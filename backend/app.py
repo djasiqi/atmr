@@ -592,7 +592,15 @@ def create_app(config_name: str | None = None):
     else:
         app.logger.info("🔧 [INIT] Configuration Socket.IO...")
         allowed_modes: set[str] = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
-        env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
+
+        # ✅ FIX: Si DISABLE_EVENTLET=1, forcer threading mode pour éviter
+        # que Flask-SocketIO n'initialise eventlet et casse les migrations Alembic
+        _disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
+        if _disable_eventlet:
+            env_mode = "threading"
+            app.logger.info("[Socket.IO] Mode threading forcé (DISABLE_EVENTLET=1)")
+        else:
+            env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
         async_mode: AsyncMode = cast(
             "AsyncMode", env_mode if env_mode in allowed_modes else "eventlet"
         )
@@ -949,7 +957,24 @@ def create_app(config_name: str | None = None):
     def shutdown_session(  # pyright: ignore[reportUnusedFunction]
         exception=None,  # noqa: ARG001
     ):
-        db.session.remove()
+        # ✅ FIX: Gérer les connexions PostgreSQL fermées côté serveur
+        # (stale connections dans les workers Celery)
+        import contextlib
+
+        try:
+            db.session.remove()
+        except Exception as e:
+            # Si la connexion est déjà fermée (OperationalError),
+            # on log et on continue sans bloquer
+            app.logger.warning(
+                "[shutdown_session] Error removing session (stale connection?): %s",
+                str(e)[:200],
+            )
+            # Forcer la fermeture de la connexion sans rollback
+            with contextlib.suppress(Exception):
+                db.session.rollback()
+            with contextlib.suppress(Exception):
+                db.session.close()
 
     # Gestion d'erreurs réseau (Bad file descriptor, etc.)
     # Constantes pour les codes d'erreur système
@@ -2279,31 +2304,69 @@ def create_app(config_name: str | None = None):
 
         @app.errorhandler(BadRequest)
         def handle_bad_request(e: BadRequest):  # pyright: ignore
+            """Handler BadRequest aligné sur le format standard v2.
+
+            Format: {"error": "error_code", "message": "Message"}
+            """
+            original_message = getattr(e, "description", str(e))
             app.logger.warning(
                 "[BadRequest] path=%s method=%s Content-Type=%s Content-Length=%s desc=%s",
                 getattr(request, "path", None),
                 getattr(request, "method", None),
                 getattr(request, "content_type", None),
                 getattr(request, "content_length", None),
-                getattr(e, "description", str(e)),
+                original_message,
             )
-            return (
-                jsonify(
-                    {
-                        "error": "Bad Request",
-                        "message": "Corps de requête JSON manquant ou invalide. Vérifiez Content-Type: application/json et le format du body.",
-                    }
-                ),
-                400,
-            )
+
+            # Déterminer le code d'erreur et le message
+            werkzeug_default = "The browser (or proxy) sent a request that this server could not understand."
+
+            if original_message == werkzeug_default:
+                # Erreur générique Werkzeug - clarifier selon le contexte
+                if request.content_type != "application/json":
+                    error_code = "invalid_content_type"
+                    error_message = f"Content-Type invalide: '{request.content_type}'. Utilisez 'application/json'."
+                else:
+                    error_code = "invalid_json"
+                    error_message = "Corps de requête JSON manquant ou invalide. Vérifiez le format du body."
+            else:
+                # Message spécifique - déterminer le code approprié
+                msg_lower = original_message.lower()
+                if (
+                    "password" in msg_lower
+                    or "email" in msg_lower
+                    or "required" in msg_lower
+                    or "missing" in msg_lower
+                ):
+                    error_code = "validation_error"
+                else:
+                    error_code = "bad_request"
+                error_message = original_message
+
+            return jsonify({
+                "error": error_code,
+                "message": error_message,
+            }), 400
 
         @app.errorhandler(HTTPException)
         def handle_http_exception(e: HTTPException):  # pyright: ignore
+            """Handler HTTPException aligné sur le format standard v2.
+
+            Format: {"error": "error_code", "message": "Message", "details": {}}
+            """
             if isinstance(e, NotFound):
                 app.logger.warning("404 on path: %s", request.path)
-            # <- évite int | None
+
             status_code: int = int(e.code or 500)
-            return jsonify({"error": e.name, "message": e.description}), status_code
+
+            # Convertir le nom HTTP en code machine (snake_case)
+            # Ex: "Bad Request" -> "bad_request", "Not Found" -> "not_found"
+            error_code = e.name.lower().replace(" ", "_") if e.name else f"http_{status_code}"
+
+            return jsonify({
+                "error": error_code,
+                "message": e.description or f"HTTP {status_code} error",
+            }), status_code
 
         @app.errorhandler(Exception)
         def handle_exception(e: Exception):  # pyright: ignore[reportUnusedFunction]

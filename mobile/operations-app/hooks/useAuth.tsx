@@ -18,7 +18,6 @@ import {
   Driver,
   fetchDriverProfile,
   loginDriver,
-  refreshAccessToken,
   refreshDriverTokenSingleflight,
   invalidateInterceptorCache,
 } from "@/services/api";
@@ -66,7 +65,7 @@ import {
 } from "@/services/proactiveRefreshCooldown";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import { pushSessionEvent } from "@/services/sessionJournal";
-import { setLogoutMarker, isSessionExpiredReason } from "@/services/logoutMarker";
+import { setLogoutMarker, shouldShowLogoutBanner } from "@/services/logoutMarker";
 import { connectSocket, disconnectSocket } from "@/services/socket";
 // ✅ PHASE 2 : Import de l'authentification biométrique
 import {
@@ -74,6 +73,9 @@ import {
   BiometricNoCredentialsError,
 } from "@/services/biometricAuth";
 import { sendIngestEvent } from "@/src/config/telemetry";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Auth");
 
 const debugLog = (data: Record<string, unknown>) => {
   if (__DEV__) {
@@ -99,7 +101,7 @@ const getTokenExpiration = (token: string): number | null => {
     const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp ? payload.exp * 1000 : null; // Convertir en ms
   } catch (error) {
-    console.warn("[getTokenExpiration] Erreur décodage JWT:", error);
+    log.warn("jwt decode failed", { error });
     return null;
   }
 };
@@ -253,7 +255,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setDriverLoading(true);
       notifyAuthNotReady();
       try {
-        if (isSessionExpiredReason(reason)) {
+        if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "driver", reason, ts: Date.now() });
         }
         if (reason === "manual_logout") {
@@ -268,7 +270,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 { headers: { Authorization: `Bearer ${accessToken}` } }
               );
             } catch (e) {
-              console.warn("Erreur lors du logout server-side:", e);
+              log.warn("server-side logout error", { error: e });
             }
           }
           await secureStorage.clearDriverAuthOnly();
@@ -296,7 +298,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (enterpriseLogoutInProgressRef.current) return;
       enterpriseLogoutInProgressRef.current = true;
       try {
-        if (isSessionExpiredReason(reason)) {
+        if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "enterprise", reason, ts: Date.now() });
         }
         notifyAuthNotReady();
@@ -351,7 +353,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // ✅ Stocker driver_id pour navigation rapide
         await asyncStorage.setDriverId(profile.id);
       } catch (error) {
-        console.warn("Impossible de récupérer le profil chauffeur :", error);
+        log.warn("driver profile fetch failed", { error });
         // ✅ Important: AUTH_NOT_READY est transitoire → ne pas effacer les tokens / ne pas logout
         if (isAuthNotReadyError(error)) {
           return;
@@ -374,8 +376,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Vérifier que le token est bien présent et valide
       if (!session.token) {
-        // eslint-disable-next-line no-console
-        console.error("[ENT] ERREUR: Token manquant dans la réponse de login");
+        log.error("enterprise token missing in login response");
         throw new Error("Token manquant dans la réponse de login");
       }
 
@@ -400,16 +401,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Vérifier que le token a bien été stocké
       const storedToken = await secureStorage.getEnterpriseToken();
       if (storedToken !== session.token) {
-        // eslint-disable-next-line no-console
-        console.error("[ENT] ERREUR: Token stocké ne correspond pas au token reçu");
+        log.error("stored token mismatch");
       }
 
       // Attendre un peu pour s'assurer que AsyncStorage a bien écrit les données
       // avant que d'autres requêtes ne soient faites
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // eslint-disable-next-line no-console
-      console.log("[ENT] Session entreprise stockée avec succès", {
+      log.success("enterprise session stored", {
         hasToken: !!session.token,
         hasRefreshToken: !!session.refreshToken,
         userId: session.user?.id,
@@ -496,7 +495,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   await storeMode("driver");
                 }
               } catch (error) {
-                console.warn("Access token chauffeur invalide, tentative avec refresh token :", error);
+                log.warn("driver access token invalid, trying refresh", { error });
                 // Continuer avec le refresh token si l'access token échoue
               }
             }
@@ -521,14 +520,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   driverSessionRestored = true;
                 }
               } catch (refreshError) {
-                console.warn(
-                  "Auto-login échoué (refresh token) :",
-                  refreshError
-                );
+                log.warn("auto-login failed (refresh token)", { error: refreshError });
 
                 // ✅ P0.2.B : Offline/timeout/5xx ≠ logout — uniquement 401/403 invalide la session
                 if (isNetworkError(refreshError)) {
-                  console.warn("[useAuth] ⚠️ Boot: erreur réseau, tokens conservés. Connexion requise.");
+                  log.warn("boot network error, tokens kept");
                   // Pas de forceLogout, pas de wipe storage
                 } else if (isHttpAuthError(refreshError)) {
                   const status = getHttpStatus(refreshError);
@@ -537,7 +533,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   );
                 } else {
                   // 5xx, autre → pas de logout
-                  console.warn("[useAuth] ⚠️ Boot: erreur serveur/autre, tokens conservés.");
+                  log.warn("boot server error, tokens kept");
                 }
 
                 // ✅ PHASE 2 : Si refresh a échoué (hors auth invalid, on a déjà logout), essayer biométrique
@@ -559,23 +555,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         await storeMode("driver");
                         profileLoaded = true;
                         driverSessionRestored = true;
-                        console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
+                        log.success("auto-login succeeded with biometric");
                       }
                     } else {
-                      if (__DEV__) {
-                        console.log("[useAuth] ⚠️ Auto-login biométrique annulé ou échoué");
-                      }
+                      log.debug("biometric auto-login cancelled or failed");
                     }
                   } catch (autoLoginError) {
                     if (autoLoginError instanceof BiometricNoCredentialsError) {
                       if (isMounted) {
                         Alert.alert(
-                          "",
-                          "Identifiants mémorisés indisponibles. Veuillez vous reconnecter."
+                          "Reconnexion nécessaire",
+                          "Vos identifiants enregistrés ne sont plus disponibles. Veuillez saisir vos identifiants pour vous reconnecter.",
+                          [{ text: "Se connecter", style: "default" }]
                         );
                       }
                     } else {
-                      console.warn("[useAuth] ⚠️ Auto-login biométrique échoué:", autoLoginError);
+                      log.warn("biometric auto-login failed", { error: autoLoginError });
                     }
                     // ✅ P0.2.B : Pas de forceLogout sur erreur réseau ou autre
                     if (isMounted && isHttpAuthError(autoLoginError)) {
@@ -609,7 +604,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     await storeMode("driver");
                     profileLoaded = true;
                     driverSessionRestored = true;
-                    console.log("[useAuth] ✅ Auto-login réussi avec authentification biométrique");
+                    log.success("auto-login succeeded with biometric");
                   }
                 } else {
                   // ✅ P0.2.B : User annulé → pas de forceLogout (rien à effacer)
@@ -618,12 +613,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (autoLoginError instanceof BiometricNoCredentialsError) {
                   if (isMounted) {
                     Alert.alert(
-                      "",
-                      "Identifiants mémorisés indisponibles. Veuillez vous reconnecter."
+                      "Reconnexion nécessaire",
+                      "Vos identifiants enregistrés ne sont plus disponibles. Veuillez saisir vos identifiants pour vous reconnecter.",
+                      [{ text: "Se connecter", style: "default" }]
                     );
                   }
                 } else {
-                  console.warn("[useAuth] ⚠️ Auto-login biométrique échoué:", autoLoginError);
+                  log.warn("biometric auto-login failed", { error: autoLoginError });
                 }
                 // ✅ P0.2.B : Pas de forceLogout sur erreur réseau ; uniquement 401/403
                 if (isMounted && isHttpAuthError(autoLoginError)) {
@@ -666,8 +662,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Supprimer le flag pour les prochaines fois
             if (justCreated === "true") {
               await AsyncStorage.removeItem("enterprise_session_just_created");
-              // eslint-disable-next-line no-console
-              console.log("[ENT] Session vient d'être créée, vérification différée");
+              log.info("enterprise session just created, verification deferred");
               return; // Sortir sans vérifier la session
             }
 
@@ -708,26 +703,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         await refreshEnterpriseTokenSingleflight(refreshToken);
                       await handleEnterpriseSuccess(refreshResponse);
                     } catch (refreshError) {
-                      // eslint-disable-next-line no-console
-                      console.warn("Rafraîchissement token entreprise échoué :", refreshError);
+                      log.warn("enterprise token refresh failed", { error: refreshError });
                       // Ne pas nettoyer la session ici - laisser l'utilisateur utiliser l'app
                       // La session sera invalidée lors de la prochaine requête API réelle
                     }
                   } else {
-                    // eslint-disable-next-line no-console
-                    console.warn("Session entreprise invalide (pas de refresh token) :", sessionError);
+                    log.warn("enterprise session invalid, no refresh token", { error: sessionError });
                     // Ne pas nettoyer immédiatement - laisser l'utilisateur utiliser l'app
                   }
                 } else {
-                  // eslint-disable-next-line no-console
-                  console.warn("Erreur lors de la vérification de session entreprise :", sessionError);
+                  log.warn("enterprise session verification failed", { error: sessionError });
                   // Ne pas nettoyer la session pour les erreurs réseau temporaires
                 }
               }
             })();
           } catch (error) {
-            // eslint-disable-next-line no-console
-            console.warn("Erreur lors de la restauration de la session entreprise :", error);
+            log.warn("enterprise session restore failed", { error });
             enterpriseRestored = false;
             await clearEnterpriseStorage();
             setEnterpriseSession(null);
@@ -770,7 +761,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const expiresAt = getTokenExpiration(driverToken);
     if (!expiresAt) {
-      console.warn("[useAuth] Impossible de décoder l'expiration du token driver");
+      log.warn("driver token expiration decode failed");
       return;
     }
 
@@ -782,13 +773,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // ✅ P0.3.A : Vérifier cooldown avant tentative
       if (isDriverProactiveRefreshInCooldown()) {
         const remaining = getDriverProactiveRefreshCooldownRemaining();
-        console.warn(`[useAuth] ⏳ Refresh proactif driver en cooldown, retry dans ${Math.round(remaining / 1000)}s`);
+        log.warn("driver proactive refresh in cooldown", { remainingSeconds: Math.round(remaining / 1000) });
         driverProactiveRefreshTimeoutRef.current = setTimeout(runProactiveRefresh, remaining);
         return;
       }
 
       (async () => {
-        console.log("[useAuth] 🔄 Refresh proactif du token driver (10min avant expiration)");
+        log.info("driver proactive refresh started");
 
         const MAX_RETRIES = 3;
         let retryCount = 0;
@@ -807,7 +798,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             invalidateInterceptorCache();
 
-            console.log(`[useAuth] ✅ Refresh proactif réussi${retryCount > 0 ? ` (après ${retryCount} tentative(s))` : ""}`);
+            log.success("driver proactive refresh succeeded", retryCount > 0 ? { retryCount } : undefined);
             return;
           } catch (error: any) {
             lastError = error;
@@ -816,7 +807,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             // ✅ PHASE 3 : Ne pas retry pour les erreurs critiques (401, 403)
             if (status === 401 || status === 403) {
-              console.error(`[useAuth] ❌ Refresh proactif échoué (${status}):`, error?.response?.data || error?.message);
+              log.error("driver proactive refresh failed", { status, data: error?.response?.data, message: error?.message });
               break; // Sortir de la boucle, ne pas retry
             }
 
@@ -825,16 +816,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               retryCount++;
               if (retryCount < MAX_RETRIES) {
                 const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // Backoff exponentiel (max 10s)
-                console.warn(`[useAuth] ⚠️ Refresh proactif échoué (tentative ${retryCount}/${MAX_RETRIES}), retry dans ${delay}ms...`);
+                log.warn("driver proactive refresh retry", { attempt: retryCount, maxRetries: MAX_RETRIES, delayMs: delay });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue; // Retry
               } else {
-                console.error(`[useAuth] ❌ Refresh proactif échoué après ${MAX_RETRIES} tentatives`);
+                log.error("driver proactive refresh failed after retries", { maxRetries: MAX_RETRIES });
                 break; // Toutes les tentatives ont échoué
               }
             } else {
               // Autres erreurs (400, etc.) → ne pas retry
-              console.warn(`[useAuth] ⚠️ Refresh proactif échoué (status: ${status}), pas de retry`);
+              log.warn("driver proactive refresh failed, no retry", { status });
               break;
             }
           }
@@ -847,10 +838,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // ✅ P0.2.A : 401/403 mais access encore valide → best effort, pas de logout
           if ((status === 401 || status === 403) && accessStillValid(driverToken)) {
-            console.warn(
-              "[useAuth] ⚠️ Refresh proactif échoué (status=%s) mais access token encore valide. Pas de logout.",
-              status
-            );
+            log.warn("driver proactive refresh failed but access still valid", { status });
             const backoff = recordDriverProactiveRefreshFailure();
             driverProactiveRefreshTimeoutRef.current = setTimeout(runProactiveRefresh, backoff);
             return;
@@ -858,10 +846,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // ✅ Si 403 (compte désactivé) et access expiré, forcer déconnexion
           if (status === 403) {
-            console.error(
-              "[useAuth] 🚫 Compte désactivé (403) lors du refresh proactif. Déconnexion forcée.",
-              errorData
-            );
+            log.error("driver account disabled on proactive refresh", { errorData });
             await forceLogoutDriverInternal("refresh_rejected_403");
             return;
           }
@@ -869,7 +854,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // 401 et access expiré, ou 5xx/network → cooldown + retry
           const backoff = recordDriverProactiveRefreshFailure();
           driverProactiveRefreshTimeoutRef.current = setTimeout(runProactiveRefresh, backoff);
-          console.warn("[useAuth] ⚠️ Refresh proactif échoué (fallback sur intercepteur 401):", lastError);
+          log.warn("driver proactive refresh failed, fallback to interceptor", { error: lastError });
         }
       })();
     };
@@ -882,7 +867,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const timeoutId = setTimeout(runProactiveRefresh, initialDelay);
       driverProactiveRefreshTimeoutRef.current = timeoutId;
 
-      console.log(`[useAuth] ⏰ Refresh proactif planifié dans ${Math.round(initialDelay / 1000 / 60)} minutes`);
+      log.info("driver proactive refresh scheduled", { minutes: Math.round(initialDelay / 1000 / 60) });
 
       return () => {
         if (driverProactiveRefreshTimeoutRef.current) {
@@ -892,7 +877,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
     } else if (timeUntilExpiry > 0 && timeUntilExpiry <= refreshBeforeExpiry) {
       // ✅ PHASE 3 : Token expire bientôt (< 10min), rafraîchir immédiatement avec retry
-      console.log("[useAuth] ⚡ Token expire dans moins de 10min, refresh immédiat");
+      log.info("driver token expiring soon, immediate refresh");
       (async () => {
         const MAX_RETRIES = 3;
         let retryCount = 0;
@@ -900,38 +885,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         while (retryCount < MAX_RETRIES) {
           try {
-            const refreshToken = await secureStorage.getRefreshToken();
-            if (!refreshToken) {
-              throw new Error("Pas de refresh token disponible");
-            }
-
-            const refreshResponse = await refreshAccessToken(refreshToken);
-            await secureStorage.setAccessToken(refreshResponse.access_token);
-            setDriverToken(refreshResponse.access_token);
-            if (refreshResponse.refresh_token) {
-              await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-            }
+            const newAccessToken = await refreshDriverTokenSingleflight();
+            setDriverToken(newAccessToken);
             invalidateInterceptorCache();
             resetDriverProactiveRefreshCooldown();
-            console.log(`[useAuth] ✅ Refresh immédiat réussi${retryCount > 0 ? ` (après ${retryCount} tentative(s))` : ""}`);
+            log.success("driver immediate refresh succeeded", retryCount > 0 ? { retryCount } : undefined);
             return;
           } catch (error: any) {
             lastError = error;
             const status = error?.response?.status;
             const isNetworkError = !error?.response;
 
-            // Ne pas retry pour erreurs critiques
             if (status === 401 || status === 403) {
-              console.error(`[useAuth] ❌ Refresh immédiat échoué (${status})`);
+              log.error("driver immediate refresh failed", { status });
               break;
             }
 
-            // Retry pour erreurs réseau ou serveur
             if (isNetworkError || (status && status >= 500)) {
               retryCount++;
               if (retryCount < MAX_RETRIES) {
                 const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 10000);
-                console.warn(`[useAuth] ⚠️ Refresh immédiat échoué (tentative ${retryCount}/${MAX_RETRIES}), retry dans ${delay}ms...`);
+                log.warn("driver immediate refresh retry", { attempt: retryCount, maxRetries: MAX_RETRIES, delayMs: delay });
                 await new Promise(resolve => setTimeout(resolve, delay));
                 continue;
               }
@@ -948,22 +922,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // ✅ P0.2.A : 401/403 mais access encore valide (skew horloge) → pas de logout
           if ((status === 401 || status === 403) && accessStillValid(driverToken)) {
-            console.warn(
-              "[useAuth] ⚠️ Refresh immédiat échoué (status=%s) mais access encore valide. Pas de logout.",
-              status
-            );
+            log.warn("driver immediate refresh failed but access still valid", { status });
             recordDriverProactiveRefreshFailure();
             return;
           }
 
           if (status === 403) {
-            console.error("[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat. Déconnexion forcée.", errorData);
+            log.error("driver account disabled on immediate refresh", { errorData });
             await forceLogoutDriverInternal("refresh_rejected_403");
             return;
           }
 
           recordDriverProactiveRefreshFailure();
-          console.warn("[useAuth] ⚠️ Refresh immédiat échoué:", lastError);
+          log.warn("driver immediate refresh failed", { error: lastError });
         }
       })();
     }
@@ -1021,7 +992,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               } catch (e) {
                 if (attempt === 2) {
                   resyncOk = false;
-                  console.warn("[useAuth] FOREGROUND_RESYNC ping /driver/me échoué après 2 essais");
+                  log.warn("foreground resync ping failed after 2 attempts");
                 }
               }
             }
@@ -1050,7 +1021,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const expiresAt = getTokenExpiration(enterpriseSession.token);
     if (!expiresAt) {
-      console.warn("[useAuth] Impossible de décoder l'expiration du token entreprise");
+      log.warn("enterprise token expiration decode failed");
       return;
     }
 
@@ -1062,24 +1033,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const runEnterpriseProactiveRefresh = () => {
         if (isEnterpriseProactiveRefreshInCooldown()) {
           const remaining = getEnterpriseProactiveRefreshCooldownRemaining();
-          console.warn(`[useAuth] ⏳ Refresh proactif entreprise en cooldown, retry dans ${Math.round(remaining / 1000)}s`);
+          log.warn("enterprise proactive refresh in cooldown", { remainingSeconds: Math.round(remaining / 1000) });
           enterpriseProactiveRefreshTimeoutRef.current = setTimeout(runEnterpriseProactiveRefresh, remaining);
           return;
         }
 
         (async () => {
-          console.log("[useAuth] 🔄 Refresh proactif du token entreprise (5min avant expiration)");
+          log.info("enterprise proactive refresh started");
           try {
             // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
             const refreshToken = enterpriseSession.refreshToken || await secureStorage.getEnterpriseRefreshToken();
             if (!refreshToken) {
-              console.warn("[useAuth] ⚠️ Aucun refresh token disponible pour le refresh proactif entreprise");
+              log.warn("enterprise proactive refresh no refresh token");
               return;
             }
 
-            if (__DEV__) {
-              console.log("[useAuth] 🔄 Refresh proactif entreprise: token disponible (longueur:", refreshToken.length, ")");
-            }
+            log.debug("enterprise proactive refresh token available", { length: refreshToken.length });
 
             const refreshResponse =
               await refreshEnterpriseTokenSingleflight(refreshToken);
@@ -1088,7 +1057,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
             invalidateEnterpriseInterceptorCache();
 
-            console.log("[useAuth] ✅ Refresh proactif entreprise réussi");
+            log.success("enterprise proactive refresh succeeded");
           } catch (error: any) {
             const status = error?.response?.status;
             const errorData = error?.response?.data;
@@ -1097,28 +1066,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // ✅ Si 401 (refresh token invalide/expiré), ne pas déconnecter immédiatement
             // L'intercepteur gérera la déconnexion lors de la prochaine requête
             if (status === 401) {
-              console.error(
-                `[useAuth] ❌ Refresh token invalide (401) lors du refresh proactif entreprise: ${errorMessage}`
-              );
+              log.error("enterprise proactive refresh 401", { errorMessage });
               // Ne pas déconnecter ici, l'intercepteur gérera lors de la prochaine requête réelle
               return;
             }
 
             // ✅ P0.2.A : 403 mais access encore valide → best effort, pas de logout
             if (status === 403 && enterpriseSession && accessStillValid(enterpriseSession.token)) {
-              console.warn(
-                "[useAuth] ⚠️ Refresh proactif entreprise échoué (403) mais access encore valide. Pas de logout."
-              );
+              log.warn("enterprise proactive refresh failed but access still valid");
               const backoff = recordEnterpriseProactiveRefreshFailure();
               enterpriseProactiveRefreshTimeoutRef.current = setTimeout(runEnterpriseProactiveRefresh, backoff);
               return;
             }
 
             if (status === 403) {
-              console.error(
-                "[useAuth] 🚫 Compte désactivé (403) lors du refresh proactif entreprise. Déconnexion forcée.",
-                errorData
-              );
+              log.error("enterprise account disabled on proactive refresh", { errorData });
               await forceLogoutEnterpriseInternal("refresh_rejected_403");
               return;
             }
@@ -1126,9 +1088,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Autres erreurs (réseau, serveur, etc.) → cooldown + retry
             const backoff = recordEnterpriseProactiveRefreshFailure();
             enterpriseProactiveRefreshTimeoutRef.current = setTimeout(runEnterpriseProactiveRefresh, backoff);
-            console.warn(
-              `[useAuth] ⚠️ Refresh proactif entreprise échoué (status: ${status || "network"}): ${errorMessage}`
-            );
+            log.warn("enterprise proactive refresh failed", { status: status || "network", errorMessage });
           }
         })();
       };
@@ -1139,7 +1099,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const timeoutId = setTimeout(runEnterpriseProactiveRefresh, initialDelay);
       enterpriseProactiveRefreshTimeoutRef.current = timeoutId;
 
-      console.log(`[useAuth] ⏰ Refresh proactif entreprise planifié dans ${Math.round(initialDelay / 1000 / 60)} minutes`);
+      log.info("enterprise proactive refresh scheduled", { minutes: Math.round(initialDelay / 1000 / 60) });
 
       return () => {
         if (enterpriseProactiveRefreshTimeoutRef.current) {
@@ -1149,7 +1109,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       };
     } else if (timeUntilExpiry > 0 && timeUntilExpiry <= refreshBeforeExpiry) {
       // Token expire bientôt (< 5min), rafraîchir immédiatement
-      console.log("[useAuth] ⚡ Token entreprise expire dans moins de 5min, refresh immédiat");
+      log.info("enterprise token expiring soon, immediate refresh");
       (async () => {
         try {
           // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
@@ -1163,7 +1123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             invalidateEnterpriseInterceptorCache();
             resetEnterpriseProactiveRefreshCooldown();
 
-            console.log("[useAuth] ✅ Refresh immédiat entreprise réussi");
+            log.success("enterprise immediate refresh succeeded");
           }
         } catch (error: any) {
           const status = error?.response?.status;
@@ -1171,24 +1131,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           // ✅ P0.2.A : 403 mais access encore valide → pas de logout
           if (status === 403 && enterpriseSession && accessStillValid(enterpriseSession.token)) {
-            console.warn(
-              "[useAuth] ⚠️ Refresh immédiat entreprise échoué (403) mais access encore valide. Pas de logout."
-            );
+            log.warn("enterprise immediate refresh failed but access still valid");
             recordEnterpriseProactiveRefreshFailure();
             return;
           }
 
           if (status === 403) {
-            console.error(
-              "[useAuth] 🚫 Compte désactivé (403) lors du refresh immédiat entreprise. Déconnexion forcée.",
-              errorData
-            );
+            log.error("enterprise account disabled on immediate refresh", { errorData });
             await forceLogoutEnterpriseInternal("refresh_rejected_403");
             return;
           }
 
           recordEnterpriseProactiveRefreshFailure();
-          console.warn("[useAuth] ⚠️ Refresh immédiat entreprise échoué:", error);
+          log.warn("enterprise immediate refresh failed", { error });
         }
       })();
     }
@@ -1241,20 +1196,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Si la session vient d'être créée (juste après un switch), ne pas la vérifier immédiatement
             if (justCreated === "true") {
               await AsyncStorage.removeItem("enterprise_session_just_created");
-              // eslint-disable-next-line no-console
-              console.log("[ENT] Session chargée après switchMode, vérification différée");
+              log.info("enterprise session loaded after switch, verification deferred");
             }
           } catch (error) {
-            // eslint-disable-next-line no-console
-            console.warn("[ENT] Erreur lors du chargement de la session après switchMode:", error);
+            log.warn("enterprise session load error after switch", { error });
             // #region agent log
             debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
             // #endregion
           }
         }
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn("[ENT] Erreur lors de la lecture AsyncStorage après switchMode:", error);
+        log.warn("enterprise async storage read error after switch", { error });
         // #region agent log
         debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode AsyncStorage error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
         // #endregion
@@ -1330,13 +1282,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession set', data: { hasToken: !!accessToken, driverId: profile.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
           // #endregion
 
-          console.log("[useAuth] Driver session loaded from SecureStorage:", {
+          log.success("driver session loaded from storage", {
             hasToken: !!accessToken,
             hasRefreshToken: !!refreshToken,
             driverId: profile.id,
           });
         } catch (profileError) {
-          console.warn("[useAuth] Error loading driver profile:", profileError);
+          log.warn("driver profile load error", { error: profileError });
           // #region agent log
           debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession profile error', data: { error: String(profileError) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
           // #endregion
@@ -1345,10 +1297,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         setDriver(null);
         setDriverToken(null);
-        console.log("[useAuth] No driver session found in SecureStorage.");
+        log.info("no driver session in storage");
       }
     } catch (error) {
-      console.error("[useAuth] Error loading driver session:", error);
+      log.error("driver session load error", { error });
       // #region agent log
       sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
       // #endregion
@@ -1367,9 +1319,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       currentToken = await secureStorage.getAccessToken();
       if (currentToken) {
         setDriverToken(currentToken);
-        console.log("[useAuth] Token driver récupéré depuis SecureStorage pour refreshProfile");
+        log.info("driver token restored from storage for refreshProfile");
       } else {
-        console.warn("[useAuth] Aucun token driver disponible pour rafraîchir le profil");
+        log.warn("no driver token for refresh profile");
         return;
       }
     }
@@ -1379,7 +1331,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const profile = await fetchDriverProfile();
       setDriver(profile);
       await asyncStorage.setDriverId(profile.id);
-      console.log("[useAuth] Profil chauffeur rafraîchi et stocké:", profile.id);
+      log.success("driver profile refreshed", { profileId: profile.id });
     } catch (error: any) {
       const status = error?.response?.status;
 
@@ -1392,31 +1344,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const profile = await fetchDriverProfile();
           setDriver(profile);
           await asyncStorage.setDriverId(profile.id);
-          console.log("[useAuth] Profil rafraîchi après retry post-refresh");
+          log.success("driver profile refreshed after retry");
           return;
         } catch (retryError) {
           if (isHttpAuthError(retryError)) {
-            console.error(
-              "[useAuth] ❌ Profile 401/403 persistant après refresh+retry. Déconnexion.",
-              getHttpStatus(retryError)
-            );
+            log.error("driver profile auth invalid after retry", { status: getHttpStatus(retryError) });
             await forceLogoutDriverInternal("profile_auth_invalid");
           } else {
-            console.warn("[useAuth] Retry profile échoué (non-auth):", retryError);
+            log.warn("driver profile retry failed", { error: retryError });
           }
         }
       } else if (isNetworkError(error)) {
         // Erreur réseau temporaire → ne pas déconnecter, juste logger
-        console.warn(
-          "[useAuth] ⚠️ Erreur réseau lors du refresh profil (pas de connexion). Profil non mis à jour mais utilisateur reste connecté.",
-          error?.message
-        );
+        log.warn("network error during profile refresh", { message: error?.message });
       } else {
         // Autres erreurs (500, etc.) → ne pas déconnecter non plus
-        console.warn(
-          "[useAuth] ⚠️ Erreur serveur lors du refresh profil (status: %s). Profil non mis à jour mais utilisateur reste connecté.",
-          status || "unknown"
-        );
+        log.warn("server error during profile refresh", { status: status || "unknown" });
       }
     } finally {
       setDriverLoading(false);
@@ -1447,12 +1390,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         await handleEnterpriseSuccess(response as EnterpriseTokenPayload);
-        // eslint-disable-next-line no-console
-        console.log("[ENT] Login réussi, session stockée");
+        log.success("enterprise login succeeded, session stored");
         return { mfaRequired: false as const };
       } catch (error: any) {
-        // eslint-disable-next-line no-console
-        console.error("[ENT] Erreur lors du login:", {
+        log.error("enterprise login failed", {
           message: error?.message,
           status: error?.response?.status,
           data: error?.response?.data,
@@ -1516,17 +1457,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         debugLog({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
         // #endregion
 
-        console.log("[useAuth] Enterprise session loaded from AsyncStorage:", {
+        log.success("enterprise session loaded from storage", {
           hasToken: !!enterpriseToken,
           hasRefreshToken: !!parsed.refreshToken,
           companyId: parsed.company?.id,
         });
       } else {
         setEnterpriseSession(null);
-        console.log("[useAuth] No enterprise session found in AsyncStorage.");
+        log.info("no enterprise session in storage");
       }
     } catch (error) {
-      console.error("[useAuth] Error loading enterprise session:", error);
+      log.error("enterprise session load error", { error });
       // #region agent log
       sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
       // #endregion
@@ -1544,7 +1485,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const response = await refreshEnterpriseTokenSingleflight(refreshToken);
       await handleEnterpriseSuccess(response);
     } catch (error) {
-      console.warn("Refresh token entreprise invalide :", error);
+      log.warn("enterprise refresh token invalid", { error });
       await forceLogoutEnterpriseInternal("refresh_rejected_401");
     }
   }, [handleEnterpriseSuccess, forceLogoutEnterpriseInternal]);

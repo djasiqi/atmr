@@ -47,6 +47,8 @@ class InvoiceDescriptionBuilder:
         is_material_delivery: bool = False,
         delivery_description: str | None = None,
         is_cancelled: bool = False,
+        cancellation_fee_percent: int | None = None,
+        cancellation_fee_label: str | None = None,
     ) -> str:
         """Construit la description d'une ligne de facture.
 
@@ -58,11 +60,15 @@ class InvoiceDescriptionBuilder:
             is_material_delivery: True si livraison matériel
             delivery_description: Description de la livraison (ex: Livraison médicament)
             is_cancelled: True si transport annulé (mention "Annulation" préfixée)
+            cancellation_fee_percent: Pourcentage du palier appliqué (ex: 40)
+            cancellation_fee_label: Label du palier (ex: "< 12h")
 
         Returns:
             Description formatée
         """
         if is_cancelled:
+            if cancellation_fee_percent is not None and cancellation_fee_label:
+                return f"Annulation ({cancellation_fee_label}) – {cancellation_fee_percent}%"
             return "Annulation dernière minute"
         if is_material_delivery:
             # Livraison : toujours préfixer "Livraison" (avec description si fournie)

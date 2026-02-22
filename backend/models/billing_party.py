@@ -67,7 +67,16 @@ class BillingParty(db.Model):
         passive_deletes=True,
     )
 
-    __table_args__ = (Index("ix_billing_parties_company_type", "company_id", "type"),)
+    __table_args__ = (
+        Index("ix_billing_parties_company_type", "company_id", "type"),
+        Index(
+            "uq_billing_parties_company_external_ref",
+            "company_id",
+            "external_ref",
+            unique=True,
+            postgresql_where="external_ref IS NOT NULL",
+        ),
+    )
 
     @validates("display_name")
     def _validate_display_name(self, _key: str, value: str) -> str:
@@ -160,7 +169,9 @@ class ClientBillingParty(db.Model):
         ),
     )
 
-    @validates("contact_name", "contact_email", "contact_phone", "role", "client_reference")
+    @validates(
+        "contact_name", "contact_email", "contact_phone", "role", "client_reference"
+    )
     def _normalize_link_fields(self, _key: str, value: str | None) -> str | None:
         if value is None:
             return None
@@ -178,5 +189,7 @@ class ClientBillingParty(db.Model):
             "contact_email": self.contact_email,
             "contact_phone": self.contact_phone,
             "client_reference": self.client_reference,
-            "billing_party": self.billing_party.to_dict() if self.billing_party else None,
+            "billing_party": self.billing_party.to_dict()
+            if self.billing_party
+            else None,
         }

@@ -2,6 +2,9 @@
 import { Platform, PermissionsAndroid } from "react-native";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Push");
 
 export type PushTokens = {
   /** Android: FCM; iOS: APNs */
@@ -40,7 +43,7 @@ Notifications.setNotificationHandler({
     // P0.5: Filtrer recipient_role=company quand on est en mode driver (ou inconnu = conservateur)
     if (recipientRole === "company" && _notificationAppMode !== "enterprise") {
       if (__DEV__) {
-        console.log("🔕 P0.5 Ignored company notification on driver app", {
+        log.info("ignored company notification on driver app", {
           trace_id: data.trace_id,
           recipient_role: recipientRole,
           app_mode: _notificationAppMode,
@@ -55,14 +58,13 @@ Notifications.setNotificationHandler({
       };
     }
 
-    // Pour les autres notifications, afficher normalement
+    // Foreground: pas de notification système, uniquement in-app
     return {
-      shouldShowAlert: true,
+      shouldShowAlert: false,
       shouldPlaySound: false,
       shouldSetBadge: false,
-      // iOS (SDK 5x) :
-      shouldShowBanner: true,
-      shouldShowList: true,
+      shouldShowBanner: false,
+      shouldShowList: false,
     };
   },
 });
@@ -78,7 +80,7 @@ export async function configureNotifications(): Promise<void> {
     if (status !== "granted") {
       const { status: newStatus } = await Notifications.requestPermissionsAsync();
       if (newStatus !== "granted") {
-        console.warn("🚫 Notifications refusées par l'utilisateur");
+        log.warn("notifications denied by user");
         return;
       }
     }
@@ -94,9 +96,9 @@ export async function configureNotifications(): Promise<void> {
       });
     }
 
-    console.log("🔔 Notifications configurées");
+    log.success("notifications configured");
   } catch (error) {
-    console.error("❌ Erreur configureNotifications :", error);
+    log.error("configure notifications failed", { error });
   }
 }
 
@@ -120,12 +122,12 @@ export async function initNotifications(
   const maxRetries = opts.maxRetries ?? 3;
   const wantExpo = !!opts.withExpoToken;
 
-  console.log("🔔 initNotifications START", { maxRetries, wantExpo });
+  log.info("init notifications start", { maxRetries, wantExpo });
 
   // Android 13+: demander la permission runtime
   const granted13 = await ensureAndroid13Permission();
   if (!granted13) {
-    console.warn("🚫 Permission notifications refusée (Android 13+).");
+    log.warn("notification permission denied android 13");
     return { device: null, expo: null };
   }
 
@@ -144,37 +146,37 @@ export async function initNotifications(
     (Constants.executionEnvironment === "storeClient" ||
       Constants.executionEnvironment === "standalone" /* fallback safe */);
 
-  console.log("🔔 Push env:", {
+  log.info("push env", {
     platform: Platform.OS,
     appOwnership: Constants.appOwnership,
     executionEnvironment: Constants.executionEnvironment,
-    projectId: projectId ? "✅" : "❌",
+    hasProjectId: !!projectId,
     isExpoGo,
   });
 
   // Expo Go: pas de push remote en SDK 53+ (Android)
   if (isExpoGo) {
-    console.warn("🚫 Expo Go détecté: push remote indisponible.");
+    log.warn("expo go detected, remote push unavailable");
     return { device: null, expo: null };
   }
 
   // 1) Device token (FCM/APNs) avec retry
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔔 Tentative device token (${attempt + 1}/${maxRetries + 1})...`);
+      log.info("device token attempt", { attempt: attempt + 1, max: maxRetries + 1 });
       const tokenData = await Notifications.getDevicePushTokenAsync();
       device = tokenData?.data ?? null;
       if (device) {
-        console.log("✅ Device token récupéré");
+        log.success("device token retrieved");
         break;
       }
       throw new Error("Token device vide");
     } catch (e: any) {
       const msg = String(e?.message || e);
-      console.warn(`⚠️ Device token échec (${attempt + 1}/${maxRetries + 1}): ${msg}`);
+      log.warn("device token failed", { attempt: attempt + 1, max: maxRetries + 1, msg });
       if (attempt < maxRetries) {
         const backoff = 400 * Math.pow(2, attempt);
-        console.log(`⏳ Attente ${backoff}ms avant retry...`);
+        log.info("waiting before retry", { backoff });
         await sleep(backoff);
       }
     }
@@ -183,24 +185,21 @@ export async function initNotifications(
   // 2) Expo token (optionnel)
   if (wantExpo) {
     try {
-      console.log("🔔 Tentative récupération Expo token...");
+      log.info("fetching expo token");
       const expoToken = await Notifications.getExpoPushTokenAsync(
         projectId ? { projectId } : undefined
       );
       expo = expoToken?.data ?? null;
-      console.log("✅ Expo token récupéré:", expo ? "OK" : "VIDE");
+      log.success("expo token retrieved", { ok: !!expo });
     } catch (e: any) {
       const msg = String(e?.message || e);
-      console.warn("⚠️ Expo token échec:", msg);
+      log.warn("expo token failed", { msg });
     }
   }
 
   // Résultat final
   const result = { device, expo };
-  console.log("🔔 initNotifications RESULT:", {
-    device: device ? "✅" : "❌",
-    expo: expo ? "✅" : "❌",
-  });
+  log.info("init notifications result", { device: !!device, expo: !!expo });
 
   return result;
 }

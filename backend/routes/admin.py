@@ -5,13 +5,13 @@ import string
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
-import sentry_sdk  # pyright: ignore[reportMissingImports]
+import sentry_sdk
 from flask import request
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_restx import (
     Namespace,
     Resource,
     fields,
@@ -259,6 +259,34 @@ class AllCompanies(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+@admin_ns.route("/institutions")
+class AllInstitutions(Resource):
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()  # ✅ Phase 3: IP whitelist pour endpoints admin
+    @limiter.limit("100 per hour")  # ✅ Rate limiting pour liste institutions
+    def get(self):
+        """Récupère toutes les institutions pour l'admin (cliniques, EMS, hôpitaux)."""
+        try:
+            from models import Institution
+
+            institutions = db.session.query(Institution).order_by(Institution.name).all()
+            return {
+                "institutions": [
+                    {
+                        "id": inst.id,
+                        "name": inst.name,
+                        "type": getattr(inst, "institution_type", None),
+                    }
+                    for inst in institutions
+                ]
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR get_institutions: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
 @admin_ns.route("/users/<int:user_id>")
 class ManageUser(Resource):
     @jwt_required()
@@ -374,7 +402,7 @@ class UpdateUserRole(Resource):
     # ✅ S2: Rate limiting strict pour changement rôle (action sensible)
     @limiter.limit("20 per hour")
     @admin_ns.expect(user_role_update_model, validate=False)
-    def put(self, user_id: int):
+    def put(self, user_id: int):  # noqa: PLR0911
         """Met à jour le rôle d'un utilisateur et, si besoin,
         crée/assigne Driver ou Company en gérant la transition depuis l'ancien rôle.
         """
@@ -395,9 +423,7 @@ class UpdateUserRole(Resource):
             data = request.get_json(silent=True) or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.admin_schemas import UserRoleUpdateSchema
             from schemas.validation_utils import (
@@ -459,12 +485,86 @@ class UpdateUserRole(Resource):
                     if new_name:
                         comp.name = new_name
 
+                # Auto-approuver et activer le dispatch quand l'admin assigne le rôle
+                comp.approve()
+                comp.dispatch_enabled = True
+
                 if old_role_value == "DRIVER":
                     drv = getattr(user, "driver", None)
                     if drv:
                         db.session.delete(drv)
 
             elif role_upper == "CLIENT":
+                drv = getattr(user, "driver", None)
+                if drv:
+                    db.session.delete(drv)
+                comp = getattr(user, "company", None)
+                if comp:
+                    db.session.delete(comp)
+                    with contextlib.suppress(Exception):
+                        cast("Any", user).company = None
+
+            elif role_upper == "INSTITUTION":
+                # Assigner l'utilisateur à une institution
+                institution_id = validated_data.get("institution_id")
+                institution_role = validated_data.get("institution_role", "institution_admin")
+
+                from models import Institution
+
+                # ✅ Si aucune institution_id fournie, créer automatiquement l'institution
+                if not institution_id:
+                    # Utiliser le nom de l'utilisateur comme nom d'institution
+                    institution_name = cast("Any", user).username or cast("Any", user).email.split("@")[0]
+                    user_email = cast("Any", user).email
+
+                    # Vérifier si une institution existe déjà avec cet email
+                    existing_inst = db.session.query(Institution).filter_by(
+                        contact_email=user_email
+                    ).first()
+
+                    if existing_inst:
+                        institution = existing_inst
+                        logger.info(
+                            "🏥 Institution existante trouvée pour %s: %s (id=%s)",
+                            user_email,
+                            institution.name,
+                            institution.id,
+                        )
+                    else:
+                        # Créer une nouvelle institution
+                        import uuid
+                        InstitutionCtor = cast("Any", Institution)
+                        institution = InstitutionCtor(
+                            public_id=str(uuid.uuid4()),
+                            name=institution_name,
+                            institution_type="clinic",  # Type par défaut
+                            contact_email=user_email,
+                        )
+                        db.session.add(institution)
+                        db.session.flush()  # Pour obtenir l'ID
+                        logger.info(
+                            "🏥 Nouvelle institution créée: %s (id=%s) pour %s",
+                            institution.name,
+                            institution.id,
+                            user_email,
+                        )
+
+                    institution_id = institution.id
+                else:
+                    # Vérifier que l'institution existe
+                    institution = db.session.query(Institution).filter_by(id=institution_id).first()
+                    if institution is None:
+                        return APIErrorHandler.handle_not_found(
+                            "Institution",
+                            institution_id,
+                            logger,
+                        )
+
+                # Assigner l'institution et le rôle
+                cast("Any", user).institution_id = institution_id
+                cast("Any", user).institution_role = institution_role
+
+                # Nettoyer les anciennes associations si nécessaire
                 drv = getattr(user, "driver", None)
                 if drv:
                     db.session.delete(drv)
@@ -530,9 +630,9 @@ class UpdateUserRole(Resource):
                 "user": cast("Any", user).serialize,
             }, 200
 
-        except Exception:
+        except Exception as e:
             db.session.rollback()
-            logger.exception("❌ ERREUR update_user_role: {e}")
+            logger.exception("❌ ERREUR update_user_role: %s", e)
             return {"message": "Une erreur interne est survenue."}, 500
 
 
@@ -623,9 +723,7 @@ class AutonomousActionsList(Resource):
 
         try:
             # ✅ 2.4: Validation Marshmallow des query parameters
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.admin_schemas import AutonomousActionsListQuerySchema
             from schemas.validation_utils import (
@@ -863,9 +961,7 @@ class AutonomousActionReview(Resource):
         Body:
         - notes: notes optionnelles de l'admin (max 1000 caractères)
         """
-        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
-            get_jwt_identity,
-        )
+        from flask_jwt_extended import get_jwt_identity
 
         try:
             action = autonomous_action_repo.find_by_id_or_404(action_id)
@@ -873,9 +969,7 @@ class AutonomousActionReview(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.admin_schemas import AutonomousActionReviewSchema
             from schemas.validation_utils import (

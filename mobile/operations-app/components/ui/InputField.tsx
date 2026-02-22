@@ -1,4 +1,3 @@
-// components/ui/InputField.tsx
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -10,18 +9,14 @@ import {
   StyleProp,
   ViewStyle,
   TextStyle,
-  Text, // Ajout de l'import Text
+  Text,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 export interface InputFieldProps extends Omit<TextInputProps, 'style'> {
-  /** Affiche ou non le bouton œil */
   showToggle?: boolean;
-  /** Label affiché au-dessus du champ */
   label?: string;
-  /** Styles appliqués au conteneur (View) */
   containerStyle?: StyleProp<ViewStyle>;
-  /** Styles appliqués au TextInput */
   inputStyle?: StyleProp<TextStyle>;
 }
 
@@ -42,26 +37,24 @@ export function InputField({
 
   return (
     <View style={[styles.container, containerStyle]}>
-      {label && (
-        <Text style={styles.label}>{label}</Text>
-      )}
+      {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
         {...props}
         secureTextEntry={secure}
-        placeholderTextColor="#999"
+        placeholderTextColor="#94A3B8"
         onLayout={onLayout}
         style={[
           styles.input,
-          { paddingRight: showToggle ? 40 : 12, height: Math.max(44, inputHeight) },
+          { paddingRight: showToggle ? 40 : 12, height: Math.max(42, inputHeight) },
           inputStyle,
         ]}
       />
       {showToggle && (
         <TouchableOpacity
-          style={[styles.iconButton, { height: Math.max(44, inputHeight) }]}
+          style={[styles.iconButton, { height: Math.max(42, inputHeight) }]}
           onPress={() => setSecure((s) => !s)}
         >
-          <Ionicons name={secure ? 'eye-off' : 'eye'} size={24} color="#000" />
+          <Ionicons name={secure ? 'eye-off' : 'eye'} size={20} color="#64748B" />
         </TouchableOpacity>
       )}
     </View>
@@ -71,22 +64,24 @@ export function InputField({
 const styles = StyleSheet.create({
   container: {
     position: 'relative',
-    marginVertical: 8,
+    marginVertical: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
     marginBottom: 4,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#CCC',
-    borderRadius: 8,
+    borderColor: 'rgba(0,121,107,0.12)',
+    borderRadius: 10,
     paddingLeft: 12,
-    fontSize: 16,
-    color: '#000',
-    backgroundColor: '#FFF',
+    fontSize: 14,
+    color: '#1E293B',
+    backgroundColor: '#f8fafc',
   },
   iconButton: {
     position: 'absolute',
@@ -94,5 +89,6 @@ const styles = StyleSheet.create({
     width: 32,
     justifyContent: 'center',
     alignItems: 'center',
+    bottom: 0,
   },
 });

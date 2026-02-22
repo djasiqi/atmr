@@ -32,6 +32,8 @@ class AuditLog(db.Model):  # type: ignore[name-defined]
         Index("ix_audit_logs_company_id", "company_id"),
         Index("ix_audit_logs_booking_id", "booking_id"),
         Index("ix_audit_logs_driver_id", "driver_id"),
+        Index("ix_audit_logs_institution_id", "institution_id"),
+        Index("ix_audit_logs_company_category_created", "company_id", "action_category", "created_at"),
     )
 
     # Identifiant unique (auto-incrémental)
@@ -44,7 +46,7 @@ class AuditLog(db.Model):  # type: ignore[name-defined]
     user_id = db.Column(Integer, nullable=True)  # NULL pour actions système
     user_type = db.Column(
         String(50), nullable=False
-    )  # 'admin', 'operator', 'system', etc.
+    )  # 'admin', 'operator', 'system', 'institution', etc.
 
     # Action effectuée
     action_type = db.Column(
@@ -52,7 +54,7 @@ class AuditLog(db.Model):  # type: ignore[name-defined]
     )  # 'dispatch', 'booking_update', 'driver_assign', etc.
     action_category = db.Column(
         String(50), nullable=False
-    )  # 'dispatch', 'security', 'data_access', etc.
+    )  # 'dispatch', 'security', 'data_access', 'institution', etc.
 
     # Détails de l'action (JSON)
     action_details = db.Column(Text, nullable=False)  # JSON string
@@ -67,10 +69,16 @@ class AuditLog(db.Model):  # type: ignore[name-defined]
     company_id = db.Column(Integer, nullable=True)
     booking_id = db.Column(Integer, nullable=True)
     driver_id = db.Column(Integer, nullable=True)
+    institution_id = db.Column(Integer, nullable=True)  # ✅ Institution support
 
     # Sécurité
     ip_address = db.Column(String(45), nullable=True)  # IPv4 ou IPv6
     user_agent = db.Column(Text, nullable=True)
+
+    # Ressource cible (generique)
+    resource_type = db.Column(String(50), nullable=True)
+    resource_id = db.Column(String(64), nullable=True)
+    correlation_id = db.Column(String(100), nullable=True)
 
     # Métadonnées
     additional_metadata = db.Column(Text, nullable=True)  # JSON string supplémentaire
@@ -97,23 +105,28 @@ class AuditLogger:
         company_id: int | None = None,
         booking_id: int | None = None,
         driver_id: int | None = None,
+        institution_id: int | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
         metadata: Dict[str, Any] | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> AuditLog:
         """✅ D2: Enregistre une action d'audit (insert-only).
 
         Args:
             action_type: Type d'action (ex: 'dispatch_complete')
-            action_category: Catégorie (ex: 'dispatch', 'security')
+            action_category: Catégorie (ex: 'dispatch', 'security', 'institution')
             user_id: ID utilisateur (optionnel pour actions système)
-            user_type: Type d'utilisateur ('admin', 'operator', 'system')
+            user_type: Type d'utilisateur ('admin', 'operator', 'system', 'institution')
             result_status: Statut ('success', 'failure', 'partial')
             result_message: Message de résultat
             action_details: Détails JSON de l'action
             company_id: ID entreprise (optionnel)
             booking_id: ID booking (optionnel)
             driver_id: ID driver (optionnel)
+            institution_id: ID institution (optionnel)
             ip_address: Adresse IP (optionnel)
             user_agent: User-Agent (optionnel)
             metadata: Métadonnées supplémentaires (optionnel)
@@ -135,8 +148,12 @@ class AuditLogger:
         audit_log.company_id = company_id
         audit_log.booking_id = booking_id
         audit_log.driver_id = driver_id
+        audit_log.institution_id = institution_id
         audit_log.ip_address = ip_address
         audit_log.user_agent = user_agent
+        audit_log.resource_type = resource_type
+        audit_log.resource_id = resource_id
+        audit_log.correlation_id = correlation_id
         audit_log.additional_metadata = json.dumps(metadata or {})
         audit_log.created_at = datetime.now(UTC)
 
@@ -221,4 +238,29 @@ class AuditLogger:
             result_status=severity,
             action_details=details or {},
             ip_address=ip_address,
+        )
+
+    @staticmethod
+    def log_institution_action(
+        action_type: str,
+        institution_id: int,
+        user_id: int | None = None,
+        result_status: str = "success",
+        result_message: str | None = None,
+        action_details: Dict[str, Any] | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> AuditLog:
+        """✅ Institution: Log spécifique pour actions institution."""
+        return AuditLogger.log_action(
+            action_type=action_type,
+            action_category="institution",
+            user_id=user_id,
+            user_type="institution",
+            result_status=result_status,
+            result_message=result_message,
+            action_details=action_details or {},
+            institution_id=institution_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )

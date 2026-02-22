@@ -82,9 +82,6 @@ billing_settings_model = settings_ns.model(
         ),
         "signature_zip": fields.String(description="Code postal (mode form)"),
         "signature_city": fields.String(description="Ville (mode form)"),
-        "signature_logo_url": fields.String(
-            description="URL logo (mode form, optionnel)"
-        ),
         "email_signature_html_template": fields.String(
             description="Template HTML signature (mode HTML, variables: name, phone, email, address, logo_url)"
         ),
@@ -95,6 +92,20 @@ billing_settings_model = settings_ns.model(
         "vat_rate": fields.Float(description="Taux de TVA (%)", allow_null=True),
         "vat_label": fields.String(description="Libellé TVA", allow_null=True),
         "vat_number": fields.String(description="Numéro de TVA", allow_null=True),
+        # SMTP
+        "smtp_enabled": fields.Boolean(description="SMTP activé"),
+        "smtp_server": fields.String(description="Serveur SMTP"),
+        "smtp_port": fields.Integer(description="Port SMTP"),
+        "smtp_use_tls": fields.Boolean(description="SMTP TLS"),
+        "smtp_use_ssl": fields.Boolean(description="SMTP SSL"),
+        "smtp_username": fields.String(description="Utilisateur SMTP"),
+        "smtp_password_configured": fields.Boolean(
+            description="Mot de passe SMTP configuré (lecture seule)"
+        ),
+        # Cancellation policy
+        "cancellation_policy": fields.Raw(
+            description="Politique d'annulation (JSONB)", allow_null=True
+        ),
     },
 )
 
@@ -217,6 +228,9 @@ class OperationalSettings(Resource):
             logger.info(
                 "[Settings] Operational settings updated for company %s", company.id
             )
+
+            from shared.audit_helpers import audit_log
+            audit_log("settings_updated", "settings", resource_type="operational_settings", resource_id=company.id)
 
             return {
                 "success": True,
@@ -433,8 +447,10 @@ class BillingSettings(Resource):
     @settings_ns.expect(billing_settings_model, validate=False)
     def put(self):
         """Mettre à jour les paramètres de facturation."""
+        logger.info("[Settings] PUT /billing handler entered")
         company, err, code = get_company_from_token()
         if err:
+            logger.warning("[Settings] PUT /billing company error: %s (code=%s)", err, code)
             error_msg = err.get("error", "Company not found")
             error_response, status_code = (
                 APIErrorHandler.handle_not_found(
@@ -586,11 +602,54 @@ class BillingSettings(Resource):
                 "signature_address_line",
                 "signature_zip",
                 "signature_city",
-                "signature_logo_url",
                 "email_signature_html_template",
                 "legal_footer",
                 "pdf_template_variant",
+                "smtp_server",
+                "smtp_port",
+                "smtp_use_tls",
+                "smtp_use_ssl",
+                "smtp_username",
+                "smtp_enabled",
             ]
+
+            # smtp_password: hybrid_property chiffree, ne pas ecraser si vide
+            if "smtp_password" in data:
+                value = data["smtp_password"]
+                if value and isinstance(value, str) and value.strip():
+                    billing.smtp_password = value.strip()
+
+            # Cancellation policy : validation via Marshmallow schema
+            if "cancellation_policy" in data:
+                raw_policy = data["cancellation_policy"]
+                if raw_policy is None and billing.cancellation_policy is not None:
+                    pass  # ne pas ecraser une policy existante avec null
+                elif raw_policy is None:
+                    billing.cancellation_policy = None
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(billing, "cancellation_policy")
+                else:
+                    from marshmallow import ValidationError as MarshmallowValidationError  # noqa: I001
+                    from application.bookings.cancellation_policy_schema import (
+                        CancellationPolicySchema,
+                    )
+
+                    try:
+                        validated_policy = CancellationPolicySchema().load(raw_policy)
+                        billing.cancellation_policy = validated_policy
+                    except MarshmallowValidationError as e:
+                        logger.warning(
+                            "[Settings] Cancellation policy validation failed: %s (input: %s)",
+                            e.messages,
+                            raw_policy,
+                        )
+                        return {
+                            "success": False,
+                            "error": f"Cancellation policy invalid: {e.messages}",
+                        }, 400
+
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(billing, "cancellation_policy")
 
             for field in updatable_fields:
                 if field in data:
@@ -615,9 +674,10 @@ class BillingSettings(Resource):
                             "signature_address_line",
                             "signature_zip",
                             "signature_city",
-                            "signature_logo_url",
                             "email_signature_html_template",
                             "legal_footer",
+                            "smtp_server",
+                            "smtp_username",
                         ]:
                             setattr(billing, field, None)
                         continue
@@ -639,11 +699,9 @@ class BillingSettings(Resource):
                     # Conversion spéciale pour reminder_schedule_days
                     # (doit être un dict)
                     if field == "reminder_schedule_days" and isinstance(value, dict):
-                        # S'assurer que les clés sont des strings
-                        normalized = {
-                            str(k): int(v) for k, v in value.items() if v is not None
-                        }
-                        setattr(billing, field, normalized)
+                        existing = billing.reminder_schedule_days or {}
+                        merged = {**existing, **{str(k): int(v) for k, v in value.items() if v is not None}}  # type: ignore[arg-type]
+                        setattr(billing, field, merged)
                     else:
                         setattr(billing, field, value)
 
@@ -686,6 +744,20 @@ class BillingSettings(Resource):
             if "vat_number" in data:
                 billing.vat_number = data.get("vat_number") or None
 
+            # Log structure des champs mis a jour (toujours actif)
+            all_tracked = [
+                *updatable_fields,
+                "iban", "qr_iban", "esr_ref_base", "smtp_password",
+                "cancellation_policy", "vat_applicable", "vat_rate",
+                "vat_label", "vat_number",
+            ]
+            fields_received = [f for f in all_tracked if f in data]
+            logger.info(
+                "[Settings] PUT billing: company_id=%s, fields_in_payload=%s",
+                company.id,
+                fields_received,
+            )
+
             # Log avant commit avec vérification de détection de changement SQLAlchemy
             if BILLING_DEBUG:
                 from sqlalchemy.orm.attributes import flag_modified
@@ -719,11 +791,9 @@ class BillingSettings(Resource):
                     flag_modified(billing, "_qr_iban_raw")
 
             db.session.commit()
+            db.session.refresh(billing)
 
-            # Log après commit (recharger depuis DB pour vérifier persistance)
             if BILLING_DEBUG:
-                # Recharger depuis DB pour vérifier que le commit a bien persisté
-                db.session.refresh(billing)
                 logger.info(
                     (
                         "[BILLING_DEBUG] PUT after commit (refreshed): company_id=%s, billing_id=%s, "
@@ -761,6 +831,9 @@ class BillingSettings(Resource):
                     "esr_ref_base" in result_dict,
                     result_dict.get("esr_ref_base"),
                 )
+
+            from shared.audit_helpers import audit_log
+            audit_log("settings_updated", "settings", resource_type="billing_settings", resource_id=company.id)
 
             return {
                 "success": True,

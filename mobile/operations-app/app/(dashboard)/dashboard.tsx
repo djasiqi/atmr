@@ -8,6 +8,8 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { openNavigation } from '@/services/deepLinks';
+import { MissionStateManager } from '@/services/missionState';
 
 // MapView n'est pas disponible sur web
 let MapView: any = null;
@@ -88,9 +90,11 @@ export default function DashboardScreen() {
     // TODO: appeler l'API pour marquer la mission comme terminée
   };
 
-  const openNavigation = (destination: string) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-    Linking.openURL(url);
+  const handleOpenNavigation = (destination: string) => {
+    if (MissionStateManager.isActive()) {
+      MissionStateManager.setNavigating(true);
+    }
+    openNavigation(destination);
   };
 
   useEffect(() => {

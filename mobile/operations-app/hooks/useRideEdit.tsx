@@ -2,6 +2,9 @@ import { useState, useCallback } from "react";
 import { Alert } from "react-native";
 import { RideDetail, RideEditPayload } from "@/types/enterpriseDispatch";
 import { updateRide, getDispatchRideDetails } from "@/services/enterpriseDispatch";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("RideEdit");
 
 export const useRideEdit = (onSuccess?: () => Promise<void>) => {
     const [loading, setLoading] = useState(false);
@@ -21,7 +24,7 @@ export const useRideEdit = (onSuccess?: () => Promise<void>) => {
             // ✅ Ne pas afficher d'alerte pour les erreurs 500 - on utilisera les données de base
             // L'utilisateur peut quand même éditer avec les données disponibles
             if (status === 500) {
-                console.warn("[useRideEdit] Erreur 500 lors du chargement des détails, utilisation des données de base");
+                log.warn("details 500, using base data", {});
                 // Ne pas définir rideDetail, le modal utilisera les données de ride (RideSummary)
                 return null;
             }
@@ -34,7 +37,7 @@ export const useRideEdit = (onSuccess?: () => Promise<void>) => {
                 "Impossible de charger les détails de la course.";
             
             // Ne pas bloquer l'édition - l'utilisateur peut toujours modifier avec les données de base
-            console.warn("[useRideEdit] Erreur lors du chargement des détails:", message);
+            log.warn("load ride details failed", { message });
             return null;
         } finally {
             setLoadingDetail(false);

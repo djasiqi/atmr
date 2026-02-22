@@ -1,26 +1,474 @@
-/* Styles spécifiques pour l'encadré d'information facture */
+/* PaymentModal — SaaS Pro Design */
 
-.invoiceInfo {
-  background-color: var(--bg-tertiary);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-lg);
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
 }
 
-.invoiceInfo h3 {
-  margin: 0 0 var(--spacing-sm) 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-lg);
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.invoiceInfo p {
-  margin: var(--spacing-xs) 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+.modal {
+  background: var(--bg-primary, #fff);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.balanceDue {
-  font-weight: var(--font-weight-bold);
-  color: var(--error-primary) !important;
-  font-size: var(--font-size-base) !important;
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerTitle h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+}
+
+.headerIcon {
+  color: var(--brand-primary, #00796b);
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--bg-tertiary, #f1f5f9);
+  border-radius: 8px;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+
+/* Invoice summary card */
+.invoiceCard {
+  margin: 16px 20px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.invoiceCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-secondary, #f1f5f9);
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.invoiceNumber {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+}
+
+.clientName {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.invoiceAmounts {
+  padding: 12px 14px;
+}
+
+.amountRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.amountLabel {
+  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.amountValue {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress bar */
+.progressBar {
+  height: 4px;
+  background: var(--border-primary, #e2e8f0);
+  border-radius: 2px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--brand-primary, #00796b);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+
+.balanceRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0 0;
+  border-top: 1px dashed var(--border-primary, #e2e8f0);
+  margin-top: 4px;
+}
+
+.balanceLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+}
+
+.balanceValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--danger-primary, #dc2626);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Form */
+.form {
+  padding: 0 20px 20px;
+}
+
+.formGroup {
+  margin-bottom: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.formRow {
+  display: flex;
+  gap: 12px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 5px;
+}
+
+.labelIcon {
+  color: var(--text-tertiary, #94a3b8);
+  flex-shrink: 0;
+}
+
+.labelOptional {
+  font-weight: 400;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.input,
+.select {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--text-primary, #1e293b);
+  background: var(--bg-primary, #fff);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+/* ===== Chip dropdown ===== */
+.chipDrop {
+  position: relative;
+}
+
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #4b5563);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.chipBtn:hover {
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.chipBtnActive {
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+}
+
+.chipText {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipArrow {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.chipArrowOpen {
+  transform: rotate(180deg);
+}
+
+.chipMenu {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+}
+
+.chipOption {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.1s ease;
+}
+
+.chipOption:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+}
+
+.chipOptionActive {
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+  background: #f0fdfa;
+}
+
+/* Amount input with suffix + pay-full button */
+.amountInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.amountInputWrapper .input {
+  flex: 1;
+  padding-right: 48px;
+  font-weight: 600;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.inputSuffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary, #94a3b8);
+  pointer-events: none;
+}
+
+/* Adjust suffix when pay-full button is visible */
+.amountInputWrapper:has(.payFullBtn) .inputSuffix {
+  right: calc(12px);
+}
+
+.amountInputWrapper:has(.payFullBtn) .input {
+  flex: 1;
+}
+
+.payFullBtn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 12px;
+  background: var(--bg-tertiary, #f1f5f9);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-primary, #00796b);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.payFullBtn:hover {
+  background: var(--brand-primary, #00796b);
+  color: #fff;
+  border-color: var(--brand-primary, #00796b);
+}
+
+/* Error */
+.error {
+  background: var(--danger-bg, #fef2f2);
+  color: var(--danger-primary, #dc2626);
+  border: 1px solid var(--danger-border, #fecaca);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn,
+.submitBtn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  white-space: nowrap;
+}
+
+.cancelBtn {
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+  border: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+
+.submitBtn {
+  background: linear-gradient(180deg, var(--brand-primary, #00796b) 0%, var(--brand-primary-dark, #00695c) 100%);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.submitBtn:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.3);
+}
+
+.submitBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .modal {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .header {
+    padding: 14px 16px;
+  }
+
+  .headerTitle h2 {
+    font-size: 15px;
+  }
+
+  .invoiceCard {
+    margin: 12px 16px;
+  }
+
+  .form {
+    padding: 0 16px 16px;
+  }
+
+  .formRow {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .footer {
+    flex-direction: column-reverse;
+  }
+
+  .cancelBtn,
+  .submitBtn {
+    width: 100%;
+  }
 }

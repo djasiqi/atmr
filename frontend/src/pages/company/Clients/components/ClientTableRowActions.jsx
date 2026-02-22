@@ -1,17 +1,12 @@
-// frontend/src/pages/company/Clients/components/ClientTableRowActions.jsx
 import React, { useState, useRef, useEffect } from 'react';
+import { FiMoreHorizontal, FiEye, FiEdit2, FiTrash2 } from 'react-icons/fi';
 import styles from './ClientTableRowActions.module.css';
 
-/**
- * Menu d'actions pour une ligne de tableau (pattern ⋯)
- * Évite d'avoir des boutons visibles sur chaque ligne
- */
 const ClientTableRowActions = ({ client, onEdit, onDelete, onView }) => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
 
-  // Fermer le menu si clic en dehors
   useEffect(() => {
     if (!isOpen) return;
 
@@ -64,7 +59,7 @@ const ClientTableRowActions = ({ client, onEdit, onDelete, onView }) => {
         aria-expanded={isOpen}
         title="Actions"
       >
-        ⋯
+        <FiMoreHorizontal size={16} />
       </button>
 
       {isOpen && (
@@ -76,7 +71,8 @@ const ClientTableRowActions = ({ client, onEdit, onDelete, onView }) => {
               className={styles.menuItem}
               role="menuitem"
             >
-              Voir détails
+              <FiEye size={14} />
+              Voir details
             </button>
           )}
           <button
@@ -85,6 +81,7 @@ const ClientTableRowActions = ({ client, onEdit, onDelete, onView }) => {
             className={styles.menuItem}
             role="menuitem"
           >
+            <FiEdit2 size={14} />
             Modifier
           </button>
           <div className={styles.menuDivider} />
@@ -94,6 +91,7 @@ const ClientTableRowActions = ({ client, onEdit, onDelete, onView }) => {
             className={`${styles.menuItem} ${styles.menuItemDanger}`}
             role="menuitem"
           >
+            <FiTrash2 size={14} />
             Supprimer
           </button>
         </div>

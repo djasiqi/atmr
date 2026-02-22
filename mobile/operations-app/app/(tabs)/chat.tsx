@@ -1,6 +1,3 @@
-// app/(tabs)/chat.tsx
-// ✅ Version simplifiée & stable – scroll WhatsApp-like + tab bar + clavier OK
-
 import React, {
   useEffect,
   useState,
@@ -19,6 +16,8 @@ import {
   Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  StyleSheet,
+  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -39,8 +38,21 @@ import ImagePreviewModal from "@/components/chat/ImagePreviewModal";
 import PdfPreviewModal from "@/components/chat/PdfPreviewModal";
 import DateSeparator from "@/components/chat/DateSeparator";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import { getLogger } from "@/utils/logger";
 
-// ✅ Import conditionnel DocumentPicker (bare / dev / prod)
+const MAX_IMAGE_DIM = 1200;
+const IMAGE_COMPRESS = 0.75;
+
+const log = getLogger("Chat");
+
+const BRAND = "#00796b";
+const TXT = "#0f172a";
+const TXT_SEC = "#6b7280";
+const BORDER = "#e5e7eb";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+
 let DocumentPicker: typeof import("expo-document-picker") | null = null;
 try {
   if (Platform.OS !== "web") {
@@ -174,12 +186,12 @@ export default function ChatScreen() {
         isAtBottomRef.current = true;
         setShowScrollButton(false);
       } catch (e) {
-        console.log("[ChatScreen] scrollToBottom error:", e);
+        log.warn("scrollToBottom error", { error: e });
         // Fallback : essayer avec scrollToEnd
         try {
           flatListRef.current.scrollToEnd({ animated });
         } catch (e2) {
-          console.log("[ChatScreen] scrollToEnd fallback error:", e2);
+          log.warn("scrollToEnd fallback error", { error: e2 });
         }
       }
     },
@@ -202,7 +214,7 @@ export default function ChatScreen() {
 
     setIsLoadingMore(true);
     try {
-      console.log("📨 load more messages before:", oldestMessage.timestamp);
+      log.info("load more messages", { before: oldestMessage.timestamp });
       // Charger les messages plus anciens que le timestamp du message le plus ancien
       const res = await api.get(`/messages/${driver.company_id}`, {
         params: { limit: 20, before: oldestMessage.timestamp },
@@ -233,7 +245,7 @@ export default function ChatScreen() {
       // Si on a moins de 20 messages, il n'y a plus de messages à charger
       setHasMoreMessages(loaded.length >= 20);
     } catch (e) {
-      console.error("❌ Erreur chargement messages supplémentaires:", e);
+      log.error("load more messages failed", { error: e });
     } finally {
       setIsLoadingMore(false);
     }
@@ -290,16 +302,41 @@ export default function ChatScreen() {
 
   // =============== IMAGE / PDF ENVOI ===============
 
+  const resizeImage = useCallback(async (uri: string): Promise<string> => {
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: MAX_IMAGE_DIM } }],
+        { compress: IMAGE_COMPRESS, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      return result.uri;
+    } catch (e) {
+      log.warn("image resize failed, using original", { error: e });
+      return uri;
+    }
+  }, []);
+
   const handleSendImage = useCallback(
     async (imageUri: string) => {
-      if (!socket || !driver?.company_id) return;
+      if (!socket) {
+        log.warn("handleSendImage: socket null", {});
+        Alert.alert("Erreur", "Connexion perdue. Réessayez.");
+        return;
+      }
+      if (!driver?.company_id) {
+        log.warn("handleSendImage: no company_id", {});
+        return;
+      }
 
       try {
+        const resizedUri = await resizeImage(imageUri);
+        log.info("uploading image", { uri: resizedUri.substring(0, 80) });
+
         const formData = new FormData();
         formData.append("file", {
-          uri: imageUri,
+          uri: resizedUri,
           type: "image/jpeg",
-          name: "image.jpg",
+          name: `image_${Date.now()}.jpg`,
         } as any);
 
         const uploadRes = await api.post("/messages/upload", formData, {
@@ -307,21 +344,28 @@ export default function ChatScreen() {
         });
 
         const { url } = uploadRes.data;
+        log.info("image uploaded, emitting socket", { url });
         socket.emit("team_chat_message", {
           content: "",
           image_url: url,
           receiver_id: null,
         });
-      } catch (error) {
-        console.log("[ChatScreen] Erreur upload image:", error);
+      } catch (error: any) {
+        log.error("image upload failed", { error: error?.message, status: error?.response?.status });
+        const msg = error?.response?.data?.error || "Impossible d'envoyer l'image.";
+        Alert.alert("Envoi échoué", msg);
       }
     },
-    [socket, driver?.company_id]
+    [socket, driver?.company_id, resizeImage]
   );
 
   const handleSendPdf = useCallback(
     async (pdfUri: string, filename: string) => {
-      if (!socket || !driver?.company_id) return;
+      if (!socket) {
+        Alert.alert("Erreur", "Connexion perdue. Réessayez.");
+        return;
+      }
+      if (!driver?.company_id) return;
 
       try {
         const formData = new FormData();
@@ -343,8 +387,10 @@ export default function ChatScreen() {
           pdf_size: size_bytes,
           receiver_id: null,
         });
-      } catch (error) {
-        console.log("[ChatScreen] Erreur upload PDF:", error);
+      } catch (error: any) {
+        log.error("pdf upload failed", { error: error?.message });
+        const msg = error?.response?.data?.error || "Impossible d'envoyer le document.";
+        Alert.alert("Envoi échoué", msg);
       }
     },
     [socket, driver?.company_id]
@@ -352,15 +398,23 @@ export default function ChatScreen() {
 
   // =============== ATTACHMENT HANDLERS ===============
 
+  const waitForModalClose = () => new Promise<void>((r) => setTimeout(r, 350));
+
   const handlePickCamera = useCallback(async () => {
     setShowAttachment(false);
+    await waitForModalClose();
+
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") return;
+    if (status !== "granted") {
+      Alert.alert("Permission requise", "L'accès à la caméra est nécessaire pour prendre une photo.");
+      return;
+    }
 
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5,
+      exif: false,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -370,18 +424,19 @@ export default function ChatScreen() {
 
   const handlePickGallery = useCallback(async () => {
     setShowAttachment(false);
-    // ✅ Demander les permissions pour accéder à la galerie
+    await waitForModalClose();
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
-      console.log("[ChatScreen] Permission galerie refusée");
+      Alert.alert("Permission requise", "L'accès à la galerie est nécessaire pour choisir une image.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      quality: 0.5,
+      exif: false,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -391,26 +446,32 @@ export default function ChatScreen() {
 
   const handlePickDocument = useCallback(async () => {
     setShowAttachment(false);
+    await waitForModalClose();
+
     if (!DocumentPicker) {
-      console.log("⚠️ DocumentPicker non dispo (Expo Go / rebuild natif)");
+      Alert.alert("Non disponible", "La sélection de documents n'est pas disponible sur cette plateforme.");
       return;
     }
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "application/pdf",
+        type: ["application/pdf", "image/*"],
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets[0]) {
-        await handleSendPdf(
-          result.assets[0].uri,
-          result.assets[0].name || "document.pdf"
-        );
+        const asset = result.assets[0];
+        const isPdf = asset.mimeType?.includes("pdf") || asset.name?.endsWith(".pdf");
+
+        if (isPdf) {
+          await handleSendPdf(asset.uri, asset.name || "document.pdf");
+        } else {
+          await handleSendImage(asset.uri);
+        }
       }
     } catch (error) {
-      console.log("Erreur sélection PDF:", error);
+      log.warn("document selection error", { error });
     }
-  }, [handleSendPdf]);
+  }, [handleSendPdf, handleSendImage]);
 
   // =============== LOAD INITIAL MESSAGES (derniers messages uniquement) ===============
 
@@ -419,7 +480,7 @@ export default function ChatScreen() {
       if (!driver?.company_id) return;
 
       try {
-        console.log("📨 load initial messages company_id:", driver.company_id);
+        log.info("load initial messages", { company_id: driver.company_id });
         // Charger seulement les 20 derniers messages
         const res = await api.get(`/messages/${driver.company_id}`, {
           params: { limit: 20 },
@@ -474,7 +535,7 @@ export default function ChatScreen() {
           });
         });
       } catch (e) {
-        console.error("❌ Erreur chargement messages:", e);
+        log.error("load messages failed", { error: e });
       }
     };
 
@@ -683,8 +744,8 @@ export default function ChatScreen() {
         // Pagination gérée dans handleScroll (scroll vers le haut)
         ListHeaderComponent={
           isLoadingMore ? (
-            <View style={{ padding: 16, alignItems: "center" }}>
-              <Text style={{ color: "#5F7369", fontSize: 14 }}>Chargement...</Text>
+            <View style={{ padding: 12, alignItems: "center" }}>
+              <Text style={{ color: TXT_SEC, fontSize: 12 }}>Chargement...</Text>
             </View>
           ) : null
         }
@@ -757,16 +818,19 @@ export default function ChatScreen() {
             try {
               Keyboard.dismiss();
             } catch (e) {
-              console.log("[ChatScreen] Keyboard dismiss error:", e);
+              log.warn("keyboard dismiss error", { error: e });
             }
           }
         }}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={() => (
           <View style={chatStyles.emptyContainer}>
-            <Text style={chatStyles.emptyText}>
-              Aucun message pour le moment.{"\n"}
-              Commencez la conversation avec votre équipe !
+            <View style={emptyStyles.iconBox}>
+              <Ionicons name="chatbubbles-outline" size={40} color={BRAND} />
+            </View>
+            <Text style={emptyStyles.title}>Aucun message</Text>
+            <Text style={emptyStyles.desc}>
+              Commencez la conversation avec votre équipe
             </Text>
           </View>
         )}
@@ -782,32 +846,24 @@ export default function ChatScreen() {
         bottomOffset={scrollButtonBottom}
       />
 
-      {/* Barre d'input - Position dynamique sur Android selon le clavier */}
       <View
         style={[
-          chatStyles.inputContainer,
+          inputBarStyles.bar,
           Platform.OS === "android"
             ? {
-              // Android : Position absolue pour suivre le clavier
               position: "absolute" as const,
-              bottom:
-                keyboardHeight > 0
-                  ? keyboardHeight // Au-dessus du clavier quand ouvert
-                  : tabBarHeight, // Au-dessus de la tab bar quand fermé
+              bottom: keyboardHeight > 0 ? keyboardHeight : tabBarHeight,
               left: 0,
               right: 0,
               paddingBottom: insets.bottom,
-              // Éviter les re-renders qui font perdre le focus
               pointerEvents: "auto" as const,
             }
             : {
-              // iOS : Dans le flux normal (géré par KeyboardAvoidingView)
               paddingBottom: insets.bottom,
               marginBottom: tabBarHeight,
             },
         ]}
         onLayout={(e) => {
-          // Ne mesurer que si le clavier est fermé pour éviter les re-renders
           if (Platform.OS === "android" && keyboardHeight === 0) {
             setInputContainerHeight(e.nativeEvent.layout.height);
           } else if (Platform.OS !== "android") {
@@ -815,39 +871,30 @@ export default function ChatScreen() {
           }
         }}
       >
-        <TouchableOpacity
-          onPress={() => setShowAttachment(true)}
-          style={{ marginRight: 8 }}
-        >
-          <Ionicons
-            name="attach"
-            size={22}
-            color="#0A7F59"
-            style={{ transform: [{ rotate: "45deg" }] }}
-          />
+        <TouchableOpacity onPress={() => setShowAttachment(true)} style={inputBarStyles.attachBtn} activeOpacity={0.7}>
+          <Ionicons name="add-circle" size={28} color={BRAND} />
         </TouchableOpacity>
 
-        <TextInput
-          value={input}
-          onChangeText={handleTyping}
-          placeholder="Écrire un message..."
-          placeholderTextColor={chatStyles.inputPlaceholder.color}
-          style={chatStyles.input}
-          multiline={false}
-          onSubmitEditing={sendMessage}
-          returnKeyType="send"
-          onFocus={() => {
-            // Pas de scroll automatique au focus sur Android
-            // Le clavier va s'ouvrir et le padding va s'ajuster automatiquement
-            // On laisse le comportement natif gérer le scroll
-          }}
-        />
+        <View style={inputBarStyles.inputWrap}>
+          <TextInput
+            value={input}
+            onChangeText={handleTyping}
+            placeholder="Message..."
+            placeholderTextColor="#9ca3af"
+            style={inputBarStyles.input}
+            multiline={false}
+            onSubmitEditing={sendMessage}
+            returnKeyType="send"
+          />
+        </View>
 
         <TouchableOpacity
           onPress={sendMessage}
-          style={chatStyles.sendButton}
+          style={[inputBarStyles.sendBtn, !input.trim() && { opacity: 0.4 }]}
+          activeOpacity={0.7}
+          disabled={!input.trim()}
         >
-          <Ionicons name="send" size={20} color="#FFFFFF" />
+          <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -897,3 +944,65 @@ export default function ChatScreen() {
     </View>
   );
 }
+
+const inputBarShadow = Platform.OS === "web"
+  ? { boxShadow: "0 -1px 4px rgba(0,0,0,0.04)" }
+  : { shadowColor: "#000", shadowOffset: { width: 0, height: -1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 2 };
+
+const sendShadow = Platform.OS === "web"
+  ? { boxShadow: "0 2px 4px rgba(0,121,107,0.25)" }
+  : { shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 3 };
+
+const inputBarStyles = StyleSheet.create({
+  bar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: CARD,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    gap: 8,
+    ...inputBarShadow,
+  },
+  attachBtn: { padding: 2 },
+  inputWrap: {
+    flex: 1,
+    backgroundColor: BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    justifyContent: "center",
+  },
+  input: {
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
+    fontSize: 14,
+    color: TXT,
+    maxHeight: 80,
+  },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: BRAND,
+    justifyContent: "center",
+    alignItems: "center",
+    ...sendShadow,
+  },
+});
+
+const emptyStyles = StyleSheet.create({
+  iconBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(0,121,107,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  title: { fontSize: 16, fontWeight: "700", color: TXT, marginBottom: 4 },
+  desc: { fontSize: 13, color: TXT_SEC, textAlign: "center", lineHeight: 20 },
+});

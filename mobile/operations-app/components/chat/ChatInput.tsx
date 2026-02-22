@@ -14,7 +14,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { chatStyles } from "@/styles/chatStyles";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("ChatInput");
 interface ChatInputProps {
     value: string;
     onChangeText: (text: string) => void;
@@ -111,7 +113,7 @@ export default function ChatInput({
                 onSendPdf(asset.uri, asset.name || "document.pdf");
             }
         } catch (error) {
-            console.log("❌ Erreur sélection PDF:", error);
+            log.error("pdf selection failed", { error });
             Alert.alert("Erreur", "Impossible de sélectionner le document");
         }
     };

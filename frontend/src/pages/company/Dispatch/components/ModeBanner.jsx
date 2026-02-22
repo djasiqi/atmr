@@ -1,9 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 
-/**
- * Composant réutilisable pour les bannières d'information de mode
- */
 const ModeBanner = ({ icon, title, description, action, variant = 'info', styles = {} }) => {
   const bannerClass = `${styles.dispatchModeBanner || ''} ${styles[variant] || ''}`;
 
@@ -20,7 +17,7 @@ const ModeBanner = ({ icon, title, description, action, variant = 'info', styles
 };
 
 ModeBanner.propTypes = {
-  icon: PropTypes.string.isRequired,
+  icon: PropTypes.node.isRequired,
   title: PropTypes.string.isRequired,
   description: PropTypes.string.isRequired,
   action: PropTypes.node,

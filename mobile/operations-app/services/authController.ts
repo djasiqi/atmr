@@ -9,7 +9,10 @@
  */
 
 import Constants from "expo-constants";
+import { getLogger } from "@/utils/logger";
 import { getNetworkStateSnapshot } from "@/services/networkState";
+
+const log = getLogger("AuthCtrl");
 import {
   type DriverLogoutReason,
   type EnterpriseLogoutReason,
@@ -43,11 +46,9 @@ export function registerForceLogoutDriver(cb: ForceLogoutDriverCallback): () => 
   if (pendingDriver) {
     const { reason } = pendingDriver;
     pendingDriver = null;
-    if (__DEV__) {
-      console.log("[AuthController] Drain pending driver logout:", reason);
-    }
+    log.info("drain pending driver logout", { reason });
     void Promise.resolve(cb(reason as DriverLogoutReason)).catch((e: unknown) => {
-      console.error("[AuthController] Erreur lors du drain pending driver:", e);
+      log.error("drain pending driver error", { error: e });
     });
   }
   return () => {
@@ -64,11 +65,9 @@ export function registerForceLogoutEnterprise(cb: ForceLogoutEnterpriseCallback)
   if (pendingEnterprise) {
     const { reason } = pendingEnterprise;
     pendingEnterprise = null;
-    if (__DEV__) {
-      console.log("[AuthController] Drain pending enterprise logout:", reason);
-    }
+    log.info("drain pending enterprise logout", { reason });
     void Promise.resolve(cb(reason as EnterpriseLogoutReason)).catch((e: unknown) => {
-      console.error("[AuthController] Erreur lors du drain pending enterprise:", e);
+      log.error("drain pending enterprise error", { error: e });
     });
   }
   return () => {
@@ -127,9 +126,7 @@ export async function invokeForceLogoutDriver(
   logLogoutTransition("driver", reason);
 
   if (shouldDedupeDriver(reason)) {
-    if (__DEV__) {
-      console.log("[AuthController] Dedupe driver logout (reason=%s, fenêtre %dms)", reason, DEDUPE_MS);
-    }
+    log.info("dedupe driver logout", { reason, windowMs: DEDUPE_MS });
     return;
   }
 
@@ -137,11 +134,7 @@ export async function invokeForceLogoutDriver(
     await forceLogoutDriverCallback(reason);
   } else {
     pendingDriver = { route: "driver", reason, ts: Date.now() };
-    console.warn(
-      "[AuthController] invokeForceLogoutDriver appelé mais callback non enregistré (reason=%s). " +
-        "Pending drain au register.",
-      reason
-    );
+    log.warn("force logout driver callback not registered", { reason });
   }
 }
 
@@ -156,9 +149,7 @@ export async function invokeForceLogoutEnterprise(
   logLogoutTransition("enterprise", reason);
 
   if (shouldDedupeEnterprise(reason)) {
-    if (__DEV__) {
-      console.log("[AuthController] Dedupe enterprise logout (reason=%s, fenêtre %dms)", reason, DEDUPE_MS);
-    }
+    log.info("dedupe enterprise logout", { reason, windowMs: DEDUPE_MS });
     return;
   }
 
@@ -166,10 +157,6 @@ export async function invokeForceLogoutEnterprise(
     await forceLogoutEnterpriseCallback(reason);
   } else {
     pendingEnterprise = { route: "enterprise", reason, ts: Date.now() };
-    console.warn(
-      "[AuthController] invokeForceLogoutEnterprise appelé mais callback non enregistré (reason=%s). " +
-        "Pending drain au register.",
-      reason
-    );
+    log.warn("force logout enterprise callback not registered", { reason });
   }
 }

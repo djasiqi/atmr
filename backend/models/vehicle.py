@@ -66,10 +66,16 @@ class Vehicle(db.Model):
     wheelchair_accessible = Column(Boolean, nullable=False, server_default="false")
 
     # Suivi administratif
+    insurance_company_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
     insurance_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     inspection_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tachograph_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -121,6 +127,7 @@ class Vehicle(db.Model):
     def serialize(self):
         ins_dt = _as_dt(self.insurance_expires_at)
         insp_dt = _as_dt(self.inspection_expires_at)
+        tacho_dt = _as_dt(self.tachograph_expires_at)
         created_dt = _as_dt(self.created_at)
         return {
             "id": self.id,
@@ -131,11 +138,15 @@ class Vehicle(db.Model):
             "vin": self.vin,
             "seats": self.seats,
             "wheelchair_accessible": _as_bool(self.wheelchair_accessible),
-            "insurance_expires_at": ins_dt.isoformat()
+            "insurance_company_name": self.insurance_company_name,
+            "insurance_expires_at": ins_dt.strftime("%Y-%m-%d")
             if isinstance(ins_dt, datetime)
             else None,
-            "inspection_expires_at": insp_dt.isoformat()
+            "inspection_expires_at": insp_dt.strftime("%Y-%m-%d")
             if isinstance(insp_dt, datetime)
+            else None,
+            "tachograph_expires_at": tacho_dt.strftime("%Y-%m-%d")
+            if isinstance(tacho_dt, datetime)
             else None,
             "is_active": _as_bool(self.is_active),
             "created_at": created_dt.isoformat()

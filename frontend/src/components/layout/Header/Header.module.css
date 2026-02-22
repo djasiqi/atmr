@@ -1,116 +1,154 @@
-/* Header styles */
+/* Header — Public pages */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background-color: var(--brand-primary);
-  color: #fff;
-  position: relative;
-  font-family: Arial, sans-serif;
-  z-index: var(--z-modal-backdrop);
+  padding: 14px var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
 }
 
 /* Logo */
 .logo {
-  font-size: var(--font-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--cyan-100);
+  display: flex;
+  align-items: center;
   text-decoration: none;
   cursor: pointer;
 }
 
-.logo:hover {
-  color: var(--teal-200);
+.logoImg {
+  height: 30px;
+  width: auto;
+  transition: opacity 0.2s ease;
+}
+
+.logo:hover .logoImg {
+  opacity: 0.8;
 }
 
 /* Navigation */
 .nav {
   display: flex;
   align-items: center;
-  gap: var(--spacing-lg);
+  gap: 8px;
 }
 
 .navList {
   display: flex;
   list-style: none;
-  gap: var(--spacing-lg);
+  gap: 4px;
   margin: 0;
   padding: 0;
 }
 
-.navList li a {
-  color: var(--cyan-100);
+.navList li a,
+.navLink {
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: var(--font-sm);
-  transition: color var(--transition-base);
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
-.navList li a:hover {
-  color: var(--teal-200);
+.navList li a:hover,
+.navLink:hover {
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest);
 }
 
-/* Auth and Hamburger */
+/* Auth actions */
 .authAndMenu {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 10px;
 }
 
 .login {
-  color: var(--cyan-100);
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: var(--font-sm);
-  transition: color var(--transition-base);
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .login:hover {
-  color: var(--teal-200);
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest);
+  text-decoration: none;
 }
 
 .signUp {
-  padding: var(--spacing-xs) var(--spacing-md);
-  background-color: var(--bg-primary);
-  color: var(--teal-900);
+  padding: 8px 20px;
+  background: var(--brand-primary);
+  color: #ffffff;
   border: none;
   border-radius: var(--radius-full);
   cursor: pointer;
   font-size: var(--font-sm);
+  font-weight: 600;
   transition:
-    background-color var(--transition-base),
-    color var(--transition-base);
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-brand);
 }
 
 .signUp:hover {
-  background-color: var(--teal-900);
-  color: #fff;
+  background: var(--brand-primary-dark);
+  box-shadow: 0 4px 14px rgba(0, 121, 107, 0.3);
 }
 
 .signUpDisabled {
-  background-color: var(--gray-200);
-  color: var(--gray-600);
-  opacity: 0.75;
+  background: var(--bg-disabled);
+  color: var(--text-disabled);
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.signUpDisabled:hover {
+  background: var(--bg-disabled);
+  box-shadow: none;
 }
 
 /* Hamburger button */
 .hamburgerButton {
   display: none;
-  background-color: transparent;
+  background: transparent;
   border: none;
-  color: var(--cyan-100);
-  font-size: var(--font-2xl);
+  color: var(--text-secondary);
+  font-size: var(--font-xl);
   cursor: pointer;
-  transition: color var(--transition-base);
-  z-index: var(--z-modal);
-  position: relative;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .hamburgerButton:hover {
-  color: var(--teal-200);
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest);
 }
 
-/* Responsive behavior */
+/* Responsive */
 @media (max-width: 768px) {
+  .header {
+    padding: 12px var(--spacing-md);
+  }
+
   .hamburgerButton {
     display: block;
   }
@@ -119,15 +157,14 @@
     display: none;
     position: absolute;
     top: 100%;
+    left: 0;
     right: 0;
-    background-color: var(--teal-900);
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(12px);
     flex-direction: column;
-    width: 100%;
-    padding: var(--spacing-lg);
-    border-radius: var(--radius-sm);
-    text-align: center;
-    transition: all var(--transition-base);
-    z-index: var(--z-modal-backdrop);
+    padding: var(--spacing-md) var(--spacing-lg);
+    border-bottom: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-lg);
   }
 
   .navListOpen {
@@ -138,11 +175,8 @@
     display: none;
   }
 
-  .navList li {
-    margin: var(--spacing-md) 0;
-  }
-
-  .signUp {
-    align-self: center;
+  .navList li a {
+    padding: 12px 16px;
+    border-radius: var(--radius-md);
   }
 }

@@ -27,8 +27,10 @@ class _VehicleLike(Protocol):
     wheelchair_accessible: bool  # Compat ancien champ
     is_active: bool
     notes: str | None
+    insurance_company_name: str | None
     insurance_expires_at: datetime | None
     inspection_expires_at: datetime | None
+    tachograph_expires_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +81,12 @@ class UpdateCompanyVehicleUseCase:
         if "notes" in validated_data:
             vehicle.notes = validated_data["notes"]
 
-        # Dates legacy (pas dans le schema)
+        if "insurance_company_name" in raw_data:
+            val = raw_data.get("insurance_company_name")
+            vehicle.insurance_company_name = (
+                str(val).strip() if val and str(val).strip() else None
+            )
+
         try:
             if "insurance_expires_at" in raw_data:
                 vehicle.insurance_expires_at = _parse_dt(
@@ -88,6 +95,10 @@ class UpdateCompanyVehicleUseCase:
             if "inspection_expires_at" in raw_data:
                 vehicle.inspection_expires_at = _parse_dt(
                     raw_data.get("inspection_expires_at")
+                )
+            if "tachograph_expires_at" in raw_data:
+                vehicle.tachograph_expires_at = _parse_dt(
+                    raw_data.get("tachograph_expires_at")
                 )
         except Exception as e:
             return UpdateCompanyVehicleResult(

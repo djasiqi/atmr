@@ -4,7 +4,10 @@
 import { Platform } from "react-native";
 import * as Application from "expo-application";
 import Constants from "expo-constants";
+import { getLogger } from "@/utils/logger";
 import { api } from "./api";
+
+const log = getLogger("Version");
 
 export type UpdateStatus = "OK" | "UPDATE_RECOMMENDED" | "UPDATE_REQUIRED";
 
@@ -38,7 +41,7 @@ export function getCurrentAppVersion(): string {
       return Application.nativeApplicationVersion;
     }
   } catch (e) {
-    console.warn("expo-application non disponible, fallback...", e);
+    log.warn("expo-application not available, fallback", { error: e });
   }
 
   try {
@@ -50,7 +53,7 @@ export function getCurrentAppVersion(): string {
       return configVersion;
     }
   } catch (e) {
-    console.warn("Constants.expoConfig non disponible, fallback...", e);
+    log.warn("constants expo config not available, fallback", { error: e });
   }
 
   // Dernier recours: package.json (nécessite un require)
@@ -60,11 +63,10 @@ export function getCurrentAppVersion(): string {
       return pkg.version;
     }
   } catch (e) {
-    console.warn("package.json non accessible", e);
+    log.warn("package.json not accessible", { error: e });
   }
 
-  // Valeur par défaut si rien ne fonctionne
-  console.warn("Impossible de récupérer la version, utilisation de '1.0.0'");
+  log.warn("could not get version, using 1.0.0", {});
   return "1.0.0";
 }
 
@@ -93,9 +95,7 @@ export async function checkVersion(): Promise<VersionCheckResponse> {
 
     return response.data;
   } catch (error: any) {
-    // En cas d'erreur réseau ou serveur, on considère que tout est OK
-    // pour ne pas bloquer l'utilisateur
-    console.warn("Erreur lors de la vérification de version:", error);
+    log.warn("version check failed", { error });
 
     // Retourner une réponse par défaut "OK" pour ne pas bloquer l'app
     return {

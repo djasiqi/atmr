@@ -1,22 +1,99 @@
 // src/pages/company/Dashboard/components/DispatchTable.jsx
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import styles from './ReservationTable.module.css';
-import { FiCheckCircle, FiXCircle } from 'react-icons/fi';
-import { renderBookingDateTime } from '../../../../utils/formatDate';
+import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiRefreshCw, FiEye, FiClock } from 'react-icons/fi';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
+import DriverInlineSelect from '../../Dispatch/components/DriverInlineSelect';
+
+// V11: Cle unifiee
+const getDispatchKey = (d) => d.booking_id ?? d.id;
+
+// V16: Statuts FR — aligne avec STATUS_LABELS de ReservationTable.jsx (accents corrects)
+export const STATUS_FR = {
+  pending: 'En attente',
+  accepted: 'Acceptée',
+  assigned: 'Assignée',
+  en_route: 'En route',
+  in_progress: 'En cours',
+  completed: 'Terminée',
+  canceled: 'Annulée',
+  cancelled: 'Annulée',
+  rejected: 'Refusée',
+  no_show: 'Non présenté',
+  return_completed: 'Retour terminé',
+};
+
+// V7: Statut composite — coherent avec le dashboard
+const getCompositeStatus = (r) => {
+  const status = r.status?.toLowerCase() || 'unknown';
+  return STATUS_FR[status] || (r.status || '').replace('_', ' ') || status;
+};
+
+// V6: Retards 3 niveaux (seuils etendus CT1: <=5 / 5-15 / >15)
+const getDelayLevel = (minutes) => {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes <= 5) return 'light';
+  if (minutes <= 15) return 'moderate';
+  return 'critical';
+};
+
+// Detecter si un retour necessite confirmation d'heure avant assignation
+const checkNeedsTimeConfirmation = (r) => {
+  const isReturn = !!(r.is_return || r.booking_type === 'return' || r.type === 'return');
+  if (!isReturn) return false;
+
+  const hasScheduledTime = !!r.scheduled_time;
+  const timeConfirmed = r.time_confirmed === true;
+
+  let isDefaultTime = false;
+  if (r.scheduled_time) {
+    const timeStr = r.scheduled_time.toString();
+    isDefaultTime = timeStr.includes('T00:00:00') || timeStr.includes(' 00:00:00');
+  }
+
+  return !timeConfirmed || !hasScheduledTime || isDefaultTime;
+};
+
+// V17: Hierarchie visuelle stricte danger > warning
+const getRowPriority = (d, delayMap) => {
+  const key = getDispatchKey(d);
+  const delay = delayMap?.[key]?.minutes || 0;
+  const isUnassigned = !d.driver_id && !d.driver;
+  if (delay > 15) return 'critical';
+  if (delay > 5) return 'moderate';
+  if (delay > 0) return 'light';
+  if (isUnassigned) return 'unassigned';
+  return 'normal';
+};
+
+const ROW_PRIORITY_CLASS = {
+  critical: styles.rowDelayedCritical || styles.rowDelayed,
+  moderate: styles.rowDelayedModerate || styles.rowSlightDelay,
+  light: styles.rowDelayedLight || styles.rowReasonableDelay,
+  unassigned: styles.rowUnassigned,
+  normal: '',
+};
+
+const DELAY_BADGE_CLASS = {
+  light: styles.delayBadgeLight || styles.delayBadgeReasonable,
+  moderate: styles.delayBadgeModerate,
+  critical: styles.delayBadgeCritical,
+};
 
 /**
- * Tableau spécifique pour la page Dispatch
- * Affiche la colonne Chauffeur au lieu de Montant
+ * Tableau Dispatch refactore (Zone D)
+ * 6 colonnes : Client, Heure, Trajet, Chauffeur, Statut, Actions
  */
 const DispatchTable = ({
   reservations = [],
   dispatches,
-  delays = [], // ✅ Retards détectés pour affichage visuel
+  delays = [],
+  delayMap: externalDelayMap,
   onRowClick,
   onAccept,
   onReject,
   onAssign,
+  onAssignDirect,
   onTransfer,
   onDelete,
   onSchedule,
@@ -25,49 +102,52 @@ const DispatchTable = ({
   hideUrgent = false,
   hideEdit = false,
   hideDelete = false,
-  currentCompanyId, // ✅ ID de l'entreprise connectée pour déterminer la direction du transfert
+  currentCompanyId,
+  activeDrivers = [],
+  autoOpenId = null,
+  onAutoOpenReset: _onAutoOpenReset,
 }) => {
-  const deletableStatuses = ['pending', 'accepted', 'assigned'];
+  const [localAutoOpenId, _setLocalAutoOpenId] = useState(null);
+  const effectiveAutoOpenId = autoOpenId ?? localAutoOpenId;
 
-  // Support des deux noms de prop pour compatibilité
   const data = dispatches || reservations || [];
 
-  // ✅ Fonction helper pour trouver le retard d'une course
-  const getDelayForBooking = (bookingId) => {
-    if (!delays || delays.length === 0 || !bookingId) return null;
-    
-    // Gérer les cas où booking_id pourrait être string ou number
-    const found = delays.find(d => 
-      d.booking_id === bookingId || 
-      Number(d.booking_id) === Number(bookingId)
-    );
-    
-    return found;
-  };
-
-  // ✅ Fonction pour déterminer le type de retard (3 niveaux)
-  const getDelayStatus = (delayInfo) => {
-    if (!delayInfo) return null;
-    
-    // ✅ Priorité 1: Utiliser delay_severity du backend si disponible
-    const delaySeverity = delayInfo.delay_severity;
-    if (delaySeverity) {
-      // Mapper les statuts backend vers les classes CSS frontend
-      if (delaySeverity === 'reasonable') return 'reasonable';
-      if (delaySeverity === 'moderate') return 'moderate';
-      if (delaySeverity === 'critical') return 'critical';
+  // Construire delayMap interne si pas fourni en prop (compatibilite)
+  const delayMap = externalDelayMap || (() => {
+    const map = {};
+    if (delays && delays.length > 0) {
+      delays.forEach((d) => {
+        const key = d.booking_id ?? d.id;
+        map[key] = {
+          minutes: Math.round(d.delay_minutes || d.pickup_delay_minutes || d.dropoff_delay_minutes || 0),
+          severity: d.delay_severity || 'reasonable',
+        };
+      });
     }
-    
-    // ✅ Priorité 2: Utiliser delay_minutes pour déterminer la sévérité
-    const delayMinutes = delayInfo.delay_minutes || 
-                         delayInfo.pickup_delay_minutes || 
-                         delayInfo.dropoff_delay_minutes || 
-                         0;
-    
-    if (delayMinutes <= 0) return null;
-    if (delayMinutes <= 5) return 'reasonable';  // 1-5 min : raisonnable
-    if (delayMinutes <= 10) return 'moderate';   // 5-10 min : modéré
-    return 'critical';  // >10 min : critique
+    return map;
+  })();
+
+  // Formater heure
+  const formatTime = useCallback((timeString) => {
+    if (!timeString) return '\u2014';
+    const date = new Date(timeString);
+    if (isNaN(date.getTime())) return '\u2014';
+    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  }, []);
+
+  // Handler clic sur ligne -> ouvre le panel lateral de details
+  const handleRowClick = useCallback((r) => {
+    onRowClick?.(r);
+  }, [onRowClick]);
+
+  // Obtenir le nom du chauffeur
+  const getDriverName = (r) => {
+    return r.driver?.full_name ||
+      r.driver?.name ||
+      r.driver?.username ||
+      r.assignment?.driver?.full_name ||
+      r.assignment?.driver?.name ||
+      null;
   };
 
   return (
@@ -76,8 +156,8 @@ const DispatchTable = ({
         <thead>
           <tr>
             <th>Client</th>
-            <th>Date / Heure</th>
-            <th>Lieu</th>
+            <th>Heure</th>
+            <th>Trajet</th>
             <th>Chauffeur</th>
             <th>Statut</th>
             <th className={styles.actionsCell}>Actions</th>
@@ -86,158 +166,145 @@ const DispatchTable = ({
         <tbody>
           {data.map((r) => {
             const status = r.status?.toLowerCase() || 'unknown';
-            const _isDeletable = deletableStatuses.includes(status); // Conservé pour référence future
-            const isReturn = !!r.is_return;
+            const key = getDispatchKey(r);
+            const priority = getRowPriority(r, delayMap);
+            const delayInfo = delayMap[key];
+            const delayMinutes = delayInfo?.minutes || 0;
+            const delayLevel = getDelayLevel(delayMinutes);
+            const driverName = getDriverName(r);
+            const needsTimeConfirmation = checkNeedsTimeConfirmation(r);
 
-            // ❌ Aucune action pour les statuts terminaux (canceled, completed, rejected, etc.)
-            const noActionStatuses = [
-              'canceled',
-              'cancelled',
-              'completed',
-              'return_completed',
-              'rejected',
-              'no_show',
-            ];
+            const noActionStatuses = ['canceled', 'cancelled', 'completed', 'return_completed', 'rejected', 'no_show'];
             const hasActions = !noActionStatuses.includes(status);
 
-            // ✅ Déterminer si l'entreprise actuelle peut gérer cette réservation transférée
-            // Après acceptation, company_id est mis à jour pour être l'entreprise receveuse
-            // Donc on utilise active_transfer.owner_company_id pour déterminer l'émettrice
             const isTransferredSender = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.owner_company_id === currentCompanyId;
-            const _isTransferredReceiver = currentCompanyId && r.is_transferred && r.active_transfer && r.active_transfer.executing_company_id === currentCompanyId;
-            
-            // L'entreprise émettrice (A) ne peut PAS assigner/modifier une course transférée acceptée
-            // Seule l'entreprise receveuse (B) peut la gérer
             const canManageReservation = !isTransferredSender || status === 'pending';
 
-            // Vérifier si c'est un retour sans heure définie (à confirmer)
-            // Utiliser le champ time_confirmed pour déterminer si l'heure est à confirmer
-            // Conservé pour référence future (géré par ReservationActions)
-            const _needsTimeConfirmation =
-              isReturn && (r.time_confirmed === false || !r.scheduled_time);
-
-            // ✅ Obtenir les infos de retard pour cette course
-            const delayInfo = getDelayForBooking(r.id);
-            const delayStatus = getDelayStatus(delayInfo);
-            const delayMinutes = delayInfo 
-              ? Math.round(delayInfo.delay_minutes || delayInfo.pickup_delay_minutes || delayInfo.dropoff_delay_minutes || 0)
-              : 0;
-
             return (
-              <tr 
-                key={r.id} 
-                onClick={() => onRowClick?.(r)} 
-                className={`${styles.tableRow} ${
-                  delayStatus === 'critical' ? styles.rowDelayed : 
-                  delayStatus === 'moderate' ? styles.rowSlightDelay : 
-                  delayStatus === 'reasonable' ? styles.rowReasonableDelay : ''
-                }`}
+              <tr
+                key={key}
+                onClick={(e) => handleRowClick(r, e)}
+                className={`${styles.tableRow} ${ROW_PRIORITY_CLASS[priority] || ''} ${onRowClick ? styles.rowClickable : ''}`}
               >
+                {/* Colonne Client */}
                 <td className={styles.clientCell}>
-                  {r.client?.full_name || r.client_name}
-                  {delayInfo && delayStatus && (
-                    <span 
-                      className={`${styles.delayBadge} ${
-                        delayStatus === 'critical' ? styles.delayBadgeCritical :
-                        delayStatus === 'moderate' ? styles.delayBadgeModerate :
-                        styles.delayBadgeReasonable
-                      }`} 
-                      title={`Retard de ${delayMinutes} minutes (${delayStatus === 'reasonable' ? 'raisonnable' : delayStatus === 'moderate' ? 'modéré' : 'critique'})`}
-                    >
-                      {delayStatus === 'critical' ? '🚨' : '⚠️'} {delayMinutes > 0 ? `${delayMinutes} min` : 'Retard'}
-                    </span>
+                  <span className={styles.clientName}>{r.client?.full_name || r.client_name || '\u2014'}</span>
+                  {r.client?.institution_name && (
+                    <span className={styles.clientInstitution}>{r.client.institution_name}</span>
                   )}
+                  {r.is_return && <span className={styles.clientSub}>Retour</span>}
+                  {r.is_transferred && <span className={styles.clientSub}>
+                    <FiRefreshCw size={10} /> Transfert
+                  </span>}
                 </td>
-                <td>{renderBookingDateTime(r)}</td>
-                <td className={styles.locationCell}>
-                  <div>
-                    <strong>De:</strong> {r.pickup_location}
-                  </div>
-                  <div>
-                    <strong>À:</strong> {r.dropoff_location}
-                  </div>
-                </td>
-                <td className={styles.driverCell}>
-                  {r.driver?.full_name ||
-                    r.driver?.name ||
-                    r.driver?.username ||
-                    r.assignment?.driver?.full_name ||
-                    r.assignment?.driver?.name ||
-                    (r.driver_id ? `Chauffeur #${r.driver_id}` : 'Non assigné')}
-                </td>
-                <td>
-                  <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
-                    {(r.status || '').replace('_', ' ') || status}
-                  </span>
-                  {/* ✅ Badge transfert partenaire avec direction */}
-                  {r.is_transferred && r.active_transfer && (() => {
-                    // Déterminer si je suis l'émetteur (A) ou le receveur (B)
-                    // Après acceptation, company_id est mis à jour, donc on utilise active_transfer
-                    const isSender = currentCompanyId && r.active_transfer.owner_company_id === currentCompanyId;
-                    const isReceiver = currentCompanyId && r.active_transfer.executing_company_id === currentCompanyId;
-                    
-                    let direction = '';
-                    let partnerName = '';
-                    
-                    if (isSender) {
-                      direction = 'à';
-                      // Utiliser active_transfer pour obtenir le nom de l'entreprise receveuse
-                      partnerName = r.active_transfer.executing_company_name || r.executing_company_name || 'partenaire';
-                    } else if (isReceiver) {
-                      direction = 'de';
-                      // Utiliser active_transfer pour obtenir le nom de l'entreprise émettrice (pas company_name qui devient B après acceptation)
-                      partnerName = r.active_transfer.owner_company_name || 'partenaire';
-                    } else {
-                      // Fallback si currentCompanyId n'est pas fourni
-                      direction = 'vers';
-                      partnerName = r.executing_company_name || r.company_name || 'partenaire';
-                    }
-                    
-                    return (
-                      <span 
-                        className={styles.transferBadge}
-                        title={`Transférée ${direction} ${partnerName}`}
-                      >
-                        🔄 Transférée
-                      </span>
-                    );
-                  })()}
-                  {delayInfo && delayStatus && (
-                    <div className={styles.delayIndicator}>
-                      ⚠️ Retard: {delayMinutes > 0 ? `${delayMinutes} min` : 'Détecté'}
-                    </div>
-                  )}
-                </td>
-                <td
-                  className={styles.actionsCell}
-                  onClick={(e) => e.stopPropagation()} // Empêche d'ouvrir le modal en cliquant sur un bouton
-                >
-                  {/* ❌ Aucune action pour les statuts terminaux */}
-                  {!hasActions ? (
-                    <span
-                      style={{
-                        color: '#94a3b8',
-                        fontSize: '0.85rem',
-                        fontStyle: 'italic',
-                      }}
-                    >
-                      Aucune action
-                    </span>
-                  ) : !canManageReservation ? (
-                    /* ✅ Entreprise émettrice : Lecture seule après transfert accepté */
-                    <span
-                      style={{
-                        color: '#6b7280',
-                        fontSize: '0.85rem',
-                        fontStyle: 'italic',
-                      }}
-                      title="Cette course est gérée par l'entreprise partenaire"
-                    >
-                      👁️ Lecture seule
+
+                {/* Colonne Heure + badge retard */}
+                <td className={styles.timeCell}>
+                  {needsTimeConfirmation ? (
+                    <span className={styles.timeToDefine} title="Heure de retour a definir">
+                      <FiClock size={12} /> A definir
                     </span>
                   ) : (
                     <>
-                      {/* B) Courses PENDING => Toujours afficher Accepter/Rejeter */}
+                      <span className={styles.timeBold}>{formatTime(r.scheduled_time)}</span>
+                      {delayLevel && (
+                        <span
+                          className={`${styles.delayBadge} ${DELAY_BADGE_CLASS[delayLevel] || ''}`}
+                          title={`Retard de ${delayMinutes} min`}
+                        >
+                          {delayLevel === 'critical' && <FiAlertTriangle size={10} />}
+                          +{delayMinutes}min
+                        </span>
+                      )}
+                    </>
+                  )}
+                </td>
+
+                {/* Colonne Trajet — aligne avec ReservationTable (locationCell) */}
+                <td className={styles.locationCell}>
+                  <div className={styles.locationRow}>
+                    <span className={`${styles.locationDot} ${styles.locationDotPickup}`} />
+                    <span className={styles.locationText} title={r.pickup_location}>
+                      {r.pickup_location || '\u2014'}
+                    </span>
+                  </div>
+                  <div className={styles.locationRow}>
+                    <span className={`${styles.locationDot} ${styles.locationDotDropoff}`} />
+                    <span className={styles.locationText} title={r.dropoff_location}>
+                      {r.dropoff_location || '\u2014'}
+                    </span>
+                  </div>
+                </td>
+
+                {/* Colonne Chauffeur V3: dropdown inline (sauf retour sans heure) */}
+                <td
+                  className={styles.driverCellInline}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {needsTimeConfirmation ? (
+                    <span className={styles.timeRequiredHint} title="Definir l'heure de retour avant d'assigner">
+                      <FiClock size={11} /> Heure requise
+                    </span>
+                  ) : onAssignDirect ? (
+                    <DriverInlineSelect
+                      drivers={activeDrivers}
+                      reservationId={key}
+                      onAssign={onAssignDirect}
+                      currentDriverName={driverName}
+                      autoOpen={effectiveAutoOpenId === key}
+                      disabled={false}
+                    />
+                  ) : (
+                    <span className={driverName ? styles.driverNameText : styles.unassignedText}>
+                      {driverName || (r.driver_id ? `Chauffeur #${r.driver_id}` : 'Non assigne')}
+                    </span>
+                  )}
+                </td>
+
+                {/* Colonne Statut FR V7 */}
+                <td>
+                  <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
+                    {getCompositeStatus(r)}
+                  </span>
+                  {r.is_transferred && r.active_transfer && (() => {
+                    const isSender = currentCompanyId && r.active_transfer.owner_company_id === currentCompanyId;
+                    const isReceiver = currentCompanyId && r.active_transfer.executing_company_id === currentCompanyId;
+                    let direction = '';
+                    let partnerName = '';
+                    if (isSender) {
+                      direction = 'a';
+                      partnerName = r.active_transfer.executing_company_name || r.executing_company_name || 'partenaire';
+                    } else if (isReceiver) {
+                      direction = 'de';
+                      partnerName = r.active_transfer.owner_company_name || 'partenaire';
+                    } else {
+                      direction = 'vers';
+                      partnerName = r.executing_company_name || r.company_name || 'partenaire';
+                    }
+                    return (
+                      <span
+                        className={styles.transferBadge}
+                        title={`Transferee ${direction} ${partnerName}`}
+                      >
+                        <FiRefreshCw size={10} /> Transferee
+                      </span>
+                    );
+                  })()}
+                </td>
+
+                {/* Colonne Actions */}
+                <td
+                  className={styles.actionsCell}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {!hasActions ? (
+                    <span className={styles.noActionLabel}>Aucune action</span>
+                  ) : !canManageReservation ? (
+                    <span className={styles.readOnlyLabel} title="Cette course est geree par l'entreprise partenaire">
+                      <FiEye size={12} /> Lecture seule
+                    </span>
+                  ) : (
+                    <>
                       {status === 'pending' && (
                         <>
                           <button
@@ -256,8 +323,6 @@ const DispatchTable = ({
                           </button>
                         </>
                       )}
-
-                      {/* Actions centralisées : Transférer pour pending, autres actions pour accepted/assigned */}
                       <ReservationActions
                         reservation={r}
                         onSchedule={onSchedule}
@@ -265,6 +330,7 @@ const DispatchTable = ({
                         onAssign={onAssign}
                         onTransfer={onTransfer}
                         onDelete={onDelete}
+                        hideAssign={!!onAssignDirect}
                         hideSchedule={status === 'pending' ? true : hideSchedule}
                         hideUrgent={status === 'pending' ? true : hideUrgent}
                         hideEdit={status === 'pending' ? true : hideEdit}

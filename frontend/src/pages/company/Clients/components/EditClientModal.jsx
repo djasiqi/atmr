@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 import { normalizePhone, getPhoneValidationError } from '../../../../utils/phone';
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 
 const EditClientModal = ({ client, onClose, onSave }) => {
-  // ✅ CORRECTION: Les données viennent directement de client, pas de client.domicile
+  // CORRECTION: Les données viennent directement de client, pas de client.domicile
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
@@ -53,7 +54,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
   );
 
   // Coordonnées GPS pour adresse de domicile
-  // ✅ CORRECTION: Lire directement depuis client.domicile_lat, pas client.domicile.lat
+  // CORRECTION: Lire directement depuis client.domicile_lat, pas client.domicile.lat
   const [domicileCoords, setDomicileCoords] = useState({
     lat: client.domicile_lat || client.domicile?.lat || null,
     lon: client.domicile_lon || client.domicile?.lon || null,
@@ -75,9 +76,9 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
   // Gérer la sélection d'adresse de domicile via autocomplete
   const handleDomicileAddressSelect = (item) => {
-    console.log('📍 [Domicile] Adresse sélectionnée:', item);
+    console.log('[Domicile] Adresse sélectionnée:', item);
 
-    // ✅ Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
+    // Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
     const label = item.label || '';
     const parsed = parseAddressWithEstablishment(label, item);
 
@@ -87,7 +88,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
         ? `${parsed.street} ${parsed.streetNumber}`.trim()
         : parsed.street || item.address || '';
 
-    console.log('📍 [Domicile] Composants extraits:', {
+    console.log('[Domicile] Composants extraits:', {
       establishment: parsed.establishment,
       streetNumber: parsed.streetNumber,
       street: parsed.street,
@@ -98,7 +99,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
     setFormData((prev) => ({
       ...prev,
-      // ✅ Si un établissement est détecté, le mettre dans residence_facility
+      // Si un établissement est détecté, le mettre dans residence_facility
       residence_facility: parsed.establishment || prev.residence_facility,
       domicile_address: address,
       domicile_zip: parsed.postcode,
@@ -110,12 +111,12 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       lon: item.lon ?? null,
     });
 
-    console.log(`📍 [Domicile] GPS: ${item.lat}, ${item.lon}`);
+    console.log(`[Domicile] GPS: ${item.lat}, ${item.lon}`);
   };
 
   // Gérer la sélection d'adresse de facturation via autocomplete
   const handleBillingAddressSelect = (item) => {
-    console.log('📍 [Facturation] Adresse sélectionnée:', item);
+    console.log('[Facturation] Adresse sélectionnée:', item);
 
     const fullAddress = item.label || '';
     setFormData((prev) => ({
@@ -128,7 +129,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
       lon: item.lon ?? null,
     });
 
-    console.log(`📍 [Facturation] GPS: ${item.lat}, ${item.lon}`);
+    console.log(`[Facturation] GPS: ${item.lat}, ${item.lon}`);
   };
 
   const handleSubmit = async (e) => {
@@ -211,16 +212,16 @@ const EditClientModal = ({ client, onClose, onSave }) => {
         if (formData.birth_date?.trim()) payload.birth_date = formData.birth_date;
       }
 
-      console.log('📤 Payload envoyé:', payload);
+      console.log('Payload envoyé:', payload);
 
       const result = await onSave(payload);
-      console.log('✅ Sauvegarde réussie:', result);
+      console.log('Sauvegarde réussie:', result);
       
-      // ✅ Ne pas fermer ici - laisser handleSaveClient gérer la fermeture après rechargement
+      // Ne pas fermer ici - laisser handleSaveClient gérer la fermeture après rechargement
       setLoading(false);
       // onClose() sera appelé par handleSaveClient après le rechargement des données
     } catch (err) {
-      console.error('❌ Erreur lors de la sauvegarde:', err);
+      console.error('Erreur lors de la sauvegarde:', err);
       const errorMessage =
         (typeof err === 'object' && err !== null && err.error) ||
         err.response?.data?.error ||
@@ -243,7 +244,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
               : 'Éditer le client'}
           </h2>
           <button className="modal-close" onClick={onClose}>
-            ✕
+            {'\u00D7'}
           </button>
         </div>
 
@@ -262,7 +263,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   <div className={styles.infoRow}>
                     <span className={styles.label}>Institution :</span>
                     <span className={styles.value}>
-                      🏥 {formData.institution_name || client.institution_name || 'Non défini'}
+                      {formData.institution_name || client.institution_name || 'Non defini'}
                     </span>
                   </div>
                   <div className={styles.infoRow}>
@@ -349,15 +350,11 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                     </div>
                   </div>
                   <div className={styles.formGroup}>
-                    <label htmlFor="birth_date" className={styles.label}>Date de naissance</label>
-                    <input
-                      type="date"
-                      id="birth_date"
-                      name="birth_date"
+                    <label className={styles.label}>Date de naissance</label>
+                    <InlineDatePicker
                       value={formData.birth_date}
-                      onChange={handleChange}
-                      className={styles.input}
-                      disabled={loading}
+                      onChange={(v) => handleChange({ target: { name: 'birth_date', value: v } })}
+                      placeholder="Date de naissance"
                     />
                   </div>
                 </>
@@ -474,7 +471,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                   placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
                   disabled={loading}
                 />
-                <small className={styles.hint}>💡 Si différente de l&apos;adresse de domicile</small>
+                <small className={styles.hint}>Si différente de l&apos;adresse de domicile</small>
               </div>
             )}
 
@@ -534,7 +531,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
           {/* Adresse de domicile */}
           <div className={styles.section}>
-            <h3 className={styles.sectionTitle}>🏠 Adresse de domicile</h3>
+            <h3 className={styles.sectionTitle}>Adresse de domicile</h3>
             <p className={styles.sectionDescription}>
               Adresse où le client habite (utilisée pour la prise en charge par défaut)
             </p>
@@ -554,7 +551,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                 disabled={loading}
               />
               <small className={styles.hint}>
-                💡 Indiquer si le client habite dans un EMS, Foyer, ou autre établissement
+                Indiquer si le client habite dans un EMS, Foyer, ou autre établissement
               </small>
             </div>
 
@@ -574,7 +571,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
                 placeholder="Ex: Avenue Ernest-Pictet 9, 1203, Genève"
                 disabled={loading}
               />
-              <small className={styles.hint}>💡 Tapez pour rechercher une nouvelle adresse</small>
+              <small className={styles.hint}>Tapez pour rechercher une nouvelle adresse</small>
             </div>
 
             <div className={styles.formRow}>
@@ -694,7 +691,7 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
           {/* Tarif préférentiel */}
           <div className={styles.section}>
-            <h3 className={styles.sectionTitle}>💰 Tarif préférentiel</h3>
+            <h3 className={styles.sectionTitle}>Tarif preferentiel</h3>
 
             <div className={styles.formGroup}>
               <label htmlFor="preferential_rate" className={styles.label}>
@@ -756,13 +753,13 @@ const EditClientModal = ({ client, onClose, onSave }) => {
           </div>
         </form>
 
-        {/* 🏥 Séjours d'hospitalisation - Uniquement pour les clients (pas les institutions) */}
+        {/* Sejours d'hospitalisation - Uniquement pour les clients (pas les institutions) */}
         {/* Placé en dehors du formulaire principal pour éviter les formulaires imbriqués */}
         {!formData.is_institution && (
           <ClientStaysSection clientId={client.id} />
         )}
 
-        {/* 💰 Tiers payeur / Curateur - Uniquement pour les clients (pas les institutions) */}
+        {/* Tiers payeur / Curateur - Uniquement pour les clients (pas les institutions) */}
         {/* Placé en dehors du formulaire principal pour éviter les formulaires imbriqués */}
         {!formData.is_institution && (
           <ClientBillingPartiesSection clientId={client.id} />

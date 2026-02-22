@@ -1,6 +1,13 @@
 // frontend/src/pages/company/Clients/components/ClientStaysSection.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  FiActivity,
+  FiPlus,
+  FiCheck,
+  FiEdit2,
+  FiChevronDown,
+} from 'react-icons/fi';
+import {
   fetchClientStays,
   createClientStay,
   updateClientStay,
@@ -8,6 +15,57 @@ import {
 } from '../../../../services/companyService';
 import { fetchClinicBillingMappings } from '../../../../services/settingsService';
 import styles from './ClientStaysSection.module.css';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
+
+function ClinicChipDropdown({ clinics, value, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const selected = clinics.find((c) => String(c.id) === String(value));
+
+  return (
+    <div className={styles.chipDrop} ref={ref}>
+      <button
+        type="button"
+        className={`${styles.chipBtn} ${selected ? styles.chipBtnActive : ''}`}
+        onClick={() => setOpen((p) => !p)}
+      >
+        <span className={styles.chipText}>{selected?.name || 'Sélectionner une clinique'}</span>
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </button>
+      {open && (
+        <div className={styles.chipMenu}>
+          <button
+            type="button"
+            className={`${styles.chipOption} ${!value ? styles.chipOptionActive : ''}`}
+            onClick={() => { onChange(''); setOpen(false); }}
+          >
+            Aucune
+          </button>
+          {clinics.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`${styles.chipOption} ${String(c.id) === String(value) ? styles.chipOptionActive : ''}`}
+              onClick={() => { onChange(String(c.id)); setOpen(false); }}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ClientStaysSection = ({ clientId }) => {
   const [stays, setStays] = useState([]);
@@ -39,7 +97,6 @@ const ClientStaysSection = ({ clientId }) => {
     try {
       const response = await fetchClinicBillingMappings();
       const mappings = response.data || [];
-      // Extraire les cliniques uniques
       const uniqueClinics = [];
       const seen = new Set();
       mappings.forEach((m) => {
@@ -76,11 +133,8 @@ const ClientStaysSection = ({ clientId }) => {
       if (editingStay) {
         await updateClientStay(editingStay.id, payload);
       } else {
-        // Si c'est un nouveau séjour, vérifier s'il y a un séjour actif
         const activeStay = getActiveStay();
         if (activeStay) {
-          // Fermer automatiquement le séjour actif avec la date de début du nouveau séjour comme date de fin
-          // Le séjour actif se termine le jour même où le nouveau séjour commence
           await closeClientStay(activeStay.id, formData.start_date);
         }
         await createClientStay(clientId, payload);
@@ -135,7 +189,10 @@ const ClientStaysSection = ({ clientId }) => {
   return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
-        <h3 className={styles.sectionTitle}>🏥 Hospitalisation</h3>
+        <h3 className={styles.sectionTitle}>
+          <FiActivity size={14} className={styles.sectionIcon} />
+          Hospitalisation
+        </h3>
         {!showForm && (
           <button
             type="button"
@@ -152,18 +209,19 @@ const ClientStaysSection = ({ clientId }) => {
             className={styles.addButton}
             title="Ajouter un nouveau séjour d'hospitalisation"
           >
-            Nouveau séjour
+            <FiPlus size={14} />
+            Nouveau sejour
           </button>
         )}
       </div>
 
       {activeStay && (
         <div className={styles.activeStayBadge}>
-          <span className={styles.badgeIcon}>🏥</span>
+          <FiActivity size={20} className={styles.badgeIcon} />
           <div className={styles.badgeContent}>
-            <strong>Client actuellement hospitalisé</strong>
+            <strong>Client actuellement hospitalise</strong>
             <div className={styles.badgeDetails}>
-              {activeStay.company_name} - Depuis le{' '}
+              {activeStay.company_name} \u2014 Depuis le{' '}
               {new Date(activeStay.start_date).toLocaleDateString('fr-FR')}
             </div>
           </div>
@@ -174,52 +232,34 @@ const ClientStaysSection = ({ clientId }) => {
         <div className={styles.form}>
           <div className={styles.formGroup}>
             <label htmlFor="company_id" className={styles.label}>
-              Clinique / Établissement *
+              Clinique / Etablissement *
             </label>
-            <select
-              id="company_id"
+            <ClinicChipDropdown
+              clinics={clinics}
               value={formData.company_id}
-              onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
-              required
-              className={styles.input}
-            >
-              <option value="">-- Sélectionnez une clinique --</option>
-              {clinics.map((clinic) => (
-                <option key={clinic.id} value={clinic.id}>
-                  {clinic.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setFormData({ ...formData, company_id: v })}
+            />
           </div>
 
           <div className={styles.formRow}>
             <div className={styles.formGroup}>
-              <label htmlFor="start_date" className={styles.label}>
-                Date de début *
-              </label>
-              <input
-                type="date"
-                id="start_date"
+              <label className={styles.label}>Date de debut *</label>
+              <InlineDatePicker
                 value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                required
-                className={styles.input}
+                onChange={(v) => setFormData({ ...formData, start_date: v })}
+                placeholder="Début"
               />
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="end_date" className={styles.label}>
-                Date de fin (optionnel)
-              </label>
-              <input
-                type="date"
-                id="end_date"
+              <label className={styles.label}>Date de fin (optionnel)</label>
+              <InlineDatePicker
                 value={formData.end_date}
-                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                className={styles.input}
+                onChange={(v) => setFormData({ ...formData, end_date: v })}
+                placeholder="Fin"
               />
               <small className={styles.hint}>
-                Laisser vide si le séjour est en cours
+                Laisser vide si le sejour est en cours
               </small>
             </div>
           </div>
@@ -234,7 +274,7 @@ const ClientStaysSection = ({ clientId }) => {
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               className={styles.textarea}
               rows={3}
-              placeholder="Informations complémentaires sur le séjour..."
+              placeholder="Informations complementaires sur le sejour..."
             />
           </div>
 
@@ -262,7 +302,7 @@ const ClientStaysSection = ({ clientId }) => {
               onClick={handleSubmit}
               className={styles.saveButton}
             >
-              {editingStay ? 'Modifier' : 'Créer'} le séjour
+              {editingStay ? 'Modifier' : 'Creer'} le sejour
             </button>
           </div>
         </div>
@@ -271,10 +311,10 @@ const ClientStaysSection = ({ clientId }) => {
       {!showForm && (
         <>
           {loading ? (
-            <div className={styles.loading}>Chargement des séjours...</div>
+            <div className={styles.loading}>Chargement des sejours...</div>
           ) : stays.length === 0 ? (
             <div className={styles.emptyState}>
-              Aucun séjour enregistré. Cliquez sur "Nouveau séjour" pour en ajouter un.
+              Aucun sejour enregistre. Cliquez sur &laquo; Nouveau sejour &raquo; pour en ajouter un.
             </div>
           ) : (
             <div className={styles.staysList}>
@@ -295,10 +335,11 @@ const ClientStaysSection = ({ clientId }) => {
                         <button
                           type="button"
                           onClick={() => handleClose(stay.id)}
-                          className={styles.closeButton}
-                          title="Fermer le séjour"
+                          className={styles.closeStayButton}
+                          title="Fermer le sejour"
                         >
-                          ✓ Fermer
+                          <FiCheck size={12} />
+                          Fermer
                         </button>
                       )}
                       <button
@@ -307,7 +348,7 @@ const ClientStaysSection = ({ clientId }) => {
                         className={styles.editButton}
                         title="Modifier"
                       >
-                        ✏️
+                        <FiEdit2 size={12} />
                       </button>
                     </div>
                   </div>

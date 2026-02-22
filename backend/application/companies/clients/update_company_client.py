@@ -24,6 +24,7 @@ class _ClientLike(Protocol):
     is_active: Any
     is_institution: Any
     institution_name: Any
+    linked_institution_id: Any
     residence_facility: Any
     domicile_address: Any
     domicile_zip: Any
@@ -79,12 +80,22 @@ class UpdateCompanyClientUseCase:
         if "is_active" in data:
             client.is_active = bool(data["is_active"])
 
+        # Liaison institution officielle
+        if "linked_institution_id" in data:
+            lid = data["linked_institution_id"]
+            client.linked_institution_id = int(lid) if lid else None
+
         if "is_institution" in data:
             client.is_institution = bool(data["is_institution"])
+            # Si lié à une institution officielle, le nom est verrouillé
+            is_linked = bool(getattr(client, "linked_institution_id", None))
             if bool(client.is_institution) and "institution_name" in data:
-                client.institution_name = data["institution_name"]
+                if not is_linked:
+                    client.institution_name = data["institution_name"]
+                # Sinon on ignore: le nom vient de l'Institution officielle
             elif not bool(client.is_institution):
                 client.institution_name = None
+                client.linked_institution_id = None
 
         if "residence_facility" in data:
             client.residence_facility = data["residence_facility"] or None

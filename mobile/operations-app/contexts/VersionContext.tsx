@@ -1,6 +1,7 @@
 // contexts/VersionContext.tsx
 // Contexte React pour gérer le statut de mise à jour de l'application
 
+import { getLogger } from "@/utils/logger";
 import React, {
     createContext,
     ReactNode,
@@ -14,6 +15,8 @@ import {
     VersionCheckResponse,
     checkVersion,
 } from "@/services/versionService";
+
+const log = getLogger("Version");
 
 interface VersionContextType {
     versionInfo: VersionCheckResponse | null;
@@ -42,7 +45,7 @@ export const VersionProvider = ({ children }: { children: ReactNode }) => {
             const error =
                 err instanceof Error ? err : new Error("Erreur vérification version");
             setError(error);
-            console.error("Erreur lors de la vérification de version:", error);
+            log.error("Version check failed", { error });
         } finally {
             setIsLoading(false);
         }

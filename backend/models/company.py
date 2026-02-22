@@ -131,6 +131,11 @@ class Company(db.Model):
         Text, nullable=True, comment="Configuration JSON pour le dispatch autonome"
     )
 
+    # ✅ Security V2: Politique de securite entreprise (JSON)
+    security_policy: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="JSON: require_2fa_roles, password_expiry_days, max_session_days, enforcement_mode"
+    )
+
     # Relations
     user = relationship("User", back_populates="company", passive_deletes=True)
     clients = relationship(

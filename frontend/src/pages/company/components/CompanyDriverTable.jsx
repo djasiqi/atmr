@@ -1,74 +1,157 @@
 // src/pages/company/components/CompanyDriverTable.jsx
-import React from 'react';
-import { FiEdit, FiTrash2 } from 'react-icons/fi';
-import styles from './CompanyDriverTable.module.css';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower } from 'react-icons/fi';
+import s from './CompanyDriverTable.module.css';
 
-const CompanyDriverTable = ({ drivers, onEdit, onDeleteRequest }) => {
+const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }) => {
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuRef = useRef(null);
+
+  const closeMenu = useCallback(() => setOpenMenu(null), []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        closeMenu();
+      }
+    };
+    if (openMenu !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openMenu, closeMenu]);
+
+  const getDisplayName = (driver) => {
+    if (driver.first_name || driver.last_name) {
+      return `${driver.first_name || ''} ${driver.last_name || ''}`.trim();
+    }
+    return driver.full_name || driver.username || driver.name || `Chauffeur #${driver.id}`;
+  };
+
+  const getAvailabilityStatus = (driver) => {
+    if (!driver.is_active) return { label: 'Hors ligne', className: s.statusOffline };
+    if (driver.current_trip_id) return { label: 'En course', className: s.statusOnTrip };
+    return { label: 'Disponible', className: s.statusAvailable };
+  };
+
   return (
-    <div className={styles.tableContainer}>
-      <table className={styles.table}>
+    <div className={s.tableContainer}>
+      <table className={s.table}>
         <thead>
           <tr>
-            <th>Nom Complet</th>
-            <th>Véhicule</th>
-            <th>Statut du Compte</th>
-            <th style={{ textAlign: 'right' }}>Actions</th>
+            <th>Chauffeur</th>
+            <th>Vehicule</th>
+            <th>Disponibilite</th>
+            <th>Compte</th>
+            <th className={s.thActions}>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {(drivers || []).map((driver) => (
-            <tr key={driver.id}>
-              <td>
-                <div className={styles.userCell}>
-                  <img
-                    src={driver.photo || '/default-avatar.png'}
-                    alt={driver.username}
-                    className={styles.avatar}
-                  />
-                  {/* On ne garde que la div pour le nom complet */}
-                  <div className={styles.fullName}>
-                    {driver.full_name ||
-                      (driver.first_name || driver.last_name
-                        ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
-                        : driver.username ||
-                          driver.name ||
-                          `Chauffeur #${driver.id}`)}
+          {(drivers || []).map((driver) => {
+            const displayName = getDisplayName(driver);
+            const availability = getAvailabilityStatus(driver);
+            const initials = displayName
+              .split(' ')
+              .slice(0, 2)
+              .map((w) => w[0]?.toUpperCase() || '')
+              .join('');
+
+            return (
+              <tr key={driver.id} onClick={() => onEdit(driver)} className={s.row}>
+                <td>
+                  <div className={s.driverCell}>
+                    {driver.photo ? (
+                      <img
+                        src={driver.photo}
+                        alt=""
+                        className={s.avatar}
+                      />
+                    ) : (
+                      <div className={s.avatarFallback}>{initials || 'CH'}</div>
+                    )}
+                    <div className={s.driverInfo}>
+                      <span className={s.driverName}>{displayName}</span>
+                      {driver.email && (
+                        <span className={s.driverSub}>{driver.email}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </td>
-              <td>
-                <div className={styles.vehicleCell}>
-                  <div className={styles.vehicleModel}>{driver.vehicle_assigned || 'N/A'}</div>
-                  <div className={styles.vehicleBrand}>{driver.brand || 'N/A'}</div>
-                </div>
-              </td>
-              <td>
-                <span
-                  className={`${styles.statusBadge} ${
-                    driver.is_active ? styles.active : styles.inactive
-                  }`}
-                >
-                  {driver.is_active ? 'Actif' : 'Inactif'}
-                </span>
-              </td>
-              <td className={styles.actionsCell}>
-                <button
-                  onClick={() => onEdit(driver)}
-                  title="Modifier les détails"
-                  className={styles.actionButton}
-                >
-                  <FiEdit />
-                </button>
-                <button
-                  onClick={() => onDeleteRequest(driver)}
-                  title="Supprimer le chauffeur"
-                  className={`${styles.actionButton} ${styles.deleteButton}`}
-                >
-                  <FiTrash2 />
-                </button>
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td>
+                  <span className={s.vehicleText}>
+                    {driver.vehicle_assigned || '\u2014'}
+                  </span>
+                </td>
+                <td>
+                  <span className={`${s.statusBadge} ${availability.className}`}>
+                    {availability.label}
+                  </span>
+                </td>
+                <td>
+                  <span className={`${s.accountBadge} ${driver.is_active ? s.accountActive : s.accountInactive}`}>
+                    {driver.is_active ? 'Actif' : 'Inactif'}
+                  </span>
+                </td>
+                <td className={s.actionsCell} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className={s.editBtn}
+                    onClick={() => onEdit(driver)}
+                    title="Modifier"
+                  >
+                    <FiEdit size={14} />
+                  </button>
+                  <div className={s.menuWrap} ref={openMenu === driver.id ? menuRef : null}>
+                    <button
+                      type="button"
+                      className={s.menuTrigger}
+                      onClick={() => setOpenMenu(openMenu === driver.id ? null : driver.id)}
+                      title="Plus d'actions"
+                    >
+                      <FiMoreVertical size={14} />
+                    </button>
+                    {openMenu === driver.id && (
+                      <div className={s.menuDropdown}>
+                        <button
+                          type="button"
+                          className={s.menuItem}
+                          onClick={() => {
+                            onEdit(driver);
+                            closeMenu();
+                          }}
+                        >
+                          <FiEye size={13} />
+                          Voir la fiche
+                        </button>
+                        <button
+                          type="button"
+                          className={s.menuItem}
+                          onClick={() => {
+                            onToggleStatus(driver.id, !driver.is_active);
+                            closeMenu();
+                          }}
+                        >
+                          <FiPower size={13} />
+                          {driver.is_active ? 'Desactiver' : 'Activer'}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${s.menuItem} ${s.menuItemDanger}`}
+                          onClick={() => {
+                            onDeleteRequest(driver);
+                            closeMenu();
+                          }}
+                        >
+                          <FiTrash2 size={13} />
+                          Supprimer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

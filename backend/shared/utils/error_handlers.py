@@ -7,8 +7,9 @@ améliorant la cohérence des réponses d'erreur et simplifiant la maintenance.
 import logging
 from typing import Any
 
-from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+from marshmallow import ValidationError
 from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import HTTPException
 
 from routes.api_error_utils import (
     create_conflict_error,
@@ -50,6 +51,18 @@ class APIErrorHandler:
         """
         log = logger_instance or logger
         result: tuple[dict[str, Any], int] | None = None
+
+        # HTTPException (from Flask abort()) — propager le bon status code
+        if isinstance(exception, HTTPException):
+            log.warning(
+                "HTTPException interceptée: %s %s",
+                exception.code,
+                exception.description,
+            )
+            return (
+                {"error": exception.description or str(exception)},
+                exception.code or 500,
+            )
 
         # ValidationError (Marshmallow)
         if isinstance(exception, ValidationError):

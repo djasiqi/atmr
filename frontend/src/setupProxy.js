@@ -36,38 +36,6 @@ module.exports = function (app) {
   console.log('⚠️ [DEBUG] setupProxy.js EXÉCUTÉ - app:', app ? 'OK' : 'NULL');
   console.log(`📡 Backend URL: ${BACKEND_URL}`);
 
-  // ✅ CRITIQUE: Handler Express pour /ws qui répond directement sans proxifier
-  // webpack-dev-server utilise /ws pour le HMR et ne doit JAMAIS être proxifié
-  // Ce handler doit être AVANT tous les proxies pour éviter qu'ils interceptent /ws
-  // IMPORTANT: On utilise app.get() au lieu de app.use() pour être plus spécifique
-  // et on ne fait rien (pas de next()) pour laisser webpack-dev-server gérer la connexion
-  app.get('/ws', (req, _res, _next) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:/ws GET handler',message:'/ws GET request intercepted',data:{url:req.url,method:req.method,is_upgrade:req.headers.upgrade === 'websocket',headers_upgrade:req.headers.upgrade},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}),credentials:'omit'}).catch(()=>{});
-    // #endregion
-    console.log('[PROXY] /ws GET request - laissé à webpack-dev-server pour HMR');
-    // Ne pas appeler next() - laisser webpack-dev-server gérer directement
-    // webpack-dev-server intercepte les connexions WebSocket avant les middlewares Express
-    // En ne faisant rien, on empêche les proxies d'intercepter la connexion
-  });
-  
-  // Handler pour les requêtes WebSocket upgrade (méthode GET avec header Upgrade: websocket)
-  app.use('/ws', (req, res, next) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:/ws middleware',message:'/ws request intercepted',data:{url:req.url,method:req.method,is_upgrade:req.headers.upgrade === 'websocket',headers_upgrade:req.headers.upgrade},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}),credentials:'omit'}).catch(()=>{});
-    // #endregion
-    // Si c'est une requête WebSocket upgrade, on ne fait rien et on laisse webpack-dev-server la gérer
-    if (req.headers.upgrade === 'websocket') {
-      console.log('[PROXY] /ws WebSocket upgrade - laissé à webpack-dev-server pour HMR');
-      // Ne pas appeler next() pour les WebSocket - laisser webpack-dev-server les gérer directement
-      // webpack-dev-server intercepte les connexions WebSocket avant les middlewares Express
-      return; // Sortir sans appeler next() pour empêcher les proxies d'intercepter
-    }
-    // Pour les requêtes HTTP normales, on peut simplement passer
-    console.log('[PROXY] /ws HTTP request - laissé à webpack-dev-server pour HMR');
-    next(); // Passer au middleware suivant (webpack-dev-server)
-  });
-
   // 🔌 Proxy Socket.IO avec support WebSocket
   // ✅ IMPORTANT: Ce middleware doit être AVANT les autres pour capturer les requêtes Socket.IO
   // ✅ IMPORTANT: Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR
@@ -81,11 +49,7 @@ module.exports = function (app) {
     logLevel: 'info',
     // ✅ Exclure /ws pour que webpack-dev-server puisse l'utiliser pour le HMR
     filter: function (pathname, req) {
-      // #region agent log
       const isWsPath = pathname === '/ws' || pathname.startsWith('/ws/');
-      const isUpgrade = req.headers.upgrade === 'websocket';
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:socketIoProxy.filter',message:'Filter check',data:{pathname,url:req.url,is_ws_path:isWsPath,is_upgrade:isUpgrade,starts_with_socketio:pathname.startsWith('/socket.io')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'}),credentials:'omit'}).catch(()=>{});
-      // #endregion
       // Ne pas capturer /ws - webpack-dev-server en a besoin pour le HMR
       if (isWsPath) {
         console.log(`[SOCKET.IO PROXY] Filtre: /ws exclu (pathname: ${pathname}, url: ${req.url})`);
@@ -112,10 +76,7 @@ module.exports = function (app) {
         console.warn(`[SOCKET.IO PROXY] ⚠️ Tentative de proxifier /ws - cela ne devrait pas arriver (filtre devrait l'exclure)`);
         return path; // Retourner tel quel (ne devrait jamais arriver grâce au filtre)
       }
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:pathRewrite',message:'Path rewrite before transformation',data:{original_path:path,original_url:req.url,path_starts_with_slash:path.startsWith('/'),path_already_has_socketio:path.startsWith('/socket.io'),url_has_socketio:req.url.includes('/socket.io'),is_ws_path:path === '/ws' || path.startsWith('/ws/')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}),credentials:'omit'}).catch(()=>{});
-      // #endregion
+
       // ✅ FIX CRITIQUE: Éviter le double préfixe /socket.io/socket.io/
       // http-proxy-middleware supprime automatiquement le préfixe du middleware (/socket.io)
       // MAIS pour certaines requêtes (WebSocket), le préfixe peut ne pas être supprimé
@@ -148,46 +109,19 @@ module.exports = function (app) {
       }
       
       console.log(`[SOCKET.IO PROXY] pathRewrite: ${path} -> ${rewrittenPath} (original: ${req.url})`);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:pathRewrite',message:'Path rewrite after transformation',data:{rewritten_path:rewrittenPath,original_path:path,has_double_prefix:rewrittenPath.includes('/socket.io/socket.io'),is_valid_socketio_path:rewrittenPath.startsWith('/socket.io'),was_already_socketio:path.startsWith('/socket.io'),url_had_socketio:req.url && req.url.includes('/socket.io')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}),credentials:'omit'}).catch(()=>{});
-      // #endregion
       return rewrittenPath;
     },
     onProxyReq: (proxyReq, req) => {
       // ✅ Log de test pour vérifier que le callback est appelé
       console.log('[SOCKET.IO PROXY] onProxyReq appelé pour:', req.url);
-      // #region agent log
-      const cookieHeader = req.headers.cookie || '';
-      const hasAccessTokenCookie = cookieHeader.includes('access_token');
-      const isWebSocketRequest = req.url?.includes('transport=websocket') || req.headers.upgrade === 'websocket';
-      const requestHeaders = {
-        upgrade: req.headers.upgrade,
-        connection: req.headers.connection,
-        'sec-websocket-key': req.headers['sec-websocket-key'],
-        'sec-websocket-version': req.headers['sec-websocket-version'],
-        'sec-websocket-protocol': req.headers['sec-websocket-protocol'],
-        'sec-websocket-extensions': req.headers['sec-websocket-extensions'],
-      };
-      try {
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyReq',message:'Proxy request before cookie transmission',data:{url:req.url,method:req.method,is_websocket_request:isWebSocketRequest,request_headers:requestHeaders,has_cookie_header:!!req.headers.cookie,has_access_token:hasAccessTokenCookie,cookie_keys:cookieHeader.split(';').map(c=>c.split('=')[0].trim()).filter(Boolean),target_path:proxyReq.path,proxy_headers:{upgrade:proxyReq.getHeader('upgrade'),connection:proxyReq.getHeader('connection')}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}),credentials:'omit'}).catch((e)=>console.error('[LOG ERROR]',e));
-      } catch(e) {
-        console.error('[LOG ERROR] onProxyReq:', e);
-      }
-      // #endregion
       // ✅ S'assurer que les cookies sont transmis
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
         console.log(`[SOCKET.IO] Cookies transmis: ${req.headers.cookie.substring(0, 50)}...`);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyReq',message:'Cookies transmitted to backend',data:{cookie_header_set:true,has_access_token:hasAccessTokenCookie},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'}),credentials:'omit'}).catch(()=>{});
-        // #endregion
       } else {
         console.warn(`[SOCKET.IO] ⚠️ Aucun cookie dans la requête`);
         // ✅ Logger tous les headers pour debug
         console.log(`[SOCKET.IO] Headers reçus:`, Object.keys(req.headers));
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyReq',message:'No cookies in request',data:{headers:Object.keys(req.headers)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'}),credentials:'omit'}).catch(()=>{});
-        // #endregion
       }
       // ✅ S'assurer que les headers d'authentification sont transmis
       if (req.headers.authorization) {
@@ -216,30 +150,10 @@ module.exports = function (app) {
         proxyReq.setHeader('Sec-WebSocket-Extensions', req.headers['sec-websocket-extensions']);
       }
       console.log(`[SOCKET.IO] ${req.method} ${req.url} -> ${proxyReq.path}`);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyReq',message:'Proxy request path rewrite',data:{original_url:req.url,rewritten_path:proxyReq.path,path_matches_socketio:proxyReq.path.startsWith('/socket.io')},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'}),credentials:'omit'}).catch(()=>{});
-      // #endregion
     },
     onProxyRes: (proxyRes, req, res) => {
       // ✅ Log de test pour vérifier que le callback est appelé
       console.log('[SOCKET.IO PROXY] onProxyRes appelé pour:', req.url, 'status:', proxyRes.statusCode);
-      // #region agent log
-      const isWebSocketUpgrade = req.headers.upgrade === 'websocket' || req.url?.includes('transport=websocket');
-      const responseHeaders = {
-        upgrade: proxyRes.headers.upgrade,
-        connection: proxyRes.headers.connection,
-        'sec-websocket-accept': proxyRes.headers['sec-websocket-accept'],
-        'sec-websocket-protocol': proxyRes.headers['sec-websocket-protocol'],
-        'set-cookie': proxyRes.headers['set-cookie'] ? 'present' : 'missing',
-        'access-control-allow-origin': proxyRes.headers['access-control-allow-origin'],
-        'access-control-allow-credentials': proxyRes.headers['access-control-allow-credentials'],
-      };
-      try {
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyRes',message:'Proxy response received',data:{status_code:proxyRes.statusCode,url:req.url,is_websocket_upgrade:isWebSocketUpgrade,response_headers:responseHeaders,is_error:proxyRes.statusCode >= 400},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}),credentials:'omit'}).catch((e)=>console.error('[LOG ERROR]',e));
-      } catch(e) {
-        console.error('[LOG ERROR] onProxyRes:', e);
-      }
-      // #endregion
       // ✅ Logger les cookies reçus du backend
       const setCookieHeaders = proxyRes.headers['set-cookie'];
       if (setCookieHeaders) {
@@ -249,26 +163,8 @@ module.exports = function (app) {
       }
       // ✅ Logger le status code pour debug
       console.log(`[SOCKET.IO] Response: ${proxyRes.statusCode} ${req.url}`);
-      // #region agent log
-      if (proxyRes.statusCode >= 400) {
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyRes',message:'Error response from backend',data:{status_code:proxyRes.statusCode,url:req.url,error_type:'backend_error'},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'}),credentials:'omit'}).catch(()=>{});
-      }
-      // #endregion
     },
     onProxyReqWs: (proxyReq, req) => {
-      // #region agent log
-      const upgradeHeaders = {
-        upgrade: req.headers.upgrade,
-        connection: req.headers.connection,
-        'sec-websocket-key': req.headers['sec-websocket-key'],
-        'sec-websocket-version': req.headers['sec-websocket-version'],
-        'sec-websocket-protocol': req.headers['sec-websocket-protocol'],
-        'sec-websocket-extensions': req.headers['sec-websocket-extensions'],
-        cookie: req.headers.cookie ? 'present' : 'missing',
-        authorization: req.headers.authorization ? 'present' : 'missing',
-      };
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:onProxyReqWs',message:'WebSocket upgrade request',data:{url:req.url,method:req.method,headers:upgradeHeaders,proxy_path:proxyReq.path,has_cookie:!!req.headers.cookie,has_authorization:!!req.headers.authorization},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}),credentials:'omit'}).catch(()=>{});
-      // #endregion
       // ✅ Transmettre les cookies lors de l'upgrade WebSocket
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
@@ -336,15 +232,9 @@ module.exports = function (app) {
         return rewritten;
       },
       onProxyReq: (proxyReq, req) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:/api/v1 onProxyReq',message:'Proxy request to backend',data:{url:req.url,method:req.method,path:proxyReq.path,target:BACKEND_URL,has_cookie:!!req.headers.cookie,has_authorization:!!req.headers.authorization},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}),credentials:'omit'}).catch(()=>{});
-        // #endregion
         console.log(`[API V1] Proxying ${req.method} ${req.url} -> ${BACKEND_URL}${proxyReq.path}`);
       },
       onProxyRes: (proxyRes, req) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'setupProxy.js:/api/v1 onProxyRes',message:'Proxy response from backend',data:{url:req.url,method:req.method,status_code:proxyRes.statusCode,is_error:proxyRes.statusCode >= 400},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}),credentials:'omit'}).catch(()=>{});
-        // #endregion
         console.log(`[API V1] ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
       },
       onError: (err, req, res) => {

@@ -34,6 +34,16 @@ def send_push_to_company_sync(
     """
     success = False
     try:
+        # Guard centralise : bloquer self-notification (company est l'acteur)
+        actor_role = data.get("actor_role") if data else None
+        actor_id = data.get("actor_id") if data else None
+        if actor_role == "company" and actor_id is not None and str(actor_id) == str(company_id):
+            app_logger.info(
+                "[company_push] GUARD: self-notification blocked (company %s is actor)",
+                company_id,
+            )
+            return True
+
         from models import Company, User
 
         company = Company.query.get(company_id)

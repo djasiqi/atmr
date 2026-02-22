@@ -1,6 +1,8 @@
 // src/pages/company/Dashboard/components/OverviewCards.jsx
-import React, { useMemo, useEffect } from 'react';
-import styles from '../CompanyDashboard.module.css';
+// NIVEAU 1 — Situation temps réel : 4 KPI opérationnels uniquement
+import React, { useMemo } from 'react';
+import { FiClock, FiUsers, FiNavigation, FiAlertTriangle } from 'react-icons/fi';
+import styles from './OverviewCards.module.css';
 
 const toYMD = (raw) => {
   if (!raw) return null;
@@ -17,40 +19,38 @@ const toYMD = (raw) => {
   }
 };
 
-// meilleur champ date disponible
 const whenOf = (r) => r?.scheduled_time ?? r?.pickup_time ?? r?.date_time ?? r?.datetime ?? null;
-
 const norm = (s) => String(s || '').toLowerCase();
-const isCompleted = (s) => ['completed', 'return_completed', 'done', 'finished'].includes(norm(s));
-
-const amountOf = (r) =>
-  Number(r?.amount ?? r?.total_amount ?? r?.total ?? r?.price ?? r?.fare ?? 0) || 0;
+const isActive = (s) =>
+  ['en_route', 'in_progress', 'onboard', 'en_route_pickup', 'en_route_dropoff', 'assigned'].includes(norm(s));
 
 const OverviewCards = ({
   reservations,
-  pendingReservations, // déjà filtrées dans CompanyDashboard
-  assignedReservations, // accepted && !driver_id
+  pendingReservations,
+  assignedReservations,
   driver,
-  day, // optionnel 'YYYY-MM-DD'
-  qualityMetrics, // ✅ 3.4.2: Métriques qualité depuis dashboard temps réel
+  day,
+  delayCount = 0,
+  hasCriticalDelays = false,
 }) => {
-  // Filtre jour (si fourni) — calcule 'all' *dans* le useMemo pour satisfaire eslint react-hooks/exhaustive-deps
   const dayList = useMemo(() => {
     const all = Array.isArray(reservations) ? reservations : [];
     if (!day) return all;
     return all.filter((r) => toYMD(whenOf(r)) === day);
   }, [reservations, day]);
 
-  // Attente = pending + accepted sans driver (si on nous les passe), sinon heuristique
+  const inProgressCount = useMemo(
+    () => dayList.filter((r) => isActive(r.status) && (r.driver_id || r.driver?.id)).length,
+    [dayList]
+  );
+
   const waitingCount = useMemo(() => {
     if (Array.isArray(pendingReservations) || Array.isArray(assignedReservations)) {
       const p = Array.isArray(pendingReservations) ? pendingReservations : [];
       const a = Array.isArray(assignedReservations) ? assignedReservations : [];
-      // Si day est donné, restreindre
       const inDay = (r) => (!day ? true : toYMD(whenOf(r)) === day);
       return p.filter(inDay).length + a.filter(inDay).length;
     }
-    // Fallback heuristique
     return dayList.filter((r) => {
       const s = norm(r.status);
       const unassigned = !r?.driver_id && !r?.driver?.id;
@@ -58,93 +58,63 @@ const OverviewCards = ({
     }).length;
   }, [dayList, pendingReservations, assignedReservations, day]);
 
-  const completedCount = useMemo(
-    () => dayList.filter((r) => isCompleted(r.status)).length,
-    [dayList]
-  );
-
-  const revenue = useMemo(
-    () => dayList.reduce((acc, r) => (isCompleted(r.status) ? acc + amountOf(r) : acc), 0),
-    [dayList]
-  );
-
-  const availableDriver = useMemo(
-    () =>
-      (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active && d?.is_available).length,
+  const availableDrivers = useMemo(
+    () => (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active && d?.is_available).length,
     [driver]
   );
 
-  // Petit logger pour vérifier la distribution réelle des statuts
-  useEffect(() => {
-    try {
-      const dist = dayList.reduce((m, r) => {
-        const s = norm(r.status);
-        m[s] = (m[s] || 0) + 1;
-        return m;
-      }, {});
-      // Commenter si ça t’embête dans la console
-      console.debug('[OverviewCards] status distribution:', dist);
-    } catch {}
-  }, [dayList]);
+  const totalDrivers = useMemo(
+    () => (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active).length,
+    [driver]
+  );
+
+  const cards = [
+    {
+      id: 'inprogress',
+      Icon: FiNavigation,
+      label: 'En cours',
+      value: inProgressCount,
+      accent: inProgressCount > 0 ? 'brand' : 'default',
+    },
+    {
+      id: 'delays',
+      Icon: FiAlertTriangle,
+      label: 'Retards',
+      value: delayCount,
+      accent: delayCount === 0 ? 'success' : hasCriticalDelays ? 'danger' : 'warning',
+    },
+    {
+      id: 'waiting',
+      Icon: FiClock,
+      label: 'À assigner',
+      value: waitingCount,
+      accent: waitingCount > 0 ? 'warning' : 'success',
+    },
+    {
+      id: 'drivers',
+      Icon: FiUsers,
+      label: 'Chauffeurs',
+      value: `${availableDrivers}/${totalDrivers}`,
+      accent: availableDrivers === 0 && totalDrivers > 0 ? 'danger' : 'default',
+    },
+  ];
 
   return (
-    <div className={styles.overviewCards}>
-      <div className={styles.card}>
-        <div className={styles.cardIcon}>📅</div>
-        <div className={styles.cardContent}>
-          <h3>En attente</h3>
-          <p>{waitingCount}</p>
-        </div>
-      </div>
-      <div className={styles.card}>
-        <div className={styles.cardIcon}>✅</div>
-        <div className={styles.cardContent}>
-          <h3>Réalisées</h3>
-          <p>{completedCount}</p>
-        </div>
-      </div>
-      <div className={styles.card}>
-        <div className={styles.cardIcon}>💰</div>
-        <div className={styles.cardContent}>
-          <h3>Revenu</h3>
-          <p>{revenue.toFixed(2)} CHF</p>
-        </div>
-      </div>
-      <div className={styles.card}>
-        <div className={styles.cardIcon}>👤</div>
-        <div className={styles.cardContent}>
-          <h3>Disponibles</h3>
-          <p>{availableDriver}</p>
-        </div>
-      </div>
-      {/* ✅ 3.4.2: Métriques qualité depuis dashboard temps réel */}
-      {qualityMetrics && (
-        <>
-          {qualityMetrics.on_time_rate !== undefined && (
-            <div className={styles.card}>
-              <div className={styles.cardIcon}>⏱️</div>
-              <div className={styles.cardContent}>
-                <h3>Ponctualité</h3>
-                <p>{Math.round(qualityMetrics.on_time_rate)}%</p>
-                {qualityMetrics.avg_delay !== undefined && qualityMetrics.avg_delay > 0 && (
-                  <small style={{ color: qualityMetrics.avg_delay > 5 ? '#f44336' : '#ff9800' }}>
-                    Retard moyen: {Math.round(qualityMetrics.avg_delay)} min
-                  </small>
-                )}
-              </div>
+    <div className={styles.kpiGrid}>
+      {cards.map((card) => {
+        const accentClass = styles[`accent_${card.accent}`] || '';
+        return (
+          <div key={card.id} className={`${styles.kpiCard} ${accentClass}`}>
+            <div className={styles.kpiIconContainer}>
+              <card.Icon className={styles.kpiIcon} />
             </div>
-          )}
-          {qualityMetrics.quality_score !== undefined && (
-            <div className={styles.card}>
-              <div className={styles.cardIcon}>⭐</div>
-              <div className={styles.cardContent}>
-                <h3>Qualité dispatch</h3>
-                <p>{Math.round(qualityMetrics.quality_score)}%</p>
-              </div>
+            <div className={styles.kpiContent}>
+              <span className={styles.kpiLabel}>{card.label}</span>
+              <span className={styles.kpiValue}>{card.value}</span>
             </div>
-          )}
-        </>
-      )}
+          </div>
+        );
+      })}
     </div>
   );
 };

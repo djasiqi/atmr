@@ -94,17 +94,9 @@
   flex-shrink: 0;
 }
 
-/* Styles pour les marqueurs personnalisés */
-:global(.custom-marker-icon) {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Styles pour les popups Leaflet */
-:global(.leaflet-popup-content) {
-  margin: 0;
-  padding: 0;
+/* Style InfoWindow Google Maps */
+:global(.gm-style-iw-d) {
+  overflow: hidden !important;
 }
 
 .popupContent {

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import (
     Boolean,
@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     event,
@@ -141,7 +142,7 @@ class Booking(db.Model):
     distance_meters = Column(Integer)
 
     client_id = Column(
-        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=True, index=True
     )
     company_id = Column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
@@ -266,6 +267,9 @@ class Booking(db.Model):
     cancellation_reason_text = Column(Text, nullable=True)
     is_cancellation_billable = Column(Boolean, nullable=True)
     cancellation_display_label = Column(String(120), nullable=True)
+    cancellation_fee_amount = Column(Numeric(10, 2), nullable=True)
+    cancellation_fee_percent = Column(Integer, nullable=True)
+    cancellation_fee_tier_id = Column(String(50), nullable=True)
 
     # Relations
     client = relationship("Client", back_populates="bookings", passive_deletes=True)
@@ -359,6 +363,7 @@ class Booking(db.Model):
         updated_dt = _as_dt(self.updated_at)
         boarded_dt = _as_dt(self.boarded_at)
         completed_dt = _as_dt(self.completed_at)
+        cancelled_dt = cast("datetime | None", _as_dt(self.cancelled_at))
 
         date_local, time_local = (
             split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
@@ -446,6 +451,8 @@ class Booking(db.Model):
                 "door_code": getattr(cli, "door_code", None) if cli else None,
                 "floor": getattr(cli, "floor", None) if cli else None,
                 "access_notes": getattr(cli, "access_notes", None) if cli else None,
+                "is_institution": bool(getattr(cli, "is_institution", False)) if cli else False,
+                "institution_name": getattr(cli, "institution_name", None) if cli else None,
             },
             # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
             "company_id": self.company_id,
@@ -477,6 +484,11 @@ class Booking(db.Model):
             if self.driver
             else None,
             "driver_id": self.driver_id,
+            "driver_name": (
+                f"{self.driver.user.first_name} {self.driver.user.last_name}".strip()
+                if self.driver and self.driver.user
+                else None
+            ),
             "duration_seconds": self.duration_seconds,
             "distance_meters": self.distance_meters,
             "medical_facility": self.medical_facility or "Non spécifié",
@@ -540,7 +552,62 @@ class Booking(db.Model):
             # ✅ Livraison matériel
             "mission_type": getattr(self, "mission_type", None) or "patient_transport",
             "delivery_description": getattr(self, "delivery_description", None) or None,
+            # ✅ Annulation
+            "cancelled_at": iso_utc_z(to_utc_from_db(cancelled_dt))
+            if cancelled_dt
+            else None,
+            "cancelled_by_role": self.cancelled_by_role,
+            "cancellation_reason_code": self.cancellation_reason_code,
+            "cancellation_reason_text": self.cancellation_reason_text,
+            "is_cancellation_billable": self.is_cancellation_billable,
+            "cancellation_display_label": self.cancellation_display_label,
+            "cancellation_fee_amount": float(self.cancellation_fee_amount) if getattr(self, "cancellation_fee_amount", None) is not None else None,  # type: ignore[arg-type]
+            "cancellation_fee_percent": self.cancellation_fee_percent,
+            "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
+            # ✅ Timeline institution (si booking issu d'une demande institution)
+            "institution_timeline": self._get_institution_timeline(),
         }
+
+    def _get_institution_timeline(self):
+        """Retourne les dates cles de la demande institution source, si elle existe.
+
+        Pour un booking retour (is_return=True), remonte au parent pour
+        trouver la TransportRequest source.
+        """
+        try:
+            reqs = getattr(self, "source_request", None)
+            if not reqs and getattr(self, "is_return", False) and self.parent_booking_id:  # type: ignore[truthy-bool]
+                from ext import db
+
+                parent = db.session.get(type(self), self.parent_booking_id)
+                if parent:
+                    reqs = getattr(parent, "source_request", None)
+            if not reqs:
+                return None
+            req = reqs[0] if isinstance(reqs, list) else reqs
+            inst = getattr(req, "institution", None)
+            inst_name = getattr(inst, "name", None) if inst else None
+            company = getattr(req, "accepted_by_company", None)
+            company_name = getattr(company, "name", None) if company else None
+            creator_name = None
+            creator = getattr(req, "created_by", None)
+            if creator:
+                first = getattr(creator, "first_name", "") or ""
+                last = getattr(creator, "last_name", "") or ""
+                creator_name = f"{first} {last}".strip() or None
+
+            return {
+                "institution_name": inst_name,
+                "created_at": req.created_at.isoformat() if req.created_at else None,
+                "created_by_name": creator_name,
+                "sent_at": req.sent_at.isoformat() if req.sent_at else None,
+                "accepted_at": req.accepted_at.isoformat() if req.accepted_at else None,
+                "accepted_by_company_name": company_name,
+                "converted_at": req.converted_at.isoformat() if req.converted_at else None,
+                "cancelled_at": req.cancelled_at.isoformat() if req.cancelled_at else None,
+            }
+        except Exception:
+            return None
 
     def _is_transferred(self) -> bool:
         """Détermine si la course a été transférée (ACCEPTED ou COMPLETED).

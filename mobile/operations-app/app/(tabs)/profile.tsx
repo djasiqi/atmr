@@ -7,7 +7,11 @@ import {
   Image,
   Text,
   Modal,
+  Pressable,
   ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Animated,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
@@ -22,6 +26,7 @@ import {
   updateDriverPhoto,
   switchToEnterpriseToken,
   invalidateInterceptorCache,
+  testPushNotification,
 } from "@/services/api";
 import { sendIngestEvent } from "@/src/config/telemetry";
 import { secureStorage, asyncStorage } from "@/services/storage";
@@ -35,18 +40,99 @@ import { InputField } from "@/components/ui/InputField";
 import { Loader } from "@/components/ui/Loader";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { profileStyles } from "@/styles/profileStyles";
+import { profileStyles as s } from "@/styles/profileStyles";
 import { PushDebugCard } from "@/components/common/PushDebugCard";
+import { getLogger } from "@/utils/logger";
 
-// Import direct de l'image par défaut
-import DefaultDriver from "../../assets/images/default-driver.png";
+const log = getLogger("Profile");
+
+const DefaultDriver = require("../../assets/images/icon.png");
+
+const BRAND = "#00796B";
+const TEXT_SEC = "#64748B";
+
+const formatContractType = (ct: string | null | undefined): string => {
+  if (!ct) return "Non renseigné";
+  const map: Record<string, string> = {
+    CDI: "CDI",
+    CDD: "CDD",
+    TEMP: "Temporaire",
+    FREELANCE: "Indépendant",
+    STAGE: "Stage",
+  };
+  return map[ct.toUpperCase()] || ct;
+};
+
+const formatDate = (d: string | null | undefined): string => {
+  if (!d) return "Non renseigné";
+  try {
+    return new Date(d).toLocaleDateString("fr-CH", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return d;
+  }
+};
+
+const isExpiringSoon = (d: string | null | undefined): boolean => {
+  if (!d) return false;
+  try {
+    const diff = new Date(d).getTime() - Date.now();
+    return diff > 0 && diff < 90 * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+};
+
+function InfoRow({
+  label,
+  value,
+  last,
+  warn,
+}: {
+  label: string;
+  value: string | null | undefined;
+  last?: boolean;
+  warn?: boolean;
+}) {
+  const display = value?.trim() || "Non renseigné";
+  const isMuted = !value?.trim();
+  return (
+    <View style={[s.infoRow, last && s.infoRowLast]}>
+      <Text style={s.infoLabel}>{label}</Text>
+      {warn && !isMuted ? (
+        <View style={[s.infoBadge, s.infoBadgeWarn]}>
+          <Text style={[s.infoBadgeText, s.infoBadgeWarnText]}>{display}</Text>
+        </View>
+      ) : (
+        <Text style={[s.infoValue, isMuted && s.infoValueMuted]}>{display}</Text>
+      )}
+    </View>
+  );
+}
+
+function AnimatedProgressBar({ duration = 1800 }: { duration?: number }) {
+  const anim = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration,
+      useNativeDriver: false,
+    }).start();
+  }, []);
+  const width = anim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  return (
+    <View style={successStyles.progressBar}>
+      <Animated.View style={[successStyles.progressFill, { width }]} />
+    </View>
+  );
+}
 
 export default function ProfileScreen() {
   const { driver, refreshProfile, logout, switchMode, loadEnterpriseSession } = useAuth();
   const [form, setForm] = useState({
-    vehicle_assigned: "",
-    brand: "",
-    license_plate: "",
     phone: "",
     address: "",
     email: "",
@@ -58,6 +144,7 @@ export default function ProfileScreen() {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [switchingToEnterprise, setSwitchingToEnterprise] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+  const [switchSuccessInfo, setSwitchSuccessInfo] = useState<{ visible: boolean; companyName: string }>({ visible: false, companyName: "" });
   const [lastSessionDiag, setLastSessionDiag] = useState<{
     event: string;
     at: number;
@@ -77,9 +164,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (driver) {
       setForm({
-        vehicle_assigned: driver.vehicle_assigned,
-        brand: driver.brand,
-        license_plate: driver.license_plate,
         phone: driver.phone,
         address: (driver as any).address || "",
         email: (driver as any).email || "",
@@ -92,11 +176,7 @@ export default function ProfileScreen() {
     setProfileLoading(true);
     try {
       await updateDriverProfile({
-        vehicle_assigned: form.vehicle_assigned,
-        brand: form.brand,
-        license_plate: form.license_plate,
         phone: form.phone,
-        // Note: address et email peuvent être ajoutés plus tard si l'API les supporte
       });
       await refreshProfile();
       Alert.alert("Succès", "Votre profil a été mis à jour.");
@@ -115,7 +195,6 @@ export default function ProfileScreen() {
       quality: 0.7,
       base64: true,
     });
-
     if (!result.canceled && result.assets.length > 0) {
       const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setForm((prev) => ({ ...prev, photo: base64Img }));
@@ -125,28 +204,19 @@ export default function ProfileScreen() {
   const takePhotoWithCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permission requise",
-        "Permission caméra nécessaire pour prendre une photo"
-      );
+      Alert.alert("Permission requise", "Permission caméra nécessaire pour prendre une photo");
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
       base64: true,
     });
-
     if (!result.canceled && result.assets.length > 0) {
       const base64Img = `data:image/jpeg;base64,${result.assets[0].base64}`;
       setForm((prev) => ({ ...prev, photo: base64Img }));
     }
-  };
-
-  const showPhotoOptions = () => {
-    setPhotoModalVisible(true);
   };
 
   const handlePhotoSelection = async (type: "camera" | "gallery") => {
@@ -175,47 +245,35 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
-  };
-
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
     try {
       await logout();
-      Alert.alert("Succès", "Vous avez été déconnecté.");
     } catch (error) {
       Alert.alert("Erreur", "Impossible de se déconnecter.");
     }
   };
 
-  // Fonction pour basculer vers le compte entreprise
   const handleSwitchToEnterprise = useCallback(async () => {
     setShowSwitchModal(false);
     setSwitchingToEnterprise(true);
     try {
-      // 1. Obtenir un token entreprise à partir du token driver
       const enterpriseTokenResponse = await switchToEnterpriseToken();
-      console.log("[Profile] Tokens entreprise reçus:", {
+      log.info("enterprise tokens received", {
         hasToken: !!enterpriseTokenResponse.token,
         hasRefreshToken: !!enterpriseTokenResponse.refresh_token,
         userPublicId: enterpriseTokenResponse.user.public_id,
       });
 
-      // 2. ✅ CORRECTION: Stocker les tokens Enterprise dans SecureStore (source of truth)
-      // (enterpriseApi lit SecureStore, pas AsyncStorage)
       await secureStorage.setEnterpriseToken(enterpriseTokenResponse.token);
       if (enterpriseTokenResponse.refresh_token) {
         await secureStorage.setEnterpriseRefreshToken(enterpriseTokenResponse.refresh_token);
       } else {
         await secureStorage.removeEnterpriseRefreshToken();
       }
-      // Invalider le cache de l'intercepteur Enterprise pour forcer l'utilisation du nouveau token
       invalidateEnterpriseInterceptorCache();
-      console.log("[Profile] Tokens entreprise stockés dans SecureStore + cache Enterprise invalidé");
+      log.info("enterprise tokens stored, cache invalidated", {});
 
-      // 3. Récupérer la session complète depuis le backend
-      // Cela nous donne toutes les informations (user.id, dispatch_mode, etc.)
       let enterprisePayload: EnterpriseTokenPayload;
       try {
         const session = await fetchEnterpriseSession(enterpriseTokenResponse.token);
@@ -232,10 +290,8 @@ export default function ProfileScreen() {
           session_id: session.session_id || `switch_${Date.now()}_${enterpriseTokenResponse.user.public_id}`,
           mfa_required: false as const,
         };
-        console.log("[Profile] Session entreprise récupérée depuis le backend");
       } catch (sessionError) {
-        console.warn("[Profile] Erreur lors de la récupération de la session, utilisation des données du switch:", sessionError);
-        // Fallback: utiliser les données du switch si fetchEnterpriseSession échoue
+        log.warn("session fetch failed, using switch data", { error: sessionError });
         enterprisePayload = {
           token: enterpriseTokenResponse.token,
           refresh_token: enterpriseTokenResponse.refresh_token || null,
@@ -258,7 +314,6 @@ export default function ProfileScreen() {
         };
       }
 
-      // 4. Stocker la session complète dans AsyncStorage
       await AsyncStorage.multiSet([
         [
           ENTERPRISE_SESSION_KEY,
@@ -275,47 +330,26 @@ export default function ProfileScreen() {
             sessionId: enterprisePayload.session_id,
           }),
         ],
-        // Marquer que la session vient d'être créée pour éviter la vérification immédiate
         ["enterprise_session_just_created", "true"],
       ]);
-      console.log("[Profile] Session entreprise complète stockée dans AsyncStorage");
 
-      // 5. Basculer vers le mode entreprise
-      // #region agent log
       sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant switchMode', data: { hasToken: !!enterpriseTokenResponse.token, hasRefreshToken: !!enterpriseTokenResponse.refresh_token, companyId: enterpriseTokenResponse.company.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' });
-      // #endregion
       await switchMode("enterprise");
-      console.log("[Profile] Mode changé vers 'enterprise'");
-      // #region agent log
       sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Après switchMode', data: { mode: 'enterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' });
-      // #endregion
 
-      // 6. Invalider le cache de l'intercepteur driver (par sécurité/cohérence)
-      // Note: l'intercepteur Enterprise a déjà été invalidé après écriture SecureStore ci-dessus.
       invalidateInterceptorCache();
-      console.log("[Profile] Cache intercepteur invalidé");
-
-      // 7. Nettoyer seulement le driver_id dans AsyncStorage
       await asyncStorage.removeDriverId();
-      console.log("[Profile] Driver ID nettoyé");
-
-      // 8. Charger la session depuis AsyncStorage et mettre à jour le contexte
-      // Au lieu d'appeler refreshEnterprise (qui essaie de rafraîchir le token),
-      // nous chargeons directement la session que nous venons de stocker
       await loadEnterpriseSession();
-      console.log("[Profile] Session entreprise chargée depuis AsyncStorage");
 
-      // 10. Naviguer vers le dashboard entreprise
-      // #region agent log
       sendIngestEvent({ location: 'profile.tsx:handleSwitchToEnterprise', message: 'Avant navigation dashboard', data: { target: '/(enterprise)/dashboard' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'F' });
-      // #endregion
-      router.replace("/(enterprise)/dashboard" as any);
-      Alert.alert(
-        "Basculement réussi",
-        `Vous êtes maintenant connecté en tant qu'entreprise (${enterpriseTokenResponse.company.name}).`
-      );
+
+      setSwitchSuccessInfo({ visible: true, companyName: enterpriseTokenResponse.company.name });
+      setTimeout(() => {
+        setSwitchSuccessInfo((prev) => ({ ...prev, visible: false }));
+        router.replace("/(enterprise)/dashboard" as any);
+      }, 1800);
     } catch (error: any) {
-      console.error("Erreur lors du basculement:", error);
+      log.error("switch to enterprise failed", { error });
       const errorMessage =
         error?.response?.data?.error ??
         error?.message ??
@@ -328,7 +362,7 @@ export default function ProfileScreen() {
 
   if (!driver) {
     return (
-      <View style={profileStyles.container}>
+      <View style={s.container}>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <Loader />
         </View>
@@ -337,43 +371,38 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={profileStyles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        style={profileStyles.scrollContainer}
-      >
-        {/* Header avec photo intégrée */}
-        <View style={profileStyles.headerGradient}>
-          <View style={profileStyles.headerContent}>
-            <View style={profileStyles.headerText}>
-              <Text style={profileStyles.headerTitle}>
+    <View style={s.container}>
+      <ScrollView showsVerticalScrollIndicator={false} style={s.scrollContainer}>
+        {/* ——— Header ——— */}
+        <View style={s.headerGradient}>
+          <View style={s.headerContent}>
+            <View style={s.headerText}>
+              <Text style={s.headerTitle}>
                 {driver?.first_name} {driver?.last_name}
               </Text>
+              <Text style={s.headerSubtitle}>Chauffeur</Text>
             </View>
             <TouchableOpacity
-              style={profileStyles.headerPhotoContainer}
-              onPress={showPhotoOptions}
+              style={s.headerPhotoContainer}
+              onPress={() => setPhotoModalVisible(true)}
             >
               <Image
                 source={form.photo ? { uri: form.photo } : DefaultDriver}
-                style={profileStyles.headerPhoto}
+                style={s.headerPhoto}
               />
-              <View style={profileStyles.headerPhotoOverlay}>
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+              <View style={s.headerPhotoOverlay}>
+                <Ionicons name="camera" size={12} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Section Informations Personnelles */}
-        <View style={profileStyles.cardContainer}>
-          <View style={profileStyles.cardHeader}>
-            <Ionicons name="person-outline" size={22} color="#0A7F59" />
-            <Text style={profileStyles.cardTitle}>
-              Informations Personnelles
-            </Text>
+        {/* ——— Informations personnelles ——— */}
+        <View style={s.cardContainer}>
+          <View style={s.cardHeader}>
+            <Ionicons name="person-outline" size={18} color={BRAND} />
+            <Text style={s.cardTitle}>Informations personnelles</Text>
           </View>
-
           <InputField
             label="Téléphone"
             value={form.phone}
@@ -381,7 +410,6 @@ export default function ProfileScreen() {
             onChangeText={(phone) => setForm({ ...form, phone })}
             showToggle={false}
           />
-
           <InputField
             label="Adresse"
             value={form.address}
@@ -389,7 +417,6 @@ export default function ProfileScreen() {
             placeholder="Votre adresse complète"
             showToggle={false}
           />
-
           <InputField
             label="Email"
             value={form.email}
@@ -400,285 +427,447 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* Section Véhicule */}
-        <View style={profileStyles.cardContainer}>
-          <View style={profileStyles.cardHeader}>
-            <Ionicons name="car-outline" size={22} color="#0A7F59" />
-            <Text style={profileStyles.cardTitle}>Mon Véhicule</Text>
+        {/* ——— Informations professionnelles (lecture seule) ——— */}
+        <View style={s.cardContainer}>
+          <View style={s.cardHeader}>
+            <Ionicons name="briefcase-outline" size={18} color={BRAND} />
+            <Text style={s.cardTitle}>Informations professionnelles</Text>
           </View>
-
-          <InputField
-            label="Véhicule assigné"
-            value={form.vehicle_assigned}
-            onChangeText={(vehicle_assigned) =>
-              setForm({ ...form, vehicle_assigned })
-            }
-            placeholder="Type de véhicule"
-            showToggle={false}
+          <InfoRow label="Contrat" value={formatContractType(driver.contract_type)} />
+          <InfoRow label="Nationalité" value={driver.nationality} />
+          <InfoRow label="N° AVS" value={driver.avs_number} />
+          <InfoRow
+            label="Début d'emploi"
+            value={formatDate(driver.employment_start_date)}
           />
-
-          <InputField
-            label="Marque du véhicule"
-            value={form.brand}
-            onChangeText={(brand) => setForm({ ...form, brand })}
-            placeholder="Marque du véhicule"
-            showToggle={false}
-          />
-
-          <InputField
-            label="Plaque d'immatriculation"
-            value={form.license_plate}
-            onChangeText={(license_plate) =>
-              setForm({ ...form, license_plate })
-            }
-            placeholder="ABC-123"
-            showToggle={false}
-          />
+          {driver.employment_end_date && (
+            <InfoRow label="Fin d'emploi" value={formatDate(driver.employment_end_date)} />
+          )}
+          {driver.weekly_hours != null && (
+            <InfoRow label="Heures / semaine" value={`${driver.weekly_hours}h`} last />
+          )}
         </View>
 
-        {/* Section Switch de compte (si chauffeur d'urgence) */}
+        {/* ——— Permis & Qualifications (lecture seule) ——— */}
+        <View style={s.cardContainer}>
+          <View style={s.cardHeader}>
+            <Ionicons name="shield-checkmark-outline" size={18} color={BRAND} />
+            <Text style={s.cardTitle}>Permis & Qualifications</Text>
+          </View>
+          <View style={s.infoRow}>
+            <Text style={s.infoLabel}>Catégories</Text>
+            <View style={s.chipRow}>
+              {(driver.license_categories ?? []).length > 0
+                ? (driver.license_categories as string[]).map((cat: string) => (
+                    <View key={cat} style={s.chip}>
+                      <Text style={s.chipText}>{cat}</Text>
+                    </View>
+                  ))
+                : <Text style={[s.infoValue, s.infoValueMuted]}>Non renseigné</Text>
+              }
+            </View>
+          </View>
+          <InfoRow
+            label="Validité permis"
+            value={formatDate(driver.license_valid_until)}
+            warn={isExpiringSoon(driver.license_valid_until)}
+          />
+          <InfoRow
+            label="Certificat médical"
+            value={formatDate(driver.medical_valid_until)}
+            warn={isExpiringSoon(driver.medical_valid_until)}
+          />
+          <View style={[s.infoRow, s.infoRowLast]}>
+            <Text style={s.infoLabel}>Formations</Text>
+            <View style={s.chipRow}>
+              {(driver.trainings ?? []).length > 0
+                ? (driver.trainings as string[]).map((t: string, i: number) => (
+                    <View key={i} style={s.chip}>
+                      <Text style={s.chipText}>{t}</Text>
+                    </View>
+                  ))
+                : <Text style={[s.infoValue, s.infoValueMuted]}>Aucune</Text>
+              }
+            </View>
+          </View>
+        </View>
+
+        {/* ——— Contact d'urgence (lecture seule) ——— */}
+        {(driver.emergency_contact_name || driver.emergency_contact_phone) && (
+          <View style={s.cardContainer}>
+            <View style={s.cardHeader}>
+              <Ionicons name="medkit-outline" size={18} color={BRAND} />
+              <Text style={s.cardTitle}>Contact d'urgence</Text>
+            </View>
+            <InfoRow label="Nom" value={driver.emergency_contact_name} />
+            <InfoRow label="Téléphone" value={driver.emergency_contact_phone} last />
+          </View>
+        )}
+
+        {/* ——— Mon véhicule (lecture seule) ——— */}
+        <View style={s.cardContainer}>
+          <View style={s.cardHeader}>
+            <Ionicons name="car-outline" size={18} color={BRAND} />
+            <Text style={s.cardTitle}>Mon véhicule</Text>
+          </View>
+          <InfoRow label="Véhicule assigné" value={driver.vehicle_assigned} />
+          <InfoRow label="Marque" value={driver.brand} />
+          <InfoRow label="Plaque d'immatriculation" value={driver.license_plate} last />
+        </View>
+
+        {/* ——— Switch entreprise (si chauffeur d'urgence) ——— */}
         {driver?.company_id && driver?.driver_type === "EMERGENCY" && (
-          <View style={profileStyles.cardContainer}>
-            <View style={profileStyles.cardHeader}>
-              <Ionicons name="swap-horizontal" size={22} color="#0A7F59" />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={profileStyles.cardTitle}>Compte entreprise</Text>
-                <Text style={[profileStyles.cardTitle, { fontSize: 14, fontWeight: "normal", color: "#5F7369", marginTop: 4 }]}>
-                  Vous êtes lié à l'entreprise {driver.company?.name || `#${driver.company_id}`}
+          <View style={s.cardContainer}>
+            <View style={s.cardHeader}>
+              <Ionicons name="swap-horizontal" size={18} color={BRAND} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={s.cardTitle}>Compte entreprise</Text>
+                <Text style={s.cardDesc}>
+                  Lié à {driver.company?.name || `Entreprise #${driver.company_id}`}
                 </Text>
               </View>
             </View>
-
             <TouchableOpacity
-              style={[
-                profileStyles.saveButton,
-                { marginTop: 16, opacity: switchingToEnterprise ? 0.6 : 1 },
-              ]}
+              style={[s.saveButton, { opacity: switchingToEnterprise ? 0.6 : 1 }]}
               onPress={() => setShowSwitchModal(true)}
               disabled={switchingToEnterprise}
             >
               {switchingToEnterprise ? (
                 <>
                   <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={profileStyles.saveButtonText}>
-                    Basculement en cours...
-                  </Text>
+                  <Text style={s.saveButtonText}>Basculement...</Text>
                 </>
               ) : (
                 <>
-                  <Ionicons name="business-outline" size={20} color="#FFFFFF" />
-                  <Text style={profileStyles.saveButtonText}>
-                    Basculer vers l'entreprise
-                  </Text>
+                  <Ionicons name="business-outline" size={16} color="#FFFFFF" />
+                  <Text style={s.saveButtonText}>Basculer vers l'entreprise</Text>
                 </>
               )}
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Actions */}
-        <View style={profileStyles.actionsContainer}>
+        {/* ——— Actions ——— */}
+        <View style={s.actionsContainer}>
           <TouchableOpacity
-            style={profileStyles.saveButton}
+            style={s.saveButton}
             onPress={handleSaveProfile}
             disabled={profileLoading}
           >
-            <Ionicons name="save-outline" size={20} color="#FFFFFF" />
-            <Text style={profileStyles.saveButtonText}>
-              {profileLoading
-                ? "Enregistrement..."
-                : "Enregistrer les modifications"}
+            <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" />
+            <Text style={s.saveButtonText}>
+              {profileLoading ? "Enregistrement..." : "Enregistrer"}
             </Text>
           </TouchableOpacity>
 
-          {/* Bouton de déconnexion */}
-          <TouchableOpacity style={profileStyles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
-            <Text style={profileStyles.logoutButtonText}>
-              Se déconnecter
-            </Text>
+          <TouchableOpacity
+            style={s.logoutButton}
+            onPress={() => setLogoutModalVisible(true)}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#FFFFFF" />
+            <Text style={s.logoutButtonText}>Se déconnecter</Text>
           </TouchableOpacity>
         </View>
 
-        {/* P0.1 – Menu debug chauffeur : dernier reason session (X-Session-Diag) */}
+        {/* Debug section (dev only) */}
         {__DEV__ && lastSessionDiag && (
           <View
             style={{
               marginHorizontal: 16,
               marginTop: 12,
               padding: 10,
-              backgroundColor: "#f0f4f0",
-              borderRadius: 8,
+              backgroundColor: "rgba(0,121,107,0.04)",
+              borderRadius: 10,
               borderLeftWidth: 3,
-              borderLeftColor: "#0A7F59",
+              borderLeftColor: BRAND,
             }}
           >
-            <Text
-              style={{
-                fontSize: 11,
-                color: "#5F7369",
-                marginBottom: 4,
-                fontWeight: "600",
-              }}
-            >
-              Debug – Dernier événement session
+            <Text style={{ fontSize: 11, color: TEXT_SEC, marginBottom: 4, fontWeight: "600" }}>
+              Debug — Dernier événement session
             </Text>
-            <Text style={{ fontSize: 13, color: "#1a1a1a" }}>
-              {lastSessionDiag.event}
-            </Text>
-            <Text style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
-              {new Date(lastSessionDiag.at).toLocaleString()} · envoyé en
-              X-Session-Diag
+            <Text style={{ fontSize: 12, color: "#1E293B" }}>{lastSessionDiag.event}</Text>
+            <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+              {new Date(lastSessionDiag.at).toLocaleString()} · X-Session-Diag
             </Text>
           </View>
         )}
 
-        {/* P0: Push Debug Card — état complet pour diagnostic app kill */}
-        <PushDebugCard />
+        {__DEV__ && <PushDebugCard />}
 
-        {/* Espacement final */}
-        <View style={profileStyles.bottomSpacing} />
+        {__DEV__ && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#2563EB",
+              borderRadius: 10,
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              marginHorizontal: 16,
+              marginTop: 12,
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "center",
+              gap: 6,
+            }}
+            onPress={async () => {
+              try {
+                const res = await testPushNotification();
+                if (res.ok) {
+                  const details = (res.results ?? [])
+                    .map((r) => `${r.platform ?? "?"}: ${r.ok ? "OK" : r.error ?? "Échec"}`)
+                    .join("\n");
+                  Alert.alert("Test réussi", `Notification envoyée à ${res.tokens_count ?? 0} appareil(s).\n\n${details}`);
+                } else {
+                  Alert.alert("Échec du test", res.error ?? "La notification n'a pas pu être envoyée.");
+                }
+              } catch (e: any) {
+                Alert.alert("Erreur", e?.message ?? "Erreur réseau");
+              }
+            }}
+          >
+            <Ionicons name="notifications-outline" size={14} color="#fff" />
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Tester les notifications</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={s.bottomSpacing} />
       </ScrollView>
 
-      {/* Modal de sélection photo */}
+      {/* ——— Modal photo (bottom sheet) ——— */}
       <Modal
         visible={photoModalVisible}
-        transparent={true}
-        animationType="fade"
+        transparent
+        animationType="slide"
         onRequestClose={() => setPhotoModalVisible(false)}
       >
-        <View style={profileStyles.modalOverlay}>
-          <View style={profileStyles.modalContainer}>
-            <View style={profileStyles.modalHeader}>
-              <Text style={profileStyles.modalTitle}>
-                Modifier la photo
-              </Text>
+        <Pressable style={s.modalOverlay} onPress={() => setPhotoModalVisible(false)}>
+          <View
+            style={s.modalContainer}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={s.modalHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    backgroundColor: "rgba(0,121,107,0.08)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="image-outline" size={16} color={BRAND} />
+                </View>
+                <Text style={s.modalTitle}>Modifier la photo</Text>
+              </View>
               <TouchableOpacity
-                style={profileStyles.modalCloseButton}
+                style={s.modalCloseButton}
                 onPress={() => setPhotoModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close" size={24} color="#5F7369" />
+                <Ionicons name="close" size={18} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <View style={profileStyles.modalContent}>
+            <View style={s.modalContent}>
               <TouchableOpacity
-                style={profileStyles.modalOption}
+                style={s.modalOption}
                 onPress={() => handlePhotoSelection("camera")}
               >
-                <View style={profileStyles.modalOptionIcon}>
-                  <Ionicons name="camera" size={28} color="#0A7F59" />
+                <View style={s.modalOptionIcon}>
+                  <Ionicons name="camera-outline" size={20} color={BRAND} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={profileStyles.modalOptionText}>
-                    Prendre une photo
-                  </Text>
-                  <Text style={profileStyles.modalOptionSubtext}>
-                    Utiliser la caméra
-                  </Text>
+                  <Text style={s.modalOptionText}>Prendre une photo</Text>
+                  <Text style={s.modalOptionSubtext}>Utiliser la caméra</Text>
                 </View>
+                <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={profileStyles.modalOption}
+                style={s.modalOption}
                 onPress={() => handlePhotoSelection("gallery")}
               >
-                <View style={profileStyles.modalOptionIcon}>
-                  <Ionicons name="images" size={28} color="#0A7F59" />
+                <View style={s.modalOptionIcon}>
+                  <Ionicons name="images-outline" size={20} color={BRAND} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={profileStyles.modalOptionText}>
-                    Choisir depuis la galerie
-                  </Text>
-                  <Text style={profileStyles.modalOptionSubtext}>
-                    Sélectionner une image existante
-                  </Text>
+                  <Text style={s.modalOptionText}>Galerie</Text>
+                  <Text style={s.modalOptionSubtext}>Choisir une image existante</Text>
                 </View>
+                <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </Pressable>
       </Modal>
 
-      {/* Modal de déconnexion */}
+      {/* ——— Modal déconnexion (bottom sheet) ——— */}
       <Modal
         visible={logoutModalVisible}
-        transparent={true}
-        animationType="fade"
+        transparent
+        animationType="slide"
         onRequestClose={() => setLogoutModalVisible(false)}
       >
-        <View style={profileStyles.modalOverlay}>
-          <View style={profileStyles.logoutModalContainer}>
-            <View style={profileStyles.logoutIconContainer}>
-              <Ionicons name="log-out-outline" size={32} color="#D32F2F" />
+        <Pressable style={s.modalOverlay} onPress={() => setLogoutModalVisible(false)}>
+          <View
+            style={s.logoutModalContainer}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={s.logoutIconContainer}>
+              <Ionicons name="log-out-outline" size={24} color="#dc3545" />
             </View>
-            <Text style={profileStyles.logoutModalTitle}>
-              Déconnexion
+            <Text style={s.logoutModalTitle}>Déconnexion</Text>
+            <Text style={s.logoutModalMessage}>
+              Êtes-vous sûr de vouloir vous déconnecter ? Vous devrez vous reconnecter pour accéder à vos missions.
             </Text>
-            <Text style={profileStyles.logoutModalMessage}>
-              Êtes-vous sûr de vouloir vous déconnecter ?
-            </Text>
-            <View style={profileStyles.logoutModalActions}>
+            <View style={s.logoutModalActions}>
               <TouchableOpacity
-                style={profileStyles.logoutCancelButton}
+                style={s.logoutCancelButton}
                 onPress={() => setLogoutModalVisible(false)}
               >
-                <Text style={profileStyles.logoutCancelButtonText}>
-                  Annuler
-                </Text>
+                <Text style={s.logoutCancelButtonText}>Annuler</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={profileStyles.logoutConfirmButton}
-                onPress={confirmLogout}
-              >
-                <Text style={profileStyles.logoutConfirmButtonText}>
-                  Se déconnecter
-                </Text>
+              <TouchableOpacity style={s.logoutConfirmButton} onPress={confirmLogout}>
+                <Ionicons name="log-out-outline" size={15} color="#fff" />
+                <Text style={s.logoutConfirmButtonText}>Se déconnecter</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </Pressable>
       </Modal>
 
-      {/* Modal de confirmation switch vers entreprise */}
+      {/* ——— Modal switch entreprise (bottom sheet) ——— */}
       <Modal
         visible={showSwitchModal}
-        transparent={true}
-        animationType="fade"
+        transparent
+        animationType="slide"
         onRequestClose={() => setShowSwitchModal(false)}
       >
-        <View style={profileStyles.modalOverlay}>
-          <View style={profileStyles.logoutModalContainer}>
-            <View style={[profileStyles.logoutIconContainer, { backgroundColor: "rgba(10,127,89,0.1)" }]}>
-              <Ionicons name="business-outline" size={32} color="#0A7F59" />
+        <Pressable style={s.modalOverlay} onPress={() => setShowSwitchModal(false)}>
+          <View
+            style={s.logoutModalContainer}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={[s.logoutIconContainer, { backgroundColor: "rgba(0,121,107,0.08)" }]}>
+              <Ionicons name="business-outline" size={24} color={BRAND} />
             </View>
-            <Text style={profileStyles.logoutModalTitle}>
-              Basculer vers l'entreprise
-            </Text>
-            <Text style={profileStyles.logoutModalMessage}>
+            <Text style={s.logoutModalTitle}>Basculer vers l'entreprise</Text>
+            <Text style={s.logoutModalMessage}>
               Vous allez basculer vers votre compte entreprise. Vous pourrez revenir au compte chauffeur depuis les paramètres.
             </Text>
-            <View style={profileStyles.logoutModalActions}>
+            <View style={s.logoutModalActions}>
               <TouchableOpacity
-                style={profileStyles.logoutCancelButton}
+                style={s.logoutCancelButton}
                 onPress={() => setShowSwitchModal(false)}
               >
-                <Text style={profileStyles.logoutCancelButtonText}>
-                  Annuler
-                </Text>
+                <Text style={s.logoutCancelButtonText}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[profileStyles.logoutConfirmButton, { backgroundColor: "#0A7F59" }]}
+                style={[s.logoutConfirmButton, { backgroundColor: BRAND }]}
                 onPress={handleSwitchToEnterprise}
               >
-                <Text style={profileStyles.logoutConfirmButtonText}>
-                  Basculer
-                </Text>
+                <Ionicons name="swap-horizontal-outline" size={15} color="#fff" />
+                <Text style={s.logoutConfirmButtonText}>Basculer</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ——— Modal succès basculement ——— */}
+      <Modal
+        visible={switchSuccessInfo.visible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={successStyles.overlay}>
+          <View style={successStyles.card}>
+            <View style={successStyles.iconWrap}>
+              <Ionicons name="checkmark-circle" size={44} color="#0A7F59" />
+            </View>
+            <Text style={successStyles.title}>Basculement réussi</Text>
+            <Text style={successStyles.subtitle}>
+              Vous êtes maintenant connecté à{"\n"}
+              <Text style={successStyles.companyName}>{switchSuccessInfo.companyName}</Text>
+            </Text>
+            {switchSuccessInfo.visible && <AnimatedProgressBar duration={1800} />}
           </View>
         </View>
       </Modal>
     </View>
   );
 }
+
+const successStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(5,22,16,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "rgba(10,127,89,0.2)",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 1,
+        shadowRadius: 28,
+      },
+      android: { elevation: 12 },
+      default: {},
+    }),
+  },
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(10,127,89,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0F362B",
+    letterSpacing: -0.3,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  companyName: {
+    fontWeight: "700",
+    color: "#0A7F59",
+  },
+  progressBar: {
+    width: "80%",
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(10,127,89,0.1)",
+    marginTop: 24,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 2,
+    backgroundColor: "#0A7F59",
+  },
+});

@@ -1,21 +1,19 @@
 // src/components/reservations/ReservationModals.jsx
 import React, { useState, useEffect } from 'react';
+import { FiClock, FiZap } from 'react-icons/fi';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
-import ConfirmationModal from '../common/ConfirmationModal';
+import CancellationModal from './CancellationModal';
 import EditReservationModal from './EditReservationModal';
+import InlineDatePicker from '../ui/InlineDatePicker';
+import InlineTimePicker from '../ui/InlineTimePicker';
 import styles from './ReservationModals.module.css';
 
-/**
- * Modal centralisée pour planifier l'heure de retour
- * Remplace ReturnTimeModal et ScheduleReturnModal
- */
 const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Initialiser avec la date/heure fournie ou maintenant + 1h par défaut
   useEffect(() => {
     if (isOpen) {
       let dateObj;
@@ -23,51 +21,36 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
       if (reservation?.scheduled_time) {
         dateObj = new Date(reservation.scheduled_time);
       } else {
-        // Pas de scheduled_time : utiliser la date du jour et suggérer maintenant + 1h
         dateObj = new Date(Date.now() + 60 * 60 * 1000);
       }
 
-      // Format date YYYY-MM-DD
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dateObj.getDate()).padStart(2, '0');
       setSelectedDate(`${year}-${month}-${day}`);
 
-      // Format heure HH:mm (24h)
-      const hours = String(dateObj.getHours()).padStart(2, '0');
-      const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-      setSelectedTime(`${hours}:${minutes}`);
+      const hours = dateObj.getHours();
+      const minutes = dateObj.getMinutes();
+      if (hours === 0 && minutes === 0) {
+        setSelectedTime('');
+      } else {
+        setSelectedTime(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
+      }
     }
   }, [isOpen, reservation]);
 
-  // Date minimale = aujourd'hui
-  const minDate = new Date().toISOString().split('T')[0];
-  // Heure minimale = maintenant si date = aujourd'hui, sinon 00:00
-  const today = new Date().toISOString().split('T')[0];
-  const minTime =
-    selectedDate === today
-      ? `${String(new Date().getHours()).padStart(2, '0')}:${String(
-          new Date().getMinutes()
-        ).padStart(2, '0')}`
-      : '00:00';
-
   const handleConfirm = async () => {
-    if (!selectedDate || !selectedTime) {
-      return;
-    }
+    if (!selectedDate || !selectedTime) return;
 
     setLoading(true);
     try {
-      // Format attendu selon le contexte (string ou objet)
       if (typeof onConfirm === 'function') {
         const [hours, minutes] = selectedTime.split(':');
         const dateTime = new Date(`${selectedDate}T${hours}:${minutes}`);
 
-        // Essayer d'appeler avec l'objet format (comme ReturnTimeModal)
         try {
           await onConfirm({ return_time: dateTime.toISOString().slice(0, 16) });
         } catch (e) {
-          // Si ça échoue, essayer avec le format string (comme ScheduleReturnModal)
           const isoDatetime = `${selectedDate} ${selectedTime}`;
           await onConfirm(isoDatetime);
         }
@@ -75,7 +58,6 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
       onClose();
     } catch (error) {
       console.error('Erreur lors de la planification:', error);
-      alert(error?.response?.data?.error || 'Erreur lors de la planification');
     } finally {
       setLoading(false);
     }
@@ -90,100 +72,88 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
 
   if (!isOpen) return null;
 
-  return (
-    <Modal onClose={onClose} size="compact">
-      <div className={styles.modalWrapper}>
-        <h3>Planifier l'heure de retour</h3>
+  const clientName = reservation?.client_name || reservation?.client?.full_name || '';
+  const formatAllerTime = (isoStr) => {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    const datePart = d.toLocaleDateString('fr-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    if (d.getHours() === 0 && d.getMinutes() === 0) return datePart;
+    const timePart = d.toLocaleTimeString('fr-CH', { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} ${timePart}`;
+  };
+  const allerTime = formatAllerTime(reservation?.original_booking?.scheduled_time)
+    || formatAllerTime(reservation?.scheduled_time);
 
+  return (
+    <div className={styles.schedOverlay} onClick={onClose}>
+      <div className={styles.schedModal} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className={styles.schedHeader}>
+          <div className={styles.schedHeaderIcon}><FiClock size={14} /></div>
+          <h3 className={styles.schedTitle}>Planifier le retour</h3>
+        </div>
+
+        {/* Info card */}
         {reservation && (
-          <div className={styles.reservationInfo}>
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Client :</span>
-              <strong>{reservation.client_name || reservation.client?.full_name}</strong>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Aller :</span>
-              <span>
-                {reservation.original_booking?.scheduled_time
-                  ? new Date(reservation.original_booking.scheduled_time).toLocaleString('fr-CH', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : reservation.scheduled_time
-                    ? new Date(reservation.scheduled_time).toLocaleString('fr-CH', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'Non spécifié'}
-              </span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.label}>Trajet retour :</span>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <span>{reservation.pickup_location}</span>
-                <span>→ {reservation.dropoff_location}</span>
-              </span>
-            </div>
+          <div className={styles.schedInfo}>
+            {clientName && (
+              <div className={styles.schedInfoRow}>
+                <span className={styles.schedInfoLabel}>Client</span>
+                <span className={styles.schedInfoValue}>{clientName}</span>
+              </div>
+            )}
+            {allerTime && (
+              <div className={styles.schedInfoRow}>
+                <span className={styles.schedInfoLabel}>Aller</span>
+                <span className={styles.schedInfoValue}>{allerTime}</span>
+              </div>
+            )}
+            {reservation.pickup_location && (
+              <div className={styles.schedInfoRow}>
+                <span className={styles.schedInfoLabel}>Trajet</span>
+                <span className={styles.schedInfoValue}>
+                  {reservation.pickup_location}
+                  <span className={styles.schedArrow}> → </span>
+                  {reservation.dropoff_location}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
-        <div className={styles.formGroup}>
-          <label htmlFor="return-date" className={styles.label}>
-            Date du retour <span>*</span>
-          </label>
-          <input
-            type="date"
-            id="return-date"
-            className={styles.input}
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            min={minDate}
-            required
-            disabled={loading}
-          />
+        {/* Form */}
+        <div className={styles.schedForm}>
+          <div className={styles.schedFieldRow}>
+            <div className={styles.schedField}>
+              <label className={styles.schedLabel}>Date <span>*</span></label>
+              <InlineDatePicker value={selectedDate} onChange={(iso) => setSelectedDate(iso)} />
+            </div>
+            <div className={styles.schedField}>
+              <label className={styles.schedLabel}>Heure <span>*</span></label>
+              <InlineTimePicker value={selectedTime} onChange={(hhmm) => setSelectedTime(hhmm)} />
+            </div>
+          </div>
         </div>
 
-        <div className={styles.formGroup}>
-          <label htmlFor="return-time" className={styles.label}>
-            Heure du retour <span>*</span>
-          </label>
-          <input
-            type="time"
-            id="return-time"
-            className={styles.input}
-            value={selectedTime}
-            onChange={(e) => setSelectedTime(e.target.value)}
-            min={selectedDate === today ? minTime : undefined}
-            required
-            disabled={loading}
-          />
-          <small className={styles.hint}>Format 24h (ex: 14:30)</small>
-        </div>
-
-        <div className={styles.buttonGroup}>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+        {/* Actions */}
+        <div className={styles.schedActions}>
+          <button type="button" className={styles.schedCancel} onClick={onClose} disabled={loading}>
             Annuler
-          </Button>
-          <Button variant="warning" onClick={handleUrgent} disabled={loading}>
-            ⚡ Urgent
-          </Button>
-          <Button
-            variant="primary"
+          </button>
+          <button type="button" className={styles.schedUrgent} onClick={handleUrgent} disabled={loading}>
+            <FiZap size={12} /> Urgent
+          </button>
+          <button
+            type="button"
+            className={styles.schedConfirm}
             onClick={handleConfirm}
-            loading={loading}
-            disabled={!selectedDate || !selectedTime}
+            disabled={!selectedDate || !selectedTime || loading}
           >
-            Planifier
-          </Button>
+            {loading ? 'Planification...' : 'Planifier'}
+          </button>
         </div>
       </div>
-    </Modal>
+    </div>
   );
 };
 
@@ -303,29 +273,13 @@ const ReservationModals = ({
         onClose={onEditClose}
       />
 
-      {/* Modal Confirmation suppression */}
-      <ConfirmationModal
+      {/* Modal Annulation / Suppression intelligent */}
+      <CancellationModal
         isOpen={deleteModalOpen}
-        onClose={onDeleteClose}
+        reservation={deleteModalReservation}
         onConfirm={onDeleteConfirm}
-        title={
-          deleteModalReservation
-            ? `Supprimer la réservation #${deleteModalReservation.id}`
-            : 'Supprimer la réservation'
-        }
-        confirmText="Oui, supprimer"
-        confirmButtonVariant="danger"
-      >
-        {deleteModalReservation && (
-          <p>
-            Êtes-vous sûr de vouloir supprimer la réservation pour{' '}
-            <strong>
-              {deleteModalReservation.customer_name || deleteModalReservation.client?.full_name}
-            </strong>{' '}
-            ?
-          </p>
-        )}
-      </ConfirmationModal>
+        onClose={onDeleteClose}
+      />
     </>
   );
 };

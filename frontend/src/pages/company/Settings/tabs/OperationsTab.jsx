@@ -1,5 +1,6 @@
 // frontend/src/pages/company/Settings/tabs/OperationsTab.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FiTruck, FiMapPin, FiSettings, FiRefreshCw, FiEdit, FiX } from 'react-icons/fi';
 import styles from '../CompanySettings.module.css';
 import DispatchModeSelector from '../../../../components/DispatchModeSelector';
 import AutonomousConfigPanel from '../../../../components/AutonomousConfigPanel';
@@ -11,7 +12,10 @@ import {
 import apiClient from '../../../../utils/apiClient';
 import { showSuccess, showError } from '../../../../utils/toast';
 
-const OperationsTab = () => {
+const hasCompanyToken = () =>
+  !!(localStorage.getItem('company_access_token') || localStorage.getItem('company_authToken'));
+
+const OperationsTab = ({ isEditing: _isEditing }) => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -34,18 +38,18 @@ const OperationsTab = () => {
   };
 
   // Charger les paramètres avancés depuis la DB
-  const loadAdvancedSettings = async () => {
+  const loadAdvancedSettings = useCallback(async () => {
+    if (!hasCompanyToken()) return;
     setLoadingAdvancedSettings(true);
     try {
       const { data } = await apiClient.get('/company_dispatch/advanced_settings');
       setAdvancedSettings(data.dispatch_overrides);
-      console.log('🔄 [OperationsTab] Paramètres avancés chargés:', data.dispatch_overrides);
     } catch (err) {
-      console.error('[OperationsTab] Erreur chargement paramètres avancés:', err);
+      console.error('[OperationsTab] Erreur chargement parametres avances:', err);
     } finally {
       setLoadingAdvancedSettings(false);
     }
-  };
+  }, []);
 
   // Sauvegarder les paramètres avancés
   const saveAdvancedSettings = async (newSettings) => {
@@ -55,13 +59,12 @@ const OperationsTab = () => {
       });
       setAdvancedSettings(data.dispatch_overrides);
       setShowAdvancedSettingsModal(false);
-      showSuccess('✅ Paramètres avancés sauvegardés avec succès !');
-      console.log('💾 [OperationsTab] Paramètres avancés sauvegardés:', data.dispatch_overrides);
-      // ✅ Recharger les paramètres pour s'assurer qu'ils sont à jour
+      showSuccess('Paramètres avancés sauvegardés avec succès.');
+      console.log('[OperationsTab] Paramètres avancés sauvegardés:', data.dispatch_overrides);
       await loadAdvancedSettings();
     } catch (err) {
       console.error('[OperationsTab] Erreur sauvegarde paramètres avancés:', err);
-      showError('❌ Erreur lors de la sauvegarde des paramètres');
+      showError('Erreur lors de la sauvegarde des paramètres');
     }
   };
 
@@ -74,11 +77,11 @@ const OperationsTab = () => {
     try {
       await apiClient.delete('/company_dispatch/advanced_settings');
       setAdvancedSettings(null);
-      showSuccess('✅ Paramètres réinitialisés aux valeurs par défaut');
-      console.log('🗑️ [OperationsTab] Paramètres avancés réinitialisés');
+      showSuccess('Paramètres réinitialisés aux valeurs par défaut.');
+      console.log('[OperationsTab] Paramètres avancés réinitialisés');
     } catch (err) {
       console.error('[OperationsTab] Erreur réinitialisation paramètres:', err);
-      showError('❌ Erreur lors de la réinitialisation');
+      showError('Erreur lors de la réinitialisation');
     }
   };
 
@@ -95,26 +98,27 @@ const OperationsTab = () => {
           longitude: data.longitude || null,
         });
 
-        // Charger aussi le mode de dispatch actuel
-        try {
-          const apiClient = (await import('../../../../utils/apiClient')).default;
-          const { data: modeData } = await apiClient.get('/company_dispatch/mode');
-          if (modeData.dispatch_mode) {
-            setCurrentMode(modeData.dispatch_mode);
+        // Charger aussi le mode de dispatch actuel (seulement si token dispo)
+        if (hasCompanyToken()) {
+          try {
+            const { data: modeData } = await apiClient.get('/company_dispatch/mode');
+            if (modeData.dispatch_mode) {
+              setCurrentMode(modeData.dispatch_mode);
+            }
+          } catch (err) {
+            console.error('Failed to load dispatch mode:', err);
           }
-        } catch (err) {
-          console.error('Failed to load dispatch mode:', err);
         }
       } catch (err) {
         console.error('Failed to load operational settings:', err);
-        setError('Impossible de charger les paramètres.');
+        setError('Impossible de charger les parametres.');
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-    loadAdvancedSettings(); // Charger aussi les paramètres avancés
+    loadAdvancedSettings();
 
     // Charger les chauffeurs pour la sélection de préférence
     const loadDrivers = async () => {
@@ -128,7 +132,7 @@ const OperationsTab = () => {
       }
     };
     loadDrivers();
-  }, []);
+  }, [loadAdvancedSettings]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -171,11 +175,11 @@ const OperationsTab = () => {
       }
 
       await updateOperationalSettings(payload);
-      setMessage('✅ Sauvegardé automatiquement');
+      setMessage('Sauvegardé automatiquement.');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       console.error('Auto-save failed:', err);
-      setError('❌ Erreur lors de la sauvegarde');
+      setError('Erreur lors de la sauvegarde');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -213,7 +217,7 @@ const OperationsTab = () => {
             }
 
             await updateOperationalSettings(gpsPayload);
-            setMessage('📍 Position détectée et sauvegardée automatiquement');
+            setMessage('Position détectée et sauvegardée automatiquement.');
             setTimeout(() => setMessage(''), 2000);
           } catch (err) {
             console.error('Failed to save GPS:', err);
@@ -243,25 +247,21 @@ const OperationsTab = () => {
   }
 
   return (
-    <div className={styles.settingsForm} style={{ display: 'block' }}>
+    <div className={`${styles.settingsForm} ${styles.blockDisplay}`}>
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
-      {/* Layout en 2 colonnes */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 'var(--spacing-lg)',
-          alignItems: 'start',
-          width: '100%',
-        }}
-      >
-        {/* COLONNE GAUCHE */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-          {/* Configuration opérationnelle */}
-          <section className={styles.section}>
-            <h2>🚗 Configuration opérationnelle</h2>
+      <div className={styles.operationsGrid}>
+        <div className={styles.operationsCol}>
+          {/* Carte 1 : Configuration operationnelle */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardIcon}><FiTruck size={16} /></div>
+              <div className={styles.cardHeaderText}>
+                <h3 className={styles.cardTitle}>Configuration operationnelle</h3>
+                <p className={styles.cardHint}>Zones couvertes et limites de capacite</p>
+              </div>
+            </div>
 
             <div className={styles.formGroup}>
               <label htmlFor="service_area">Zone de service</label>
@@ -294,11 +294,17 @@ const OperationsTab = () => {
                 Nombre maximum de réservations acceptées quotidiennement
               </small>
             </div>
-          </section>
+          </div>
 
-          {/* Géolocalisation */}
-          <section className={styles.section}>
-            <h2>📍 Géolocalisation</h2>
+          {/* Carte 2 : Geolocalisation */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardIcon}><FiMapPin size={16} /></div>
+              <div className={styles.cardHeaderText}>
+                <h3 className={styles.cardTitle}>Geolocalisation</h3>
+                <p className={styles.cardHint}>Coordonnees du siege social pour les calculs de distance</p>
+              </div>
+            </div>
 
             <div className={styles.gpsRow}>
               <div className={styles.formGroup}>
@@ -334,38 +340,37 @@ const OperationsTab = () => {
                 className={`${styles.button} ${styles.secondary}`}
                 onClick={detectGPS}
               >
-                📍 Détecter
+                <FiMapPin aria-hidden /> Détecter
               </button>
             </div>
+          </div>
 
-            <small className={styles.hint}>
-              Coordonnées du siège social, utilisées pour les calculs de distance
-            </small>
-          </section>
+          {/* Carte 3 : Configuration Dispatch Avancee (masquee en mode manuel) */}
+          {currentMode !== 'manual' && <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardIcon}><FiSettings size={16} /></div>
+              <div className={styles.cardHeaderText}>
+                <h3 className={styles.cardTitle}>Configuration Dispatch Avancee</h3>
+                <p className={styles.cardHint}>Heuristiques, solver, equite, chauffeurs d'urgence</p>
+              </div>
+            </div>
 
-          {/* 🆕 Configuration Dispatch Avancée */}
-          <section className={styles.section}>
-            <h2>⚙️ Configuration Dispatch Avancée</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--spacing-md)' }}>
-              Personnalisez finement les paramètres de dispatch (heuristiques, solver, équité,
-              chauffeurs d'urgence, etc.)
-            </p>
-
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--spacing-sm)',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
+            <div className={styles.advancedActionsRow}>
               <button
                 type="button"
                 className={`${styles.button} ${styles.primary}`}
                 onClick={() => setShowAdvancedSettingsModal(true)}
                 disabled={loadingAdvancedSettings}
               >
-                {advancedSettings ? '✏️ Modifier les paramètres' : '⚙️ Configurer'}
+                {advancedSettings ? (
+                  <>
+                    <FiEdit aria-hidden /> Modifier les paramètres
+                  </>
+                ) : (
+                  <>
+                    <FiSettings aria-hidden /> Configurer
+                  </>
+                )}
               </button>
 
               {advancedSettings && (
@@ -375,93 +380,55 @@ const OperationsTab = () => {
                   onClick={resetAdvancedSettings}
                   disabled={loadingAdvancedSettings}
                 >
-                  🔄 Réinitialiser
+                  <FiRefreshCw aria-hidden /> Réinitialiser
                 </button>
               )}
 
               {loadingAdvancedSettings && (
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                  Chargement...
-                </span>
+                <span className={styles.statusText}>Chargement...</span>
               )}
 
               {advancedSettings && !loadingAdvancedSettings && (
-                <span style={{ color: 'var(--success)', fontSize: '0.9rem' }}>
-                  ✅ Paramètres personnalisés actifs
-                </span>
+                <span className={styles.statusTextSuccess}>Paramètres personnalisés actifs</span>
               )}
             </div>
 
             {!advancedSettings && !loadingAdvancedSettings && (
-              <p
-                style={{
-                  color: 'var(--text-muted)',
-                  fontSize: '0.85rem',
-                  marginTop: 'var(--spacing-sm)',
-                }}
-              >
-                💡 Aucune configuration personnalisée. Les valeurs par défaut seront utilisées.
+              <p className={styles.advancedHint}>
+                Aucune configuration personnalisée. Les valeurs par défaut seront utilisées.
               </p>
             )}
-          </section>
+          </div>}
         </div>
 
-        {/* COLONNE DROITE */}
         <div>
-          {/* Système de dispatch autonome */}
-          <section className={styles.section}>
+          {/* Carte 4 : Systeme de dispatch autonome */}
+          <div className={styles.card}>
             <DispatchModeSelector onModeChange={handleModeChange} />
             <AutonomousConfigPanel visible={currentMode === 'fully_auto'} />
-          </section>
+          </div>
         </div>
       </div>
 
-      {/* Modal Paramètres Avancés */}
       {showAdvancedSettingsModal && (
         <div
-          className="modal-overlay"
+          className={styles.modalOverlay}
           onClick={() => setShowAdvancedSettingsModal(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-          }}
+          role="presentation"
         >
           <div
-            className="modal-content"
+            className={styles.modalContentLarge}
             onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              maxWidth: '800px',
-              maxHeight: '90vh',
-              overflow: 'auto',
-              position: 'relative',
-              padding: '20px',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-            }}
+            role="dialog"
+            aria-modal="true"
           >
             <button
+              type="button"
+              className={styles.modalClose}
               onClick={() => setShowAdvancedSettingsModal(false)}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                background: 'transparent',
-                border: 'none',
-                fontSize: '1.5rem',
-                cursor: 'pointer',
-                color: 'var(--text-secondary)',
-              }}
+              aria-label="Fermer"
             >
-              ✕
+              <FiX aria-hidden />
             </button>
             <AdvancedSettings
               onApply={saveAdvancedSettings}

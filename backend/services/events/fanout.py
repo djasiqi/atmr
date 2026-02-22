@@ -268,7 +268,20 @@ def _send_push_to_driver(
             )
             return False
 
-        # ✅ AMÉLIORATION: Vérifier la déduplication avant d'envoyer
+        # Guard centralise : bloquer self-notification (driver est l'acteur)
+        actor_role = data.get("actor_role") if data else None
+        actor_id = data.get("actor_id") if data else None
+        if actor_role == "driver" and actor_id is not None:
+            try:
+                if int(actor_id) == int(driver_id):
+                    app_logger.info(
+                        "[fanout] GUARD: self-notification blocked (driver %s is actor)",
+                        driver_id,
+                    )
+                    return True
+            except (ValueError, TypeError):
+                pass
+
         notification_type = data.get("type", "unknown") if data else "unknown"
 
         # ✅ Phase 1 - Quick Wins: Ajouter le canal Android approprié
@@ -321,7 +334,6 @@ def _send_push_to_driver(
                 notification_type,
             )
 
-            # Envoyer la task en asynchrone (non-bloquant)
             send_push_notification_task.delay(  # pyright: ignore[reportFunctionMemberAccess]
                 driver_id=driver_id,
                 title=title,
@@ -329,8 +341,15 @@ def _send_push_to_driver(
                 data=data,
                 notification_type=notification_type,
                 bypass_rate_limit=bypass_rate_limit,
-                fallback_to_sms=True,  # Activer fallback SMS si push échoue
-                fallback_to_email=True,  # Activer fallback Email en dernier recours
+                fallback_to_sms=True,
+                fallback_to_email=True,
+            )
+            app_logger.info(
+                "[push_enqueued] driver_id=%s type=%s priority=%s trace_id=%s",
+                driver_id,
+                notification_type,
+                "high" if is_urgent else "default",
+                data.get("trace_id"),
             )
 
             # ✅ Phase 2 - Analytics: Tracker notification envoyée
@@ -367,6 +386,8 @@ def _send_push_to_driver(
                     timeout=timeout,
                     driver_id=driver_id,
                     bypass_rate_limit=bypass_rate_limit,
+                    provider=getattr(device_token, "provider", None),
+                    platform=getattr(device_token, "platform", None),
                 )
 
                 if result.get("ok"):
@@ -510,6 +531,10 @@ def fanout_booking_assigned_to_driver(
         push_ctx.get("pickup_location") or push_ctx.get("pickup_address") or "-",
     )
 
+    data = dict(msg["data"])
+    data["recipient_role"] = "driver"
+    data["actor_role"] = "company"
+
     _log_push_fanout(
         event_type="booking_assigned",
         booking_id=booking_id,
@@ -521,7 +546,7 @@ def fanout_booking_assigned_to_driver(
         driver_id=driver_id,
         title=msg["title"],
         body=msg["body"],
-        data=msg["data"],
+        data=data,
     )
 
     app_logger.warning(
@@ -583,6 +608,7 @@ def fanout_booking_assigned_to_company(
 
     data = dict(msg["data"])
     data["recipient_role"] = "company"
+    data["actor_role"] = "system"
     send_push_company_notification_task.delay(  # pyright: ignore[reportFunctionMemberAccess]
         company_id=company_id,
         title=msg["title"],
@@ -882,6 +908,8 @@ def fanout_booking_cancelled(
     data = dict(msg["data"])
     data["collapse_key"] = msg["collapse_key"]
     data["dedupe_key"] = msg["dedupe_key"]
+    data["recipient_role"] = "driver"
+    data["actor_role"] = "company"
     _send_push_to_driver(
         driver_id=driver_id,
         title=msg["title"],
@@ -937,6 +965,10 @@ def fanout_message_new(
     data["collapse_key"] = msg["collapse_key"]
     data["dedupe_key"] = msg["dedupe_key"]
     data["channelId"] = _get_notification_channel("message")
+    data["recipient_role"] = "driver"
+    data["actor_role"] = "company"
+    if company_id is not None:
+        data["actor_id"] = company_id
     thread_id_val = _get_notification_thread_id("message")
     if thread_id_val:
         data["threadId"] = thread_id_val
@@ -992,6 +1024,8 @@ def fanout_driver_booking_reassigned(
             "booking_id": booking_id,
             "new_driver_id": new_driver_id,
             "deepLink": "atmr://bookings",
+            "recipient_role": "driver",
+            "actor_role": "company",
         },
     )
 
@@ -1025,6 +1059,8 @@ def fanout_delay_detected(
             "assignment_id": assignment_id,
             "delay_minutes": float(delay_minutes),
             "deepLink": f"atmr://booking/{booking_id}?alert=delay",
+            "recipient_role": "driver",
+            "actor_role": "system",
         },
     )
 
@@ -1083,6 +1119,7 @@ def fanout_dispatch_run_completed(
             data={
                 "type": "dispatch_completed",
                 "recipient_role": "company",
+                "actor_role": "system",
                 "dispatch_run_id": str(dispatch_run_id),
                 "assignments_count": int(assignments_count),
                 "date": date_str,
@@ -1144,6 +1181,7 @@ def fanout_urgent_alert(
         "booking_id": booking_id,
         "driver_id": driver_id,
         "deepLink": f"atmr://alerts/{alert_id}",
+        "actor_role": "system",
     }
 
     # Push pour company (P1: async via Celery)
@@ -1171,6 +1209,96 @@ def fanout_urgent_alert(
             body=message,
             data=driver_push_data,
         )
+
+
+# ========================================
+# Fanout executing company (partenaire)
+# ========================================
+
+
+def _send_notification_to_executing_company(  # pyright: ignore[reportUnusedFunction]
+    executing_company_id: int,
+    title: str,
+    body: str,
+    data: Dict[str, Any],
+    *,
+    send_push: bool = True,
+    persist: bool = True,
+) -> bool:
+    """Envoie une notification a l'executing company (partenaire) via socket + push + persistence.
+
+    Le partenaire est une Company ; on reutilise les canaux existants.
+    """
+    success = False
+    try:
+        # 1. Socket.IO
+        try:
+            from services.realtime.socketio import emit_company_event
+
+            event_type = data.get("type", "booking_updated")
+            emit_company_event(executing_company_id, event_type, data)
+            success = True
+        except Exception:
+            app_logger.exception(
+                "[fanout] Socket.IO failed for executing company %s",
+                executing_company_id,
+            )
+
+        # 2. Push (via Celery)
+        if send_push:
+            try:
+                from tasks.notification_tasks import (
+                    send_push_company_notification_task,
+                )
+
+                push_data = dict(data)
+                push_data["recipient_role"] = "company"
+                push_data["actor_role"] = data.get("actor_role", "system")
+                send_push_company_notification_task.delay(  # pyright: ignore[reportFunctionMemberAccess]
+                    company_id=executing_company_id,
+                    title=title,
+                    body=body,
+                    data=push_data,
+                )
+                app_logger.info(
+                    "[push_enqueued] company_id=%s type=%s priority=high trace_id=%s",
+                    executing_company_id,
+                    data.get("type", "unknown"),
+                    data.get("trace_id"),
+                )
+            except Exception:
+                app_logger.exception(
+                    "[fanout] Push failed for executing company %s",
+                    executing_company_id,
+                )
+
+        # 3. Persistence (CompanyNotification)
+        if persist:
+            try:
+                from services.events.institution_events import (
+                    persist_company_notification,
+                )
+
+                persist_company_notification(
+                    company_id=executing_company_id,
+                    event_type=data.get("type", "booking_updated"),
+                    title=title,
+                    message=body,
+                    metadata=data,
+                )
+            except Exception:
+                app_logger.exception(
+                    "[fanout] Persistence failed for executing company %s",
+                    executing_company_id,
+                )
+
+    except Exception:
+        app_logger.exception(
+            "[fanout] _send_notification_to_executing_company failed for %s",
+            executing_company_id,
+        )
+
+    return success
 
 
 # ========================================
@@ -1232,19 +1360,29 @@ def send_silent_data_update(
             "content-available": 1,  # iOS background fetch
         }
 
-        # Envoyer à tous les devices actifs
         success_count = 0
         for device_token in device_tokens:
-            result = send_push_message(
-                token=device_token.token,
-                title="",  # Vide pour silent notification
-                body="",  # Vide pour silent notification
-                data=push_data,
-                timeout=5,
-                use_retry=False,  # Pas de retry pour silent notifications
-                driver_id=driver_id,
-                bypass_rate_limit=False,
-            )
+            dt_provider = getattr(device_token, "provider", None)
+            dt_platform = getattr(device_token, "platform", None)
+
+            if dt_provider == "fcm":
+                from services.notifications.firebase_push import send_fcm_silent
+                result = send_fcm_silent(
+                    token=device_token.token,
+                    data=push_data,
+                    platform=dt_platform or "android",
+                )
+            else:
+                result = send_push_message(
+                    token=device_token.token,
+                    title="",
+                    body="",
+                    data=push_data,
+                    timeout=5,
+                    use_retry=False,
+                    driver_id=driver_id,
+                    bypass_rate_limit=False,
+                )
 
             if result.get("ok"):
                 success_count += 1
@@ -1438,21 +1576,20 @@ def send_critical_alert_ios(
                 body=message,
                 data={
                     **push_data,
-                    # iOS 15+ : Interruption Level
                     "interruptionLevel": "critical",
-                    # Android : Canal critical (déjà configuré)
                     "channelId": "critical",
-                    # iOS : Son critique (si entitlement approuvé)
                     "sound": {
                         "critical": True,
-                        "name": "default",  # ou "emergency_alert.wav" si custom
+                        "name": "default",
                         "volume": 1.0,
                     },
                 },
-                timeout=10,  # Timeout plus long pour urgences
+                timeout=10,
                 use_retry=True,
                 driver_id=driver_id,
-                bypass_rate_limit=True,  # Pas de rate limit pour urgences
+                bypass_rate_limit=True,
+                provider=getattr(device_token, "provider", None),
+                platform=getattr(device_token, "platform", None),
             )
 
             if result.get("ok"):

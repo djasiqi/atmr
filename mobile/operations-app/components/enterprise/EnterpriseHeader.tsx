@@ -16,7 +16,9 @@ import { switchDispatchMode } from "@/services/enterpriseDispatch";
 import { ModeSelectionModal } from "@/components/modals/ModeSelectionModal";
 import { DateSelectionModal } from "@/components/modals/DateSelectionModal";
 import { createShadow } from "@/styles/shadowStyles";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("EntHeader");
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const headerPalette = {
   background: "#FFFFFF",
@@ -47,6 +49,7 @@ const MODES: Array<{
       value: "semi_auto",
       label: "Semi-auto",
       subtitle: "Optimisation assistée, validation opérateur requise.",
+      locked: true,
     },
     {
       value: "fully_auto",
@@ -117,7 +120,7 @@ export const EnterpriseHeader: React.FC = () => {
         setMode(target);
         await refreshEnterprise();
       } catch (error) {
-        console.warn("Impossible de changer de mode", error);
+        log.warn("dispatch mode change failed", { error });
         Alert.alert(
           "Changement impossible",
           "La modification du mode dispatch a échoué."

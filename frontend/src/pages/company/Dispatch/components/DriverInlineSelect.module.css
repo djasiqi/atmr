@@ -1,0 +1,163 @@
+/* DriverInlineSelect — Dropdown inline pour assignation chauffeur */
+
+.wrapper {
+  position: relative;
+}
+
+.assignedWrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  position: relative;
+}
+
+.assignedNameClickable {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.assignedNameClickable:hover {
+  background: var(--bg-secondary, #f8fafc);
+  color: var(--brand-primary);
+}
+
+.assignedNameClickable:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 1px;
+}
+
+.assignedNameAssigning {
+  opacity: 0.6;
+  cursor: wait;
+  color: var(--text-tertiary);
+}
+
+/* Badge "Non assigne" cliquable */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--warning-bg, #fef3c7);
+  border: 1px solid var(--warning-border, #fde68a);
+  border-radius: var(--radius-full);
+  color: var(--warning-hover, #d97706);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--warning-primary, #f59e0b);
+  color: white;
+  border-color: var(--warning-primary, #f59e0b);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.trigger:disabled {
+  cursor: not-allowed;
+}
+
+.triggerAssigning {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+/* Dropdown position:fixed */
+.dropdown {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-primary, white);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 0;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.driverOption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  gap: var(--spacing-sm);
+}
+
+.driverOption:hover {
+  background: var(--bg-secondary, #f8fafc);
+}
+
+.driverOptionActive {
+  background: rgba(0, 121, 107, 0.08);
+}
+
+.driverName {
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--text-primary, #1e293b);
+  font-size: var(--font-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driverLoad {
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.driverLoadHigh {
+  color: var(--warning-hover, #d97706);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.noDrivers {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--font-sm);
+  font-style: italic;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

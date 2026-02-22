@@ -7,6 +7,7 @@ import {
   resetUserPassword,
   updateUserRole, // ✅ Utilisation de la version du service
   fetchCompanies,
+  fetchInstitutions,
 } from '../../../services/adminService';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
@@ -21,6 +22,12 @@ const AdminUsers = () => {
   const [companyOptions, setCompanyOptions] = useState([]);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [pendingDriverUserId, setPendingDriverUserId] = useState(null);
+  // ✅ États pour les institutions
+  const [institutionOptions, setInstitutionOptions] = useState([]);
+  const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
+  const [pendingInstitutionUserId, setPendingInstitutionUserId] = useState(null);
+  const [selectedInstitutionId, setSelectedInstitutionId] = useState(null);
+  const [selectedInstitutionRole, setSelectedInstitutionRole] = useState('institution_admin');
   const norm = (v) => String(v ?? '').toLowerCase();
 
   useEffect(() => {
@@ -56,6 +63,21 @@ const AdminUsers = () => {
     loadCompanies();
   }, []);
 
+  // ✅ Chargement des institutions au démarrage
+  useEffect(() => {
+    const loadInstitutions = async () => {
+      console.log('📡 Tentative de chargement des institutions...');
+      try {
+        const institutions = await fetchInstitutions();
+        console.log('✅ Institutions chargées :', institutions);
+        setInstitutionOptions(institutions || []);
+      } catch (error) {
+        console.error('⚠️ Erreur chargement institutions :', error);
+      }
+    };
+    loadInstitutions();
+  }, []);
+
   const updateUserRoleHandler = async (userId, newRole) => {
     if (!userId || !newRole) {
       alert("⚠️ Erreur : L'utilisateur ou le rôle est invalide.");
@@ -72,6 +94,21 @@ const AdminUsers = () => {
 
       setPendingDriverUserId(userId);
       setShowCompanyDropdown(true);
+    } else if (newRole.toLowerCase() === 'institution') {
+      // ✅ Si c'est une institution, créer automatiquement l'institution avec le nom de l'utilisateur
+      // Le backend va créer l'institution automatiquement si aucune institution_id n'est fournie
+      try {
+        await updateUserRole(userId, { 
+          role: 'institution',
+          institution_role: 'institution_admin'  // Admin par défaut
+        });
+        alert(`✅ Rôle Institution attribué avec succès ! L'institution a été créée automatiquement.`);
+        loadUsers();
+      } catch (error) {
+        console.error('❌ Erreur attribution rôle institution :', error);
+        alert('⚠️ Impossible d\'attribuer le rôle institution.');
+      }
+      return;
     } else {
       // Pour les autres rôles, mise à jour directe
       try {
@@ -198,6 +235,7 @@ const AdminUsers = () => {
               <option value="client">👤 Client</option>
               <option value="driver">🚖 Chauffeur</option>
               <option value="company">🏢 Entreprise</option>
+              <option value="institution">🏥 Institution</option>
             </select>
 
             <select
@@ -244,6 +282,7 @@ const AdminUsers = () => {
                             <option value="client">👤 Client</option>
                             <option value="company">🏢 Entreprise</option>
                             <option value="driver">🚖 Chauffeur</option>
+                            <option value="institution">🏥 Institution</option>
                             <option value="admin">🛠️ Admin</option>
                           </select>
                         </td>
@@ -344,6 +383,90 @@ const AdminUsers = () => {
             >
               Annuler
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Modal pour sélection d'institution */}
+      {showInstitutionDropdown && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent}>
+            <h3>🏥 Assigner une institution</h3>
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>Institution :</label>
+              <select
+                value={selectedInstitutionId || ''}
+                onChange={(e) => setSelectedInstitutionId(parseInt(e.target.value, 10) || null)}
+                style={{ width: '100%', padding: '8px' }}
+              >
+                <option value="">Sélectionnez une institution</option>
+                {institutionOptions.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name} ({inst.type || 'clinique'})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>Rôle dans l'institution :</label>
+              <select
+                value={selectedInstitutionRole}
+                onChange={(e) => setSelectedInstitutionRole(e.target.value)}
+                style={{ width: '100%', padding: '8px' }}
+              >
+                <option value="institution_admin">🛠️ Admin institution</option>
+                <option value="institution_requester">📝 Demandeur</option>
+                <option value="institution_reader">👁️ Lecteur</option>
+                <option value="institution_billing">💰 Facturation</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={async () => {
+                  if (!selectedInstitutionId) {
+                    alert('Veuillez sélectionner une institution.');
+                    return;
+                  }
+                  try {
+                    const updateData = {
+                      role: 'institution',
+                      institution_id: selectedInstitutionId,
+                      institution_role: selectedInstitutionRole,
+                    };
+                    const response = await apiClient.put(
+                      `/admin/users/${pendingInstitutionUserId}/role`,
+                      updateData
+                    );
+                    if (response.status === 200) {
+                      alert(`✅ Rôle mis à jour avec succès : institution`);
+                      loadUsers();
+                      setShowInstitutionDropdown(false);
+                      setPendingInstitutionUserId(null);
+                      setSelectedInstitutionId(null);
+                      setSelectedInstitutionRole('institution_admin');
+                    }
+                  } catch (error) {
+                    console.error(
+                      '❌ Erreur lors de la mise à jour du rôle :',
+                      error.response?.data || error.message
+                    );
+                    alert('⚠️ Impossible de mettre à jour le rôle.');
+                  }
+                }}
+              >
+                Valider
+              </button>
+              <button
+                onClick={() => {
+                  setShowInstitutionDropdown(false);
+                  setPendingInstitutionUserId(null);
+                  setSelectedInstitutionId(null);
+                  setSelectedInstitutionRole('institution_admin');
+                }}
+              >
+                Annuler
+              </button>
+            </div>
           </div>
         </div>
       )}

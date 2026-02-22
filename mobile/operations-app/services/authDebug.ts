@@ -3,6 +3,10 @@
  * N'expose jamais la valeur des tokens (seulement présence, longueur, clé).
  * Usage : EXPO_PUBLIC_DEBUG_AUTH=1 dans .env ou variables d'environnement.
  */
+
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("AuthDebug");
 const DEBUG_AUTH_ENABLED =
   typeof process !== "undefined" &&
   process.env?.EXPO_PUBLIC_DEBUG_AUTH === "1";
@@ -25,10 +29,7 @@ export function debugAuthLog(
 ): void {
   if (!DEBUG_AUTH_ENABLED) return;
   try {
-    const msg = `[DEBUG_AUTH] ${phase} ${JSON.stringify(payload)}`;
-    if (typeof console !== "undefined" && console.debug) {
-      console.debug(msg);
-    }
+    log.debug(phase, payload as Record<string, unknown>);
   } catch {
     // Ne jamais casser le flux
   }

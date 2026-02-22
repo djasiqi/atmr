@@ -9,7 +9,7 @@ import os
 from typing import Any
 
 from flask import Response, make_response
-from flask_restx import Api  # pyright: ignore[reportMissingImports]
+from flask_restx import Api
 
 # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
 # Les namespaces seront importés dans init_namespaces() au lieu d'ici
@@ -76,7 +76,7 @@ api_v2 = Api(
 @api_v1.errorhandler(Exception)
 def handle_jwt_errors_v1(error):
     """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
-    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+    from jwt.exceptions import (
         ExpiredSignatureError,
         InvalidTokenError,
     )
@@ -92,7 +92,7 @@ def handle_jwt_errors_v1(error):
 @api_v2.errorhandler(Exception)
 def handle_jwt_errors_v2(error):
     """Intercepte les erreurs JWT pour retourner 401 au lieu de 500."""
-    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+    from jwt.exceptions import (
         ExpiredSignatureError,
         InvalidTokenError,
     )
@@ -164,6 +164,7 @@ def init_namespaces(app):
     ✅ REFACTORING: Les imports des routes sont faits ici plutôt qu'au niveau du module
     pour éviter le cycle: app.py → routes_api.py → routes/* → services/* → models/* → ext.py
     """
+    # ruff: noqa: I001 - Imports organisés par domaine fonctionnel
     # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
     from routes.admin import admin_ns
     from routes.analytics import analytics_ns  # /analytics
@@ -184,6 +185,17 @@ def init_namespaces(app):
     from routes.driver import driver_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
+    from routes.institutions import institutions_ns  # ✅ Portail institutionnel
+    from routes.institution_patients import institution_patients_ns  # ✅ Patients institution
+    from routes.institution_requests import institution_requests_ns  # ✅ Demandes transport
+    from routes.institution_settings import institution_settings_ns  # ✅ ÉTAPE 4: Paramètres institution
+    from routes.institution_billing import institution_billing_ns  # ✅ ÉTAPE 5: Facturation institution
+    from routes.institution_teams import institution_teams_ns  # ✅ Curatelle: équipes
+    from routes.institution_notifications import institution_notifications_ns  # ✅ Notifications in-app
+    from routes.booking_messages import booking_messages_ns  # ✅ Mini-chat booking
+    from routes.company_notifications import company_notifications_ns  # ✅ Notifications company
+    from routes.company_request_offers import company_offers_ns  # ✅ ÉTAPE 4: Offres côté company
+    from routes.company_security import security_ns  # ✅ Security Tab V2: audit logs, export, policy
     from routes.invoices import invoices_ns
     from routes.medical import medical_ns
     from routes.messages import messages_ns
@@ -202,6 +214,7 @@ def init_namespaces(app):
     from routes.transport_vouchers import (  # ✅ P3: Bons de transport
         transport_vouchers_ns,
     )
+    from routes.public_stats import public_stats_ns
     from routes.utils import utils_ns
 
     # Routes RL (uniquement disponible dans l'environnement RL)
@@ -254,6 +267,8 @@ def init_namespaces(app):
 
     # Routes bookings
     api_v1.add_namespace(bookings_ns, path="/bookings")
+    api_v1.add_namespace(booking_messages_ns, path="/bookings")  # ✅ Mini-chat booking
+    api_v1.add_namespace(company_notifications_ns, path="/companies/notifications")  # ✅ Notifications company
 
     # Routes payments
     api_v1.add_namespace(partnerships_ns, path="/partnerships")
@@ -273,6 +288,21 @@ def init_namespaces(app):
 
     # Routes invoices
     api_v1.add_namespace(invoices_ns, path="/invoices")
+
+    # ✅ Portail institutionnel
+    api_v1.add_namespace(institutions_ns, path="/institutions")
+    api_v1.add_namespace(institution_patients_ns, path="/institutions/patients")
+    api_v1.add_namespace(institution_requests_ns, path="/institutions/requests")
+    api_v1.add_namespace(institution_settings_ns, path="/institutions/settings")  # ✅ ÉTAPE 4
+    api_v1.add_namespace(institution_billing_ns, path="/institutions/billing")  # ✅ ÉTAPE 5
+    api_v1.add_namespace(institution_notifications_ns, path="/institutions/notifications")
+    api_v1.add_namespace(institution_teams_ns, path="/institutions/teams")  # ✅ Curatelle
+
+    # ✅ ÉTAPE 4: Offres côté company
+    api_v1.add_namespace(company_offers_ns, path="/company/request-offers")
+
+    # ✅ Security Tab V2: audit logs, export, policy
+    api_v1.add_namespace(security_ns, path="/company-settings/security")
 
     # ✅ P5: Routes contrôle facturation
     api_v1.add_namespace(billing_review_ns, path="/billing")
@@ -311,6 +341,9 @@ def init_namespaces(app):
     # Company settings
     api_v1.add_namespace(settings_ns, path="/company-settings")
 
+    # Routes publiques (sans auth)
+    api_v1.add_namespace(public_stats_ns, path="/public/platform-stats")
+
     # SMTP configuration
 
     # Routes RL (uniquement dans l'environnement RL)
@@ -340,12 +373,17 @@ def init_namespaces(app):
         api_legacy.add_namespace(partnerships_ns, path="/partnerships")
         api_legacy.add_namespace(driver_ns, path="/driver")
         api_legacy.add_namespace(bookings_ns, path="/bookings")
+        api_legacy.add_namespace(booking_messages_ns, path="/bookings")  # ✅ Mini-chat
+        api_legacy.add_namespace(company_notifications_ns, path="/companies/notifications")  # ✅ Notif company
         api_legacy.add_namespace(payments_ns, path="/payments")
         api_legacy.add_namespace(utils_ns, path="/utils")
         api_legacy.add_namespace(messages_ns, path="/messages")
         api_legacy.add_namespace(geocode_ns, path="/geocode")
         api_legacy.add_namespace(medical_ns, path="/medical")
         api_legacy.add_namespace(invoices_ns, path="/invoices")
+        api_legacy.add_namespace(institutions_ns, path="/institutions")  # ✅ Portail institutionnel
+        api_legacy.add_namespace(institution_patients_ns, path="/institutions/patients")
+        api_legacy.add_namespace(institution_requests_ns, path="/institutions/requests")
         api_legacy.add_namespace(planning_ns, path="/planning")
         api_legacy.add_namespace(osrm_ns, path="/osrm")
         api_legacy.add_namespace(ns_osrm_metrics, path="/osrm-metrics")

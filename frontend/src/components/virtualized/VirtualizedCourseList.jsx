@@ -15,10 +15,6 @@ import { List } from 'react-window';
 import { fetchDriverAssignments } from '../../services/driverService';
 import styles from './VirtualizedCourseList.module.css';
 
-// #region agent log
-fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedCourseList.jsx:14',message:'Import List from react-window',data:{listType:typeof List,listExists:!!List},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-// #endregion
-
 /**
  * Composant pour une ligne de course
  */

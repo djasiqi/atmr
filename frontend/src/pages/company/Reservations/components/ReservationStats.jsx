@@ -1,53 +1,62 @@
 import React from 'react';
+import { FiHash, FiActivity, FiCheckCircle, FiDollarSign } from 'react-icons/fi';
 import styles from './ReservationStats.module.css';
 
+function formatCompactRevenue(val) {
+  const num = Number(val) || 0;
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}k CHF`;
+  }
+  return `${num.toFixed(2)} CHF`;
+}
+
 const ReservationStats = ({ stats }) => {
-  const statItems = [
+  const items = [
     {
       label: 'Total',
       value: stats.total,
-      icon: '📅',
-      color: '#00796b',
+      icon: FiHash,
+      accent: 'default',
     },
     {
       label: 'En cours',
       value: stats.inProgress,
-      icon: '🚗',
-      color: '#ff9800',
+      icon: FiActivity,
+      accent: 'warning',
     },
     {
-      label: 'Terminées',
+      label: 'Terminees',
       value: stats.completed,
-      icon: '✅',
-      color: '#4caf50',
-    },
-    {
-      label: 'Annulées',
-      value: stats.canceled,
-      icon: '❌',
-      color: '#f44336',
+      icon: FiCheckCircle,
+      accent: 'success',
     },
     {
       label: 'Revenus',
-      value: `${stats.revenue.toFixed(2)} CHF`,
-      icon: '💰',
-      color: '#2196f3',
+      value: formatCompactRevenue(stats.revenue),
+      icon: FiDollarSign,
+      accent: 'info',
     },
   ];
 
   return (
-    <div className={styles.statsContainer}>
-      {statItems.map((item, index) => (
-        <div key={index} className={styles.statCard}>
-          <div className={styles.statIcon} style={{ color: item.color }}>
-            {item.icon}
+    <div className={styles.statsGrid}>
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <div
+            key={item.label}
+            className={`${styles.kpiCard} ${styles[`accent_${item.accent}`] || ''}`}
+          >
+            <div className={styles.kpiIconWrap}>
+              <Icon size={18} className={styles.kpiIcon} />
+            </div>
+            <div className={styles.kpiContent}>
+              <span className={styles.kpiLabel}>{item.label}</span>
+              <span className={styles.kpiValue}>{item.value}</span>
+            </div>
           </div>
-          <div className={styles.statContent}>
-            <h3 className={styles.statLabel}>{item.label}</h3>
-            <p className={styles.statValue}>{item.value}</p>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

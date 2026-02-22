@@ -158,3 +158,138 @@ class ErrorCodes:
     # Livraison matériel
     MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED = "MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED"
     MATERIAL_DELIVERY_DESCRIPTION_REQUIRED = "MATERIAL_DELIVERY_DESCRIPTION_REQUIRED"
+
+
+# ============================================================================
+# CODES D'ERREUR AUTH (authentification / inscription / mot de passe)
+# ============================================================================
+
+
+class AuthErrorCodes:
+    """Codes d'erreur pour l'authentification et la gestion des comptes.
+
+    Ces codes sont utilisés avec api_error() / auth_error() de api_error_utils.py.
+    Voir docs/api/errors.md pour la documentation complète.
+
+    Format de réponse standard:
+    {
+        "error": "<code>",
+        "message": "<message FR>",
+        "details": {}  // optionnel
+    }
+    """
+
+    # -------------------------------------------------------------------------
+    # Inscription (409 Conflict)
+    # -------------------------------------------------------------------------
+    EMAIL_EXISTS = "email_exists"
+    """Email déjà utilisé par un autre compte. HTTP 409."""
+
+    USERNAME_EXISTS = "username_exists"
+    """Nom d'utilisateur déjà pris. HTTP 409."""
+
+    # -------------------------------------------------------------------------
+    # Validation mot de passe (400 Bad Request)
+    # -------------------------------------------------------------------------
+    PASSWORD_POLICY_ERROR = "password_policy_error"
+    """Mot de passe non conforme à la politique de sécurité. HTTP 400."""
+
+    PASSWORD_TOO_SHORT = "password_too_short"
+    """Mot de passe trop court (< 12 caractères). HTTP 400."""
+
+    PASSWORD_NO_UPPERCASE = "password_no_uppercase"
+    """Mot de passe sans majuscule. HTTP 400."""
+
+    PASSWORD_NO_LOWERCASE = "password_no_lowercase"
+    """Mot de passe sans minuscule. HTTP 400."""
+
+    PASSWORD_NO_DIGIT = "password_no_digit"
+    """Mot de passe sans chiffre. HTTP 400."""
+
+    PASSWORD_NO_SPECIAL = "password_no_special"
+    """Mot de passe sans caractère spécial. HTTP 400."""
+
+    PASSWORD_COMPROMISED = "password_compromised"
+    """Mot de passe trouvé dans une base de données de fuites (HIBP). HTTP 400."""
+
+    PASSWORD_IN_HISTORY = "password_in_history"
+    """Mot de passe déjà utilisé récemment. HTTP 400."""
+
+    # -------------------------------------------------------------------------
+    # Tokens (400 Bad Request)
+    # -------------------------------------------------------------------------
+    TOKEN_INVALID = "token_invalid"
+    """Token invalide ou malformé. HTTP 400."""
+
+    TOKEN_EXPIRED = "token_expired"
+    """Token expiré. HTTP 400 ou 401."""
+
+    TOKEN_ALREADY_USED = "token_already_used"
+    """Token déjà utilisé (reset password, email verification). HTTP 400."""
+
+    # -------------------------------------------------------------------------
+    # Authentification (401 Unauthorized)
+    # -------------------------------------------------------------------------
+    INVALID_CREDENTIALS = "invalid_credentials"
+    """Email ou mot de passe incorrect. HTTP 401."""
+
+    MISSING_TOKEN = "missing_token"
+    """Token JWT manquant dans la requête. HTTP 401."""
+
+    # -------------------------------------------------------------------------
+    # Accès refusé (403 Forbidden)
+    # -------------------------------------------------------------------------
+    ACCOUNT_LOCKED = "account_locked"
+    """Compte verrouillé après trop de tentatives. HTTP 403."""
+
+    ACCOUNT_DISABLED = "account_disabled"
+    """Compte désactivé par un administrateur. HTTP 403."""
+
+    EMAIL_NOT_VERIFIED = "email_not_verified"
+    """Email non vérifié, accès restreint. HTTP 403."""
+
+    # -------------------------------------------------------------------------
+    # Rate limiting (429 Too Many Requests)
+    # -------------------------------------------------------------------------
+    RATE_LIMITED = "rate_limited"
+    """Trop de tentatives, veuillez patienter. HTTP 429."""
+
+    # -------------------------------------------------------------------------
+    # Erreurs génériques
+    # -------------------------------------------------------------------------
+    REGISTRATION_ERROR = "registration_error"
+    """Erreur générique lors de l'inscription. HTTP 400."""
+
+    LOGIN_ERROR = "login_error"
+    """Erreur générique lors de la connexion. HTTP 400."""
+
+
+# Mapping codes auth -> HTTP status (pour référence)
+AUTH_ERROR_HTTP_STATUS = {
+    # 409 Conflict
+    AuthErrorCodes.EMAIL_EXISTS: 409,
+    AuthErrorCodes.USERNAME_EXISTS: 409,
+    # 400 Bad Request
+    AuthErrorCodes.PASSWORD_POLICY_ERROR: 400,
+    AuthErrorCodes.PASSWORD_TOO_SHORT: 400,
+    AuthErrorCodes.PASSWORD_NO_UPPERCASE: 400,
+    AuthErrorCodes.PASSWORD_NO_LOWERCASE: 400,
+    AuthErrorCodes.PASSWORD_NO_DIGIT: 400,
+    AuthErrorCodes.PASSWORD_NO_SPECIAL: 400,
+    AuthErrorCodes.PASSWORD_COMPROMISED: 400,
+    AuthErrorCodes.PASSWORD_IN_HISTORY: 400,
+    AuthErrorCodes.TOKEN_INVALID: 400,
+    AuthErrorCodes.TOKEN_EXPIRED: 401,
+    AuthErrorCodes.TOKEN_ALREADY_USED: 400,
+    AuthErrorCodes.REGISTRATION_ERROR: 400,
+    AuthErrorCodes.LOGIN_ERROR: 400,
+    # 401 Unauthorized
+    AuthErrorCodes.INVALID_CREDENTIALS: 401,
+    AuthErrorCodes.MISSING_TOKEN: 401,
+    # 403 Forbidden
+    AuthErrorCodes.ACCOUNT_LOCKED: 403,
+    AuthErrorCodes.ACCOUNT_DISABLED: 403,
+    AuthErrorCodes.EMAIL_NOT_VERIFIED: 403,
+    # 429 Too Many Requests
+    AuthErrorCodes.RATE_LIMITED: 429,
+}

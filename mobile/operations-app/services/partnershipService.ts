@@ -1,5 +1,7 @@
+import { getLogger } from "@/utils/logger";
 import { enterpriseApi, hasValidToken, retryWithBackoff } from "./enterpriseAuth";
 
+const log = getLogger("Partnership");
 const API_BASE = "/partnerships";
 
 // ============================================================================
@@ -54,14 +56,13 @@ export interface TransferListFilters {
  */
 export const fetchPartnershipsForTransfer = async (): Promise<Partnership[]> => {
   try {
-    console.log("[partnershipService] Récupération des partenariats pour transfert...");
+    log.info("fetching partnerships for transfer", {});
     const response = await enterpriseApi.get<{ data: Partnership[] }>(`${API_BASE}/for-transfer`);
     const partnerships = response.data?.data || response.data;
-    console.log(`[partnershipService] ${partnerships.length} partenariats disponibles`);
+    log.info("partnerships fetched", { count: partnerships.length });
     return partnerships;
   } catch (error: any) {
-    console.error("[partnershipService] Erreur lors de la récupération des partenariats:", error);
-    console.error("[partnershipService] Détails:", error?.response?.data);
+    log.error("fetch partnerships failed", { error, details: error?.response?.data });
     throw error;
   }
 };
@@ -96,7 +97,7 @@ export const proposeTransfer = async (
   }
 
   try {
-    console.log("[partnershipService] Proposition de transfert:", {
+    log.info("proposing transfer", {
       partnershipId: partnershipIdNum,
       bookingId: bookingIdNum,
       transferModel,
@@ -113,7 +114,7 @@ export const proposeTransfer = async (
     );
 
     const transfer = response.data?.data || response.data;
-    console.log("[partnershipService] Transfert proposé avec succès:", transfer.id);
+    log.success("transfer proposed", { transferId: transfer.id });
     return transfer;
   } catch (error: any) {
     const status = error?.response?.status;
@@ -139,7 +140,7 @@ export const proposeTransfer = async (
       errorMessage = error.message;
     }
     
-    console.error("[partnershipService] Erreur lors de la proposition de transfert:", {
+    log.error("propose transfer failed", {
       status,
       error: errorMessage,
       errorData,
@@ -178,18 +179,17 @@ export const acceptTransfer = async (transferId: string): Promise<Transfer> => {
       }
 
       try {
-        console.log("[partnershipService] Acceptation du transfert:", transferId);
+        log.info("accepting transfer", { transferId });
 
         const response = await enterpriseApi.post<{ data: Transfer }>(
           `${API_BASE}/transfers/${transferId}/accept`
         );
 
         const transfer = response.data?.data || response.data;
-        console.log("[partnershipService] Transfert accepté avec succès");
+        log.success("transfer accepted", {});
         return transfer;
       } catch (error: any) {
-        console.error("[partnershipService] Erreur lors de l'acceptation du transfert:", error);
-        console.error("[partnershipService] Détails:", error?.response?.data);
+        log.error("accept transfer failed", { error, details: error?.response?.data });
         throw error;
       }
     },
@@ -221,7 +221,7 @@ export const rejectTransfer = async (transferId: string, reason?: string): Promi
       }
 
       try {
-        console.log("[partnershipService] Refus du transfert:", transferId, "Raison:", reason);
+        log.info("rejecting transfer", { transferId, reason });
 
         const payload: any = {};
         if (reason) {
@@ -234,11 +234,10 @@ export const rejectTransfer = async (transferId: string, reason?: string): Promi
         );
 
         const transfer = response.data?.data || response.data;
-        console.log("[partnershipService] Transfert refusé avec succès");
+        log.success("transfer rejected", {});
         return transfer;
       } catch (error: any) {
-        console.error("[partnershipService] Erreur lors du refus du transfert:", error);
-        console.error("[partnershipService] Détails:", error?.response?.data);
+        log.error("reject transfer failed", { error, details: error?.response?.data });
         throw error;
       }
     },
@@ -263,7 +262,7 @@ export const fetchPartnershipTransfers = async (
   filters?: TransferListFilters
 ): Promise<Transfer[]> => {
   try {
-    console.log("[partnershipService] Récupération des transferts avec filtres:", filters);
+    log.info("fetching transfers with filters", { filters });
 
     const params = new URLSearchParams();
     if (filters?.partnership_id) {
@@ -279,11 +278,10 @@ export const fetchPartnershipTransfers = async (
     const response = await enterpriseApi.get<{ data: Transfer[] }>(url);
 
     const transfers = response.data?.data || response.data;
-    console.log(`[partnershipService] ${transfers.length} transferts récupérés`);
+    log.info("transfers fetched", { count: transfers.length });
     return transfers;
   } catch (error: any) {
-    console.error("[partnershipService] Erreur lors de la récupération des transferts:", error);
-    console.error("[partnershipService] Détails:", error?.response?.data);
+    log.error("fetch transfers failed", { error, details: error?.response?.data });
     throw error;
   }
 };

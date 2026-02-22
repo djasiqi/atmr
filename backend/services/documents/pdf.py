@@ -1210,14 +1210,45 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
     if getattr(invoice, "billing_party_id", None):
         from models import BillingParty as BillingPartyModel
         from models.billing_party import ClientBillingParty
-        from models.enums import BillingPartyType
+        from models.enums import BillingPartyType, InvoiceBillingStrategy
 
-        # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé), facturer au domicile du client
         _client_id = getattr(invoice, "client_id", None)
         _bp_id = getattr(invoice, "billing_party_id", None)
         use_billing_party = True
         _link = None
-        if _client_id is not None and _bp_id is not None:
+
+        # Charger le billing_party en amont pour le bypass S2/clinic
+        bp = BillingPartyModel.query.get(invoice.billing_party_id)
+
+        # ════════════════════════════════════════════════════════════════════
+        # BYPASS pour factures cliniques mensuelles (S2) ou établissements
+        # ════════════════════════════════════════════════════════════════════
+        # Pour ces factures multi-patients, on ne vérifie PAS le lien
+        # ClientBillingParty car le client_id est arbitraire (premier patient).
+        # On utilise directement le billing_party (clinique/EMS/hôpital).
+        # ════════════════════════════════════════════════════════════════════
+        _billing_strategy = getattr(invoice, "billing_strategy", None)
+        _bp_type = getattr(bp, "type", None) if bp else None
+        _is_clinic_invoice = (
+            _billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+            or _bp_type in (BillingPartyType.CLINIC, BillingPartyType.EMS, BillingPartyType.HOSPITAL)
+        )
+
+        if _is_clinic_invoice:
+            app_logger.info(
+                "[PDF] Facture clinique/établissement (strategy=%s, bp_type=%s) → bypass lien ClientBillingParty (invoice_id=%s).",
+                _billing_strategy.value if _billing_strategy else None,
+                _bp_type.value if _bp_type else None,
+                getattr(invoice, "id", None),
+            )
+            # On force l'utilisation du billing_party, pas de vérification du lien
+            _link = None  # Pas de référence SPC pour les établissements
+        elif _client_id is not None and _bp_id is not None:
+            # ════════════════════════════════════════════════════════════════════
+            # Logique standard : vérifier le lien ClientBillingParty
+            # ════════════════════════════════════════════════════════════════════
+            # Si le client n'a plus de lien avec ce tiers payeur (lien supprimé),
+            # facturer au domicile du client (fallback).
             _link = (
                 ClientBillingParty.query.filter_by(
                     client_id=_client_id, billing_party_id=_bp_id
@@ -1231,46 +1262,46 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
                     _bp_id,
                 )
                 use_billing_party = False
-        if use_billing_party:
-            bp = BillingPartyModel.query.get(invoice.billing_party_id)
-            if bp:
-                raw = bp.billing_address or "Adresse non renseignée"
-                raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
-                addr = _format_billed_to_three_lines(
-                    raw or "Adresse non renseignée", company_country=company_country
-                )
-                if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
-                    BillingPartyType.FAMILY,
-                    BillingPartyType.CURATORSHIP,
-                    BillingPartyType.OPAD,
-                    BillingPartyType.LAWYER,
-                    BillingPartyType.INSURANCE,
-                    BillingPartyType.OTHER,
-                ):
-                    client = getattr(invoice, "client", None)
-                    if client and getattr(client, "user", None):
-                        client_name = (
-                            f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
-                            or getattr(client.user, "username", None)
-                            or "Client"
-                        )
-                        client_name = _name_with_uppercase_last_name(client_name or "Client")
-                        bp_name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
-                        name = f"{client_name}\nc/o {bp_name}"
-                    else:
-                        name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+
+        if use_billing_party and bp:
+            raw = bp.billing_address or "Adresse non renseignée"
+            raw = _sanitize_billed_to_address(bp.display_name or "Payeur", raw)
+            addr = _format_billed_to_three_lines(
+                raw or "Adresse non renseignée", company_country=company_country
+            )
+            if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
+                BillingPartyType.FAMILY,
+                BillingPartyType.CURATORSHIP,
+                BillingPartyType.OPAD,
+                BillingPartyType.LAWYER,
+                BillingPartyType.INSURANCE,
+                BillingPartyType.OTHER,
+            ):
+                client = getattr(invoice, "client", None)
+                if client and getattr(client, "user", None):
+                    client_name = (
+                        f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
+                        or getattr(client.user, "username", None)
+                        or "Client"
+                    )
+                    client_name = _name_with_uppercase_last_name(client_name or "Client")
+                    bp_name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+                    name = f"{client_name}\nc/o {bp_name}"
                 else:
                     name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
-                if (
-                    _client_id is not None
-                    and _bp_id is not None
-                    and (bp.display_name or "").upper().strip().find("SPC") >= 0
-                    and _link is not None
-                    and getattr(_link, "client_reference", None)
-                    and (_link.client_reference or "").strip()
-                ):
-                    addr = f"{addr}<br/><br/><br/>No. SPC : {(_link.client_reference or '').strip()}"
-                return (name, addr)
+            else:
+                name = _name_with_uppercase_last_name(bp.display_name or "Payeur")
+            if (
+                _client_id is not None
+                and _bp_id is not None
+                and (bp.display_name or "").upper().strip().find("SPC") >= 0
+                and _link is not None
+                and getattr(_link, "client_reference", None)
+                and (_link.client_reference or "").strip()
+            ):
+                addr = f"{addr}<br/><br/><br/>No. SPC : {(_link.client_reference or '').strip()}"
+            return (name, addr)
+        if getattr(invoice, "billing_party_id", None) and not bp:
             app_logger.warning(
                 "[PDF] billing_party_id=%s défini mais BillingParty introuvable (invoice_id=%s). Fallback.",
                 getattr(invoice, "billing_party_id", None),
@@ -1313,6 +1344,69 @@ def _get_billed_to(invoice: "Invoice") -> tuple[str, str]:
         getattr(invoice, "client_id", None),
     )
     client = invoice.client
+
+    # ── Institution client avec facturation patient : utiliser le nom/adresse du patient ──
+    from models.enums import InvoiceBillingStrategy as IBS
+    _billing_strat = getattr(invoice, "billing_strategy", None)
+    if (
+        client
+        and getattr(client, "is_institution", False)
+        and _billing_strat == IBS.S1_PATIENT
+    ):
+        app_logger.info(
+            "[PDF] Client institution + S1_PATIENT → recherche patient réel (invoice_id=%s).",
+            getattr(invoice, "id", None),
+        )
+        # Chercher le nom du patient depuis le premier booking de la facture
+        _patient_name = None
+        _patient_address = None
+        if hasattr(invoice, "lines") and invoice.lines:
+            from models import Booking
+            for line in invoice.lines:
+                # billed_booking est un backref InstrumentedList, pas un objet unique
+                _bk_rel = getattr(line, "billed_booking", None)
+                if isinstance(_bk_rel, list) and _bk_rel:
+                    _bk = _bk_rel[0]
+                elif _bk_rel and not isinstance(_bk_rel, list):
+                    _bk = _bk_rel
+                else:
+                    _bk = (
+                        Booking.query.get(line.reservation_id)
+                        if line.reservation_id
+                        else None
+                    )
+                if _bk and getattr(_bk, "customer_name", None):
+                    _patient_name = _bk.customer_name
+                    break
+        # Chercher l'adresse du patient via InstitutionPatient
+        if client.linked_institution_id:
+            try:
+                from models.institution_patient import InstitutionPatient
+                from models.transport_request import TransportRequest
+                _tr = TransportRequest.query.filter_by(
+                    institution_id=client.linked_institution_id,
+                ).order_by(TransportRequest.id.desc()).first()
+                if _tr and _tr.patient_id:
+                    _ip = InstitutionPatient.query.get(_tr.patient_id)
+                    if _ip:
+                        if not _patient_name:
+                            _patient_name = f"{_ip.first_name or ''} {_ip.last_name or ''}".strip()
+                        parts = [_ip.address or "", _ip.postal_code or "", _ip.city or ""]
+                        _patient_address = ", ".join(p for p in parts if p)
+            except Exception as e:
+                app_logger.warning("[PDF] Patient lookup error: %s", e)
+
+        if _patient_name:
+            p_name = _name_with_uppercase_last_name(_patient_name)
+            p_raw = _patient_address or "Adresse non renseignée"
+            p_raw = _sanitize_billed_to_address(p_name, p_raw)
+            return (
+                p_name,
+                _format_billed_to_three_lines(
+                    p_raw or "Adresse non renseignée", company_country=company_country
+                ),
+            )
+
     client_name = (
         f"{client.user.first_name or ''} {(client.user.last_name or '').upper()}".strip()
         or client.user.username
@@ -1559,8 +1653,17 @@ def _build_s2_table(
                 patient_id = booking.client_id
         else:
             # Facture client directe : utiliser le nom du client comme "patient"
+            # Pour les clients institution avec facturation patient (S1_PATIENT),
+            # utiliser booking.customer_name (= nom réel du patient)
             client = invoice.client
-            if client and hasattr(client, "user") and client.user:
+            _is_inst_patient = (
+                client
+                and getattr(client, "is_institution", False)
+                and strategy_value == "s1_patient"
+            )
+            if _is_inst_patient and booking.customer_name:
+                patient_name = booking.customer_name
+            elif client and hasattr(client, "user") and client.user:
                 patient_name = (
                     f"{client.user.first_name or ''} {client.user.last_name or ''}".strip()
                     or client.user.username
@@ -2005,6 +2108,21 @@ class PDFService:
             if not invoice:
                 msg = "Facture non trouvée"
                 raise ValueError(msg)
+
+            # ════════════════════════════════════════════════════════════════════
+            # FILET DE SÉCURITÉ: Recalculer les totaux si incohérents
+            # ════════════════════════════════════════════════════════════════════
+            # Protège contre les factures avec totaux à 0 alors que des lignes existent.
+            from infrastructure.invoices.invoice_calculator import recompute_invoice_totals
+
+            if invoice.lines and (invoice.total_amount or Decimal("0.00")) == Decimal("0.00"):
+                app_logger.warning(
+                    "[PDF] Facture %s a des lignes mais total_amount=0. Recalcul automatique...",
+                    invoice.id,
+                )
+                recompute_invoice_totals(invoice.id, commit=True)
+                # Recharger après recalcul
+                db.session.refresh(invoice)
 
             # ✅ Forcer le rechargement des relations profondes pour avoir les données à jour
             # (adresses client, adresses entreprise, billing party, etc.)

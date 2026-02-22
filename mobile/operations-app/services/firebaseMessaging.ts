@@ -1,0 +1,171 @@
+import { Platform } from "react-native";
+import messaging, {
+  FirebaseMessagingTypes,
+} from "@react-native-firebase/messaging";
+import notifee, { AndroidImportance, EventType } from "@notifee/react-native";
+import { getLogger } from "@/utils/logger";
+import { validateDeepLink } from "@/services/deepLinkHandler";
+
+const log = getLogger("FCM");
+
+export type FCMData = {
+  type: string;
+  title?: string;
+  body?: string;
+  deepLink?: string;
+  booking_id?: string;
+  channelId?: string;
+  trace_id?: string;
+  recipient_role?: string;
+};
+
+type NavigationCallback = (deepLink: string) => void;
+
+let _onNavigate: NavigationCallback | null = null;
+
+export function setFCMNavigationHandler(cb: NavigationCallback): void {
+  _onNavigate = cb;
+}
+
+function handleDeepLink(data: Record<string, string> | undefined): void {
+  if (!data?.deepLink) return;
+  const result = validateDeepLink(data.deepLink);
+  if (!result.valid) {
+    log.warn("invalid deep link from FCM", { deepLink: data.deepLink, error: result.error });
+    return;
+  }
+  log.info("navigating from FCM deep link", { deepLink: data.deepLink, type: result.type });
+  _onNavigate?.(data.deepLink);
+}
+
+async function ensureChannel(): Promise<void> {
+  await notifee.createChannel({
+    id: "missions_v2",
+    name: "Missions",
+    importance: AndroidImportance.HIGH,
+    sound: "default",
+  });
+}
+
+/**
+ * Foreground message handler.
+ * Android data-only: display via Notifee (same as background handler).
+ * iOS notification+data: system already shows it — skip display to avoid duplicates.
+ */
+export function registerForegroundHandler(): () => void {
+  return messaging().onMessage(async (remoteMessage) => {
+    log.info("foreground message received", {
+      type: remoteMessage.data?.type,
+      hasNotification: !!remoteMessage.notification,
+    });
+
+    if (Platform.OS === "android" && !remoteMessage.notification) {
+      const data = remoteMessage.data as Record<string, string> | undefined;
+      if (!data || data.type === "silent_update") return;
+
+      await ensureChannel();
+      await notifee.displayNotification({
+        title: data.title || "Liri Opérations",
+        body: data.body || "",
+        data,
+        android: {
+          channelId: data.channelId || "missions_v2",
+          importance: AndroidImportance.HIGH,
+          sound: "default",
+          pressAction: { id: "default" },
+        },
+      });
+    }
+  });
+}
+
+/**
+ * Handles notification tap when app was killed (cold start).
+ * Must be called early in the app lifecycle.
+ */
+export async function handleInitialNotification(): Promise<void> {
+  try {
+    const remoteMessage = await messaging().getInitialNotification();
+    if (remoteMessage) {
+      log.info("initial notification (killed->tap)", {
+        type: remoteMessage.data?.type,
+        booking_id: remoteMessage.data?.booking_id,
+      });
+      handleDeepLink(remoteMessage.data as Record<string, string> | undefined);
+    }
+  } catch (e) {
+    log.error("getInitialNotification failed", { error: e });
+  }
+}
+
+/**
+ * Handles notification tap when app was in background.
+ * Returns unsubscribe function.
+ */
+export function registerNotificationOpenedHandler(): () => void {
+  return messaging().onNotificationOpenedApp((remoteMessage) => {
+    log.info("notification opened (background->tap)", {
+      type: remoteMessage.data?.type,
+      booking_id: remoteMessage.data?.booking_id,
+    });
+    handleDeepLink(remoteMessage.data as Record<string, string> | undefined);
+  });
+}
+
+/**
+ * Handles Notifee foreground tap events (Android data-only displayed via Notifee).
+ */
+export function registerNotifeeForegroundHandler(): () => void {
+  return notifee.onForegroundEvent(({ type, detail }) => {
+    if (type === EventType.PRESS && detail.notification?.data) {
+      log.info("notifee foreground press", {
+        type: detail.notification.data.type,
+      });
+      handleDeepLink(detail.notification.data as Record<string, string>);
+    }
+  });
+}
+
+/**
+ * Request FCM permission (mainly for iOS).
+ * On Android 13+ POST_NOTIFICATIONS is handled by expo-notifications.
+ */
+export async function requestFCMPermission(): Promise<boolean> {
+  try {
+    const authStatus = await messaging().requestPermission();
+    const enabled =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+    log.info("FCM permission", { authStatus, enabled });
+    return enabled;
+  } catch (e) {
+    log.error("FCM permission request failed", { error: e });
+    return false;
+  }
+}
+
+/**
+ * Get the FCM registration token for this device.
+ */
+export async function getFCMToken(): Promise<string | null> {
+  try {
+    const token = await messaging().getToken();
+    log.info("FCM token retrieved", { tokenPrefix: token?.substring(0, 12) });
+    return token;
+  } catch (e) {
+    log.error("getFCMToken failed", { error: e });
+    return null;
+  }
+}
+
+/**
+ * Listen for token refresh events. Returns unsubscribe.
+ */
+export function onFCMTokenRefresh(
+  callback: (token: string) => void
+): () => void {
+  return messaging().onTokenRefresh((token) => {
+    log.info("FCM token refreshed", { tokenPrefix: token?.substring(0, 12) });
+    callback(token);
+  });
+}

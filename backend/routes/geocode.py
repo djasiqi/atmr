@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple, cast
 
 import requests
 from flask import current_app, request
-from flask_restx import Namespace, Resource  # type: ignore[reportMissingImports]
+from flask_restx import Namespace, Resource
 
 from services.geolocation.google_places import (
     GooglePlacesError,

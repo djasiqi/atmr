@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
-import 'leaflet/dist/leaflet.css';
 import reportWebVitals from './reportWebVitals';
 import * as Sentry from '@sentry/react';
 import { onCLS, onINP, onFCP, onLCP, onTTFB } from 'web-vitals';

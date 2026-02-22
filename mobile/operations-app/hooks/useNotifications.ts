@@ -7,14 +7,18 @@ import * as Linking from "expo-linking";
 import { useAuth } from "@/hooks/useAuth";
 import { logError } from "@/utils/errorHandler";
 import { validateDeepLink } from "@/services/deepLinkHandler";
+import { getLogger } from "@/utils/logger";
+import { emitInAppNotification } from "@/components/common/InAppNotificationToast";
 
-// 🔔 Configuration du comportement des notifications en mode foreground
+const log = getLogger("Notifs");
+
+// 🔔 Foreground: pas de notification système, uniquement in-app (toast/banner)
 const foregroundBehavior: NotificationBehavior = {
-  shouldShowAlert: true,
-  shouldPlaySound: true,
-  shouldSetBadge: true,
-  shouldShowBanner: true,
-  shouldShowList: true,
+  shouldShowAlert: false,
+  shouldPlaySound: false,
+  shouldSetBadge: false,
+  shouldShowBanner: false,
+  shouldShowList: false,
 };
 
 // P0.2: Driver ID pour filtrer self-notifications (actor=driver)
@@ -51,7 +55,7 @@ export const useNotifications = () => {
   // P0.5: Vérification bundle — si ce log n'apparaît pas, mauvais code chargé
   useEffect(() => {
     if (__DEV__) {
-      console.log("🚨 useNotifications OPERATIONS-APP (driver mode) LOADED");
+      log.info("operations-app driver notifications loaded", {});
     }
   }, []);
 
@@ -85,11 +89,11 @@ export const useNotifications = () => {
     // Ne rien faire tant que l'utilisateur n'est pas chargé et identifié
     // Et ne rien faire sur web (expo-notifications non supporté)
     if (Platform.OS === "web") {
-      console.warn("🔔 [useNotifications] Platform.OS === 'web' - notifications push désactivées sur web");
+      log.warn("push disabled on web", {});
       return;
     }
     if (loading || !driver) {
-      console.log(`🔔 [useNotifications] Attente: loading=${loading}, driver=${!!driver}`);
+      log.info("waiting for auth", { loading, hasDriver: !!driver });
       return;
     }
 
@@ -105,7 +109,7 @@ export const useNotifications = () => {
         // P0.2: Filtrer affichage si notification pas pour le chauffeur
         const filterResult = _shouldIgnoreNotificationForDriver(data);
         if (filterResult.ignore) {
-          console.log("📩 Notification ignorée (driver filter):", {
+          log.info("notification ignored by driver filter", {
             ignored_reason: filterResult.reason,
             trace_id: data.trace_id,
             recipient_role: data.recipient_role,
@@ -118,7 +122,7 @@ export const useNotifications = () => {
         }
 
         // P0.4: Log payload proof (trace_id, recipient_role, etc.)
-        console.log("📩 Notification reçue pendant que l'app est ouverte:", {
+        log.info("notification received while app open", {
           trace_id: data.trace_id,
           type: notificationType,
           event_type: data.event_type ?? data.event,
@@ -138,32 +142,38 @@ export const useNotifications = () => {
               "@/services/silentNotifications"
             );
             await handleSilentNotification(data);
-            console.log("✅ Notification silencieuse traitée:", data.sync_type);
+            log.success("silent notification handled", { sync_type: data.sync_type });
           } catch (error) {
-            console.error("❌ Erreur traitement notification silencieuse:", error);
+            log.error("silent notification handling failed", { error });
           }
           // Ne pas afficher la notification si c'est silencieuse
           return;
         }
 
-        // Pour les autres notifications, afficher normalement
-        console.log("📩 Notification normale:", notificationType);
+        // Afficher en toast in-app (pas de notification système)
+        const title = notification.request.content.title;
+        const body = notification.request.content.body;
+        if (title || body) {
+          emitInAppNotification({
+            title: title || "",
+            body: body || "",
+            data: data as Record<string, unknown>,
+          });
+        }
+        log.info("in-app toast shown", { notificationType });
       }
     );
 
     const responseListener =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        console.log(
-          "📲 L'utilisateur a interagi avec une notification:",
-          response
-        );
+        log.info("user interacted with notification", { response });
         
         // ✅ Extract deep link from notification data
         const notificationData = response.notification.request.content.data;
         const deepLink = notificationData?.deepLink;
         
         if (deepLink) {
-          console.log("🔗 Deep link détecté:", deepLink);
+          log.info("deep link detected", { deepLink });
           
           // ✅ Valider le deep link (sécurité: anti-injection, anti-open-redirect)
           if (typeof deepLink === "string") {
@@ -173,17 +183,17 @@ export const useNotifications = () => {
               // Use expo-linking to handle the deep link
               // This will trigger the router to navigate
               Linking.openURL(deepLink).catch((error) => {
-                console.warn("❌ Failed to open deep link:", error);
+                log.warn("failed to open deep link", { error });
                 logError("Deep link navigation failed", error);
               });
             } else {
-              console.warn("⚠️ Deep link invalide:", validation.error, deepLink);
+              log.warn("invalid deep link", { error: validation.error, deepLink });
             }
           } else {
-            console.warn("⚠️ Deep link n'est pas une chaîne:", typeof deepLink);
+            log.warn("deep link not a string", { type: typeof deepLink });
           }
         } else {
-          console.log("ℹ️ Aucun deep link dans la notification");
+          log.info("no deep link in notification", {});
         }
       });
 

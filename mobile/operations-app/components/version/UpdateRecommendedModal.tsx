@@ -14,7 +14,9 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useVersion } from "@/contexts/VersionContext";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("Update");
 export function UpdateRecommendedModal() {
     const { versionInfo, status } = useVersion();
     const [dismissed, setDismissed] = useState(false);
@@ -32,10 +34,10 @@ export function UpdateRecommendedModal() {
                 if (canOpen) {
                     await Linking.openURL(storeUrl);
                 } else {
-                    console.warn("Impossible d'ouvrir le store:", storeUrl);
+                    log.warn("cannot open store", { storeUrl });
                 }
             } catch (error) {
-                console.error("Erreur lors de l'ouverture du store:", error);
+                log.error("open store failed", { error });
             }
         } else {
             // Fallback: ouvrir le store par défaut selon la plateforme
@@ -46,7 +48,7 @@ export function UpdateRecommendedModal() {
             try {
                 await Linking.openURL(defaultStoreUrl);
             } catch (error) {
-                console.error("Erreur lors de l'ouverture du store par défaut:", error);
+                log.error("open default store failed", { error });
             }
         }
     };

@@ -17,6 +17,7 @@ class _User:
 class _Driver:
     user: _User | None = None
     is_active: bool = False
+    is_available: bool = False
     contract_type: str | None = None
     weekly_hours: int | None = None
     hourly_rate_cents: int | None = None
@@ -37,8 +38,8 @@ def test_missing_user_returns_500() -> None:
     assert res.should_commit is False
 
 
-def test_updates_user_fields_and_sets_active() -> None:
-    driver = _Driver(user=_User(), is_active=False)
+def test_updates_user_fields_and_sets_available() -> None:
+    driver = _Driver(user=_User(), is_available=False)
     uc = UpdateDriverProfileUseCase()
     res = uc.execute(
         driver=driver,
@@ -60,8 +61,17 @@ def test_updates_user_fields_and_sets_active() -> None:
     assert driver.user.first_name == "A"
     assert driver.user.last_name == "B"
     assert driver.user.phone == "123"
-    assert driver.is_active is True
+    assert driver.is_available is True
     assert driver.contract_type == "CDI"
     assert driver.weekly_hours == 35
     assert driver.hourly_rate_cents == 1200
     assert driver.license_categories == ["B", "C1"]
+
+
+def test_hors_service_sets_unavailable_not_inactive() -> None:
+    driver = _Driver(user=_User(), is_active=True, is_available=True)
+    uc = UpdateDriverProfileUseCase()
+    res = uc.execute(driver=driver, validated_data={"status": "hors service"})
+    assert res.status_code == 200
+    assert driver.is_available is False
+    assert driver.is_active is True

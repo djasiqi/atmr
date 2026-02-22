@@ -1,0 +1,634 @@
+/* ====== Section divider ====== */
+.sectionDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 12px;
+}
+
+.sectionDivider h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sectionLine {
+  flex: 1;
+  height: 1px;
+  background: var(--border-primary, #e5e7eb);
+}
+
+/* ====== Sessions ====== */
+.sessionList {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 8px;
+}
+
+.sessionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.sessionRow:last-child {
+  border-bottom: none;
+}
+
+.sessionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sessionDevice {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sessionBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--color-success-bg, #d1fae5);
+  color: var(--color-success, #065f46);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sessionMeta {
+  font-size: 11px;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.sessionIp {
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 10px;
+}
+
+.sessionActions {
+  flex-shrink: 0;
+}
+
+.revokeBtn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-danger, #dc2626);
+  background: none;
+  border: 1px solid var(--color-danger, #dc2626);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.revokeBtn:hover {
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+}
+
+.sessionFooter {
+  padding: 4px 20px 12px;
+}
+
+.revokeAllBtn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #374151);
+  background: none;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.revokeAllBtn:hover {
+  border-color: var(--color-danger, #dc2626);
+  color: var(--color-danger, #dc2626);
+}
+
+/* ====== Audit log ====== */
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px 8px;
+  flex-wrap: wrap;
+}
+
+.filterChips {
+  display: flex;
+  gap: 4px;
+}
+
+.filterChip {
+  font-size: 11px;
+  font-weight: 500;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 15px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-tertiary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filterChip:hover {
+  border-color: var(--brand-primary-lighter, #4db6ac);
+  color: var(--text-primary, #111827);
+}
+
+.filterChipActive {
+  background: var(--brand-primary-lightest, #e0f2f1);
+  border-color: var(--brand-primary, #00796B);
+  color: var(--brand-primary, #00796B);
+  font-weight: 600;
+}
+
+/* Dropdown button for category */
+.filterDropdown {
+  position: relative;
+}
+
+.filterDropdownBtn {
+  font-size: 11px;
+  font-weight: 500;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 15px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.filterDropdownBtn:hover {
+  border-color: var(--brand-primary-lighter, #4db6ac);
+}
+
+.filterDropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 4px 0;
+  min-width: 140px;
+}
+
+.filterDropdownItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  color: var(--text-secondary, #374151);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.filterDropdownItem:hover {
+  background: var(--bg-secondary, #f9fafb);
+}
+
+.filterDropdownItemActive {
+  color: var(--brand-primary, #00796B);
+  font-weight: 600;
+  background: var(--brand-primary-lightest, #e0f2f1);
+}
+
+.auditList {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+}
+
+.auditDayHeader {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary, #9ca3af);
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.auditDayHeader:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.auditRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.auditMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.auditAction {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary, #111827);
+  line-height: 1.3;
+}
+
+.auditActionFailure {
+  composes: auditAction;
+  color: var(--color-danger, #dc2626);
+}
+
+.auditActor {
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.auditRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.auditTime {
+  font-size: 11px;
+  color: var(--text-secondary, #374151);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.loadMoreBtn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--brand-primary, #00796B);
+  background: none;
+  border: none;
+  padding: 8px 0;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+}
+
+.loadMoreBtn:hover {
+  text-decoration: underline;
+}
+
+/* ====== Export panel ====== */
+.exportPanel {
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+  padding: 10px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exportRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exportLabel {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #374151);
+  min-width: 50px;
+}
+
+.exportHint {
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  line-height: 1.3;
+}
+
+.exportActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ====== 2FA card ====== */
+.tfaBody {
+  padding: 0 0 2px;
+}
+
+.tfaDefaultRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tfaError {
+  color: var(--color-danger, #dc2626);
+  font-size: 11px;
+  margin: 0 0 4px;
+}
+
+.tfaText {
+  font-size: 12px;
+  color: var(--text-tertiary, #9ca3af);
+  margin: 0 0 6px;
+  line-height: 1.3;
+}
+
+.tfaTextBold {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+  margin: 0 0 6px;
+}
+
+.tfaTextDanger {
+  font-size: 11px;
+  color: var(--color-danger, #dc2626);
+  margin: 0 0 8px;
+}
+
+.tfaStatus {
+  font-size: 12px;
+  color: var(--text-secondary, #374151);
+  margin: 0 0 2px;
+}
+
+.tfaStatusSub {
+  font-size: 11px;
+  color: var(--text-tertiary, #9ca3af);
+  margin: 0 0 10px;
+}
+
+.tfaQr {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto 8px;
+  display: block;
+}
+
+.tfaSecret {
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  margin: 0 0 8px;
+  word-break: break-all;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.tfaCodeInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 15px;
+  text-align: center;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  letter-spacing: 4px;
+  box-sizing: border-box;
+}
+
+.tfaCodeInput:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796B);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.1);
+}
+
+.tfaPasswordInput {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.tfaPasswordInput:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796B);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.1);
+}
+
+.tfaCodesGrid {
+  background: var(--bg-secondary, #f9fafb);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 8px;
+  columns: 2;
+  column-gap: 16px;
+}
+
+.tfaBtnRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ====== Policy card — compact ====== */
+.policyBody {
+  padding: 0 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.policySection {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.policySection:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.policySectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.policySectionIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--bg-secondary, #f9fafb);
+  color: var(--brand-primary, #00796B);
+  flex-shrink: 0;
+}
+
+
+.policySectionDesc {
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.policyInlineRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.policyRowLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #374151);
+  white-space: nowrap;
+  min-width: 90px;
+}
+
+.policyRowIcon {
+  color: var(--brand-primary, #00796B);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+
+.policyFooter {
+  padding: 8px 20px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.policyFooterIcon {
+  color: var(--text-tertiary, #9ca3af);
+  flex-shrink: 0;
+}
+
+.policyFooterText {
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.policySavingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--brand-primary-lighter, #e0f2f1);
+  color: var(--brand-primary, #00796B);
+  animation: policyPulse 1s ease-in-out infinite;
+}
+
+@keyframes policyPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ====== Compact card override ====== */
+.compactCard {
+  padding: 16px 20px;
+}
+
+.compactCard > div:first-child {
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+}
+
+/* ====== Empty state ====== */
+.emptyState {
+  padding: 8px 20px;
+  text-align: center;
+  color: var(--text-tertiary, #9ca3af);
+  font-size: 12px;
+}
+
+/* ====== Responsive ====== */
+@media (max-width: 768px) {
+  .filterBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterChips {
+    flex-wrap: wrap;
+  }
+
+  .sessionRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .sessionActions {
+    align-self: flex-end;
+  }
+
+  .auditRow {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .auditRight {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .policyInlineRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .policyRowLabel {
+    min-width: unset;
+  }
+}

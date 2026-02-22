@@ -1,38 +1,41 @@
 import { StyleSheet, Platform } from "react-native";
 
-// ——— Design system : terrain, lisible en ≤3s ———
 const spacing = { s: 8, m: 12, l: 16, xl: 24 } as const;
 const radius = { m: 12, l: 16 } as const;
 export const palette = {
-  background: "#F5F7F6",
+  background: "#f4f7fc",
   card: "#FFFFFF",
-  text: "#15362B",
-  secondary: "#5F7369",
-  accent: "#0A7F59",
-  border: "rgba(15,54,43,0.08)",
-  placeholder: "#91A59D",
+  text: "#1E293B",
+  secondary: "#64748B",
+  accent: "#00796B",
+  accentDark: "#00695C",
+  accentLight: "#26a69a",
+  border: "rgba(0,121,107,0.08)",
+  placeholder: "#94A3B8",
   danger: "#dc3545",
   dangerBorder: "rgba(220,53,69,0.2)",
   secondaryAction: "#6c757d",
   secondaryActionBorder: "rgba(108,117,125,0.2)",
-  timingDeparture: "#2C3E50",
-  timingArrival: "#7F8C8D",
+  timingDeparture: "#1E293B",
+  timingArrival: "#64748B",
+  routePickup: "#00796B",
+  routeDropoff: "#1E293B",
 } as const;
 
 const containerShadow =
   Platform.OS === "web"
-    ? { boxShadow: "0 8px 24px rgba(16,39,30,0.12)" }
+    ? { boxShadow: "0 4px 16px rgba(0,0,0,0.06)" }
     : {
-        shadowColor: "rgba(16,39,30,0.12)",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.14,
-        shadowRadius: 24,
-        elevation: 8,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        elevation: 4,
       };
 
 const actionShadow =
   Platform.OS === "web"
-    ? { boxShadow: "0 4px 8px rgba(10,127,89,0.2)" }
+    ? { boxShadow: "0 4px 8px rgba(0,121,107,0.2)" }
     : {
         shadowColor: palette.accent,
         shadowOffset: { width: 0, height: 4 },
@@ -73,21 +76,21 @@ export const styles = StyleSheet.create({
     overflow: "visible",
   },
   clientCivility: {
-    fontSize: 12,
+    fontSize: 11,
     color: palette.secondary,
     marginBottom: 2,
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
+    fontWeight: "600",
   },
   clientName: {
     fontWeight: "700",
-    fontSize: 18,
+    fontSize: 17,
     color: palette.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   clientBirthDate: {
     fontSize: 12,
-    marginTop: spacing.s,
     color: palette.secondary,
   },
   headerBadgesWrap: {
@@ -100,18 +103,18 @@ export const styles = StyleSheet.create({
     marginLeft: "auto",
   },
   statusBadgeContainer: {
-    backgroundColor: "rgba(10,127,89,0.12)",
-    paddingVertical: spacing.s,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    paddingVertical: 6,
     paddingHorizontal: spacing.m,
-    borderRadius: radius.m,
+    borderRadius: 8,
     minWidth: 70,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(10,127,89,0.2)",
+    borderColor: "rgba(0,121,107,0.15)",
   },
   statusBadgeText: {
     color: palette.accent,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
@@ -155,11 +158,11 @@ export const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
-  // ——— 2. MissionTimingBlock : départ / arrivée estimée ———
+  // ——— 2. MissionTimingBlock ———
   timingSection: {
-    marginTop: spacing.m,
+    marginTop: spacing.s,
     marginBottom: spacing.m,
-    gap: spacing.s,
+    gap: 6,
   },
   timingRow: {
     flexDirection: "row",
@@ -167,44 +170,65 @@ export const styles = StyleSheet.create({
     gap: spacing.s,
   },
   timingDepartureColor: {
-    color: "#2C3E50",
+    color: palette.timingDeparture,
   },
   timingArrivalColor: {
-    color: "#7F8C8D",
+    color: palette.timingArrival,
   },
   timingDeparture: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#2C3E50",
+    color: palette.timingDeparture,
   },
   timingArrival: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "400",
-    color: "#7F8C8D",
+    color: palette.timingArrival,
   },
   timingUnavailable: {
     color: palette.placeholder,
   },
 
-  // ——— 3. MissionRouteBlock : départ → destination (icônes) ———
+  // ——— 3. MissionRouteBlock : départ → destination (timeline) ———
   routeSection: {
     marginTop: spacing.m,
     marginBottom: spacing.m,
-    paddingVertical: spacing.m,
+    paddingVertical: 14,
     paddingHorizontal: spacing.l,
-    backgroundColor: "rgba(15,54,43,0.03)",
+    backgroundColor: "rgba(0,121,107,0.03)",
     borderRadius: radius.m,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: "rgba(0,121,107,0.08)",
   },
   routeRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: spacing.s,
     gap: spacing.m,
   },
   routeRowLast: {
-    marginBottom: 0,
+    // no margin needed — connector provides spacing
+  },
+  routeTimelineWrap: {
+    alignItems: "center",
+    width: 24,
+  },
+  routeDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2.5,
+    borderColor: palette.routePickup,
+    backgroundColor: "#fff",
+  },
+  routeDotDropoff: {
+    borderColor: palette.routeDropoff,
+    backgroundColor: palette.routeDropoff,
+  },
+  routeConnector: {
+    width: 2,
+    height: 28,
+    backgroundColor: "rgba(0,121,107,0.15)",
+    marginVertical: 4,
   },
   routeIconWrap: {
     width: 24,
@@ -216,15 +240,15 @@ export const styles = StyleSheet.create({
     color: palette.secondary,
     marginBottom: 2,
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   routeAddress: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "500",
     color: palette.text,
-    lineHeight: 22,
+    lineHeight: 20,
     flex: 1,
-    maxHeight: 44,
+    maxHeight: 40,
   },
   routeContentWrap: {
     flex: 1,
@@ -250,8 +274,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.l,
     borderRadius: radius.m,
     borderWidth: 1,
-    borderColor: palette.border,
-    backgroundColor: "rgba(10,127,89,0.04)",
+    borderColor: "rgba(0,121,107,0.08)",
+    backgroundColor: "rgba(0,121,107,0.03)",
   },
   hintsSectionTitle: {
     fontSize: 14,
@@ -351,27 +375,28 @@ export const styles = StyleSheet.create({
     flexWrap: "nowrap",
     justifyContent: "flex-start",
     alignItems: "stretch",
-    marginTop: spacing.xl,
-    gap: spacing.m,
+    marginTop: spacing.l,
+    gap: spacing.s,
   },
   actionItemEnhanced: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.accent,
-    borderRadius: radius.m,
-    paddingVertical: spacing.m,
-    paddingHorizontal: spacing.m,
-    minHeight: 44,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 40,
     flex: 1,
     flexBasis: 0,
     flexGrow: 1,
     flexShrink: 1,
+    gap: 6,
     ...actionShadow,
   },
   actionLabel: {
     fontSize: 12,
     color: "#FFFFFF",
-    marginTop: 4,
     textAlign: "center",
     fontWeight: "600",
     letterSpacing: 0.2,
@@ -379,77 +404,29 @@ export const styles = StyleSheet.create({
   actionItemMore: {
     alignItems: "center",
     justifyContent: "center",
-    minWidth: 44,
-    minHeight: 44,
-    borderRadius: radius.m,
+    minWidth: 40,
+    minHeight: 40,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: palette.border,
     backgroundColor: palette.card,
   },
 
-  // ——— Sheet Plus (Détails) : slide depuis le bas, backdrop plus sombre ———
+  // Legacy compat — kept for notes modal
   detailsSheetBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.35)",
     justifyContent: "flex-end",
     padding: 0,
   },
   detailsSheetCard: {
     backgroundColor: palette.card,
-    borderTopLeftRadius: radius.l,
-    borderTopRightRadius: radius.l,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: spacing.xl,
     paddingBottom: spacing.xl + 24,
-    marginHorizontal: 0,
     maxWidth: "100%",
     width: "100%",
-  },
-  detailsSheetTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: palette.text,
-    marginBottom: spacing.m,
-    letterSpacing: 0.2,
-  },
-  detailsSheetItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.m,
-    paddingHorizontal: spacing.l,
-    borderRadius: radius.m,
-    backgroundColor: "rgba(15,54,43,0.03)",
-    marginBottom: spacing.s,
-    gap: spacing.m,
-  },
-  detailsSheetItemText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: palette.text,
-  },
-  detailsSheetScroll: {
-    maxHeight: 360,
-    marginBottom: spacing.m,
-  },
-  detailsSheetSection: {
-    marginBottom: spacing.m,
-  },
-  detailsSheetSectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: palette.secondary,
-    marginBottom: spacing.s,
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  detailsSheetLine: {
-    fontSize: 14,
-    color: palette.text,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  detailsSheetLineLabel: {
-    fontWeight: "600",
-    color: palette.secondary,
   },
 
   // ——— Compact mode (réduction hauteur ~25–35%) ———
@@ -558,36 +535,40 @@ export const styles = StyleSheet.create({
     flexWrap: "nowrap",
     justifyContent: "center",
     alignItems: "stretch",
-    marginTop: spacing.m,
-    gap: spacing.m,
+    marginTop: spacing.s,
+    gap: spacing.s,
   },
   actionItemSecondary: {
     flex: 1,
     maxWidth: "48%",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.secondaryAction,
-    borderRadius: radius.m,
-    paddingVertical: spacing.m,
-    paddingHorizontal: spacing.m,
-    minHeight: 44,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 40,
+    gap: 6,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 2px 6px rgba(108,117,125,0.25)" }
-      : { elevation: 3, shadowColor: palette.secondaryAction, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6 }),
+      ? { boxShadow: "0 2px 4px rgba(108,117,125,0.2)" }
+      : { elevation: 2, shadowColor: palette.secondaryAction, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 4 }),
   },
   actionItemDanger: {
     flex: 1,
     maxWidth: "48%",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: palette.danger,
-    borderRadius: radius.m,
-    paddingVertical: spacing.m,
-    paddingHorizontal: spacing.m,
-    minHeight: 44,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 40,
+    gap: 6,
     ...(Platform.OS === "web"
-      ? { boxShadow: "0 2px 6px rgba(220,53,69,0.25)" }
-      : { elevation: 3, shadowColor: palette.danger, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 6 }),
+      ? { boxShadow: "0 2px 4px rgba(220,53,69,0.2)" }
+      : { elevation: 2, shadowColor: palette.danger, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 4 }),
   },
 
   // ——— Legacy / compat ———
@@ -629,7 +610,7 @@ export const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   medicalInfoSection: {
-    backgroundColor: "rgba(10,127,89,0.06)",
+    backgroundColor: "rgba(0,121,107,0.04)",
     borderLeftWidth: 3,
     borderLeftColor: palette.accent,
     borderRadius: radius.m,
@@ -637,7 +618,7 @@ export const styles = StyleSheet.create({
     marginTop: spacing.m,
     marginBottom: spacing.s,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: "rgba(0,121,107,0.08)",
   },
   medicalTitle: {
     fontSize: 14,
@@ -682,7 +663,7 @@ export const styles = StyleSheet.create({
   emptyStateContainer: {
     backgroundColor: palette.card,
     borderRadius: radius.l,
-    padding: spacing.xl,
+    padding: 32,
     marginHorizontal: 20,
     marginVertical: spacing.l,
     marginBottom: 75,
@@ -693,18 +674,82 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyStateWebFixed: Platform.OS === "web" ? { width: 380, alignSelf: "center" as const, marginHorizontal: 0 } : {},
+  emptyStateIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,121,107,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
   emptyStateTitle: {
     fontSize: 18,
     textAlign: "center",
     color: palette.text,
-    fontWeight: "600",
-    letterSpacing: 0.2,
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
   emptyStateSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     textAlign: "center",
     color: palette.secondary,
-    marginTop: spacing.m,
+    marginTop: spacing.s,
     lineHeight: 22,
+    maxWidth: 260,
   },
+  emptyStateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.l,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: "rgba(22,163,74,0.08)",
+  },
+  emptyStateBadgeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#16a34a",
+    letterSpacing: 0.1,
+  },
+});
+
+// ——— Detail Sheet — Bottom Sheet séparé pour éviter la limite TS de StyleSheet.create ———
+const sheetShadow =
+  Platform.OS === "web"
+    ? { boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }
+    : { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 12 };
+
+export const dsStyles = StyleSheet.create({
+  dsRoot: { flex: 1, justifyContent: "flex-end" },
+  dsOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.35)" },
+  dsSheet: { backgroundColor: palette.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: "65%", overflow: "hidden", ...sheetShadow },
+  dsHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#D1D5DB", alignSelf: "center", marginTop: 10, marginBottom: 6 },
+  dsHeaderBar: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: palette.border },
+  dsHeaderIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(0,121,107,0.08)", alignItems: "center", justifyContent: "center" },
+  dsHeaderTitle: { fontSize: 16, fontWeight: "700", color: palette.text },
+  dsHeaderSub: { fontSize: 12, color: palette.secondary, marginTop: 2 },
+  dsStatusBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: "rgba(0,121,107,0.08)" },
+  dsStatusText: { fontSize: 11, fontWeight: "600", color: palette.accent },
+  dsScroll: { flex: 1 },
+  dsScrollContent: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 20 },
+  dsFooter: { flexDirection: "row", gap: 10, paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: 1, borderTopColor: palette.border },
+  dsFooterBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: palette.border, backgroundColor: palette.card },
+  dsFooterBtnText: { fontSize: 14, fontWeight: "600", color: palette.accent },
+  dsCard: { backgroundColor: "rgba(0,121,107,0.02)", borderRadius: radius.m, borderWidth: 1, borderColor: palette.border, marginBottom: 10, overflow: "hidden" },
+  dsCardHeader: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.m, paddingVertical: 8, backgroundColor: "rgba(0,121,107,0.05)", borderBottomWidth: 1, borderBottomColor: palette.border },
+  dsCardTitle: { fontSize: 11, fontWeight: "700", color: palette.secondary, textTransform: "uppercase", letterSpacing: 0.4 },
+  dsCardBody: { paddingHorizontal: 14, paddingVertical: 10 },
+  dsMainText: { fontSize: 13, fontWeight: "500", color: palette.text, lineHeight: 19 },
+  dsSecText: { fontSize: 12, color: palette.secondary, lineHeight: 17 },
+  dsPhoneText: { fontSize: 13, fontWeight: "600", color: palette.accent },
+  dsChipRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  dsMetricChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(0,121,107,0.06)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  dsMetricText: { fontSize: 12, fontWeight: "600", color: palette.accent },
+  dsReturnChip: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(245,158,11,0.10)", paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 },
+  dsRouteLabel: { fontSize: 10, fontWeight: "600", color: palette.placeholder, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 },
+  dsInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
+  dsInfoLabel: { fontSize: 11, fontWeight: "600", color: palette.placeholder, textTransform: "uppercase", letterSpacing: 0.2, marginBottom: 1 },
 });

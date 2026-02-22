@@ -48,7 +48,10 @@ import AttachmentSheet from "@/components/chat/AttachmentSheet";
 import ImagePreviewModal from "@/components/chat/ImagePreviewModal";
 import PdfPreviewModal from "@/components/chat/PdfPreviewModal";
 import { chatStyles } from "@/styles/chatStyles";
+import { getLogger } from "@/utils/logger";
 import * as ImagePicker from "expo-image-picker";
+
+const log = getLogger("EntChat");
 
 // ✅ Import conditionnel DocumentPicker
 let DocumentPicker: typeof import("expo-document-picker") | null = null;
@@ -238,7 +241,7 @@ export default function EnterpriseChatScreen() {
           receiver_id: null,
         });
       } catch (error: any) {
-        console.error("[EnterpriseChat] Erreur upload image:", error);
+        log.error("image upload failed", { error });
         const errorMessage =
           error?.response?.data?.error ||
           error?.message ||
@@ -289,7 +292,7 @@ export default function EnterpriseChatScreen() {
           receiver_id: null,
         });
       } catch (error: any) {
-        console.error("[EnterpriseChat] Erreur upload PDF:", error);
+        log.error("pdf upload failed", { error });
         const errorMessage =
           error?.response?.data?.error ||
           error?.message ||
@@ -347,7 +350,7 @@ export default function EnterpriseChatScreen() {
   const handlePickDocument = useCallback(async () => {
     setShowAttachment(false);
     if (!DocumentPicker) {
-      console.log("⚠️ DocumentPicker non dispo");
+      log.warn("document picker not available");
       return;
     }
     try {
@@ -363,7 +366,7 @@ export default function EnterpriseChatScreen() {
         );
       }
     } catch (error) {
-      console.log("Erreur sélection PDF:", error);
+      log.warn("pdf selection error", { error });
     }
   }, [handleSendPdf]);
 
@@ -374,7 +377,7 @@ export default function EnterpriseChatScreen() {
       if (!enterpriseSession?.company?.id) return;
 
       try {
-        console.log("📨 load initial messages company_id:", enterpriseSession.company.id);
+        log.info("load initial messages", { companyId: enterpriseSession.company.id });
         const fetched = await getDispatchMessages({
           limit: CHAT_FETCH_LIMIT,
         });
@@ -428,7 +431,7 @@ export default function EnterpriseChatScreen() {
           });
         });
       } catch (e) {
-        console.error("❌ Erreur chargement messages:", e);
+        log.error("load messages failed", { error: e });
       }
     };
 
@@ -470,7 +473,7 @@ export default function EnterpriseChatScreen() {
 
       setHasMoreMessages(older.length >= CHAT_FETCH_LIMIT);
     } catch (e) {
-      console.error("❌ Erreur chargement messages supplémentaires:", e);
+      log.error("load more messages failed", { error: e });
     } finally {
       setIsLoadingMore(false);
     }
@@ -494,7 +497,7 @@ export default function EnterpriseChatScreen() {
       isAtBottomRef.current = true;
       setShowScrollButton(false);
     } catch (e) {
-      console.log("[EnterpriseChat] scrollToBottom error:", e);
+      log.warn("scroll to bottom error", { error: e });
     }
   }, []);
 
@@ -554,7 +557,7 @@ export default function EnterpriseChatScreen() {
       }
       socket.emit("typing_stop");
     } catch (error: any) {
-      console.error("[EnterpriseChat] Erreur envoi message:", error);
+      log.error("send message failed", { error });
       Alert.alert(
         "Erreur",
         error?.message || "Erreur lors de l'envoi du message. Veuillez réessayer."
@@ -822,7 +825,7 @@ export default function EnterpriseChatScreen() {
             try {
               Keyboard.dismiss();
             } catch (e) {
-              console.log("[EnterpriseChat] Keyboard dismiss error:", e);
+              log.warn("keyboard dismiss error", { error: e });
             }
           }
         }}

@@ -25,6 +25,7 @@ from .base import (
     _iso,
 )
 from .booking import Booking
+from .booking_message import BookingMessage, BookingMessageSender
 from .booking_transfer import BookingTransfer
 from .client import Client
 from .client_stay import ClientStay
@@ -54,6 +55,7 @@ from .driver import (
 )
 from .enums import (
     AssignmentStatus,
+    BillingIntent,
     BookingStatus,
     BreakType,
     BillingReviewStatus,
@@ -65,14 +67,20 @@ from .enums import (
     DriverState,
     DriverType,
     GenderEnum,
+    InstitutionRole,
     InvoiceBillingStrategy,
     InvoiceLineType,
     InvoiceStatus,
+    LocationType,
+    MissionType,
+    OfferMode,  # ✅ ÉTAPE 4: Mode d'offre
+    OfferStatus,  # ✅ ÉTAPE 4: Statut offre
     PartnershipStatus,
     PaymentMethod,
     PaymentStatus,
     RealtimeEntityType,
     RealtimeEventType,
+    RequestStatus,
     SenderRole,
     ShiftStatus,
     ShiftType,
@@ -85,6 +93,30 @@ from .enums import (
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
 from .billing_party import BillingParty, ClientBillingParty
+from .curator_team import CuratorTeam, CuratorTeamMember
+from .institution import Institution
+from .institution_api_key import (
+    InstitutionApiKey,
+    VALID_SCOPES as INSTITUTION_API_VALID_SCOPES,
+    generate_api_key,
+    hash_api_key,
+    validate_scopes,
+)
+from .company_notification import CompanyNotification
+from .institution_notification import InstitutionNotification
+from .institution_patient import InstitutionPatient
+from .patient_identity import (
+    PatientAuditLog,
+    PatientIdentity,
+    PatientIdentityLink,
+    PatientLinkSuggestion,
+    PatientMatchRejection,
+    PatientSyncEvent,
+)
+from .institution_settings import InstitutionSettings
+from .institution_transport_preference import InstitutionTransportPreference  # ✅ ÉTAPE 4
+from .request_offer import RequestOffer  # ✅ ÉTAPE 4
+from .transport_request import TransportRequest
 from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
     CompanyBillingSettings,
@@ -121,9 +153,12 @@ __all__ = [
     "AssignmentStatus",
     "AutonomousAction",
     "Booking",
+    "BookingMessage",
+    "BookingMessageSender",
     "BookingStatus",
     "BookingTransfer",
     "BreakType",
+    "BillingIntent",  # ✅ Intention facturation
     "BillingParty",
     "BillingPartyType",
     "BillingAuditLog",
@@ -135,8 +170,11 @@ __all__ = [
     "ClinicBillingPartyMapping",
     "ClientType",
     "Company",
+    "CuratorTeam",
+    "CuratorTeamMember",
     "CompanyBillingSettings",
     "CompanyBillingProfile",
+    "CompanyNotification",
     "CompanyPlanningSettings",
     "DailyStats",
     "DelayEvent",  # ✅ 3.5.1: Historique événements retards
@@ -159,6 +197,23 @@ __all__ = [
     "EtaAccuracyLog",
     "FavoritePlace",
     "GenderEnum",
+    "Institution",  # ✅ Portail institutionnel
+    "InstitutionApiKey",  # ✅ API Keys DPI
+    "InstitutionNotification",  # ✅ Notifications in-app
+    "InstitutionPatient",  # ✅ Patients institution
+    "PatientAuditLog",  # ✅ Curatelle: audit log
+    "PatientIdentity",  # ✅ Curatelle: master index
+    "PatientIdentityLink",  # ✅ Curatelle: liens entités
+    "PatientLinkSuggestion",  # ✅ Curatelle: suggestions de lien patient
+    "PatientMatchRejection",  # ✅ Curatelle: rejets matching
+    "PatientSyncEvent",  # ✅ Curatelle: outbox sync
+    "InstitutionSettings",  # ✅ P1: Settings institution
+    "InstitutionRole",  # ✅ Rôles institution
+    "InstitutionTransportPreference",  # ✅ ÉTAPE 4: Préférences transport
+    "INSTITUTION_API_VALID_SCOPES",  # ✅ Scopes API DPI
+    "generate_api_key",  # ✅ Utilitaire API Keys
+    "hash_api_key",  # ✅ Utilitaire API Keys
+    "validate_scopes",  # ✅ Utilitaire API Keys
     "Invoice",
     "InvoiceBillingStrategy",
     "InvoiceLine",
@@ -167,7 +222,11 @@ __all__ = [
     "InvoiceReminder",
     "InvoiceSequence",
     "InvoiceStatus",
+    "LocationType",  # ✅ Type de lieu (institution/domicile/other)
+    "MissionType",  # ✅ Type mission transport
     "MLPrediction",
+    "OfferMode",  # ✅ ÉTAPE 4: Mode d'offre
+    "OfferStatus",  # ✅ ÉTAPE 4: Statut offre
     "MedicalEstablishment",
     "MedicalService",
     "Message",
@@ -186,11 +245,14 @@ __all__ = [
     "RealtimeEvent",
     "RealtimeEventType",
     "RefreshToken",
+    "RequestOffer",  # ✅ ÉTAPE 4: Offres de transport
+    "RequestStatus",  # ✅ Statut demande transport
     "SecretRotation",
     "SenderRole",
     "ShiftStatus",
     "ShiftType",
     "TaskFailure",
+    "TransportRequest",  # ✅ Demandes transport institution
     "TransportVoucher",
     "TransportVoucherFile",
     "TransportVoucherStatus",

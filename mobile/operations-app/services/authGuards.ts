@@ -1,3 +1,6 @@
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("AuthGuard");
 export type ApiKind = "driver" | "enterprise" | "enterpriseStandard";
 
 /**
@@ -76,14 +79,11 @@ export function reportAuthNotReadyMetric(params: {
   url?: string;
 }): void {
   try {
-    if (__DEV__) {
-      console.debug(
-        "[AUTH] AuthNotReadyError (metric placeholder):",
-        params.kind,
-        params.reason,
-        params.url ?? ""
-      );
-    }
+    log.debug("auth not ready metric placeholder", {
+      kind: params.kind,
+      reason: params.reason,
+      url: params.url ?? "",
+    });
     // TODO: Sentry/Datadog/Firebase — compter AuthNotReadyError (non silentDedupe), tag mode: driver | enterprise
   } catch {
     // Fire-and-forget : ne jamais faire échouer l'appelant (SDK externe peut throw plus tard).

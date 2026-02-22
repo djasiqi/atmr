@@ -12,7 +12,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("DatePicker");
 dayjs.extend(customParseFormat);
 
 const palette = {
@@ -426,7 +428,7 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
                 const dateStrISO = `${year}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
                 const parsed = dayjs(dateStrISO, "YYYY-MM-DD", true);
                 if (parsed.isValid()) {
-                    console.log("[TimeDatePicker] Date parsée:", dateStr, "->", parsed.format("YYYY-MM-DD"), "(DD/MM/YYYY interprété comme jour/mois/année)");
+                    log.info("date parsed dd/mm/yyyy", { dateStr, result: parsed.format("YYYY-MM-DD") });
                     return parsed;
                 }
             }
@@ -435,11 +437,11 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
         // Fallback: essayer avec dayjs directement
         const parsed = dayjs(normalized, "DD/MM/YYYY", true);
         if (parsed.isValid()) {
-            console.log("[TimeDatePicker] Date parsée (fallback):", dateStr, "->", parsed.format("YYYY-MM-DD"));
+            log.info("date parsed fallback", { dateStr, result: parsed.format("YYYY-MM-DD") });
             return parsed;
         }
 
-        console.warn("[TimeDatePicker] Date invalide:", dateStr);
+        log.warn("invalid date", { dateStr });
         return null;
     };
 
@@ -476,9 +478,7 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
         } else {
             // datetime - utiliser dateInput et timeInput directement
             const parsed = parseDateInput(dateInput);
-            console.log("[TimeDatePicker] handleSave datetime - dateInput:", dateInput, "parsed:", parsed?.format("YYYY-MM-DD"));
-            console.log("[TimeDatePicker] handleSave datetime - timeInput:", timeInput);
-            console.log("[TimeDatePicker] handleSave datetime - selectedHour:", selectedHour, "selectedMinute:", selectedMinute);
+            log.info("handleSave datetime", { dateInput, parsed: parsed?.format("YYYY-MM-DD"), timeInput, selectedHour, selectedMinute });
 
             // Utiliser timeInput en priorité, sinon utiliser selectedHour/selectedMinute
             let finalHours = selectedHour;
@@ -486,7 +486,7 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
 
             if (timeInput && timeInput.trim() && timeInput.includes(":")) {
                 const [hours, minutes] = timeInput.split(":").map(Number);
-                console.log("[TimeDatePicker] Parsing timeInput - hours:", hours, "minutes:", minutes);
+                log.info("parsing timeInput", { hours, minutes });
                 if (!isNaN(hours) && !isNaN(minutes)) {
                     finalHours = hours;
                     finalMinutes = minutes;
@@ -494,9 +494,8 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
             }
 
             if (parsed && !isNaN(finalHours) && !isNaN(finalMinutes)) {
-                console.log("[TimeDatePicker] Utilisation - hours:", finalHours, "minutes:", finalMinutes);
                 const date = parsed.hour(finalHours).minute(finalMinutes).toDate();
-                console.log("[TimeDatePicker] Date finale:", dayjs(date).format("YYYY-MM-DD HH:mm"));
+                log.info("final datetime", { hours: finalHours, minutes: finalMinutes, date: dayjs(date).format("YYYY-MM-DD HH:mm") });
                 if (minimumDate && date < minimumDate) {
                     onChange(minimumDate);
                 } else if (maximumDate && date > maximumDate) {

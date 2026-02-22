@@ -34,10 +34,13 @@ from services.security.authentication import AccessTokenService, RefreshTokenSer
 **Date :** 7 janvier 2025
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
+from typing import Any
 
-import redis  # pyright: ignore[reportMissingImports]
+import redis
 from flask import current_app
 
 logger = logging.getLogger(__name__)
@@ -111,7 +114,7 @@ class RefreshTokenService:
         """Initialise le service avec une connexion Redis."""
         super().__init__()
         redis_url = current_app.config.get("REDIS_URL", "redis://127.0.0.1:6379/0")
-        self.redis_client = redis.from_url(redis_url, decode_responses=True)
+        self.redis_client: Any = redis.from_url(redis_url, decode_responses=True)
         self.revoked_tokens_prefix = "revoked_refresh_token:"
         self.active_tokens_prefix = "active_refresh_token:"
 
@@ -211,13 +214,12 @@ class RefreshTokenService:
             "revoked",
         )
 
-        # Supprimer de la liste des tokens actifs
         stored_user_id = self.redis_client.get(
             f"{self.active_tokens_prefix}{token_hash}"
         )
         if stored_user_id:
             user_tokens_key = f"user_refresh_tokens:{stored_user_id}"
-            self.redis_client.srem(user_tokens_key, token_hash)
+            self.redis_client.zrem(user_tokens_key, token_hash)
             self.redis_client.delete(f"{self.active_tokens_prefix}{token_hash}")
 
         logger.info("Token révoqué: %s...", token_hash[:8])
@@ -237,26 +239,25 @@ class RefreshTokenService:
             user_id: ID de l'utilisateur propriétaire du token
             token: Le refresh token JWT en clair
         """
+        import time
+
         token_hash = self._hash_token(token)
 
-        # Obtenir l'expiration du token depuis la config
         try:
             refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
             ttl = int(refresh_expires_delta.total_seconds())
         except Exception:
-            # Fallback: 30 jours en secondes
             ttl = 30 * 24 * 3600
 
-        # Stocker le mapping token -> user_id
         self.redis_client.setex(
             f"{self.active_tokens_prefix}{token_hash}",
             ttl,
             str(user_id),
         )
 
-        # Ajouter à la liste des tokens actifs de l'utilisateur
+        # ZSET ordonné par timestamp (score) pour éviction FIFO déterministe
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        self.redis_client.sadd(user_tokens_key, token_hash)
+        self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
         self.redis_client.expire(user_tokens_key, ttl)
 
         logger.info("Token stocké: user_id=%s, hash=%s...", user_id, token_hash[:8])
@@ -268,7 +269,7 @@ class RefreshTokenService:
             user_id: ID de l'utilisateur
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        token_hashes = self.redis_client.smembers(user_tokens_key)
+        token_hashes = self.redis_client.zrange(user_tokens_key, 0, -1)
 
         # Obtenir l'expiration du token depuis la config
         try:
@@ -314,51 +315,65 @@ class RefreshTokenService:
             Nombre de tokens actifs
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        return self.redis_client.scard(user_tokens_key)
+        return self.redis_client.zcard(user_tokens_key)
+
+    def touch_token_score(self, user_id: int, token: str) -> None:
+        """Met a jour le score ZSET d'un token avec le timestamp actuel.
+
+        Cela garantit que la purge (limit_active_tokens) evince les tokens
+        les moins recemment utilises, pas les plus anciens par creation.
+        """
+        import time
+
+        token_hash = self._hash_token(token)
+        user_tokens_key = f"user_refresh_tokens:{user_id}"
+        if self.redis_client.zscore(user_tokens_key, token_hash) is not None:
+            self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
 
     def limit_active_tokens(self, user_id: int, max_tokens: int = 5) -> None:
         """Limite le nombre de tokens actifs par utilisateur.
 
-        Si le nombre de tokens actifs dépasse max_tokens, les tokens en excès
-        sont révoqués (FIFO approximatif via SRANDMEMBER).
+        Evince les tokens les plus anciens (score le plus bas dans le ZSET)
+        pour garantir un comportement FIFO deterministe.
 
         Args:
             user_id: ID de l'utilisateur
-            max_tokens: Nombre maximum de tokens actifs (défaut: 5)
+            max_tokens: Nombre maximum de tokens actifs (defaut: 5)
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        count = self.redis_client.scard(user_tokens_key)
+        count = self.redis_client.zcard(user_tokens_key)
 
         if count > max_tokens:
-            # Supprimer les tokens les plus anciens (FIFO approximatif)
             excess = count - max_tokens
-            tokens_to_revoke = self.redis_client.srandmember(user_tokens_key, excess)
+            tokens_to_revoke = self.redis_client.zrange(
+                user_tokens_key, 0, excess - 1
+            )
 
-            # Si srandmember retourne une seule valeur au lieu d'une liste
-            if not isinstance(tokens_to_revoke, list):
-                tokens_to_revoke = [tokens_to_revoke] if tokens_to_revoke else []
-
-            # Obtenir l'expiration du token depuis la config
             try:
                 refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
                 ttl = int(refresh_expires_delta.total_seconds())
             except Exception:
-                # Fallback: 30 jours en secondes
                 ttl = 30 * 24 * 3600
 
+            pruned_hashes = []
             for token_hash in tokens_to_revoke:
-                # Marquer comme révoqué
+                if isinstance(token_hash, bytes):
+                    token_hash = token_hash.decode()
                 self.redis_client.setex(
                     f"{self.revoked_tokens_prefix}{token_hash}",
                     ttl,
                     "revoked",
                 )
-                # Supprimer de la liste des actifs
                 self.redis_client.delete(f"{self.active_tokens_prefix}{token_hash}")
-                self.redis_client.srem(user_tokens_key, token_hash)
+                self.redis_client.zrem(user_tokens_key, token_hash)
+                pruned_hashes.append(token_hash[:8])
 
             logger.info(
-                "Tokens limités pour user_id=%s: %s -> %s", user_id, count, max_tokens
+                "refresh_token_pruned user_id=%s before=%s after=%s pruned=%s",
+                user_id,
+                count,
+                max_tokens,
+                pruned_hashes,
             )
 
     @staticmethod

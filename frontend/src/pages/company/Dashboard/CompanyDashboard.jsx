@@ -1,6 +1,7 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
 import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
 import { Link } from 'react-router-dom';
+import { FiZap, FiPlus, FiBarChart2 } from 'react-icons/fi';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +14,10 @@ import ReservationModals from '../../../components/reservations/ReservationModal
 import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
 import DriverLiveMap from './components/DriverLiveMap';
 import OpportunitiesSection from './components/OpportunitiesSection';
+import DispatchModeStatusBar from './components/DispatchModeStatusBar';
+import InstitutionOffersTable from './components/InstitutionOffersTable';
+import ReservationFilterBar, { TIME_RANGES } from './components/ReservationFilterBar';
+import QuickAssignPanel from './components/QuickAssignPanel';
 import {
   acceptReservation,
   rejectReservation,
@@ -25,17 +30,22 @@ import {
   dispatchNowForReservation,
   triggerReturnBooking,
   fetchDispatchDelays,
+  fetchRequestOffers,
+  acceptRequestOffer,
+  rejectRequestOffer,
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
 import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
+import { useDispatchMode } from '../../../hooks/useDispatchMode';
 import styles from './CompanyDashboard.module.css';
 import ManualBookingForm from './components/ManualBookingForm';
 import ChatWidget from '../../../components/widgets/ChatWidget';
 import EditDriverForm from '../components/EditDriverForm';
 import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { Toaster, toast } from 'sonner';
 
 function makeToday() {
@@ -45,10 +55,8 @@ function makeToday() {
 }
 
 const CompanyDashboard = () => {
-  // 1) State d’abord
   const [dispatchDay, setDispatchDay] = useState(makeToday());
 
-  // 2) Hooks qui dépendent de dispatchDay
   const {
     company,
     reservations,
@@ -58,18 +66,21 @@ const CompanyDashboard = () => {
     reloadReservations,
     reloadDriver,
   } = useCompanyData({ day: dispatchDay });
-  // WebSocket entreprise
-  const socket = useCompanySocket();
-  useDispatchStatus(socket); // Monitor dispatch status via WebSocket
 
-  // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
+  const socket = useCompanySocket();
+  useDispatchStatus(socket);
+
   const { user, isCompanyAuthReady } = useCompanyAuthToken();
   const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
 
-  // Hook pour les retards dispatch (refresh toutes les 2 minutes). Désactivé si auth non prête ou rôle DRIVER.
-  const { delayCount: _delayCount, hasCriticalDelays: _hasCriticalDelays, hasDelays: _hasDelays } = useDispatchDelays(dispatchDay, 120000, isCompanyAuthReady && !!isCompanyOrAdmin);
+  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(dispatchDay, 120000, isCompanyAuthReady && !!isCompanyOrAdmin);
 
-  // ✅ Toast lorsque la connexion Socket est refusée (backend envoie AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
+  const { dispatchMode } = useDispatchMode();
+
+  const isManualMode = dispatchMode === 'manual';
+  const isAutoMode = dispatchMode === 'fully_auto' || dispatchMode === 'autonomous';
+  const isSemiAutoMode = !!dispatchMode && !isManualMode && !isAutoMode;
+
   useEffect(() => {
     const handler = (e) => {
       const code = (e.detail?.code || e.detail?.message || '').toString();
@@ -86,23 +97,28 @@ const CompanyDashboard = () => {
     return () => window.removeEventListener('socket_connection_rejected', handler);
   }, []);
 
-  // ✅ 3.4.2: Hook pour dashboard temps réel dispatch (refresh toutes les 2 minutes)
   const {
     loading: loadingRealtimeDashboard,
     qualityMetrics,
     opportunities,
   } = useRealtimeDashboard(dispatchDay, 120000);
 
-  // queryClient pour invalidation
   const queryClient = useQueryClient();
-  // ✅ PERF: useTransition pour améliorer l'INP
   const [, startTransition] = useTransition();
   const [showEditModal, setShowEditModal] = useState(false);
   const [driverToEdit, setDriverToEdit] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showDriversSection, setShowDriversSection] = useState(false);
-  const [showChartSection, setShowChartSection] = useState(false);
-  const [reservationTab, setReservationTab] = useState('pending'); // "pending" | "assigned"
+  const [showPerformance, setShowPerformance] = useState(false);
+  const [reservationTab, setReservationTab] = useState('pending');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [urgenceMode, setUrgenceMode] = useState(false);
+  const [delaysOnly, setDelaysOnly] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [selectedInstitution, setSelectedInstitution] = useState(null);
+  const [timeRange, setTimeRange] = useState('all');
+  const [quickAssignOpen, setQuickAssignOpen] = useState(false);
+  const [quickAssignOpportunity, setQuickAssignOpportunity] = useState(null);
+  const [quickAssigning, setQuickAssigning] = useState(false);
 
   const handleEditDriver = (d) => {
     setDriverToEdit(d);
@@ -113,19 +129,17 @@ const CompanyDashboard = () => {
     setDriverToEdit(null);
   };
 
-  // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
   const handleToggleType = async (driverId) => {
     try {
       await toggleDriverType(driverId);
       startTransition(() => {
-      reloadDriver();
+        reloadDriver();
       });
     } catch (err) {
       console.error('Erreur lors du changement de type du chauffeur :', err);
     }
   };
 
-  // Dispo chauffeur (nettoyée & unifiée)
   const handleToggleAvailability = async (driverId) => {
     try {
       const d = (driver || []).find((x) => x.id === driverId);
@@ -139,7 +153,6 @@ const CompanyDashboard = () => {
     }
   };
 
-  // États pour les modales centralisées
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -149,7 +162,6 @@ const CompanyDashboard = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteModalReservation, setDeleteModalReservation] = useState(null);
 
-  // ✅ PERF: Utiliser useMemo pour optimiser les recherches
   const reservationsMap = useMemo(() => {
     const map = new Map();
     (reservations || []).forEach((r) => {
@@ -159,7 +171,6 @@ const CompanyDashboard = () => {
   }, [reservations]);
 
   const handleScheduleReservation = (reservation) => {
-    // Passer l'objet complet (pas juste l'ID)
     const resObj =
       typeof reservation === 'object'
         ? reservation
@@ -169,7 +180,6 @@ const CompanyDashboard = () => {
     setScheduleModalOpen(true);
   };
 
-  // ✅ PERF: Dispatch urgent avec startTransition pour les mises à jour non-urgentes
   const handleDispatchNow = async (reservation) => {
     const id = reservation?.id ?? reservation;
     if (!id) return;
@@ -181,18 +191,14 @@ const CompanyDashboard = () => {
       });
       toast.success('Dispatch urgent déclenché avec succès');
     } catch (e) {
-      // ⚡ Gestion améliorée : extraire le message du backend
       const errorData = e?.response?.data;
       const errorMessage = errorData?.message || errorData?.error;
       const status = e?.response?.status;
 
-      // 🔍 Debug pour comprendre pourquoi la détection ne fonctionne pas
       console.debug('[DispatchNow] Error status:', status);
       console.debug('[DispatchNow] Error data:', errorData);
       console.debug('[DispatchNow] Error message:', errorMessage);
 
-      // ⚡ Si c'est un retour avec aller non complété (400), c'est un comportement attendu
-      // Vérifier dans error ET message pour détecter les retours
       const errorLower = (errorMessage || '').toLowerCase();
       const errorErrorLower = (errorData?.error || '').toLowerCase();
       const isReturnNotReady =
@@ -205,38 +211,28 @@ const CompanyDashboard = () => {
       console.debug('[DispatchNow] isReturnNotReady:', isReturnNotReady);
 
       if (isReturnNotReady) {
-        // ⚡ Message informatif (warning) au lieu d'une erreur
-        // Utiliser le message détaillé du backend s'il existe (message contient plus de détails)
         const detailMessage =
           errorData?.message ||
           errorData?.error ||
           "Impossible de déclencher un retour d'urgence. La course aller doit être complétée avant de déclencher le retour.";
 
         console.debug('[DispatchNow] Showing warning:', detailMessage);
-        toast.warning(detailMessage, {
-          duration: 5000, // ⚡ Plus long pour que l'utilisateur puisse lire
-        });
-        // ⚡ Ne pas logger comme erreur car c'est un comportement attendu (utiliser debug)
+        toast.warning(detailMessage, { duration: 5000 });
         console.debug('Dispatch urgent refusé (comportement attendu):', detailMessage);
       } else {
-        // ⚡ Vraie erreur : afficher et logger
         console.error('Dispatch urgent:', e);
         toast.error(errorMessage || 'Erreur lors du dispatch urgent.');
       }
     }
   };
 
-  // Modale d'assignation
-
-  // Liste des dispatches (assignations/affectations) pour la carte et la table
   const { data: dispatchedReservations = [], refetch: refetchAssigned } = useQuery({
     queryKey: ['assigned-reservations', dispatchDay],
     queryFn: () => fetchAssignedReservations(dispatchDay),
     staleTime: 30_000,
-    enabled: !!company?.id, // ✅ évite les 403 bruités
+    enabled: !!company?.id,
   });
 
-  // Retards du jour (pour DriverLiveMap)
   const {
     data: delays = [],
     refetch: refetchDelays,
@@ -246,10 +242,22 @@ const CompanyDashboard = () => {
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
-    enabled: !!company?.id, // ✅ idem
+    enabled: !!company?.id,
   });
 
-  // WS: nouvelles réservations -> recharger la liste
+  const {
+    data: institutionOffersData,
+    refetch: refetchInstitutionOffers,
+    isLoading: loadingInstitutionOffers,
+  } = useQuery({
+    queryKey: ['institution-offers'],
+    queryFn: () => fetchRequestOffers('PENDING'),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    enabled: !!company?.id,
+  });
+  const institutionOffers = institutionOffersData?.offers || [];
+
   const handleNewReservation = useCallback(() => reloadReservations(), [reloadReservations]);
   useEffect(() => {
     if (!socket) return;
@@ -257,58 +265,42 @@ const CompanyDashboard = () => {
     return () => socket.off('new_reservation', handleNewReservation);
   }, [socket, handleNewReservation]);
 
-  // ✅ PERF: WebSocket handlers avec startTransition pour éviter de bloquer
   useEffect(() => {
     if (!socket) return;
     const refetchAll = () => {
       startTransition(() => {
-      refetchAssigned?.();
-      reloadReservations?.();
-      refetchDelays?.();
+        refetchAssigned?.();
+        reloadReservations?.();
+        refetchDelays?.();
       });
     };
     const onAssignCreated = () => refetchAll();
     const onAssignUpdated = () => refetchAll();
     const onAssignDeleted = () => refetchAll();
-    const onDispatchProgress = (_p) => {
-      // Optionnel: logger ou afficher un toast/loader granulaire
-      // console.debug("dispatch_progress", _p);
-    };
+    const onDispatchProgress = (_p) => {};
     const onDispatchError = (err) => {
       console.error('dispatch_error:', err);
-      // Optionnel: notifier l’utilisateur
       refetchAll();
     };
     const onDispatchRunCompleted = (data) => {
-      // eslint-disable-next-line no-console
       console.log('Dispatch run completed:', data);
-      // window.alert(err?.message || "Une erreur est survenue pendant l'optimisation.");
       refetchAll();
     };
     const onTransferReceived = (data) => {
-      // Notification: une course a été transférée à cette entreprise
-      console.log('📥 Transfert reçu:', data);
-      // Rafraîchir les réservations pour afficher la nouvelle course
+      console.log('Transfert reçu:', data);
       refetchAll();
-      // TODO: Afficher une notification toast si souhaité
-      // toast.info(`Nouvelle course transférée : #${data.booking_id}`);
     };
     const onTransferProposed = (data) => {
-      // Notification: cette entreprise a proposé un transfert (pour info)
-      console.log('📤 Transfert proposé:', data);
-      // Rafraîchir pour mettre à jour le statut de la course
+      console.log('Transfert proposé:', data);
       refetchAll();
     };
     const onBookingUpdated = (data) => {
-      // Notification: une course a été mise à jour (statut changé par le chauffeur)
-      console.log('🔄 Course mise à jour:', data);
-      // Rafraîchir les réservations pour afficher le nouveau statut
+      console.log('Course mise à jour:', data);
       refetchAll();
     };
-    // ✅ FIX: Corriger les noms d'événements pour correspondre au backend
     socket.on('dispatch_assignment_created', onAssignCreated);
     socket.on('dispatch_assignment_updated', onAssignUpdated);
-    socket.on('dispatch_assignment_cancelled', onAssignDeleted); // Note: "cancelled" pas "deleted"
+    socket.on('dispatch_assignment_cancelled', onAssignDeleted);
     socket.on('dispatch_progress', onDispatchProgress);
     socket.on('dispatch_error', onDispatchError);
     socket.on('dispatch_run_completed', onDispatchRunCompleted);
@@ -328,12 +320,11 @@ const CompanyDashboard = () => {
     };
   }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
 
-  // ✅ PERF: Callbacks réservations avec startTransition
   const handleAccept = async (id) => {
     try {
       await acceptReservation(id);
       startTransition(() => {
-      reloadReservations();
+        reloadReservations();
       });
     } catch (err) {
       console.error('Erreur acceptation :', err);
@@ -343,14 +334,47 @@ const CompanyDashboard = () => {
     try {
       await rejectReservation(id);
       startTransition(() => {
-      reloadReservations();
+        reloadReservations();
       });
     } catch (err) {
       console.error('Erreur rejet :', err);
     }
   };
+
+  const handleAcceptOffer = async (offerId, proposedPickupTime) => {
+    try {
+      const result = await acceptRequestOffer(offerId, proposedPickupTime);
+      toast.success(
+        proposedPickupTime
+          ? 'Offre acceptée avec horaire proposé — réservation créée'
+          : 'Offre acceptée — réservation créée'
+      );
+      startTransition(() => {
+        refetchInstitutionOffers();
+        reloadReservations();
+        queryClient.invalidateQueries(['reservations']);
+      });
+      return result;
+    } catch (err) {
+      console.error('[handleAcceptOffer] error:', err);
+      toast.error(err?.response?.data?.error || 'Erreur lors de l\'acceptation');
+    }
+  };
+
+  const handleRejectOffer = async (offerId) => {
+    try {
+      await rejectRequestOffer(offerId);
+      toast.success('Offre refusée');
+      startTransition(() => {
+        refetchInstitutionOffers();
+      });
+    } catch (err) {
+      console.error('[handleRejectOffer] error:', err);
+      toast.error(err?.response?.data?.error || 'Erreur lors du refus');
+    }
+  };
+
   const openAssignModal = (res) => {
-    // ✅ PERF: Utiliser la Map au lieu de find
     const resObj = typeof res === 'object' ? res : reservationsMap.get(res);
     if (!resObj) return;
     setAssignModalReservation(resObj);
@@ -360,9 +384,8 @@ const CompanyDashboard = () => {
     try {
       await assignDriver(reservationId, driverId);
       startTransition(() => {
-      reloadReservations();
+        reloadReservations();
       });
-      // ✅ PERF: Mise à jour modale immédiate (urgente)
       setAssignModalOpen(false);
       setAssignModalReservation(null);
     } catch (err) {
@@ -370,9 +393,7 @@ const CompanyDashboard = () => {
     }
   };
 
-  // ✅ PERF: Ouvre la modale de retour avec Map optimisée
   const handleTriggerReturn = (reservation) => {
-    // Passer l'objet complet (pas juste l'ID)
     const resObj =
       typeof reservation === 'object'
         ? reservation
@@ -382,7 +403,6 @@ const CompanyDashboard = () => {
     setScheduleModalOpen(true);
   };
 
-  // Ouvre la modale de transfert
   const handleOpenTransferModal = (reservation) => {
     const resObj =
       typeof reservation === 'object'
@@ -393,7 +413,6 @@ const CompanyDashboard = () => {
     setTransferModalOpen(true);
   };
 
-  // Callback après transfert réussi
   const handleTransferSuccess = () => {
     startTransition(() => {
       reloadReservations();
@@ -401,7 +420,6 @@ const CompanyDashboard = () => {
     toast.success('Course transférée avec succès');
   };
 
-  // Transforme en ISO local sans offset ni "Z"
   const toLocalIsoString = (date) => {
     const pad = (n) => n.toString().padStart(2, '0');
     const Y = date.getFullYear();
@@ -412,7 +430,6 @@ const CompanyDashboard = () => {
     return `${Y}-${M}-${D}T${h}:${m}`;
   };
 
-  // Confirme l'heure du retour OU marque en 'Urgent +15 min'
   const handleConfirmReturnTime = async (data) => {
     setScheduleModalOpen(false);
     if (!scheduleModalReservation) return;
@@ -442,7 +459,6 @@ const CompanyDashboard = () => {
   };
 
   const handleDeleteReservationClick = (reservation) => {
-    // ✅ PERF: Utiliser la Map au lieu de find
     const resObj =
       typeof reservation === 'object'
         ? reservation
@@ -452,40 +468,36 @@ const CompanyDashboard = () => {
     setDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!deleteModalReservation) return;
+  const handleConfirmDelete = async (reservationId, reasonCode, reasonText) => {
+    if (!reservationId && !deleteModalReservation) return;
 
-    const id = deleteModalReservation?.id ?? deleteModalReservation;
-    await handleDeleteReservation(id);
+    const id = reservationId || deleteModalReservation?.id || deleteModalReservation;
+    await handleDeleteReservation(id, reasonCode, reasonText);
     setDeleteModalOpen(false);
     setDeleteModalReservation(null);
   };
 
-  // ✅ PERF: Après ajout manuel avec startTransition
   const handleManualBookingSuccess = (resp) => {
     const ymd = String(resp?.reservation?.scheduled_time || '').slice(0, 10);
     if (ymd) setDispatchDay(ymd);
     startTransition(() => {
-    reloadReservations();
-    queryClient.invalidateQueries(['reservations']);
+      reloadReservations();
+      queryClient.invalidateQueries(['reservations']);
     });
   };
 
-  // Filtrage listes
   const pendingReservations = (reservations || []).filter(
     (r) => r.status?.toLowerCase() === 'pending'
   );
-  // Fix: Filter for reservations that are accepted but don't have a driver assigned
   const assignedReservations = (reservations || []).filter(
     (r) => r.status?.toLowerCase() === 'accepted' && !r.driver_id
   );
 
-  // Callbacks chauffeurs (liste)
   const handleToggleDriver = async (driverId, current) => {
     try {
       await updateDriverStatus(driverId, !current);
       startTransition(() => {
-      reloadDriver();
+        reloadDriver();
       });
     } catch (err) {
       console.error('Erreur mise à jour chauffeur :', err);
@@ -495,44 +507,33 @@ const CompanyDashboard = () => {
     try {
       await deleteDriver(driverId);
       startTransition(() => {
-      reloadDriver();
+        reloadDriver();
       });
     } catch (err) {
       console.error('Erreur suppression chauffeur :', err);
     }
   };
   const handleDeleteReservation = useCallback(
-    async (reservation) => {
+    async (reservation, reasonCode = null, reasonText = null) => {
       const id = reservation?.id ?? reservation;
       if (!id) {
-        console.error('❌ ID réservation manquant:', reservation);
+        console.error('ID réservation manquant:', reservation);
         return;
       }
 
-      try {
-        console.log('🗑️ Suppression en cours de la réservation', id);
-        const result = await deleteReservation(id);
-        console.log('✅ Réservation supprimée:', result);
+      const result = await deleteReservation(id, reasonCode, reasonText);
+      console.log('Réservation supprimée:', result);
 
-        // ✅ PERF: Rafraîchir les données de manière non-bloquante
-        startTransition(() => {
-          reloadReservations();
-          queryClient.invalidateQueries(['reservations']);
-        });
+      startTransition(() => {
+        reloadReservations();
+        queryClient.invalidateQueries(['reservations']);
+      });
 
-        alert(`✅ Réservation #${id} supprimée avec succès`);
-      } catch (e) {
-        console.error('❌ Erreur suppression réservation:', e);
-        const errorMsg = e?.response?.data?.error || e?.message || 'Suppression impossible.';
-        alert(`❌ Erreur: ${errorMsg}`);
-      }
+      toast.success(`Réservation #${id} supprimée avec succès`);
     },
     [reloadReservations, queryClient]
   );
 
-  // ---------- Données pour DriverLiveMap ----------
-
-  // Bookings "actifs" du jour (en dehors de completed/cancelled/no_show)
   const activeBookings = useMemo(() => {
     const isActive = (b) =>
       b && !['completed', 'cancelled', 'no_show'].includes((b.status || '').toLowerCase());
@@ -540,15 +541,13 @@ const CompanyDashboard = () => {
       id: r.id,
       client_name: r.client_name || r.client?.full_name || '',
       status: r.status,
-      pickup_time: r.scheduled_time || r.pickup_time, // Fallback
+      pickup_time: r.scheduled_time || r.pickup_time,
       dropoff_time: r.dropoff_time,
       pickup_location: r.pickup_location_coords || r.pickup_location || r.pickup || null,
       dropoff_location: r.dropoff_location_coords || r.dropoff_location || r.dropoff || null,
     }));
   }, [reservations]);
 
-  // Assignments pour la carte :
-  // on part de dispatchedReservations (booking + assignment)
   const assignmentsForMap = useMemo(() => {
     const rows = Array.isArray(dispatchedReservations)
       ? dispatchedReservations
@@ -556,7 +555,6 @@ const CompanyDashboard = () => {
     return rows.map((row) => {
       const a = row.assignment || {};
       return {
-        // identifiant d'assignation si dispo, sinon fallback booking
         id: a.id ?? row.id,
         driver_id: a.driver_id ?? row.driver?.id ?? row.driver_id,
         is_on_trip: [
@@ -580,7 +578,6 @@ const CompanyDashboard = () => {
     });
   }, [dispatchedReservations]);
 
-  // Delays normalisés { [bookingId]: {delay_minutes, is_dropoff?} }
   const delaysByBooking = useMemo(() => {
     if (!Array.isArray(delays)) return delays;
     const map = {};
@@ -595,56 +592,231 @@ const CompanyDashboard = () => {
     return map;
   }, [delays]);
 
+  const activeDelayCount = useMemo(() => {
+    if (!delaysByBooking || typeof delaysByBooking !== 'object' || Array.isArray(delaysByBooking)) return 0;
+    return Object.values(delaysByBooking).filter((d) => d?.delay_minutes > 0).length;
+  }, [delaysByBooking]);
+
+  const filterBySearch = useCallback(
+    (list) => {
+      if (!searchQuery.trim()) return list;
+      const q = searchQuery.toLowerCase().trim();
+      return list.filter((r) => {
+        const name = (r.client?.full_name || r.client_name || '').toLowerCase();
+        const pickup = (r.pickup_location || '').toLowerCase();
+        const dropoff = (r.dropoff_location || '').toLowerCase();
+        return name.includes(q) || pickup.includes(q) || dropoff.includes(q);
+      });
+    },
+    [searchQuery]
+  );
+
+  const filterByDelaysOnly = useCallback(
+    (list) => {
+      if (!delaysOnly || !delaysByBooking) return list;
+      return list.filter((r) => delaysByBooking[r.id]?.delay_minutes > 0);
+    },
+    [delaysOnly, delaysByBooking]
+  );
+
+  const filterByDriver = useCallback(
+    (list) => {
+      if (!selectedDriver) return list;
+      return list.filter((r) => {
+        const dId = String(selectedDriver);
+        return String(r.driver_id) === dId || String(r.driver?.id) === dId;
+      });
+    },
+    [selectedDriver]
+  );
+
+  const filterByInstitution = useCallback(
+    (list) => {
+      if (!selectedInstitution) return list;
+      return list.filter((r) => r.client?.institution_name === selectedInstitution);
+    },
+    [selectedInstitution]
+  );
+
+  const filterByTimeRange = useCallback(
+    (list) => {
+      if (!timeRange || timeRange === 'all') return list;
+      const range = TIME_RANGES.find((tr) => tr.id === timeRange);
+      if (!range?.start) return list;
+      return list.filter((r) => {
+        const t = r.scheduled_time || r.pickup_time;
+        if (!t) return true;
+        const hour = new Date(t).getHours();
+        return hour >= range.start && hour < range.end;
+      });
+    },
+    [timeRange]
+  );
+
+  const applyStructuredFilters = useCallback(
+    (list) => filterByTimeRange(filterByInstitution(filterByDriver(list))),
+    [filterByDriver, filterByInstitution, filterByTimeRange]
+  );
+
+  const urgentReservations = useMemo(() => {
+    if (!urgenceMode) return [];
+    const activeStatuses = [
+      'pending', 'accepted', 'assigned', 'en_route', 'in_progress',
+      'onboard', 'en_route_pickup', 'en_route_dropoff',
+    ];
+    return (reservations || []).filter((r) => {
+      const status = (r.status || '').toLowerCase();
+      return activeStatuses.includes(status) || (delaysByBooking && delaysByBooking[r.id]?.delay_minutes > 0);
+    });
+  }, [reservations, urgenceMode, delaysByBooking]);
+
+  const displayPending = useMemo(
+    () => applyStructuredFilters(filterByDelaysOnly(filterBySearch(pendingReservations))),
+    [pendingReservations, filterBySearch, filterByDelaysOnly, applyStructuredFilters]
+  );
+
+  const displayAssigned = useMemo(
+    () => applyStructuredFilters(filterByDelaysOnly(filterBySearch(assignedReservations))),
+    [assignedReservations, filterBySearch, filterByDelaysOnly, applyStructuredFilters]
+  );
+
+  const displayUrgent = useMemo(
+    () => applyStructuredFilters(filterBySearch(urgentReservations)),
+    [urgentReservations, filterBySearch, applyStructuredFilters]
+  );
+
+  const perfStats = useMemo(() => {
+    const all = Array.isArray(reservations) ? reservations : [];
+    const isCompleted = (s) => ['completed', 'return_completed', 'done', 'finished'].includes((s || '').toLowerCase());
+    const dayFiltered = dispatchDay
+      ? all.filter((r) => String(r.scheduled_time || r.pickup_time || '').startsWith(dispatchDay))
+      : all;
+    const completed = dayFiltered.filter((r) => isCompleted(r.status));
+    const rev = completed.reduce((acc, r) => acc + (Number(r.amount || r.total_amount || 0) || 0), 0);
+    return {
+      total: dayFiltered.length,
+      completed: completed.length,
+      revenue: rev >= 1000 ? `${(rev / 1000).toFixed(1)}k` : String(Math.round(rev)),
+    };
+  }, [reservations, dispatchDay]);
+
+  const institutionOptions = useMemo(() => {
+    const names = new Set();
+    (reservations || []).forEach((r) => {
+      const inst = r.client?.institution_name;
+      if (inst) names.add(inst);
+    });
+    return Array.from(names).sort();
+  }, [reservations]);
+
+  const handleRefresh = useCallback(() => {
+    startTransition(() => {
+      reloadReservations();
+      refetchAssigned?.();
+      refetchDelays?.();
+      refetchInstitutionOffers?.();
+    });
+  }, [reloadReservations, refetchAssigned, refetchDelays, refetchInstitutionOffers]);
+
+  const handleOpportunityAction = useCallback((opp) => {
+    setQuickAssignOpportunity(opp);
+    setQuickAssignOpen(true);
+  }, []);
+
+  const handleQuickAssign = async (bookingId, driverId) => {
+    setQuickAssigning(true);
+    try {
+      await assignDriver(bookingId, driverId);
+      startTransition(() => {
+        reloadReservations();
+        refetchAssigned?.();
+        refetchDelays?.();
+        queryClient.invalidateQueries(['reservations']);
+      });
+      toast.success('Assignation confirmée');
+      setQuickAssignOpen(false);
+      setQuickAssignOpportunity(null);
+    } catch (err) {
+      console.error('Quick assign error:', err);
+      toast.error(err?.response?.data?.error || "Erreur lors de l'assignation");
+    } finally {
+      setQuickAssigning(false);
+    }
+  };
+
   return (
     <div className={styles.companyContainer}>
-      {/* ⚡ Toaster pour les notifications toast */}
       <Toaster position="top-right" richColors />
       <CompanyHeader />
-
-      {/* 🆕 Badge d'alerte pour les retards détectés - DÉSACTIVÉ */}
-      {/* {hasDelays && (
-        <div className={styles.delayAlert}>
-          <div className={styles.delayAlertContent}>
-            <span className={styles.delayAlertIcon}>{hasCriticalDelays ? '🚨' : '⚠️'}</span>
-            <span className={styles.delayAlertText}>
-              {hasCriticalDelays ? (
-                <strong>{delayCount} retard(s) critique(s) détecté(s) aujourd'hui !</strong>
-              ) : (
-                <>{delayCount} retard(s) détecté(s) aujourd'hui</>
-              )}
-            </span>
-            {company?.public_id ? (
-              <Link
-                to={`/dashboard/company/${company.public_id}/dispatch`}
-                className={styles.delayAlertLink}
-              >
-                Voir les détails et suggestions →
-              </Link>
-            ) : (
-              <span className={styles.delayAlertLink}>Voir les détails et suggestions →</span>
-            )}
-          </div>
-        </div>
-      )} */}
 
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
-          {/* ======= KPIs compacts en haut ======= */}
+          {/* ============ 1. HEADER CONTEXTUALISÉ ============ */}
+          <header className={styles.dashboardHeader}>
+            <div className={styles.headerLeft}>
+              <h1 className={styles.headerTitle}>Tableau de bord Exploitation</h1>
+              <div className={styles.headerMeta}>
+                <InlineDatePicker
+                  value={dispatchDay}
+                  onChange={(iso) => setDispatchDay(iso)}
+                />
+                {hasDelays && (
+                  <span className={styles.delayHeaderBadge}>
+                    {delayCount} retard{delayCount !== 1 ? 's' : ''} actif{delayCount !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className={styles.headerActions}>
+              {company?.public_id && (
+                <Link
+                  to={`/dashboard/company/${company.public_id}/dispatch`}
+                  className={styles.headerBtnSecondary}
+                >
+                  <FiZap size={16} />
+                  Optimiser les courses
+                </Link>
+              )}
+              <button
+                onClick={() => setShowBookingModal(true)}
+                className={styles.headerBtnPrimary}
+              >
+                <FiPlus size={16} />
+                Nouvelle réservation
+              </button>
+            </div>
+          </header>
+
+          {/* ============ 2. KPI + MODE DISPATCH ============ */}
           <OverviewCards
             reservations={reservations}
             pendingReservations={pendingReservations}
             assignedReservations={assignedReservations}
             driver={driver}
             day={dispatchDay}
-            qualityMetrics={qualityMetrics}
+            delayCount={delayCount || 0}
+            hasCriticalDelays={!!hasCriticalDelays}
           />
 
-          {/* ======= Layout 2 colonnes ======= */}
-          <div className={styles.twoColumnLayout}>
-            {/* Colonne gauche : Carte + Actions */}
-            <div className={styles.leftColumn}>
-              {/* Carte */}
+          <DispatchModeStatusBar
+            mode={dispatchMode}
+            opportunities={opportunities}
+          />
+
+          {/* ============ 3. VUE OPÉRATIONNELLE ============ */}
+          {/* Mode Auto : IA prioritaire au-dessus de la carte */}
+          {isAutoMode && (
+            <OpportunitiesSection
+              opportunities={opportunities}
+              companyPublicId={company?.public_id}
+              loading={loadingRealtimeDashboard}
+              onAction={handleOpportunityAction}
+            />
+          )}
+
+          <div className={isManualMode ? styles.singleColumnLayout : styles.twoColumnLayout}>
+            <div className={isManualMode ? styles.fullColumn : styles.leftColumn}>
               <section className={styles.mapSection}>
                 <DriverLiveMap
                   date={dispatchDay}
@@ -653,118 +825,113 @@ const CompanyDashboard = () => {
                   assignments={assignmentsForMap}
                   delays={delaysByBooking}
                 />
-                {fetchingDelays && <small className={styles.hint}>Mise à jour des retards…</small>}
-              </section>
-
-              {/* Actions rapides */}
-              <div className={styles.quickActions}>
-                {/* Dispatch & Planification */}
-                {company?.public_id ? (
-                  <Link
-                    to={`/dashboard/company/${company.public_id}/dispatch`}
-                    className={styles.actionButton}
-                  >
-                    <span className={styles.actionIcon}>🚀</span>
-                    <span className={styles.actionText}>
-                      <strong>Dispatch & Planification</strong>
-                      <small>Optimiser les courses</small>
-                    </span>
-                  </Link>
-                ) : (
-                  <button className={styles.actionButton} disabled>
-                    <span className={styles.actionIcon}>🚀</span>
-                    <span className={styles.actionText}>
-                      <strong>Dispatch & Planification</strong>
-                      <small>Optimiser les courses</small>
-                    </span>
-                  </button>
-                )}
-
-                {/* Créer une réservation */}
-                <button onClick={() => setShowBookingModal(true)} className={styles.actionButton}>
-                  <span className={styles.actionIcon}>➕</span>
-                  <span className={styles.actionText}>
-                    <strong>Nouvelle réservation</strong>
-                    <small>Créer manuellement</small>
-                  </span>
-                </button>
-              </div>
-
-              {/* ✅ 3.4.2: Section opportunités d'optimisation */}
-              <OpportunitiesSection
-                opportunities={opportunities}
-                companyPublicId={company?.public_id}
-                loading={loadingRealtimeDashboard}
-              />
-
-              {/* Graphique (collapsible) */}
-              <section className={styles.compactSection}>
-                <div
-                  className={styles.collapsibleHeader}
-                  onClick={() => setShowChartSection(!showChartSection)}
-                >
-                  <h2>📊 Statistiques</h2>
-                  <span className={styles.collapseIcon}>{showChartSection ? '▼' : '▶'}</span>
-                </div>
-                {showChartSection && (
-                  <div style={{ padding: '16px' }}>
-                    <ReservationChart reservations={reservations} />
-                  </div>
-                )}
-              </section>
-
-              {/* Section chauffeurs (collapsible) */}
-              <section className={styles.compactSection}>
-                <div
-                  className={styles.collapsibleHeader}
-                  onClick={() => setShowDriversSection(!showDriversSection)}
-                >
-                  <h2>👥 Chauffeurs ({(driver || []).length})</h2>
-                  <span className={styles.collapseIcon}>{showDriversSection ? '▼' : '▶'}</span>
-                </div>
-                {showDriversSection && (
-                  <DriverTable
-                    driver={driver}
-                    loading={loadingDriver}
-                    onToggle={handleToggleDriver}
-                    onDelete={handleDeleteDriver}
-                    onEdit={handleEditDriver}
-                    onToggleAvailability={handleToggleAvailability}
-                    onToggleType={handleToggleType}
-                  />
-                )}
+                {fetchingDelays && <small className={styles.hint}>Mise à jour des retards...</small>}
               </section>
             </div>
 
-            {/* Colonne droite : Réservations avec onglets */}
-            <div className={styles.rightColumn}>
-              {/* Onglets sans conteneur */}
+            {/* Mode Semi-Auto : IA en colonne droite */}
+            {isSemiAutoMode && (
+              <div className={styles.rightColumn}>
+                <OpportunitiesSection
+                  opportunities={opportunities}
+                  companyPublicId={company?.public_id}
+                  loading={loadingRealtimeDashboard}
+                  onAction={handleOpportunityAction}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* ============ 4. RÉSERVATIONS — PLEINE LARGEUR ============ */}
+          <section className={`${styles.reservationsFullSection} ${urgenceMode ? styles.urgenceSection : ''}`}>
+            <ReservationFilterBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              urgenceMode={urgenceMode}
+              onToggleUrgence={() => {
+                setUrgenceMode((m) => !m);
+                if (!urgenceMode) setDelaysOnly(false);
+              }}
+              delaysOnly={delaysOnly}
+              onToggleDelaysOnly={() => setDelaysOnly((d) => !d)}
+              drivers={driver || []}
+              selectedDriver={selectedDriver}
+              onDriverChange={setSelectedDriver}
+              institutions={institutionOptions}
+              selectedInstitution={selectedInstitution}
+              onInstitutionChange={setSelectedInstitution}
+              timeRange={timeRange}
+              onTimeRangeChange={setTimeRange}
+              onRefresh={handleRefresh}
+              visibleCount={
+                urgenceMode
+                  ? displayUrgent.length
+                  : reservationTab === 'pending'
+                    ? displayPending.length
+                    : reservationTab === 'institution'
+                      ? institutionOffers.length
+                      : displayAssigned.length
+              }
+              totalCount={
+                urgenceMode
+                  ? (reservations || []).length
+                  : reservationTab === 'pending'
+                    ? pendingReservations.length
+                    : reservationTab === 'institution'
+                      ? institutionOffers.length
+                      : assignedReservations.length
+              }
+              activeDelayCount={activeDelayCount}
+            />
+
+            {!urgenceMode && (
               <div className={styles.tabsHeader} data-active-tab={reservationTab}>
                 <button
-                  className={`${styles.tab} ${
-                    reservationTab === 'pending' ? styles.tabActive : ''
-                  }`}
+                  className={`${styles.tab} ${reservationTab === 'pending' ? styles.tabActive : ''}`}
                   onClick={() => setReservationTab('pending')}
                 >
-                  📋 En attente{' '}
+                  En attente
                   <span className={styles.tabBadge}>{pendingReservations.length}</span>
                 </button>
                 <button
-                  className={`${styles.tab} ${
-                    reservationTab === 'assigned' ? styles.tabActive : ''
-                  }`}
+                  className={`${styles.tab} ${reservationTab === 'institution' ? styles.tabActive : ''}`}
+                  onClick={() => setReservationTab('institution')}
+                >
+                  Institutions
+                  <span className={styles.tabBadge}>{institutionOffers.length}</span>
+                </button>
+                <button
+                  className={`${styles.tab} ${reservationTab === 'assigned' ? styles.tabActive : ''}`}
                   onClick={() => setReservationTab('assigned')}
                 >
-                  ⏳ Assignation chauffeur{' '}
+                  Assignation chauffeur
                   <span className={styles.tabBadge}>{assignedReservations.length}</span>
                 </button>
               </div>
+            )}
 
-              {/* Tableaux directement sans conteneur */}
-              {reservationTab === 'pending' && (
-                <ReservationTable
-                    reservations={pendingReservations}
+            {urgenceMode ? (
+              <ReservationTable
+                reservations={displayUrgent}
+                loading={loadingReservations}
+                delays={delaysByBooking}
+                onAccept={handleAccept}
+                onReject={handleReject}
+                onAssign={openAssignModal}
+                onTransfer={handleOpenTransferModal}
+                onTriggerReturn={handleTriggerReturn}
+                onDelete={handleDeleteReservationClick}
+                onSchedule={handleScheduleReservation}
+                onDispatchNow={handleDispatchNow}
+                currentCompanyId={company?.id}
+              />
+            ) : (
+              <>
+                {reservationTab === 'pending' && (
+                  <ReservationTable
+                    reservations={displayPending}
                     loading={loadingReservations}
+                    delays={delaysByBooking}
                     onAccept={handleAccept}
                     onReject={handleReject}
                     onAssign={openAssignModal}
@@ -776,24 +943,90 @@ const CompanyDashboard = () => {
                     hideSchedule={true}
                     currentCompanyId={company?.id}
                   />
-              )}
+                )}
 
-              {reservationTab === 'assigned' && (
-                <ReservationTable
-                  reservations={assignedReservations}
-                  loading={loadingReservations}
-                  onAssign={openAssignModal}
-                  onTransfer={handleOpenTransferModal}
-                  onTriggerReturn={handleTriggerReturn}
-                  onDelete={handleDeleteReservationClick}
-                  onSchedule={handleScheduleReservation}
-                  onDispatchNow={handleDispatchNow}
-                  hideSchedule={true}
-                  currentCompanyId={company?.id}
-                />
-              )}
+                {reservationTab === 'institution' && (
+                  <InstitutionOffersTable
+                    offers={institutionOffers}
+                    loading={loadingInstitutionOffers}
+                    onAccept={handleAcceptOffer}
+                    onReject={handleRejectOffer}
+                  />
+                )}
+
+                {reservationTab === 'assigned' && (
+                  <ReservationTable
+                    reservations={displayAssigned}
+                    loading={loadingReservations}
+                    delays={delaysByBooking}
+                    onAssign={openAssignModal}
+                    onTransfer={handleOpenTransferModal}
+                    onTriggerReturn={handleTriggerReturn}
+                    onDelete={handleDeleteReservationClick}
+                    onSchedule={handleScheduleReservation}
+                    onDispatchNow={handleDispatchNow}
+                    hideSchedule={true}
+                    currentCompanyId={company?.id}
+                  />
+                )}
+              </>
+            )}
+          </section>
+
+          {/* ============ 5. PERFORMANCE & FLOTTE (collapsible) ============ */}
+          <section className={styles.performanceSection}>
+            <div
+              className={styles.performanceHeader}
+              onClick={() => setShowPerformance(!showPerformance)}
+            >
+              <div className={styles.performanceTitleRow}>
+                <FiBarChart2 size={18} />
+                <h2 className={styles.performanceTitle}>Performance & Flotte</h2>
+              </div>
+              <div className={styles.performanceInline}>
+                <span className={styles.perfStat}>
+                  {perfStats.completed}/{perfStats.total} réalisées
+                </span>
+                <span className={styles.perfStatSep}>|</span>
+                <span className={styles.perfStat}>
+                  {perfStats.revenue} CHF
+                </span>
+                {qualityMetrics?.on_time_rate !== undefined && (
+                  <>
+                    <span className={styles.perfStatSep}>|</span>
+                    <span className={styles.perfStat}>
+                      {Math.round(qualityMetrics.on_time_rate)}% ponctualité
+                    </span>
+                  </>
+                )}
+                <span className={styles.perfStatSep}>|</span>
+                <span className={styles.perfStat}>
+                  {(driver || []).filter((d) => d.is_active).length} chauffeurs
+                </span>
+              </div>
+              <span className={styles.collapseIcon}>{showPerformance ? '▼' : '▶'}</span>
             </div>
-          </div>
+            {showPerformance && (
+              <div className={styles.performanceContent}>
+                <div className={styles.performanceGrid}>
+                  <div className={styles.performanceChart}>
+                    <ReservationChart reservations={reservations} />
+                  </div>
+                  <div className={styles.performanceDrivers}>
+                    <DriverTable
+                      driver={driver}
+                      loading={loadingDriver}
+                      onToggle={handleToggleDriver}
+                      onDelete={handleDeleteDriver}
+                      onEdit={handleEditDriver}
+                      onToggleAvailability={handleToggleAvailability}
+                      onToggleType={handleToggleType}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
         </main>
 
         {/* Modal réservation manuelle */}
@@ -855,6 +1088,24 @@ const CompanyDashboard = () => {
         }}
         reservation={transferModalReservation}
         onSuccess={handleTransferSuccess}
+      />
+
+      {/* Panel assignation rapide (Intelligence Dispatch) */}
+      <QuickAssignPanel
+        isOpen={quickAssignOpen}
+        onClose={() => {
+          setQuickAssignOpen(false);
+          setQuickAssignOpportunity(null);
+        }}
+        opportunity={quickAssignOpportunity}
+        booking={
+          quickAssignOpportunity?.booking_id
+            ? reservationsMap.get(quickAssignOpportunity.booking_id)
+            : null
+        }
+        drivers={driver || []}
+        onAssign={handleQuickAssign}
+        assigning={quickAssigning}
       />
     </div>
   );

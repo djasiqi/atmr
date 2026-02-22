@@ -137,7 +137,7 @@ const ClinicBillingMappingSection = ({
       const company = response?.data || response;
       
       if (company && company.id) {
-        console.log('✅ Company créée:', company);
+        console.log('Company creee:', company);
         
         // Mettre à jour l'état local immédiatement
         setClinicCompanyId(company.id);
@@ -150,13 +150,13 @@ const ClinicBillingMappingSection = ({
         // Si un BillingParty et un mapping ont été créés automatiquement
         if (company.billing_party_id) {
           setMessage(
-            `✅ Tout est configuré automatiquement ! Company, BillingParty et Mapping créés. ` +
+            `Tout est configure automatiquement. Company, BillingParty et Mapping crees. ` +
             `Le destinataire "${company.billing_party_name || '—'}" est déjà configuré pour cette clinique.`
           );
           // Pré-sélectionner le BillingParty créé automatiquement
           setSelectedBillingPartyId(String(company.billing_party_id));
         } else {
-          setMessage('✅ Company créée avec succès. Rechargement des données...');
+          setMessage('Company creee avec succes. Rechargement des donnees...');
         }
         
         // Appeler le callback pour recharger les données du client
@@ -234,10 +234,10 @@ const ClinicBillingMappingSection = ({
 
         // Recharger le mapping
         await loadData();
-        setMessage('✅ Destinataire créé et mapping configuré avec succès');
+        setMessage('Destinataire cree et mapping configure avec succes');
         setShowCreateBillingPartyForm(false);
       } else {
-        setMessage('✅ Destinataire créé avec succès. Sélectionnez-le ci-dessous.');
+        setMessage('Destinataire cree avec succes. Selectionnez-le ci-dessous.');
         setShowCreateBillingPartyForm(false);
       }
 
@@ -285,7 +285,7 @@ const ClinicBillingMappingSection = ({
       // Recharger les données
       await loadData();
       setShowEditBillingPartyForm(false);
-      setMessage('✅ Destinataire de facturation mis à jour avec succès');
+      setMessage('Destinataire de facturation mis a jour avec succes');
       setTimeout(() => setMessage(''), 5000);
     } catch (err) {
       console.error('[ClinicBillingMappingSection] update billing party failed:', err);
@@ -345,7 +345,7 @@ const ClinicBillingMappingSection = ({
 
       // Recharger le mapping
       await loadData();
-      setMessage('✅ Mapping enregistré avec succès');
+      setMessage('Mapping enregistre avec succes');
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       console.error('[ClinicBillingMappingSection] save failed:', err);
@@ -425,7 +425,7 @@ const ClinicBillingMappingSection = ({
 
         <div className={styles.successBadge}>
           <p className={styles.successBadgeTitle}>
-            ✅ Mapping configuré
+            Mapping configure
           </p>
           <p className={styles.successBadgeText}>
             Destinataire de facturation déjà configuré pour cette clinique.
@@ -489,7 +489,7 @@ const ClinicBillingMappingSection = ({
                 onClick={handleEditBillingParty}
                 className={styles.saveButton}
               >
-                ✏️ Modifier les informations
+                Modifier les informations
               </button>
             </div>
           </>

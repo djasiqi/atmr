@@ -265,8 +265,10 @@ vehicle_model = companies_ns.model(
         "vin": fields.String,
         "seats": fields.Integer,
         "wheelchair_accessible": fields.Boolean,
+        "insurance_company_name": fields.String,
         "insurance_expires_at": fields.String,
         "inspection_expires_at": fields.String,
+        "tachograph_expires_at": fields.String,
         "is_active": fields.Boolean,
         "created_at": fields.String,
     },
@@ -281,8 +283,10 @@ vehicle_create_model = companies_ns.model(
         "vin": fields.String(allow_null=True),  # ✅ Permettre None
         "seats": fields.Integer(allow_null=True),  # ✅ Permettre None
         "wheelchair_accessible": fields.Boolean(allow_null=True),
-        "insurance_expires_at": fields.String(description="ISO 8601", allow_null=True),
-        "inspection_expires_at": fields.String(description="ISO 8601", allow_null=True),
+        "insurance_company_name": fields.String(allow_null=True),
+        "insurance_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
+        "inspection_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
+        "tachograph_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
         "is_active": fields.Boolean(allow_null=True),
     },
 )
@@ -296,8 +300,10 @@ vehicle_update_model = companies_ns.model(
         "vin": fields.String,
         "seats": fields.Integer,
         "wheelchair_accessible": fields.Boolean,
-        "insurance_expires_at": fields.String(description="ISO 8601"),
-        "inspection_expires_at": fields.String(description="ISO 8601"),
+        "insurance_company_name": fields.String,
+        "insurance_expires_at": fields.String(description="YYYY-MM-DD"),
+        "inspection_expires_at": fields.String(description="YYYY-MM-DD"),
+        "tachograph_expires_at": fields.String(description="YYYY-MM-DD"),
         "is_active": fields.Boolean,
     },
 )
@@ -535,11 +541,21 @@ def get_company_from_token() -> tuple[
     result = uc.execute()
     # Le use case retourne _CompanyLike, mais on sait que c'est Company dans notre cas
     company = result.company
-    return (
-        (company if isinstance(company, Company) else None),
-        result.error,
-        result.status_code,
-    )
+    resolved_company = company if isinstance(company, Company) else None
+
+    # Cache dans flask.g pour eviter N+1 queries dans audit_log helper (G8)
+    try:
+        from flask import g as flask_g
+
+        if resolved_company:
+            flask_g.current_company = resolved_company
+        current_user = get_current_user_via_use_case()
+        if current_user:
+            flask_g.current_user = current_user
+    except Exception:
+        pass
+
+    return (resolved_company, result.error, result.status_code)
 
 
 def _get_current_company_via_use_case() -> tuple[
@@ -2657,6 +2673,7 @@ class DriverItem(Resource):
         data = request.get_json(silent=True) or {}
         from repositories.user_repository import UserRepository
         from repositories.vehicle_repository import VehicleRepository
+        from repositories.driver_repository import DriverRepository as _DriverRepo
         from application.companies.drivers.update_company_driver import (
             UpdateCompanyDriverUseCase,
         )
@@ -2664,6 +2681,7 @@ class DriverItem(Resource):
         uc = UpdateCompanyDriverUseCase(
             user_repo=UserRepository(),
             vehicle_repo=VehicleRepository(),
+            driver_repo=_DriverRepo(),
         )
         uc_result = uc.execute(driver=cast("Any", driver), company_id=cid, data=data)
         if not uc_result.ok:
@@ -4335,6 +4353,50 @@ parser.add_argument(
 
 
 # ======================================================
+# 17b. Recherche d'institutions officielles (pour liaison client)
+# ======================================================
+@companies_ns.route("/me/institutions/search")
+class CompanyInstitutionSearch(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        """Recherche parmi les institutions officielles de la plateforme.
+
+        Permet aux entreprises de trouver et lier une institution officielle
+        lors de la création/édition d'un client institution.
+        Query param: q (string, min 2 caractères)
+        """
+        from models.institution import Institution
+
+        q = request.args.get("q", "").strip()
+        if len(q) < 2:  # noqa: PLR2004
+            return {"institutions": [], "total": 0}, 200
+
+        results = (
+            Institution.query
+            .filter(Institution.name.ilike(f"%{q}%"))
+            .order_by(Institution.name)
+            .limit(10)
+            .all()
+        )
+
+        return {
+            "institutions": [
+                {
+                    "id": inst.id,
+                    "name": inst.name,
+                    "institution_type": inst.institution_type,
+                    "address": inst.address,
+                    "contact_email": inst.contact_email,
+                    "contact_phone": inst.contact_phone,
+                }
+                for inst in results
+            ],
+            "total": len(results),
+        }, 200
+
+
+# ======================================================
 # 18. Liste des clients de l'entreprise + création d'un client
 # ======================================================
 @companies_ns.route("/me/clients")
@@ -5715,6 +5777,30 @@ class SingleReservation(Resource):
             # cancel
             db.session.commit()
             _maybe_trigger_dispatch(cid, "cancel")
+
+            try:
+                from application.events.event_bus import publish_event
+                from domain.events.events import BookingCancelledEvent
+
+                publish_event(
+                    BookingCancelledEvent(
+                        booking_id=reservation_id,
+                        driver_id=getattr(booking, "driver_id", None),
+                        company_id=cid,
+                        actor_role="company",
+                        actor_id=cid,
+                        cancel_reason=reason_code,
+                        cancel_source="company_api",
+                    )
+                )
+            except Exception as notif_err:
+                logger.warning(
+                    "BookingCancelledEvent publish failed: %s", notif_err
+                )
+
+            from shared.audit_helpers import audit_log as _audit_log
+            _audit_log("booking_cancelled", "operations", resource_type="booking", resource_id=reservation_id)
+
             resp: dict[str, Any] = {
                 "message": uc_result.message or "La réservation a été annulée."
             }
@@ -6144,12 +6230,16 @@ class MyVehicles(Resource):
                 )
             # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
             from repositories.vehicle_repository import VehicleRepository
+            from repositories.driver_repository import DriverRepository as _DrvRepo
             from application.companies.vehicles.list_company_vehicles import (
                 ListCompanyVehiclesUseCase,
             )
 
             vehicle_repo = VehicleRepository()
-            uc = ListCompanyVehiclesUseCase(vehicle_repo=vehicle_repo)
+            uc = ListCompanyVehiclesUseCase(
+                vehicle_repo=vehicle_repo,
+                driver_repo=_DrvRepo(),
+            )
             result = uc.execute(company_id=cid)
             logger.info(
                 "GET /me/vehicles: Found %d vehicles for company %d",

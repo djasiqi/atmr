@@ -16,8 +16,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
 import { scheduleMissionReminder } from "./localNotifications";
 import { trackNotificationEvent } from "./notificationAnalytics";
+
+const log = getLogger("SilentNotif");
 
 // Import conditionnel de BackgroundFetch (optionnel)
 let BackgroundFetch: any = null;
@@ -27,9 +30,7 @@ try {
   BackgroundFetch = require("expo-background-fetch");
   TaskManager = require("expo-task-manager");
 } catch (e) {
-  console.warn(
-    "⚠️ expo-background-fetch non installé. Fonctionnalités background limitées."
-  );
+  getLogger("SilentNotif").warn("expo-background-fetch not installed, background limited");
 }
 
 /**
@@ -62,9 +63,7 @@ const BACKGROUND_SYNC_TASK = "background-data-sync";
  */
 export async function setupBackgroundSync(): Promise<void> {
   if (!BackgroundFetch || !TaskManager) {
-    console.warn(
-      "⚠️ Background sync non disponible (expo-background-fetch manquant)"
-    );
+    log.warn("background sync unavailable (expo-background-fetch missing)");
     return;
   }
 
@@ -82,12 +81,12 @@ export async function setupBackgroundSync(): Promise<void> {
         startOnBoot: true, // Démarre au boot device
       });
 
-      console.log("✅ Background sync configuré avec succès");
+      log.success("background sync configured");
     } else {
-      console.log("ℹ️ Background sync déjà configuré");
+      log.info("background sync already configured");
     }
   } catch (error) {
-    console.error("❌ Erreur configuration background sync:", error);
+    log.error("background sync configuration failed", { error });
   }
 }
 
@@ -97,9 +96,9 @@ export async function setupBackgroundSync(): Promise<void> {
 export async function unregisterBackgroundSync(): Promise<void> {
   try {
     await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
-    console.log("✅ Background sync désactivé");
+    log.success("background sync disabled");
   } catch (error) {
-    console.error("❌ Erreur désactivation background sync:", error);
+    log.error("disable background sync failed", { error });
   }
 }
 
@@ -112,7 +111,7 @@ export async function handleSilentNotification(
   const startTime = Date.now();
 
   try {
-    console.log("📥 Silent notification reçue:", data.sync_type);
+    log.info("silent notification received", { sync_type: data.sync_type });
 
     const syncType = data.sync_type as SyncType;
     const payload = data.payload || {};
@@ -135,16 +134,16 @@ export async function handleSilentNotification(
         break;
 
       default:
-        console.warn("⚠️ Type sync inconnu:", data.sync_type);
+        log.warn("unknown sync type", { sync_type: data.sync_type });
         return BackgroundFetchResult.NoData;
     }
 
     const duration = Date.now() - startTime;
-    console.log(`✅ Sync ${syncType} complétée en ${duration}ms`);
+    log.success("sync completed", { syncType, durationMs: duration });
 
     return BackgroundFetchResult.NewData;
   } catch (error) {
-    console.error("❌ Erreur silent notification:", error);
+    log.error("silent notification failed", { error });
     return BackgroundFetchResult.Failed;
   }
 }
@@ -157,7 +156,7 @@ async function syncMissions(payload: any): Promise<void> {
     const missions = payload.missions || [];
 
     if (missions.length === 0) {
-      console.log("ℹ️ Aucune mission à synchroniser");
+      log.info("no missions to sync");
       return;
     }
 
@@ -182,11 +181,12 @@ async function syncMissions(payload: any): Promise<void> {
       }
     }
 
-    console.log(
-      `✅ ${missions.length} missions synchronisées, ${remindersScheduled} rappels planifiés`
-    );
+    log.success("missions synced, reminders scheduled", {
+      missionsCount: missions.length,
+      remindersScheduled,
+    });
   } catch (error) {
-    console.error("❌ Erreur sync missions:", error);
+    log.error("sync missions failed", { error });
     throw error;
   }
 }
@@ -199,7 +199,7 @@ async function syncDriverProfile(payload: any): Promise<void> {
     const profile = payload.profile || {};
 
     if (Object.keys(profile).length === 0) {
-      console.log("ℹ️ Aucun profil à synchroniser");
+      log.info("no profile to sync");
       return;
     }
 
@@ -211,9 +211,9 @@ async function syncDriverProfile(payload: any): Promise<void> {
       await AsyncStorage.setItem("cached_driver_stats", JSON.stringify(payload.stats));
     }
 
-    console.log("✅ Profil chauffeur synchronisé");
+    log.success("driver profile synced");
   } catch (error) {
-    console.error("❌ Erreur sync profil:", error);
+    log.error("sync profile failed", { error });
     throw error;
   }
 }
@@ -226,7 +226,7 @@ async function precacheMaps(payload: any): Promise<void> {
     const routes = payload.routes || [];
 
     if (routes.length === 0) {
-      console.log("ℹ️ Aucune carte à précharger");
+      log.info("no maps to precache");
       return;
     }
 
@@ -237,9 +237,9 @@ async function precacheMaps(payload: any): Promise<void> {
     // une bibliothèque de cartes spécifique (ex: react-native-maps)
     // Pour l'instant, on sauvegarde juste les métadonnées
 
-    console.log(`✅ ${routes.length} itinéraires cachés`);
+    log.success("routes cached", { count: routes.length });
   } catch (error) {
-    console.error("❌ Erreur préchargement cartes:", error);
+    log.error("precache maps failed", { error });
     throw error;
   }
 }
@@ -252,16 +252,16 @@ async function syncAppConfig(payload: any): Promise<void> {
     const config = payload.config || {};
 
     if (Object.keys(config).length === 0) {
-      console.log("ℹ️ Aucune config à synchroniser");
+      log.info("no config to sync");
       return;
     }
 
     // Sauvegarder config en local
     await AsyncStorage.setItem("app_config", JSON.stringify(config));
 
-    console.log("✅ Configuration app synchronisée");
+    log.success("app config synced");
   } catch (error) {
-    console.error("❌ Erreur sync config:", error);
+    log.error("sync config failed", { error });
     throw error;
   }
 }
@@ -274,7 +274,7 @@ export async function getCachedMissions(): Promise<any[]> {
     const cached = await AsyncStorage.getItem("cached_missions");
     return cached ? JSON.parse(cached) : [];
   } catch (error) {
-    console.error("❌ Erreur lecture missions cachées:", error);
+    log.error("read cached missions failed", { error });
     return [];
   }
 }
@@ -287,7 +287,7 @@ export async function getCachedDriverProfile(): Promise<any | null> {
     const cached = await AsyncStorage.getItem("cached_driver_profile");
     return cached ? JSON.parse(cached) : null;
   } catch (error) {
-    console.error("❌ Erreur lecture profil caché:", error);
+    log.error("read cached profile failed", { error });
     return null;
   }
 }
@@ -300,7 +300,7 @@ export async function getCachedDriverStats(): Promise<any | null> {
     const cached = await AsyncStorage.getItem("cached_driver_stats");
     return cached ? JSON.parse(cached) : null;
   } catch (error) {
-    console.error("❌ Erreur lecture stats cachées:", error);
+    log.error("read cached stats failed", { error });
     return null;
   }
 }
@@ -317,9 +317,9 @@ export async function clearCachedData(): Promise<void> {
       "cached_routes",
       "app_config",
     ]);
-    console.log("✅ Cache nettoyé");
+    log.success("cache cleared");
   } catch (error) {
-    console.error("❌ Erreur nettoyage cache:", error);
+    log.error("clear cache failed", { error });
   }
 }
 
@@ -330,7 +330,7 @@ export async function clearCachedData(): Promise<void> {
 export function defineBackgroundSyncTask(): void {
   TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
     try {
-      console.log("🔄 Tâche background sync démarrée");
+      log.info("background sync task started");
 
       // Ici, on pourrait faire un appel API pour récupérer les données
       // Pour l'instant, on considère que les données arrivent via silent notifications
@@ -339,14 +339,14 @@ export function defineBackgroundSyncTask(): void {
       const hasCachedData = await AsyncStorage.getItem("cached_missions");
 
       if (hasCachedData) {
-        console.log("✅ Données cachées disponibles");
+        log.info("cached data available");
         return BackgroundFetch.BackgroundFetchResult.NewData;
       }
 
-      console.log("ℹ️ Aucune donnée en attente");
+      log.info("no data pending");
       return BackgroundFetch.BackgroundFetchResult.NoData;
     } catch (error) {
-      console.error("❌ Erreur tâche background:", error);
+      log.error("background task failed", { error });
       return BackgroundFetch.BackgroundFetchResult.Failed;
     }
   });

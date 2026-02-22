@@ -790,6 +790,13 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     else:
                         line_vat_rate = default_vat_rate
 
+                # Annulation facturable : utiliser cancellation_fee_amount si disponible
+                if (
+                    str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
+                    and getattr(reservation, "cancellation_fee_amount", None) is not None
+                ):
+                    base_amount = Decimal(str(reservation.cancellation_fee_amount)).quantize(two_places)
+
                 # Arrondir base_amount à 5 centimes avant de calculer la TVA
                 base_amount = round_to_5_cents(base_amount)
 
@@ -803,6 +810,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 delivery_desc = (
                     getattr(reservation, "delivery_description", None) or None
                 )
+                _is_cancelled_c = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
+                _fee_pct_c = getattr(reservation, "cancellation_fee_percent", None) if _is_cancelled_c else None
+                _fee_tier_c = getattr(reservation, "cancellation_fee_tier_id", None) if _is_cancelled_c else None
                 description = self.description_builder.build_description(
                     pickup_location=reservation.pickup_location or "",
                     dropoff_location=reservation.dropoff_location or "",
@@ -810,10 +820,9 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     bill_to_client_id=None,
                     is_material_delivery=is_delivery,
                     delivery_description=delivery_desc,
-                    is_cancelled=(
-                        str(getattr(reservation, "status", "") or "").upper()
-                        == "CANCELED"
-                    ),
+                    is_cancelled=_is_cancelled_c,
+                    cancellation_fee_percent=_fee_pct_c,
+                    cancellation_fee_label=_fee_tier_c,
                 )
 
                 # ✅ Créer la ligne avec métadonnées patient (snapshot juridique)
@@ -902,6 +911,36 @@ class GenerateClinicMonthlyInvoiceUseCase:
 
             # 12. Commit de la transaction
             db.session.commit()
+
+            # 13. Vérification post-commit : s'assurer que invoice_line_id
+            # est bien persisté sur chaque booking (filet de sécurité)
+            unfixed = []
+            for reservation in reservations:
+                db.session.refresh(reservation)
+                if reservation.invoice_line_id is None:
+                    unfixed.append(reservation.id)
+            if unfixed:
+                logger.error(
+                    "⚠️ S2 post-commit: %d booking(s) avec invoice_line_id=None "
+                    "après commit ! IDs: %s. Tentative de réparation.",
+                    len(unfixed),
+                    unfixed[:10],
+                )
+                # Réparation : retrouver la ligne par reservation_id
+                from models import InvoiceLine as ILModel
+                for bid in unfixed:
+                    il = ILModel.query.filter_by(
+                        reservation_id=bid, invoice_id=invoice.id
+                    ).first()
+                    if il:
+                        bk = Booking.query.get(bid)
+                        if bk:
+                            bk.invoice_line_id = il.id
+                            logger.info(
+                                "  Repaired booking %s → invoice_line_id=%s",
+                                bid, il.id,
+                            )
+                db.session.commit()
 
             # ✅ Log INFO succès S2: company_id, clinic_company_id, period, line_count, total
             logger.info(

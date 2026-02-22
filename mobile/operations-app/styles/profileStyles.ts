@@ -1,416 +1,408 @@
-// styles/profileStyles.ts
 import { StyleSheet, Platform } from "react-native";
 
-// ✅ Palette épurée et élégante (cohérente avec le login, mission, courses et chat)
-const palette = {
-  background: "#F5F7F6",
-  card: "#FFFFFF",
-  text: "#15362B",
-  secondary: "#5F7369",
-  accent: "#0A7F59",
-  border: "rgba(15,54,43,0.08)",
-  placeholder: "#91A59D",
-  error: "#D32F2F",
-  errorLight: "#FFEBEE",
-};
+const BRAND = "#00796B";
+const BRAND_DARK = "#00695C";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+const DANGER = "#dc3545";
 
-// Styles shadow conditionnels pour éviter l'avertissement de dépréciation
-// Utiliser Platform.OS === 'web' au lieu de Platform.select() pour éviter la détection des shadow* sur le web
-const headerGradientShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 2px 8px rgba(16,39,30,0.06)' }
-  : {
-      shadowColor: "rgba(16,39,30,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 2,
-    };
+const cardShadow =
+  Platform.OS === "web"
+    ? { boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }
+    : {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+      };
 
-const headerPhotoShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 2px 6px rgba(10,127,89,0.2)' }
-  : {
-      shadowColor: "rgba(10,127,89,0.2)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.16,
-      shadowRadius: 6,
-      elevation: 3,
-    };
+const btnShadow =
+  Platform.OS === "web"
+    ? { boxShadow: "0 2px 6px rgba(0,121,107,0.2)" }
+    : {
+        shadowColor: BRAND,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        elevation: 3,
+      };
 
-const headerPhotoOverlayShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 2px 4px rgba(10,127,89,0.3)' }
-  : {
-      shadowColor: "rgba(10,127,89,0.3)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 3,
-    };
-
-const cardContainerShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 2px 8px rgba(16,39,30,0.06)' }
-  : {
-      shadowColor: "rgba(16,39,30,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
-    };
-
-const saveButtonShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 4px 8px rgba(10,127,89,0.3)' }
-  : {
-      shadowColor: "rgba(10,127,89,0.3)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    };
-
-const logoutButtonShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 4px 8px rgba(211,47,47,0.3)' }
-  : {
-      shadowColor: "rgba(211,47,47,0.3)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    };
-
-const modalContainerShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 10px 20px rgba(16,39,30,0.2)' }
-  : {
-      shadowColor: "rgba(16,39,30,0.2)",
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.25,
-      shadowRadius: 20,
-      elevation: 10,
-    };
-
-const logoutModalContainerShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 10px 20px rgba(16,39,30,0.2)' }
-  : {
-      shadowColor: "rgba(16,39,30,0.2)",
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.25,
-      shadowRadius: 20,
-      elevation: 10,
-    };
-
-const logoutConfirmButtonShadow = Platform.OS === 'web'
-  ? { boxShadow: '0 6px 12px rgba(211,47,47,0.35)' }
-  : {
-      shadowColor: "rgba(211,47,47,0.35)",
-      shadowOpacity: 0.35,
-      shadowOffset: { width: 0, height: 6 },
-      shadowRadius: 12,
-      elevation: 6,
-    };
+const sheetShadow =
+  Platform.OS === "web"
+    ? { boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }
+    : {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
+      };
 
 export const profileStyles = StyleSheet.create({
-  // ✅ Container principal
+  // ——— Layout ———
   container: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
   },
-
   scrollContainer: {
     flex: 1,
   },
 
-  // ✅ Header élégant avec photo
+  // ——— Header ———
   headerGradient: {
-    backgroundColor: palette.card,
-    paddingHorizontal: 28,
-    paddingTop: 32,
-    paddingBottom: 24,
+    backgroundColor: CARD,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 56 : 44,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-    ...headerGradientShadow,
+    borderBottomColor: BORDER,
   },
-
   headerContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-
   headerText: {
     flex: 1,
   },
-
   headerTitle: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "700",
-    color: palette.text,
-    marginBottom: 4,
-    letterSpacing: -0.5,
+    color: TEXT,
+    letterSpacing: -0.3,
   },
-
+  headerSubtitle: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    marginTop: 4,
+  },
   headerPhotoContainer: {
     position: "relative",
     marginLeft: 16,
   },
-
   headerPhoto: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: palette.border,
-    borderWidth: 3,
-    borderColor: palette.accent,
-    ...headerPhotoShadow,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: BORDER,
+    borderWidth: 2.5,
+    borderColor: BRAND,
   },
-
   headerPhotoOverlay: {
     position: "absolute",
     bottom: -2,
     right: -2,
-    backgroundColor: palette.accent,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    backgroundColor: BRAND,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: palette.card,
-    ...headerPhotoOverlayShadow,
+    borderColor: CARD,
   },
 
-  // ✅ Cartes de contenu élégantes
+  // ——— Section cards ———
   cardContainer: {
-    backgroundColor: palette.card,
-    marginHorizontal: 20,
-    marginVertical: 10,
-    borderRadius: 18,
-    padding: 20,
-    ...cardContainerShadow,
+    backgroundColor: CARD,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 16,
+    ...cardShadow,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
-
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    paddingBottom: 14,
+    marginBottom: 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    borderBottomColor: BORDER,
   },
-
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: palette.text,
-    marginLeft: 12,
-    flex: 1,
-    letterSpacing: -0.3,
-  },
-
-  // ✅ Actions
-  actionsContainer: {
-    paddingHorizontal: 20,
-    marginVertical: 16,
-  },
-
-  saveButton: {
-    backgroundColor: palette.accent,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    ...saveButtonShadow,
-    marginBottom: 12,
-  },
-
-  saveButtonText: {
-    color: palette.card,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    marginLeft: 8,
-    letterSpacing: 0.2,
-  },
-
-  // ✅ Bouton de déconnexion
-  logoutButton: {
-    backgroundColor: palette.error,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 14,
-    ...logoutButtonShadow,
-  },
-
-  logoutButtonText: {
-    color: palette.card,
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-    letterSpacing: 0.2,
-  },
-
-  // ✅ Espacement final
-  bottomSpacing: {
-    height: 80,
-  },
-
-  // ✅ Modal de sélection photo
-  modalOverlay: {
+    color: TEXT,
+    marginLeft: 10,
     flex: 1,
-    backgroundColor: "rgba(15,54,43,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    letterSpacing: -0.1,
   },
-
-  modalContainer: {
-    backgroundColor: palette.card,
-    borderRadius: 20,
-    width: "100%",
-    maxWidth: 400,
-    ...modalContainerShadow,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-  },
-
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: palette.text,
-    letterSpacing: -0.3,
-  },
-
-  modalCloseButton: {
-    padding: 4,
-  },
-
-  modalContent: {
-    padding: 24,
-  },
-
-  modalOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 18,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-    backgroundColor: palette.background,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  modalOptionIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(10,127,89,0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-
-  modalOptionText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: palette.text,
-    flex: 1,
-    letterSpacing: -0.2,
-  },
-
-  modalOptionSubtext: {
+  cardDesc: {
     fontSize: 13,
-    color: palette.secondary,
+    color: TEXT_SEC,
     marginTop: 2,
     lineHeight: 18,
   },
 
-  // ✅ Modal de déconnexion
-  logoutModalContainer: {
-    backgroundColor: palette.card,
-    borderRadius: 24,
-    width: "100%",
-    maxWidth: 400,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: palette.border,
-    gap: 20,
+  // ——— Read-only info rows ———
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    ...logoutModalContainerShadow,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,121,107,0.05)",
+  },
+  infoRowLast: {
+    borderBottomWidth: 0,
+  },
+  infoLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: TEXT_SEC,
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: TEXT,
+    textAlign: "right",
+    flex: 1.5,
+  },
+  infoValueMuted: {
+    color: TEXT_MUTED,
+    fontStyle: "italic",
+  },
+  infoBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "rgba(0,121,107,0.06)",
+  },
+  infoBadgeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: BRAND,
+  },
+  infoBadgeWarn: {
+    backgroundColor: "rgba(245,158,11,0.1)",
+  },
+  infoBadgeWarnText: {
+    color: "#92400e",
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    justifyContent: "flex-end",
+    flex: 1.5,
+  },
+  chip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "rgba(0,121,107,0.06)",
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: BRAND,
   },
 
-  logoutIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: palette.errorLight,
+  // ——— Actions ———
+  actionsContainer: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+    gap: 10,
+  },
+  saveButton: {
+    backgroundColor: BRAND,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    ...btnShadow,
+  },
+  saveButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  logoutButton: {
+    backgroundColor: DANGER,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    ...(Platform.OS === "web"
+      ? { boxShadow: "0 2px 6px rgba(220,53,69,0.2)" }
+      : {
+          shadowColor: DANGER,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 6,
+          elevation: 3,
+        }),
+  },
+  logoutButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
 
+  bottomSpacing: {
+    height: 80,
+  },
+
+  // ——— Modal backdrop (shared) ———
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+
+  // ——— Photo modal (bottom sheet) ———
+  modalContainer: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === "ios" ? 32 : 16,
+    ...sheetShadow,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: TEXT,
+    letterSpacing: -0.2,
+  },
+  modalCloseButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  modalOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: BG,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  modalOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,121,107,0.06)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  modalOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT,
+  },
+  modalOptionSubtext: {
+    fontSize: 12,
+    color: TEXT_SEC,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+
+  // ——— Logout / Switch modal (bottom sheet) ———
+  logoutModalContainer: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: Platform.OS === "ios" ? 36 : 20,
+    alignItems: "center",
+    ...sheetShadow,
+  },
+  logoutIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(220,53,69,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
   logoutModalTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: palette.text,
+    fontSize: 17,
+    fontWeight: "600",
+    color: TEXT,
     textAlign: "center",
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
-
   logoutModalMessage: {
-    fontSize: 15,
-    color: palette.secondary,
+    fontSize: 13,
+    color: TEXT_SEC,
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 19,
+    marginTop: 8,
+    maxWidth: 300,
   },
-
   logoutModalActions: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
+    gap: 10,
     width: "100%",
-    marginTop: 8,
+    marginTop: 20,
   },
-
   logoutCancelButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 14,
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BG,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: "rgba(0,0,0,0.08)",
   },
-
   logoutCancelButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: palette.secondary,
+    fontSize: 14,
+    fontWeight: "500",
+    color: TEXT_SEC,
   },
-
   logoutConfirmButton: {
-    backgroundColor: palette.error,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 14,
-    ...logoutConfirmButtonShadow,
+    flex: 1.2,
+    height: 42,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: DANGER,
+    gap: 6,
   },
-
   logoutConfirmButtonText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: palette.card,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
   },
 });
-

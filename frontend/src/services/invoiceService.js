@@ -319,23 +319,10 @@ export const invoiceService = {
 
   // Récupérer les partenaires facturables
   async fetchBillablePartners(companyId) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'Calling API',data:{companyId,url:`${API_BASE}/invoices/companies/${companyId}/partners/billable`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-    // #endregion
-    try {
-      const response = await apiClient.get(
-        `${API_BASE}/invoices/companies/${companyId}/partners/billable`
-      );
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'API response received',data:{status:response?.status,hasData:!!response?.data,dataType:typeof response?.data,dataKeys:response?.data ? Object.keys(response?.data) : [],dataValue:response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
-      return response.data;
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invoiceService.js:fetchBillablePartners',message:'API error',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data,errorUrl:err?.config?.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-      // #endregion
-      throw err;
-    }
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/partners/billable`
+    );
+    return response.data;
   },
 
   // Générer une facture partenaire

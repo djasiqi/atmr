@@ -17,7 +17,7 @@ const EmptyState = ({ icon = '📦', title, message, action }) => {
 };
 
 EmptyState.propTypes = {
-  icon: PropTypes.string,
+  icon: PropTypes.node,
   title: PropTypes.string.isRequired,
   message: PropTypes.string,
   action: PropTypes.node,

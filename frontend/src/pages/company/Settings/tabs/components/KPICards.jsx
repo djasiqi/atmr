@@ -1,5 +1,13 @@
 // frontend/src/pages/company/Settings/tabs/components/KPICards.jsx
 import React from 'react';
+import {
+  FiUsers,
+  FiArrowUpRight,
+  FiArrowDownLeft,
+  FiDollarSign,
+  FiTrendingUp,
+  FiBarChart2,
+} from 'react-icons/fi';
 import styles from './KPICards.module.css';
 
 const KPICards = ({ stats, loading }) => {
@@ -28,40 +36,40 @@ const KPICards = ({ stats, loading }) => {
     {
       label: 'Partenaires actifs',
       value: stats?.active_partnerships || 0,
-      icon: '🤝',
-      color: '#4CAF50',
+      Icon: FiUsers,
+      tone: 'success',
     },
     {
       label: 'Courses envoyées',
       value: stats?.sent_transfers_current_month || 0,
-      icon: '📤',
-      color: '#2196F3',
+      Icon: FiArrowUpRight,
+      tone: 'neutral',
       subtitle: 'mois en cours',
     },
     {
       label: 'Courses reçues',
       value: stats?.received_transfers_current_month || 0,
-      icon: '📥',
-      color: '#FF9800',
+      Icon: FiArrowDownLeft,
+      tone: 'warning',
       subtitle: 'mois en cours',
     },
     {
       label: 'À payer',
       value: formatCurrency(stats?.amount_to_pay || 0),
-      icon: '💸',
-      color: '#F44336',
+      Icon: FiDollarSign,
+      tone: 'danger',
     },
     {
       label: 'À recevoir',
       value: formatCurrency(stats?.amount_to_receive || 0),
-      icon: '💰',
-      color: '#4CAF50',
+      Icon: FiTrendingUp,
+      tone: 'success',
     },
     {
       label: 'Solde net',
       value: formatCurrency(stats?.net_balance || 0),
-      icon: '📊',
-      color: stats?.net_balance >= 0 ? '#4CAF50' : '#F44336',
+      Icon: FiBarChart2,
+      tone: (stats?.net_balance ?? 0) >= 0 ? 'success' : 'danger',
       highlight: true,
     },
   ];
@@ -73,8 +81,10 @@ const KPICards = ({ stats, loading }) => {
           key={index}
           className={`${styles.kpiCard} ${kpi.highlight ? styles.highlight : ''}`}
         >
-          <div className={styles.kpiIcon} style={{ color: kpi.color }}>
-            {kpi.icon}
+          <div
+            className={`${styles.kpiIcon} ${styles[`tone${kpi.tone.charAt(0).toUpperCase() + kpi.tone.slice(1)}`]}`}
+          >
+            <kpi.Icon size={20} />
           </div>
           <div className={styles.kpiContent}>
             <div className={styles.kpiValue}>{kpi.value}</div>

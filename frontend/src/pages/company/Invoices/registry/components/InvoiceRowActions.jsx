@@ -1,4 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
+import {
+  FiFileText,
+  FiBell,
+  FiMail,
+  FiDollarSign,
+  FiClock,
+  FiRefreshCw,
+  FiEdit,
+  FiXCircle,
+  FiMoreHorizontal,
+  FiSend,
+} from 'react-icons/fi';
 import styles from './InvoiceRowActions.module.css';
 import { ensurePdfUrlWorksInDev } from '../../../../../utils/pdfUrlFallback';
 import {
@@ -67,37 +79,26 @@ const InvoiceRowActions = ({
     action();
   };
 
-  // ✅ Trouver le rappel le plus récent (OPEN ou PAID)
+  // Trouver le rappel le plus recent (OPEN ou PAID)
   const latestReminder = invoice.reminders?.length > 0
     ? invoice.reminders
         .sort((a, b) => new Date(b.generated_at || 0) - new Date(a.generated_at || 0))[0]
     : null;
   const hasReminder = latestReminder && latestReminder.pdf_url;
 
-  // ✅ Helper pour supprimer les emojis des labels (protection contre double icône)
-  const stripEmojis = (text) => {
-    // Regex pour détecter les emojis (plages Unicode principales)
-    return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F900}-\u{1F9FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '').trim();
-  };
-
   const actions = [
-    // ✅ NOUVEAU : "Voir facture initiale" (toujours disponible si PDF existe)
-    // Même après un rappel, la facture initiale reste accessible
     {
       key: 'viewInitial',
       label: 'Voir facture initiale',
-      icon: '📄',
+      icon: <FiFileText size={14} />,
       onClick: () => onViewPdf(ensurePdfUrlWorksInDev(invoice.pdf_url)),
       className: styles.actionBtnSecondary,
       show: !!invoice.pdf_url,
     },
-    // ✅ NOUVEAU : "Voir rappel (PDF)" (si rappel existe avec PDF)
     {
       key: 'viewReminder',
-      label: hasReminder && latestReminder.status === 'PAID'
-        ? 'Voir rappel (PDF)'
-        : 'Voir rappel (PDF)',
-      icon: '🔔',
+      label: 'Voir rappel (PDF)',
+      icon: <FiBell size={14} />,
       onClick: () => {
         if (latestReminder?.pdf_url) {
           window.open(ensurePdfUrlWorksInDev(latestReminder.pdf_url), '_blank');
@@ -109,15 +110,15 @@ const InvoiceRowActions = ({
     {
       key: 'sendEmail',
       label: 'Envoyer par email',
-      icon: '📧',
+      icon: <FiMail size={14} />,
       onClick: onSendEmail,
       className: styles.actionBtnPrimary,
       show: canSendInvoice(invoice),
     },
     {
       key: 'send',
-      label: 'Marquer envoyée (papier)',
-      icon: '📄',
+      label: 'Marquer envoyee (papier)',
+      icon: <FiSend size={14} />,
       onClick: onSend,
       className: styles.actionBtnSecondary,
       show: canSendInvoice(invoice),
@@ -125,15 +126,15 @@ const InvoiceRowActions = ({
     {
       key: 'payment',
       label: 'Enregistrer paiement',
-      icon: '💰',
+      icon: <FiDollarSign size={14} />,
       onClick: onPayment,
       className: styles.actionBtnSuccess,
       show: canAddPayment(invoice),
     },
     {
       key: 'reminder',
-      label: `Générer rappel suivant ${getNextReminderLevel(invoice)}`,
-      icon: '⏰',
+      label: `Generer rappel suivant ${getNextReminderLevel(invoice)}`,
+      icon: <FiClock size={14} />,
       onClick: onReminder,
       className: styles.actionBtnWarning,
       show: canGenerateReminder(invoice),
@@ -141,23 +142,23 @@ const InvoiceRowActions = ({
     {
       key: 'sendReminderEmail',
       label: 'Envoyer rappel par email',
-      icon: '📧',
+      icon: <FiMail size={14} />,
       onClick: onSendReminderEmail,
       className: styles.actionBtnPrimary,
       show: invoice.reminder_level > 0 && invoice.status !== 'paid',
     },
     {
       key: 'regenerate',
-      label: 'Régénérer PDF',
-      icon: '🔄',
+      label: 'Regenerer PDF',
+      icon: <FiRefreshCw size={14} />,
       onClick: onRegeneratePdf,
       className: styles.actionBtnSecondary,
       show: canRegeneratePdf(invoice),
     },
     {
       key: 'duplicate',
-      label: 'Créer un correctif',
-      icon: '📝',
+      label: 'Creer un correctif',
+      icon: <FiEdit size={14} />,
       onClick: onDuplicate,
       className: styles.actionBtnSecondary,
       show: canDuplicateInvoice(invoice),
@@ -165,7 +166,7 @@ const InvoiceRowActions = ({
     {
       key: 'cancel',
       label: 'Annuler',
-      icon: '❌',
+      icon: <FiXCircle size={14} />,
       onClick: onCancel,
       className: styles.actionBtnDanger,
       show: canCancelInvoice(invoice),
@@ -261,38 +262,6 @@ const InvoiceRowActions = ({
     if (!showMenu) {
       const position = calculateMenuPosition();
       if (position) {
-        // Debug détaillé
-        const rect = buttonRef.current?.getBoundingClientRect();
-        console.log(`🎯 Menu "${invoice.invoice_number}" - Direction: ${position.direction}`, {
-          bouton: {
-            top: Math.round(rect.top),
-            bottom: Math.round(rect.bottom),
-            left: Math.round(rect.left),
-            height: Math.round(rect.height),
-          },
-          espaces: {
-            dessous: Math.round(window.innerHeight - rect.bottom),
-            dessus: Math.round(rect.top),
-          },
-          menuCalculé: position.direction === 'above' 
-            ? {
-                bottom: position.bottom,
-                left: position.left,
-                direction: position.direction,
-                maxHeight: position.maxHeight,
-                note: `Bas du menu = ${Math.round(window.innerHeight - position.bottom)}px depuis le haut`,
-              }
-            : {
-                top: position.top,
-                left: position.left,
-                direction: position.direction,
-                maxHeight: position.maxHeight,
-              },
-          viewport: {
-            height: window.innerHeight,
-            width: window.innerWidth,
-          },
-        });
         setMenuPosition(position);
       }
     }
@@ -312,9 +281,7 @@ const InvoiceRowActions = ({
         onClick={handleToggleMenu}
         title="Actions"
       >
-        <span className={styles.actionIcon}>⚙️</span>
-        <span className={styles.actionLabel}>Actions</span>
-        <span className={styles.actionIcon}>▼</span>
+        <FiMoreHorizontal size={16} />
       </button>
 
       {showMenu && (
@@ -341,40 +308,35 @@ const InvoiceRowActions = ({
             role="menu"
             aria-orientation="vertical"
           >
-            {visibleActions.map((action) => {
-              // ✅ Protection: supprimer les emojis du label si présents (évite double icône)
-              const cleanLabel = stripEmojis(action.label);
-              
-              return (
-                <button
-                  key={action.key}
-                  className={`${styles.menuItem} ${action.className}`}
-                  onClick={() => handleAction(action.onClick)}
-                  role="menuitem"
-                  tabIndex={showMenu ? 0 : -1}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleAction(action.onClick);
-                    } else if (e.key === 'Escape') {
-                      setShowMenu(false);
-                      buttonRef.current?.focus();
-                    } else if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      const nextButton = e.currentTarget.nextElementSibling;
-                      if (nextButton) nextButton.focus();
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      const prevButton = e.currentTarget.previousElementSibling;
-                      if (prevButton) prevButton.focus();
-                    }
-                  }}
-                >
-                  <span className={styles.actionIcon}>{action.icon}</span>
-                  <span className={styles.actionLabel}>{cleanLabel}</span>
-                </button>
-              );
-            })}
+            {visibleActions.map((action) => (
+              <button
+                key={action.key}
+                className={`${styles.menuItem} ${action.className}`}
+                onClick={() => handleAction(action.onClick)}
+                role="menuitem"
+                tabIndex={showMenu ? 0 : -1}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleAction(action.onClick);
+                  } else if (e.key === 'Escape') {
+                    setShowMenu(false);
+                    buttonRef.current?.focus();
+                  } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const nextButton = e.currentTarget.nextElementSibling;
+                    if (nextButton) nextButton.focus();
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prevButton = e.currentTarget.previousElementSibling;
+                    if (prevButton) prevButton.focus();
+                  }
+                }}
+              >
+                <span className={styles.actionIcon}>{action.icon}</span>
+                <span className={styles.actionLabel}>{action.label}</span>
+              </button>
+            ))}
           </div>
         </>
       )}

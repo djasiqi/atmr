@@ -1,81 +1,215 @@
-.topClientsContainer {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
+/* TopClients - collapsible V2 */
+.topClientsSection {
+  border-top: 1px solid var(--border-primary);
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-sm);
 }
 
 .topClientsHeader {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-  font-weight: var(--font-weight-semibold);
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.topClientsIcon {
-  font-size: var(--font-size-xl);
+.topClientsHeader:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-primary);
 }
 
-.topClientsTitle {
-  font-size: var(--font-size-base);
+.headerIcon {
+  color: var(--brand-primary);
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
-.topClientsList {
+.headerTitle {
+  flex: 1;
+  text-align: left;
+}
+
+.headerChevron {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+/* Corps collapsible */
+.topClientsBody {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+}
+
+.bodyOpen {
+  max-height: 300px;
+  opacity: 1;
+}
+
+.clientsList {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 6px;
+  padding: 10px 0 4px 0;
 }
 
 .clientItem {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm);
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
-  transition: var(--transition-base);
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .clientItem:hover {
-  background: var(--bg-hover);
-  transform: translateX(4px);
+  background: var(--bg-primary);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-sm);
 }
 
 .clientRank {
   background: var(--brand-primary);
-  color: white;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-full);
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
+  font-size: 11px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
 .clientInfo {
   flex: 1;
+  min-width: 0;
 }
 
 .clientName {
-  font-weight: var(--font-weight-semibold);
+  font-weight: 600;
+  font-size: 13px;
   color: var(--text-primary);
-  font-size: var(--font-size-sm);
   margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .clientStats {
-  font-size: var(--font-size-xs);
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 
 .noData {
   text-align: center;
-  padding: var(--spacing-lg);
-  color: var(--text-disabled);
+  padding: var(--spacing-md);
+  color: var(--text-tertiary);
   font-style: italic;
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .topClientsSection {
+    margin-top: 12px;
+    padding-top: 8px;
+  }
+
+  .topClientsHeader {
+    padding: 8px 10px;
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .clientItem {
+    padding: 8px 10px;
+    gap: 8px;
+    border-radius: 8px;
+  }
+
+  .clientItem:hover {
+    transform: none;
+  }
+
+  .clientRank {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+
+  .clientName {
+    font-size: 12px;
+  }
+
+  .clientStats {
+    font-size: 11px;
+  }
+
+  .clientsList {
+    gap: 4px;
+    padding: 6px 0 4px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .topClientsSection {
+    margin-top: 8px;
+    padding-top: 6px;
+  }
+
+  .topClientsHeader {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .clientItem {
+    padding: 6px 8px;
+    gap: 6px;
+    border-radius: 6px;
+  }
+
+  .clientRank {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+
+  .clientName {
+    font-size: 11px;
+  }
+
+  .clientStats {
+    font-size: 10px;
+  }
+
+  .noData {
+    font-size: 11px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 390px) {
+  .topClientsHeader {
+    padding: 5px 6px;
+    font-size: 11.5px;
+  }
+
+  .clientItem {
+    padding: 5px 6px;
+  }
 }

@@ -1,0 +1,157 @@
+/* ============================================================
+   DISPATCH MODE STATUS BAR — Indicateur compact du mode actif
+   1 ligne, discret, opérationnel
+   ============================================================ */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: var(--font-xs);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+/* ---- Accents par mode ---- */
+
+.bar_neutral {
+  background: var(--bg-secondary);
+  border-color: var(--border-primary);
+}
+
+.bar_brand {
+  background: var(--brand-primary-lightest, #e0f2f1);
+  border-color: var(--brand-primary);
+  border-left: 3px solid var(--brand-primary);
+}
+
+.bar_auto {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.06) 0%, var(--bg-secondary) 100%);
+  border-color: #6366f1;
+  border-left: 3px solid #6366f1;
+}
+
+/* ---- Mode info (gauche) ---- */
+
+.modeInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.modeIcon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.bar_brand .modeIcon {
+  color: var(--brand-primary);
+}
+
+.bar_auto .modeIcon {
+  color: #6366f1;
+}
+
+.modeLabel {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.modeSep {
+  color: var(--text-tertiary);
+}
+
+.modeDesc {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ---- Statut IA (droite) ---- */
+
+.aiStatus {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.aiAlert {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warning-hover, #d97706);
+  font-weight: var(--font-weight-semibold);
+}
+
+.aiSuggestions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.aiOk {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success-primary);
+}
+
+.manualHint {
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--spacing-xxs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .modeInfo {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .modeSep,
+  .modeDesc {
+    display: none;
+  }
+
+  .aiStatus {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .bar {
+    padding: var(--spacing-xs);
+    font-size: 0.7rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .modeLabel {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .bar {
+    padding: 4px var(--spacing-xs);
+    font-size: 0.65rem;
+    gap: 2px;
+  }
+}

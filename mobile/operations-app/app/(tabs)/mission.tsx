@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { ScrollView, Alert, Linking, View, RefreshControl, Platform } from "react-native";
+import { ScrollView, Alert, Linking, View, RefreshControl, Platform, AppState } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { useLocation } from "@/hooks/useLocation";
@@ -11,15 +11,18 @@ import MissionGroupHeader from "@/components/dashboard/MissionGroupHeader";
 import MissionHeader from "@/components/dashboard/MissionHeader";
 import MissionMap from "@/components/dashboard/MissionMap";
 import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModal";
-import SocketStatusIndicator from "@/components/common/SocketStatusIndicator";
+// SocketStatusIndicator is now integrated into MissionHeader
 import { Loader } from "@/components/ui/Loader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getAssignedTrips,
-  updateTripStatus,
   Booking,
   BookingStatus,
 } from "@/services/api";
+import { MissionStateManager, type MissionBarStatus } from "@/services/missionState";
+import { showMissionNotification, dismissMissionNotification } from "@/services/missionBarAndroid";
+import { openNavigation as openNavigationApp } from "@/services/deepLinks";
+import { registerNotifeeForegroundHandler } from "@/services/missionBarBackground";
 import { sendDriverHeartbeat, onBookingsResync } from "@/services/socket";
 import {
   organizeMissionsForDisplay,
@@ -35,6 +38,9 @@ import {
   scheduleRemindersForActiveMissions,
   cleanupExpiredReminders,
 } from "@/services/localNotifications";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Mission");
 
 /**
  * Détecte si la mission est un retour, quel que soit le type de donnée reçu (bool, int, string, etc.)
@@ -53,19 +59,12 @@ function isMissionReturn(is_return: any): boolean {
   }
   // Cas null/undefined ou autre
   if (!is_return) return false;
-  // Log tout le reste pour analyse
-  console.log(
-    "[isMissionReturn] Valeur inattendue:",
-    is_return,
-    typeof is_return
-  );
+  log.info("unexpected is_return value", { is_return, type: typeof is_return });
   return false;
 }
 
 export default function MissionScreen() {
-  console.log("🟢 [MissionScreen] Composant rendu", {
-    timestamp: new Date().toISOString()
-  });
+  log.info("mission screen rendered", { timestamp: new Date().toISOString() });
 
   const { driver } = useAuth();
   const { location } = useLocation();
@@ -287,7 +286,7 @@ export default function MissionScreen() {
     const onReassigned = async (payload: any) => {
       try {
         const bookingId = payload?.booking_id ?? payload?.id ?? null;
-        console.log("📩 Booking reassigned in missions:", bookingId);
+        log.info("booking reassigned", { bookingId });
         Alert.alert(
           "🔄 Mission réassignée",
           "Une mission a été réassignée. Vos courses vont être mises à jour."
@@ -300,13 +299,13 @@ export default function MissionScreen() {
 
     // Gestion de la déconnexion WebSocket
     const onDisconnect = () => {
-      console.log("⚠️ [Mission] Socket déconnecté, tentative de reconnexion...");
+      log.warn("socket disconnected, reconnecting", {});
       // Le client Socket.IO reconnecte automatiquement, mais on peut forcer un refresh
     };
 
     // Gestion de la reconnexion WebSocket
     const onReconnect = () => {
-      console.log("✅ [Mission] Socket reconnecté, rechargement des missions...");
+      log.info("socket reconnected, reloading missions", {});
       // Recharger les missions après reconnexion
       loadMissions(true); // Refresh silencieux
     };
@@ -344,6 +343,44 @@ export default function MissionScreen() {
     };
   }, [socket, loadMissions]);
 
+  // ✅ Mission Bar: foreground Notifee handler + AppState reconciliation
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const unsubNotifee = registerNotifeeForegroundHandler();
+
+    const appStateSub = AppState.addEventListener("change", async (state) => {
+      if (state === "active" && MissionStateManager.isActive()) {
+        await MissionStateManager.syncPendingActions();
+        try {
+          const fresh = await getAssignedTrips();
+          await MissionStateManager.updateFromServer(fresh);
+          if (MissionStateManager.isActive()) {
+            await showMissionNotification(MissionStateManager.getState());
+          } else {
+            await dismissMissionNotification();
+          }
+        } catch { /* best-effort */ }
+      }
+    });
+
+    const unsubState = MissionStateManager.subscribe(async (event) => {
+      if (event === "mission_stopped") {
+        await dismissMissionNotification();
+      } else if (event === "state_changed" || event === "transition_confirmed" || event === "reconciliation") {
+        if (MissionStateManager.isActive()) {
+          await showMissionNotification(MissionStateManager.getState());
+        }
+      }
+    });
+
+    return () => {
+      unsubNotifee();
+      appStateSub.remove();
+      unsubState();
+    };
+  }, []);
+
   // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou si pas de missions depuis >60s
   useEffect(() => {
     const pollingInterval = setInterval(() => {
@@ -354,7 +391,10 @@ export default function MissionScreen() {
         (missions.length === 0 && timeSinceLastUpdate > 60000); // Pas de missions depuis >60s
 
       if (shouldPoll) {
-        console.log(`🔄 [Mission] Polling de secours déclenché (socket: ${socket?.connected ? 'connecté' : 'déconnecté'}, timeSinceLastUpdate: ${Math.round(timeSinceLastUpdate / 1000)}s)`);
+        log.info("fallback polling triggered", {
+          socketConnected: socket?.connected,
+          timeSinceLastUpdateSeconds: Math.round(timeSinceLastUpdate / 1000),
+        });
         loadMissions(true); // Refresh silencieux
       }
     }, 60000); // Toutes les 60s
@@ -377,11 +417,10 @@ export default function MissionScreen() {
             lon: location.coords.longitude
           } : undefined
         }).catch((err) => {
-          console.warn(JSON.stringify({
-            event: "driver_heartbeat_error",
+          log.warn("driver heartbeat error", {
             error: err?.message || String(err),
-            timestamp: new Date().toISOString()
-          }));
+            timestamp: new Date().toISOString(),
+          });
         });
       }
     }, 60000); // Toutes les 60s
@@ -389,10 +428,13 @@ export default function MissionScreen() {
     return () => clearInterval(heartbeatInterval);
   }, [socket, missions, location]);
 
-  const openNavigation = (destination: string) => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-    Linking.openURL(url);
-  };
+  const openNavigation = useCallback(async (destination: string, mission?: Booking) => {
+    if (mission && Platform.OS !== "web") {
+      await MissionStateManager.startMission(mission, destination);
+      await showMissionNotification(MissionStateManager.getState());
+    }
+    await openNavigationApp(destination);
+  }, []);
 
   const handleOpenModal = useCallback((missionId: number) => {
     setCompletingMissionId(missionId);
@@ -412,45 +454,44 @@ export default function MissionScreen() {
     setIsSubmitting(true);
 
     try {
-      const isReturn = !!mission.is_return;
-      // ✅ P0-1: Utiliser les statuts en UPPERCASE pour correspondre au backend
-      const statusToSend: BookingStatus = isReturn
-        ? "RETURN_COMPLETED"
-        : "COMPLETED";
+      log.info("updating status to completed", { bookingId: mission.id });
 
-      console.log("[Mission] Mise à jour du statut:", statusToSend, "pour booking", mission.id);
-
-      await updateTripStatus(mission.id, statusToSend);
+      if (Platform.OS !== "web" && MissionStateManager.isActive()) {
+        const ok = await MissionStateManager.requestTransition("COMPLETED");
+        if (!ok) {
+          throw new Error("Transition COMPLETED refusée par le state manager");
+        }
+        await MissionStateManager.stopMission();
+        await dismissMissionNotification();
+      } else {
+        const { updateTripStatus } = await import("@/services/api");
+        const statusToSend: BookingStatus = mission.is_return ? "RETURN_COMPLETED" : "COMPLETED";
+        await updateTripStatus(mission.id, statusToSend);
+      }
 
       // ✅ Phase 1 - Quick Wins: Annuler le rappel local pour cette mission
       await cancelMissionReminder(mission.id);
 
-      // Mettre à jour la liste des missions (retirer la mission terminée)
       setMissions((prev) =>
-        prev
-          .map((m) =>
-            m.id === mission.id ? { ...m, status: statusToSend } : m
-          )
-          .filter(
-            (m) => {
-              const s = (m.status || "").toLowerCase();
-              return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
-            }
-          )
+        prev.filter((m) => {
+          if (m.id === mission.id) return false;
+          const s = (m.status || "").toLowerCase();
+          return !["completed", "return_completed", "canceled", "cancelled"].includes(s);
+        })
       );
 
       // Fermer le modal après succès
       setModalVisible(false);
       setCompletingMissionId(null);
 
-      console.log("✅ Mission terminée avec succès");
+      log.success("mission completed", { bookingId: mission.id });
     } catch (error: any) {
       const msg =
         error.response?.data?.error ||
         error.response?.data?.message ||
         "Impossible de terminer la mission.";
       Alert.alert("Erreur", msg);
-      console.error("[Mission] Erreur lors de la confirmation:", error);
+      log.error("confirm completion failed", { error });
     } finally {
       // Toujours débloquer le bouton
       setIsSubmitting(false);
@@ -464,7 +505,7 @@ export default function MissionScreen() {
           flex: 1,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#F5F7F6", // ✅ Fond épuré cohérent avec le login
+          backgroundColor: "#f4f7fc",
         }}
       >
         <Loader />
@@ -473,24 +514,21 @@ export default function MissionScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
-      {/* 🆕 Indicateur de statut connexion Socket.IO */}
-      <SocketStatusIndicator />
-
+    <View style={{ flex: 1, backgroundColor: "#f4f7fc" }}>
       <ScrollView
         style={{ flex: 1 }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={onRefresh}
-            colors={["#0A7F59"]} // Android - accent color
-            tintColor="#0A7F59" // iOS - accent color
+            colors={["#00796b"]}
+            tintColor="#00796b"
           />
         }
       >
         <MissionHeader
           driverName={driver.first_name || "Chauffeur"}
-          date={new Date().toLocaleDateString()}
+          missionCount={activeMissions.length}
         />
 
         {location && nextDestination && (
@@ -553,17 +591,12 @@ export default function MissionScreen() {
                       }
                     }}
                     onNavigate={() => {
-                      // ✅ Normaliser le statut en majuscules pour correspondre au backend
                       const normalizedStatus = mission.status?.toUpperCase();
-
-                      // Déterminer la destination selon le statut :
-                      // - IN_PROGRESS : client à bord → dropoff (Point B)
-                      // - ASSIGNED/EN_ROUTE : aller chercher client → pickup (Point A)
                       const dest =
                         normalizedStatus === "IN_PROGRESS"
                           ? mission.dropoff_location!
                           : mission.pickup_location!;
-                      openNavigation(dest);
+                      openNavigation(dest, mission);
                     }}
                     onStatusChange={(missionId, newStatus) => {
                       setMissions((prev) => {

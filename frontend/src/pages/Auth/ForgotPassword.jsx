@@ -1,42 +1,58 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import styles from './ForgotPassword.module.css';
+
+const InfoIcon = () => (
+  <svg className={styles.infoIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="16" x2="12" y2="12" />
+    <line x1="12" y1="8" x2="12.01" y2="8" />
+  </svg>
+);
+
+const ArrowLeftIcon = () => (
+  <svg className={styles.backIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+
+const ShieldIcon = () => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="M9 12l2 2 4-4" />
+  </svg>
+);
 
 const ForgotPassword = () => {
-  const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      const response = await axios.post('http://localhost:5000/auth/forgot-password', {
-        email,
-      });
-
-      setMessage(response.data.message);
-      setError('');
-    } catch (err) {
-      console.error('Erreur :', err);
-      setError(err.response?.data?.error || 'Une erreur est survenue.');
-    }
-  };
-
   return (
-    <div>
-      <h2>Mot de passe oublié</h2>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Entrez votre email"
-          required
-        />
-        <button type="submit">Envoyer</button>
-      </form>
-      {message && <p>{message}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+    <div className={styles.pageWrapper}>
+      <div className={styles.card}>
+        <img src="/logo-lirie.png" alt="Lirie" className={styles.logo} />
+
+        <h1 className={styles.title}>Mot de passe oublié ?</h1>
+        <p className={styles.description}>
+          La réinitialisation de mot de passe est gérée par votre administrateur pour des raisons de sécurité.
+        </p>
+
+        <div className={styles.infoBox}>
+          <InfoIcon />
+          <p className={styles.infoText}>
+            <strong>Contactez l'administrateur de votre entreprise</strong> pour demander la réinitialisation de votre mot de passe. Il pourra générer un nouveau mot de passe temporaire depuis le panneau d'administration.
+          </p>
+        </div>
+
+        <Link to="/login" className={styles.backButton}>
+          <ArrowLeftIcon />
+          Retour à la connexion
+        </Link>
+
+        <div className={styles.footer}>
+          <p className={styles.footerText}>
+            Lirie — Plateforme de transport sanitaire
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

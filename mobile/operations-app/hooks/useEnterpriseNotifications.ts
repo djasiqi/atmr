@@ -12,6 +12,9 @@ import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
 import api from "@/services/api";
 import { secureStorage } from "@/services/storage";
 import { getErrorMessage, logError } from "@/utils/errorHandler";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("EntNotif");
 
 // 🔔 Configuration du comportement des notifications en mode foreground
 const foregroundBehavior: NotificationBehavior = {
@@ -49,7 +52,7 @@ export const useEnterpriseNotifications = () => {
     const forceDevPush =
       String(process.env.EXPO_PUBLIC_ENABLE_PUSH_DEV || "").trim() === "1";
     if ((isDevEnv || isBare) && !forceDevPush) {
-      console.log("🔔 Notifications désactivées en développement/local - skip registration");
+      log.info("notifications disabled in dev/local, skip registration", {});
       return;
     }
 
@@ -61,9 +64,9 @@ export const useEnterpriseNotifications = () => {
         if (!token || !Number.isInteger(companyId)) {
           const isDevLocal = __DEV__ === true || Constants.executionEnvironment === "bare";
           if (isDevLocal && !token) {
-            console.log("ℹ️ Pas de token push en dev/local - normal sans Firebase");
+            log.info("no push token in dev/local, normal without firebase", {});
           } else {
-            console.warn("⛔ Token ou ID d'entreprise invalide, enregistrement annulé.");
+            log.warn("invalid token or company id, registration cancelled", {});
           }
           return;
         }
@@ -71,9 +74,9 @@ export const useEnterpriseNotifications = () => {
         // Sauvegarder company_id dans AsyncStorage
         try {
           await AsyncStorage.setItem("company_id", String(companyId));
-          console.log(`💾 company_id sauvegardé dans AsyncStorage: ${companyId}`);
+          log.info("company_id saved to AsyncStorage", { companyId });
         } catch (e) {
-          console.warn("⚠️ Impossible de sauvegarder company_id:", e);
+          log.warn("failed to save company_id", { error: e });
         }
 
         // Ne contacter le serveur que si le token est nouveau
@@ -81,9 +84,9 @@ export const useEnterpriseNotifications = () => {
         const lastSentToken = await AsyncStorage.getItem(storageKey);
 
         if (lastSentToken === token) {
-          console.log("✅ Token de notification inchangé, pas de nouvel enregistrement.");
+          log.info("push token unchanged, no new registration", {});
         } else {
-          console.log("🔔 Nouveau token détecté, enregistrement sur le serveur pour l'entreprise:", companyId);
+          log.info("new token detected, registering on server", { companyId });
 
           try {
             // ✅ Envoyer avec Authorization Enterprise (sinon l'intercepteur driver ne met pas le bon token)
@@ -98,9 +101,9 @@ export const useEnterpriseNotifications = () => {
                 headers: enterpriseJwt ? { Authorization: `Bearer ${enterpriseJwt}` } : {},
               }
             );
-            console.log("✅ Token push enregistré avec succès sur le serveur");
+            log.success("push token registered on server", {});
           } catch (e: any) {
-            console.error("❌ Envoi push token échoué:", {
+            log.error("push token send failed", {
               companyId,
               status: e?.response?.status,
               data: e?.response?.data,
@@ -110,13 +113,13 @@ export const useEnterpriseNotifications = () => {
           }
 
           await AsyncStorage.setItem(storageKey, token);
-          console.log("✅ Token enregistré sur le serveur et sauvegardé localement.");
+          log.success("token saved on server and locally", {});
         }
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
         
         if (errorMessage.includes("FIS_AUTH_ERROR")) {
-          console.warn("⚠️ Firebase Error lors de la configuration des notifications - normal en dev/local");
+          log.warn("firebase error during notification setup, normal in dev", {});
         } else {
           logError("Erreur durant la configuration des notifications", error);
         }
@@ -157,15 +160,15 @@ export const useEnterpriseNotifications = () => {
           trigger: null, // Envoyer immédiatement
         });
 
-        console.log(`📩 Notification envoyée: ${title} - ${body} (app inactive: ${isAppInactive})`);
+        log.info("notification sent", { title, body, appInactive: isAppInactive });
       } catch (error) {
-        console.error("❌ Erreur lors de l'envoi de la notification:", error);
+        log.error("send notification failed", { error });
       }
     };
 
     // Handler pour nouvelle course (jamais d'ID visible)
     const handleNewBooking = (data: any) => {
-      console.log("📦 Nouvelle course reçue:", data);
+      log.info("new booking received", { data });
       const clientName = data.client_name || data.client_display_name || "Client";
       const timeShort = data.time_formatted || (data.scheduled_time ? String(data.scheduled_time).slice(11, 16) : "");
       const body = timeShort ? `${clientName} • ${timeShort}` : clientName;
@@ -180,7 +183,7 @@ export const useEnterpriseNotifications = () => {
     // Handler pour course mise à jour (Driver→Company: chauffeur change statut)
     // Format: "Course • {STATUT}" + "Chauffeur → Client" + trajet (jamais d'ID visible)
     const handleBookingUpdated = (data: any) => {
-      console.log("🔄 Course mise à jour:", data);
+      log.info("booking updated", { data });
       const statusLabels: Record<string, string> = {
         assigned: "Assignée",
         en_route: "En route",
@@ -229,7 +232,7 @@ export const useEnterpriseNotifications = () => {
 
     // Handler pour course annulée (jamais d'ID visible)
     const handleBookingCancelled = (data: any) => {
-      console.log("❌ Course annulée:", data);
+      log.info("booking cancelled", { data });
       const clientName = data.client_name || data.client_display_name || "Client";
       const timeShort = data.time_formatted || (data.scheduled_time ? String(data.scheduled_time).slice(11, 16) : "");
       const body = timeShort ? `${clientName} • ${timeShort}` : clientName;
@@ -247,7 +250,7 @@ export const useEnterpriseNotifications = () => {
         return;
       }
 
-      console.log("💬 Nouveau message de chat:", message);
+      log.info("new chat message", { message });
       const role = String(message.sender_role || "").toLowerCase();
       const roleLabel = role === "company" ? "Entreprise" : role === "driver" ? "Chauffeur" : "Équipe";
       const senderName = message.sender_name || message.sender_first_name || roleLabel || "Message";
@@ -308,13 +311,13 @@ export const useEnterpriseNotifications = () => {
   useEffect(() => {
     const notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
-        console.log("📩 Notification reçue:", notification);
+        log.info("notification received", { notification });
       }
     );
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        console.log("📲 L'utilisateur a interagi avec une notification:", response);
+        log.info("user interacted with notification", { response });
         const data = response.notification.request.content.data as Record<string, unknown> | undefined;
         if (!data) return;
 
@@ -342,7 +345,7 @@ export const useEnterpriseNotifications = () => {
         } else if (notifType === "chat_message" || notifType === "message") {
           router.push("/(enterprise)/chat" as any);
         } else if (notifType && (notifType.includes("booking") || notifType.includes("booking_assigned"))) {
-          console.warn("⚠️ Notification booking sans booking_id — impossible d'ouvrir la course", data);
+          log.warn("booking notification without booking_id, cannot open", { data });
         }
       }
     );
@@ -357,7 +360,7 @@ export const useEnterpriseNotifications = () => {
 async function registerForPushNotificationsAsync(): Promise<string | null> {
   try {
     if (!Device.isDevice) {
-      console.warn("⚠️ Emulator detected - notifications may be limited");
+      log.warn("emulator detected, notifications may be limited", {});
     }
     if (Platform.OS === "web") {
       return null;
@@ -372,7 +375,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     }
 
     if (finalStatus !== "granted") {
-      console.warn("⚠️ Notification permissions denied");
+      log.warn("notification permissions denied", {});
       return null;
     }
 
@@ -396,7 +399,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
       projectId ? { projectId } : undefined
     );
 
-    console.log("📱 Expo push token:", token.data.substring(0, 50) + "...");
+    log.info("expo push token obtained", { prefix: token.data.substring(0, 50) + "..." });
 
     return token.data;
   } catch (error: unknown) {
@@ -411,9 +414,9 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
     if (isFirebaseError) {
       const isDevLocal = __DEV__ || process.env.NODE_ENV === "development";
       if (isDevLocal) {
-        console.log("ℹ️ Erreur Firebase en dev/local - Firebase non accessible, c'est normal");
+        log.info("firebase error in dev/local, normal if firebase unavailable", {});
       } else {
-        console.warn("⚠️ Firebase Error - Expo token should still work");
+        log.warn("firebase error, expo token should still work", {});
       }
     } else {
       logError("Error registering for notifications", error);

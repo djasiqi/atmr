@@ -9,25 +9,25 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Literal, cast
 
-import redis  # pyright: ignore[reportMissingImports]
+import redis
 from flask import (
     abort,
     jsonify,
     request,
 )
-from flask_bcrypt import Bcrypt  # pyright: ignore[reportMissingImports]
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import (
     JWTManager,
     get_jwt_identity,
 )
-from flask_limiter import Limiter  # pyright: ignore[reportMissingImports]
-from flask_limiter.util import (  # pyright: ignore[reportMissingImports]
+from flask_limiter import Limiter
+from flask_limiter.util import (
     get_remote_address,
 )
-from flask_mail import Mail  # pyright: ignore[reportMissingImports]
-from flask_migrate import Migrate  # pyright: ignore[reportMissingModuleSource]
-from flask_socketio import SocketIO  # pyright: ignore[reportMissingModuleSource]
-from flask_sqlalchemy import SQLAlchemy  # pyright: ignore[reportMissingImports]
+from flask_mail import Mail
+from flask_migrate import Migrate
+from flask_socketio import SocketIO
+from flask_sqlalchemy import SQLAlchemy
 
 # Initialisation des extensions (singleton importables partout)
 db = SQLAlchemy()
@@ -51,14 +51,14 @@ REDIS_SOCKET_CONNECT_TIMEOUT = int(
 redis_client: redis.Redis | None = None
 try:
     # ✅ P1: Configurer timeouts pour éviter blocages
-    redis_client = redis.Redis.from_url(
+    _redis_instance = redis.Redis.from_url(
         REDIS_URL,
         socket_timeout=REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
     )
     # ✅ P1: Ping avec timeout pour vérifier connexion sans bloquer
-    if redis_client is not None:
-        redis_client.ping()
+    _redis_instance.ping()
+    redis_client = _redis_instance
     limiter_storage = REDIS_URL
 except Exception as e:
     app_logger.warning(
@@ -78,11 +78,19 @@ except Exception as e:
 # en multi-workers car les SIDs ne sont pas partagés entre workers.
 # Typage strict de async_mode pour contenter Pylance/pyright.
 AsyncMode = Literal["threading", "eventlet", "gevent", "gevent_uwsgi"]
-_env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="eventlet").strip().lower()
-_allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
-if _env_async not in _allowed_modes:
-    # fallback sûr si une valeur inconnue est fournie
-    _env_async = "eventlet"
+
+# ✅ FIX: Si DISABLE_EVENTLET=1, forcer threading mode pour éviter
+# que Flask-SocketIO n'initialise eventlet et casse les migrations Alembic
+_disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
+if _disable_eventlet:
+    _env_async = "threading"
+    app_logger.info("[Socket.IO] Mode threading forcé (DISABLE_EVENTLET=1)")
+else:
+    _env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="eventlet").strip().lower()
+    _allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
+    if _env_async not in _allowed_modes:
+        # fallback sûr si une valeur inconnue est fournie
+        _env_async = "eventlet"
 ASYNC_MODE: AsyncMode = cast("AsyncMode", _env_async)
 
 # ✅ FIX: Utiliser REDIS_URL directement si disponible (même si redis_client est None)
@@ -173,7 +181,7 @@ class RedisStorageWithTTL:  # DEPRECATED: Non utilisée avec Flask-Limiter 3.x
 
         # Import tardif pour éviter les cycles
         # Flask-Limiter 3.x utilise le package 'limits' pour les storage backends
-        from limits.storage import RedisStorage  # pyright: ignore[reportMissingImports]
+        from limits.storage import RedisStorage
 
         self.storage = RedisStorage(storage_uri)
         self.ttl_seconds = ttl_seconds
@@ -207,7 +215,8 @@ class RedisStorageWithTTL:  # DEPRECATED: Non utilisée avec Flask-Limiter 3.x
             Nouvelle valeur du compteur
         """
         # Incrémenter via le storage sous-jacent
-        result = self.storage.incr(key, expiry, elastic_expiry, amount)
+        # Note: L'API de limits.storage peut varier selon la version
+        result = self.storage.incr(key=key, expiry=expiry, elastic_expiry=elastic_expiry, amount=amount)  # type: ignore[call-arg]
 
         # ✅ Définir un TTL automatique sur la clé
         # Si elastic_expiry=True, prolonge le TTL à chaque requête
@@ -496,7 +505,7 @@ def register_jwt_error_handlers(app):
     Cela permet au client mobile de détecter les tokens expirés et de les rafraîchir
     automatiquement via l'intercepteur HTTP.
     """
-    from jwt.exceptions import (  # pyright: ignore[reportMissingImports]
+    from jwt.exceptions import (
         ExpiredSignatureError,
         InvalidTokenError,
     )
@@ -627,7 +636,7 @@ def role_required(*roles):
             # même si l'utilisateur dans la DB a un rôle différent
             token_role = None
             try:
-                from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+                from flask_jwt_extended import (
                     get_jwt,
                 )
 

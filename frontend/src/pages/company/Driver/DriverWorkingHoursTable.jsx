@@ -17,8 +17,8 @@ export default function DriverWorkingHoursTable({ driverHoursData = [] }) {
         <thead>
           <tr>
             <th>Chauffeur</th>
-            <th style={{ textAlign: 'center' }}>Nombre de courses</th>
-            <th style={{ textAlign: 'center' }}>Heures travaillées</th>
+            <th className={styles.numericHeader}>Nombre de courses</th>
+            <th className={styles.numericHeader}>Heures travaillees</th>
           </tr>
         </thead>
         <tbody>

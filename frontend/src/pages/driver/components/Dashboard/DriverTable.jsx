@@ -1,50 +1,73 @@
-// C:\Users\jasiq\atmr\frontend\src\pages\driver\components\Dashboard\DriverTable.jsx
 import React from 'react';
 import styles from '../../Dashboard/DriverDashboard.module.css';
-import { FiRepeat, FiUserX, FiUserCheck } from 'react-icons/fi';
+import { FiRepeat, FiUserX, FiUserCheck, FiTruck } from 'react-icons/fi';
 
-// La prop "onToggleAvailability" a été retirée
 const DriverTable = ({ driver, loading, onToggle, onToggleType }) => {
-  if (loading) return <p>Chargement des chauffeurs...</p>;
-  if (!driver || driver.length === 0) return <p>Aucun chauffeur pour le moment.</p>;
+  if (loading) return <p className={styles.emptyText}>Chargement des chauffeurs...</p>;
+  if (!driver || driver.length === 0) return <p className={styles.emptyText}>Aucun chauffeur pour le moment.</p>;
+
+  const getDriverName = (drv) => {
+    const first = drv.first_name || '';
+    const last = drv.last_name || '';
+    const full = `${first} ${last}`.trim();
+    return full || drv.full_name || drv.username || '\u2014';
+  };
 
   return (
     <table className={styles.table}>
       <thead>
         <tr>
-          <th>Nom d'utilisateur</th>
+          <th>Chauffeur</th>
           <th>Type</th>
-          <th>Disponibilité</th>
+          <th>Statut</th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {driver.map((drv) => (
-          <tr key={drv.id}>
-            <td className={styles.driverNameCell}>{drv.username}</td>
-            <td>{drv.driver_type === 'EMERGENCY' ? 'Urgence' : 'Régulier'}</td>
-            <td>{drv.is_available ? 'Disponible' : 'Indisponible'}</td>
-            <td>
-              {/* Bouton pour changer le TYPE */}
-              <button
-                onClick={() => onToggleType(drv.id)}
-                title="Changer le type (Régulier/Urgence)"
-                className={styles.actionButton}
-              >
-                <FiRepeat />
-              </button>
+        {driver.map((drv) => {
+          const name = getDriverName(drv);
+          const isEmergency = drv.driver_type === 'EMERGENCY';
+          const vehicleInfo = drv.vehicle_assigned || drv.vehicle?.model;
 
-              {/* Bouton pour changer le STATUT DU COMPTE */}
-              <button
-                onClick={() => onToggle(drv.id, drv.is_active)}
-                title={drv.is_active ? 'Désactiver le compte' : 'Activer le compte'}
-                className={styles.actionButton}
-              >
-                {drv.is_active ? <FiUserX /> : <FiUserCheck />}
-              </button>
-            </td>
-          </tr>
-        ))}
+          return (
+            <tr key={drv.id} className={!drv.is_active ? styles.rowInactive : undefined}>
+              <td className={styles.driverNameCell}>
+                <span className={styles.driverName}>{name}</span>
+                {vehicleInfo && (
+                  <span className={styles.driverVehicle}>
+                    <FiTruck size={10} /> {vehicleInfo}
+                  </span>
+                )}
+              </td>
+              <td>
+                <span className={isEmergency ? styles.badgeEmergency : styles.badgeRegular}>
+                  {isEmergency ? 'Urgence' : 'Regulier'}
+                </span>
+              </td>
+              <td>
+                <span className={drv.is_available ? styles.badgeAvailable : styles.badgeUnavailable}>
+                  {drv.is_available ? 'Disponible' : 'Indisponible'}
+                </span>
+              </td>
+              <td>
+                <button
+                  onClick={() => onToggleType(drv.id)}
+                  title="Changer le type (Regulier/Urgence)"
+                  className={styles.actionButton}
+                >
+                  <FiRepeat size={13} />
+                </button>
+                <button
+                  onClick={() => onToggle(drv.id, drv.is_active)}
+                  title={drv.is_active ? 'Desactiver le compte' : 'Activer le compte'}
+                  className={styles.actionButton}
+                >
+                  {drv.is_active ? <FiUserX size={13} /> : <FiUserCheck size={13} />}
+                </button>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

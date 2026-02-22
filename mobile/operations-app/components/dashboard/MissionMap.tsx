@@ -1,23 +1,22 @@
-// components/dashboard/MissionMap.tsx
-// Version native (iOS/Android) - le fichier .web.tsx sera utilisé automatiquement sur le web
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Alert } from 'react-native';
-import MapView, { Marker, LatLng } from 'react-native-maps';
+import { View, Alert, Platform } from 'react-native';
+import MapView, { Marker, LatLng, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
-import { GOOGLE_API_KEY, ANDROID_MAPS_API_KEY } from '../../src/config/env';
-import { styles } from '@/styles/missionMapStyles';
+import { Ionicons } from '@expo/vector-icons';
+import { GOOGLE_API_KEY } from '../../src/config/env';
+import { styles, LIRIE_MAP_STYLE, MAP_BRAND } from '@/styles/missionMapStyles';
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("MissionMap");
 
 type Props = {
   location: { coords: { latitude: number; longitude: number } };
-  destination: string; // ex: "10 rue ... ville"
-  /** Largeur responsive (alignée avec la card) */
+  destination: string;
   contentWidth?: number;
-  /** Hauteur du bloc carte (responsive tablette) */
   mapHeight?: number;
 };
 
-// ✅ Directions API key (HTTP). Ne pas utiliser la clé Android Maps ici.
 const DIRECTIONS_KEY = GOOGLE_API_KEY;
 
 const mask = (val: string | undefined) =>
@@ -30,15 +29,12 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
 
   useEffect(() => {
     if (!DIRECTIONS_KEY) {
-      console.warn(
-        '⚠️ [ENV] EXPO_PUBLIC_GOOGLE_API_KEY manquant — ajoute-le dans .env.local puis redémarre Metro.'
-      );
+      log.warn("google api key missing", {});
     } else {
-      console.log('[MissionMap] Directions key chargée:', mask(DIRECTIONS_KEY));
+      log.info("directions key loaded", { key: mask(DIRECTIONS_KEY) });
     }
   }, []);
 
-  // Géocodage de l'adresse destination -> LatLng
   useEffect(() => {
     const fetchDestinationCoords = async () => {
       try {
@@ -57,8 +53,6 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
           setDestinationCoords(null);
         }
       } catch (error) {
-        // En arrière-plan / sans réseau, Android peut renvoyer une erreur transitoire (UNAVAILABLE).
-        // On évite de spammer des Alert, et on laisse l'app continuer sans coords.
         const msg = error instanceof Error ? error.message : String(error);
         const isTransient =
           msg.includes('UNAVAILABLE') ||
@@ -66,9 +60,9 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
           msg.toLowerCase().includes('rejected');
 
         if (isTransient) {
-          console.warn('⚠️ Erreur de géocodage (transitoire) :', error);
+          log.warn("geocode error transient", { error });
         } else {
-          console.error('Erreur de géocodage :', error);
+          log.error("geocode error", { error });
           const now = Date.now();
           if (now - lastGeocodeAlertAtRef.current > 60_000) {
             lastGeocodeAlertAtRef.current = now;
@@ -105,14 +99,39 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
       <MapView
         ref={mapRef}
         style={styles.map}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={region}
         showsUserLocation
+        showsMyLocationButton={false}
+        showsPointsOfInterest={false}
+        showsBuildings={false}
         loadingEnabled
+        loadingIndicatorColor={MAP_BRAND.primary}
+        customMapStyle={LIRIE_MAP_STYLE}
       >
-        <Marker coordinate={location.coords} title="Vous êtes ici" pinColor="blue" />
+        <Marker
+          coordinate={location.coords}
+          title="Votre position"
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={false}
+        >
+          <View style={styles.markerPickup}>
+            <Ionicons name="navigate" size={14} color="#fff" />
+          </View>
+        </Marker>
 
         {destinationCoords && (
-          <Marker key="marker" coordinate={destinationCoords} title="Destination" pinColor="green" />
+          <Marker
+            key="dest"
+            coordinate={destinationCoords}
+            title="Destination"
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
+            <View style={styles.markerDropoff}>
+              <Ionicons name="flag" size={14} color="#fff" />
+            </View>
+          </Marker>
         )}
 
         {canDrawRoute && (
@@ -123,25 +142,24 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
             apikey={DIRECTIONS_KEY}
             mode="DRIVING"
             strokeWidth={4}
-            strokeColor="#00BFA6"
+            strokeColor={MAP_BRAND.primary}
             optimizeWaypoints
             onReady={(result) => {
-              // Fit map to route
               if (mapRef.current && result.coordinates?.length) {
                 mapRef.current.fitToCoordinates(result.coordinates, {
-                  edgePadding: { top: 60, right: 60, bottom: 60, left: 60 },
+                  edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
                   animated: true,
                 });
               }
             }}
             onError={(e) => {
-              console.warn('Directions error:', e);
-              // Message fréquent si mauvaise clé / restrictions
-              // => activer "Directions API" et vérifier que la clé HTTP n'est pas restreinte à Android apps.
+              log.warn("directions error", { error: e });
             }}
           />
         )}
       </MapView>
+
+      {/* Overlay badge distance/durée (se remplit via onReady) */}
     </View>
   );
 };

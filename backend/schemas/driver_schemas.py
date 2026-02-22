@@ -41,6 +41,11 @@ class DriverProfileUpdateSchema(Schema):
     license_valid_until = fields.Date(allow_none=True)
     medical_valid_until = fields.Date(allow_none=True)
 
+    # Véhicule
+    vehicle_assigned = fields.Str(validate=validate.Length(max=100), allow_none=True)
+    brand = fields.Str(validate=validate.Length(max=100), allow_none=True)
+    license_plate = fields.Str(validate=validate.Length(max=50), allow_none=True)
+
     # Listes
     license_categories = fields.List(
         fields.Str(validate=validate.Length(max=10)),

@@ -872,6 +872,74 @@ class DriverBookingsSince(Resource):
         return [b.serialize for b in bookings], 200
 
 
+@driver_ns.route("/me/bookings/next-preview")
+class DriverNextBookingPreview(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self):
+        """Returns a privacy-safe preview of the driver's next upcoming booking."""
+        driver, error_response, sc = get_driver_from_token()
+        if error_response:
+            return error_response, sc
+        driver = cast("Driver", driver)
+
+        from models.booking import Booking
+        from models.enums import BookingStatus
+        from shared.time_utils import now_local
+
+        now = now_local()
+
+        next_booking = (
+            Booking.query.filter(Booking.driver_id == driver.id)
+            .filter(
+                Booking.status.in_([
+                    BookingStatus.ASSIGNED,
+                    BookingStatus.ACCEPTED,
+                ])
+            )
+            .filter(Booking.scheduled_time >= now)
+            .order_by(Booking.scheduled_time.asc())
+            .first()
+        )
+
+        if not next_booking:
+            return {"next_booking_preview": None}, 200
+
+        can_show = True
+        if hasattr(next_booking, "institution_id") and next_booking.institution_id:
+            try:
+                from models.institution_settings import InstitutionSettings
+                settings = InstitutionSettings.query.filter_by(
+                    institution_id=next_booking.institution_id
+                ).first()
+                if settings and getattr(settings, "privacy_mode", False):
+                    can_show = False
+            except Exception:
+                pass
+
+        client = next_booking.client if hasattr(next_booking, "client") else None
+        if can_show and client:
+            first = getattr(client, "first_name", "") or ""
+            last = getattr(client, "last_name", "") or ""
+            display = f"{first[:1]}. {last[:1]}." if first and last else "Course suivante"
+        else:
+            display = "Course suivante"
+
+        pickup = getattr(next_booking, "pickup_location", "") or ""
+        dropoff = getattr(next_booking, "dropoff_location", "") or ""
+
+        return {
+            "next_booking_preview": {
+                "id": next_booking.id,
+                "pickup_at": next_booking.scheduled_time.isoformat() if next_booking.scheduled_time else None,
+                "client_display": display,
+                "pickup_short": pickup.split(",")[0].strip()[:30] if pickup else "",
+                "dropoff_short": dropoff.split(",")[0].strip()[:30] if dropoff else "",
+                "can_show_identity": can_show,
+            }
+        }, 200
+
+
 @driver_ns.route("/me/bookings/eta")
 class DriverBookingsETA(Resource):
     @jwt_required()
@@ -1422,7 +1490,15 @@ class UpdateBookingStatus(Resource):
     @role_required(UserRole.driver)
     @driver_ns.expect(booking_status_model)
     def put(self, booking_id: int):
-        # Variables pour stocker le résultat
+        from security.idempotency import idempotent
+
+        @idempotent(get_context_key=lambda: f"{get_jwt_identity()}:{booking_id}")
+        def _inner():
+            return self._do_put(booking_id)
+
+        return _inner()
+
+    def _do_put(self, booking_id: int):
         result = None
         status_code = 200
 
@@ -1650,6 +1726,9 @@ class RejectBooking(Resource):
                                     booking_id=uc_res.booking.id,
                                     driver_id=driver.id,
                                     company_id=uc_res.booking.company_id,
+                                    actor_role="driver",
+                                    actor_id=driver.id,
+                                    cancel_source="driver_api",
                                 )
                             )
                         except Exception as e:
@@ -1812,6 +1891,36 @@ class DriverAllBookings(Resource):
         uc = GetDriverAllBookingsUseCase(booking_repo=BookingRepository())
         bookings = uc.execute(driver_id=driver.id).bookings
         # ✅ Retourner une liste vide au lieu d'une erreur 404
+        return [b.serialize for b in bookings], 200
+
+
+@driver_ns.route("/me/company-bookings/today")
+class DriverCompanyBookingsToday(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self):
+        """Récupère tous les transports de l'entreprise du jour (collègues inclus)."""
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        from datetime import date as date_type, datetime as dt_type, time as time_type  # noqa: I001
+
+        from models.booking import Booking as BookingModel
+
+        today_start = dt_type.combine(date_type.today(), time_type.min)
+        today_end = dt_type.combine(date_type.today(), time_type.max)
+
+        bookings = (
+            BookingModel.query
+            .filter(BookingModel.company_id == driver.company_id)
+            .filter(BookingModel.scheduled_time >= today_start)
+            .filter(BookingModel.scheduled_time <= today_end)
+            .order_by(BookingModel.scheduled_time.asc())
+            .all()
+        )
+
         return [b.serialize for b in bookings], 200
 
 
@@ -2632,5 +2741,92 @@ class QuickRejectBooking(Resource):
 
         except Exception as e:
             logger.exception("❌ Erreur quick-reject booking %s", booking_id)
+            sentry_sdk.capture_exception(e)
+            return {"error": "Erreur interne"}, 500
+
+
+@driver_ns.route("/me/test-push")
+class TestPushNotification(Resource):
+    """Endpoint de diagnostic : envoie une notification push de test au chauffeur."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        try:
+            driver, error_response, status_code = get_driver_from_token()
+            if error_response:
+                return error_response, status_code
+
+            driver = cast("Driver", driver)
+
+            from ext import redis_client
+            from models.device_token import DeviceToken
+
+            MAX_TEST_PUSH_PER_MIN = 3
+
+            if redis_client:
+                rl_key = f"test_push_rl:{driver.id}"
+                count = redis_client.get(rl_key)
+                if count and int(count) >= MAX_TEST_PUSH_PER_MIN:  # type: ignore[arg-type]
+                    return {
+                        "ok": False,
+                        "error": "Limite atteinte : max 3 tests par minute",
+                    }, 429
+                redis_client.incr(rl_key)
+                redis_client.expire(rl_key, 60)
+
+            all_tokens = (
+                DeviceToken.query.filter_by(driver_id=driver.id, is_active=True)
+                .order_by(DeviceToken.updated_at.desc())
+                .all()
+            )
+
+            if not all_tokens:
+                return {
+                    "ok": False,
+                    "error": "Aucun token push enregistré pour ce chauffeur",
+                }, 404
+
+            seen_tokens: set[str] = set()
+            active_tokens: list[object] = []
+            for dt in all_tokens:
+                if dt.token not in seen_tokens and len(active_tokens) < MAX_TEST_PUSH_PER_MIN:
+                    seen_tokens.add(dt.token)
+                    active_tokens.append(dt)
+
+            from services.notifications.push import send_push_message
+
+            results = []
+            for dt in active_tokens:
+                res = send_push_message(
+                    token=dt.token,
+                    title="Test notification Liri",
+                    body="Si vous voyez ceci, les notifications fonctionnent !",
+                    data={"type": "test_push", "driver_id": driver.id},
+                    driver_id=driver.id,
+                    bypass_rate_limit=True,
+                )
+                results.append({
+                    "token_preview": dt.token[:20] + "...",
+                    "platform": dt.platform,
+                    "ok": res.get("ok", False),
+                    "error": res.get("error"),
+                })
+
+            all_ok = all(r["ok"] for r in results)
+            errors_count = sum(1 for r in results if not r["ok"])
+            logger.info(
+                "test_push driver_id=%s tokens=%d ok=%s errors=%d",
+                driver.id, len(active_tokens), all_ok, errors_count,
+            )
+            return {
+                "ok": all_ok,
+                "results": results,
+                "tokens_count": len(active_tokens),
+            }, 200
+
+        except Exception as e:
+            logger.exception("❌ Erreur test-push pour driver")
+            import sentry_sdk
             sentry_sdk.capture_exception(e)
             return {"error": "Erreur interne"}, 500

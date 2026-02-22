@@ -38,6 +38,88 @@ class DeleteOrCancelCompanyReservationUseCase:
     """Use-case Application: suppression/annulation intelligente selon
     statut + timing."""
 
+    def _validate_cancellation_reason(
+        self,
+        reason_code: str | None,
+        reason_text: str | None,
+    ) -> DeleteOrCancelCompanyReservationResult | None:
+        """Valide que le motif est present. Retourne un result d'erreur ou None si OK."""
+        if not reason_code or not str(reason_code).strip():
+            return DeleteOrCancelCompanyReservationResult(
+                ok=False,
+                error={"error": "Motif d'annulation requis (reason_code)."},
+                status_code=400,
+            )
+        code = str(reason_code).strip().upper()
+        if code == "OTHER" and (not reason_text or not str(reason_text).strip()):
+            return DeleteOrCancelCompanyReservationResult(
+                ok=False,
+                error={
+                    "error": "Justification requise pour le motif 'Autre' (reason_text)."
+                },
+                status_code=400,
+            )
+        return None
+
+    def _cancel_with_reason(
+        self,
+        booking: _BookingLike,
+        reason_code: str | None,
+        reason_text: str | None,
+        now: datetime,
+        *,
+        message: str = "La réservation a été annulée.",
+    ) -> DeleteOrCancelCompanyReservationResult:
+        """Valide le motif, applique l'annulation et persiste les champs."""
+        validation_error = self._validate_cancellation_reason(reason_code, reason_text)
+        if validation_error:
+            return validation_error
+
+        status_at_cancel = getattr(booking, "status", None)
+        if hasattr(status_at_cancel, "value"):
+            status_at_cancel = status_at_cancel.value
+
+        set_status(booking, "status", "CANCELED")
+        if getattr(booking, "driver_id", None):
+            booking.driver_id = None
+
+        from application.bookings.cancellation_rules import (
+            compute_cancellation_fields,
+            log_cancellation_persisted,
+        )
+        from models.invoice import CompanyBillingSettings
+
+        billing = CompanyBillingSettings.query.filter_by(
+            company_id=booking.company_id
+        ).first() if getattr(booking, "company_id", None) else None
+        cancellation_policy = getattr(billing, "cancellation_policy", None) if billing else None
+
+        already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
+        fields = compute_cancellation_fields(
+            reason_code=reason_code,
+            reason_text=reason_text,
+            cancelled_by_role="company",
+            now=now,
+            booking=booking,
+            policy=cancellation_policy,
+            status_at_cancel=status_at_cancel,
+        )
+        for key, val in fields.items():
+            if hasattr(booking, key):
+                setattr(booking, key, val)
+        if not already_had_reason:
+            log_cancellation_persisted(booking, fields)
+
+        return DeleteOrCancelCompanyReservationResult(
+            ok=True,
+            action="cancel",
+            message=message,
+            should_trigger_dispatch=True,
+            trigger_reason="cancel",
+            is_cancellation_billable=fields["is_cancellation_billable"],
+            cancellation_display_label=fields["cancellation_display_label"],
+        )
+
     def execute(
         self,
         booking: _BookingLike,
@@ -82,42 +164,17 @@ class DeleteOrCancelCompanyReservationUseCase:
                     should_trigger_dispatch=True,
                     trigger_reason="cancel",
                 )
-            # sinon: cancel + libérer driver
-            # ✅ CORRECTION : Libérer le driver AVANT de changer le statut
-            # pour éviter l'erreur de validation "driver_id ne peut pas être NULL si status=ASSIGNED"
-            # (même si on change vers CANCELED, la validation peut se déclencher entre les deux opérations)
-            if getattr(booking, "driver_id", None):
-                booking.driver_id = None
-            # Maintenant on peut changer le statut en toute sécurité
-            set_status(booking, "status", "CANCELED")
-
-            # ✅ Annulation standardisée : persister motif + facturation
-            from application.bookings.cancellation_rules import (
-                compute_cancellation_fields,
-                log_cancellation_persisted,
-            )
-
-            already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
-            fields = compute_cancellation_fields(
-                reason_code=reason_code,
-                reason_text=reason_text,
-                cancelled_by_role="company",
-                now=now,
-            )
-            for key, val in fields.items():
-                if hasattr(booking, key):
-                    setattr(booking, key, val)
-            if not already_had_reason:
-                log_cancellation_persisted(booking, fields)
-
-            return DeleteOrCancelCompanyReservationResult(
-                ok=True,
-                action="cancel",
+            # Validation motif obligatoire pour cancel
+            return self._cancel_with_reason(
+                booking, reason_code, reason_text, now,
                 message="La réservation a été annulée avec succès.",
-                should_trigger_dispatch=True,
-                trigger_reason="cancel",
-                is_cancellation_billable=fields["is_cancellation_billable"],
-                cancellation_display_label=fields["cancellation_display_label"],
+            )
+
+        # Règle 2.5: EN_ROUTE → cancel (facturation selon motif)
+        if st == "en_route":
+            return self._cancel_with_reason(
+                booking, reason_code, reason_text, now,
+                message="La course a été annulée (chauffeur en route).",
             )
 
         # Règle 3: forbid

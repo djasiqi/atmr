@@ -101,8 +101,9 @@ services:
       - UPLOADS_PUBLIC_BASE=${UPLOADS_PUBLIC_BASE:-/uploads}
       - API_DOCS=${API_DOCS:-off}
       - API_LEGACY_ENABLED=${API_LEGACY_ENABLED:-false}
-      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      # Sécurité - Clés de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
       - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
@@ -117,6 +118,9 @@ services:
       - RL_WORKER_URL=${RL_WORKER_URL:-http://atmr-rl-worker:5000}
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      # Firebase Cloud Messaging (FCM)
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
       # ✅ D3: Variables de chaos (NE JAMAIS activer en production)
       - CHAOS_ENABLED=${CHAOS_ENABLED:-false}
       - CHAOS_OSRM_DOWN=${CHAOS_OSRM_DOWN:-false}
@@ -190,10 +194,14 @@ services:
       - FLASK_APP=app.py
       - PDF_BASE_URL=${PDF_BASE_URL:-http://127.0.0.1:5000}
       - TZ=Europe/Zurich
-      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      # Sécurité - Clés de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
       - BREVO_API_KEY=${BREVO_API_KEY}
+      # Firebase Cloud Messaging (FCM) — pour push notifications Celery worker
+      - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
+      - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
@@ -267,8 +275,9 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
       - PDF_BASE_URL=${PDF_BASE_URL:-http://127.0.0.1:5000}
       - TZ=Europe/Zurich
-      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      # Sécurité - Clés de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
       - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
@@ -329,8 +338,9 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
       - FLASK_APP=app.py
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      # Sécurité - Clé de chiffrement (doit être dans backend/.env)
+      # Sécurité - Clés de chiffrement (doit être dans backend/.env)
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
       - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)

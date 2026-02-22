@@ -278,6 +278,69 @@ class Invoice(db.Model):
         self.cancelled_at = datetime.now(UTC)
         self.updated_at = datetime.now(UTC)
 
+    def _serialize_client(self) -> dict | None:
+        """Sérialise le client, avec override patient pour institution + S1_PATIENT."""
+        client = self.client
+        if not client and self.client_id:
+            from models.client import Client as ClientModel
+            from sqlalchemy.orm import joinedload as _jl
+
+            client = (
+                ClientModel.query
+                .options(_jl(ClientModel.user))
+                .filter_by(id=self.client_id)
+                .first()
+            )
+        if not client:
+            return None
+        first_name = (
+            getattr(client.user, "first_name", "")
+            if hasattr(client, "user") and client.user
+            else ""
+        )
+        last_name = (
+            getattr(client.user, "last_name", "")
+            if hasattr(client, "user") and client.user
+            else ""
+        )
+        username = (
+            getattr(client.user, "username", "")
+            if hasattr(client, "user") and client.user
+            else ""
+        )
+        is_institution = _as_bool(client.is_institution) if client else False
+        institution_name = client.institution_name if client else None
+        patient_display_name = None
+
+        # Pour les clients institution avec facturation patient (S1_PATIENT),
+        # retrouver le nom du patient depuis le premier booking de la facture
+        if (
+            is_institution
+            and self.billing_strategy == InvoiceBillingStrategy.S1_PATIENT
+        ):
+            try:
+                if hasattr(self, "lines") and self.lines:
+                    from models.booking import Booking
+
+                    for line in self.lines:
+                        if line.reservation_id:
+                            bk = Booking.query.get(line.reservation_id)
+                            if bk and bk.customer_name:
+                                patient_display_name = bk.customer_name
+                                break
+            except Exception:
+                pass
+
+        return {
+            "id": client.id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "username": username,
+            "is_institution": is_institution,
+            "institution_name": institution_name,
+            "patient_display_name": patient_display_name,
+        }
+
     def to_dict(self):
         """Sérialise la facture en dictionnaire."""
         return {
@@ -319,26 +382,7 @@ class Invoice(db.Model):
             "pdf_url": self.pdf_url,
             "qr_reference": self.qr_reference,
             "meta": self.meta,
-            "client": {
-                "id": self.client.id,
-                "first_name": getattr(self.client.user, "first_name", "")
-                if hasattr(self.client, "user") and self.client.user
-                else "",
-                "last_name": getattr(self.client.user, "last_name", "")
-                if hasattr(self.client, "user") and self.client.user
-                else "",
-                "username": getattr(self.client.user, "username", "")
-                if hasattr(self.client, "user") and self.client.user
-                else "",
-                "is_institution": _as_bool(self.client.is_institution)
-                if self.client
-                else False,
-                "institution_name": self.client.institution_name
-                if self.client
-                else None,
-            }
-            if self.client
-            else None,
+            "client": self._serialize_client(),
             "bill_to_client": {
                 "id": self.bill_to_client.id,
                 "first_name": getattr(self.bill_to_client.user, "first_name", "")
@@ -592,6 +636,11 @@ class CompanyBillingSettings(db.Model):
     material_delivery_price_fixed: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True, default=None
     )
+    cancellation_policy = Column(
+        JSONB, nullable=True, server_default=None,
+        comment="Policy d'annulation parametrable: tiers, min/max, overrides",
+    )
+
     vat_applicable = Column(Boolean, nullable=False, default=True)
     vat_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2), nullable=True, default=Decimal("7.7")
@@ -781,6 +830,7 @@ class CompanyBillingSettings(db.Model):
             "smtp_use_ssl": self.smtp_use_ssl,
             "smtp_username": self.smtp_username,
             "smtp_password_configured": bool(self.smtp_password),  # Juste un booléen
+            "cancellation_policy": self.cancellation_policy,
         }
 
     @hybrid_property  # Le linter détecte un conflit mais c'est intentionnel : _iban_raw mappe la colonne "iban" et iban est la propriété Python

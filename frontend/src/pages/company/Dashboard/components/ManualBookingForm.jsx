@@ -25,6 +25,8 @@ import { extractMedicalServiceInfo } from '../../../../utils/medicalExtract';
 import { shortAddress } from './formatAddress';
 import { toast } from 'sonner';
 import styles from './ManualBookingForm.module.css';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
+import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
 
 /** Trim + vide → null. Réutilisable pour champs optionnels (medical_facility, hospital_service, notes_medical, etc.). */
 function cleanOptionalText(s) {
@@ -154,22 +156,23 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   const [clientHomeAddress, setClientHomeAddress] = useState(''); // Adresse du client (pour override)
   const [clientHomeGPS, setClientHomeGPS] = useState({ lat: null, lon: null }); // GPS du client
 
-  // --- Date/heure de l'aller
-  const [scheduledTime, setScheduledTime] = useState('');
+  // --- Date/heure de l'aller (séparés pour UX)
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledHour, setScheduledHour] = useState('');
 
   // --- Aller-retour
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [returnDate, setReturnDate] = useState(''); // Date de retour
   const [returnTime, setReturnTime] = useState(''); // Heure de retour (optionnel)
 
-  // Pré-remplir automatiquement la date de retour avec la date de l'aller
+  const scheduledTime = scheduledDate && scheduledHour
+    ? `${scheduledDate}T${scheduledHour}` : '';
+
   useEffect(() => {
-    if (isRoundTrip && scheduledTime && !returnDate) {
-      // Extraire la date de scheduledTime (format: YYYY-MM-DDTHH:mm)
-      const datePart = scheduledTime.split('T')[0]; // YYYY-MM-DD
-      setReturnDate(datePart);
+    if (isRoundTrip && scheduledDate && !returnDate) {
+      setReturnDate(scheduledDate);
     }
-  }, [isRoundTrip, scheduledTime, returnDate]);
+  }, [isRoundTrip, scheduledDate, returnDate]);
 
   // --- Livraison matériel
   const [isMaterialDelivery, setIsMaterialDelivery] = useState(false);
@@ -299,7 +302,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   }, [pickupCoords.lat, pickupCoords.lon, dropoffCoords.lat, dropoffCoords.lon]);
 
   // Helper: min pour <input type="datetime-local"> au format local (pas UTC)
-  const minLocalDatetime = (() => {
+  const _minLocalDatetime = (() => {
     const d = new Date(Date.now() + 5 * 60 * 1000);
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
@@ -307,7 +310,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     )}:${pad(d.getMinutes())}`;
   })();
 
-  // Préréglages date/heure : "maintenant + 30 min", "+ 1h", "demain 9h"
   const applyDateTimePreset = (preset) => {
     const pad = (n) => String(n).padStart(2, '0');
     const now = new Date();
@@ -327,10 +329,8 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       default:
         return;
     }
-    const value = `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(
-      target.getDate()
-    )}T${pad(target.getHours())}:${pad(target.getMinutes())}`;
-    setScheduledTime(value);
+    setScheduledDate(`${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`);
+    setScheduledHour(`${pad(target.getHours())}:${pad(target.getMinutes())}`);
   };
 
   // === Handlers établissement / service ===
@@ -429,19 +429,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
         const options = clients.map((c) => {
           // 🏥 Pour les institutions, afficher le nom de l'institution
           let label = `Client #${c.id}`; // Par défaut
-          
-          // #region agent log
-          if (c.id === clients[0]?.id) {
-            console.log('🔍 [ManualBookingForm] loadDefaultClients - Construction du label pour client:', {
-              id: c.id,
-              is_institution: c.is_institution,
-              institution_name: c.institution_name,
-              user_first_name: c.user_first_name,
-              user_last_name: c.user_last_name,
-            });
-          }
-          // #endregion
-          
+
           if (c.is_institution && c.institution_name) {
             label = `🏥 ${c.institution_name}`;
           } else {
@@ -458,12 +446,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
               }
             }
           }
-          
-          // #region agent log
-          if (c.id === clients[0]?.id) {
-            console.log('🔍 [ManualBookingForm] loadDefaultClients - Label final:', label);
-          }
-          // #endregion
 
           return {
             value: c.id,
@@ -654,45 +636,11 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       const clients = q ? await searchClients(q) : await searchClients('');
 
       console.log('✅ Clients trouvés:', clients.length);
-      
-      // #region agent log
-      if (clients.length > 0) {
-        console.log('🔍 [ManualBookingForm] Structure complète du premier client:', clients[0]);
-        console.log('🔍 [ManualBookingForm] Toutes les clés:', Object.keys(clients[0]));
-        console.log('🔍 [ManualBookingForm] Valeurs des champs de nom:', {
-          full_name: clients[0].full_name,
-          first_name: clients[0].first_name,
-          last_name: clients[0].last_name,
-          user: clients[0].user,
-          user_first_name: clients[0].user?.first_name,
-          user_last_name: clients[0].user?.last_name,
-          user_username: clients[0].user?.username,
-          is_institution: clients[0].is_institution,
-          institution_name: clients[0].institution_name,
-        });
-      }
-      // #endregion
 
       const options = clients.map((c) => {
         // 🏥 Pour les institutions, afficher le nom de l'institution
         let label = `Client #${c.id}`; // Par défaut
-        
-        // #region agent log
-        if (c.id === clients[0]?.id) {
-          console.log('🔍 [ManualBookingForm] Construction du label pour client:', {
-            id: c.id,
-            is_institution: c.is_institution,
-            institution_name: c.institution_name,
-            user_first_name: c.user_first_name,
-            user_last_name: c.user_last_name,
-            user_first_name_type: typeof c.user_first_name,
-            user_last_name_type: typeof c.user_last_name,
-            user_first_name_truthy: !!c.user_first_name,
-            user_last_name_truthy: !!c.user_last_name,
-          });
-        }
-        // #endregion
-        
+
         if (c.is_institution && c.institution_name) {
           label = `🏥 ${c.institution_name}`;
         } else {
@@ -709,12 +657,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             }
           }
         }
-        
-        // #region agent log
-        if (c.id === clients[0]?.id) {
-          console.log('🔍 [ManualBookingForm] Label final:', label);
-        }
-        // #endregion
 
         return {
           value: c.id,
@@ -1502,48 +1444,23 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             </div>
           </div>
 
-          {/* Date & heure */}
+          {/* Date & heure aller */}
           <div className={styles.formGroup}>
-            <Label htmlFor="scheduled_time">Date &amp; heure *</Label>
+            <Label>Date &amp; heure de départ *</Label>
             <div className={styles.dateTimeRow}>
-              <Input
-                id="scheduled_time"
-                type="datetime-local"
-                name="scheduled_time"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                required
-                min={minLocalDatetime}
+              <InlineDatePicker
+                value={scheduledDate}
+                onChange={(v) => setScheduledDate(v)}
+                placeholder="Date"
               />
-              <div className={styles.datePresets}>
-                <button
-                  type="button"
-                  className={styles.datePresetBtn}
-                  onClick={() => applyDateTimePreset('now30')}
-                  title="Dans 30 minutes"
-                  aria-label="Définir la date à dans 30 minutes"
-                >
-                  +30 min
-                </button>
-                <button
-                  type="button"
-                  className={styles.datePresetBtn}
-                  onClick={() => applyDateTimePreset('now1h')}
-                  title="Dans 1 heure"
-                  aria-label="Définir la date à dans 1 heure"
-                >
-                  +1h
-                </button>
-                <button
-                  type="button"
-                  className={styles.datePresetBtn}
-                  onClick={() => applyDateTimePreset('tomorrow9')}
-                  title="Demain à 9h"
-                  aria-label="Définir la date à demain 9h"
-                >
-                  Demain 9h
-                </button>
-              </div>
+              <InlineTimePicker
+                value={scheduledHour}
+                onChange={(v) => setScheduledHour(v)}
+                placeholder="Heure"
+              />
+              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('now30')}>+30 min</button>
+              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('now1h')}>+1h</button>
+              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('tomorrow9')}>Demain 9h</button>
             </div>
 
             <div className={styles.chipsRow}>
@@ -1599,25 +1516,21 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
 
             {isRoundTrip && (
               <div className={styles.returnTimeGroup}>
-                <Label>Date du retour</Label>
-                <Input
-                  type="date"
-                  name="return_date"
-                  value={returnDate}
-                  onChange={(e) => setReturnDate(e.target.value)}
-                  placeholder="Date du retour"
-                />
-
-                <Label className={styles.returnTimeLabel}>Heure de retour (optionnel)</Label>
-                <Input
-                  type="time"
-                  name="return_time"
-                  value={returnTime}
-                  onChange={(e) => setReturnTime(e.target.value)}
-                  placeholder="Laisser vide pour « ⏱️ »"
-                />
+                <Label>Date &amp; heure de retour</Label>
+                <div className={styles.dateTimeRow}>
+                  <InlineDatePicker
+                    value={returnDate}
+                    onChange={(v) => setReturnDate(v)}
+                    placeholder="Date"
+                  />
+                  <InlineTimePicker
+                    value={returnTime}
+                    onChange={(v) => setReturnTime(v)}
+                    placeholder="Heure (opt.)"
+                  />
+                </div>
                 <small className={styles.returnTimeHint}>
-                  💡 Si l'heure n'est pas définie, elle pourra être planifiée plus tard
+                  Si l'heure n'est pas définie, elle pourra être planifiée plus tard
                 </small>
               </div>
             )}
@@ -1722,11 +1635,10 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
                 {/* Date de fin (optionnel) */}
                 <div className={styles.recurrenceGroup}>
                   <Label>Jusqu'au (optionnel)</Label>
-                  <Input
-                    type="date"
+                  <InlineDatePicker
                     value={recurrenceEndDate}
-                    onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(v) => setRecurrenceEndDate(v)}
+                    placeholder="Date de fin"
                   />
                 </div>
               </div>
@@ -1864,44 +1776,30 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
 
             {/* Options chaise roulante */}
             <div className={styles.medicalFormGroup}>
-              <Label htmlFor="clientHasWheelchair">Chaise roulante</Label>
-              <div className={styles.checkboxRowInline}>
-                <div className={styles.checkboxGroup}>
-                  <input
-                    type="checkbox"
-                    id="clientHasWheelchair"
-                    checked={wheelchairOptions.clientHasWheelchair}
-                    onChange={(e) =>
-                      setWheelchairOptions({
-                        clientHasWheelchair: e.target.checked,
-                        needWheelchair: e.target.checked ? false : wheelchairOptions.needWheelchair,
-                      })
-                    }
-                    className={styles.checkbox}
-                  />
-                  <Label htmlFor="clientHasWheelchair" className={styles.checkboxLabel}>
-                    ♿ En chaise
-                  </Label>
-                </div>
-                <div className={styles.checkboxGroup}>
-                  <input
-                    type="checkbox"
-                    id="needWheelchair"
-                    checked={wheelchairOptions.needWheelchair}
-                    onChange={(e) =>
-                      setWheelchairOptions({
-                        needWheelchair: e.target.checked,
-                        clientHasWheelchair: e.target.checked
-                          ? false
-                          : wheelchairOptions.clientHasWheelchair,
-                      })
-                    }
-                    className={styles.checkbox}
-                  />
-                  <Label htmlFor="needWheelchair" className={styles.checkboxLabel}>
-                    🏥 Prendre
-                  </Label>
-                </div>
+              <Label>Chaise roulante</Label>
+              <div className={styles.dateTimeRow}>
+                <button
+                  type="button"
+                  className={`${styles.chip} ${wheelchairOptions.clientHasWheelchair ? styles.isActive : ''}`}
+                  onClick={() => setWheelchairOptions({
+                    clientHasWheelchair: !wheelchairOptions.clientHasWheelchair,
+                    needWheelchair: false,
+                  })}
+                  aria-pressed={wheelchairOptions.clientHasWheelchair}
+                >
+                  ♿ En chaise
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.chip} ${wheelchairOptions.needWheelchair ? styles.isActive : ''}`}
+                  onClick={() => setWheelchairOptions({
+                    needWheelchair: !wheelchairOptions.needWheelchair,
+                    clientHasWheelchair: false,
+                  })}
+                  aria-pressed={wheelchairOptions.needWheelchair}
+                >
+                  🏥 Fournir chaise
+                </button>
               </div>
             </div>
           </div>

@@ -6,9 +6,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Platform,
+  Pressable,
 } from "react-native";
 import dayjs from "dayjs";
 import { Ionicons } from "@expo/vector-icons";
+
+const BRAND = "#00796B";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const CARD = "#FFFFFF";
 
 type DateSelectionModalProps = {
   visible: boolean;
@@ -31,8 +40,9 @@ export const DateSelectionModal: React.FC<DateSelectionModalProps> = ({
       const date = base.add(idx, "day");
       return {
         iso: date.format("YYYY-MM-DD"),
-        label: date.format("dddd D MMMM"),
-        shortLabel: date.format("ddd D"),
+        dayName: date.format("dddd"),
+        dayNumber: date.format("D"),
+        monthName: date.format("MMMM"),
         isToday: idx === 0,
         isTomorrow: idx === 1,
       };
@@ -43,217 +53,216 @@ export const DateSelectionModal: React.FC<DateSelectionModalProps> = ({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Sélectionne une date</Text>
-            <Text style={styles.subtitle}>
-              Visualise les trajets planifiés pour aujourd'hui, demain ou les
-              prochains jours.
-            </Text>
+      <Pressable style={s.overlay} onPress={onClose}>
+        <Pressable style={s.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={s.handle} />
+
+          <View style={s.header}>
+            <View style={s.headerIconWrap}>
+              <Ionicons name="calendar-outline" size={18} color={BRAND} />
+            </View>
+            <View style={s.headerText}>
+              <Text style={s.title}>Choisir une date</Text>
+              <Text style={s.subtitle}>Courses des 7 prochains jours</Text>
+            </View>
           </View>
 
           <ScrollView
-            style={styles.list}
-            contentContainerStyle={{ gap: 12, paddingBottom: 12 }}
+            style={s.list}
+            contentContainerStyle={s.listContent}
             showsVerticalScrollIndicator={false}
           >
             {dates.map((item) => {
               const isActive = item.iso === selectedDate;
+              const tag = item.isToday
+                ? "Aujourd\u2019hui"
+                : item.isTomorrow
+                  ? "Demain"
+                  : null;
+
               return (
                 <TouchableOpacity
                   key={item.iso}
-                  style={[
-                    styles.dateOption,
-                    isActive && styles.dateOptionActive,
-                  ]}
-                  onPress={() => {
-                    onSelectDate(item.iso);
-                  }}
-                  activeOpacity={0.9}
+                  style={[s.row, isActive && s.rowActive]}
+                  onPress={() => onSelectDate(item.iso)}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.optionLeft}>
-                    <View style={styles.iconCircle}>
-                      <Ionicons
-                        name={
-                          item.isToday
-                            ? "sunny-outline"
-                            : item.isTomorrow
-                              ? "partly-sunny-outline"
-                              : "calendar-outline"
-                        }
-                        size={18}
-                        color={modalPalette.iconColor}
-                      />
-                    </View>
-
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.optionLabel}>
-                        {item.label.charAt(0).toUpperCase() + item.label.slice(1)}
-                      </Text>
-                      <Text style={styles.optionDescription}>
-                        {item.isToday
-                          ? "Aujourd'hui"
-                          : item.isTomorrow
-                            ? "Demain"
-                            : ""}
-                      </Text>
-                    </View>
+                  <View style={[s.dayCircle, isActive && s.dayCircleActive]}>
+                    <Text style={[s.dayNumber, isActive && s.dayNumberActive]}>
+                      {item.dayNumber}
+                    </Text>
                   </View>
 
-                  {isActive ? (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={22}
-                      color={modalPalette.check}
-                    />
-                  ) : (
-                    <Ionicons
-                      name="chevron-forward"
-                      size={20}
-                      color={modalPalette.chevron}
-                    />
+                  <View style={s.rowInfo}>
+                    <Text style={[s.rowLabel, isActive && s.rowLabelActive]}>
+                      {item.dayName.charAt(0).toUpperCase() + item.dayName.slice(1)}
+                    </Text>
+                    <Text style={s.rowMonth}>
+                      {item.monthName.charAt(0).toUpperCase() + item.monthName.slice(1)}
+                      {tag ? ` \u00b7 ${tag}` : ""}
+                    </Text>
+                  </View>
+
+                  {isActive && (
+                    <Ionicons name="checkmark-circle" size={20} color={BRAND} />
                   )}
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelLabel}>Fermer</Text>
+          <TouchableOpacity style={s.closeBtn} onPress={onClose} activeOpacity={0.7}>
+            <Text style={s.closeBtnText}>Fermer</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };
 
-// ✅ Palette professionnelle claire cohérente avec le dashboard
-const modalPalette = {
-  backdrop: "rgba(5,22,16,0.82)",
-  cardBackground: "#FFFFFF",
-  cardBorder: "rgba(15,54,43,0.08)",
-  title: "#15362B",
-  subtitle: "#5F7369",
-  optionBackground: "#FFFFFF",
-  optionBorder: "rgba(15,54,43,0.08)",
-  optionActiveBackground: "rgba(10,127,89,0.06)",
-  optionActiveBorder: "#0A7F59",
-  optionLabel: "#15362B",
-  optionDescription: "#5F7369",
-  iconCircle: "rgba(10,127,89,0.12)",
-  iconBorder: "rgba(10,127,89,0.2)",
-  check: "#0A7F59",
-  chevron: "#91A59D",
-  cancelBackground: "#F5F7F6",
-  cancelText: "#5F7369",
-  iconColor: "#0A7F59",
-};
+const sheetShadow =
+  Platform.OS === "web"
+    ? { boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }
+    : {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        elevation: 12,
+      };
 
-const styles = StyleSheet.create({
-  backdrop: {
+const s = StyleSheet.create({
+  overlay: {
     flex: 1,
-    backgroundColor: modalPalette.backdrop,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(30,41,59,0.45)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === "ios" ? 34 : 24,
+    ...sheetShadow,
   },
-  card: {
-    width: "100%",
-    maxWidth: 380,
-    backgroundColor: modalPalette.cardBackground,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: modalPalette.cardBorder,
-    shadowColor: "rgba(15,54,43,0.12)",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 1,
-    shadowRadius: 24,
-    elevation: 8,
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    alignSelf: "center",
+    marginBottom: 16,
   },
+
   header: {
-    marginBottom: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 18,
+  },
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
-    color: modalPalette.title,
-    fontSize: 22,
+    color: TEXT,
+    fontSize: 17,
     fontWeight: "700",
-    letterSpacing: 0.2,
   },
   subtitle: {
-    marginTop: 8,
-    color: modalPalette.subtitle,
-    fontSize: 14,
-    lineHeight: 20,
+    color: TEXT_MUTED,
+    fontSize: 13,
+    marginTop: 2,
   },
+
   list: {
-    maxHeight: 320,
+    maxHeight: 340,
   },
-  dateOption: {
-    borderRadius: 18,
-    backgroundColor: modalPalette.optionBackground,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+  listContent: {
+    gap: 6,
+    paddingBottom: 4,
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: CARD,
     borderWidth: 1,
-    borderColor: modalPalette.optionBorder,
-    flexDirection: "row",
+    borderColor: BORDER,
+  },
+  rowActive: {
+    backgroundColor: "rgba(0,121,107,0.05)",
+    borderColor: BRAND,
+    borderWidth: 1.5,
+  },
+
+  dayCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#f4f7fc",
     alignItems: "center",
-    gap: 16,
+    justifyContent: "center",
   },
-  dateOptionActive: {
-    borderColor: modalPalette.optionActiveBorder,
-    borderWidth: 2,
-    backgroundColor: modalPalette.optionActiveBackground,
+  dayCircleActive: {
+    backgroundColor: BRAND,
   },
-  optionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    flex: 1,
-  },
-  optionLabel: {
-    color: modalPalette.optionLabel,
+  dayNumber: {
+    color: TEXT,
     fontSize: 16,
     fontWeight: "700",
-    letterSpacing: 0.2,
   },
-  optionDescription: {
-    marginTop: 4,
-    color: modalPalette.optionDescription,
-    fontSize: 13,
-    fontWeight: "500",
+  dayNumberActive: {
+    color: "#FFFFFF",
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: modalPalette.iconCircle,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: modalPalette.iconBorder,
+
+  rowInfo: {
+    flex: 1,
   },
-  cancelButton: {
-    marginTop: 20,
-    alignSelf: "stretch",
-    paddingVertical: 14,
-    borderRadius: 18,
-    backgroundColor: modalPalette.cancelBackground,
-    borderWidth: 1,
-    borderColor: modalPalette.optionBorder,
-    alignItems: "center",
-  },
-  cancelLabel: {
-    color: modalPalette.cancelText,
+  rowLabel: {
+    color: TEXT,
     fontSize: 15,
+    fontWeight: "600",
+  },
+  rowLabelActive: {
+    color: BRAND,
+  },
+  rowMonth: {
+    color: TEXT_SEC,
+    fontSize: 12,
+    marginTop: 1,
+  },
+
+  closeBtn: {
+    marginTop: 14,
+    alignSelf: "stretch",
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#f4f7fc",
+    borderWidth: 1,
+    borderColor: BORDER,
+    alignItems: "center",
+  },
+  closeBtnText: {
+    color: TEXT_SEC,
+    fontSize: 14,
     fontWeight: "700",
-    letterSpacing: 0.2,
   },
 });
 
 export default DateSelectionModal;
-

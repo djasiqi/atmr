@@ -1,25 +1,41 @@
 // src/components/layout/Header/CompanyHeader.jsx
+/**
+ * Header professionnel — Espace Entreprise
+ *
+ * Aligné sur le design InstitutionLayout header :
+ * - Zone gauche : logo entreprise + nom
+ * - Zone droite : indicateurs (retards, socket), aujourd'hui
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useLocation } from 'react-router-dom';
+import { FiAlertTriangle, FiCalendar } from 'react-icons/fi';
 import styles from './CompanyHeader.module.css';
 
 import useCompanyData from '../../../hooks/useCompanyData';
 import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 import useDispatchDelays from '../../../hooks/useDispatchDelays';
-import { logoutUser } from '../../../utils/apiClient';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 import SocketStatusBadge from '../../common/SocketStatusBadge';
+import CompanyNotificationBell from './CompanyNotificationBell';
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'CO';
 }
 
+function formatToday() {
+  return new Date().toLocaleDateString('fr-CH', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 const CompanyHeader = () => {
   const params = useParams();
   const location = useLocation();
 
-  // Extraire public_id de manière stable depuis l'URL
   const routePublicId =
     params.public_id ||
     (() => {
@@ -36,81 +52,87 @@ const CompanyHeader = () => {
   const logoSrc = useMemo(() => {
     const abs = resolveLogoUrl(company?.logo_url);
     if (!abs) return '';
-
-    // Debug: log l'URL résolue (à retirer en production si nécessaire)
     if (abs && !abs.startsWith('http') && !abs.startsWith('data:') && !abs.startsWith('blob:')) {
-      console.warn('[CompanyHeader] URL logo invalide:', abs);
+      return '';
     }
-
-    // Ajouter un timestamp pour éviter le cache uniquement pour les URLs HTTP/HTTPS
-    // Ne pas ajouter pour data: ou blob: car cela casse l'URL
     if (abs.startsWith('http://') || abs.startsWith('https://')) {
       const sep = abs.includes('?') ? '&' : '?';
-      // Utiliser un timestamp plus stable (seconde) pour éviter trop de requêtes
       const cacheBuster = Math.floor(Date.now() / 1000);
       return `${abs}${sep}v=${cacheBuster}`;
     }
     return abs;
   }, [company?.logo_url]);
 
-  // Reset logoError quand l'URL change pour permettre un nouveau chargement
   useEffect(() => {
     setLogoError(false);
   }, [company?.logo_url]);
 
   const homeHref = routePublicId ? `/dashboard/company/${routePublicId}` : '/dashboard/company';
 
-  // 🆕 Hook pour les retards (refresh toutes les 2 minutes). Désactivé si auth company non prête.
   const { isCompanyAuthReady } = useCompanyAuthToken();
   const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000, isCompanyAuthReady);
 
+  const todayLabel = useMemo(() => formatToday(), []);
+
   return (
     <header className={styles.header} role="banner">
-      <Link to={homeHref} className={styles.brand} aria-label="Tableau de bord entreprise">
-        <div className={styles.logoWrap}>
-          {logoSrc && !logoError ? (
-            <img
-              src={logoSrc}
-              alt="Logo de l'entreprise"
-              className={styles.logoImg}
-              onError={(e) => {
-                console.warn('Erreur de chargement du logo:', logoSrc, {
-                  naturalWidth: e.currentTarget.naturalWidth,
-                  naturalHeight: e.currentTarget.naturalHeight,
-                  complete: e.currentTarget.complete,
-                });
-                setLogoError(true);
-              }}
-              onLoad={() => setLogoError(false)}
-              loading="eager"
-            />
-          ) : (
-            <div className={styles.logoFallback} aria-hidden="true">
-              {getInitials(name)}
-            </div>
-          )}
-        </div>
-      </Link>
+      {/* ── Zone gauche — Identité entreprise ── */}
+      <div className={styles.headerLeft}>
+        <Link to={homeHref} className={styles.brand} aria-label="Tableau de bord entreprise">
+          <div className={styles.logoWrap}>
+            {logoSrc && !logoError ? (
+              <img
+                src={logoSrc}
+                alt=""
+                className={styles.logoImg}
+                onError={() => setLogoError(true)}
+                onLoad={() => setLogoError(false)}
+                loading="eager"
+              />
+            ) : (
+              <div className={styles.logoFallback} aria-hidden="true">
+                {getInitials(name)}
+              </div>
+            )}
+          </div>
+          <span className={styles.companyName}>{name}</span>
+        </Link>
+      </div>
 
-      <div className={styles.rightZone}>
-        {/* 🆕 Badge de notification retards */}
+      {/* ── Zone droite — Indicateurs ── */}
+      <div className={styles.headerRight}>
+        {/* Date du jour */}
+        <div className={styles.indicator}>
+          <FiCalendar className={styles.indicatorIcon} />
+          <span className={styles.indicatorText}>{todayLabel}</span>
+        </div>
+
+        {/* Retards */}
         {delayCount > 0 && (
-          <Link
-            to={`/dashboard/company/${routePublicId}/dispatch/monitor`}
-            className={`${styles.delayBadge} ${hasCriticalDelays ? styles.critical : ''}`}
-            title={`${delayCount} retard(s) détecté(s) - Cliquer pour voir les détails`}
-          >
-            <span className={styles.badgeIcon}>{hasCriticalDelays ? '🚨' : '⚠️'}</span>
-            <span className={styles.badgeCount}>{delayCount}</span>
-          </Link>
+          <>
+            <div className={styles.headerDivider} />
+            <Link
+              to={`/dashboard/company/${routePublicId}/dispatch/monitor`}
+              className={`${styles.delayIndicator} ${hasCriticalDelays ? styles.delayIndicatorCritical : ''}`}
+              title={`${delayCount} retard(s) détecté(s)`}
+            >
+              <FiAlertTriangle className={styles.indicatorIcon} />
+              <span className={styles.indicatorText}>
+                {delayCount} retard{delayCount > 1 ? 's' : ''}
+              </span>
+            </Link>
+          </>
         )}
 
-        {/* 🆕 Badge de statut connexion Socket.IO */}
-        <SocketStatusBadge />
+        <div className={styles.headerDivider} />
 
-        <button type="button" className={styles.logoutBtn} onClick={logoutUser}>
-          Déconnexion
-        </button>
+        {/* Notifications */}
+        <CompanyNotificationBell />
+
+        <div className={styles.headerDivider} />
+
+        {/* Socket.IO */}
+        <SocketStatusBadge />
       </div>
     </header>
   );

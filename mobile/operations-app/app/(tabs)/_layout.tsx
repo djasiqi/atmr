@@ -9,13 +9,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HapticTab } from "@/components/HapticTab";
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { tabBarStyles } from "@/styles/tabBarStyles";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("TabLayout");
 
 // NOTE : On retire AuthProvider et useNotifications. Ils sont déjà gérés par le layout parent.
 
 export default function TabLayout() {
-  console.log("🟡 [TabLayout] Composant rendu", {
-    timestamp: new Date().toISOString()
-  });
+  log.info("tab layout rendered", { timestamp: new Date().toISOString() });
   
   const insets = useSafeAreaInsets();
 

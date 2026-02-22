@@ -1,6 +1,9 @@
 // mobile/operations-app/services/notificationGrouping.ts
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("NotifGroup");
 
 /**
  * Service de groupement intelligent des notifications
@@ -74,7 +77,7 @@ export async function countNotificationsInGroup(
 
     return count;
   } catch (error) {
-    console.error("❌ Erreur comptage notifications groupe:", error);
+    log.error("count notifications in group failed", { error });
     return 0;
   }
 }
@@ -168,7 +171,7 @@ export async function createGroupedMissionsNotification(
       });
     }
   } catch (error) {
-    console.error("❌ Erreur création notification groupée:", error);
+    log.error("create grouped missions notification failed", { error });
     return null;
   }
 }
@@ -262,7 +265,7 @@ export async function createGroupedMessagesNotification(
       });
     }
   } catch (error) {
-    console.error("❌ Erreur création notification messages groupés:", error);
+    log.error("create grouped messages notification failed", { error });
     return null;
   }
 }
@@ -288,9 +291,9 @@ export async function clearNotificationGroup(
       }
     }
 
-    console.log(`🧹 Groupe "${groupId}" nettoyé`);
+    log.info("group cleared", { groupId });
   } catch (error) {
-    console.error("❌ Erreur nettoyage groupe:", error);
+    log.error("clear notification group failed", { error });
   }
 }
 
@@ -336,11 +339,9 @@ export async function updateGroupedNotificationCount(
       trigger: null,
     });
 
-    console.log(
-      `✅ Notification groupée mise à jour: ${groupId} (${count})`
-    );
+    log.success("grouped notification updated", { groupId, count });
   } catch (error) {
-    console.error("❌ Erreur mise à jour notification groupée:", error);
+    log.error("update grouped notification failed", { error });
   }
 }
 

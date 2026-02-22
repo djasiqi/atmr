@@ -1,7 +1,8 @@
 import * as Sentry from "@sentry/react-native";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Slot, useSegments, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
+import * as SplashScreen from "expo-splash-screen";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import * as Notifications from "expo-notifications";
 import {
@@ -15,7 +16,31 @@ import {
 } from "@/services/notificationChannels";
 import { setupNotificationActions } from "@/services/notificationActions";
 import { useNotificationActions } from "@/hooks/useNotificationActions";
-import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import {
+  getFCMToken,
+  onFCMTokenRefresh,
+  requestFCMPermission,
+  registerForegroundHandler,
+  registerNotificationOpenedHandler,
+  registerNotifeeForegroundHandler,
+  handleInitialNotification,
+  setFCMNavigationHandler,
+} from "@/services/firebaseMessaging";
+import { Platform, View, Text, Image, Animated, ActivityIndicator, StyleSheet, LogBox } from "react-native";
+
+// ✅ Supprimer les avertissements GPS bruyants en mode dev
+// Ces messages sont des retries normaux quand le backend est lent (non bloquants).
+LogBox.ignoreLogs([
+  "Timeout waiting for ACK",
+  "Erreur resync queue GPS",
+  "Erreur resync pour driver",
+  "Retry #",
+  "[expo-notifications] Listening to push token changes",
+  '"shadow*" style props are deprecated',
+  "refresh token rejected",
+  "refresh token expired",
+  "refresh token failed",
+]);
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerPushToken, initializeCSRFToken } from "@/services/api"; // si l'alias '@' n'est pas configuré: ../services/api
@@ -27,6 +52,16 @@ import { validateDeepLink } from "@/services/deepLinkHandler";
 import { initNetworkStateCache } from "@/services/networkState";
 import { initLogContext } from "@/services/logContext";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
+import { PushFailureBanner } from "@/components/common/PushFailureBanner";
+import { GpsDisabledBanner } from "@/components/common/GpsDisabledBanner";
+import { InAppNotificationToast } from "@/components/common/InAppNotificationToast";
+import { BatteryOptimizationGuide } from "@/components/common/BatteryOptimizationGuide";
+import { checkBatteryOptimization } from "@/services/batteryOptimization";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("App");
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // P0.2.C — Init cache réseau pour logs (corrélation logout ↔ offline)
 initNetworkStateCache();
@@ -45,7 +80,7 @@ if (Platform.OS !== "web") {
   } catch (error) {
     // Module natif non disponible (Expo Go ou build non mis à jour)
     // C'est normal en développement, le tracking arrière-plan nécessite un development build
-    console.log("ℹ️ TaskManager non disponible (normal en Expo Go, nécessite un development build)");
+    log.info("task manager unavailable (expo go, needs dev build)", { error });
   }
 }
 
@@ -54,9 +89,19 @@ if (Platform.OS !== "web") {
   try {
     const { defineBackgroundSyncTask } = require("@/services/silentNotifications");
     defineBackgroundSyncTask();
-    console.log("✅ Tâche background sync définie");
+    log.success("background sync task defined");
   } catch (error) {
-    console.log("ℹ️ defineBackgroundSyncTask non disponible:", error);
+    log.info("background sync task not available", { error });
+  }
+}
+
+// ✅ Mission Bar: enregistrer le handler Notifee headless (actions notif app tuée)
+if (Platform.OS !== "web") {
+  try {
+    const { registerNotifeeBackgroundHandler } = require("@/services/missionBarBackground");
+    registerNotifeeBackgroundHandler();
+  } catch (error) {
+    log.info("mission bar background handler not available", { error });
   }
 }
 
@@ -90,9 +135,19 @@ function RootNav() {
     driver,
   } = useAuth();
   const userId = driver?.id ?? null;
+  const [pushFailed, setPushFailed] = useState(false);
+  const [showBatteryGuide, setShowBatteryGuide] = useState(false);
 
   // Version check - récupération du statut de mise à jour
   const { status: updateStatus, isLoading: versionLoading } = useVersion();
+
+  const splashHiddenRef = useRef(false);
+  useEffect(() => {
+    if (splashHiddenRef.current) return;
+    if (loading || versionLoading) return;
+    splashHiddenRef.current = true;
+    SplashScreen.hideAsync().catch(() => {});
+  }, [loading, versionLoading]);
 
   // P0.5: Mettre à jour le mode notif dès que l'auth est connue (handler boot-level)
   useEffect(() => {
@@ -105,7 +160,7 @@ function RootNav() {
           : null;
     setNotificationAppMode(mode);
     if (__DEV__ && mode) {
-      console.log("🚨 P0.5 setNotificationAppMode:", mode);
+      log.info("notification app mode set", { mode });
     }
   }, [isDriverAuthenticated, isEnterpriseAuthenticated]);
 
@@ -119,12 +174,12 @@ function RootNav() {
   // ✅ Deep link handler: parse atmr:// URLs and navigate to appropriate routes
   const handleDeepLink = React.useCallback((url: string) => {
     try {
-      console.log("🔗 Handling deep link:", url);
+      log.info("handling deep link", { url });
 
       // ✅ Valider le deep link (sécurité: anti-injection, anti-open-redirect)
       const validation = validateDeepLink(url);
       if (!validation.valid) {
-        console.warn("⚠️ Deep link invalide:", validation.error, url);
+        log.warn("invalid deep link", { error: validation.error, url });
         return;
       }
 
@@ -134,44 +189,44 @@ function RootNav() {
 
       // Only navigate if driver is authenticated
       if (!isDriverAuthenticated || loading) {
-        console.log("⏳ Driver not authenticated yet, deferring deep link navigation");
+        log.info("driver not authenticated yet, deferring deep link");
         return;
       }
 
       // Map deep link paths to app routes (utiliser les valeurs validées)
       if (route === "booking" && id) {
         // Navigate to trip details
-        console.log("📍 Navigating to trip details for booking:", id);
+        log.info("navigating to trip details", { bookingId: id });
         router.push(`/(dashboard)/trip-details?id=${id}` as any);
       } else if (route === "bookings") {
         // Navigate to trips list
-        console.log("📍 Navigating to trips list");
+        log.info("navigating to trips list");
         router.push("/(tabs)/trips" as any);
       } else if (route === "chat") {
         // Navigate to chat: chat/message/{id} | chat/thread/{id} | chat
         const subType = validation.subType;
         if (id && subType === "message") {
-          console.log("📍 Navigating to chat with message:", id);
+          log.info("navigating to chat with message", { messageId: id });
           router.push(`/(tabs)/chat?messageId=${id}` as any);
         } else if (id && subType === "thread") {
-          console.log("📍 Navigating to chat with thread:", id);
+          log.info("navigating to chat with thread", { threadId: id });
           router.push(`/(tabs)/chat?threadId=${id}` as any);
         } else if (id) {
           // Fallback rétrocompatible: chat/123 → messageId
           router.push(`/(tabs)/chat?messageId=${id}` as any);
         } else {
-          console.log("📍 Navigating to chat");
+          log.info("navigating to chat");
           router.push("/(tabs)/chat" as any);
         }
       } else if (route === "dispatch" && id) {
         // Navigate to schedule/dispatch (le format dispatch/run/{id} est validé comme dispatch/{id})
-        console.log("📍 Navigating to schedule with dispatch run:", id);
+        log.info("navigating to schedule with dispatch run", { dispatchRunId: id });
         router.push(`/(dashboard)/schedule?dispatchRunId=${id}` as any);
       } else {
-        console.warn("⚠️ Deep link route non gérée:", route, id);
+        log.warn("unhandled deep link route", { route, id });
       }
     } catch (error) {
-      console.error("❌ Error handling deep link:", error);
+      log.error("error handling deep link", { error });
     }
   }, [isDriverAuthenticated, loading, router]);
 
@@ -256,9 +311,7 @@ function RootNav() {
 
     // Expo Go n'embarque pas google-services.json → skip pour éviter l'erreur Firebase
     if (Constants.appOwnership === "expo") {
-      console.warn(
-        "Skip FCM in Expo Go. Use a Development Build to test push."
-      );
+      log.warn("skip fcm in expo go (use dev build for push)");
       return;
     }
 
@@ -270,7 +323,7 @@ function RootNav() {
 
     (async () => {
       try {
-        console.log("🔔 [_layout] Initialisation des notifications…", {
+        log.info("notifications init", {
           driverId: currentUserId,
           platform: Platform.OS,
           appOwnership: Constants.appOwnership,
@@ -291,105 +344,74 @@ function RootNav() {
         const { setupBackgroundSync } = await import("@/services/silentNotifications");
         await setupBackgroundSync();
 
-        // Récupération token (device ou expo) avec peu de retries pour éviter le spam
-        const tokens = await initNotifications({
-          withExpoToken: true,
-          maxRetries: 2,
-        });
+        // FCM: request permission (mainly iOS) + get native FCM token
+        await requestFCMPermission();
+        const fcmToken = await getFCMToken();
+
+        // Fallback: try legacy Expo token if FCM unavailable (Expo Go)
+        let tokenToUse: string | null = fcmToken;
+        let provider: "fcm" | "expo" = "fcm";
+
+        if (!fcmToken) {
+          log.info("FCM token unavailable, trying Expo fallback");
+          const tokens = await initNotifications({ withExpoToken: true, maxRetries: 2 });
+          if (cancelled) return;
+          tokenToUse = (tokens as any)?.expo ?? (tokens as any)?.device ?? null;
+          provider = "expo";
+        }
 
         if (cancelled) return;
 
-        const device = (tokens as any)?.device ?? null;
-        const expo = (tokens as any)?.expo ?? null;
-        const tokenToUse = device || expo;
-
         if (!tokenToUse) {
-          // Expo Go: pas de push remote (SDK 53+). Dev build: doit avoir au moins un token.
           const isExpoGo =
             Constants.appOwnership === "expo" &&
             Constants.executionEnvironment === "storeClient";
-          console.error("❌ [_layout] Aucun token push disponible", {
+          log.error("no push token available", {
             driverId: currentUserId,
             platform: Platform.OS,
             isExpoGo,
-            hasDevice: !!device,
-            hasExpo: !!expo,
           });
           if (isExpoGo) {
-            console.log("ℹ️ [_layout] Pas de token push en Expo Go - normal (push remote désactivé)");
-          } else {
-            console.warn(
-              "⚠️ [_layout] Aucun token push disponible (dev build: vérifier Firebase/FCM + permissions)"
-            );
+            log.info("no push token in expo go (expected, remote push disabled)");
           }
           return;
         }
 
-        // ✅ INSTRUMENTATION: Device ID
-        let deviceId = "unknown";
-        try {
-          const Device = await import("expo-device");
-          // expo-device exporte modelId directement
-          deviceId = Device.modelId || Device.deviceName || "unknown";
-        } catch (error) {
-          console.warn("⚠️ Impossible de récupérer Device ID:", error);
-        }
+        log.info("push token acquired", {
+          provider,
+          tokenPreview: tokenToUse.substring(0, 20) + "...",
+          driverId: currentUserId,
+        });
 
-        // ✅ INSTRUMENTATION: Logs avec Device ID et User ID
-        console.log("🔔 Device ID:", deviceId);
-        console.log("🔔 Token enregistré:", tokenToUse.substring(0, 20) + "...");
-        console.log("🔔 Enregistrement token pour driver:", currentUserId);
-
-        // ✅ CORRECTIF: Toujours enregistrer le token lors de la connexion
-        // même s'il n'a pas changé, pour réactiver les tokens inactifs
-        // (les tokens peuvent être invalidés lors du logout et doivent être réactivés)
         const key = currentUserId
           ? `push_token_${currentUserId}`
           : "push_token_default";
-        const last = await AsyncStorage.getItem(key);
-
-        // ✅ FORCER l'enregistrement à chaque connexion pour réactiver les tokens inactifs
-        // Ne pas vérifier si le token a changé, toujours enregistrer
-        console.log(
-          "🔔 [_layout] Enregistrement token pour réactivation (connexion):",
-          currentUserId,
-          last === tokenToUse ? "(token identique - réactivation)" : "(token changé)"
-        );
 
         try {
-          console.log("🔔 [_layout] Envoi token au backend...", {
-            driverId: currentUserId,
-            tokenPreview: tokenToUse.substring(0, 30) + "...",
-          });
           const response = await registerPushToken({
             token: tokenToUse,
             driverId: currentUserId,
+            provider,
           });
           await AsyncStorage.setItem(key, tokenToUse);
-          console.log("✅ [_layout] Push token enregistré/réactivé côté backend", {
-            response,
-          });
+          log.success("push token registered on backend", { response, provider });
         } catch (e: any) {
-          console.error("❌ [_layout] Enregistrement token échoué:", {
+          log.error("push token registration failed", {
             driverId: currentUserId,
             status: e?.response?.status,
-            statusText: e?.response?.statusText,
             data: e?.response?.data,
             message: e?.message,
           });
-          // Ne pas throw pour ne pas bloquer l'app, mais logger l'erreur
         }
       } catch (e: any) {
-        console.error(
-          "❌ [_layout] Enregistrement des notifications échoué:",
-          {
-            driverId: currentUserId,
-            error: e?.message || String(e),
-            status: e?.response?.status,
-            data: e?.response?.data,
-            platform: Platform.OS,
-          }
-        );
+        log.error("notification registration failed", {
+          driverId: currentUserId,
+          error: e?.message || String(e),
+          status: e?.response?.status,
+          data: e?.response?.data,
+          platform: Platform.OS,
+        });
+        if (!cancelled) setPushFailed(true);
       } finally {
         registeringRef.current = false;
       }
@@ -398,6 +420,60 @@ function RootNav() {
     return () => {
       cancelled = true;
     };
+  }, [driver, isDriverAuthenticated, loading]);
+
+  // FCM: register foreground handler, deep link handlers, token refresh
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (loading || !isDriverAuthenticated || !driver) return;
+
+    const currentUserId = driver?.id;
+
+    const unsubForeground = registerForegroundHandler();
+    const unsubOpened = registerNotificationOpenedHandler();
+    const unsubNotifee = registerNotifeeForegroundHandler();
+
+    setFCMNavigationHandler((deepLink: string) => {
+      log.info("FCM deep link navigation", { deepLink });
+      handleDeepLink(deepLink);
+    });
+
+    handleInitialNotification();
+
+    const unsubTokenRefresh = onFCMTokenRefresh(async (newToken) => {
+      if (!currentUserId) return;
+      try {
+        await registerPushToken({
+          token: newToken,
+          driverId: currentUserId,
+          provider: "fcm",
+        });
+        log.success("FCM token refreshed and registered", { driverId: currentUserId });
+      } catch (e: any) {
+        log.error("FCM token refresh registration failed", { error: e?.message });
+      }
+    });
+
+    return () => {
+      unsubForeground();
+      unsubOpened();
+      unsubNotifee();
+      unsubTokenRefresh();
+    };
+  }, [driver, isDriverAuthenticated, loading]);
+
+  // A1: Vérifier l'optimisation batterie Samsung après login driver
+  useEffect(() => {
+    if (loading || !isDriverAuthenticated || !driver) return;
+    if (Platform.OS !== "android") return;
+    (async () => {
+      try {
+        const { needsExemption } = await checkBatteryOptimization();
+        if (needsExemption) setShowBatteryGuide(true);
+      } catch {
+        // best-effort
+      }
+    })();
   }, [driver, isDriverAuthenticated, loading]);
 
   // ✅ Initialiser le token CSRF pour les entreprises
@@ -415,7 +491,7 @@ function RootNav() {
     // Handle initial deep link when app opens from notification
     Linking.getInitialURL().then((url) => {
       if (url) {
-        console.log("🔗 Initial deep link detected:", url);
+        log.info("initial deep link detected", { url });
         // Wait for auth to complete before handling
         setTimeout(() => {
           if (isDriverAuthenticated && !loading) {
@@ -427,7 +503,7 @@ function RootNav() {
 
     // Listen for deep links when app is already running
     const subscription = Linking.addEventListener("url", (event) => {
-      console.log("🔗 Deep link received while app running:", event.url);
+      log.info("deep link received while app running", { url: event.url });
       if (isDriverAuthenticated && !loading) {
         handleDeepLink(event.url);
       }
@@ -453,16 +529,15 @@ function RootNav() {
 
     (async () => {
       try {
-        console.log("📍 Démarrage du tracking GPS adaptatif...");
+        log.info("starting adaptive gps tracking");
         await startAdaptiveLocationTracking();
         if (!cancelled) {
-          console.log("✅ Tracking GPS adaptatif démarré");
+          log.success("adaptive gps tracking started");
         }
       } catch (e: any) {
-        console.warn(
-          "❌ Erreur démarrage tracking GPS adaptatif:",
-          e?.message || String(e)
-        );
+        log.warn("adaptive gps tracking start error", {
+          message: e?.message || String(e),
+        });
       }
     })();
 
@@ -474,35 +549,78 @@ function RootNav() {
   }, [driver, isDriverAuthenticated, loading]);
 
   // ✅ UX : Afficher un écran de chargement pendant l'auto-login
-  console.log("🔴 [RootNav] État de chargement:", {
+  log.info("root nav loading state", {
     loading,
     versionLoading,
     isAuthenticated,
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
     mode,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 
   if (loading || versionLoading) {
-    console.log("⏳ [RootNav] Affichage écran de chargement...");
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Reconnexion en cours…</Text>
-      </View>
-    );
+    log.info("root nav showing loading screen");
+    return <BrandedLoadingScreen />;
   }
 
-  console.log("✅ [RootNav] Rendu <Slot /> (tabs vont être affichés)");
+  log.success("root nav ready (slot rendered)");
 
   return (
     <>
+      <InAppNotificationToast />
       <OfflineBanner />
+      {pushFailed && <PushFailureBanner />}
+      <GpsDisabledBanner />
       <Slot />
-      {/* Modal de mise à jour recommandée (non bloquante) */}
       {updateStatus === "UPDATE_RECOMMENDED" && <UpdateRecommendedModal />}
+      <BatteryOptimizationGuide
+        visible={showBatteryGuide}
+        onDismiss={() => setShowBatteryGuide(false)}
+      />
     </>
+  );
+}
+
+function BrandedLoadingScreen() {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(18)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
+
+  return (
+    <View style={styles.loadingContainer}>
+      <Image
+        source={require("@/assets/images/icon-dark.png")}
+        style={styles.loadingLogo}
+        resizeMode="contain"
+      />
+      <Animated.View
+        style={[
+          styles.loadingContent,
+          { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+        ]}
+      >
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.9)" />
+        <Text style={styles.loadingText}>Reconnexion en cours…</Text>
+      </Animated.View>
+      <Text style={styles.loadingBrand}>Liri Opérations</Text>
+    </View>
   );
 }
 
@@ -511,11 +629,31 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#0D7F72",
+  },
+  loadingLogo: {
+    width: 90,
+    height: 90,
+    borderRadius: 20,
+    marginBottom: 32,
+  },
+  loadingContent: {
+    alignItems: "center",
+    gap: 14,
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#666666",
+    fontSize: 15,
+    fontWeight: "500",
+    color: "rgba(255,255,255,0.85)",
+    letterSpacing: 0.2,
+  },
+  loadingBrand: {
+    position: "absolute",
+    bottom: 48,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
   },
 });

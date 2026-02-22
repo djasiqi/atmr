@@ -30,6 +30,7 @@ import {
   triggerReturnBooking,
   scheduleReservation,
   fetchDispatchStatus,
+  updateReservation,
 } from '../../../services/companyService';
 import {
   getOptimizerStatus,
@@ -48,6 +49,7 @@ import FullyAutoPanel from './components/FullyAutoPanel';
 import AdvancedSettings from './components/AdvancedSettings';
 import ReservationModals from '../../../components/reservations/ReservationModals';
 import DispatchProgress from './components/DispatchProgress';
+import ReservationDetailPanel from '../../company/Reservations/components/ReservationDetailPanel';
 import ChatWidget from '../../../components/widgets/ChatWidget';
 
 // Import dynamique des styles par mode
@@ -91,6 +93,9 @@ const UnifiedDispatchRefactored = () => {
   const [fastMode, setFastMode] = useState(false);
   const [_loadingOverrides, setLoadingOverrides] = useState(true);
 
+  // Panel lateral de details
+  const [selectedDispatch, setSelectedDispatch] = useState(null);
+
   // ✅ Fonction pour charger les paramètres avancés (définie en dehors du useEffect pour être réutilisable)
   const loadAdvancedSettings = React.useCallback(async () => {
     console.log('🔍 [Dispatch] Début chargement paramètres avancés...');
@@ -128,8 +133,8 @@ const UnifiedDispatchRefactored = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteModalReservation, setDeleteModalReservation] = useState(null);
 
-  // État pour le tri (Mode Manuel)
-  const [sortBy, setSortBy] = useState('time'); // 'time', 'client', 'status'
+  // État pour le tri (Mode Manuel) - defaut: priorite metier
+  const [sortBy, setSortBy] = useState('priority'); // 'priority', 'time', 'client', 'status'
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
 
   // États UI
@@ -156,6 +161,7 @@ const UnifiedDispatchRefactored = () => {
     loading: dispatchesLoading,
     error: dispatchesError,
     loadDispatches,
+    setDispatches, // CT2: destructure pour optimistic update V13
   } = useDispatchData(date, dispatchMode);
   const { delays, summary: _summary, loadDelays } = useLiveDelays(date, isCompanyAuthReady && !!isCompanyOrAdmin);
 
@@ -189,6 +195,69 @@ const UnifiedDispatchRefactored = () => {
 
     return filtered;
   }, [allDispatches]);
+
+  // V11: Cle unifiee pour eviter bug booking_id vs id
+  const getDispatchKey = useCallback((d) => d.booking_id ?? d.id, []);
+
+  // V12: Enrichir drivers avec charge O(N)
+  const driversWithLoad = useMemo(() => {
+    const loadByDriverId = {};
+    (dispatches || []).forEach((d) => {
+      const dId = d.driver_id || d.driver?.id;
+      if (dId) loadByDriverId[dId] = (loadByDriverId[dId] || 0) + 1;
+    });
+    return (driversList || [])
+      .filter((d) => d.is_active)
+      .map((driver) => ({
+        ...driver,
+        courseCount: loadByDriverId[driver.id] || 0,
+      }));
+  }, [driversList, dispatches]);
+
+  // V11: Pre-calculer delayMap avec cle normalisee
+  const delayMap = useMemo(() => {
+    const map = {};
+    (delays || []).forEach((d) => {
+      const key = d.booking_id ?? d.id;
+      map[key] = {
+        minutes: Math.round(d.delay_minutes || d.pickup_delay_minutes || 0),
+        severity: d.delay_severity || 'reasonable',
+      };
+    });
+    return map;
+  }, [delays]);
+
+  // V9 + V13: Handler assignation directe (optimistic UI, WebSocket fait le refresh)
+  const handleAssignDirect = useCallback(
+    async (reservationId, driverId) => {
+      const targetDriver = driversWithLoad.find((dr) => dr.id === driverId);
+      setDispatches((prev) =>
+        prev.map((d) =>
+          getDispatchKey(d) === reservationId
+            ? {
+                ...d,
+                driver_id: driverId,
+                driver: targetDriver,
+                status: 'assigned',
+              }
+            : d
+        )
+      );
+      const success = await handleAssignDriver(reservationId, driverId);
+      if (!success) {
+        // V9: rollback optimistic — toast generique (pas de code HTTP dispo CT3)
+        setDispatches((prev) =>
+          prev.map((d) =>
+            getDispatchKey(d) === reservationId
+              ? { ...d, driver_id: null, driver: null, status: 'accepted' }
+              : d
+          )
+        );
+      }
+      return success;
+    },
+    [handleAssignDriver, driversWithLoad, setDispatches, getDispatchKey]
+  );
 
   // États pour l'optimiseur
   const [optimizerStatus, setOptimizerStatus] = useState(null);
@@ -237,13 +306,14 @@ const UnifiedDispatchRefactored = () => {
 
   // Gérer la suppression d'une réservation (fonction interne)
   const _handleDeleteReservation = async (reservationIdOrObject) => {
-    // Extraire l'ID (peut être un objet ou un ID direct)
     const reservationId =
       typeof reservationIdOrObject === 'object' ? reservationIdOrObject.id : reservationIdOrObject;
 
-    const success = await handleDeleteReservation(reservationId);
-    if (success) {
-      loadDispatches(); // Recharger les données
+    try {
+      await handleDeleteReservation(reservationId);
+      loadDispatches();
+    } catch (err) {
+      console.error('Erreur suppression réservation:', err);
     }
   };
 
@@ -350,17 +420,15 @@ const UnifiedDispatchRefactored = () => {
     setDeleteModalOpen(true);
   };
 
-  // Confirme la suppression
-  const handleConfirmDelete = async () => {
-    if (!deleteModalReservation) return;
+  // Confirme la suppression / annulation
+  const handleConfirmDelete = async (reservationId, reasonCode, reasonText) => {
+    if (!reservationId && !deleteModalReservation) return;
 
-    const id = deleteModalReservation?.id ?? deleteModalReservation;
-    const success = await handleDeleteReservation(id);
-    if (success) {
-      setDeleteModalOpen(false);
-      setDeleteModalReservation(null);
-      loadDispatches();
-    }
+    const id = reservationId || deleteModalReservation?.id || deleteModalReservation;
+    await handleDeleteReservation(id, reasonCode, reasonText);
+    setDeleteModalOpen(false);
+    setDeleteModalReservation(null);
+    loadDispatches();
   };
 
   // Gérer l'assignation (ouvre la modale)
@@ -1037,7 +1105,8 @@ const UnifiedDispatchRefactored = () => {
       loading: dispatchesLoading,
       error: dispatchesError,
       styles,
-      currentCompanyId: company?.id, // ✅ Pour déterminer la direction des transferts
+      currentCompanyId: company?.id,
+      onRefresh: () => { loadDispatches(); loadDelays(); },
     };
 
     switch (dispatchMode) {
@@ -1055,7 +1124,14 @@ const UnifiedDispatchRefactored = () => {
             onDispatchNow={onDispatchNow}
             onDelete={onDeleteReservationClick}
             currentDate={date}
-            drivers={(driversList || []).filter((d) => d.is_active)}
+            drivers={driversWithLoad}
+            delayMap={delayMap}
+            onAssignDirect={handleAssignDirect}
+            onRowClick={(r) => setSelectedDispatch(r)}
+            onGoToSemiAuto={() => {
+              const companyId = window.location.pathname.split('/')[3] || '';
+              window.location.href = `/dashboard/company/${companyId}/settings#operations`;
+            }}
           />
         );
       case 'semi_auto':
@@ -1092,7 +1168,7 @@ const UnifiedDispatchRefactored = () => {
       <Toaster position="top-right" richColors />
 
       <CompanyHeader />
-      <div className={styles.mainContent}>
+      <div className={`${styles.mainContent} ${selectedDispatch ? styles.mainContentWithPanel : ''}`}>
         <CompanySidebar />
         <div className={styles.content}>
           <DispatchHeader
@@ -1156,6 +1232,32 @@ const UnifiedDispatchRefactored = () => {
           {actionsError && <div className={styles.errorMessage}>{actionsError}</div>}
           {actionsSuccess && <div className={styles.successMessage}>{actionsSuccess}</div>}
         </div>
+
+        {/* Panel lateral de details */}
+        {selectedDispatch && (
+          <aside className={styles.dispatchDetailPanel}>
+            <ReservationDetailPanel
+              reservation={selectedDispatch}
+              onClose={() => setSelectedDispatch(null)}
+              onSave={async (id, data) => {
+                const payload = { ...data };
+                // Recombiner scheduled_date + scheduled_time en ISO 8601
+                if (payload.scheduled_date && payload.scheduled_time) {
+                  payload.scheduled_time = `${payload.scheduled_date}T${payload.scheduled_time}:00`;
+                  delete payload.scheduled_date;
+                } else if (payload.scheduled_date && !payload.scheduled_time) {
+                  payload.scheduled_time = `${payload.scheduled_date}T00:00:00`;
+                  delete payload.scheduled_date;
+                } else {
+                  delete payload.scheduled_date;
+                }
+                await updateReservation(id, payload);
+                loadDispatches();
+              }}
+              onDelete={onDeleteReservationClick}
+            />
+          </aside>
+        )}
       </div>
 
       {/* Modales centralisées */}

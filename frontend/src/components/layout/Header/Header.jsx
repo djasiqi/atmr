@@ -30,7 +30,7 @@ const Header = () => {
     <header className={styles.header}>
       {/* Logo */}
       <Link to="/" className={styles.logo}>
-        MonTransport
+        <img src="/logo-lirie.png" alt="Lirie" className={styles.logoImg} />
       </Link>
 
       {/* Navigation menu */}

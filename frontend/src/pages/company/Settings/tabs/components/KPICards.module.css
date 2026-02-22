@@ -1,35 +1,52 @@
-/* frontend/src/pages/company/Settings/tabs/components/KPICards.module.css */
+/* KPICards — style compact, coherent avec InvoicesRegistry statCard */
 .kpiContainer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
 }
 
 .kpiCard {
-  background: white;
-  border-radius: 8px;
-  padding: 1.25rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--bg-tertiary, #f9fafb);
+  border-radius: 10px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  transition: transform 0.2s, box-shadow 0.2s;
+  gap: 10px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
 }
 
 .kpiCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  border-color: var(--border-primary, #e5e7eb);
 }
 
 .kpiCard.highlight {
-  border: 2px solid #4CAF50;
-  background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
+  border-color: var(--brand-primary-lighter, #4db6ac);
+  background: var(--brand-primary-lightest, #e0f2f1);
 }
 
 .kpiIcon {
-  font-size: 2rem;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.kpiIcon.toneNeutral {
+  color: var(--info-primary, #3b82f6);
+}
+
+.kpiIcon.toneSuccess {
+  color: var(--success-primary, #16a34a);
+}
+
+.kpiIcon.toneWarning {
+  color: var(--warning-primary, #f59e0b);
+}
+
+.kpiIcon.toneDanger {
+  color: var(--error-primary, #ef4444);
 }
 
 .kpiContent {
@@ -38,57 +55,60 @@
 }
 
 .kpiValue {
-  font-size: 1.5rem;
+  font-size: 18px;
   font-weight: 700;
-  color: #333;
+  color: var(--text-primary, #0f172a);
   line-height: 1.2;
-  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kpiLabel {
-  font-size: 0.875rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
 }
 
 .kpiSubtitle {
-  font-size: 0.75rem;
-  color: #999;
-  margin-top: 0.125rem;
+  font-size: 10px;
+  color: var(--text-disabled, #9ca3af);
+  margin-top: 1px;
 }
 
 .skeleton {
-  height: 60px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  height: 48px;
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
-  border-radius: 4px;
+  border-radius: 10px;
 }
 
 @keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @media (max-width: 768px) {
   .kpiContainer {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .kpiCard {
-    padding: 1rem;
+    padding: 10px 12px;
   }
-  
-  .kpiIcon {
-    font-size: 1.5rem;
-  }
-  
+
   .kpiValue {
-    font-size: 1.25rem;
+    font-size: 16px;
   }
 }
 
+@media (max-width: 480px) {
+  .kpiContainer {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+}

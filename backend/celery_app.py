@@ -7,7 +7,7 @@ import os
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote_plus
 
-from celery import Celery  # pyright: ignore[reportMissingImports]
+from celery import Celery
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -93,6 +93,9 @@ celery: Celery = Celery(
         "tasks.geocoding_tasks",  # ✅ P1: Géocodage asynchrone des adresses de bookings
         "tasks.analytics_tasks",  # ✅ Analytics et rapports automatiques
         "tasks.osrm_precompute_tasks",  # ✅ P1: Pré-calcul matrices OSRM pour zones fréquentes
+        "tasks.request_offer_tasks",  # ✅ ÉTAPE 4: Expiration/escalade offres institution
+        "tasks.patient_sync_tasks",  # ✅ Curatelle: sync patient cross-plateforme
+        "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
     ],
 )
 
@@ -251,6 +254,26 @@ celery.conf.beat_schedule = {
             "jitter": 3600,  # ✅ 2.6: Jitter jusqu'à 1 heure (tasks hebdomadaires)
         },
     },
+    # ✅ ÉTAPE 4: Expiration et escalade des offres de transport institutionnelles
+    # (toutes les minutes pour traiter les timeouts rapidement)
+    "process-expired-offers": {
+        "task": "tasks.request_offer_tasks.process_expired_offers",
+        "schedule": 60.0,  # 1 minute
+        "options": {
+            "expires": 120,  # Expire après 2 min
+            "jitter": 10,  # ✅ Jitter jusqu'à 10 secondes
+        },
+    },
+    # ✅ GO-LIVE: Métriques métier institution (toutes les heures)
+    "log-institution-metrics": {
+        "task": "tasks.request_offer_tasks.log_institution_metrics",
+        "schedule": 3600.0,  # 1 heure
+        "args": [24],  # période = 24h
+        "options": {
+            "expires": 3600,  # Expire après 1h
+            "jitter": 300,  # Jitter jusqu'à 5 min
+        },
+    },
     # ✅ 3.3: Purge automatique données RGPD (hebdomadaire)
     "gdpr-purge-all": {
         "task": "tasks.purge_tasks.purge_all_old_data",
@@ -313,6 +336,24 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 48 * 3600,  # Expire après 48h
             "jitter": 7200,  # ✅ 2.6: Jitter jusqu'à 2 heures
+        },
+    },
+    # ✅ Curatelle: Traitement sync patient outbox (toutes les 30 secondes)
+    "process-patient-sync": {
+        "task": "tasks.patient_sync_tasks.process_pending_sync_events",
+        "schedule": 30.0,
+        "options": {
+            "expires": 60,
+            "jitter": 5,
+        },
+    },
+    # ✅ Security V2: Purge audit logs expirés (quotidien à ~3h)
+    "purge-audit-logs": {
+        "task": "tasks.security_tasks.purge_expired_audit_logs",
+        "schedule": 24 * 3600,
+        "options": {
+            "expires": 6 * 3600,
+            "jitter": 1800,
         },
     },
     # ✅ DLQ: Cleanup automatique DLQ (quotidien)
@@ -391,7 +432,7 @@ def init_app(app: Flask) -> Celery:
 # ✅ DLQ: Handler pour stocker métadonnées des tâches échouées avec monitoring
 def _register_dlq_handlers():
     """Enregistre les handlers pour capturer les échecs et les stocker en DLQ."""
-    from celery.signals import (  # pyright: ignore[reportMissingImports]
+    from celery.signals import (
         task_failure,
         task_retry,
         task_success,
@@ -414,7 +455,7 @@ def _register_dlq_handlers():
 
             if PROMETHEUS_AVAILABLE:
                 try:
-                    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+                    from prometheus_client import (
                         Counter,
                     )
 
@@ -551,7 +592,7 @@ def _get_queue_length_gauge():
     """
     if _celery_queue_length_gauge_container["gauge"] is None:
         try:
-            from prometheus_client import (  # pyright: ignore[reportMissingImports]
+            from prometheus_client import (
                 Gauge,
             )
 

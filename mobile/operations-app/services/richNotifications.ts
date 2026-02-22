@@ -2,6 +2,9 @@
 import * as Notifications from "expo-notifications";
 import { downloadAsync, readDirectoryAsync, deleteAsync } from "expo-file-system";
 import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("RichNotif");
 
 // Chemin de cache pour les images de notifications
 const CACHE_DIR = "/notificationImages/";
@@ -27,7 +30,7 @@ export async function downloadImageForNotification(
     const filename = `notif_${Date.now()}_${imageUrl.split("/").pop()}`;
     const fileUri = `${CACHE_DIR}${filename}`;
 
-    console.log(`📥 Téléchargement image notification: ${imageUrl}`);
+    log.info("downloading notification image", { imageUrl });
 
     // Télécharger l'image avec timeout
     const downloadPromise = downloadAsync(imageUrl, fileUri);
@@ -38,14 +41,14 @@ export async function downloadImageForNotification(
     const result: any = await Promise.race([downloadPromise, timeoutPromise]);
 
     if (result && result.status === 200) {
-      console.log(`✅ Image téléchargée: ${fileUri}`);
+      log.success("image downloaded", { fileUri });
       return fileUri;
     } else {
-      console.warn(`⚠️ Échec téléchargement image: status ${result?.status}`);
+      log.warn("image download failed", { status: result?.status });
       return null;
     }
   } catch (error) {
-    console.error("❌ Erreur téléchargement image notification:", error);
+    log.error("download notification image failed", { error });
     return null;
   }
 }
@@ -72,7 +75,7 @@ export async function scheduleNotificationWithImage(
     const localImageUri = await downloadImageForNotification(imageUrl);
 
     if (!localImageUri) {
-      console.warn("⚠️ Image non disponible, notification sans image");
+      log.warn("image unavailable, notification without image");
       // Fallback: notification sans image
       return await Notifications.scheduleNotificationAsync({
         content: {
@@ -115,10 +118,10 @@ export async function scheduleNotificationWithImage(
       trigger: null,
     });
 
-    console.log(`✅ Notification avec image créée: ${notificationId}`);
+    log.success("notification with image created", { notificationId });
     return notificationId;
   } catch (error) {
-    console.error("❌ Erreur création notification avec image:", error);
+    log.error("create notification with image failed", { error });
     return null;
   }
 }
@@ -139,7 +142,7 @@ export async function scheduleInboxStyleNotification(
   channelId?: string
 ): Promise<string | null> {
   if (Platform.OS !== "android") {
-    console.warn("⚠️ InboxStyle disponible uniquement sur Android");
+    log.warn("inbox style only on android");
     // Fallback iOS: notification simple avec compteur
     const body = `${messages.length} nouveaux messages`;
     return await Notifications.scheduleNotificationAsync({
@@ -170,10 +173,10 @@ export async function scheduleInboxStyleNotification(
       trigger: null,
     });
 
-    console.log(`✅ Notification InboxStyle créée: ${notificationId}`);
+    log.success("inbox style notification created", { notificationId });
     return notificationId;
   } catch (error) {
-    console.error("❌ Erreur création notification InboxStyle:", error);
+    log.error("create inbox style notification failed", { error });
     return null;
   }
 }
@@ -224,10 +227,10 @@ export async function scheduleBigTextNotification(
       trigger: null,
     });
 
-    console.log(`✅ Notification BigTextStyle créée: ${notificationId}`);
+    log.success("big text style notification created", { notificationId });
     return notificationId;
   } catch (error) {
-    console.error("❌ Erreur création notification BigTextStyle:", error);
+    log.error("create big text notification failed", { error });
     return null;
   }
 }
@@ -284,12 +287,10 @@ export async function scheduleProgressNotification(
       trigger: null,
     });
 
-    console.log(
-      `✅ Notification Progress créée: ${notificationId} (${progress}%)`
-    );
+    log.success("progress notification created", { notificationId, progress });
     return notificationId;
   } catch (error) {
-    console.error("❌ Erreur création notification Progress:", error);
+    log.error("create progress notification failed", { error });
     return null;
   }
 }
@@ -314,10 +315,10 @@ export async function cleanupNotificationImageCache(): Promise<void> {
     }
 
     if (cleaned > 0) {
-      console.log(`🧹 ${cleaned} images de notification nettoyées`);
+      log.info("notification images cleaned", { cleaned });
     }
   } catch (error) {
-    console.error("❌ Erreur nettoyage cache images:", error);
+    log.error("cleanup notification image cache failed", { error });
   }
 }
 

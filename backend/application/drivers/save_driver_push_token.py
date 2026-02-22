@@ -132,45 +132,46 @@ class SaveDriverPushTokenUseCase:
                 from ext import db
                 from models import DeviceToken
 
-                # Extraire device_id et platform du payload si disponibles
                 device_id = payload.get("device_id") or payload.get("deviceId")
                 platform = payload.get("platform")  # "ios" | "android"
+                provider = payload.get("provider", "expo")  # "expo" | "fcm"
+                if provider not in ("expo", "fcm"):
+                    provider = "fcm" if not token.startswith("ExponentPushToken") else "expo"
 
-                # Chercher si ce token existe déjà pour ce driver
-                # ✅ CORRECTIF: Chercher le token même s'il est désactivé (pour réactivation)
                 existing_token = DeviceToken.query.filter_by(
                     driver_id=driver_id,
                     token=token,
                 ).first()
 
                 if existing_token:
-                    # Token existe déjà (actif ou non), réactiver et mettre à jour
-                    existing_token.is_active = True  # ✅ Réactiver si désactivé
+                    existing_token.is_active = True
                     existing_token.updated_at = datetime.utcnow()
                     if device_id:
                         existing_token.device_id = device_id
                     if platform:
                         existing_token.platform = platform
+                    existing_token.provider = provider
                     app_logger.info(
-                        "[push-token] Token existant réactivé/mis à jour pour driver %s (was_active=%s)",
+                        "[push-token] Token existant réactivé/mis à jour pour driver %s (provider=%s)",
                         driver_id,
-                        existing_token.is_active,
+                        provider,
                     )
                 else:
-                    # Nouveau token, créer un DeviceToken
                     device_token = DeviceToken(
                         driver_id=driver_id,
                         token=token,
                         device_id=device_id,
                         platform=platform,
+                        provider=provider,
                         is_active=True,
                     )
                     db.session.add(device_token)
                     app_logger.info(
-                        "[push-token] Nouveau token enregistré pour driver %s (device: %s, platform: %s)",
+                        "[push-token] Nouveau token enregistré pour driver %s (device: %s, platform: %s, provider: %s)",
                         driver_id,
                         device_id,
                         platform,
+                        provider,
                     )
 
                 # ✅ CONSERVER driver.push_token pour rétrocompatibilité (legacy)

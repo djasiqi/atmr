@@ -227,17 +227,24 @@ export interface RideEditPayload {
   dropoff_lat?: number;
   dropoff_lon?: number;
   scheduled_time?: string;
-  // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
   client_name?: string;
   notes?: string;
   priority?: "LOW" | "NORMAL" | "HIGH";
   amount?: number;
   is_return?: boolean;
+  return_time?: string;
+  medical_facility?: string;
+  hospital_service?: string;
+  doctor_name?: string;
+  notes_medical?: string;
+  pickup_access_notes?: string;
+  dropoff_access_notes?: string;
+  wheelchair_client_has?: boolean;
+  wheelchair_need?: boolean;
 }
 
 export interface RideCreatePayload {
   client_id?: string;
-  // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
   client_name?: string;
   pickup_address: string;
   dropoff_address: string;
@@ -254,12 +261,17 @@ export interface RideCreatePayload {
   assign_driver_id?: string;
   wheelchair_client_has?: boolean;
   wheelchair_need?: boolean;
-  // 🔄 Champs de récurrence
+  medical_facility?: string;
+  hospital_service?: string;
+  doctor_name?: string;
+  notes_medical?: string;
+  pickup_access_notes?: string;
+  dropoff_access_notes?: string;
   is_recurring?: boolean;
   recurrence_type?: "daily" | "weekly" | "custom";
-  recurrence_days?: number[]; // 0=Lundi, 1=Mardi, ..., 6=Dimanche
-  recurrence_end_date?: string; // YYYY-MM-DD
-  occurrences?: number; // Nombre de répétitions
+  recurrence_days?: number[];
+  recurrence_end_date?: string;
+  occurrences?: number;
 }
 
 export interface AddressSuggestion {

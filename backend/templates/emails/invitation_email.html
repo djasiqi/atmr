@@ -1,0 +1,57 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Invitation - {{ institution_name }}{% endblock %}
+
+{% block header_title %}{{ institution_name|default('Portail Institution') }}{% endblock %}
+
+{% block content %}
+<h2>Vous avez été invité(e) !</h2>
+
+<p>Bonjour{{ ' ' + first_name if first_name else '' }},</p>
+
+<p>
+    <span class="text-bold">{{ inviter_name }}</span> vous a invité(e) à rejoindre
+    <span class="text-bold">{{ institution_name }}</span> sur le portail de transport Lirie.
+</p>
+
+<div class="info-box">
+    <p style="margin: 0;">
+        <strong>Votre rôle :</strong> {{ role_label }}<br>
+        <strong>Institution :</strong> {{ institution_name }}
+    </p>
+</div>
+
+<p>Pour accéder au portail, cliquez sur le bouton ci-dessous et créez votre mot de passe :</p>
+
+<div style="text-align: center;">
+    <a href="{{ invite_url }}" class="button">Créer mon accès</a>
+</div>
+
+<p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
+    Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+    <a href="{{ invite_url }}" style="color: #667eea;">{{ invite_url }}</a>
+</p>
+
+<div class="divider"></div>
+
+<p class="text-muted">
+    Ce lien est valable <strong>48 heures</strong> et ne peut être utilisé qu'une seule fois.<br>
+    Si le lien a expiré, demandez à votre administrateur de renvoyer l'invitation.
+</p>
+
+<div class="alert-box">
+    <p style="margin: 0; font-size: 13px;">
+        Si vous n'avez pas demandé cet accès, vous pouvez ignorer cet email en toute sécurité.
+    </p>
+</div>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email a été envoyé automatiquement par le portail Lirie.<br>
+    Pour toute question, contactez l'administrateur de {{ institution_name|default('votre institution') }}.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; {{ current_year|default('2026') }} Lirie. Tous droits réservés.
+</p>
+{% endblock %}

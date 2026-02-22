@@ -1,6 +1,9 @@
+import { getLogger } from "@/utils/logger";
 import { enterpriseApi, hasValidToken, retryWithBackoff } from "./enterpriseAuth";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const log = getLogger("Dispatch");
 import { ENTERPRISE_SESSION_KEY } from "./enterpriseAuth";
 import * as Sentry from "@sentry/react-native";
 import { secureStorage } from "@/services/storage";
@@ -157,14 +160,14 @@ export const markRideUrgent = async (
   payload: MarkUrgentPayload
 ): Promise<MarkUrgentResponse> => {
   if (__DEV__ && URGENT_DEBUG) {
-    console.log("[markRideUrgent] payload", { rideId, payload });
+    log.debug("mark ride urgent payload", { rideId, payload });
   }
   const { data } = await enterpriseApi.post<MarkUrgentResponse>(
     `/dispatch/v1/rides/${rideId}/urgent`,
     payload
   );
   if (__DEV__ && URGENT_DEBUG) {
-    console.log("[markRideUrgent] response", data);
+    log.debug("mark ride urgent response", data);
   }
   return data;
 };
@@ -205,15 +208,15 @@ export interface DriverAccountInfo {
 }
 
 export const getMyDriverAccount = async (): Promise<DriverAccountInfo> => {
-  console.log("[getMyDriverAccount] Appel de l'endpoint /auth/me/driver-account");
+  log.info("calling driver-account endpoint", {});
   try {
     const response = await enterpriseApi.get<DriverAccountInfo>(
       "/auth/me/driver-account"
     );
-    console.log("[getMyDriverAccount] Réponse reçue:", response.data);
+    log.info("driver-account response received", { data: response.data });
     return response.data;
   } catch (error: any) {
-    console.error("[getMyDriverAccount] Erreur:", {
+    log.error("get my driver account failed", {
       message: error?.message,
       status: error?.response?.status,
       data: error?.response?.data,
@@ -458,24 +461,25 @@ export const createRide = async (
         throw new Error("Aucun token valide. Veuillez vous reconnecter.");
       }
 
-      console.log("[createRide] Envoi payload:", JSON.stringify(payload, null, 2));
+      log.info("create ride sending payload", { payload: JSON.stringify(payload, null, 2) });
       try {
         const response = await enterpriseApi.post<{ summary: RideDetail; return_summary?: RideDetail }>(
           "/dispatch/v1/rides",
           payload
         );
-        console.log("[createRide] Réponse complète:", response.data);
-        // Le backend retourne {summary: RideDetail, return_summary?: RideDetail}, on extrait summary
+        log.info("create ride full response", { data: response.data });
         const rideDetail = response.data.summary || response.data;
-        console.log("[createRide] RideDetail extrait:", rideDetail);
+        log.info("create ride detail extracted", { rideDetail });
         if (response.data.return_summary) {
-          console.log("[createRide] Course retour créée:", response.data.return_summary);
+          log.info("return ride created", { returnSummary: response.data.return_summary });
         }
         return rideDetail as RideDetail;
       } catch (error: any) {
-        console.error("[createRide] Erreur:", error);
-        console.error("[createRide] Erreur response:", error?.response?.data);
-        console.error("[createRide] Erreur status:", error?.response?.status);
+        log.error("create ride failed", {
+          error,
+          responseData: error?.response?.data,
+          status: error?.response?.status,
+        });
         
         // ✅ Capturer erreurs critiques (401 inattendu après guard)
         if (error?.response?.status === 401 && !__DEV__) {
@@ -590,25 +594,33 @@ export interface CreateClientPayload {
   email?: string; // Généré automatiquement si non fourni
   first_name: string;
   last_name: string;
-  gender: 'male' | 'female'; // ✅ Civilité obligatoire
-  avs_number?: string; // ✅ Numéro AVS optionnel
+  gender: 'male' | 'female'; // Civilité obligatoire
+  avs_number?: string;
   phone?: string;
-  address?: string; // Adresse complète formatée
+  address?: string;
   birth_date?: string;
   is_institution?: boolean;
   institution_name?: string;
-  residence_facility?: string; // Établissement de résidence (EMS, clinique, etc.)
-  domicile_address?: string; // Rue seule (sans code postal/ville)
+  linked_institution_id?: number | null;
+  residence_facility?: string;
+  domicile_address?: string;
   domicile_zip?: string;
   domicile_city?: string;
   domicile_lat?: number | null;
   domicile_lon?: number | null;
-  billing_address?: string; // Adresse complète de facturation
+  billing_address?: string;
   billing_lat?: number | null;
   billing_lon?: number | null;
   contact_email?: string;
   contact_phone?: string;
   preferential_rate?: number;
+  door_code?: string;
+  floor?: string;
+  access_notes?: string;
+  gp_name?: string;
+  gp_phone?: string;
+  default_billed_to_type?: string;
+  default_billed_to_contact?: string;
 }
 
 export const createClient = async (
@@ -677,8 +689,15 @@ export const createClient = async (
     preferential_rate: payload.preferential_rate || undefined,
     // ✅ Numéro AVS optionnel
     avs_number: payload.avs_number || undefined,
-    // ✅ Établissement de résidence
     residence_facility: payload.residence_facility || undefined,
+    door_code: payload.door_code || undefined,
+    floor: payload.floor || undefined,
+    access_notes: payload.access_notes || undefined,
+    gp_name: payload.gp_name || undefined,
+    gp_phone: payload.gp_phone || undefined,
+    default_billed_to_type: payload.default_billed_to_type || undefined,
+    default_billed_to_contact: payload.default_billed_to_contact || undefined,
+    linked_institution_id: payload.linked_institution_id ?? undefined,
   };
 
   // Ajouter les coordonnées GPS seulement si elles sont définies (pas null)
@@ -744,14 +763,16 @@ export const createClient = async (
   }
 
   // ✅ Log détaillé pour diagnostic (toujours activé)
-  console.log("[createClient] CREATE CLIENT PAYLOAD", JSON.stringify(fullPayload, null, 2));
-  console.log("[createClient] Gender dans payload:", fullPayload.gender, "Type:", typeof fullPayload.gender);
-  console.log("[createClient] URL:", `${standardApiURL}/companies/me/clients`);
-  
-  // ✅ Validation finale avant envoi (défense en profondeur)
+  log.info("create client payload", {
+    payload: JSON.stringify(fullPayload, null, 2),
+    gender: fullPayload.gender,
+    genderType: typeof fullPayload.gender,
+    url: `${standardApiURL}/companies/me/clients`,
+  });
+
   if (!fullPayload.gender || (fullPayload.gender !== 'male' && fullPayload.gender !== 'female')) {
     const errorMsg = `Gender invalide: ${fullPayload.gender}. Attendu: 'male' ou 'female'`;
-    console.error("[createClient] ❌", errorMsg);
+    log.error("create client invalid gender", { gender: fullPayload.gender });
     throw new Error(errorMsg);
   }
 
@@ -798,4 +819,64 @@ export const createClient = async (
       },
     }
   );
+};
+
+/** Cliniques disponibles pour hospitalisation (mappings clinique → billing) */
+export interface ClinicOption {
+  id: number;
+  name: string;
+}
+
+export const fetchClinicBillingMappings = async (): Promise<ClinicOption[]> => {
+  const { data } = await enterpriseStandardApi.get<{ data?: Array<{ clinic_company_id: number; clinic_company_name: string }> }>(
+    "/company-settings/billing/clinic-mappings"
+  );
+  const mappings = data?.data || [];
+  const seen = new Set<number>();
+  const result: ClinicOption[] = [];
+  for (const m of mappings) {
+    if (m.clinic_company_id && !seen.has(m.clinic_company_id)) {
+      seen.add(m.clinic_company_id);
+      result.push({ id: m.clinic_company_id, name: m.clinic_company_name || `Clinique ${m.clinic_company_id}` });
+    }
+  }
+  return result;
+};
+
+/** Tiers payeurs / curateurs */
+export interface BillingPartyOption {
+  id: number;
+  display_name: string;
+  type: string;
+}
+
+export const fetchBillingParties = async (active = true): Promise<BillingPartyOption[]> => {
+  const { data } = await enterpriseStandardApi.get<{ data?: BillingPartyOption[] }>(
+    "/company-settings/billing/parties",
+    { params: { active } }
+  );
+  return data?.data || [];
+};
+
+export const createClientStay = async (
+  clientId: number,
+  stayData: { company_id: number; start_date: string; end_date?: string | null; notes?: string | null }
+) => {
+  const { data } = await enterpriseStandardApi.post(`/clients/${clientId}/stays`, stayData);
+  return data;
+};
+
+export const linkClientBillingParty = async (
+  clientId: number | string,
+  linkData: {
+    billing_party_id: string | number;
+    role?: string | null;
+    is_default?: boolean;
+    contact_name?: string | null;
+    contact_email?: string | null;
+    contact_phone?: string | null;
+  }
+) => {
+  const { data } = await enterpriseStandardApi.post(`/clients/${clientId}/billing-parties`, linkData);
+  return data;
 };

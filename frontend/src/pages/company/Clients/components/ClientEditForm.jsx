@@ -1,7 +1,21 @@
 // frontend/src/pages/company/Clients/components/ClientEditForm.jsx
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  FiX,
+  FiFileText,
+  FiMapPin,
+  FiCreditCard,
+  FiBriefcase,
+  FiActivity,
+  FiSettings,
+  FiChevronDown,
+  FiChevronRight,
+} from 'react-icons/fi';
 import styles from './ClientEditForm.module.css';
+import ntStyles from '../../Settings/tabs/NotificationsTab.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 import {
   normalizePhone,
@@ -15,6 +29,164 @@ import ClinicBillingMappingSection from './ClinicBillingMappingSection';
  * Formulaire d'édition dans le drawer
  * Réutilise la logique de EditClientModal mais adapté pour le drawer avec accordéons
  */
+const PLACEHOLDER_VALUES = ['Non spécifié', 'Non renseigné', 'Non renseignée', '—', '\u2014'];
+const clean = (val) => {
+  if (!val) return '';
+  const str = String(val).trim();
+  return PLACEHOLDER_VALUES.includes(str) ? '' : str;
+};
+
+const GENDER_OPTIONS = [
+  { value: '', label: 'Sélectionner' },
+  { value: 'male', label: 'Monsieur' },
+  { value: 'female', label: 'Madame' },
+];
+
+function GenderDropdown({ value, onChange, disabled }) {
+  const [open, setOpen] = React.useState(false);
+  const btnRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+  const [pos, setPos] = React.useState({ top: 0, left: 0, width: 0 });
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const reposition = React.useCallback(() => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => { window.removeEventListener('scroll', reposition, true); window.removeEventListener('resize', reposition); };
+  }, [open, reposition]);
+
+  const selected = GENDER_OPTIONS.find((o) => o.value === value);
+
+  return (
+    <div className={styles.chipDrop}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`${styles.chipBtn} ${value ? styles.chipBtnActive : ''}`}
+        onClick={() => !disabled && setOpen((p) => !p)}
+        disabled={disabled}
+      >
+        <span className={styles.chipText}>{selected?.label || 'Sélectionner'}</span>
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className={styles.chipMenu}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+        >
+          {GENDER_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className={`${styles.chipOption} ${o.value === value ? styles.chipOptionActive : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+const BILLING_TYPE_OPTIONS = [
+  { value: '', label: 'Par défaut' },
+  { value: 'patient', label: 'Patient' },
+  { value: 'clinic', label: 'Clinique' },
+  { value: 'insurance', label: 'Assurance' },
+];
+
+function BillingTypeDropdown({ value, onChange, disabled }) {
+  const [open, setOpen] = React.useState(false);
+  const btnRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+  const [pos, setPos] = React.useState({ top: 0, left: 0, width: 0 });
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const reposition = React.useCallback(() => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => { window.removeEventListener('scroll', reposition, true); window.removeEventListener('resize', reposition); };
+  }, [open, reposition]);
+
+  const selected = BILLING_TYPE_OPTIONS.find((o) => o.value === value);
+
+  return (
+    <div className={styles.chipDrop}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`${styles.chipBtn} ${value ? styles.chipBtnActive : ''}`}
+        onClick={() => !disabled && setOpen((p) => !p)}
+        disabled={disabled}
+      >
+        <span className={styles.chipText}>{selected?.label || 'Par défaut'}</span>
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className={styles.chipMenu}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+        >
+          {BILLING_TYPE_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className={`${styles.chipOption} ${o.value === value ? styles.chipOptionActive : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 const ClientEditForm = ({
   client,
   onSave,
@@ -27,9 +199,13 @@ const ClientEditForm = ({
 }) => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(externalHasUnsavedChanges);
   
+  // L'institution est-elle liée à une institution officielle ?
+  const isLinkedInstitution = !!(client.linked_institution_id || client.linked_institution);
+
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
+    linked_institution_id: client.linked_institution_id || null,
     first_name: client.user_first_name || client.first_name || client.user?.first_name || '',
     last_name: client.user_last_name || client.last_name || client.user?.last_name || '',
     residence_facility: client.residence_facility || '',
@@ -43,9 +219,9 @@ const ClientEditForm = ({
       return genderStr;
     })(),
     avs_number: client.avs_number || '',
-    phone: client.phone || client.user_phone || client.user?.phone || '',
-    contact_email: client.contact_email || '',
-    contact_phone: client.contact_phone || '',
+    phone: clean(client.phone || client.user_phone || client.user?.phone),
+    contact_email: clean(client.contact_email),
+    contact_phone: clean(client.contact_phone),
     domicile_address: client.domicile_address || client.domicile?.address || '',
     domicile_zip: client.domicile_zip || client.domicile?.zip || '',
     domicile_city: client.domicile_city || client.domicile?.city || '',
@@ -109,9 +285,9 @@ const ClientEditForm = ({
         return s;
       })(),
       avs_number: client.avs_number || '',
-      phone: client.phone || client.user_phone || client.user?.phone || '',
-      contact_email: client.contact_email || '',
-      contact_phone: client.contact_phone || '',
+      phone: clean(client.phone || client.user_phone || client.user?.phone),
+      contact_email: clean(client.contact_email),
+      contact_phone: clean(client.contact_phone),
       domicile_address: client.domicile_address || client.domicile?.address || '',
       domicile_zip: client.domicile_zip || client.domicile?.zip || '',
       domicile_city: client.domicile_city || client.domicile?.city || '',
@@ -347,12 +523,11 @@ const ClientEditForm = ({
             aria-label="Annuler"
             title="Annuler (ESC)"
           >
-            ✕
+            <FiX size={18} />
           </button>
           <div className={styles.headerTitle}>
             <h2 className={styles.clientName}>
               Modifier : {displayName}
-              {hasUnsavedChanges && <span className={styles.unsavedIndicator}> •</span>}
             </h2>
           </div>
         </div>
@@ -370,10 +545,11 @@ const ClientEditForm = ({
             className={styles.accordionHeader}
           >
             <span className={styles.accordionTitle}>
-              {formData.is_institution ? '📋 Informations clinique' : '📋 Informations client'}
+              <FiFileText size={14} className={styles.accordionTitleIcon} />
+              {formData.is_institution ? 'Informations clinique' : 'Informations client'}
             </span>
-            <span className={styles.accordionIcon}>
-              {expandedSections.essential ? '▾' : '▸'}
+            <span className={styles.accordionChevron}>
+              {expandedSections.essential ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
             </span>
           </button>
           {expandedSections.essential && (
@@ -384,6 +560,22 @@ const ClientEditForm = ({
                     <label htmlFor="institution_name" className={styles.label}>
                       Nom de la clinique *
                     </label>
+                    {isLinkedInstitution && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        marginBottom: '6px',
+                        padding: '4px 8px',
+                        background: 'var(--bg-success-light, #f0fdf4)',
+                        border: '1px solid var(--border-success, #86efac)',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: 'var(--text-success, #16a34a)',
+                      }}>
+                        <span>Institution officielle</span>
+                      </div>
+                    )}
                     <input
                       type="text"
                       id="institution_name"
@@ -393,8 +585,18 @@ const ClientEditForm = ({
                       className={styles.input}
                       required
                       disabled={loading}
+                      readOnly={isLinkedInstitution}
                       placeholder="Ex: Clinique des Grangettes"
+                      style={isLinkedInstitution ? {
+                        backgroundColor: 'var(--bg-disabled, #f5f5f5)',
+                        cursor: 'not-allowed',
+                      } : undefined}
                     />
+                    {isLinkedInstitution && (
+                      <small style={{ color: 'var(--text-secondary, #666)' }}>
+                        Ce nom est synchronisé avec l'institution officielle et ne peut pas être modifié.
+                      </small>
+                    )}
                   </div>
                   <div className={styles.formRowTwo}>
                     <div className={styles.formGroup}>
@@ -444,18 +646,11 @@ const ClientEditForm = ({
                       <label htmlFor="gender" className={styles.label}>
                         Civilité
                       </label>
-                      <select
-                        id="gender"
-                        name="gender"
+                      <GenderDropdown
                         value={formData.gender}
-                        onChange={handleChange}
-                        className={styles.input}
+                        onChange={(v) => handleChange({ target: { name: 'gender', value: v } })}
                         disabled={loading}
-                      >
-                        <option value="">-- Sélectionnez --</option>
-                        <option value="male">Monsieur</option>
-                        <option value="female">Madame</option>
-                      </select>
+                      />
                     </div>
                     <div className={styles.formGroup}>
                       <label htmlFor="first_name" className={styles.label}>
@@ -493,17 +688,11 @@ const ClientEditForm = ({
                   {/* Ligne 2 : Date de naissance, Numéro AVS */}
                   <div className={styles.formRowTwo}>
                     <div className={styles.formGroup}>
-                      <label htmlFor="birth_date" className={styles.label}>
-                        Date de naissance
-                      </label>
-                      <input
-                        type="date"
-                        id="birth_date"
-                        name="birth_date"
+                      <label className={styles.label}>Date de naissance</label>
+                      <InlineDatePicker
                         value={formData.birth_date}
-                        onChange={handleChange}
-                        className={styles.input}
-                        disabled={loading}
+                        onChange={(v) => handleChange({ target: { name: 'birth_date', value: v } })}
+                        placeholder="Date de naissance"
                       />
                     </div>
                     <div className={styles.formGroup}>
@@ -591,10 +780,11 @@ const ClientEditForm = ({
             className={styles.accordionHeader}
           >
             <span className={styles.accordionTitle}>
-              {formData.is_institution ? '🏠 Adresse de la clinique' : '🏠 Adresse & résidence'}
+              <FiMapPin size={14} className={styles.accordionTitleIcon} />
+              {formData.is_institution ? 'Adresse de la clinique' : 'Adresse et residence'}
             </span>
-            <span className={styles.accordionIcon}>
-              {expandedSections.address ? '▾' : '▸'}
+            <span className={styles.accordionChevron}>
+              {expandedSections.address ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
             </span>
           </button>
           {expandedSections.address && (
@@ -763,31 +953,34 @@ const ClientEditForm = ({
             className={styles.accordionHeader}
           >
             <span className={styles.accordionTitle}>
-              {formData.is_institution ? '💰 Tarif préférentiel' : '💰 Tarif patient'}
+              <FiCreditCard size={14} className={styles.accordionTitleIcon} />
+              {formData.is_institution ? 'Tarif preferentiel' : 'Tarif patient'}
             </span>
-            <span className={styles.accordionIcon}>
-              {expandedSections.billing ? '▾' : '▸'}
+            <span className={styles.accordionChevron}>
+              {expandedSections.billing ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
             </span>
           </button>
           {expandedSections.billing && (
             <div className={styles.accordionContent}>
               {!formData.is_institution && (
                 <>
-                  <div className={styles.checkboxGroup}>
-                    <label className={styles.checkboxLabel}>
+                  <label className={`${ntStyles.notifRow} ${styles.toggleRow}`} htmlFor="toggle-billing-addr">
+                    <div className={ntStyles.notifInfo}>
+                      <span className={ntStyles.notifLabel}>Adresse de facturation différente</span>
+                      <span className={ntStyles.notifHint}>Par défaut, la facturation utilise l'adresse de domicile</span>
+                    </div>
+                    <div className={ntStyles.miniToggle}>
                       <input
+                        id="toggle-billing-addr"
                         type="checkbox"
                         name="show_billing_info"
                         checked={formData.show_billing_info}
                         onChange={handleChange}
                         disabled={loading}
                       />
-                      <span className={styles.checkboxText}>
-                        <strong>Adresse de facturation différente</strong>
-                        <small>Par défaut, la facturation utilise l&apos;adresse de domicile</small>
-                      </span>
-                    </label>
-                  </div>
+                      <span className={ntStyles.miniSlider} />
+                    </div>
+                  </label>
                   {formData.show_billing_info && (
                     <div className={styles.formGroup}>
                       <label htmlFor="billing_address" className={styles.label}>Adresse de facturation</label>
@@ -802,46 +995,38 @@ const ClientEditForm = ({
                         placeholder="Ex: Avenue de la Gare 5, 1003, Lausanne"
                         disabled={loading}
                       />
-                      <small className={styles.hint}>💡 Si différente de l&apos;adresse de domicile</small>
+                      <small className={styles.hint}>Si differente de l&apos;adresse de domicile</small>
                     </div>
                   )}
-                  <div className={styles.checkboxGroup}>
-                    <label className={styles.checkboxLabel}>
+                  <label className={`${ntStyles.notifRow} ${styles.toggleRow}`} htmlFor="toggle-advanced-billing">
+                    <div className={ntStyles.notifInfo}>
+                      <span className={ntStyles.notifLabel}>Options de facturation avancées</span>
+                      <span className={ntStyles.notifHint}>Type de facturation par défaut et contact principal</span>
+                    </div>
+                    <div className={ntStyles.miniToggle}>
                       <input
+                        id="toggle-advanced-billing"
                         type="checkbox"
                         checked={showAdvancedBilling}
                         onChange={(e) => setShowAdvancedBilling(e.target.checked)}
                         disabled={loading}
                       />
-                      <span className={styles.checkboxText}>
-                        <strong>Options de facturation avancées</strong>
-                        <small>Type de facturation par défaut et contact principal</small>
-                      </span>
-                    </label>
-                  </div>
+                      <span className={ntStyles.miniSlider} />
+                    </div>
+                  </label>
                   {showAdvancedBilling && (
-                    <div className={styles.formRow}>
+                    <div className={styles.formRowTwo}>
                       <div className={styles.formGroup}>
-                        <label htmlFor="default_billed_to_type" className={styles.label}>
-                          Type de facturation par défaut
-                        </label>
-                        <select
-                          id="default_billed_to_type"
-                          name="default_billed_to_type"
+                        <label className={styles.label}>Type de facturation</label>
+                        <BillingTypeDropdown
                           value={formData.default_billed_to_type}
-                          onChange={handleChange}
-                          className={styles.input}
+                          onChange={(v) => handleChange({ target: { name: 'default_billed_to_type', value: v } })}
                           disabled={loading}
-                        >
-                          <option value="">— Laisser par défaut —</option>
-                          <option value="patient">Patient</option>
-                          <option value="clinic">Clinique</option>
-                          <option value="insurance">Assurance</option>
-                        </select>
+                        />
                       </div>
                       <div className={styles.formGroup}>
                         <label htmlFor="default_billed_to_contact" className={styles.label}>
-                          Contact facturation par défaut
+                          Contact facturation
                         </label>
                         <input
                           type="text"
@@ -896,9 +1081,9 @@ const ClientEditForm = ({
               onClick={() => toggleSection('clinicMapping')}
               className={styles.accordionHeader}
             >
-              <span className={styles.accordionTitle}>📋 Mapping de facturation</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.clinicMapping ? '▾' : '▸'}
+              <span className={styles.accordionTitle}><FiSettings size={14} className={styles.accordionTitleIcon} />Mapping de facturation</span>
+              <span className={styles.accordionChevron}>
+                {expandedSections.clinicMapping ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               </span>
             </button>
             {expandedSections.clinicMapping && (
@@ -915,7 +1100,7 @@ const ClientEditForm = ({
                 onCompanyCreated={async (company) => {
                   // Recharger les données du client pour mettre à jour default_billing
                   if (company && company.id && onReloadClient) {
-                    console.log('✅ Company créée, rechargement des données du client...', company);
+                    console.log('Company creee, rechargement des donnees du client...', company);
                     // Attendre un peu pour laisser le backend finaliser la transaction
                     await new Promise(resolve => setTimeout(resolve, 500));
                     // Forcer un rechargement complet
@@ -944,9 +1129,9 @@ const ClientEditForm = ({
               onClick={() => toggleSection('billingParties')}
               className={styles.accordionHeader}
             >
-              <span className={styles.accordionTitle}>💰 Tiers payeur / Curateur</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.billingParties ? '▾' : '▸'}
+              <span className={styles.accordionTitle}><FiBriefcase size={14} className={styles.accordionTitleIcon} />Tiers payeur / Curateur</span>
+              <span className={styles.accordionChevron}>
+                {expandedSections.billingParties ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               </span>
             </button>
             {expandedSections.billingParties && (
@@ -979,9 +1164,9 @@ const ClientEditForm = ({
               onClick={() => toggleSection('stays')}
               className={styles.accordionHeader}
             >
-              <span className={styles.accordionTitle}>🏥 Séjours d'hospitalisation</span>
-              <span className={styles.accordionIcon}>
-                {expandedSections.stays ? '▾' : '▸'}
+              <span className={styles.accordionTitle}><FiActivity size={14} className={styles.accordionTitleIcon} />Sejours d&apos;hospitalisation</span>
+              <span className={styles.accordionChevron}>
+                {expandedSections.stays ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
               </span>
             </button>
             {expandedSections.stays && (
@@ -993,26 +1178,29 @@ const ClientEditForm = ({
         )}
 
         {/* Statut */}
-        <div className={styles.formGroup}>
-          <label className={styles.checkboxLabel}>
+        <label className={`${ntStyles.notifRow} ${styles.toggleRow}`} htmlFor="toggle-is-active">
+          <div className={ntStyles.notifInfo}>
+            <span className={ntStyles.notifLabel}>
+              {formData.is_institution ? 'Clinique active' : 'Client actif'}
+            </span>
+            <span className={ntStyles.notifHint}>
+              {formData.is_institution
+                ? 'Les cliniques inactives n\'apparaissent pas dans les sélections'
+                : 'Les clients inactifs n\'apparaissent pas dans les sélections'}
+            </span>
+          </div>
+          <div className={ntStyles.miniToggle}>
             <input
+              id="toggle-is-active"
               type="checkbox"
               name="is_active"
               checked={formData.is_active}
               onChange={handleChange}
               disabled={loading}
-              className={styles.checkbox}
             />
-            <span className={styles.checkboxText}>
-              <strong>{formData.is_institution ? 'Clinique active' : 'Client actif'}</strong>
-              <small>
-                {formData.is_institution
-                  ? 'Les cliniques inactives n\'apparaissent pas dans les sélections'
-                  : 'Les clients inactifs n\'apparaissent pas dans les sélections'}
-              </small>
-            </span>
-          </label>
-        </div>
+            <span className={ntStyles.miniSlider} />
+          </div>
+        </label>
 
         {/* Actions */}
         <div className={styles.actions}>

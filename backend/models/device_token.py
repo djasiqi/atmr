@@ -32,6 +32,9 @@ class DeviceToken(db.Model):
     platform: Mapped[str | None] = mapped_column(
         String(20), nullable=True
     )  # "ios" | "android"
+    provider: Mapped[str] = mapped_column(
+        String(20), default="expo", server_default="expo", nullable=False
+    )  # "expo" | "fcm"
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )

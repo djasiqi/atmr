@@ -1,0 +1,199 @@
+/* ── Field row: input + icon button ── */
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input {
+  width: 100% !important;
+  min-width: 80px;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 32px 0 10px !important;
+  font-size: 13px !important;
+  box-sizing: border-box;
+}
+
+.iconBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-tertiary, #9ca3af);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.iconBtn:hover {
+  color: var(--brand-primary, #00796b);
+}
+
+/* ── Popover ── */
+.popover {
+  position: absolute;
+  z-index: 10000;
+  width: 180px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  animation: tpFadeIn 0.15s ease;
+}
+
+@keyframes tpFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.popoverTitle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-tertiary, #9ca3af);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+
+.popoverTitleIcon {
+  color: var(--brand-primary, #00796b);
+  opacity: 0.55;
+}
+
+/* ── Hour/Minute selects ── */
+.selectRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.select {
+  width: 56px;
+  height: 30px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #0f172a);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 2px;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 2px var(--brand-primary-lightest, #e0f2f1);
+}
+
+.select:hover {
+  border-color: var(--brand-primary, #00796b);
+}
+
+.sep {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-secondary, #374151);
+  line-height: 1;
+}
+
+/* ── Quick presets ── */
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.preset {
+  flex: 1 1 auto;
+  min-width: 46px;
+  height: 24px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 5px;
+  background: var(--bg-secondary, #f9fafb);
+  color: var(--text-secondary, #374151);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0 4px;
+}
+
+.preset:hover {
+  border-color: var(--brand-primary, #00796b);
+  background: var(--brand-primary-lightest, #e0f2f1);
+  color: var(--brand-primary, #00796b);
+}
+
+.presetActive {
+  border-color: var(--brand-primary, #00796b);
+  background: var(--brand-primary, #00796b);
+  color: #fff;
+}
+
+/* ── Footer ── */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.footerBtn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-primary, #00796b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+
+.footerBtn:hover {
+  background: var(--brand-primary-lightest, #e0f2f1);
+}
+
+.footerBtnClear {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #9ca3af);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+}
+
+.footerBtnClear:hover {
+  color: var(--color-danger, #dc2626);
+  background: rgba(220, 38, 38, 0.06);
+}

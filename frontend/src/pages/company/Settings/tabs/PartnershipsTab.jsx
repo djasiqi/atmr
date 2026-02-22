@@ -1,5 +1,18 @@
 // frontend/src/pages/company/Settings/tabs/PartnershipsTab.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import {
+  FiUsers,
+  FiFileText,
+  FiCheck,
+  FiX,
+  FiPlus,
+  FiHome,
+  FiTruck,
+  FiDollarSign,
+  FiTrash2,
+  FiBarChart2,
+  FiInbox,
+} from 'react-icons/fi';
 import styles from '../CompanySettings.module.css';
 import partnershipStyles from './PartnershipsTab.module.css';
 import apiClient from '../../../../utils/apiClient';
@@ -8,7 +21,7 @@ import { ensurePdfUrlWorksInDev } from '../../../../utils/pdfUrlFallback';
 import KPICards from './components/KPICards';
 import StatementGenerationForm from './components/StatementGenerationForm';
 
-const PartnershipsTab = () => {
+const PartnershipsTab = forwardRef(({ isEditing }, ref) => {
   const [partnerships, setPartnerships] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [stats, setStats] = useState(null);
@@ -42,6 +55,92 @@ const PartnershipsTab = () => {
     auto_invoice: true,
   });
 
+  const [rowEdits, setRowEdits] = useState({});
+  const [_savingRows, setSavingRows] = useState({});
+
+  useEffect(() => {
+    if (isEditing) {
+      const edits = {};
+      partnerships.forEach((p) => {
+        edits[p.id] = {
+          default_partner_tariff_percent: p.default_partner_tariff_percent ?? 90,
+          auto_accept: p.auto_accept_rules ?? false,
+          auto_invoice: p.auto_invoice !== undefined ? p.auto_invoice : true,
+        };
+      });
+      setRowEdits(edits);
+    } else {
+      setRowEdits({});
+      setSavingRows({});
+    }
+  }, [isEditing, partnerships]);
+
+  const updateRowEdit = useCallback((partnershipId, field, value) => {
+    setRowEdits((prev) => ({
+      ...prev,
+      [partnershipId]: { ...prev[partnershipId], [field]: value },
+    }));
+  }, []);
+
+  const _handleSaveRow = useCallback(async (partnershipId) => {
+    const edits = rowEdits[partnershipId];
+    if (!edits) return;
+    setSavingRows((prev) => ({ ...prev, [partnershipId]: true }));
+    try {
+      await apiClient.put(`/companies/me/partnerships/${partnershipId}`, {
+        default_partner_tariff_percent: edits.default_partner_tariff_percent,
+        auto_accept: edits.auto_accept,
+        auto_invoice: edits.auto_invoice,
+      });
+      showSuccess('Partenariat mis à jour');
+      loadPartnerships();
+      loadStats();
+    } catch (err) {
+      console.error('Erreur mise à jour partenariat:', err);
+      showError(err?.response?.data?.error || 'Erreur lors de la mise à jour');
+    } finally {
+      setSavingRows((prev) => ({ ...prev, [partnershipId]: false }));
+    }
+  }, [rowEdits]);
+
+  const handleDeleteRow = useCallback(async (partnershipId, partnerName) => {
+    if (!window.confirm(`Supprimer le partenariat avec ${partnerName} ? Cette action est irréversible.`)) return;
+    try {
+      await apiClient.delete(`/companies/me/partnerships/${partnershipId}`);
+      showSuccess('Partenariat supprimé');
+      loadPartnerships();
+      loadStats();
+    } catch (err) {
+      console.error('Erreur suppression partenariat:', err);
+      showError(err?.response?.data?.error || 'Erreur lors de la suppression');
+    }
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    async save() {
+      const ids = Object.keys(rowEdits);
+      if (ids.length === 0) return;
+      const errors = [];
+      for (const id of ids) {
+        const edits = rowEdits[id];
+        try {
+          await apiClient.put(`/companies/me/partnerships/${id}`, {
+            default_partner_tariff_percent: edits.default_partner_tariff_percent,
+            auto_accept: edits.auto_accept,
+            auto_invoice: edits.auto_invoice,
+          });
+        } catch (err) {
+          errors.push(err);
+        }
+      }
+      if (errors.length > 0) {
+        throw errors[0];
+      }
+      loadPartnerships();
+      loadStats();
+    },
+  }), [rowEdits]);
+
   // Charger les données
   useEffect(() => {
     loadStats();
@@ -63,7 +162,7 @@ const PartnershipsTab = () => {
       const { data } = await apiClient.get('/companies/me/partnerships/stats');
       setStats(data?.data || data);
     } catch (err) {
-      console.error('❌ Erreur chargement stats:', err);
+      console.error('Erreur chargement stats:', err);
     } finally {
       setLoadingStats(false);
     }
@@ -89,7 +188,7 @@ const PartnershipsTab = () => {
       );
       const pending = uniquePartnerships.filter((p) => p.status === 'PENDING');
       
-      console.log('✅ Partenariats chargés:', {
+      console.log('Partenariats charges:', {
         total: partnershipsList.length,
         unique: uniquePartnerships.length,
         active: active.length,
@@ -108,7 +207,7 @@ const PartnershipsTab = () => {
     } catch (err) {
       const status = err?.response?.status;
       const data = err?.response?.data;
-      console.error('❌ Erreur chargement partenariats:', status, data, err);
+      console.error('Erreur chargement partenariats:', status, data, err);
       const isServerError =
         status === 500 || data?.error_code === 'internal_error';
       const message = isServerError
@@ -155,7 +254,7 @@ const PartnershipsTab = () => {
   };
 
   const getPartnerName = (p) => {
-    // ✅ Utiliser le champ enrichi par le backend qui indique le nom du partenaire
+    // Utiliser le champ enrichi par le backend qui indique le nom du partenaire
     // (l'autre entreprise, pas celle qui consulte)
     return p.partner_company_name_display || p.partner_company_name || p.owner_company_name || 'Partenaire inconnu';
   };
@@ -167,9 +266,9 @@ const PartnershipsTab = () => {
   };
 
   const getStatusBadge = (p) => {
-    if (!p.is_active) return { text: '🔴 Suspendu', color: '#F44336' };
+    if (!p.is_active) return { text: 'Suspendu', className: partnershipStyles.badgeSuspended };
     // TODO: Ajouter logique pour "À régulariser"
-    return { text: '🟢 Actif', color: '#4CAF50' };
+    return { text: 'Actif', className: partnershipStyles.badgeActive };
   };
 
   const handleRequestPartnership = async () => {
@@ -236,7 +335,7 @@ const PartnershipsTab = () => {
     }
   };
 
-  const handleEditPartnership = (partnership) => {
+  const _handleEditPartnership = (partnership) => {
     setEditingPartnership(partnership);
     setEditForm({
       default_partner_tariff_percent: partnership.default_partner_tariff_percent || 90,
@@ -328,17 +427,37 @@ const PartnershipsTab = () => {
   }
 
   return (
-    <div className={styles.settingsForm} style={{ display: 'block' }}>
-      <h2>🤝 Partenariats</h2>
+    <div className={`${styles.settingsForm} ${styles.blockDisplay}`}>
+      {/* Carte 1 : Vue d'ensemble */}
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardIcon}><FiBarChart2 size={16} /></div>
+          <div className={styles.cardHeaderText}>
+            <h3 className={styles.cardTitle}>Vue d'ensemble</h3>
+            <p className={styles.cardHint}>Activite et solde du mois en cours</p>
+          </div>
+        </div>
+        <KPICards stats={stats} loading={loadingStats} />
+      </div>
 
-      {/* KPI Cards */}
-      <KPICards stats={stats} loading={loadingStats} />
-
-      {/* Tableau Partenariats Actifs */}
-      <section className={styles.section}>
-        <h3>Partenariats actifs</h3>
+      {/* Carte 2 : Partenariats actifs */}
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardIcon}><FiUsers size={16} /></div>
+          <div className={styles.cardHeaderText}>
+            <h3 className={styles.cardTitle}>Partenariats actifs</h3>
+          </div>
+          <button
+            type="button"
+            className={`${styles.button} ${styles.primary}`}
+            onClick={() => setShowRequestModal(true)}
+          >
+            <FiPlus size={14} aria-hidden />
+            Nouveau
+          </button>
+        </div>
         {partnerships.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <p className={partnershipStyles.textSecondary}>
             Aucun partenariat actif
           </p>
         ) : (
@@ -347,63 +466,127 @@ const PartnershipsTab = () => {
               <thead>
                 <tr>
                   <th>Partenaire</th>
-                  <th>Type</th>
-                  <th>Courses envoyées</th>
-                  <th>Courses reçues</th>
-                  <th>CA généré</th>
-                  <th>À payer</th>
-                  <th>À recevoir</th>
-                  <th>Solde</th>
+                  {isEditing ? (
+                    <>
+                      <th>Part %</th>
+                      <th>Auto-accept</th>
+                      <th>Fact. auto</th>
+                    </>
+                  ) : (
+                    <>
+                      <th>Type</th>
+                      <th>Courses envoyées</th>
+                      <th>Courses reçues</th>
+                      <th>CA généré</th>
+                      <th>À payer</th>
+                      <th>À recevoir</th>
+                      <th>Solde</th>
+                    </>
+                  )}
                   <th>Statut</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {partnerships.map((p) => {
-                  const stats = p.stats || {};
+                  const pStats = p.stats || {};
                   const statusBadge = getStatusBadge(p);
-                  const balance = stats.balance || 0;
+                  const balance = pStats.balance || 0;
+                  const edits = rowEdits[p.id];
                   return (
                     <tr
                       key={p.id}
-                      onClick={() => setSelectedPartnership(p)}
-                      className={partnershipStyles.tableRow}
+                      onClick={() => !isEditing && setSelectedPartnership(p)}
+                      className={isEditing ? undefined : partnershipStyles.tableRow}
                     >
                       <td>
                         <strong>{getPartnerName(p)}</strong>
                       </td>
-                      <td>{getCompanyType(p)}</td>
-                      <td>{stats.sent_transfers || 0}</td>
-                      <td>{stats.received_transfers || 0}</td>
-                      <td>{formatCurrency(stats.total_revenue)}</td>
-                      <td>{formatCurrency(stats.amount_to_pay)}</td>
-                      <td>{formatCurrency(stats.amount_to_receive)}</td>
-                      <td
-                        style={{
-                          color: balance >= 0 ? '#4CAF50' : '#F44336',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {formatCurrency(balance)}
-                      </td>
+                      {isEditing && edits ? (
+                        <>
+                          <td>
+                            <input
+                              type="number"
+                              min="1"
+                              max="100"
+                              value={edits.default_partner_tariff_percent}
+                              onChange={(e) =>
+                                updateRowEdit(p.id, 'default_partner_tariff_percent', parseFloat(e.target.value) || 90)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              className={partnershipStyles.inlineInput}
+                            />
+                          </td>
+                          <td className={partnershipStyles.inlineCheckboxCell}>
+                            <div className={partnershipStyles.inlineToggle}>
+                              <label className={partnershipStyles.inlineCheckbox} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={edits.auto_accept}
+                                  onChange={(e) => updateRowEdit(p.id, 'auto_accept', e.target.checked)}
+                                />
+                                <span className={partnershipStyles.inlineSlider} />
+                              </label>
+                              <span className={partnershipStyles.inlineToggleLabel}>
+                                {edits.auto_accept ? 'Oui' : 'Non'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className={partnershipStyles.inlineCheckboxCell}>
+                            <div className={partnershipStyles.inlineToggle}>
+                              <label className={partnershipStyles.inlineCheckbox} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={edits.auto_invoice}
+                                  onChange={(e) => updateRowEdit(p.id, 'auto_invoice', e.target.checked)}
+                                />
+                                <span className={partnershipStyles.inlineSlider} />
+                              </label>
+                              <span className={partnershipStyles.inlineToggleLabel}>
+                                {edits.auto_invoice ? 'Oui' : 'Non'}
+                              </span>
+                            </div>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{getCompanyType(p)}</td>
+                          <td>{pStats.sent_transfers || 0}</td>
+                          <td>{pStats.received_transfers || 0}</td>
+                          <td>{formatCurrency(pStats.total_revenue)}</td>
+                          <td>{formatCurrency(pStats.amount_to_pay)}</td>
+                          <td>{formatCurrency(pStats.amount_to_receive)}</td>
+                          <td
+                            className={
+                              balance >= 0
+                                ? partnershipStyles.balancePositive
+                                : partnershipStyles.balanceNegative
+                            }
+                          >
+                            {formatCurrency(balance)}
+                          </td>
+                        </>
+                      )}
                       <td>
-                        <span style={{ color: statusBadge.color }}>
+                        <span className={statusBadge.className}>
                           {statusBadge.text}
                         </span>
                       </td>
                       <td>
                         <div className={partnershipStyles.actionButtons}>
-                          <button
-                            type="button"
-                            className={partnershipStyles.actionBtn}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditPartnership(p);
-                            }}
-                            title="Modifier"
-                          >
-                            ✏️
-                          </button>
+                          {isEditing && (
+                            <button
+                              type="button"
+                              className={`${partnershipStyles.actionBtn} ${partnershipStyles.actionBtnDelete}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRow(p.id, getPartnerName(p));
+                              }}
+                              title="Supprimer"
+                            >
+                              <FiTrash2 size={15} aria-hidden />
+                            </button>
+                          )}
                           <button
                             type="button"
                             className={partnershipStyles.actionBtn}
@@ -414,7 +597,7 @@ const PartnershipsTab = () => {
                             }}
                             title="Générer décompte"
                           >
-                            📄
+                            <FiFileText size={16} aria-hidden />
                           </button>
                         </div>
                       </td>
@@ -425,13 +608,18 @@ const PartnershipsTab = () => {
             </table>
           </div>
         )}
-      </section>
+      </div>
 
-      {/* Demandes en attente */}
-      <section className={styles.section}>
-        <h3>Demandes de partenariat</h3>
+      {/* Carte 3 : Demandes en attente */}
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardIcon}><FiInbox size={16} /></div>
+          <div className={styles.cardHeaderText}>
+            <h3 className={styles.cardTitle}>Demandes en attente</h3>
+          </div>
+        </div>
         {pendingRequests.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>
+          <p className={partnershipStyles.textSecondary}>
             Aucune demande en attente
           </p>
         ) : (
@@ -466,14 +654,16 @@ const PartnershipsTab = () => {
                             className={`${styles.button} ${styles.primary}`}
                             onClick={() => handleAcceptRequest(p.id)}
                           >
-                            ✅ Accepter
+                            <FiCheck size={16} aria-hidden />
+                            Accepter
                           </button>
                           <button
                             type="button"
                             className={`${styles.button} ${styles.danger}`}
                             onClick={() => handleRejectRequest(p.id)}
                           >
-                            ❌ Refuser
+                            <FiX size={16} aria-hidden />
+                            Refuser
                           </button>
                         </div>
                       </td>
@@ -484,18 +674,7 @@ const PartnershipsTab = () => {
             </table>
           </div>
         )}
-      </section>
-
-      {/* Bouton pour demander un partenariat */}
-      <section className={styles.section}>
-        <button
-          type="button"
-          className={`${styles.button} ${styles.primary}`}
-          onClick={() => setShowRequestModal(true)}
-        >
-          ➕ Demander un partenariat
-        </button>
-      </section>
+      </div>
 
       {/* Modal Détail Partenariat */}
       {selectedPartnership && (
@@ -513,13 +692,17 @@ const PartnershipsTab = () => {
                 type="button"
                 onClick={() => setSelectedPartnership(null)}
                 className={partnershipStyles.closeBtn}
+                aria-label="Fermer"
               >
-                ✕
+                <FiX size={20} aria-hidden />
               </button>
             </div>
             <div className={partnershipStyles.modalBody}>
               <div className={partnershipStyles.detailSection}>
-                <h4>🏢 Infos générales</h4>
+                <h4 className={partnershipStyles.detailSectionTitle}>
+                  <FiHome size={16} aria-hidden />
+                  Infos générales
+                </h4>
                 <p>
                   <strong>Partenaire:</strong> {getPartnerName(selectedPartnership)}
                 </p>
@@ -546,7 +729,10 @@ const PartnershipsTab = () => {
               {selectedPartnership.stats && (
                 <>
                   <div className={partnershipStyles.detailSection}>
-                    <h4>🚗 Activité opérationnelle</h4>
+                    <h4 className={partnershipStyles.detailSectionTitle}>
+                      <FiTruck size={16} aria-hidden />
+                      Activité opérationnelle
+                    </h4>
                     <p>
                       <strong>Courses envoyées:</strong>{' '}
                       {selectedPartnership.stats.sent_transfers || 0}
@@ -557,7 +743,10 @@ const PartnershipsTab = () => {
                     </p>
                   </div>
                   <div className={partnershipStyles.detailSection}>
-                    <h4>💰 Financier</h4>
+                    <h4 className={partnershipStyles.detailSectionTitle}>
+                      <FiDollarSign size={16} aria-hidden />
+                      Financier
+                    </h4>
                     <p>
                       <strong>CA généré:</strong>{' '}
                       {formatCurrency(selectedPartnership.stats.total_revenue)}
@@ -573,13 +762,11 @@ const PartnershipsTab = () => {
                     <p>
                       <strong>Solde:</strong>{' '}
                       <span
-                        style={{
-                          color:
-                            (selectedPartnership.stats.balance || 0) >= 0
-                              ? '#4CAF50'
-                              : '#F44336',
-                          fontWeight: 'bold',
-                        }}
+                        className={
+                          (selectedPartnership.stats.balance || 0) >= 0
+                            ? partnershipStyles.balancePositive
+                            : partnershipStyles.balanceNegative
+                        }
                       >
                         {formatCurrency(selectedPartnership.stats.balance)}
                       </span>
@@ -595,51 +782,40 @@ const PartnershipsTab = () => {
       {/* Modal d'édition de partenariat */}
       {showEditModal && editingPartnership && (
         <div
-          className="modal-overlay"
+          className={styles.modalOverlay}
           onClick={() => {
             setShowEditModal(false);
             setEditingPartnership(null);
           }}
         >
           <div
-            className="modal-content modal-md"
+            className={partnershipStyles.modalContentMd}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header">
-              <h2 className="modal-title">Modifier le partenariat</h2>
+            <div className={partnershipStyles.modalHeaderRow}>
+              <div>
+                <h2 className={partnershipStyles.modalTitleText}>
+                  {getPartnerName(editingPartnership)}
+                </h2>
+                <p className={partnershipStyles.modalSubtitle}>Modifier les conditions du partenariat</p>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setShowEditModal(false);
                   setEditingPartnership(null);
                 }}
-                className="modal-close"
+                className={partnershipStyles.modalCloseBtn}
+                aria-label="Fermer"
               >
-                ✕
+                <FiX size={20} aria-hidden />
               </button>
             </div>
-            <div className="modal-body">
+
+            <div className={partnershipStyles.modalBodyBlock}>
               <div className={styles.formGroup}>
-                <label className={styles.label}>Partenaire</label>
-                <div
-                  style={{
-                    padding: 'var(--spacing-sm)',
-                    background: 'var(--bg-secondary)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-primary)',
-                    color: 'var(--text-primary)',
-                    fontWeight: 'var(--font-weight-medium)',
-                  }}
-                >
-                  {getPartnerName(editingPartnership)}
-                </div>
-              </div>
-              <div className={styles.formGroup}>
-                <label
-                  htmlFor="edit_partner_tariff_percent"
-                  className={styles.label}
-                >
-                  Pourcentage pour le partenaire (%)
+                <label htmlFor="edit_partner_tariff_percent">
+                  Part partenaire (%)
                 </label>
                 <input
                   id="edit_partner_tariff_percent"
@@ -655,146 +831,95 @@ const PartnershipsTab = () => {
                   }
                   className={styles.input}
                 />
-                <small
-                  style={{
-                    display: 'block',
-                    marginTop: 'var(--spacing-xs)',
-                    color: 'var(--text-secondary)',
-                    fontSize: 'var(--font-size-xs)',
-                  }}
-                >
-                  Réduction: {100 - editForm.default_partner_tariff_percent}%
+                <small className={partnershipStyles.inputHint}>
+                  Reduction : {100 - editForm.default_partner_tariff_percent}%
                 </small>
               </div>
-              <div className={styles.formGroup}>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--spacing-sm)',
-                    cursor: 'pointer',
-                    padding: 'var(--spacing-sm)',
-                    border: '1px solid var(--border-primary)',
-                    borderRadius: 'var(--radius-md)',
-                    transition: 'var(--transition-fast)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--bg-secondary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editForm.auto_accept}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        auto_accept: e.target.checked,
-                      })
-                    }
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      cursor: 'pointer',
-                    }}
-                  />
-                  <span>Auto-accepter les transferts</span>
-                </label>
-              </div>
-              <div className={styles.formGroup}>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--spacing-sm)',
-                    cursor: 'pointer',
-                    padding: 'var(--spacing-sm)',
-                    border: '1px solid var(--border-primary)',
-                    borderRadius: 'var(--radius-md)',
-                    transition: 'var(--transition-fast)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--bg-secondary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={editForm.auto_invoice}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        auto_invoice: e.target.checked,
-                      })
-                    }
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      cursor: 'pointer',
-                    }}
-                  />
-                  <span>Facturation automatique</span>
-                </label>
-              </div>
+
+              <label className={partnershipStyles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={editForm.auto_accept}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      auto_accept: e.target.checked,
+                    })
+                  }
+                  className={partnershipStyles.checkboxInput}
+                />
+                <span>Auto-accepter les transferts entrants</span>
+              </label>
+
+              <label className={partnershipStyles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={editForm.auto_invoice}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      auto_invoice: e.target.checked,
+                    })
+                  }
+                  className={partnershipStyles.checkboxInput}
+                />
+                <span>Facturation automatique</span>
+              </label>
             </div>
-            <div className="modal-footer">
+
+            <div className={partnershipStyles.modalFooterRow}>
               <button
                 type="button"
-                className="btn btn-danger"
+                className={partnershipStyles.dangerLink}
                 onClick={async () => {
                   if (
                     !window.confirm(
-                      'Êtes-vous sûr de vouloir supprimer ce partenariat ? Cette action est irréversible et supprimera complètement le lien entre les deux entreprises.'
+                      'Supprimer ce partenariat ? Cette action est irreversible.'
                     )
                   ) {
                     return;
                   }
-                    try {
-                      const response = await apiClient.delete(
-                        `/companies/me/partnerships/${editingPartnership.id}`
-                      );
-                      console.log('✅ Suppression réussie:', response);
-                      showSuccess('Partenariat supprimé avec succès');
-                      setShowEditModal(false);
-                      setEditingPartnership(null);
-                      loadPartnerships();
-                      loadStats();
-                    } catch (err) {
-                      console.error('❌ Erreur suppression partenariat:', err);
-                      console.error('Response data:', err?.response?.data);
-                      console.error('Response status:', err?.response?.status);
-                      const errorMessage =
-                        err?.response?.data?.error ||
-                        err?.response?.data?.message ||
-                        err?.message ||
-                        'Erreur lors de la suppression du partenariat';
-                      showError(errorMessage);
-                    }
+                  try {
+                    await apiClient.delete(
+                      `/companies/me/partnerships/${editingPartnership.id}`
+                    );
+                    showSuccess('Partenariat supprime');
+                    setShowEditModal(false);
+                    setEditingPartnership(null);
+                    loadPartnerships();
+                    loadStats();
+                  } catch (err) {
+                    console.error('Erreur suppression partenariat:', err);
+                    showError(
+                      err?.response?.data?.error ||
+                      err?.response?.data?.message ||
+                      'Erreur lors de la suppression'
+                    );
+                  }
                 }}
               >
-                🗑️ Supprimer le partenariat
+                <FiTrash2 size={13} aria-hidden />
+                Supprimer
               </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditingPartnership(null);
-                }}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleUpdatePartnership}
-              >
-                Enregistrer les modifications
-              </button>
+              <div className={partnershipStyles.footerActions}>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.secondary}`}
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingPartnership(null);
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.primary}`}
+                  onClick={handleUpdatePartnership}
+                >
+                  Enregistrer
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -803,30 +928,31 @@ const PartnershipsTab = () => {
       {/* Modal de génération de décompte */}
       {showStatementModal && (
         <div
-          className="modal-overlay"
+          className={styles.modalOverlay}
           onClick={() => {
             setShowStatementModal(false);
             setStatementPartnership(null);
           }}
         >
           <div
-            className="modal-content modal-md"
+            className={partnershipStyles.modalContentMd}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header">
-              <h2 className="modal-title">Générer un décompte</h2>
+            <div className={partnershipStyles.modalHeaderRow}>
+              <h2 className={partnershipStyles.modalTitleText}>Générer un décompte</h2>
               <button
                 type="button"
                 onClick={() => {
                   setShowStatementModal(false);
                   setStatementPartnership(null);
                 }}
-                className="modal-close"
+                className={partnershipStyles.modalCloseBtn}
+                aria-label="Fermer"
               >
-                ✕
+                <FiX size={20} aria-hidden />
               </button>
             </div>
-            <div className="modal-body">
+            <div className={partnershipStyles.modalBodyBlock}>
               <StatementGenerationForm
                 isConsolidated={!statementPartnership}
                 partnership={statementPartnership}
@@ -848,105 +974,120 @@ const PartnershipsTab = () => {
           onClick={() => setShowRequestModal(false)}
         >
           <div
-            className={partnershipStyles.modalContent}
+            className={partnershipStyles.modalContentMd}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3>Demander un partenariat</h3>
-            <div className={styles.formGroup}>
-              <label htmlFor="company_search">Rechercher une entreprise</label>
-              <input
-                id="company_search"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSearchQuery(v);
-                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                  searchDebounceRef.current = setTimeout(() => searchCompanies(v), 300);
-                }}
-                placeholder="Nom, email ou domaine (ex: emmenez-moi.ch)..."
-                className={styles.input}
-              />
-              {searching && <p>Recherche en cours...</p>}
-              {!searching && lastSearchQuery && searchResults.length === 0 && (
-                <p style={{ marginTop: '0.25rem', color: 'var(--color-text-secondary, #666)', fontSize: '0.9rem' }}>
-                  Aucune entreprise trouvée pour « {lastSearchQuery} »
-                </p>
-              )}
-              {searchResults.length > 0 && (
-                <div style={{ marginTop: '0.5rem' }}>
-                  {searchResults.map((company) => (
-                    <div
-                      key={company.id}
-                      onClick={() => {
-                        setRequestForm({
-                          ...requestForm,
-                          partner_company_id: company.id,
-                          partner_company_name: company.name,
-                        });
-                        setSearchQuery(company.name);
-                        setSearchResults([]);
-                      }}
-                      style={{
-                        padding: '0.5rem',
-                        cursor: 'pointer',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        marginBottom: '0.25rem',
-                      }}
-                    >
-                      {company.name}
-                    </div>
-                  ))}
+            <div className={partnershipStyles.modalHeaderRow}>
+              <h2 className={partnershipStyles.modalTitleText}>Nouveau partenariat</h2>
+              <button
+                type="button"
+                onClick={() => setShowRequestModal(false)}
+                className={partnershipStyles.modalCloseBtn}
+                aria-label="Fermer"
+              >
+                <FiX size={20} aria-hidden />
+              </button>
+            </div>
+
+            <div className={partnershipStyles.modalBodyBlock}>
+              {/* Recherche entreprise */}
+              <div className={styles.formGroup}>
+                <label htmlFor="company_search">Entreprise partenaire</label>
+                <input
+                  id="company_search"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSearchQuery(v);
+                    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                    searchDebounceRef.current = setTimeout(() => searchCompanies(v), 300);
+                  }}
+                  placeholder="Rechercher par nom, email ou domaine..."
+                  className={styles.input}
+                />
+                {searching && (
+                  <small className={partnershipStyles.inputHint}>Recherche en cours...</small>
+                )}
+                {!searching && lastSearchQuery && searchResults.length === 0 && (
+                  <small className={partnershipStyles.searchNoResults}>
+                    Aucun resultat pour « {lastSearchQuery} »
+                  </small>
+                )}
+                {searchResults.length > 0 && (
+                  <div className={partnershipStyles.searchResultsList}>
+                    {searchResults.map((company) => (
+                      <div
+                        key={company.id}
+                        onClick={() => {
+                          setRequestForm({
+                            ...requestForm,
+                            partner_company_id: company.id,
+                            partner_company_name: company.name,
+                          });
+                          setSearchQuery(company.name);
+                          setSearchResults([]);
+                        }}
+                        className={partnershipStyles.searchResultItem}
+                      >
+                        {company.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {requestForm.partner_company_name && (
+                <div className={styles.formGroup}>
+                  <label>Selectionnee</label>
+                  <div className={partnershipStyles.formReadonlyBox}>
+                    {requestForm.partner_company_name}
+                  </div>
                 </div>
               )}
-            </div>
-            {requestForm.partner_company_name && (
-              <div className={styles.formGroup}>
-                <label>Entreprise sélectionnée</label>
-                <div>{requestForm.partner_company_name}</div>
+
+              {/* Conditions */}
+              <div className={partnershipStyles.formRow}>
+                <div className={styles.formGroup}>
+                  <label htmlFor="partner_tariff_percent">Part partenaire (%)</label>
+                  <input
+                    id="partner_tariff_percent"
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={requestForm.default_partner_tariff_percent}
+                    onChange={(e) =>
+                      setRequestForm({
+                        ...requestForm,
+                        default_partner_tariff_percent: parseFloat(e.target.value) || 90,
+                      })
+                    }
+                    className={styles.input}
+                  />
+                  <small className={partnershipStyles.inputHint}>
+                    Reduction : {100 - requestForm.default_partner_tariff_percent}%
+                  </small>
+                </div>
+                <div className={styles.formGroup}>
+                  <label htmlFor="payment_terms_days">Delai de paiement</label>
+                  <input
+                    id="payment_terms_days"
+                    type="number"
+                    min="1"
+                    value={requestForm.payment_terms_days}
+                    onChange={(e) =>
+                      setRequestForm({
+                        ...requestForm,
+                        payment_terms_days: parseInt(e.target.value) || 30,
+                      })
+                    }
+                    className={styles.input}
+                  />
+                  <small className={partnershipStyles.inputHint}>jours</small>
+                </div>
               </div>
-            )}
-            <div className={styles.formGroup}>
-              <label htmlFor="partner_tariff_percent">
-                Pourcentage pour le partenaire (%)
-              </label>
-              <input
-                id="partner_tariff_percent"
-                type="number"
-                min="1"
-                max="100"
-                value={requestForm.default_partner_tariff_percent}
-                onChange={(e) =>
-                  setRequestForm({
-                    ...requestForm,
-                    default_partner_tariff_percent: parseFloat(e.target.value) || 90,
-                  })
-                }
-                className={styles.input}
-              />
-              <small>
-                Réduction: {100 - requestForm.default_partner_tariff_percent}%
-              </small>
-            </div>
-            <div className={styles.formGroup}>
-              <label htmlFor="payment_terms_days">Délai de paiement (jours)</label>
-              <input
-                id="payment_terms_days"
-                type="number"
-                min="1"
-                value={requestForm.payment_terms_days}
-                onChange={(e) =>
-                  setRequestForm({
-                    ...requestForm,
-                    payment_terms_days: parseInt(e.target.value) || 30,
-                  })
-                }
-                className={styles.input}
-              />
-            </div>
-            <div className={styles.formGroup}>
-              <label>
+
+              <label className={partnershipStyles.checkboxLabel}>
                 <input
                   type="checkbox"
                   checked={requestForm.auto_accept}
@@ -956,18 +1097,13 @@ const PartnershipsTab = () => {
                       auto_accept: e.target.checked,
                     })
                   }
+                  className={partnershipStyles.checkboxInput}
                 />
-                Auto-accepter les transferts
+                <span>Auto-accepter les transferts entrants</span>
               </label>
             </div>
-            <div
-              style={{
-                display: 'flex',
-                gap: '0.5rem',
-                justifyContent: 'flex-end',
-                marginTop: '1rem',
-              }}
-            >
+
+            <div className={partnershipStyles.modalFooterRow}>
               <button
                 type="button"
                 className={`${styles.button} ${styles.secondary}`}
@@ -979,6 +1115,7 @@ const PartnershipsTab = () => {
                 type="button"
                 className={`${styles.button} ${styles.primary}`}
                 onClick={handleRequestPartnership}
+                disabled={!requestForm.partner_company_id}
               >
                 Envoyer la demande
               </button>
@@ -988,6 +1125,8 @@ const PartnershipsTab = () => {
       )}
     </div>
   );
-};
+});
+
+PartnershipsTab.displayName = 'PartnershipsTab';
 
 export default PartnershipsTab;

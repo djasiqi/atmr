@@ -629,7 +629,13 @@ class GenerateInvoiceUseCase:
                 input_data.client_id, input_data.company_id
             )
             patient_name = ""
-            if client and client.user:
+            # Pour les clients institution : utiliser customer_name du premier booking
+            if client and getattr(client, "is_institution", False) and reservations:
+                for _r in reservations:
+                    if getattr(_r, "customer_name", None):
+                        patient_name = _r.customer_name
+                        break
+            if not patient_name and client and client.user:
                 patient_name = (
                     f"{client.user.first_name} {client.user.last_name}".strip()
                 )
@@ -761,6 +767,15 @@ class GenerateInvoiceUseCase:
                     else:
                         line_vat_rate = default_vat_rate
 
+                # Annulation facturable : utiliser cancellation_fee_amount si disponible
+                booking_obj = bookings_by_id.get(reservation.id)
+                if (
+                    booking_obj
+                    and str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
+                    and getattr(booking_obj, "cancellation_fee_amount", None) is not None
+                ):
+                    base_amount = Decimal(str(booking_obj.cancellation_fee_amount)).quantize(two_places)
+
                 # Arrondir base_amount à 5 centimes avant de calculer la TVA
                 base_amount = round_to_5_cents(base_amount)
 
@@ -774,6 +789,9 @@ class GenerateInvoiceUseCase:
                 delivery_desc = (
                     getattr(reservation, "delivery_description", None) or None
                 )
+                _is_cancelled = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
+                _fee_pct = getattr(booking_obj, "cancellation_fee_percent", None) if booking_obj and _is_cancelled else None
+                _fee_tier = getattr(booking_obj, "cancellation_fee_tier_id", None) if booking_obj and _is_cancelled else None
                 description = self.description_builder.build_description(
                     pickup_location=reservation.pickup_location or "",
                     dropoff_location=reservation.dropoff_location or "",
@@ -790,10 +808,9 @@ class GenerateInvoiceUseCase:
                     else None,
                     is_material_delivery=is_delivery,
                     delivery_description=delivery_desc,
-                    is_cancelled=(
-                        str(getattr(reservation, "status", "") or "").upper()
-                        == "CANCELED"
-                    ),
+                    is_cancelled=_is_cancelled,
+                    cancellation_fee_percent=_fee_pct,
+                    cancellation_fee_label=_fee_tier,
                 )
 
                 # Créer la ligne

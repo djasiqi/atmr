@@ -156,15 +156,22 @@ export const completeReservation = async (reservationId) => {
 };
 
 /**
- * Supprime une réservation.
+ * Supprime ou annule une réservation.
+ * @param {number} reservationId
+ * @param {string|null} reasonCode - Code motif (requis pour ASSIGNED/EN_ROUTE)
+ * @param {string|null} reasonText - Texte libre (requis si reasonCode === 'OTHER')
  */
-export const deleteReservation = async (reservationId) => {
-  try {
-    const { data } = await apiClient.delete(`/companies/me/reservations/${reservationId}`);
-    return data;
-  } catch (error) {
-    throw error;
+export const deleteReservation = async (reservationId, reasonCode = null, reasonText = null) => {
+  const config = {};
+  if (reasonCode) {
+    const rt = reasonText?.trim();
+    config.data = { reason_code: reasonCode, ...(rt ? { reason_text: rt } : {}) };
   }
+  const { data } = await apiClient.delete(
+    `/companies/me/reservations/${reservationId}`,
+    config,
+  );
+  return data;
 };
 
 /**
@@ -1012,33 +1019,17 @@ export const fetchAssignedReservations = async (forDate) => {
 
     console.log(`Filtering bookings for target day: ${targetDay}`);
 
-    // #region agent log
-    // DEBUG H8: Log pour voir si #29791 est dans les réservations reçues du backend
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:751',message:'Reservations received from backend',data:{targetDay,reservations_count:reservations.length,has_29791:reservations.some(r=>r.id===29791),reservation_29791:reservations.find(r=>r.id===29791)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
-    // #endregion
-
     // 🔧 filtre plus tolérant : accepte scheduled_time, pickup_time, date_time, datetime
     const bookingsOfDay = reservations.filter((r) => {
       try {
         const rawWhen = pickBestDateField(r);
         const ymd = toYMD(rawWhen);
-        // #region agent log
-        // DEBUG H8: Log chaque réservation filtrée pour voir si #29791 passe le filtre
-        if (r.id === 29791) {
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:756',message:'Booking #29791 date filter check',data:{id:r.id,rawWhen,ymd,targetDay,passes:!targetDay||ymd===targetDay},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
-        }
-        // #endregion
         return !targetDay || ymd === targetDay;
       } catch (e) {
         console.error('Error filtering booking:', e);
         return false;
       }
     });
-
-    // #region agent log
-    // DEBUG H8: Log après le filtre de date
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'companyService.js:765',message:'After date filter',data:{targetDay,bookingsOfDay_count:bookingsOfDay.length,has_29791:bookingsOfDay.some(r=>r.id===29791)},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix-transfer',hypothesisId:'H8'})}).catch(()=>{});
-    // #endregion
 
     console.log(`Found ${bookingsOfDay.length} bookings for the target day`);
 
@@ -1364,4 +1355,121 @@ export const dispatchBookingNow = async (reservationId) => {
     console.error('[CompanyService] Error dispatching booking now:', error);
     throw error.response?.data || error.message;
   }
+};
+
+// --------------------------------------
+// Recherche d'institutions officielles
+// --------------------------------------
+
+/**
+ * Recherche parmi les institutions officielles de la plateforme.
+ * Utilisé lors de la création/édition d'un client institution pour le lier
+ * à une institution officielle existante.
+ * @param {string} query - Texte de recherche (min 2 caractères)
+ * @returns {Promise<Array<{id: number, name: string, institution_type: string, address: string, contact_email: string, contact_phone: string}>>}
+ */
+export const searchOfficialInstitutions = async (query) => {
+  try {
+    if (!query || query.length < 2) return [];
+    const { data } = await apiClient.get('/companies/me/institutions/search', {
+      params: { q: query },
+    });
+    return data.institutions || [];
+  } catch (error) {
+    console.error('[CompanyService] Error searching institutions:', error);
+    return [];
+  }
+};
+
+// Offres de transport institutionnelles
+// --------------------------------------
+
+/**
+ * Récupère les offres de transport reçues par l'entreprise.
+ * @param {string} [status] - Filtrer par statut (PENDING, ACCEPTED, etc.)
+ * @returns {Promise<{offers: Array, total: number}>}
+ */
+export const fetchRequestOffers = async (status) => {
+  try {
+    const params = {};
+    if (status) params.status = status;
+    const { data } = await apiClient.get('/company/request-offers', { params });
+    return data;
+  } catch (error) {
+    console.error('[CompanyService] Error fetching request offers:', error);
+    return { offers: [], total: 0 };
+  }
+};
+
+/**
+ * Accepte une offre de transport institutionnelle.
+ * @param {number} offerId - ID de l'offre
+ * @param {string} [proposedPickupTime] - Horaire de prise en charge proposé (ISO8601)
+ * @returns {Promise<{success: boolean, offer_id: number, booking_id: number}>}
+ */
+export const acceptRequestOffer = async (offerId, proposedPickupTime) => {
+  const body = {};
+  if (proposedPickupTime) body.proposed_pickup_time = proposedPickupTime;
+  const { data } = await apiClient.post(`/company/request-offers/${offerId}/accept`, body);
+  return data;
+};
+
+/**
+ * Refuse une offre de transport institutionnelle.
+ * @param {number} offerId - ID de l'offre
+ * @param {string} [reason] - Raison du refus
+ * @returns {Promise<{success: boolean, offer_id: number}>}
+ */
+export const rejectRequestOffer = async (offerId, reason) => {
+  const { data } = await apiClient.post(`/company/request-offers/${offerId}/reject`, {
+    reason,
+  });
+  return data;
+};
+
+// ---------------------------------------------------------------------------
+// Mini-chat booking (institution <-> entreprise)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recupere les messages d'un booking (pagine).
+ * @param {number} bookingId
+ * @param {{ limit?: number, beforeId?: number }} options
+ * @returns {Promise<{ messages: Array, has_more: boolean }>}
+ */
+export const fetchBookingMessages = async (bookingId, { limit = 30, beforeId } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (beforeId) params.set('before_id', String(beforeId));
+  const { data } = await apiClient.get(`/bookings/${bookingId}/messages?${params}`);
+  return data;
+};
+
+/**
+ * Envoie un message dans le mini-chat d'un booking.
+ * @param {number} bookingId
+ * @param {string} content
+ * @returns {Promise<{ message: Object }>}
+ */
+export const sendBookingMessage = async (bookingId, content) => {
+  const { data } = await apiClient.post(`/bookings/${bookingId}/messages`, { content });
+  return data;
+};
+
+// ============================================================================
+// Company Notifications
+// ============================================================================
+
+export const fetchCompanyNotifications = async ({ limit = 30, offset = 0 } = {}) => {
+  const { data } = await apiClient.get('/companies/notifications', { params: { limit, offset } });
+  return data;
+};
+
+export const markCompanyNotificationRead = async (notificationId) => {
+  const { data } = await apiClient.put(`/companies/notifications/${notificationId}/read`);
+  return data;
+};
+
+export const markAllCompanyNotificationsRead = async () => {
+  const { data } = await apiClient.put('/companies/notifications/read-all');
+  return data;
 };

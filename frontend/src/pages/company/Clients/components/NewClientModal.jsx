@@ -1,21 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import AsyncSelect from 'react-select/async';
 import styles from './ClientFormModal.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 import { fetchBillingParties, fetchClinicBillingMappings } from '../../../../services/settingsService';
+import { searchOfficialInstitutions } from '../../../../services/companyService';
 
 const NewClientModal = ({ onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    // ✅ client_type et email supprimés - tous les clients sont PRIVATE
+    // client_type et email supprimés - tous les clients sont PRIVATE
     first_name: '',
     last_name: '',
     phone: '',
     address: '',
     birth_date: '',
-    gender: '', // ✅ Civilité obligatoire (male/female)
-    avs_number: '', // ✅ Numéro AVS optionnel
+    gender: '', // Civilité obligatoire (male/female)
+    avs_number: '', // Numéro AVS optionnel
     is_institution: false,
     institution_name: '',
+    linked_institution_id: null,
     residence_facility: '',
     billing_address: '',
     contact_email: '', // Email de facturation (optionnel)
@@ -39,6 +43,10 @@ const NewClientModal = ({ onClose, onSave }) => {
   const [showBillingInfo, setShowBillingInfo] = useState(false);
   const [showAdvancedBilling, setShowAdvancedBilling] = useState(false);
   const [createdClient, setCreatedClient] = useState(null);
+
+  // Institution officielle : sélection et mode manuel
+  const [selectedInstitution, setSelectedInstitution] = useState(null);
+  const [manualInstitution, setManualInstitution] = useState(false);
 
   /* Harmonica : un seul accordéon ouvert à la fois (identity | contact | residence | billing) */
   const [openAccordion, setOpenAccordion] = useState('identity');
@@ -102,8 +110,68 @@ const NewClientModal = ({ onClose, onSave }) => {
     }));
   };
 
+  // Chargement des institutions officielles pour l'autocomplete
+  const loadInstitutionOptions = useCallback(async (inputValue) => {
+    if (!inputValue || inputValue.length < 2) return [];
+    const results = await searchOfficialInstitutions(inputValue);
+    const options = results.map((inst) => ({
+      value: inst.id,
+      label: inst.name,
+      institution: inst,
+    }));
+    // Ajouter l'option "Saisir manuellement" en bas
+    options.push({
+      value: '__manual__',
+      label: `Saisir manuellement : "${inputValue}"`,
+      manualName: inputValue,
+    });
+    return options;
+  }, []);
+
+  // Quand une institution officielle est sélectionnée
+  const handleInstitutionSelect = useCallback((option) => {
+    if (!option) {
+      // Désélection
+      setSelectedInstitution(null);
+      setManualInstitution(false);
+      setFormData((prev) => ({
+        ...prev,
+        institution_name: '',
+        linked_institution_id: null,
+      }));
+      return;
+    }
+
+    if (option.value === '__manual__') {
+      // Mode saisie manuelle
+      setSelectedInstitution(null);
+      setManualInstitution(true);
+      setFormData((prev) => ({
+        ...prev,
+        institution_name: option.manualName || '',
+        linked_institution_id: null,
+      }));
+      return;
+    }
+
+    // Institution officielle sélectionnée
+    const inst = option.institution;
+    setSelectedInstitution(inst);
+    setManualInstitution(false);
+    setFormData((prev) => ({
+      ...prev,
+      institution_name: inst.name,
+      linked_institution_id: inst.id,
+    }));
+  }, []);
+
   useEffect(() => {
-    if (!formData.is_institution) return;
+    if (!formData.is_institution) {
+      // Reset institution linking state when unchecked
+      setSelectedInstitution(null);
+      setManualInstitution(false);
+      return;
+    }
     setStayData({
       company_id: '',
       start_date: '',
@@ -171,9 +239,9 @@ const NewClientModal = ({ onClose, onSave }) => {
 
   // Gérer la sélection d'adresse de domicile via autocomplete
   const handleDomicileAddressSelect = (item) => {
-    console.log('📍 [Domicile] Adresse sélectionnée:', item);
+    console.log('[Domicile] Adresse sélectionnée:', item);
 
-    // ✅ Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
+    // Utiliser la fonction utilitaire pour parser l'adresse avec détection d'établissement
     const label = item.label || '';
     const parsed = parseAddressWithEstablishment(label, item);
 
@@ -183,7 +251,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         ? `${parsed.street} ${parsed.streetNumber}`.trim()
         : parsed.street || item.address || '';
 
-    console.log('📍 [Domicile] Composants extraits:', {
+    console.log('[Domicile] Composants extraits:', {
       establishment: parsed.establishment,
       streetNumber: parsed.streetNumber,
       street: parsed.street,
@@ -195,12 +263,12 @@ const NewClientModal = ({ onClose, onSave }) => {
     setFormData((prev) => ({
       ...prev,
       address: label,
-      // ✅ Si un établissement est détecté, le mettre dans residence_facility
+      // Si un établissement est détecté, le mettre dans residence_facility
       residence_facility: parsed.establishment || prev.residence_facility,
       domicile_address: address,
       domicile_zip: parsed.postcode,
       domicile_city: parsed.city,
-      // ✅ NE PAS toucher au champ address global ici
+      // NE PAS toucher au champ address global ici
       // Il sera construit dans le payload si nécessaire
     }));
 
@@ -210,12 +278,12 @@ const NewClientModal = ({ onClose, onSave }) => {
       lon: item.lon ?? null,
     });
 
-    console.log(`📍 [Domicile] GPS: ${item.lat}, ${item.lon}`);
+    console.log(`[Domicile] GPS: ${item.lat}, ${item.lon}`);
   };
 
   // Gérer la sélection d'adresse de facturation via autocomplete
   const handleBillingAddressSelect = (item) => {
-    console.log('📍 [Facturation] Adresse sélectionnée:', item);
+    console.log('[Facturation] Adresse sélectionnée:', item);
 
     const fullAddress = item.label || '';
     setFormData((prev) => ({
@@ -229,7 +297,7 @@ const NewClientModal = ({ onClose, onSave }) => {
       lon: item.lon ?? null,
     });
 
-    console.log(`📍 [Facturation] GPS: ${item.lat}, ${item.lon}`);
+    console.log(`[Facturation] GPS: ${item.lat}, ${item.lon}`);
   };
 
   const handleSubmit = async (e) => {
@@ -243,7 +311,7 @@ const NewClientModal = ({ onClose, onSave }) => {
       return;
     }
 
-    // ✅ Validation civilité obligatoire
+    // Validation civilité obligatoire
     if (!formData.gender) {
       setError('La civilité (Madame/Monsieur) est obligatoire');
       return;
@@ -275,10 +343,10 @@ const NewClientModal = ({ onClose, onSave }) => {
 
     try {
       // Préparer le payload
-      // ✅ Si pas d'adresse de facturation spécifique → copier domicile
+      // Si pas d'adresse de facturation spécifique → copier domicile
       const hasSeparateBilling = showBillingInfo && formData.billing_address.trim();
 
-      console.log('📋 [NewClient] Préparation payload:');
+      console.log('[NewClient] Préparation payload:');
       console.log('  - Checkbox facturation active:', showBillingInfo);
       console.log('  - Adresse de facturation remplie:', formData.billing_address.trim() !== '');
       console.log('  - Facturation séparée:', hasSeparateBilling);
@@ -297,18 +365,18 @@ const NewClientModal = ({ onClose, onSave }) => {
         : fullDomicile || domicileAddress || manualAddress;
 
       const payload = {
-        // ✅ TOUS les clients créés depuis le Dashboard sont PRIVATE
+        // TOUS les clients créés depuis le Dashboard sont PRIVATE
         // (pas de compte SELF_SERVICE, pas de connexion app mobile)
         client_type: 'PRIVATE',
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
-        // ✅ Civilité obligatoire
+        // Civilité obligatoire
         gender: formData.gender,
         address: fullDomicile || domicileAddress || manualAddress,
         birth_date: formData.birth_date || undefined,
-        // ✅ Numéro AVS optionnel
+        // Numéro AVS optionnel
         avs_number: formData.avs_number?.trim() || undefined,
-        // ✅ Établissement de résidence (EMS, clinique, foyer, etc.)
+        // Établissement de résidence (EMS, clinique, foyer, etc.)
         residence_facility: formData.residence_facility?.trim() || undefined,
         // Adresse de domicile (structurée)
         domicile_address: domicileAddress || undefined,
@@ -329,6 +397,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         // Institution
         is_institution: formData.is_institution,
         institution_name: formData.is_institution ? formData.institution_name.trim() : undefined,
+        linked_institution_id: formData.is_institution ? formData.linked_institution_id : undefined,
         // Accès logement
         door_code: formData.door_code?.trim() || undefined,
         floor: formData.floor?.trim() || undefined,
@@ -341,7 +410,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         default_billed_to_contact: formData.default_billed_to_contact?.trim() || undefined,
       };
 
-      // ✅ TOUS les clients : générer un email interne unique pour le User
+      // TOUS les clients : générer un email interne unique pour le User
       // Les vrais emails de contact vont dans contact_email (facturation)
       const randomId = Math.random().toString(36).substring(2, 10);
       const timestamp = Date.now().toString(36);
@@ -385,7 +454,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         };
       }
 
-      console.log('📤 Payload envoyé au backend:', payload);
+      console.log('Payload envoyé au backend:', payload);
       await onSave(payload, { existingClient: createdClient });
       setCreatedClient(null);
       setLoading(false);
@@ -434,7 +503,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               onClick={onClose}
               aria-label="Fermer"
             >
-              ✕
+              ×
             </button>
           </div>
 
@@ -454,7 +523,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               aria-controls="accordion-identity"
               id="accordion-identity-trigger"
             >
-              <span className={styles.accordionTitle}>📋 Identité du client</span>
+              <span className={styles.accordionTitle}>Identite du client</span>
               <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
             <div
@@ -481,22 +550,130 @@ const NewClientModal = ({ onClose, onSave }) => {
                   </label>
                 </div>
 
-                {formData.is_institution && (
+                {formData.is_institution && !manualInstitution && !selectedInstitution && (
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>
+                      Rechercher une institution *
+                    </label>
+                    <AsyncSelect
+                      cacheOptions
+                      loadOptions={loadInstitutionOptions}
+                      onChange={handleInstitutionSelect}
+                      placeholder="Tapez pour rechercher..."
+                      noOptionsMessage={({ inputValue }) =>
+                        inputValue?.length < 2
+                          ? 'Tapez au moins 2 caractères'
+                          : 'Aucune institution trouvée'
+                      }
+                      loadingMessage={() => 'Recherche...'}
+                      isClearable
+                      isDisabled={loading}
+                      styles={{
+                        control: (base) => ({
+                          ...base,
+                          minHeight: '38px',
+                          fontSize: '14px',
+                          borderColor: 'var(--border-color, #ddd)',
+                          borderRadius: '8px',
+                        }),
+                        option: (base, state) => ({
+                          ...base,
+                          fontSize: '14px',
+                          backgroundColor: state.isFocused ? 'var(--bg-hover, #f0f0f0)' : 'transparent',
+                          color: state.data?.value === '__manual__' ? 'var(--text-secondary, #666)' : 'inherit',
+                          fontStyle: state.data?.value === '__manual__' ? 'italic' : 'normal',
+                        }),
+                      }}
+                    />
+                  </div>
+                )}
+
+                {formData.is_institution && selectedInstitution && (
+                  <div className={styles.formGroup}>
+                    <label className={styles.label}>
+                      Institution officielle
+                    </label>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      background: 'var(--bg-success-light, #f0fdf4)',
+                      border: '1px solid var(--border-success, #86efac)',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}>
+                      <span style={{ flex: 1 }}>
+                        <strong>{selectedInstitution.name}</strong>
+                        {selectedInstitution.address && (
+                          <small style={{ display: 'block', color: 'var(--text-secondary, #666)' }}>
+                            {selectedInstitution.address}
+                          </small>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleInstitutionSelect(null)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          color: 'var(--text-secondary, #666)',
+                          padding: '4px',
+                        }}
+                        title="Changer d'institution"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {formData.is_institution && manualInstitution && (
                   <div className={styles.formGroup}>
                     <label htmlFor="institution_name" className={styles.label}>
                       Nom de l'institution *
                     </label>
-                    <input
-                      type="text"
-                      id="institution_name"
-                      name="institution_name"
-                      value={formData.institution_name}
-                      onChange={handleChange}
-                      className={styles.input}
-                      placeholder="Ex: Clinique du Léman"
-                      required={formData.is_institution}
-                      disabled={loading}
-                    />
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        id="institution_name"
+                        name="institution_name"
+                        value={formData.institution_name}
+                        onChange={handleChange}
+                        className={styles.input}
+                        placeholder="Ex: Clinique du Léman"
+                        required
+                        disabled={loading}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualInstitution(false);
+                          setFormData((prev) => ({
+                            ...prev,
+                            institution_name: '',
+                            linked_institution_id: null,
+                          }));
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          color: 'var(--text-secondary, #666)',
+                          padding: '4px',
+                        }}
+                        title="Rechercher une institution officielle"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <small style={{ color: 'var(--text-secondary, #666)' }}>
+                      Saisie manuelle (non liée à une institution officielle)
+                    </small>
                   </div>
                 )}
 
@@ -565,17 +742,11 @@ const NewClientModal = ({ onClose, onSave }) => {
                 <div className={`${styles.formRow} ${styles.formRowTwo}`}>
                   {!formData.is_institution && (
                     <div className={styles.formGroup}>
-                      <label htmlFor="birth_date" className={styles.label}>
-                        Date de naissance
-                      </label>
-                      <input
-                        type="date"
-                        id="birth_date"
-                        name="birth_date"
+                      <label className={styles.label}>Date de naissance</label>
+                      <InlineDatePicker
                         value={formData.birth_date}
-                        onChange={handleChange}
-                        className={styles.input}
-                        disabled={loading}
+                        onChange={(v) => handleChange({ target: { name: 'birth_date', value: v } })}
+                        placeholder="Date de naissance"
                       />
                     </div>
                   )}
@@ -609,7 +780,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               aria-controls="accordion-contact"
               id="accordion-contact-trigger"
             >
-              <span className={styles.accordionTitle}>📞 Contact & domicile</span>
+              <span className={styles.accordionTitle}>Contact et domicile</span>
               <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
             <div
@@ -657,7 +828,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                     disabled={loading}
                   />
                   <small className={styles.hint}>
-                    💡 Tapez pour rechercher une adresse avec autocomplete
+                    Tapez pour rechercher une adresse avec autocomplete
                   </small>
                 </div>
 
@@ -810,7 +981,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               aria-controls="accordion-residence"
               id="accordion-residence-trigger"
             >
-              <span className={styles.accordionTitle}>🏠 Établissement de résidence</span>
+              <span className={styles.accordionTitle}>Établissement de résidence</span>
               <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
             <div
@@ -838,7 +1009,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                     disabled={loading}
                   />
                   <small className={styles.hint}>
-                    💡 Indiquer si le client habite dans un EMS, Foyer, ou autre établissement
+                    Indiquer si le client habite dans un EMS, Foyer, ou autre établissement
                   </small>
                 </div>
               </div>
@@ -855,7 +1026,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               aria-controls="accordion-billing"
               id="accordion-billing-trigger"
             >
-              <span className={styles.accordionTitle}>💰 Facturation</span>
+              <span className={styles.accordionTitle}>Facturation</span>
               <span className={styles.accordionIcon} aria-hidden="true">▾</span>
             </button>
             <div
@@ -938,7 +1109,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                       disabled={loading}
                     />
                     <small className={styles.hint}>
-                      💡 Si différente de l'adresse de domicile
+                      Si différente de l'adresse de domicile
                     </small>
                   </div>
                 )}
@@ -1034,7 +1205,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                 aria-controls="accordion-curator"
                 id="accordion-curator-trigger"
               >
-                <span className={styles.accordionTitle}>💼 Curateur / tiers payeur</span>
+                <span className={styles.accordionTitle}>Curateur / tiers payeur</span>
                 <span className={styles.accordionIcon} aria-hidden="true">▾</span>
               </button>
               <div
@@ -1078,7 +1249,7 @@ const NewClientModal = ({ onClose, onSave }) => {
                     </select>
                     {!loadingBillingParties && billingParties.length === 0 && (
                       <small className={styles.hint}>
-                        ⚠️ Aucun tiers payeur disponible (vérifier les paramètres de facturation).
+                        Aucun tiers payeur disponible (vérifier les paramètres de facturation).
                       </small>
                     )}
                   </div>
@@ -1194,7 +1365,7 @@ const NewClientModal = ({ onClose, onSave }) => {
             {/* Colonne droite : résumé — même design que medicalSection */}
             <div className={styles.columnRight}>
               <div className={styles.summaryCard}>
-                <h3 className={styles.summaryCardTitle}>📋 Résumé</h3>
+                <h3 className={styles.summaryCardTitle}>Resume</h3>
                 <div className={styles.summaryRow}>
                   <span className={styles.summaryLabel}>Client</span>
                   <span
@@ -1262,7 +1433,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               {/* Hospitalisation — à droite, sous le résumé (client privé uniquement) */}
               {!formData.is_institution && (
                 <div className={styles.hospitalizationCard}>
-                  <h3 className={styles.hospitalizationCardTitle}>🏥 Hospitalisation</h3>
+                  <h3 className={styles.hospitalizationCardTitle}>Hospitalisation</h3>
                   <div className={styles.hospitalizationForm}>
                       <div className={styles.formGroup}>
                         <label htmlFor="stay_company_id" className={styles.label}>
@@ -1290,41 +1461,27 @@ const NewClientModal = ({ onClose, onSave }) => {
                         </select>
                         {!loadingClinics && clinics.length === 0 && (
                           <small className={styles.hint}>
-                            ⚠️ Aucune clinique disponible (vérifier les mappings cliniques).
+                            Aucune clinique disponible (vérifier les mappings cliniques).
                           </small>
                         )}
                       </div>
 
                       <div className={`${styles.formRow} ${styles.formRowTwo}`}>
                         <div className={styles.formGroup}>
-                          <label htmlFor="stay_start_date" className={styles.label}>
-                            Date de début *
-                          </label>
-                          <input
-                            type="date"
-                            id="stay_start_date"
+                          <label className={styles.label}>Date de début *</label>
+                          <InlineDatePicker
                             value={stayData.start_date}
-                            onChange={(e) =>
-                              setStayData((prev) => ({ ...prev, start_date: e.target.value }))
-                            }
-                            className={styles.input}
-                            disabled={loading}
+                            onChange={(v) => setStayData((prev) => ({ ...prev, start_date: v }))}
+                            placeholder="Début"
                           />
                         </div>
 
                         <div className={styles.formGroup}>
-                          <label htmlFor="stay_end_date" className={styles.label}>
-                            Date de fin
-                          </label>
-                          <input
-                            type="date"
-                            id="stay_end_date"
+                          <label className={styles.label}>Date de fin</label>
+                          <InlineDatePicker
                             value={stayData.end_date}
-                            onChange={(e) =>
-                              setStayData((prev) => ({ ...prev, end_date: e.target.value }))
-                            }
-                            className={styles.input}
-                            disabled={loading}
+                            onChange={(v) => setStayData((prev) => ({ ...prev, end_date: v }))}
+                            placeholder="Fin"
                           />
                         </div>
                       </div>
@@ -1369,7 +1526,7 @@ const NewClientModal = ({ onClose, onSave }) => {
               <div className={styles.footerRight}>
                 <button type="submit" className={styles.submitButton} disabled={loading}>
                   {loading
-                    ? '⏳ Création…'
+                    ? 'Création…'
                     : createdClient
                       ? 'Finaliser'
                       : 'Créer le client'}

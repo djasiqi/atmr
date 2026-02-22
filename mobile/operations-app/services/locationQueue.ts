@@ -2,6 +2,10 @@
 // ✅ P2-1: Mode Offline Mobile - Persister queue GPS + resync au reconnect
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLogger } from "@/utils/logger";
+import { getSocket, getSocketRole } from "./socket";
+
+const log = getLogger("LocationQ");
 
 const LOCATION_QUEUE_KEY = "@atmr:location_queue";
 const MAX_QUEUE_SIZE = 1000; // Limiter la taille de la queue pour éviter l'overflow
@@ -9,6 +13,10 @@ const MAX_QUEUE_SIZE = 1000; // Limiter la taille de la queue pour éviter l'ove
 // ✅ Client-side stabilisation (rate-limit + singleflight)
 const RESYNC_CHUNK_SIZE = 50; // éviter des payloads énormes
 const MIN_DELAY_BETWEEN_EMITS_MS = 5500; // serveur: ~1 event / 5s → on met une marge
+
+// ✅ Compteur d'échecs batch consécutifs — au delà de 3, fallback individuel
+let consecutiveBatchFailures = 0;
+const MAX_BATCH_FAILURES_BEFORE_FALLBACK = 3;
 
 let resyncInFlight: Promise<void> | null = null;
 let nextAllowedEmitAt = 0; // timestamp (ms)
@@ -31,7 +39,48 @@ function getRetryAfterSeconds(err: unknown): number | null {
   return null;
 }
 
-async function emitBatchWithAck(socket: any, payload: any): Promise<void> {
+/**
+ * ✅ Résoudre le meilleur socket disponible.
+ * Priorité: socket global (getSocket) > socket passé en paramètre.
+ * Le socket global est mis à jour lors des reconnexions automatiques,
+ * alors que le socket du hook React peut être obsolète.
+ */
+function resolveSocket(socketParam: any): any {
+  if (getSocketRole() !== "driver") {
+    return null;
+  }
+  const globalSocket = getSocket();
+  if (globalSocket && globalSocket.connected) {
+    return globalSocket;
+  }
+  if (socketParam && socketParam.connected) {
+    return socketParam;
+  }
+  return null;
+}
+
+/**
+ * ✅ Fallback: envoyer les positions une par une via driver_location (sans ACK)
+ * quand le batch avec callback échoue systématiquement.
+ */
+function emitIndividualFallback(socket: any, payload: any): void {
+  const positions = payload.positions || [];
+  const driverId = payload.driver_id;
+  for (const pos of positions) {
+    socket.emit("driver_location", {
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+      speed: pos.speed,
+      heading: pos.heading,
+      accuracy: pos.accuracy,
+      timestamp: pos.timestamp,
+      driver_id: driverId,
+    });
+  }
+  log.info("individual fallback sent", { count: positions.length });
+}
+
+async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
   // throttle global: éviter d'enchaîner plusieurs emits trop vite (rate limit server)
   const now = Date.now();
   if (now < nextAllowedEmitAt) {
@@ -41,16 +90,34 @@ async function emitBatchWithAck(socket: any, payload: any): Promise<void> {
     });
   }
 
+  // ✅ Résoudre le meilleur socket (global > param)
+  const socket = resolveSocket(socketParam);
+  if (!socket) {
+    throw new Error("Socket not connected");
+  }
+
+  // ✅ Si trop de failures batch consécutives, utiliser le fallback individuel
+  if (consecutiveBatchFailures >= MAX_BATCH_FAILURES_BEFORE_FALLBACK) {
+    log.warn("batch failures fallback", { consecutiveBatchFailures });
+    emitIndividualFallback(socket, payload);
+    consecutiveBatchFailures = 0; // Reset pour réessayer le batch plus tard
+    nextAllowedEmitAt = Date.now() + MIN_DELAY_BETWEEN_EMITS_MS;
+    return;
+  }
+
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
+      consecutiveBatchFailures++;
       reject(new Error("Timeout waiting for ACK"));
-    }, 7000);
+    }, 15000);
 
     socket.emit("driver_location_batch", payload, (ack: any) => {
       clearTimeout(timeout);
       if (ack?.success) {
+        consecutiveBatchFailures = 0; // Reset sur succès
         resolve();
       } else {
+        consecutiveBatchFailures++;
         const e = new Error(ack?.error || "ACK failed");
         if (typeof ack?.retry_after === "number") {
           (e as any).retry_after = ack.retry_after;
@@ -106,12 +173,12 @@ export async function enqueueLocation(
     // Logger si des positions ont été expirées
     const expiredCount = queue.length - validQueue.length + 1;  // +1 car on vient d'ajouter
     if (expiredCount > 0) {
-      console.log(`🗑️ [locationQueue] ${expiredCount - 1} positions expirées (> 24h)`);
+      log.info("expired positions dropped", { count: expiredCount - 1 });
     }
 
     await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(validQueue));
   } catch (error) {
-    console.error("❌ [locationQueue] Erreur lors de l'ajout à la queue:", error);
+    log.error("enqueue failed", { error });
   }
 }
 
@@ -127,7 +194,7 @@ export async function getLocationQueue(): Promise<QueuedLocation[]> {
     }
     return JSON.parse(data) as QueuedLocation[];
   } catch (error) {
-    console.error("❌ [locationQueue] Erreur lors de la lecture de la queue:", error);
+    log.error("queue read failed", { error });
     return [];
   }
 }
@@ -151,10 +218,7 @@ export async function removeSentLocations(
 
     await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(remaining));
   } catch (error) {
-    console.error(
-      "❌ [locationQueue] Erreur lors de la suppression de la queue:",
-      error
-    );
+    log.error("remove sent failed", { error });
   }
 }
 
@@ -165,7 +229,7 @@ export async function clearLocationQueue(): Promise<void> {
   try {
     await AsyncStorage.removeItem(LOCATION_QUEUE_KEY);
   } catch (error) {
-    console.error("❌ [locationQueue] Erreur lors du vidage de la queue:", error);
+    log.error("clear queue failed", { error });
   }
 }
 
@@ -192,18 +256,18 @@ export async function syncLocationQueue(socket: any): Promise<void> {
   resyncInFlight = (async () => {
     const queue = await getLocationQueue();
     if (queue.length === 0) {
-      console.log("📦 [locationQueue] Queue vide, pas de resync nécessaire");
+      log.info("queue empty no resync");
       return;
     }
 
     if (!socket || !socket.connected) {
-      console.warn("📦 [locationQueue] Socket non connecté, resync reporté");
+      log.warn("socket not connected resync deferred");
       throw new Error("Socket not connected");
     }
 
     // Important: `queue` est un snapshot. Pendant le resync, de nouvelles positions peuvent
     // être ajoutées (ex: task background) → la queue peut rester non vide, c'est normal.
-    console.log(`📦 [locationQueue] Resync (snapshot): ${queue.length} positions en queue`);
+    log.info("resync snapshot", { count: queue.length });
 
     // Grouper par driver_id (au cas où)
     const byDriver = new Map<number, QueuedLocation[]>();
@@ -230,9 +294,12 @@ export async function syncLocationQueue(socket: any): Promise<void> {
           driver_id: driverId,
         };
 
-        console.log(
-          `📤 [locationQueue] Envoi batch resync: ${chunk.length} positions (chunk ${Math.floor(i / RESYNC_CHUNK_SIZE) + 1}/${Math.ceil(locations.length / RESYNC_CHUNK_SIZE)}) pour driver ${driverId}`
-        );
+        log.info("batch resync send", {
+          chunkLength: chunk.length,
+          chunkIndex: Math.floor(i / RESYNC_CHUNK_SIZE) + 1,
+          totalChunks: Math.ceil(locations.length / RESYNC_CHUNK_SIZE),
+          driverId,
+        });
 
         try {
           // si on vient de faire un emit, attendre un peu (marge)
@@ -253,10 +320,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
             );
           }
 
-          console.error(
-            `❌ [locationQueue] Erreur resync pour driver ${driverId}:`,
-            error
-          );
+          log.error("resync failed", { driverId, error });
           // ✅ IMPORTANT: propager l'erreur pour que le caller backoff correctement
           throw error;
         }
@@ -265,14 +329,12 @@ export async function syncLocationQueue(socket: any): Promise<void> {
 
     const remaining = await getQueueSize();
     if (remaining > 0) {
-      console.log(
-        `⚠️ [locationQueue] ${remaining} positions restantes en queue après resync (souvent normal si de nouvelles positions ont été ajoutées pendant le resync)`
-      );
+      log.info("remaining after resync", { remaining });
       // Ne pas lever d'erreur: en background/offline/ratelimit, ou si la queue reçoit de
       // nouvelles positions pendant l'envoi, elle peut légitimement ne pas être vide.
       return;
     } else {
-      console.log("✅ [locationQueue] Queue vidée avec succès");
+      log.success("queue flushed");
     }
   })()
     .finally(() => {

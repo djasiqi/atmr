@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     Modal,
     View,
@@ -10,6 +10,7 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
+    Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -21,25 +22,19 @@ import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientSelector } from "./ClientSelector";
 import { NotesEditor } from "./NotesEditor";
 import { RecurrenceSelector } from "./RecurrenceSelector";
-import { shadowPresets } from "@/styles/shadowStyles";
+import { createShadow } from "@/styles/shadowStyles";
+import { getLogger } from "@/utils/logger";
 
-const palette = {
-    modalOverlay: "rgba(21,54,43,0.75)",
-    modalBackground: "#FFFFFF",
-    modalBorder: "rgba(15,54,43,0.12)",
-    modalTitle: "#15362B",
-    modalText: "#5F7369",
-    modalButton: "#0A7F59",
-    modalButtonText: "#FFFFFF",
-    modalCancelText: "#5F7369",
-    stepActive: "#0A7F59",
-    stepInactive: "#91A59D",
-    sectionBg: "rgba(10,127,89,0.06)",
-    sectionBorder: "rgba(10,127,89,0.15)",
-    divider: "rgba(15,54,43,0.08)",
-};
+const log = getLogger("RideCreate");
 
-type Step = 1 | 2 | 3 | 4;
+const BRAND = "#00796B";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+const DANGER = "#dc3545";
 
 interface RideCreateModalProps {
     visible: boolean;
@@ -58,78 +53,76 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
 }) => {
     const { setSelectedDate } = useEnterpriseContext();
     const { loading, create } = useRideCreate(onSuccess);
-    const [currentStep, setCurrentStep] = useState<Step>(1);
 
-    // Étape 1: Client
+    // Client
     const [client, setClient] = useState<ClientOption | null>(null);
     const [customerName, setCustomerName] = useState("");
 
-    // Étape 2: Adresses
+    // Addresses
     const [pickupAddress, setPickupAddress] = useState("");
     const [pickupSuggestion, setPickupSuggestion] = useState<AddressSuggestion | undefined>();
     const [dropoffAddress, setDropoffAddress] = useState("");
     const [dropoffSuggestion, setDropoffSuggestion] = useState<AddressSuggestion | undefined>();
 
-    // Pré-remplir l'adresse de départ quand un client est sélectionné
+    // Pre-fill pickup from client domicile
     useEffect(() => {
         if (client?.domicile_address) {
-            // ✅ Construire l'adresse complète avec code postal et ville si disponibles
             let fullAddress = client.domicile_address;
-
-            // Si l'adresse ne contient pas déjà le code postal et la ville,
-            // les ajouter depuis domicile_zip et domicile_city
             if (client.domicile_zip || client.domicile_city) {
-                const addressParts = [client.domicile_address];
-                if (client.domicile_zip) {
-                    addressParts.push(client.domicile_zip);
-                }
-                if (client.domicile_city) {
-                    addressParts.push(client.domicile_city);
-                }
-                fullAddress = addressParts.join(", ");
+                const parts = [client.domicile_address];
+                if (client.domicile_zip) parts.push(client.domicile_zip);
+                if (client.domicile_city) parts.push(client.domicile_city);
+                fullAddress = parts.join(", ");
             }
-
             setPickupAddress(fullAddress);
-            if (client.domicile_lat !== null && client.domicile_lat !== undefined &&
-                client.domicile_lon !== null && client.domicile_lon !== undefined) {
-                const suggestion: AddressSuggestion = {
-                    label: fullAddress, // ✅ Utiliser l'adresse complète
-                    address: fullAddress, // ✅ Utiliser l'adresse complète
+            if (client.domicile_lat != null && client.domicile_lon != null) {
+                setPickupSuggestion({
+                    label: fullAddress,
+                    address: fullAddress,
                     lat: client.domicile_lat,
                     lon: client.domicile_lon,
-                };
-                setPickupSuggestion(suggestion);
+                });
             }
         } else if (!client) {
-            // Réinitialiser si le client est désélectionné
             setPickupAddress("");
             setPickupSuggestion(undefined);
         }
     }, [client]);
 
-    // Étape 3: Horaire
+    // Schedule
     const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
     const [isReturn, setIsReturn] = useState(false);
     const [returnTime, setReturnTime] = useState<Date | null>(null);
 
-    // 🔄 Récurrence
+    // Recurrence
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurrenceType, setRecurrenceType] = useState<"daily" | "weekly" | "custom">("weekly");
     const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
     const [occurrences, setOccurrences] = useState(4);
     const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
 
-    // Étape 4: Détails
-    const [notes, setNotes] = useState("");
-    const [priority, setPriority] = useState<"LOW" | "NORMAL" | "HIGH">("NORMAL");
+    // Amount
     const [amount, setAmount] = useState("");
+
+    // Medical info
+    const [medicalExpanded, setMedicalExpanded] = useState(false);
+    const [medicalFacility, setMedicalFacility] = useState("");
+    const [hospitalService, setHospitalService] = useState("");
+    const [doctorName, setDoctorName] = useState("");
+    const [notesMedical, setNotesMedical] = useState("");
+    const [pickupAccessNotes, setPickupAccessNotes] = useState("");
+    const [dropoffAccessNotes, setDropoffAccessNotes] = useState("");
+
+    // Wheelchair
     const [wheelchairClientHas, setWheelchairClientHas] = useState(false);
     const [wheelchairNeed, setWheelchairNeed] = useState(false);
 
+    // Notes & priority
+    const [notes, setNotes] = useState("");
+    const [priority, setPriority] = useState<"LOW" | "NORMAL" | "HIGH">("NORMAL");
+
     useEffect(() => {
         if (!visible) {
-            // Reset form when modal closes
-            setCurrentStep(1);
             setClient(null);
             setCustomerName("");
             setPickupAddress("");
@@ -144,43 +137,54 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             setAmount("");
             setWheelchairClientHas(false);
             setWheelchairNeed(false);
+            setMedicalExpanded(false);
+            setMedicalFacility("");
+            setHospitalService("");
+            setDoctorName("");
+            setNotesMedical("");
+            setPickupAccessNotes("");
+            setDropoffAccessNotes("");
+            setIsRecurring(false);
+            setRecurrenceDays([]);
+            setOccurrences(4);
+            setRecurrenceEndDate("");
         }
     }, [visible]);
 
-    const canGoNext = () => {
-        switch (currentStep) {
-            case 1:
-                return client !== null || customerName.trim().length > 0;
-            case 2:
-                return pickupAddress.trim().length > 0 && dropoffAddress.trim().length > 0;
-            case 3:
-                return scheduledTime !== null;
-            case 4:
-                return true;
-            default:
-                return false;
-        }
-    };
+    const handleSwapAddresses = useCallback(() => {
+        const tmpAddr = pickupAddress;
+        const tmpSug = pickupSuggestion;
+        setPickupAddress(dropoffAddress);
+        setPickupSuggestion(dropoffSuggestion);
+        setDropoffAddress(tmpAddr);
+        setDropoffSuggestion(tmpSug);
+    }, [pickupAddress, pickupSuggestion, dropoffAddress, dropoffSuggestion]);
 
-    const handleNext = () => {
-        if (currentStep < 4 && canGoNext()) {
-            setCurrentStep((prev) => (prev + 1) as Step);
+    const applyPreset = useCallback((preset: "now30" | "now1h" | "tomorrow9") => {
+        let d: Date;
+        switch (preset) {
+            case "now30":
+                d = dayjs().add(30, "minute").toDate();
+                break;
+            case "now1h":
+                d = dayjs().add(1, "hour").toDate();
+                break;
+            case "tomorrow9":
+                d = dayjs().add(1, "day").hour(9).minute(0).second(0).toDate();
+                break;
         }
-    };
+        setScheduledTime(d);
+    }, []);
 
-    const handlePrevious = () => {
-        if (currentStep > 1) {
-            setCurrentStep((prev) => (prev - 1) as Step);
-        }
-    };
+    const canSubmit = (client !== null || customerName.trim().length > 0)
+        && pickupAddress.trim().length > 0
+        && dropoffAddress.trim().length > 0
+        && scheduledTime !== null;
 
     const handleCreate = async () => {
-        if (!canGoNext()) return;
+        if (!canSubmit) return;
 
         const payload: RideCreatePayload = {
-            // Si un client est sélectionné, on envoie seulement client_id
-            // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
-            // Sinon, on envoie client_name
             ...(client?.id ? { client_id: client.id } : { client_name: customerName || "" }),
             pickup_address: pickupAddress,
             dropoff_address: dropoffAddress,
@@ -188,839 +192,619 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             pickup_lon: pickupSuggestion?.lon,
             dropoff_lat: dropoffSuggestion?.lat,
             dropoff_lon: dropoffSuggestion?.lon,
-            scheduled_time: scheduledTime ? (() => {
-                // Utiliser format() au lieu de toISOString() pour préserver l'heure locale
-                // Le backend utilise parse_local_naive qui attend un format ISO sans timezone
-                const localISO = dayjs(scheduledTime).format("YYYY-MM-DDTHH:mm:ss");
-                console.log("[RideCreateModal] scheduledTime Date:", scheduledTime);
-                console.log("[RideCreateModal] scheduledTime dayjs:", dayjs(scheduledTime).format("DD.MM.YYYY HH:mm"));
-                console.log("[RideCreateModal] scheduledTime local ISO (sans timezone):", localISO);
-                return localISO;
-            })() : undefined,
+            scheduled_time: scheduledTime ? dayjs(scheduledTime).format("YYYY-MM-DDTHH:mm:ss") : undefined,
             notes: notes || undefined,
-            priority: priority,
+            priority,
             amount: amount ? parseFloat(amount) : undefined,
             is_return: isReturn,
             return_time: returnTime ? (() => {
-                // Si l'heure est à minuit, c'est que l'heure n'est pas définie
-                // On envoie seulement la date (sans heure) pour indiquer "heure à définir"
-                const returnDayjs = dayjs(returnTime);
-                if (returnDayjs.hour() === 0 && returnDayjs.minute() === 0) {
-                    // Heure non définie : envoyer seulement la date
-                    const dateOnly = returnDayjs.format("YYYY-MM-DD");
-                    console.log("[RideCreateModal] return_time (date seulement, heure non définie):", dateOnly);
-                    return dateOnly;
-                } else {
-                    // Heure définie : envoyer date + heure en format local (sans timezone)
-                    const localISO = returnDayjs.format("YYYY-MM-DDTHH:mm:ss");
-                    console.log("[RideCreateModal] return_time (avec heure):", localISO);
-                    return localISO;
-                }
+                const rd = dayjs(returnTime);
+                if (rd.hour() === 0 && rd.minute() === 0) return rd.format("YYYY-MM-DD");
+                return rd.format("YYYY-MM-DDTHH:mm:ss");
             })() : undefined,
             wheelchair_client_has: wheelchairClientHas || undefined,
             wheelchair_need: wheelchairNeed || undefined,
-            // 🔄 Champs de récurrence
-            ...(isRecurring
-                ? {
-                    is_recurring: true,
-                    recurrence_type: recurrenceType,
-                    recurrence_days:
-                        recurrenceType === "custom" && recurrenceDays.length > 0
-                            ? recurrenceDays
-                            : undefined,
-                    recurrence_end_date: recurrenceEndDate || undefined,
-                    occurrences: occurrences > 0 ? occurrences : undefined,
-                }
-                : {}),
+            medical_facility: medicalFacility || undefined,
+            hospital_service: hospitalService || undefined,
+            doctor_name: doctorName || undefined,
+            notes_medical: notesMedical || undefined,
+            pickup_access_notes: pickupAccessNotes || undefined,
+            dropoff_access_notes: dropoffAccessNotes || undefined,
+            ...(isRecurring ? {
+                is_recurring: true,
+                recurrence_type: recurrenceType,
+                recurrence_days: recurrenceType === "custom" && recurrenceDays.length > 0 ? recurrenceDays : undefined,
+                recurrence_end_date: recurrenceEndDate || undefined,
+                occurrences: occurrences > 0 ? occurrences : undefined,
+            } : {}),
         };
 
         try {
-            console.log("[RideCreateModal] Payload avant envoi:", JSON.stringify(payload, null, 2));
+            log.info("payload before submit", { payload });
             const created = await create(payload);
-            console.log("[RideCreateModal] Course créée:", created);
+            log.success("ride created", { created });
             if (payload.scheduled_time) {
-                const courseDate = dayjs(payload.scheduled_time).format("YYYY-MM-DD");
-                console.log("[RideCreateModal] Date de la course créée:", courseDate);
-                // Naviguer automatiquement vers la date de la course créée
-                setSelectedDate(courseDate);
-                console.log("[RideCreateModal] Navigation vers la date:", courseDate);
+                setSelectedDate(dayjs(payload.scheduled_time).format("YYYY-MM-DD"));
             }
-            // Attendre un peu pour que le backend termine le commit
-            await new Promise((resolve) => setTimeout(resolve, 500));
-            // Rafraîchir la liste
-            if (onSuccess) {
-                console.log("[RideCreateModal] Rafraîchissement de la liste...");
-                await onSuccess();
-            }
+            await new Promise((r) => setTimeout(r, 500));
+            if (onSuccess) await onSuccess();
             onClose();
         } catch (error: any) {
-            console.error("[RideCreateModal] Erreur lors de la création:", error);
-            console.error("[RideCreateModal] Erreur response:", error?.response?.data);
-            // L'erreur est déjà gérée dans le hook
-        }
-    };
-
-    const renderStepIndicator = () => {
-        return (
-            <View style={styles.stepIndicator}>
-                {[1, 2, 3, 4].map((step) => (
-                    <React.Fragment key={step}>
-                        <View
-                            style={[
-                                styles.stepCircle,
-                                currentStep >= step && styles.stepCircleActive,
-                            ]}
-                        >
-                            {currentStep > step ? (
-                                <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                            ) : (
-                                <Text
-                                    style={[
-                                        styles.stepNumber,
-                                        currentStep >= step && styles.stepNumberActive,
-                                    ]}
-                                >
-                                    {step}
-                                </Text>
-                            )}
-                        </View>
-                        {step < 4 && (
-                            <View
-                                style={[
-                                    styles.stepLine,
-                                    currentStep > step && styles.stepLineActive,
-                                ]}
-                            />
-                        )}
-                    </React.Fragment>
-                ))}
-            </View>
-        );
-    };
-
-    const renderStepContent = () => {
-        switch (currentStep) {
-            case 1:
-                return (
-                    <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}>Informations client</Text>
-                        <Text style={styles.stepDescription}>
-                            Sélectionnez un client existant ou créez-en un nouveau
-                        </Text>
-                        <ClientSelector
-                            label="Client"
-                            value={client}
-                            onChange={setClient}
-                            onNewClient={() => {
-                                if (onOpenClientCreate) {
-                                    onOpenClientCreate();
-                                }
-                            }}
-                        />
-                        {!client && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Nom du client</Text>
-                                <View style={styles.textInputContainer}>
-                                    <Ionicons name="person-outline" size={18} color={palette.modalButton} />
-                                    <TextInput
-                                        style={styles.textInput}
-                                        value={customerName}
-                                        onChangeText={setCustomerName}
-                                        placeholder="Nom complet"
-                                        placeholderTextColor={palette.modalText}
-                                        editable={true}
-                                    />
-                                </View>
-                            </View>
-                        )}
-                        {client && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Nom du client</Text>
-                                <View style={[styles.textInputContainer, styles.textInputContainerDisabled]}>
-                                    <Ionicons name="person-outline" size={18} color={palette.modalText} />
-                                    <TextInput
-                                        style={[styles.textInput, styles.textInputDisabled]}
-                                        value={client.name}
-                                        placeholder="Nom complet"
-                                        placeholderTextColor={palette.modalText}
-                                        editable={false}
-                                    />
-                                </View>
-                            </View>
-                        )}
-                    </View>
-                );
-
-            case 2:
-                return (
-                    <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}>Adresses</Text>
-                        <Text style={styles.stepDescription}>
-                            Définissez les adresses de départ et d'arrivée
-                        </Text>
-                        <AddressSelector
-                            label="Adresse de départ"
-                            value={pickupAddress}
-                            onChange={(address, suggestion) => {
-                                setPickupAddress(address);
-                                setPickupSuggestion(suggestion);
-                            }}
-                            icon="location-outline"
-                        />
-                        <AddressSelector
-                            label="Adresse d'arrivée"
-                            value={dropoffAddress}
-                            onChange={(address, suggestion) => {
-                                setDropoffAddress(address);
-                                setDropoffSuggestion(suggestion);
-                            }}
-                            icon="flag-outline"
-                        />
-                    </View>
-                );
-
-            case 3:
-                return (
-                    <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}>Horaire & Planification</Text>
-                        <Text style={styles.stepDescription}>
-                            Définissez la date et l'heure de la course
-                        </Text>
-                        <TimeDatePicker
-                            label="Date et heure de départ"
-                            value={scheduledTime}
-                            onChange={setScheduledTime}
-                            mode="datetime"
-                        />
-                        <TouchableOpacity
-                            style={styles.returnCheckboxContainer}
-                            onPress={() => {
-                                const newIsReturn = !isReturn;
-                                setIsReturn(newIsReturn);
-                                if (newIsReturn && scheduledTime) {
-                                    // Pré-remplir uniquement la date de retour (sans l'heure)
-                                    const dateOnly = dayjs(scheduledTime).startOf("day").toDate();
-                                    setReturnTime(dateOnly);
-                                } else if (!newIsReturn) {
-                                    setReturnTime(null);
-                                }
-                            }}
-                        >
-                            <Ionicons
-                                name={isReturn ? "checkbox" : "square-outline"}
-                                size={20}
-                                color={isReturn ? palette.modalButton : palette.modalText}
-                            />
-                            <Text style={styles.returnCheckboxLabel}>Course aller-retour</Text>
-                        </TouchableOpacity>
-                        {isReturn && (
-                            <View style={styles.returnSection}>
-                                <TimeDatePicker
-                                    label="Date de retour"
-                                    value={returnTime}
-                                    onChange={(date) => {
-                                        // Si on change la date, on garde l'heure si elle existe, sinon on met juste la date
-                                        if (date && returnTime) {
-                                            // Garder l'heure existante
-                                            const newDate = dayjs(date)
-                                                .hour(dayjs(returnTime).hour())
-                                                .minute(dayjs(returnTime).minute())
-                                                .toDate();
-                                            setReturnTime(newDate);
-                                        } else {
-                                            setReturnTime(date);
-                                        }
-                                    }}
-                                    mode="date"
-                                />
-                                <TimeDatePicker
-                                    label="Heure de retour (optionnel)"
-                                    value={returnTime || (scheduledTime ? dayjs(scheduledTime).startOf("day").toDate() : null)}
-                                    onChange={(date) => {
-                                        if (date) {
-                                            // Si on définit une heure, on garde la date de retour ou on utilise la date de départ
-                                            const baseDate = returnTime || scheduledTime;
-                                            if (baseDate) {
-                                                const dateOnly = dayjs(baseDate).startOf("day");
-                                                const newDate = dateOnly
-                                                    .hour(dayjs(date).hour())
-                                                    .minute(dayjs(date).minute())
-                                                    .toDate();
-                                                setReturnTime(newDate);
-                                            } else {
-                                                // Si aucune date de base, utiliser la date de départ ou aujourd'hui
-                                                const base = scheduledTime || new Date();
-                                                const dateOnly = dayjs(base).startOf("day");
-                                                const newDate = dateOnly
-                                                    .hour(dayjs(date).hour())
-                                                    .minute(dayjs(date).minute())
-                                                    .toDate();
-                                                setReturnTime(newDate);
-                                            }
-                                        } else {
-                                            // Si on supprime l'heure, on garde juste la date
-                                            if (returnTime) {
-                                                const dateOnly = dayjs(returnTime).startOf("day").toDate();
-                                                setReturnTime(dateOnly);
-                                            }
-                                        }
-                                    }}
-                                    mode="time"
-                                />
-                                {returnTime && !dayjs(returnTime).isSame(dayjs(returnTime).startOf("day")) && (
-                                    <Text style={styles.returnInfo}>
-                                        Heure de retour définie : {dayjs(returnTime).format("HH:mm")}
-                                    </Text>
-                                )}
-                                {returnTime && dayjs(returnTime).isSame(dayjs(returnTime).startOf("day")) && (
-                                    <Text style={styles.returnInfo}>
-                                        Heure de retour à définir
-                                    </Text>
-                                )}
-                            </View>
-                        )}
-
-                        {/* 🔄 Récurrence */}
-                        <RecurrenceSelector
-                            enabled={isRecurring}
-                            onEnabledChange={(enabled) => {
-                                setIsRecurring(enabled);
-                                // Réinitialiser les valeurs si désactivé
-                                if (!enabled) {
-                                    setRecurrenceDays([]);
-                                    setOccurrences(4);
-                                    setRecurrenceEndDate("");
-                                }
-                            }}
-                            recurrenceType={recurrenceType}
-                            onRecurrenceTypeChange={setRecurrenceType}
-                            recurrenceDays={recurrenceDays}
-                            onRecurrenceDaysChange={setRecurrenceDays}
-                            occurrences={occurrences}
-                            onOccurrencesChange={setOccurrences}
-                            endDate={recurrenceEndDate}
-                            onEndDateChange={setRecurrenceEndDate}
-                        />
-                    </View>
-                );
-
-            case 4:
-                return (
-                    <View style={styles.stepContent}>
-                        <Text style={styles.stepTitle}>Détails & Validation</Text>
-                        <Text style={styles.stepDescription}>
-                            Ajoutez des informations complémentaires
-                        </Text>
-                        <NotesEditor
-                            label="Notes internes"
-                            value={notes}
-                            onChange={setNotes}
-                            placeholder="Ajouter des notes..."
-                        />
-                        <View style={styles.priorityContainer}>
-                            <Text style={styles.priorityLabel}>Priorité</Text>
-                            <View style={styles.priorityButtons}>
-                                {(["LOW", "NORMAL", "HIGH"] as const).map((p) => (
-                                    <TouchableOpacity
-                                        key={p}
-                                        style={[
-                                            styles.priorityButton,
-                                            priority === p && styles.priorityButtonActive,
-                                        ]}
-                                        onPress={() => setPriority(p)}
-                                    >
-                                        <Text
-                                            style={[
-                                                styles.priorityButtonText,
-                                                priority === p && styles.priorityButtonTextActive,
-                                            ]}
-                                        >
-                                            {p === "LOW" ? "Basse" : p === "NORMAL" ? "Normale" : "Haute"}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-                        </View>
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Montant (CHF)</Text>
-                            <View style={styles.textInputContainer}>
-                                <Ionicons name="cash-outline" size={18} color={palette.modalButton} />
-                                <TextInput
-                                    style={styles.textInput}
-                                    value={amount}
-                                    onChangeText={setAmount}
-                                    placeholder="0.00"
-                                    placeholderTextColor={palette.modalText}
-                                    keyboardType="decimal-pad"
-                                />
-                            </View>
-                        </View>
-                        <View style={styles.wheelchairSection}>
-                            <Text style={styles.wheelchairLabel}>Options chaise roulante</Text>
-                            <View style={styles.checkboxGroup}>
-                                <TouchableOpacity
-                                    style={styles.checkboxRow}
-                                    onPress={() => {
-                                        setWheelchairClientHas(!wheelchairClientHas);
-                                        if (!wheelchairClientHas) {
-                                            setWheelchairNeed(false);
-                                        }
-                                    }}
-                                >
-                                    <View style={styles.checkbox}>
-                                        {wheelchairClientHas && (
-                                            <Ionicons name="checkmark" size={16} color={palette.modalButton} />
-                                        )}
-                                    </View>
-                                    <Text style={styles.checkboxLabel}>
-                                        ♿ Le client est en chaise roulante
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.checkboxRow}
-                                    onPress={() => {
-                                        setWheelchairNeed(!wheelchairNeed);
-                                        if (!wheelchairNeed) {
-                                            setWheelchairClientHas(false);
-                                        }
-                                    }}
-                                >
-                                    <View style={styles.checkbox}>
-                                        {wheelchairNeed && (
-                                            <Ionicons name="checkmark" size={16} color={palette.modalButton} />
-                                        )}
-                                    </View>
-                                    <Text style={styles.checkboxLabel}>
-                                        🏥 Prendre une chaise roulante
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                        <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryTitle}>Récapitulatif</Text>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>Client:</Text>
-                                <Text style={styles.summaryValue}>
-                                    {client?.name || customerName || "—"}
-                                </Text>
-                            </View>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>Départ:</Text>
-                                <Text style={styles.summaryValue}>{pickupAddress || "—"}</Text>
-                            </View>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>Arrivée:</Text>
-                                <Text style={styles.summaryValue}>{dropoffAddress || "—"}</Text>
-                            </View>
-                            <View style={styles.summaryItem}>
-                                <Text style={styles.summaryLabel}>Date:</Text>
-                                <Text style={styles.summaryValue}>
-                                    {scheduledTime ? dayjs(scheduledTime).format("DD/MM/YYYY HH:mm") : "—"}
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                );
-
-            default:
-                return null;
+            log.error("ride create failed", { error, response: error?.response?.data });
         }
     };
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-            onRequestClose={onClose}
-        >
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={styles.modalOverlay}
+                style={s.root}
             >
-                <View style={styles.modalCard}>
-                    <View style={styles.modalHeader}>
-                        <View>
-                            <Text style={styles.modalTitle}>Nouvelle course</Text>
-                            <Text style={styles.modalSubtitle}>Étape {currentStep}/4</Text>
+                <Pressable style={s.overlay} onPress={onClose} />
+                <View style={s.sheet}>
+                    <View style={s.handle} />
+
+                    {/* Header */}
+                    <View style={s.header}>
+                        <View style={s.headerIconWrap}>
+                            <Ionicons name="add-circle-outline" size={20} color={BRAND} />
                         </View>
-                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                            <Ionicons name="close" size={24} color={palette.modalText} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={s.headerTitle}>Créer une réservation</Text>
+                            <Text style={s.headerSub}>Renseignez le trajet, puis ajoutez les détails.</Text>
+                        </View>
+                        <TouchableOpacity onPress={onClose} style={s.closeBtn}>
+                            <Ionicons name="close" size={22} color={TEXT_SEC} />
                         </TouchableOpacity>
                     </View>
 
-                    {renderStepIndicator()}
+                    <ScrollView
+                        style={s.scroll}
+                        contentContainerStyle={s.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        nestedScrollEnabled
+                    >
+                    {/* Client */}
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Client <Text style={s.required}>*</Text></Text>
+                        <ClientSelector
+                            label=""
+                            value={client}
+                            onChange={setClient}
+                            onNewClient={() => onOpenClientCreate?.()}
+                        />
+                        {!client && (
+                            <View style={s.inputRow}>
+                                <Ionicons name="person-outline" size={16} color={TEXT_MUTED} />
+                                <TextInput
+                                    style={s.inputText}
+                                    value={customerName}
+                                    onChangeText={setCustomerName}
+                                    placeholder="Rechercher un client…"
+                                    placeholderTextColor={TEXT_MUTED}
+                                />
+                            </View>
+                        )}
+                    </View>
 
-                    <View style={styles.scrollContainer}>
-                        <ScrollView
-                            style={styles.modalScroll}
-                            contentContainerStyle={styles.modalContent}
-                            showsVerticalScrollIndicator={false}
-                            keyboardShouldPersistTaps="handled"
+                    {/* Addresses */}
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Lieu de prise en charge <Text style={s.required}>*</Text></Text>
+                        <AddressSelector
+                            label=""
+                            value={pickupAddress}
+                            onChange={(addr, sug) => { setPickupAddress(addr); setPickupSuggestion(sug); }}
+                            icon="location-outline"
+                        />
+                    </View>
+
+                    <TouchableOpacity style={s.swapBtn} onPress={handleSwapAddresses} activeOpacity={0.7}>
+                        <Ionicons name="swap-vertical" size={18} color={BRAND} />
+                    </TouchableOpacity>
+
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Lieu de destination <Text style={s.required}>*</Text></Text>
+                        <AddressSelector
+                            label=""
+                            value={dropoffAddress}
+                            onChange={(addr, sug) => { setDropoffAddress(addr); setDropoffSuggestion(sug); }}
+                            icon="flag-outline"
+                        />
+                    </View>
+
+                    {/* Date & Time */}
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Date & heure de départ <Text style={s.required}>*</Text></Text>
+                        <TimeDatePicker
+                            label=""
+                            value={scheduledTime}
+                            onChange={setScheduledTime}
+                            mode="datetime"
+                        />
+                        <View style={s.presetRow}>
+                            <TouchableOpacity style={s.presetChip} onPress={() => applyPreset("now30")}>
+                                <Text style={s.presetText}>+30 min</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={s.presetChip} onPress={() => applyPreset("now1h")}>
+                                <Text style={s.presetText}>+1h</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={s.presetChip} onPress={() => applyPreset("tomorrow9")}>
+                                <Text style={s.presetText}>Demain 9h</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Chips: AR / Récurrence */}
+                    <View style={s.chipsRow}>
+                        <TouchableOpacity
+                            style={[s.toggleChip, isReturn && s.toggleChipActive]}
+                            onPress={() => {
+                                const next = !isReturn;
+                                setIsReturn(next);
+                                if (next && scheduledTime) {
+                                    setReturnTime(dayjs(scheduledTime).startOf("day").toDate());
+                                } else if (!next) {
+                                    setReturnTime(null);
+                                }
+                            }}
                         >
-                            {renderStepContent()}
-                        </ScrollView>
+                            <Ionicons name="repeat-outline" size={14} color={isReturn ? BRAND : TEXT_SEC} />
+                            <Text style={[s.toggleChipText, isReturn && s.toggleChipTextActive]}>Trajet AR</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[s.toggleChip, isRecurring && s.toggleChipActive]}
+                            onPress={() => {
+                                setIsRecurring(!isRecurring);
+                                if (isRecurring) { setRecurrenceDays([]); setOccurrences(4); setRecurrenceEndDate(""); }
+                            }}
+                        >
+                            <Ionicons name="calendar-outline" size={14} color={isRecurring ? BRAND : TEXT_SEC} />
+                            <Text style={[s.toggleChipText, isRecurring && s.toggleChipTextActive]}>Récurrente</Text>
+                        </TouchableOpacity>
                     </View>
 
-                    <View style={styles.modalActions}>
-                        {currentStep > 1 && (
-                            <TouchableOpacity
-                                style={styles.modalCancel}
-                                onPress={handlePrevious}
-                                disabled={loading}
-                            >
-                                <Text style={styles.modalCancelText}>Précédent</Text>
-                            </TouchableOpacity>
-                        )}
-                        <View style={{ flex: 1 }} />
-                        {currentStep < 4 ? (
-                            <TouchableOpacity
-                                style={[
-                                    styles.modalNext,
-                                    !canGoNext() && styles.modalNextDisabled,
-                                ]}
-                                onPress={handleNext}
-                                disabled={!canGoNext()}
-                            >
-                                <Text style={styles.modalNextText}>Suivant</Text>
-                                <Ionicons name="chevron-forward" size={16} color="#FFFFFF" />
-                            </TouchableOpacity>
-                        ) : (
-                            <TouchableOpacity
-                                style={[
-                                    styles.modalSave,
-                                    (!canGoNext() || loading) && styles.modalSaveDisabled,
-                                ]}
-                                onPress={handleCreate}
-                                disabled={!canGoNext() || loading}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator color="#FFFFFF" size="small" />
-                                ) : (
-                                    <>
-                                        <Text style={styles.modalSaveText}>Créer la course</Text>
-                                        <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                                    </>
-                                )}
-                            </TouchableOpacity>
-                        )}
+                    {/* Return time */}
+                    {isReturn && (
+                        <View style={s.subsection}>
+                            <TimeDatePicker label="Date de retour" value={returnTime} onChange={(d) => {
+                                if (d && returnTime) {
+                                    setReturnTime(dayjs(d).hour(dayjs(returnTime).hour()).minute(dayjs(returnTime).minute()).toDate());
+                                } else setReturnTime(d);
+                            }} mode="date" />
+                            <TimeDatePicker label="Heure de retour (opt.)" value={returnTime || (scheduledTime ? dayjs(scheduledTime).startOf("day").toDate() : null)} onChange={(d) => {
+                                if (d) {
+                                    const base = returnTime || scheduledTime || new Date();
+                                    setReturnTime(dayjs(base).startOf("day").hour(dayjs(d).hour()).minute(dayjs(d).minute()).toDate());
+                                } else if (returnTime) {
+                                    setReturnTime(dayjs(returnTime).startOf("day").toDate());
+                                }
+                            }} mode="time" />
+                        </View>
+                    )}
+
+                    {/* Recurrence */}
+                    {isRecurring && (
+                        <View style={s.subsection}>
+                            <RecurrenceSelector
+                                enabled={isRecurring}
+                                onEnabledChange={setIsRecurring}
+                                recurrenceType={recurrenceType}
+                                onRecurrenceTypeChange={setRecurrenceType}
+                                recurrenceDays={recurrenceDays}
+                                onRecurrenceDaysChange={setRecurrenceDays}
+                                occurrences={occurrences}
+                                onOccurrencesChange={setOccurrences}
+                                endDate={recurrenceEndDate}
+                                onEndDateChange={setRecurrenceEndDate}
+                            />
+                        </View>
+                    )}
+
+                    {/* Amount */}
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Montant (optionnel)</Text>
+                        <View style={s.inputRow}>
+                            <Ionicons name="cash-outline" size={16} color={TEXT_MUTED} />
+                            <TextInput
+                                style={s.inputText}
+                                value={amount}
+                                onChangeText={setAmount}
+                                placeholder="Ex: 45.00"
+                                placeholderTextColor={TEXT_MUTED}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
                     </View>
+
+                    {/* Medical Info (collapsible) */}
+                    <TouchableOpacity
+                        style={s.sectionToggle}
+                        onPress={() => setMedicalExpanded(!medicalExpanded)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={s.sectionToggleLeft}>
+                            <Ionicons name="medkit-outline" size={16} color={BRAND} />
+                            <Text style={s.sectionToggleText}>Informations médicales</Text>
+                        </View>
+                        <Ionicons name={medicalExpanded ? "chevron-up" : "chevron-down"} size={16} color={TEXT_SEC} />
+                    </TouchableOpacity>
+
+                    {medicalExpanded && (
+                        <View style={s.medicalSection}>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Établissement</Text>
+                                <View style={s.inputRow}>
+                                    <TextInput
+                                        style={s.inputText}
+                                        value={medicalFacility}
+                                        onChangeText={setMedicalFacility}
+                                        placeholder="HUG, Clinique La Colline, Grangettes…"
+                                        placeholderTextColor={TEXT_MUTED}
+                                    />
+                                </View>
+                            </View>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Service / Bât.</Text>
+                                <View style={s.inputRow}>
+                                    <TextInput
+                                        style={s.inputText}
+                                        value={hospitalService}
+                                        onChangeText={setHospitalService}
+                                        placeholder="Ex: CHIR, Urgences, Cardiologie…"
+                                        placeholderTextColor={TEXT_MUTED}
+                                    />
+                                </View>
+                            </View>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Médecin</Text>
+                                <View style={s.inputRow}>
+                                    <TextInput
+                                        style={s.inputText}
+                                        value={doctorName}
+                                        onChangeText={setDoctorName}
+                                        placeholder="Ex: Dr Dupont"
+                                        placeholderTextColor={TEXT_MUTED}
+                                    />
+                                </View>
+                            </View>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Notes</Text>
+                                <View style={[s.inputRow, { minHeight: 60, alignItems: "flex-start" }]}>
+                                    <TextInput
+                                        style={[s.inputText, { textAlignVertical: "top", paddingTop: 8 }]}
+                                        value={notesMedical}
+                                        onChangeText={setNotesMedical}
+                                        placeholder="Instructions, bâtiment, étage…"
+                                        placeholderTextColor={TEXT_MUTED}
+                                        multiline
+                                    />
+                                </View>
+                            </View>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Accès pickup</Text>
+                                <View style={s.inputRow}>
+                                    <TextInput
+                                        style={s.inputText}
+                                        value={pickupAccessNotes}
+                                        onChangeText={setPickupAccessNotes}
+                                        placeholder="Ex: entrée arrière, sonner à…"
+                                        placeholderTextColor={TEXT_MUTED}
+                                    />
+                                </View>
+                            </View>
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Accès destination</Text>
+                                <View style={s.inputRow}>
+                                    <TextInput
+                                        style={s.inputText}
+                                        value={dropoffAccessNotes}
+                                        onChangeText={setDropoffAccessNotes}
+                                        placeholder="Ex: entrée B, étage 2, service…"
+                                        placeholderTextColor={TEXT_MUTED}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* Wheelchair */}
+                            <View style={s.fieldGroup}>
+                                <Text style={s.labelSm}>Chaise roulante</Text>
+                                <View style={s.chipsRow}>
+                                    <TouchableOpacity
+                                        style={[s.toggleChip, wheelchairClientHas && s.toggleChipActive]}
+                                        onPress={() => { setWheelchairClientHas(!wheelchairClientHas); if (!wheelchairClientHas) setWheelchairNeed(false); }}
+                                    >
+                                        <Text style={[s.toggleChipText, wheelchairClientHas && s.toggleChipTextActive]}>En chaise</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[s.toggleChip, wheelchairNeed && s.toggleChipActive]}
+                                        onPress={() => { setWheelchairNeed(!wheelchairNeed); if (!wheelchairNeed) setWheelchairClientHas(false); }}
+                                    >
+                                        <Text style={[s.toggleChipText, wheelchairNeed && s.toggleChipTextActive]}>Fournir chaise</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* Notes internes */}
+                    <View style={s.fieldGroup}>
+                        <Text style={s.label}>Notes internes</Text>
+                        <NotesEditor label="" value={notes} onChange={setNotes} placeholder="Ajouter des notes..." />
+                    </View>
+
+                    <View style={{ height: 20 }} />
+                </ScrollView>
+
+                {/* Footer */}
+                <View style={s.footer}>
+                    <TouchableOpacity style={s.footerCancel} onPress={onClose} disabled={loading}>
+                        <Text style={s.footerCancelText}>Annuler</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[s.footerSubmit, !canSubmit && s.footerSubmitDisabled]}
+                        onPress={handleCreate}
+                        disabled={!canSubmit || loading}
+                        activeOpacity={0.85}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#FFF" size="small" />
+                        ) : (
+                            <>
+                                <Ionicons name="checkmark" size={16} color="#FFF" />
+                                <Text style={s.footerSubmitText}>Créer la réservation</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+                </View>
                 </View>
             </KeyboardAvoidingView>
         </Modal>
     );
 };
 
-const styles = StyleSheet.create({
-    modalOverlay: {
+const s = StyleSheet.create({
+    root: {
         flex: 1,
-        backgroundColor: palette.modalOverlay,
-        justifyContent: "center",
-        alignItems: "center",
-        padding: 20,
+        justifyContent: "flex-end" as const,
     },
-    modalCard: {
-        width: "100%",
-        maxWidth: 500,
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.35)",
+    },
+    sheet: {
+        backgroundColor: CARD,
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         height: "90%",
-        backgroundColor: palette.modalBackground,
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: palette.modalBorder,
-        ...shadowPresets.large, // ✅ Compatible web/native
-        flexDirection: "column",
         overflow: "hidden",
+        ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 12 }),
     },
-    modalHeader: {
+    handle: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: "#D1D5DB",
+        alignSelf: "center",
+        marginTop: 10,
+        marginBottom: 6,
+    },
+    header: {
         flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        padding: 24,
-        paddingBottom: 16,
+        alignItems: "center",
+        gap: 10,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: palette.divider,
+        borderBottomColor: BORDER,
     },
-    modalTitle: {
-        color: palette.modalTitle,
-        fontSize: 20,
+    headerIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: "rgba(0,121,107,0.08)",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    headerTitle: {
+        fontSize: 16,
         fontWeight: "700",
+        color: TEXT,
     },
-    modalSubtitle: {
-        color: palette.modalText,
-        fontSize: 13,
-        marginTop: 4,
+    headerSub: {
+        fontSize: 12,
+        color: TEXT_SEC,
+        marginTop: 2,
     },
-    closeButton: {
+    closeBtn: {
         padding: 4,
     },
-    stepIndicator: {
+    scroll: {
+        flex: 1,
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 20,
+    },
+    fieldGroup: {
+        marginBottom: 14,
+    },
+    label: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: TEXT,
+        marginBottom: 6,
+    },
+    labelSm: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: TEXT_SEC,
+        marginBottom: 5,
+    },
+    required: {
+        color: DANGER,
+    },
+    inputRow: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 24,
-        paddingVertical: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: palette.divider,
+        backgroundColor: BG,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: BORDER,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 8,
     },
-    stepCircle: {
+    inputText: {
+        flex: 1,
+        color: TEXT,
+        fontSize: 14,
+        padding: 0,
+    },
+
+    swapBtn: {
+        alignSelf: "center",
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: palette.stepInactive,
+        backgroundColor: "rgba(0,121,107,0.08)",
         alignItems: "center",
         justifyContent: "center",
+        marginVertical: -4,
+        marginBottom: 10,
     },
-    stepCircleActive: {
-        backgroundColor: palette.stepActive,
-    },
-    stepNumber: {
-        color: "#FFFFFF",
-        fontSize: 14,
-        fontWeight: "700",
-    },
-    stepNumberActive: {
-        color: "#FFFFFF",
-    },
-    stepLine: {
-        flex: 1,
-        height: 2,
-        backgroundColor: palette.stepInactive,
-        marginHorizontal: 8,
-    },
-    stepLineActive: {
-        backgroundColor: palette.stepActive,
-    },
-    scrollContainer: {
-        flex: 1,
-    },
-    modalScroll: {
-        flex: 1,
-    },
-    modalContent: {
-        padding: 24,
-        paddingBottom: 32,
-        flexGrow: 1,
-    },
-    stepContent: {
-        gap: 20,
-    },
-    stepTitle: {
-        color: palette.modalTitle,
-        fontSize: 18,
-        fontWeight: "700",
-    },
-    stepDescription: {
-        color: palette.modalText,
-        fontSize: 14,
-        marginTop: 2,
-    },
-    inputGroup: {
+
+    presetRow: {
+        flexDirection: "row",
         gap: 8,
+        marginTop: 8,
     },
-    inputLabel: {
-        color: palette.modalTitle,
-        fontSize: 14,
+    presetChip: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: BG,
+        borderWidth: 1,
+        borderColor: BORDER,
+    },
+    presetText: {
+        fontSize: 12,
         fontWeight: "600",
+        color: BRAND,
     },
-    textInputContainer: {
+
+    chipsRow: {
+        flexDirection: "row",
+        gap: 8,
+        marginBottom: 14,
+    },
+    toggleChip: {
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: palette.modalBackground,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: palette.modalBorder,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        gap: 10,
-    },
-    textInputContainerDisabled: {
-        backgroundColor: "rgba(15,54,43,0.04)",
-        borderColor: "rgba(15,54,43,0.08)",
-    },
-    textInput: {
-        flex: 1,
-        color: palette.modalTitle,
-        fontSize: 15,
-        padding: 0,
-    },
-    textInputDisabled: {
-        color: palette.modalText,
-        opacity: 0.7,
-    },
-    checkboxContainer: {
-        marginTop: 0,
-    },
-    checkbox: {
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        borderColor: palette.modalBorder,
-        backgroundColor: palette.modalBackground,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    checkboxLabel: {
-        color: palette.modalTitle,
-        fontSize: 15,
-    },
-    returnCheckboxContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
+        gap: 5,
+        paddingHorizontal: 12,
         paddingVertical: 8,
-        marginTop: 0,
+        borderRadius: 8,
+        backgroundColor: BG,
+        borderWidth: 1,
+        borderColor: BORDER,
     },
-    returnCheckboxLabel: {
-        color: palette.modalTitle,
-        fontSize: 15,
+    toggleChipActive: {
+        borderColor: BRAND,
+        backgroundColor: "rgba(0,121,107,0.06)",
     },
-    wheelchairSection: {
-        marginTop: 16,
-        gap: 12,
-    },
-    wheelchairLabel: {
-        color: palette.modalTitle,
-        fontSize: 14,
+    toggleChipText: {
+        fontSize: 12,
         fontWeight: "600",
+        color: TEXT_SEC,
     },
-    checkboxGroup: {
-        gap: 12,
+    toggleChipTextActive: {
+        color: BRAND,
     },
-    checkboxRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-    },
-    returnSection: {
-        marginTop: 16,
-        padding: 16,
-        backgroundColor: palette.sectionBg,
+
+    subsection: {
+        backgroundColor: "rgba(0,121,107,0.03)",
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: palette.sectionBorder,
+        borderColor: "rgba(0,121,107,0.1)",
+        padding: 14,
+        marginBottom: 14,
+        gap: 10,
     },
-    returnInfo: {
-        fontSize: 13,
-        color: palette.modalText,
-        fontStyle: "italic",
-        marginTop: 8,
-    },
-    priorityContainer: {
-        gap: 8,
-    },
-    priorityLabel: {
-        color: palette.modalTitle,
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    priorityButtons: {
+
+    sectionToggle: {
         flexDirection: "row",
-        gap: 8,
-    },
-    priorityButton: {
-        flex: 1,
-        paddingVertical: 10,
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
         paddingHorizontal: 14,
         borderRadius: 12,
-        backgroundColor: palette.modalBackground,
-        borderWidth: 1.5,
-        borderColor: palette.modalBorder,
+        backgroundColor: BG,
+        borderWidth: 1,
+        borderColor: BORDER,
+        marginBottom: 10,
+    },
+    sectionToggleLeft: {
+        flexDirection: "row",
         alignItems: "center",
+        gap: 8,
     },
-    priorityButtonActive: {
-        backgroundColor: palette.modalButton,
-        borderColor: palette.modalButton,
-    },
-    priorityButtonText: {
-        color: palette.modalText,
+    sectionToggleText: {
         fontSize: 13,
         fontWeight: "600",
+        color: TEXT,
     },
-    priorityButtonTextActive: {
-        color: palette.modalButtonText,
+
+    medicalSection: {
+        backgroundColor: "rgba(0,121,107,0.02)",
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "rgba(0,121,107,0.08)",
+        padding: 14,
+        marginBottom: 14,
+        gap: 4,
     },
-    summaryContainer: {
-        backgroundColor: palette.sectionBg,
-        borderRadius: 18,
-        padding: 18,
-        borderWidth: 1.5,
-        borderColor: palette.sectionBorder,
-        gap: 12,
-        marginTop: 8,
-    },
-    summaryTitle: {
-        color: palette.modalTitle,
-        fontSize: 15,
-        fontWeight: "700",
-        marginBottom: 4,
-    },
-    summaryItem: {
+
+    footer: {
         flexDirection: "row",
-        justifyContent: "space-between",
-        paddingVertical: 6,
-    },
-    summaryLabel: {
-        color: palette.modalText,
-        fontSize: 14,
-        fontWeight: "600",
-    },
-    summaryValue: {
-        color: palette.modalTitle,
-        fontSize: 14,
-        flex: 1,
-        textAlign: "right",
-    },
-    modalActions: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        padding: 24,
-        paddingTop: 16,
+        gap: 10,
+        paddingHorizontal: 20,
+        paddingVertical: 14,
         borderTopWidth: 1,
-        borderTopColor: palette.divider,
+        borderTopColor: BORDER,
     },
-    modalCancel: {
-        paddingHorizontal: 18,
-        paddingVertical: 12,
+    footerCancel: {
+        flex: 1,
+        alignItems: "center",
+        paddingVertical: 13,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: BORDER,
+        backgroundColor: CARD,
     },
-    modalCancelText: {
-        color: palette.modalCancelText,
-        fontSize: 15,
+    footerCancelText: {
+        color: TEXT_SEC,
         fontWeight: "600",
+        fontSize: 14,
     },
-    modalNext: {
+    footerSubmit: {
+        flex: 2,
         flexDirection: "row",
         alignItems: "center",
+        justifyContent: "center",
         gap: 6,
-        backgroundColor: palette.modalButton,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 14,
+        paddingVertical: 13,
+        borderRadius: 12,
+        backgroundColor: BRAND,
+        ...createShadow({ shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }),
     },
-    modalNextDisabled: {
-        backgroundColor: "rgba(10,127,89,0.4)",
+    footerSubmitDisabled: {
+        opacity: 0.4,
     },
-    modalNextText: {
-        color: palette.modalButtonText,
-        fontSize: 15,
+    footerSubmitText: {
+        color: "#FFFFFF",
         fontWeight: "700",
-    },
-    modalSave: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        backgroundColor: palette.modalButton,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 14,
-    },
-    modalSaveDisabled: {
-        backgroundColor: "rgba(10,127,89,0.4)",
-    },
-    modalSaveText: {
-        color: palette.modalButtonText,
-        fontSize: 15,
-        fontWeight: "700",
+        fontSize: 14,
     },
 });
-

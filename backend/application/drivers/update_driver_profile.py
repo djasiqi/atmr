@@ -38,6 +38,8 @@ class UpdateDriverProfileUseCase:
             user.phone = phone
 
         # Statut (UI legacy)
+        # "hors service" = indisponible opérationnellement, NOT compte désactivé.
+        # is_active = compte actif/désactivé (admin only), is_available = dispo opérationnelle.
         status = validated_data.get("status")
         if status:
             try:
@@ -45,9 +47,9 @@ class UpdateDriverProfileUseCase:
             except Exception:
                 status_val = ""
             if status_val == "disponible":
-                driver.is_active = True
+                driver.is_available = True
             elif status_val == "hors service":
-                driver.is_active = False
+                driver.is_available = False
 
         # HR fields
         contract_type = validated_data.get("contract_type")
@@ -73,6 +75,17 @@ class UpdateDriverProfileUseCase:
         medical_valid_until = validated_data.get("medical_valid_until")
         if medical_valid_until:
             driver.medical_valid_until = medical_valid_until
+
+        # Véhicule
+        vehicle_assigned = validated_data.get("vehicle_assigned")
+        if vehicle_assigned is not None:
+            driver.vehicle_assigned = vehicle_assigned or None
+        brand = validated_data.get("brand")
+        if brand is not None:
+            driver.brand = brand or None
+        license_plate = validated_data.get("license_plate")
+        if license_plate is not None:
+            driver.license_plate = license_plate or None
 
         # Listes
         license_categories = validated_data.get("license_categories")

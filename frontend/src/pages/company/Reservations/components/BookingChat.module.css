@@ -1,0 +1,226 @@
+/* BookingChat.module.css — Mini-canal communication booking */
+
+.chatSection {
+  background: var(--bg-surface, #FFFFFF);
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: var(--radius, 10px);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 280px;
+  min-height: 280px;
+  max-height: 280px;
+}
+
+.chatHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border, #E2E8F0);
+  flex-shrink: 0;
+}
+
+.chatIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--brand-light, #F0FDFA);
+  color: var(--brand, #00796B);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.chatTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, #1E293B);
+  margin: 0;
+}
+
+/* Messages area — fills remaining space, scrollable */
+.messagesWrap {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border, #E2E8F0) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 4px;
+  min-height: 0;
+}
+
+.messagesWrap::-webkit-scrollbar {
+  width: 4px;
+}
+
+.messagesWrap::-webkit-scrollbar-thumb {
+  background: var(--border, #E2E8F0);
+  border-radius: 2px;
+}
+
+/* Single message row */
+.messageRow {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+}
+
+.messageRowCompany {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.messageRowInstitution {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.senderLabel {
+  font-size: 10px;
+  color: var(--text-muted, #94A3B8);
+  margin-bottom: 2px;
+  padding: 0 4px;
+}
+
+.bubble {
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-primary, #1E293B);
+  word-break: break-word;
+}
+
+.bubbleCompany {
+  background: var(--brand-light, #F0FDFA);
+}
+
+.bubbleInstitution {
+  background: var(--bg-muted, #F8FAFC);
+}
+
+.timestamp {
+  font-size: 9px;
+  color: var(--text-muted, #94A3B8);
+  margin-top: 1px;
+  padding: 0 4px;
+}
+
+/* Empty state */
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-muted, #94A3B8);
+}
+
+/* Loading */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted, #94A3B8);
+}
+
+/* Input bar — pinned at bottom */
+.inputBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--border, #E2E8F0);
+  padding: 8px 0 0;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.chatInput {
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--border, #E2E8F0);
+  border-radius: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--text-primary, #1E293B);
+  background: var(--bg-surface, #FFFFFF);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.chatInput::placeholder {
+  color: var(--text-muted, #94A3B8);
+}
+
+.chatInput:focus {
+  border-color: var(--brand, #00796B);
+}
+
+.sendBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand, #00796B);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.sendBtn:hover:not(:disabled) {
+  background: var(--brand-hover, #00695C);
+}
+
+.sendBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Load more */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.loadMoreBtn {
+  font-size: 10px;
+  color: var(--brand, #00796B);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.loadMoreBtn:hover {
+  background: var(--brand-light, #F0FDFA);
+}
+
+/* Closed state */
+.closedBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--border, #E2E8F0);
+  padding: 8px 0 0;
+  margin-top: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted, #94A3B8);
+  font-style: italic;
+}

@@ -17,6 +17,7 @@
 /** Clés SecureStore utilisées pour l'authentification chauffeur */
 export const DRIVER_AUTH_SECURE_KEYS = [
   "driver_refresh_token",
+  "driver_refresh_token_backup",
   "driver_access_token",
   "driver_user_public_id",
 ] as const;

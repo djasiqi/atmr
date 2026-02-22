@@ -4,9 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import * as Location from "expo-location";
 import { Alert, Platform, AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLogger } from "@/utils/logger";
 import { sendDriverLocation, getDistanceInMeters } from "@/services/location";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
+
+const log = getLogger("Location");
 // ✅ P2-1: Mode Offline Mobile - Persister queue GPS
 import {
   enqueueLocation,
@@ -84,7 +87,7 @@ export const useLocation = () => {
             await handleLocationUpdate(loc);
           },
           (error) => {
-            console.error("Erreur géolocalisation navigateur:", error);
+            log.error("browser geolocation error", { error });
             Alert.alert("Erreur", "Erreur de géolocalisation navigateur.");
           },
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
@@ -102,9 +105,9 @@ export const useLocation = () => {
         // ✅ Demander les permissions en arrière-plan (nécessaire pour le tracking continu)
         const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
         if (backgroundStatus !== "granted") {
-          console.warn("⚠️ Permission de localisation en arrière-plan refusée. Le tracking ne fonctionnera qu'en premier plan.");
+          log.warn("background location permission denied, tracking foreground only");
         } else {
-          console.log("✅ Permission de localisation en arrière-plan accordée");
+          log.success("background location permission granted");
         }
 
         try {
@@ -116,7 +119,7 @@ export const useLocation = () => {
             await handleLocationUpdate(initial);
           }
         } catch (error) {
-          console.error("Erreur récupération position initiale:", error);
+          log.error("initial position fetch failed", { error });
         }
 
         // ✅ Démarrer le tracking en arrière-plan si les permissions sont accordées
@@ -124,29 +127,29 @@ export const useLocation = () => {
           try {
             // On stocke le driver_id pour la tâche en arrière-plan
             await AsyncStorage.setItem("driver_id", driver.id.toString());
-            console.log("[useLocation] ✅ driver_id stocké pour la tâche background");
+            log.success("driver_id stored for background task");
 
             // Mutex global pour éviter les doubles appels
             if (backgroundInitDone || backgroundInitRunning) {
-              console.log("[useLocation] ⚠️ Background init déjà en cours / déjà fait → skip");
+              log.info("background init already in progress or done, skip");
             } else {
               backgroundInitRunning = true;
 
               const startBackgroundTracking = async () => {
                 try {
-                  console.log("[useLocation] 🚀 Init background tracking…");
+                  log.info("init background tracking");
 
                   // Vérifier si déjà démarré côté natif
                   let hasStarted = false;
                   try {
                     hasStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_TASK_NAME);
-                    console.log("[useLocation] ℹ️ hasStartedLocationUpdatesAsync =", hasStarted);
+                    log.info("hasStartedLocationUpdatesAsync", { hasStarted });
                   } catch (checkError) {
-                    console.warn("[useLocation] ⚠️ Erreur hasStartedLocationUpdatesAsync:", checkError);
+                    log.warn("hasStartedLocationUpdatesAsync check failed", { checkError });
                   }
 
                   if (hasStarted) {
-                    console.log("[useLocation] ✅ Updates déjà démarrés → on ne relance pas");
+                    log.success("updates already started, not restarting");
                     backgroundTrackingStarted.current = true;
                     backgroundInitDone = true;
                     return;
@@ -154,17 +157,17 @@ export const useLocation = () => {
 
                   // Re-check permission background par sécurité
                   const { status } = await Location.requestBackgroundPermissionsAsync();
-                  console.log("[useLocation] ℹ️ Background permission status =", status);
+                  log.info("background permission status", { status });
                   if (status !== "granted") {
-                    console.warn("[useLocation] ⚠️ Permission background refusée au moment du start");
+                    log.warn("background permission denied at start time");
                     return;
                   }
 
                   // Petit délai pour laisser Android initialiser le contexte
-                  console.log("[useLocation] ⏳ Attente initialisation contexte Android (3s)…");
+                  log.info("waiting for android context init (3s)");
                   await new Promise((resolve) => setTimeout(resolve, 3000));
 
-                  console.log("[useLocation] 🚀 Appel Location.startLocationUpdatesAsync()");
+                  log.info("calling startLocationUpdatesAsync");
                   await Location.startLocationUpdatesAsync(BACKGROUND_TASK_NAME, {
                     // ✅ PRODUCTION: Paramètres optimisés pour économiser la batterie
                     accuracy: Location.Accuracy.Balanced, // Bon compromis précision/batterie
@@ -178,10 +181,10 @@ export const useLocation = () => {
 
                   backgroundTrackingStarted.current = true;
                   backgroundInitDone = true;
-                  console.log("[useLocation] ✅ startLocationUpdatesAsync démarré avec succès");
+                  log.success("startLocationUpdatesAsync started");
                 } catch (startError: any) {
-                  console.warn("[useLocation] ⚠️ startLocationUpdatesAsync a échoué:", startError?.message || startError);
-                  console.log("[useLocation] ℹ️ Le tracking continue au moins en foreground");
+                  log.warn("startLocationUpdatesAsync failed", { message: startError?.message || startError });
+                  log.info("tracking continues in foreground at least");
                   backgroundTrackingStarted.current = false;
                 } finally {
                   backgroundInitRunning = false;
@@ -189,14 +192,14 @@ export const useLocation = () => {
               };
 
               // ✅ TEST : Appel immédiat sans timeout pour diagnostiquer
-              console.log("[useLocation] 🚀 Appel immédiat de startBackgroundTracking (test)");
+              log.info("immediate startBackgroundTracking call (test)");
               startBackgroundTracking().catch((err) => {
-                console.error("[useLocation] ❌ Erreur dans startBackgroundTracking:", err);
+                log.error("startBackgroundTracking error", { err });
                 backgroundInitRunning = false;
               });
             }
           } catch (error: any) {
-            console.error("❌ Erreur démarrage tracking arrière-plan:", error);
+            log.error("background tracking startup failed", { error });
             backgroundTrackingStarted.current = false;
           }
         }
@@ -218,7 +221,7 @@ export const useLocation = () => {
             }
           );
         } catch (error) {
-          console.error("Erreur création subscription localisation mobile:", error);
+          log.error("mobile location subscription creation failed", { error });
         }
       }
     };
@@ -226,7 +229,7 @@ export const useLocation = () => {
   // ✅ P2: Bug #6 - Retry automatique avec backoff exponentiel
   const retryFailedBatch = async () => {
     if (retryAttempts >= MAX_RETRY_ATTEMPTS) {
-      console.log('[useLocation] ⚠️ Max retry attempts reached, waiting for reconnect');
+      log.warn("max retry attempts reached, waiting for reconnect");
       retryAttempts = 0;
       return;
     }
@@ -238,14 +241,14 @@ export const useLocation = () => {
     }
     
     if (socket && socket.connected) {
-      console.log(`[useLocation] 🔄 Retry #${retryAttempts + 1}: ${queueSize} positions in queue`);
+      log.info("retry batch", { attempt: retryAttempts + 1, queueSize });
       try {
         const { syncLocationQueue } = await import("@/services/locationQueue");
         await syncLocationQueue(socket);
         retryAttempts = 0;  // Reset on success
-        console.log('[useLocation] ✅ Retry réussi, queue vidée');
+        log.success("retry succeeded, queue cleared");
       } catch (error: any) {
-        console.error(`[useLocation] ❌ Retry #${retryAttempts + 1} échoué:`, error);
+        log.error("retry failed", { attempt: retryAttempts + 1, error });
         // ✅ Rate limit: respecter retry_after si fourni, sinon backoff plus long
         const retryAfterSeconds =
           typeof error?.retry_after === "number" && Number.isFinite(error.retry_after)
@@ -263,7 +266,7 @@ export const useLocation = () => {
 
         retryAttempts++;
         
-        console.log(`[useLocation] ⏰ Prochain retry dans ${delay/1000}s`);
+        log.info("next retry scheduled", { delaySeconds: delay / 1000 });
         
         if (retryTimeout) {
           clearTimeout(retryTimeout);
@@ -277,7 +280,7 @@ export const useLocation = () => {
       const delay = Math.min(2000 * Math.pow(2, retryAttempts), 32000);
       retryAttempts++;
       
-      console.log(`[useLocation] ⏰ Socket déconnecté, retry dans ${delay/1000}s`);
+      log.info("socket disconnected, retry scheduled", { delaySeconds: delay / 1000 });
       
       if (retryTimeout) {
         clearTimeout(retryTimeout);
@@ -293,11 +296,11 @@ export const useLocation = () => {
   // ✅ P0: Fix Race Condition - Attendre ACK avant de vider buffer
   const flushPositionBatch = async () => {
     if (positionBuffer.current.length === 0) {
-      console.log("[useLocation] ⚠️ Buffer vide, pas d'envoi");
+      log.info("buffer empty, skip send");
       return;
     }
     if (!isDriverMode) {
-      console.log("[useLocation] ⚠️ Utilisateur n'est pas un chauffeur, pas d'envoi");
+      log.info("user not driver, skip send");
       positionBuffer.current = []; // Vider le buffer
       return;
     }
@@ -337,8 +340,14 @@ export const useLocation = () => {
           latitude: lastPos.coords.latitude,
           longitude: lastPos.coords.longitude,
         };
-      } catch (error) {
-        console.error("❌ [useLocation] Erreur resync queue GPS:", error);
+      } catch (error: any) {
+        // ✅ Réduire le bruit: warn au lieu de error pour les timeouts ACK (non bloquants)
+        const msg = error?.message || String(error);
+        if (msg.includes("Timeout") || msg.includes("ACK")) {
+          log.warn("resync gps timeout (non-blocking, auto retry)", { msg });
+        } else {
+          log.error("resync gps queue failed", { error });
+        }
         retryFailedBatch();
       }
     }
@@ -347,7 +356,7 @@ export const useLocation = () => {
   const handleLocationUpdate = async (loc: Location.LocationObject) => {
       const { latitude, longitude } = loc.coords;
       if (!isDriverMode) {
-        console.debug("[useLocation] ⚠️ Utilisateur n'est pas un chauffeur, position ignorée");
+        log.debug("user not driver, position ignored");
         return;
       }
 
@@ -365,15 +374,15 @@ export const useLocation = () => {
       
       if (!lastLoc || movedDistance >= DISTANCE_THRESHOLD) {
         positionBuffer.current.push(loc);
-        console.log(`📍 [useLocation] Position ajoutée au buffer: ${positionBuffer.current.length}/${BATCH_SIZE}, distance=${lastLoc ? movedDistance.toFixed(0) : 'première'}m`);
+        log.info("position buffered", { bufferLength: positionBuffer.current.length, batchSize: BATCH_SIZE, distanceM: lastLoc ? movedDistance : "first" });
         
         // Flush si buffer plein
         if (positionBuffer.current.length >= BATCH_SIZE) {
-          console.log(`📍 [useLocation] Buffer plein (${BATCH_SIZE}), flush immédiat`);
+          log.info("buffer full, flush immediate", { batchSize: BATCH_SIZE });
           await flushPositionBatch();
         }
       } else {
-        console.log(`📍 [useLocation] Position ignorée (déplacement < ${DISTANCE_THRESHOLD}m): ${movedDistance.toFixed(0)}m`);
+        log.info("position ignored (move below threshold)", { distanceM: movedDistance.toFixed(0), threshold: DISTANCE_THRESHOLD });
       }
     };
 
@@ -382,15 +391,15 @@ export const useLocation = () => {
     // ✅ PERF: Flush périodique du buffer (toutes les 10s)
     // ✅ Si buffer vide mais position récente disponible, forcer l'envoi de la dernière position
     const flushInterval = setInterval(() => {
-      console.log(`⏰ [useLocation] Flush périodique (buffer=${positionBuffer.current.length})`);
+      log.info("flush periodic", { bufferLength: positionBuffer.current.length });
       
       // Si buffer vide mais on a une position récente, l'ajouter au buffer
       if (positionBuffer.current.length === 0 && lastReceivedLocation.current) {
         const ts = lastReceivedLocation.current.timestamp ?? null;
         if (ts && lastEnqueuedTimestampRef.current === ts) {
-          console.log("[useLocation] ℹ️ Dernière position déjà en queue → skip");
+          log.info("last position already in queue, skip");
         } else {
-          console.log(`📍 [useLocation] Buffer vide, ajout de la dernière position reçue pour flush périodique`);
+          log.info("buffer empty, add last position for periodic flush");
           positionBuffer.current.push(lastReceivedLocation.current);
         }
       }
@@ -402,7 +411,7 @@ export const useLocation = () => {
     // Cela garantit que le serveur reçoit régulièrement des positions même sans mouvement
     const heartbeatInterval = setInterval(() => {
       if (lastReceivedLocation.current && isDriverMode && socket?.connected) {
-        console.log(`💓 [useLocation] Heartbeat GPS - forcer envoi dernière position`);
+        log.info("heartbeat gps, force send last position");
         // Ajouter la dernière position au buffer si elle n'y est pas déjà
         const lastPos = lastReceivedLocation.current;
         const ts = lastPos.timestamp ?? null;
@@ -421,7 +430,7 @@ export const useLocation = () => {
         // Forcer le flush immédiat
         flushPositionBatch();
       } else {
-        console.log(`💓 [useLocation] Heartbeat GPS - skip (pas de position ou socket déconnecté)`);
+        log.info("heartbeat gps skip (no position or socket disconnected)");
       }
     }, HEARTBEAT_INTERVAL_MS);
 
@@ -447,9 +456,9 @@ export const useLocation = () => {
         Location.stopLocationUpdatesAsync("background-location-task").catch((error: any) => {
           // Ignorer l'erreur si la tâche n'existe pas (normal si elle n'a jamais été démarrée)
           if (error?.message?.includes("TaskNotFoundException") || error?.message?.includes("not found")) {
-            console.log("ℹ️ Tâche de tracking arrière-plan non trouvée (normal si non démarrée)");
+            log.info("background tracking task not found (normal if never started)");
           } else {
-            console.error("Erreur arrêt tracking arrière-plan:", error);
+            log.error("stop background tracking failed", { error });
           }
         });
         backgroundTrackingStarted.current = false;

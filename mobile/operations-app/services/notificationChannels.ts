@@ -1,6 +1,9 @@
 // mobile/operations-app/services/notificationChannels.ts
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Channels");
 
 /**
  * Types de canaux de notification Android
@@ -10,6 +13,7 @@ export enum NotificationChannel {
   MISSIONS = "missions",
   /** H2: Canal debug pour contourner channel legacy (missions créé en DEFAULT/LOW) */
   MISSIONS_V2 = "missions_v2",
+  MISSION_ACTIVE = "mission_active",
   MESSAGES = "messages",
   INFO = "info",
 }
@@ -66,6 +70,16 @@ const CHANNEL_CONFIGS: ChannelConfig[] = [
     lightColor: "#2196F3",
   },
   {
+    id: NotificationChannel.MISSION_ACTIVE,
+    name: "📍 Mission en cours",
+    description:
+      "Notification persistante pendant la navigation avec actions rapides (En route, À bord, Terminer)",
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: null,
+    vibrationPattern: null,
+    enableLights: false,
+  },
+  {
     id: NotificationChannel.MESSAGES,
     name: "💬 Messages",
     description: "Messages de l'équipe, du dispatcher et des clients",
@@ -92,12 +106,12 @@ const CHANNEL_CONFIGS: ChannelConfig[] = [
  */
 export async function setupNotificationChannels(): Promise<void> {
   if (Platform.OS !== "android") {
-    console.log("📱 Canaux notifications skippés (non-Android)");
+    log.info("notification channels skipped (non-android)");
     return;
   }
 
   try {
-    console.log("🔧 Configuration des canaux de notification...");
+    log.info("configuring notification channels");
 
     for (const config of CHANNEL_CONFIGS) {
       await Notifications.setNotificationChannelAsync(config.id, {
@@ -114,12 +128,12 @@ export async function setupNotificationChannels(): Promise<void> {
       });
 
       // P2: Proof log — canal créé (diagnostic app killed)
-      console.log(`🔔 PUSH_PROOF channel created: ${config.id} (${config.name})`);
+      log.info("channel created", { id: config.id, name: config.name });
     }
 
-    console.log("🎉 Tous les canaux configurés avec succès");
+    log.success("all channels configured");
   } catch (error) {
-    console.error("❌ Erreur lors de la configuration des canaux:", error);
+    log.error("channel configuration failed", { error });
   }
 }
 
@@ -181,17 +195,23 @@ async function auditChannelsForKillMode(): Promise<{
   result.missions_v2 = await auditOne(NotificationChannel.MISSIONS_V2);
 
   // P0-A: Logs individuels pour diagnostic (existence + importance + sound/vibration)
-  console.log(
-    `🔔 PUSH_PROOF channel audit: missions exists=${result.missions.exists} importance=${result.missions.importance} isHigh=${result.missions.isHigh} sound=${result.missions.hasSound} vibration=${result.missions.hasVibration}`
-  );
-  console.log(
-    `🔔 PUSH_PROOF channel audit: missions_v2 exists=${result.missions_v2.exists} importance=${result.missions_v2.importance} isHigh=${result.missions_v2.isHigh} sound=${result.missions_v2.hasSound} vibration=${result.missions_v2.hasVibration}`
-  );
+  log.info("channel audit missions", {
+    exists: result.missions.exists,
+    importance: result.missions.importance,
+    isHigh: result.missions.isHigh,
+    hasSound: result.missions.hasSound,
+    hasVibration: result.missions.hasVibration,
+  });
+  log.info("channel audit missions_v2", {
+    exists: result.missions_v2.exists,
+    importance: result.missions_v2.importance,
+    isHigh: result.missions_v2.isHigh,
+    hasSound: result.missions_v2.hasSound,
+    hasVibration: result.missions_v2.hasVibration,
+  });
 
   if (!result.missions_v2.exists) {
-    console.warn(
-      "🔔 PUSH_PROOF missions_v2 NON CRÉÉ — ouvrir l'app une fois pour créer le canal avant test app kill"
-    );
+    log.warn("missions_v2 not created, open app once before kill test");
   }
 
   return result;
@@ -204,9 +224,11 @@ export async function logKillModeReadiness(): Promise<void> {
   try {
     const perm = await Notifications.getPermissionsAsync();
     const granted = perm.status === "granted";
-    console.log(
-      `🔔 PUSH_PROOF permissions: status=${perm.status} granted=${granted} canAskAgain=${perm.canAskAgain ?? "?"}`
-    );
+    log.info("push proof permissions", {
+      status: perm.status,
+      granted,
+      canAskAgain: perm.canAskAgain ?? "?",
+    });
     const channels = await auditChannelsForKillMode();
 
     let manufacturer = "?";
@@ -233,14 +255,17 @@ export async function logKillModeReadiness(): Promise<void> {
     else if (!m2High) ready = "missions_v2 importance≠HIGH";
     else if (!m1High) ready = "missions legacy (missions_v2 OK)";
 
-    console.log(
-      `🔔 KILL-MODE readiness: ${ready} | permissions=${perm.status} ` +
-        `missions=${channels.missions.exists ? (channels.missions.isHigh ? "HIGH" : "legacy") : "absent"} ` +
-        `missions_v2=${channels.missions_v2.exists ? (channels.missions_v2.isHigh ? "HIGH" : "low") : "absent"} ` +
-        `android=${androidVersion} device=${manufacturer}/${model}`
-    );
+    log.info("kill-mode readiness", {
+      ready,
+      permissions: perm.status,
+      missions: channels.missions.exists ? (channels.missions.isHigh ? "HIGH" : "legacy") : "absent",
+      missions_v2: channels.missions_v2.exists ? (channels.missions_v2.isHigh ? "HIGH" : "low") : "absent",
+      androidVersion,
+      manufacturer,
+      model,
+    });
   } catch (e) {
-    console.warn("🔔 KILL-MODE readiness: impossible de vérifier", e);
+    log.warn("kill-mode readiness check failed", { error: e });
   }
 }
 
@@ -304,7 +329,7 @@ export async function getKillModeState(): Promise<KillModeState | null> {
       appOwnership,
     };
   } catch (e) {
-    console.warn("🔔 getKillModeState: impossible de récupérer", e);
+    log.warn("get kill mode state failed", { error: e });
     return null;
   }
 }
@@ -334,6 +359,9 @@ export function getChannelForNotificationType(
     case "team_chat_message":
       return NotificationChannel.MESSAGES;
 
+    case "mission_active":
+      return NotificationChannel.MISSION_ACTIVE;
+
     case "dispatch_completed":
     case "stats":
     case "info":
@@ -352,7 +380,7 @@ export async function getChannelSettings(
   channel: NotificationChannel
 ): Promise<Notifications.NotificationChannel | null> {
   if (Platform.OS !== "android") {
-    console.warn("⚠️ Canaux disponibles uniquement sur Android");
+    log.warn("channels only available on android");
     return null;
   }
 
@@ -362,7 +390,7 @@ export async function getChannelSettings(
     );
     return channelConfig;
   } catch (error) {
-    console.error("❌ Impossible de récupérer les infos du canal:", error);
+    log.error("get channel settings failed", { error });
     return null;
   }
 }
@@ -383,12 +411,12 @@ export async function getChannelSettings(
  */
 export async function requestCriticalAlertsPermission(): Promise<boolean> {
   if (Platform.OS !== "ios") {
-    console.log("ℹ️ Critical Alerts uniquement sur iOS");
+    log.info("critical alerts only on ios");
     return true; // Pas nécessaire sur Android
   }
 
   try {
-    console.log("🔔 Demande permission Critical Alerts iOS...");
+    log.info("requesting critical alerts permission ios");
 
     const { status } = await Notifications.requestPermissionsAsync({
       ios: {
@@ -402,14 +430,14 @@ export async function requestCriticalAlertsPermission(): Promise<boolean> {
     });
 
     if (status === "granted") {
-      console.log("✅ Permissions notifications accordées");
+      log.success("notification permissions granted");
       return true;
     } else {
-      console.warn("⚠️ Permissions notifications refusées");
+      log.warn("notification permissions denied");
       return false;
     }
   } catch (error) {
-    console.error("❌ Erreur permission Critical Alerts:", error);
+    log.error("critical alerts permission failed", { error });
     return false;
   }
 }
@@ -436,7 +464,7 @@ export async function areCriticalAlertsAvailable(): Promise<boolean> {
 
     return false;
   } catch (error) {
-    console.log("ℹ️ Critical Alerts non disponibles (entitlement manquant)");
+    log.info("critical alerts not available (missing entitlement)");
     return false;
   }
 }

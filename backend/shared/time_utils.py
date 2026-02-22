@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Tuple, Union
 from zoneinfo import ZoneInfo
 
-import pytz  # pyright: ignore[reportMissingModuleSource]
+import pytz
 
 # ---------------------------------------------------------------------------
 # MODE NAÏF LOCAL (Europe/Zurich implicite) - AUCUNE CONVERSION UTC
@@ -131,10 +131,49 @@ __all__ = [
     "minutes_between_local",
     "minutes_from_now_local",
     "now_local",
+    "parse_iso8601",
     "parse_local_naive",
     "sort_key_local",
     "split_date_time_local",
 ]
+
+
+def parse_iso8601(dt_string: str | None) -> datetime | None:
+    """Parse une chaîne ISO8601 avec timezone en datetime aware.
+
+    Supporte les formats:
+    - 2026-02-04T14:30:00Z
+    - 2026-02-04T14:30:00+01:00
+    - 2026-02-04T14:30:00.123456+01:00
+    - 2026-02-04 14:30:00 (sans TZ, interprété comme LOCAL_TZ)
+
+    Args:
+        dt_string: Chaîne ISO8601 ou None
+
+    Returns:
+        datetime aware ou None
+    """
+    if not dt_string:
+        return None
+
+    try:
+        s = dt_string.strip()
+
+        # Normaliser espace en T
+        if " " in s and "T" not in s:
+            s = s.replace(" ", "T")
+
+        # Parser ISO8601
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+        # Si naïf, assumer LOCAL_TZ
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=LOCAL_TZ)
+
+        return dt
+
+    except (ValueError, TypeError):
+        return None
 
 
 # RÉTRO-COMPAT UTC : **ici, on corrige pour du vrai UTC aware**

@@ -9,11 +9,13 @@ import {
   PanResponder,
   Animated,
   Platform,
+  Linking,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { getTripDetails, Booking } from "@/services/api";
 import { Loader } from "@/components/ui/Loader";
-import { styles } from "@/styles/tripDetailsStyles";
-import { Ionicons } from "@expo/vector-icons";
+import { styles as s, palette } from "@/styles/tripDetailsStyles";
+import { openNavigation } from "@/services/deepLinks";
 
 type Props = {
   visible: boolean;
@@ -21,373 +23,426 @@ type Props = {
   onClose: () => void;
 };
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("fr-CH", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("fr-CH", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} sec`;
+  const m = Math.ceil(seconds / 60);
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm > 0 ? `${h}h${String(rm).padStart(2, "0")}` : `${h}h`;
+}
+
+function civilityLabel(gender?: string): string {
+  if (!gender) return "";
+  switch (gender.toUpperCase()) {
+    case "HOMME": return "Monsieur";
+    case "FEMME": return "Madame";
+    default: return "";
+  }
+}
+
+type StatusInfo = { label: string; color: string };
+function statusInfo(raw: string): StatusInfo {
+  switch ((raw || "").toUpperCase()) {
+    case "ASSIGNED": return { label: "Assignée", color: "#0A7F59" };
+    case "EN_ROUTE": return { label: "En route", color: "#D97706" };
+    case "IN_PROGRESS": return { label: "Client à bord", color: "#2563EB" };
+    case "COMPLETED":
+    case "RETURN_COMPLETED": return { label: "Terminée", color: palette.secondary };
+    case "CANCELED":
+    case "CANCELLED": return { label: "Annulée", color: "#DC2626" };
+    default: return { label: raw || "–", color: palette.secondary };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
 export default function TripDetailsModal({ visible, tripId, onClose }: Props) {
   const [trip, setTrip] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const pan = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(1)).current;
 
-  const fetchTripDetails = async () => {
-    if (!tripId) return;
-
-    setLoading(true);
-    try {
-      const details = await getTripDetails(tripId);
-      setTrip(details);
-    } catch {
-      Alert.alert("Erreur", "Impossible de charger les détails du trajet.");
-      onClose();
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (visible && tripId) {
-      fetchTripDetails();
-      // Réinitialiser la position du modal et l'opacité de l'overlay
+      setLoading(true);
       pan.setValue(0);
       overlayOpacity.setValue(1);
+      getTripDetails(tripId)
+        .then(setTrip)
+        .catch(() => {
+          Alert.alert("Erreur", "Impossible de charger les détails.");
+          onClose();
+        })
+        .finally(() => setLoading(false));
     }
   }, [visible, tripId]);
 
-  // Gestionnaire de swipe down pour fermer
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Activer seulement si on glisse vers le bas (dy > 0)
-        return gestureState.dy > 5;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Permettre seulement le glissement vers le bas
-        if (gestureState.dy > 0) {
-          pan.setValue(gestureState.dy);
-          // Fade out progressif de l'overlay : transparent à 30% (150px)
-          const opacity = Math.max(0, 1 - gestureState.dy / 150);
-          overlayOpacity.setValue(opacity);
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 10,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) {
+          pan.setValue(g.dy);
+          overlayOpacity.setValue(Math.max(0, 1 - g.dy / 150));
         }
       },
-      onPanResponderRelease: (_, gestureState) => {
-        // Si on a glissé plus de 100px vers le bas, fermer le modal
-        if (gestureState.dy > 100) {
-          // Animation de fermeture smooth avec fade out de l'overlay
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100) {
           Animated.parallel([
-            Animated.timing(pan, {
-              toValue: 500,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-            Animated.timing(overlayOpacity, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }),
-          ]).start(() => {
-            onClose();
-          });
+            Animated.timing(pan, { toValue: 500, duration: 250, useNativeDriver: true }),
+            Animated.timing(overlayOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+          ]).start(onClose);
         } else {
-          // Sinon, revenir à la position initiale
           Animated.parallel([
-            Animated.spring(pan, {
-              toValue: 0,
-              useNativeDriver: true,
-            }),
-            Animated.spring(overlayOpacity, {
-              toValue: 1,
-              useNativeDriver: true,
-            }),
+            Animated.spring(pan, { toValue: 0, useNativeDriver: true }),
+            Animated.spring(overlayOpacity, { toValue: 1, useNativeDriver: true }),
           ]).start();
         }
       },
-    })
+    }),
   ).current;
 
+  const callPhone = (phone: string) => {
+    if (Platform.OS === "web") {
+      (window as any).open(`tel:${phone}`);
+    } else {
+      Linking.openURL(`tel:${phone}`);
+    }
+  };
+
+  const st = trip ? statusInfo(trip.status) : null;
+  const civility = trip?.client?.gender ? civilityLabel(trip.client.gender) : "";
+  const clientDisplay = trip?.client?.full_name || trip?.client_name || trip?.customer_name || "Client";
+  const clientPhone = trip?.client?.contact_phone || trip?.client?.phone || trip?.client_phone;
+
+  const hasPickupAccess = !!(trip?.pickup_access_notes || trip?.client?.door_code || trip?.client?.floor || trip?.client?.access_notes);
+  const hasDropoffAccess = !!trip?.dropoff_access_notes;
+  const hasMedical = !!(trip?.medical_facility || trip?.doctor_name || trip?.hospital_service);
+  const hasWheelchair = !!(trip?.wheelchair_client_has || trip?.wheelchair_need);
+  const hasNotes = !!(trip?.notes_medical || trip?.notes);
+  const isDelivery = trip?.mission_type === "material_delivery";
+
   return (
-    <Modal
-      transparent
-      animationType="slide"
-      visible={visible}
-      onRequestClose={onClose}
-    >
+    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        {/* Overlay sombre avec animation */}
-        <Animated.View
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            opacity: overlayOpacity,
-          }}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={onClose}
-            style={{ flex: 1 }}
-          />
+        <Animated.View style={[s.overlay, { opacity: overlayOpacity }]}>
+          <TouchableOpacity activeOpacity={1} onPress={onClose} style={{ flex: 1 }} />
         </Animated.View>
 
-        {/* Modal qui vient du bas */}
-        <Animated.View
-          style={{
-            backgroundColor: "#FFFFFF",
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            height: "80%",
-            maxHeight: "85%",
-            ...(Platform.OS === "web"
-              ? { boxShadow: "0 -3px 10px rgba(0,0,0,0.3)" }
-              : {
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: -3 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 10,
-                  elevation: 10,
-                }),
-            transform: [{ translateY: pan }],
-          }}
-          {...panResponder.panHandlers}
-        >
-          {/* Indicateur de swipe (petite barre en haut) */}
-          <View
-            style={{
-              alignItems: "center",
-              paddingVertical: 8,
-            }}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 5,
-                backgroundColor: "#D0D0D0",
-                borderRadius: 3,
-              }}
-            />
+        <Animated.View style={[s.sheet, { transform: [{ translateY: pan }] }]}>
+          {/* Handle — swipe-down zone */}
+          <View style={s.handle} {...panResponder.panHandlers}>
+            <View style={s.handleBar} />
           </View>
 
-          {/* Header avec bouton fermer */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingHorizontal: 16,
-              paddingBottom: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: "#E0E0E0",
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "700", color: "#104F55" }}>
-              Détails du trajet {tripId ? `#${tripId}` : ""}
+          {/* Header */}
+          <View style={s.header}>
+            <Text style={s.headerTitle}>
+              Détails de la course
             </Text>
-            <TouchableOpacity onPress={onClose} style={{ padding: 8 }}>
-              <Ionicons name="close" size={28} color="#666" />
+            <TouchableOpacity onPress={onClose} style={s.headerClose}>
+              <Ionicons name="close" size={22} color={palette.secondary} />
             </TouchableOpacity>
           </View>
 
           {loading || !trip ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", minHeight: 200 }}>
               <Loader />
             </View>
           ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 16 }}
-            >
-              {/* Client */}
-              <View style={styles.section}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>Client :</Text>
-                  <Text style={styles.value}>{trip.client_name || "Non spécifié"}</Text>
-                </View>
-                {trip.client?.birth_date && (
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.label}>Date de naissance :</Text>
-                    <Text style={styles.value}>
-                      {new Date(trip.client.birth_date).toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                      })}
+            <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+
+              {/* ══════ STATUT + HORAIRE ══════ */}
+              <View style={s.section}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={s.rowLabel}>Horaire prévu</Text>
+                    <Text style={s.rowValue}>
+                      {formatDate(trip.scheduled_time)} — {formatTime(trip.scheduled_time)}
                     </Text>
+                  </View>
+                  <Text style={[s.statusInline, { color: st!.color }]}>{st!.label}</Text>
+                </View>
+
+                {(trip.distance_meters || trip.duration_seconds) && (
+                  <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
+                    {trip.distance_meters != null && trip.distance_meters > 0 && (
+                      <Text style={s.rowValueSecondary}>
+                        {(trip.distance_meters / 1000).toFixed(1)} km
+                      </Text>
+                    )}
+                    {trip.duration_seconds != null && trip.duration_seconds > 0 && (
+                      <Text style={s.rowValueSecondary}>
+                        {formatDuration(trip.duration_seconds)}
+                      </Text>
+                    )}
+                    {trip.is_return && (
+                      <Text style={[s.rowValueSecondary, { color: palette.alertText }]}>Retour</Text>
+                    )}
                   </View>
                 )}
               </View>
 
-              {/* Lieux */}
-              <View style={styles.section}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>De :</Text>
-                  <Text style={styles.value}>{trip.pickup_location || "Non spécifié"}</Text>
-                </View>
-              </View>
-              <View style={styles.section}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>Vers :</Text>
-                  <Text style={styles.value}>{trip.dropoff_location || "Non spécifié"}</Text>
-                </View>
-              </View>
-
-              {/* Horaires */}
-              <View style={styles.section}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>Heure prévue :</Text>
-                  <Text style={styles.value}>
-                    {new Date(trip.scheduled_time).toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Distance / Durée - Montant masqué pour les chauffeurs */}
-
-              {trip.distance_meters && (
-                <View style={styles.section}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.label}>Distance :</Text>
-                    <Text style={styles.value}>
-                      {(trip.distance_meters / 1000).toFixed(1)} km
+              {/* ══════ LIVRAISON ══════ */}
+              {isDelivery && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>Livraison</Text>
+                  <View style={s.sectionCard}>
+                    <Text style={s.rowValue}>
+                      {trip.delivery_description || "Livraison de matériel"}
                     </Text>
                   </View>
                 </View>
               )}
 
-              {trip.duration_seconds && (
-                <View style={styles.section}>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.label}>Durée :</Text>
-                    <Text style={styles.value}>
-                      {Math.ceil(trip.duration_seconds / 60)} min
-                    </Text>
+              {/* ══════ CLIENT ══════ */}
+              {!isDelivery && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>Client</Text>
+                  <View style={s.sectionCard}>
+                    {civility !== "" && (
+                      <Text style={s.rowLabel}>{civility}</Text>
+                    )}
+                    <Text style={s.rowValue}>{clientDisplay}</Text>
+
+                    {trip.client?.birth_date && (
+                      <Text style={s.rowValueSecondary}>
+                        Né(e) le {new Date(trip.client.birth_date).toLocaleDateString("fr-CH", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                        })}
+                      </Text>
+                    )}
+
+                    {clientPhone && (
+                      <TouchableOpacity
+                        style={{ flexDirection: "row", alignItems: "center", marginTop: 6, gap: 6 }}
+                        onPress={() => callPhone(clientPhone)}
+                      >
+                        <Ionicons name="call-outline" size={14} color={palette.accent} />
+                        <Text style={[s.rowValue, { color: palette.accent, fontSize: 13 }]}>
+                          {clientPhone}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               )}
 
-              {/* Infos médicales */}
-              {(trip.medical_facility ||
-                trip.doctor_name ||
-                trip.hospital_service) && (
-                <View
+              {/* ══════ TRAJET ══════ */}
+              <View style={s.section}>
+                <Text style={s.sectionTitle}>Trajet</Text>
+                <View style={s.routeBlock}>
+                  {/* Pickup */}
+                  <View style={s.routeRow}>
+                    <View style={s.routeIndicator}>
+                      <View style={[s.routeDot, { backgroundColor: palette.accent }]} />
+                    </View>
+                    <View style={s.routeTextWrap}>
+                      <Text style={s.rowLabel}>Prise en charge</Text>
+                      <Text style={s.rowValue}>{trip.pickup_location || "–"}</Text>
+                    </View>
+                  </View>
+
+                  {/* Pickup access */}
+                  {hasPickupAccess && (
+                    <View style={s.accessRow}>
+                      <Ionicons name="key-outline" size={12} color={palette.accent} style={{ marginRight: 6, marginTop: 1 }} />
+                      <View style={{ flex: 1 }}>
+                        {trip.client?.floor && (
+                          <Text style={s.accessText}>Étage {trip.client.floor}</Text>
+                        )}
+                        {trip.client?.door_code && (
+                          <Text style={s.accessText}>Code : {trip.client.door_code}</Text>
+                        )}
+                        {trip.client?.access_notes && (
+                          <Text style={s.accessText}>{trip.client.access_notes}</Text>
+                        )}
+                        {trip.pickup_access_notes && (
+                          <Text style={s.accessText}>{trip.pickup_access_notes}</Text>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Line */}
+                  <View style={{ alignItems: "flex-start", paddingLeft: 3.25 }}>
+                    <View style={s.routeLine} />
+                  </View>
+
+                  {/* Dropoff */}
+                  <View style={s.routeRow}>
+                    <View style={s.routeIndicator}>
+                      <View style={[s.routeDotSquare, { backgroundColor: palette.text }]} />
+                    </View>
+                    <View style={s.routeTextWrap}>
+                      <Text style={s.rowLabel}>Destination</Text>
+                      <Text style={s.rowValue}>{trip.dropoff_location || "–"}</Text>
+                    </View>
+                  </View>
+
+                  {/* Dropoff access */}
+                  {hasDropoffAccess && (
+                    <View style={s.accessRow}>
+                      <Ionicons name="key-outline" size={12} color={palette.accent} style={{ marginRight: 6, marginTop: 1 }} />
+                      <Text style={[s.accessText, { flex: 1 }]}>{trip.dropoff_access_notes}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Navigate button */}
+                <TouchableOpacity
                   style={{
-                    marginTop: 16,
-                    padding: 12,
-                    backgroundColor: "#E3F2FD",
-                    borderRadius: 8,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 10,
+                    paddingVertical: 10,
+                    backgroundColor: "rgba(10,127,89,0.06)",
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: "rgba(10,127,89,0.15)",
+                    gap: 6,
+                  }}
+                  onPress={() => {
+                    const upper = (trip.status || "").toUpperCase();
+                    const dest = upper === "IN_PROGRESS"
+                      ? trip.dropoff_location
+                      : trip.pickup_location;
+                    if (dest) openNavigation(dest);
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "700",
-                      color: "#004085",
-                      marginBottom: 8,
-                    }}
-                  >
-                    🏥 Informations médicales
+                  <Ionicons name="navigate-outline" size={16} color={palette.accent} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: palette.accent }}>
+                    Ouvrir dans la navigation
                   </Text>
-                  {trip.medical_facility && (
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: "#004085",
-                        marginBottom: 4,
-                      }}
-                    >
-                      📍 {trip.medical_facility}
-                    </Text>
-                  )}
-                  {trip.doctor_name && (
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: "#004085",
-                        marginBottom: 4,
-                      }}
-                    >
-                      👨‍⚕️ Dr {trip.doctor_name}
-                    </Text>
-                  )}
-                  {trip.hospital_service && (
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        color: "#004085",
-                        marginBottom: 4,
-                      }}
-                    >
-                      🚪 {trip.hospital_service}
-                    </Text>
-                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* ══════ INFORMATIONS MÉDICALES ══════ */}
+              {hasMedical && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>Informations médicales</Text>
+                  <View style={s.sectionCard}>
+                    {trip.medical_facility && (
+                      <View style={s.row}>
+                        <View style={s.rowIcon}>
+                          <Ionicons name="business-outline" size={14} color={palette.secondary} />
+                        </View>
+                        <View style={s.rowContent}>
+                          <Text style={s.rowLabel}>Établissement</Text>
+                          <Text style={s.rowValue}>{trip.medical_facility}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {trip.doctor_name && (
+                      <View style={s.row}>
+                        <View style={s.rowIcon}>
+                          <Ionicons name="person-outline" size={14} color={palette.secondary} />
+                        </View>
+                        <View style={s.rowContent}>
+                          <Text style={s.rowLabel}>Médecin</Text>
+                          <Text style={s.rowValue}>Dr {trip.doctor_name}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {trip.hospital_service && (
+                      <View style={s.row}>
+                        <View style={s.rowIcon}>
+                          <Ionicons name="medkit-outline" size={14} color={palette.secondary} />
+                        </View>
+                        <View style={s.rowContent}>
+                          <Text style={s.rowLabel}>Service</Text>
+                          <Text style={s.rowValue}>{trip.hospital_service}</Text>
+                        </View>
+                      </View>
+                    )}
+                    {trip.client?.gp_phone && (
+                      <TouchableOpacity
+                        style={[s.row, { marginTop: 2 }]}
+                        onPress={() => callPhone(trip.client!.gp_phone!)}
+                      >
+                        <View style={s.rowIcon}>
+                          <Ionicons name="call-outline" size={14} color={palette.accent} />
+                        </View>
+                        <View style={s.rowContent}>
+                          <Text style={s.rowLabel}>Médecin traitant</Text>
+                          <Text style={[s.rowValue, { color: palette.accent, fontSize: 13 }]}>
+                            {trip.client.gp_phone}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               )}
 
-              {/* Options chaise roulante */}
-              {(trip.wheelchair_client_has || trip.wheelchair_need) && (
-                <View
-                  style={{
-                    marginTop: 12,
-                    padding: 12,
-                    backgroundColor: "#FFF3CD",
-                    borderRadius: 8,
-                  }}
-                >
+              {/* ══════ PMR / FAUTEUIL ROULANT ══════ */}
+              {hasWheelchair && (
+                <View style={s.section}>
                   {trip.wheelchair_client_has && (
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "700",
-                        color: "#856404",
-                        marginBottom: 4,
-                      }}
-                    >
-                      ♿ Client en chaise roulante
-                    </Text>
+                    <View style={s.alertBlock}>
+                      <Ionicons name="alert-circle-outline" size={16} color={palette.alertText} />
+                      <Text style={s.alertText}>Client en fauteuil roulant</Text>
+                    </View>
                   )}
                   {trip.wheelchair_need && (
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: "700",
-                        color: "#856404",
-                      }}
-                    >
-                      🏥 Prendre une chaise roulante
-                    </Text>
+                    <View style={s.alertBlock}>
+                      <Ionicons name="alert-circle-outline" size={16} color={palette.alertText} />
+                      <Text style={s.alertText}>Fauteuil roulant à prévoir</Text>
+                    </View>
                   )}
                 </View>
               )}
 
-              {trip.notes_medical && (
-                <View style={{ marginTop: 12 }}>
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: "#616161",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    📝 Notes : {trip.notes_medical}
-                  </Text>
+              {/* ══════ NOTES ══════ */}
+              {hasNotes && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>Notes</Text>
+                  <View style={s.sectionCard}>
+                    {trip.notes_medical && (
+                      <Text style={s.notesText}>{trip.notes_medical}</Text>
+                    )}
+                    {trip.notes && trip.notes !== trip.notes_medical && (
+                      <Text style={[s.notesText, trip.notes_medical ? { marginTop: 6 } : undefined]}>
+                        {trip.notes}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               )}
 
-              {/* Statut */}
-              <View style={[styles.section, { marginTop: 16 }]}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.label}>Statut :</Text>
-                  <Text style={[styles.value, { color: "#00796B" }]}>
-                    {trip.status || "Non spécifié"}
-                  </Text>
+              {/* ══════ ENTREPRISE ══════ */}
+              {trip.company_name && (
+                <View style={s.section}>
+                  <Text style={s.sectionTitle}>Entreprise</Text>
+                  <Text style={s.rowValueSecondary}>{trip.company_name}</Text>
                 </View>
-              </View>
+              )}
+
             </ScrollView>
           )}
         </Animated.View>

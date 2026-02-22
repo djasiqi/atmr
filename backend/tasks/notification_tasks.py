@@ -124,12 +124,32 @@ def send_push_notification_task(  # noqa: PLR0911
             # ✅ CORRECTIF #3: Utiliser DeviceToken pour support multi-device
             from models import DeviceToken
 
-            device_tokens = DeviceToken.query.filter_by(
+            device_tokens_raw = DeviceToken.query.filter_by(
                 driver_id=driver_id,
                 is_active=True,
             ).all()
 
-            if not device_tokens:
+            # ✅ FIX: Extraire les données AVANT de fermer la session DB
+            # pour éviter les connexions stale pendant les opérations longues (push)
+            device_tokens_data = [
+                {
+                    "id": dt.id,
+                    "token": dt.token,
+                    "platform": getattr(dt, "platform", None),
+                    "provider": getattr(dt, "provider", "expo"),
+                }
+                for dt in device_tokens_raw
+                if dt.token
+            ]
+
+            # ✅ FIX: Fermer la session DB AVANT les opérations longues (push avec retries)
+            # Cela évite les erreurs "server closed the connection unexpectedly"
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                db.session.commit()  # Commit pour s'assurer que tout est persisté
+
+            if not device_tokens_data:
                 logger.warning(
                     "[notification_task] No active push tokens for driver %s, using fallback",
                     driver_id,
@@ -140,7 +160,7 @@ def send_push_notification_task(  # noqa: PLR0911
                     self.request.retries + 1,
                     MAX_PUSH_RETRIES,
                     driver_id,
-                    len(device_tokens),
+                    len(device_tokens_data),
                 )
 
                 # P0.4: Recipient proof logging (DEBUG_NOTIF_ROUTING)
@@ -150,14 +170,14 @@ def send_push_notification_task(  # noqa: PLR0911
                         log_push_recipient_proof,
                     )
 
-                    token_hashes = [_token_hash(dt.token) for dt in device_tokens if dt.token]
+                    token_hashes = [_token_hash(dt["token"]) for dt in device_tokens_data]
                     log_push_recipient_proof(
                         trace_id=data.get("trace_id") if data else None,
                         booking_id=data.get("booking_id") if data else None,
                         status=data.get("status") if data else None,
                         recipient_role="driver",
                         recipient_id=driver_id,
-                        token_count=len(device_tokens),
+                        token_count=len(device_tokens_data),
                         token_hashes=token_hashes,
                         collapse_key=data.get("collapse_key") if data else None,
                         dedupe_key=data.get("dedupe_key") if data else None,
@@ -171,17 +191,20 @@ def send_push_notification_task(  # noqa: PLR0911
                     pass
 
                 # Envoyer à tous les devices actifs
+                # ✅ FIX: Utiliser les données extraites (pas les objets ORM)
                 success_count = 0
-                invalid_tokens = []
+                invalid_token_ids = []
                 last_result: Dict[str, Any] | None = None
-                for device_token in device_tokens:
+                for device_token in device_tokens_data:
                     result = send_push_message(
-                        token=device_token.token,
+                        token=device_token["token"],
                         title=title,
                         body=body,
                         data=data,
                         driver_id=driver_id,
                         bypass_rate_limit=bypass_rate_limit,
+                        provider=device_token.get("provider"),
+                        platform=device_token.get("platform"),
                     )
                     last_result = (
                         result  # Garder le dernier résultat pour logging/retry
@@ -192,31 +215,40 @@ def send_push_notification_task(  # noqa: PLR0911
                         logger.debug(
                             "[notification_task] Push sent to driver %s (device %s)",
                             driver_id,
-                            device_token.id,
+                            device_token["id"],
                         )
                     else:
                         error = result.get("error", "Unknown error")
                         logger.warning(
                             "[notification_task] Push failed for driver %s (device %s): %s",
                             driver_id,
-                            device_token.id,
+                            device_token["id"],
                             error,
                         )
 
                         # Si token invalide, marquer pour invalidation
                         if result.get("token_invalid"):
-                            invalid_tokens.append(device_token)
+                            invalid_token_ids.append(device_token["id"])
 
-                # Invalider les tokens invalides
-                if invalid_tokens:
-                    for device_token in invalid_tokens:
-                        device_token.is_active = False
-                    db.session.commit()
-                    logger.warning(
-                        "[notification_task] %d tokens invalidés pour driver %s",
-                        len(invalid_tokens),
-                        driver_id,
-                    )
+                # ✅ FIX: Invalider les tokens invalides avec une nouvelle requête DB
+                # (la connexion précédente peut être stale après les opérations longues)
+                if invalid_token_ids:
+                    try:
+                        DeviceToken.query.filter(
+                            DeviceToken.id.in_(invalid_token_ids)
+                        ).update({"is_active": False}, synchronize_session=False)
+                        db.session.commit()
+                        logger.warning(
+                            "[notification_task] %d tokens invalidés pour driver %s",
+                            len(invalid_token_ids),
+                            driver_id,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "[notification_task] Failed to invalidate tokens (stale connection?): %s",
+                            str(e)[:200],
+                        )
+                        # Ne pas échouer la tâche pour ça, les tokens seront invalidés au prochain essai
 
                 # Si au moins un envoi a réussi, considérer comme succès
                 if success_count > 0:
@@ -224,19 +256,19 @@ def send_push_notification_task(  # noqa: PLR0911
                         "[notification_task] Push sent successfully to driver %s (%d/%d devices)",
                         driver_id,
                         success_count,
-                        len(device_tokens),
+                        len(device_tokens_data),
                     )
                     return {
                         "ok": True,
                         "channel": "push",
                         "attempts": self.request.retries + 1,
                         "devices_sent": success_count,
-                        "devices_total": len(device_tokens),
+                        "devices_total": len(device_tokens_data),
                     }
 
                 # Tous les envois ont échoué
                 # Si tous les tokens sont invalides, passer directement au fallback
-                if len(invalid_tokens) == len(device_tokens):
+                if len(invalid_token_ids) == len(device_tokens_data):
                     logger.warning(
                         "[notification_task] Tous les tokens invalides pour driver %s, skip retry",
                         driver_id,
@@ -246,7 +278,7 @@ def send_push_notification_task(  # noqa: PLR0911
 
                 # Au moins un token valide mais échec réseau → retry
                 # Utiliser le dernier résultat pour déterminer le type d'erreur
-                # Note: last_result est toujours défini car device_tokens n'est pas vide et la boucle s'est exécutée
+                # Note: last_result est toujours défini car device_tokens_data n'est pas vide et la boucle s'est exécutée
                 if last_result:
                     error = last_result.get("error", "Unknown error")
 
@@ -387,6 +419,16 @@ def send_push_company_notification_task(
             (data or {}).get("trace_id"),
             (data or {}).get("routing_decision"),
         )
+
+    # Guard centralise : bloquer self-notification (company est l'acteur)
+    actor_role = data.get("actor_role") if data else None
+    actor_id = data.get("actor_id") if data else None
+    if actor_role == "company" and actor_id is not None and str(actor_id) == str(company_id):
+        logger.info(
+            "[notification_task] GUARD: self-notification blocked (company %s is actor)",
+            company_id,
+        )
+        return {"ok": True, "skipped": "self-notification blocked"}
 
     app = get_flask_app()
     with app.app_context():

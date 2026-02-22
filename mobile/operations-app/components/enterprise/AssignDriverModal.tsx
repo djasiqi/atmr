@@ -13,7 +13,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import type { RideSummary, DriverSuggestion } from "@/types/enterpriseDispatch";
 import { shadowPresets } from "@/styles/shadowStyles";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("AssignDriver");
 // ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
     modalOverlay: "rgba(21,54,43,0.75)",
@@ -55,13 +57,13 @@ export function AssignDriverModal({
 }: AssignDriverModalProps) {
     // ✅ Vérifier que onAssign est bien défini
     const handleAssign = React.useCallback((driverId: string) => {
-        console.log("[AssignDriverModal] handleAssign appelé:", { driverId, rideId: ride?.id, hasOnAssign: !!onAssign });
+        log.info("handleAssign called", { driverId, rideId: ride?.id, hasOnAssign: !!onAssign });
         if (!onAssign) {
-            console.error("[AssignDriverModal] onAssign n'est pas défini!");
+            log.error("onAssign not defined", {});
             return;
         }
         if (assigning) {
-            console.log("[AssignDriverModal] Assignation déjà en cours, ignoré");
+            log.info("assign already in progress, ignored", {});
             return;
         }
         onAssign(driverId);

@@ -1,24 +1,176 @@
-/* Styles spécifiques pour les options radio (le reste utilise les classes communes) */
+/* DeleteConfirmModal — Sobre, cohérent avec le design système */
 
-.optionsGroup {
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.1s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--bg-primary, #fff);
+  border-radius: 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 380px;
+  overflow: hidden;
+  animation: slideUp 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.title {
+  margin: 0;
+  padding: 16px 18px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+}
+
+.message {
+  margin: 0;
+  padding: 6px 18px 14px;
+  font-size: 12px;
+  color: var(--text-tertiary, #64748b);
+  line-height: 1.5;
+}
+
+.message strong {
+  color: var(--text-primary, #1e293b);
+}
+
+/* Radio options */
+.options {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
+  gap: 6px;
+  padding: 0 18px 16px;
 }
 
-.optionLabel {
+.option {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  border: 2px solid var(--border-primary);
-  border-radius: var(--radius-md);
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
   cursor: pointer;
-  transition: var(--transition-base);
+  transition: all 0.12s ease;
 }
 
-.optionLabel:hover {
-  border-color: var(--border-secondary);
-  background: var(--bg-tertiary);
+.option:hover {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.optionActive {
+  border-color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+}
+
+.optionActiveDanger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.radio {
+  margin: 2px 0 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brand-primary, #00796b);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.optionActiveDanger .radio {
+  accent-color: #dc2626;
+}
+
+.optionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.optionTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+}
+
+.optionHint {
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.optionHintDanger {
+  font-size: 11px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn,
+.confirmBtn {
+  flex: 1;
+  height: 38px;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  border: none;
+  background: var(--bg-primary, #fff);
+}
+
+.cancelBtn {
+  color: var(--text-tertiary, #94a3b8);
+  border-right: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn:hover {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.confirmBtnDefault {
+  color: var(--brand-primary, #00796b);
+}
+
+.confirmBtnDefault:hover {
+  background: #f0fdfa;
+}
+
+.confirmBtnDanger {
+  color: #dc2626;
+}
+
+.confirmBtnDanger:hover {
+  background: #fef2f2;
+}
+
+.cancelBtn:disabled,
+.confirmBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

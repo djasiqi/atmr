@@ -1,7 +1,6 @@
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../hooks/useAuthToken';
 import { SOCKET_CONFIG, SOCKET_PATH, getSocketTransports, isDevelopmentLocalhost } from '../config/socketConfig';
-import { sendDebugLog } from '../utils/debugLogger';
 
 let socket = null;
 let connectPromise = null;
@@ -148,10 +147,7 @@ function buildSocketOptions() {
     // 🔒 Auth dynamique : sera rappelé à chaque (re)connexion
     // ✅ Support cookies httpOnly : si pas de token dans localStorage, utiliser uniquement les cookies
     auth: (cb) => {
-      // #region agent log
       const token = getAccessToken();
-      sendDebugLog({location:'companySocket.js:buildSocketOptions',message:'Token before auth callback',data:{has_token:!!token,token_length:token?token.length:0,token_preview:token?token.substring(0,20)+'...':null,using_cookies:!token},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'});
-      // #endregion
       // ✅ Si token disponible (mode mobile), l'envoyer dans le payload
       // ✅ Sinon, envoyer objet vide pour utiliser uniquement les cookies httpOnly (mode web)
       if (token) {
@@ -160,9 +156,6 @@ function buildSocketOptions() {
         // Mode cookies httpOnly : ne pas envoyer de payload auth, le serveur lira les cookies
         cb({});
       }
-      // #region agent log
-      sendDebugLog({location:'companySocket.js:buildSocketOptions',message:'Auth callback called',data:{token_sent:!!token,using_cookies:!token},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'});
-      // #endregion
     },
   };
 }
@@ -186,14 +179,7 @@ export function getCompanySocket() {
         const socketUrl = getSocketUrl();
         // eslint-disable-next-line no-console
         console.log('[CompanySocket] Connexion à:', socketUrl, 'avec path:', socketOptions.path);
-        // #region agent log
-        sendDebugLog({location:'companySocket.js:getCompanySocket',message:'Creating socket connection',data:{api_url:socketUrl,socket_path:socketOptions.path,is_dev:isDevelopmentLocalhost(),env_socket_url:process.env.REACT_APP_SOCKET_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'H'});
-        // #endregion
         socket = io(socketUrl, socketOptions);
-        
-        // #region agent log
-        sendDebugLog({location:'companySocket.js:getCompanySocket',message:'Socket.IO instance created',data:{socket_url:socketUrl,socket_path:socketOptions.path,transports:socketOptions.transports,has_auth:typeof socketOptions.auth === 'function',socket_id:socket?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'});
-        // #endregion
 
         socket.on('connect', () => {
           // ✅ Logs structurés
@@ -305,11 +291,6 @@ export function getCompanySocket() {
         });
 
         socket.on('connect_error', (err) => {
-          // #region agent log
-          const errorDescription = err?.description;
-          const upgradeError = typeof errorDescription === 'string' ? errorDescription.includes('upgrade') : false;
-          sendDebugLog({location:'companySocket.js:connect_error',message:'Connection error received',data:{error_message:err?.message||String(err),error_type:err?.type,error_description:errorDescription,error_description_type:typeof errorDescription,has_token:!!getAccessToken(),transport:socket.io.engine?.transport?.name,upgrade_error:upgradeError,socket_url:socketUrl,socket_path:socketOptions.path,current_transport:socket.io?.engine?.transport?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'});
-          // #endregion
           const msg = err?.message || err?.description || (err?.data && err.data.message) || String(err || '');
           console.error(JSON.stringify({
             event: 'socket_connect_error',
@@ -330,9 +311,6 @@ export function getCompanySocket() {
         });
 
         socket.on('unauthorized', (err) => {
-          // #region agent log
-          sendDebugLog({location:'companySocket.js:unauthorized',message:'Unauthorized event received',data:{error:err?.error||String(err),error_type:typeof err,has_token:!!getAccessToken()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'});
-          // #endregion
           console.error(JSON.stringify({
             event: 'socket_unauthorized',
             error: err?.error || String(err),

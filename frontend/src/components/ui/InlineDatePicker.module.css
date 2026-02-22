@@ -1,0 +1,200 @@
+/* ── Field row: input + icon button ── */
+.field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input {
+  width: 100% !important;
+  min-width: 110px;
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 32px 0 10px !important;
+  font-size: 13px !important;
+  box-sizing: border-box;
+}
+
+.input::selection {
+  background: transparent;
+  color: #b0b8c4;
+}
+
+.iconBtn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-tertiary, #9ca3af);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.iconBtn:hover {
+  color: var(--brand-primary, #00796b);
+}
+
+/* ── Popover (portalled to body) ── */
+.popover {
+  position: absolute;
+  z-index: 10000;
+  width: 240px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  animation: dpFadeIn 0.15s ease;
+}
+
+@keyframes dpFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Header nav ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.headerTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  text-transform: capitalize;
+}
+
+.navBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #374151);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.navBtn:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+}
+
+/* ── Week header ── */
+.weekRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  margin-bottom: 2px;
+}
+
+.weekDay {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary, #9ca3af);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 2px 0;
+}
+
+/* ── Day grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.emptyCell {
+  aspect-ratio: 1;
+}
+
+.dayCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary, #0f172a);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+}
+
+.dayCell:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+}
+
+.dayCellSelected {
+  background: var(--brand-primary, #00796b) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.dayCellToday {
+  border: 1.5px solid var(--brand-primary, #00796b);
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+}
+
+/* ── Footer ── */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.footerBtn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-primary, #00796b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.12s;
+  font-family: inherit;
+}
+
+.footerBtn:hover {
+  background: var(--brand-primary-lightest, #e0f2f1);
+}
+
+.footerBtnClear {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #9ca3af);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+}
+
+.footerBtnClear:hover {
+  color: var(--color-danger, #dc2626);
+  background: rgba(220, 38, 38, 0.06);
+}

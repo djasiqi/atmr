@@ -3,6 +3,9 @@
  * Évite boucles refresh, spam logs, battery drain quand refresh échoue (401/403/5xx/network).
  */
 
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("RefreshCD");
 const INITIAL_BACKOFF_MS = 30 * 1000; // 30s
 const MAX_BACKOFF_MS = 15 * 60 * 1000; // 15min
 
@@ -43,11 +46,7 @@ export function recordDriverProactiveRefreshFailure(): number {
   driverState.failureCount++;
   const backoff = getBackoffMs(driverState.failureCount);
   driverState.nextAllowedAt = Date.now() + backoff;
-  if (__DEV__) {
-    console.log(
-      `[ProactiveRefresh] Driver cooldown: ${backoff / 1000}s (failure #${driverState.failureCount})`
-    );
-  }
+  log.info("driver cooldown", { backoffSec: backoff / 1000, failureCount: driverState.failureCount });
   return backoff;
 }
 
@@ -55,11 +54,7 @@ export function recordEnterpriseProactiveRefreshFailure(): number {
   enterpriseState.failureCount++;
   const backoff = getBackoffMs(enterpriseState.failureCount);
   enterpriseState.nextAllowedAt = Date.now() + backoff;
-  if (__DEV__) {
-    console.log(
-      `[ProactiveRefresh] Enterprise cooldown: ${backoff / 1000}s (failure #${enterpriseState.failureCount})`
-    );
-  }
+  log.info("enterprise cooldown", { backoffSec: backoff / 1000, failureCount: enterpriseState.failureCount });
   return backoff;
 }
 

@@ -1,5 +1,46 @@
+/* ============================================================
+   RESERVATION TABLE — Table moderne orientée exploitation
+   Statuts visuels, hiérarchie claire, actions rapides
+   ============================================================ */
+
+/* ---- État vide ---- */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  text-align: center;
+  background: var(--bg-primary);
+  border: 2px dashed var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+.emptyIcon {
+  color: var(--text-tertiary);
+  opacity: 0.35;
+  margin-bottom: var(--spacing-md);
+}
+
+.emptyTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.emptySubtitle {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ---- Conteneur table ---- */
+
 .tableContainer {
   background: var(--bg-primary);
+  border: 2px solid var(--border-primary);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow-x: auto;
@@ -8,7 +49,6 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  /* ⚡ Améliore la visibilité de la scrollbar sur desktop */
   scrollbar-width: thin;
   scrollbar-color: var(--border-primary) var(--bg-secondary);
 }
@@ -31,15 +71,17 @@
   background: var(--text-tertiary);
 }
 
+/* ---- Table ---- */
+
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 800px; /* ⚡ Réduit de 1000px à 800px pour mieux s'adapter */
+  min-width: 800px;
   table-layout: auto;
 }
 
 .table th {
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg-tertiary, var(--bg-secondary));
   padding: var(--spacing-sm) var(--spacing-md);
   text-align: left;
   font-weight: var(--font-weight-semibold);
@@ -58,26 +100,14 @@
   border-bottom: 1px solid var(--border-primary);
   vertical-align: middle;
   color: var(--text-secondary);
-}
-
-/* Colonnes Client, Chauffeur et Lieu - même format que page Clients */
-.clientCell,
-.driverCell,
-.locationCell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.driverCell {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--font-sm);
 }
 
 .table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* ---- Ligne de table ---- */
 
 .tableRow {
   cursor: pointer;
@@ -88,73 +118,463 @@
   background-color: var(--bg-hover);
 }
 
-/* ✅ Mise en évidence des lignes avec retard */
-.rowDelayed {
-  border-left: 4px solid #dc3545;
-  background-color: rgba(220, 53, 69, 0.08);
+/* ---- Cellules spécifiques ---- */
+
+.clientCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 200px;
 }
 
-.rowDelayed:hover {
-  background-color: rgba(220, 53, 69, 0.12);
-}
-
-.rowReasonableDelay {
-  border-left: 4px solid #28a745;
-  background-color: rgba(40, 167, 69, 0.05);
-}
-
-.rowReasonableDelay:hover {
-  background-color: rgba(40, 167, 69, 0.08);
-}
-
-.rowSlightDelay {
-  border-left: 4px solid #ffc107;
-  background-color: rgba(255, 193, 7, 0.08);
-}
-
-.rowSlightDelay:hover {
-  background-color: rgba(255, 193, 7, 0.12);
-}
-
-/* ✅ Badge de retard à côté du nom du client */
-.delayBadge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  background-color: #dc3545;
-  color: white;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
+.clientName {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Variantes de badge selon la sévérité */
-.delayBadgeReasonable {
-  background-color: #28a745;
+.clientInstitution {
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dateCell {
+  white-space: nowrap;
+  font-size: var(--font-sm);
+}
+
+.locationCell {
+  max-width: 220px;
+}
+
+.locationRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-bottom: 2px;
+}
+
+.locationRow:last-child {
+  margin-bottom: 0;
+}
+
+.locationDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.locationDotPickup {
+  background: var(--brand-primary);
+}
+
+.locationDotDropoff {
+  background: var(--error-primary);
+}
+
+.locationText {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  display: inline-block;
+}
+
+.driverCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- Montant ---- */
+
+.amountValue {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.amountCurrency {
+  font-weight: var(--font-weight-normal);
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+/* ---- Badge facturation ---- */
+
+.billingBadge {
+  display: block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 0.65rem;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.billingFailed {
+  background: var(--error-bg);
+  color: var(--error-primary);
+}
+
+.billingResolved {
+  background: var(--success-bg);
+  color: var(--success-primary);
+}
+
+/* ---- Badges de statut ---- */
+
+.statusBadge {
+  display: inline-block;
+  padding: 3px var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-xs);
+  white-space: nowrap;
+}
+
+.pending {
+  background-color: var(--warning-bg);
+  color: var(--warning-hover, #d97706);
+  border: 1px solid var(--warning-border);
+}
+
+.accepted {
+  background-color: var(--info-bg);
+  color: var(--info-primary);
+  border: 1px solid var(--info-border);
+}
+
+.assigned {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.en_route,
+.in_progress {
+  background-color: var(--brand-primary-lightest, #e0f2f1);
+  color: var(--brand-primary);
+  border: 1px solid var(--brand-primary-lighter, #4db6ac);
+  animation: statusPulse 2s infinite ease-in-out;
+}
+
+.completed,
+.return_completed {
+  background-color: var(--success-bg);
+  color: var(--success-primary);
+  border: 1px solid var(--success-border);
+}
+
+.canceled,
+.cancelled {
+  background-color: var(--bg-hover);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-primary);
+}
+
+.rejected {
+  background-color: var(--error-bg);
+  color: var(--error-primary);
+  border: 1px solid var(--error-border);
+}
+
+.no_show {
+  background-color: var(--bg-hover);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-primary);
+}
+
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ---- Badge transfert ---- */
+
+.transferBadge {
+  display: inline-block;
+  margin-left: var(--spacing-xs);
+  margin-top: 4px;
+  padding: 2px var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+/* ---- Retards V17: hierarchie visuelle stricte ---- */
+
+/* Retard critique >15min : PRIORITE MAX (danger rouge) */
+.rowDelayed,
+.rowDelayedCritical {
+  border-left: 3px solid var(--error-primary);
+  background-color: rgba(239, 68, 68, 0.04);
+}
+
+.rowDelayed:hover,
+.rowDelayedCritical:hover {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+/* Retard modere 5-15min (warning orange) */
+.rowSlightDelay,
+.rowDelayedModerate {
+  border-left: 3px solid var(--warning-primary);
+  background-color: rgba(245, 158, 11, 0.04);
+}
+
+.rowSlightDelay:hover,
+.rowDelayedModerate:hover {
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+/* Retard leger <=5min (jaune doux) */
+.rowReasonableDelay,
+.rowDelayedLight {
+  border-left: 3px solid #fbbf24;
+  background-color: rgba(251, 191, 36, 0.04);
+}
+
+.rowReasonableDelay:hover,
+.rowDelayedLight:hover {
+  background-color: rgba(251, 191, 36, 0.08);
+}
+
+/* Non assigne sans retard (warning) */
+.rowUnassigned {
+  border-left: 3px solid var(--warning-primary);
+  background-color: rgba(245, 158, 11, 0.02);
+}
+
+.rowUnassigned:hover {
+  background-color: rgba(245, 158, 11, 0.06);
+}
+
+/* Ligne cliquable (assignation rapide) */
+.rowClickable {
+  cursor: pointer;
+}
+
+/* ---- Badges retard 3 niveaux V6 ---- */
+
+.delayBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: var(--spacing-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.delayBadgeReasonable,
+.delayBadgeLight {
+  background-color: #fef3c7;
+  color: #92400e;
 }
 
 .delayBadgeModerate {
-  background-color: #ffc107;
-  color: #000;
+  background-color: var(--warning-primary);
+  color: white;
 }
 
 .delayBadgeCritical {
-  background-color: #dc3545;
+  background-color: var(--error-primary);
+  color: white;
 }
 
-/* ✅ Indicateur de retard dans la colonne Statut */
 .delayIndicator {
   margin-top: 4px;
-  padding: 4px 8px;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 4px;
-  color: #856404;
-  font-size: 0.8rem;
-  font-weight: 600;
+  padding: 4px var(--spacing-sm);
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  color: var(--warning-hover, #d97706);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
   display: inline-block;
 }
+
+/* ---- Trajet dot-style V5 ---- */
+
+.routeCell {
+  max-width: 260px;
+}
+
+.routeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  line-height: 1.4;
+}
+
+.routeRow:first-child {
+  margin-bottom: 2px;
+}
+
+.routeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routeDotPickup {
+  background: var(--brand-primary, #00796b);
+}
+
+.routeArrow {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  width: 6px;
+  text-align: center;
+}
+
+.routeAddress {
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+/* ---- Heure ---- */
+
+.timeCell {
+  white-space: nowrap;
+}
+
+.timeBold {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+}
+
+.timeToDefine {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--warning-hover, #d97706);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  font-style: italic;
+}
+
+.timeRequiredHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ---- Client sous-ligne ---- */
+
+.clientSub {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- Chauffeur inline ---- */
+
+.driverCellInline {
+  max-width: 200px;
+  overflow: visible;
+  position: relative;
+}
+
+.driverNameText {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.unassignedText {
+  color: var(--warning-hover, #d97706);
+  font-weight: var(--font-weight-medium);
+  font-style: italic;
+}
+
+/* ---- Etiquettes sans action ---- */
+
+.readOnlyLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  font-style: italic;
+}
+
+/* ---- Charger plus ---- */
+
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+}
+
+.loadMoreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-family: inherit;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+}
+
+.loadMoreBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.loadMoreCount {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-normal);
+}
+
+/* ---- Actions ---- */
 
 .actionsCell {
   text-align: right;
@@ -163,11 +583,11 @@
 
 .actionButton {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  padding: var(--spacing-xs);
-  margin: 0 var(--spacing-xs);
-  border-radius: 50%;
+  padding: 6px;
+  margin: 0 2px;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   transition: all var(--transition-base);
   display: inline-flex;
@@ -178,268 +598,361 @@
 .actionButton:hover {
   background-color: var(--bg-hover);
   color: var(--text-secondary);
+  border-color: var(--border-primary);
 }
 
 .acceptButton:hover {
   background-color: var(--success-bg);
   color: var(--success-primary);
+  border-color: var(--success-border);
 }
 
 .rejectButton:hover,
 .deleteButton:hover {
-  background-color: var(--danger-bg);
-  color: var(--danger-primary);
+  background-color: var(--error-bg);
+  color: var(--error-primary);
+  border-color: var(--error-border);
 }
 
-/* --- Badges de Statut --- */
-.statusBadge {
-  display: inline-block;
-  padding: var(--spacing-xxs) var(--spacing-sm);
-  border-radius: var(--radius-full);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-xs);
-  text-transform: capitalize;
-}
-
-.pending {
-  background-color: var(--warning-bg);
-  color: var(--warning-primary);
-}
-
-.accepted {
-  background-color: var(--info-bg);
-  color: var(--info-primary);
-}
-
-.assigned {
-  background-color: var(--info-bg);
-  color: var(--info-primary);
-}
-
-.en_route,
-.in_progress {
-  background-color: var(--info-bg);
-  color: var(--brand-primary);
-  animation: pulse 2s infinite ease-in-out;
-}
-
-.completed,
-.return_completed {
-  background-color: var(--success-bg);
-  color: var(--success-primary);
-}
-
-.canceled {
-  background-color: var(--bg-hover);
+.noActionLabel {
   color: var(--text-tertiary);
+  font-size: var(--font-xs);
+  font-style: italic;
 }
 
-/* ✅ Badge transfert partenaire */
-.transferBadge {
-  display: inline-block;
-  margin-left: var(--spacing-xs);
-  padding: 2px var(--spacing-xs);
-  border-radius: var(--radius-sm);
-  font-weight: var(--font-weight-medium);
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  background-color: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
-  white-space: nowrap;
-}
+/* ============================================================
+   RESPONSIVE — Table + indicateurs touch
+   ============================================================ */
 
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
+@media (max-width: 1024px) {
+  .tableContainer {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-width: 1px;
   }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.8;
+
+  .table {
+    font-size: var(--font-sm);
+    min-width: 700px;
+  }
+
+  .table th {
+    padding: 6px 8px;
+    font-size: 10px;
+  }
+
+  .table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .locationCell {
+    max-width: 180px;
+  }
+
+  .locationText {
+    max-width: 180px;
+    font-size: 11px;
+  }
+
+  .clientCell {
+    max-width: 160px;
+  }
+
+  .clientName {
+    font-size: 12px;
+  }
+
+  .clientInstitution {
+    font-size: 10px;
+  }
+
+  .dateCell {
+    font-size: 12px;
+  }
+
+  .statusBadge {
+    font-size: 10px;
+    padding: 2px 7px;
   }
 }
 
-/* ================== CARTES MOBILES (comme KPI) ================== */
+@media (max-width: 768px) {
+  .emptyState {
+    padding: 32px 16px;
+    border-width: 1px;
+    border-radius: 8px;
+  }
 
-/* Conteneur des cartes mobiles */
+  .emptyIcon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .emptyTitle {
+    font-size: 13px;
+  }
+
+  .emptySubtitle {
+    font-size: 11px;
+  }
+
+  .loadMoreBtn {
+    width: 100%;
+    justify-content: center;
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .loadMoreContainer {
+    padding: 8px 0;
+  }
+}
+
+/* ---- Cartes mobiles ---- */
+
 .mobileCards {
-  display: none; /* Caché par défaut sur desktop */
+  display: none;
 }
 
 .mobileCard {
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  padding: 14px 16px;
+  border-radius: 10px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-primary);
-  margin-bottom: var(--spacing-sm);
-  transition: all var(--transition-base);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .mobileCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
   border-color: var(--brand-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .mobileCardHeader {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-sm);
-  padding-bottom: var(--spacing-sm);
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-primary);
 }
 
+.mobileCardTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
 .mobileCardTitle {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--brand-primary);
-  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobileCardInstitution {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mobileCardBody {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: 8px;
 }
 
 .mobileCardRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--font-sm);
+  font-size: 12px;
 }
 
 .mobileCardLabel {
   color: var(--text-tertiary);
-  font-weight: var(--font-weight-medium);
+  font-weight: 500;
+  font-size: 11px;
 }
 
 .mobileCardValue {
   color: var(--text-primary);
-  font-weight: var(--font-weight-normal);
+  font-weight: 600;
   text-align: right;
+  font-size: 12px;
+}
+
+.mobileCardRoute {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.mobileCardRouteText {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .mobileCardActions {
   display: flex;
-  gap: var(--spacing-xs);
-  margin-top: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--border-primary);
   justify-content: flex-end;
 }
 
-/* Les cartes mobiles ne sont plus utilisées - on garde la table */
-
-/* ================== RESPONSIVE MOBILE ================== */
-
-/* Tablette - Adaptation légère */
-@media (max-width: 1024px) {
-  .tableContainer {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .table {
-    font-size: var(--font-sm);
-  }
-}
-
-/* Mobile - Garder la table visible avec scroll horizontal adapté comme KPI */
+/* Show cards, hide table on mobile */
 @media (max-width: 768px) {
   .tableContainer {
-    margin-top: var(--spacing-sm);
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    box-sizing: border-box;
+    display: none;
   }
 
-  .table {
-    width: 100% !important;
-    min-width: 100%; /* S'adapte à la largeur, pas de min-width fixe */
-    font-size: var(--font-xs);
-    box-sizing: border-box;
+  .mobileCards {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .table th,
-  .table td {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-xs);
-    white-space: nowrap; /* Empêche le retour à la ligne */
+  .mobileCard {
+    padding: 12px 14px;
+    border-radius: 10px;
   }
 
-  .table th {
-    position: sticky;
-    top: 0;
-    background-color: var(--bg-secondary);
-    z-index: 10;
+  .mobileCardHeader {
+    margin-bottom: 8px;
+    padding-bottom: 8px;
   }
 
-  .clientCell,
-  .driverCell,
-  .locationCell {
-    max-width: 140px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .mobileCardTitle {
+    font-size: 13px;
   }
 
-  .actionButton {
-    padding: var(--spacing-xxs);
-    margin: 0 var(--spacing-xxs);
-    font-size: var(--font-xs);
-  }
-
-  .actionsCell {
-    white-space: nowrap;
+  .mobileCardBody {
+    gap: 6px;
   }
 }
 
-/* Très petit mobile - Encore plus compact comme les KPI */
 @media (max-width: 480px) {
-  .tableContainer {
-    margin-top: var(--spacing-xs);
+  .mobileCards {
+    gap: 4px;
   }
 
-  .table {
-    font-size: var(--font-xs);
+  .mobileCard {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 0;
   }
 
-  .table th,
-  .table td {
-    padding: var(--spacing-xxs) var(--spacing-xs);
-    font-size: var(--font-xs);
+  .mobileCardHeader {
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    gap: 6px;
   }
 
-  .clientCell,
-  .driverCell,
-  .locationCell {
-    max-width: 110px;
+  .mobileCardTitle {
+    font-size: 12.5px;
   }
 
-  .actionButton {
-    padding: var(--spacing-xxs);
-    margin: 0 var(--spacing-xxs);
+  .mobileCardInstitution {
+    font-size: 10px;
+  }
+
+  .mobileCardBody {
+    gap: 5px;
+  }
+
+  .mobileCardLabel {
+    font-size: 10.5px;
+  }
+
+  .mobileCardValue {
+    font-size: 11.5px;
+  }
+
+  .mobileCardRouteText {
+    font-size: 10.5px;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .mobileCardRoute {
+    padding: 6px 0;
+    gap: 3px;
+  }
+
+  .mobileCardActions {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  .statusBadge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .loadMoreContainer {
+    padding: 8px 0;
+  }
+
+  .loadMoreBtn {
+    height: 28px;
+    font-size: 11px;
   }
 }
 
 @media (max-width: 390px) {
-  .table th,
-  .table td {
-    padding: var(--spacing-xxs);
-    font-size: var(--font-xs);
+  .mobileCard {
+    padding: 8px 10px;
+    border-radius: 6px;
   }
 
-  .clientCell,
-  .driverCell,
-  .locationCell {
-    max-width: 100px;
+  .mobileCardTitle {
+    font-size: 12px;
+  }
+
+  .mobileCardLabel {
+    font-size: 10px;
+  }
+
+  .mobileCardValue {
+    font-size: 11px;
+  }
+
+  .mobileCardRouteText {
+    font-size: 10px;
+  }
+
+  .mobileCardActions {
+    margin-top: 6px;
+    padding-top: 6px;
+    gap: 3px;
+  }
+
+  .amountValue {
+    font-size: 11px;
+  }
+
+  .amountCurrency {
+    font-size: 9px;
   }
 }

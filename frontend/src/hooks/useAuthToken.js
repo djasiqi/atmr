@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
 
 const useAuthToken = () => {
   const [user, setUser] = useState(null);
 
-  useEffect(() => {
+  // Fonction de lecture du localStorage → état user
+  const readAuth = useCallback(() => {
     const token = localStorage.getItem('authToken');
     const rawUser = localStorage.getItem('user');
     const storedUser = rawUser ? JSON.parse(rawUser) : null;
 
-    // ✅ Si on a un token dans localStorage (mode mobile), le décoder
+    // Si on a un token dans localStorage (mode mobile), le décoder
     if (token) {
       try {
         const decoded = jwtDecode(token);
@@ -17,10 +18,7 @@ const useAuthToken = () => {
         // Vérifier expiration
         const currentTime = Date.now() / 1000;
         if (decoded.exp && decoded.exp < currentTime) {
-          console.warn('🔐 Token expiré');
-          // IMPORTANT: éviter de garder un token expiré en localStorage.
-          // Sinon le frontend l'enverra au backend (Socket.IO) et sera rejeté,
-          // empêchant les features temps réel (ex: DriverLiveMap).
+          console.warn('Token expiré');
           try {
             localStorage.removeItem('authToken');
             localStorage.removeItem('refreshToken');
@@ -29,7 +27,6 @@ const useAuthToken = () => {
           return;
         }
 
-        // Ajouter des infos structurées
         setUser({
           ...decoded,
           isCompany: decoded.role === 'company',
@@ -37,10 +34,10 @@ const useAuthToken = () => {
           isClient: decoded.role === 'client',
           companyId: decoded.company_id,
           userId: decoded.sub,
-          public_id: decoded.sub, // ✅ Le backend envoie public_id dans le champ 'sub'
+          public_id: decoded.sub,
         });
       } catch (error) {
-        console.error('❌ Erreur lors du décodage du token:', error);
+        console.error('Erreur lors du décodage du token:', error);
         try {
           localStorage.removeItem('authToken');
           localStorage.removeItem('refreshToken');
@@ -48,8 +45,7 @@ const useAuthToken = () => {
         setUser(null);
       }
     } else if (storedUser) {
-      // ✅ Mode cookies httpOnly : utiliser les infos utilisateur stockées
-      // Le backend vérifiera l'authentification via les cookies
+      // Mode cookies httpOnly : utiliser les infos utilisateur stockées
       setUser({
         ...storedUser,
         isCompany: String(storedUser.role || '').toLowerCase() === 'company',
@@ -63,6 +59,29 @@ const useAuthToken = () => {
       setUser(null);
     }
   }, []);
+
+  useEffect(() => {
+    // Lecture initiale
+    readAuth();
+
+    // Écouter les changements localStorage venant d'un autre onglet
+    const handleStorageChange = (e) => {
+      if (e.key === 'authToken' || e.key === 'user' || e.key === null) {
+        readAuth();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Écouter un événement custom pour les changements dans le MÊME onglet
+    // (l'événement 'storage' natif ne se déclenche pas dans l'onglet qui fait le changement)
+    const handleAuthChange = () => readAuth();
+    window.addEventListener('auth-changed', handleAuthChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth-changed', handleAuthChange);
+    };
+  }, [readAuth]);
 
   return user;
 };

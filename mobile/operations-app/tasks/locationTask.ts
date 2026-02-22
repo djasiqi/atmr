@@ -3,7 +3,10 @@
 
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getLogger } from "@/utils/logger";
 import { enqueueLocation, type QueuedLocation } from "../services/locationQueue";
+
+const log = getLogger("LocationTask");
 
 // Vérifier si le module natif est disponible
 let TaskManager: any = null;
@@ -11,14 +14,14 @@ try {
   TaskManager = require("expo-task-manager");
   // Vérifier que le module est bien chargé (pas juste un stub)
   if (TaskManager && typeof TaskManager.defineTask === "function") {
-    console.log("[LocationTask] ✅ TaskManager chargé et disponible");
+    log.success("task manager loaded");
   } else {
-    console.warn("[LocationTask] ⚠️ TaskManager chargé mais méthodes non disponibles");
+    log.warn("task manager methods unavailable");
     TaskManager = null;
   }
 } catch (error: any) {
-  console.warn("[LocationTask] ⚠️ expo-task-manager non disponible:", error?.message || error);
-  console.warn("[LocationTask] ℹ️ Nécessite un rebuild natif (npx expo prebuild + rebuild)");
+  log.warn("expo-task-manager unavailable", { message: error?.message || error });
+  log.info("native rebuild required");
   // En mode Expo Go ou sans rebuild, on exporte quand même les constantes
   // mais la tâche ne sera pas active
 }
@@ -49,7 +52,7 @@ async function flushPositionBatch() {
     // Récupérer le driver_id depuis le storage
     const driverIdStr = await AsyncStorage.getItem("driver_id");
     if (!driverIdStr) {
-      console.log("[LocationTask] ⚠️ Driver ID non trouvé");
+      log.warn("driver id not found");
       positionBuffer = [];
       return;
     }
@@ -74,11 +77,9 @@ async function flushPositionBatch() {
       await enqueueLocation(loc);
     }
 
-    console.log(
-      `[LocationTask] 📦 Positions ajoutées à la queue: ${queued.length}, driver_id=${driverId}`
-    );
+    log.info("positions enqueued", { count: queued.length, driverId });
   } catch (error) {
-    console.error("[LocationTask] ❌ Erreur enqueue batch:", error);
+    log.error("enqueue batch failed", { error });
   }
 }
 
@@ -95,24 +96,23 @@ if (TaskManager && !taskDefinitionAttempted) {
   try {
     // Définir la tâche directement (defineTask est idempotent mais on protège quand même)
     TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: { data?: { locations: Location.LocationObject[] }; error?: Error }) => {
-    // ✅ Log explicite pour diagnostiquer si la tâche est appelée en arrière-plan
-    console.log(`[LocationTask] 🔔 Task appelée`);
-    
+    log.info("task called");
+
     if (error) {
-      console.log(`[LocationTask] ❌ Erreur dans la tâche :`, error);
+      log.error("task error", { error });
       return;
     }
 
     if (data) {
       const { locations } = data;
-      console.log(`[LocationTask] 📍 Locations reçues :`, JSON.stringify(locations));
+      log.info("locations received", { locations });
 
       // Récupérer le driver_id
       try {
         const driverId = await AsyncStorage.getItem("driver_id");
-        console.log(`[LocationTask] ℹ️ driver_id récupéré:`, driverId);
+        log.info("driver id fetched", { driverId });
       } catch (e) {
-        console.log(`[LocationTask] ⚠️ Erreur récupération driver_id:`, e);
+        log.warn("driver id fetch error", { error: e });
       }
 
       for (const location of locations) {
@@ -129,7 +129,7 @@ if (TaskManager && !taskDefinitionAttempted) {
           timestamp,
         });
 
-        console.log(`[LocationTask] 📍 Position ajoutée au buffer: ${positionBuffer.length}/${BATCH_SIZE}`);
+        log.info("position buffered", { bufferLength: positionBuffer.length, batchSize: BATCH_SIZE });
 
         // Flush si buffer plein
         if (positionBuffer.length >= BATCH_SIZE) {
@@ -140,22 +140,22 @@ if (TaskManager && !taskDefinitionAttempted) {
       // ✅ Envoyer le batch restant à la fin (mode event-driven, pas besoin d'interval)
       // Android appelle la task par batch de locations, on peut envoyer directement
       if (positionBuffer.length > 0) {
-        console.log(`[LocationTask] 📤 Envoi batch final (${positionBuffer.length} positions restantes)`);
+        log.info("final batch flush", { remaining: positionBuffer.length });
         await flushPositionBatch();
       }
     }
     });
     taskRegistered = true;
-    console.log(`[LocationTask] ✅ Tâche "${LOCATION_TASK_NAME}" enregistrée avec succès`);
+    log.success("task registered");
   } catch (error: any) {
-    console.error(`[LocationTask] ❌ Erreur lors de l'enregistrement de la tâche:`, error?.message || error);
+    log.error("task registration failed", { error: error?.message || error });
     taskRegistered = false;
     taskDefinitionAttempted = false; // Permettre de réessayer en cas d'erreur
   }
 } else if (!TaskManager) {
-  console.warn("[LocationTask] TaskManager non disponible - la tâche en arrière-plan ne sera pas active");
+  log.warn("task manager unavailable");
 } else {
-  console.log(`[LocationTask] ℹ️ Tentative de définition de tâche déjà effectuée → skip (protection double appel)`);
+  log.info("task definition skip duplicate");
 }
 
 // Fonction pour vérifier si la tâche est enregistrée
@@ -173,7 +173,7 @@ function startPeriodicFlush() {
   }
 
   flushInterval = setInterval(async () => {
-    console.log(`[LocationTask] ⏰ Flush périodique (buffer=${positionBuffer.length})`);
+    log.info("periodic flush", { bufferLength: positionBuffer.length });
     await flushPositionBatch();
   }, BATCH_INTERVAL_MS);
 }

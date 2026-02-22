@@ -45,6 +45,7 @@ from models import (
     Invoice,
     InvoiceLine,
     InvoicePayment,
+    TransportRequest,
     User,
     db,
 )
@@ -1370,6 +1371,8 @@ class EligibleClients(Resource):
                 func.max(
                     func.coalesce(Booking.completed_at, Booking.scheduled_time)
                 ).label("last_ride_at"),
+                # Nom du patient (depuis booking.customer_name) pour les clients institution
+                func.max(Booking.customer_name).label("patient_name"),
             )
             .outerjoin(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
             .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
@@ -1448,15 +1451,21 @@ class EligibleClients(Resource):
                 unbilled_subquery.c.unbilled_count,
                 unbilled_subquery.c.unbilled_total_amount,
                 unbilled_subquery.c.last_ride_at,
+                unbilled_subquery.c.patient_name,
             )
             .join(unbilled_subquery, Client.id == unbilled_subquery.c.client_id)
             .options(joinedload(Client.user))
             .filter(
                 Client.company_id == company_id,
-                Client.is_institution.is_(False),
                 Client.client_type != ClientType.SELF_SERVICE,
             )
         )
+
+        # Pas de filtre is_institution : les clients institution portent les bookings
+        # issus du flux institution (billed_to_type=clinic + billed_to_company_id).
+        # Les filtres au niveau booking (unbilled_subquery) garantissent la cohérence :
+        # - Mode patient : Booking.billed_to_type == "patient"
+        # - Mode S2/clinique : Booking.billed_to_type == "clinic" + billed_to_company_id
 
         if clinic_company_id:
             stay_query = db.session.query(ClientStay.client_id).filter(
@@ -1475,7 +1484,17 @@ class EligibleClients(Resource):
                     | (ClientStay.end_date >= start_date),
                 )
             stay_subquery = stay_query.distinct().subquery()
-            query = query.join(stay_subquery, Client.id == stay_subquery.c.client_id)
+            # Outerjoin : clients institution n'ont pas de ClientStay mais ont des
+            # bookings liés via billed_to_company_id (flux institution → S2).
+            # On accepte le client s'il a un séjour actif OU s'il est un client institution.
+            query = query.outerjoin(
+                stay_subquery, Client.id == stay_subquery.c.client_id
+            ).filter(
+                or_(
+                    stay_subquery.c.client_id.isnot(None),
+                    Client.is_institution.is_(True),
+                )
+            )
 
         if search:
             pattern = f"%{search.lower()}%"
@@ -1493,7 +1512,7 @@ class EligibleClients(Resource):
 
         clients = []
         seen_client_ids = set()
-        for client, unbilled_count, unbilled_total_amount, last_ride_at in results:
+        for client, unbilled_count, unbilled_total_amount, last_ride_at, patient_name in results:
             payload = client.serialize
             payload["unbilled_count"] = int(unbilled_count or 0)
             payload["invoiced_count"] = 0
@@ -1503,6 +1522,39 @@ class EligibleClients(Resource):
             payload["last_ride_at"] = (
                 last_ride_at.isoformat() if isinstance(last_ride_at, datetime) else None
             )
+            # Pour les clients institution : afficher le nom du patient (pas la clinique)
+            # et résoudre l'adresse selon le mode de facturation.
+            if client.is_institution and patient_name:
+                payload["patient_name"] = patient_name
+                payload["display_name"] = patient_name
+                # Retrouver les coordonnées du patient institution
+                try:
+                    from models.institution_patient import InstitutionPatient
+                    patient_tr = TransportRequest.query.filter_by(
+                        institution_id=client.linked_institution_id,
+                    ).order_by(TransportRequest.id.desc()).first()
+                    if patient_tr and patient_tr.patient_id:
+                        inst_patient = InstitutionPatient.query.get(patient_tr.patient_id)
+                        if inst_patient:
+                            # Nom du patient pour l'affichage
+                            pname = f"{inst_patient.first_name or ''} {inst_patient.last_name or ''}".strip()
+                            if pname:
+                                payload["full_name"] = pname
+                                payload["first_name"] = inst_patient.first_name or ""
+                                payload["last_name"] = inst_patient.last_name or ""
+                            # Adresse : patient si billed_to_type=patient, institution sinon
+                            if billed_to_type == "patient":
+                                parts = [
+                                    inst_patient.address or "",
+                                    inst_patient.postal_code or "",
+                                    inst_patient.city or "",
+                                ]
+                                patient_address = ", ".join(p for p in parts if p)
+                                if patient_address:
+                                    payload["billing_address"] = patient_address
+                                payload["billing_mode"] = "patient_override"
+                except Exception as e:
+                    logger.warning("[EligibleClients] Patient info lookup error: %s", e)
             clients.append(payload)
             seen_client_ids.add(client.id)
 
@@ -2495,16 +2547,44 @@ class SendInvoice(Resource):
                 PartnerInvoiceStatus,
             )
 
-            # Facture partenaire : seul "paper" (marquer envoyée) est supporté
-            if (
-                send_method == "email"
-                and PartnerInvoice.query.filter_by(
-                    id=invoice_id, executing_company_id=company_id
-                ).first()
-            ):
-                return APIErrorHandler.handle_validation_error(
-                    "Pour les factures partenaires, utilisez 'Marquer comme envoyée' (send_method=paper).",
-                    logger_instance=logger,
+            # Vérifier si c'est une facture partenaire
+            partner_invoice = PartnerInvoice.query.filter_by(
+                id=invoice_id, executing_company_id=company_id
+            ).first()
+
+            if send_method == "email" and partner_invoice:
+                # Envoi par email pour facture partenaire
+                from application.invoices.send_partner_invoice_by_email import (
+                    SendPartnerInvoiceByEmailInput,
+                    SendPartnerInvoiceByEmailUseCase,
+                )
+
+                send_use_case = SendPartnerInvoiceByEmailUseCase()
+                input_data = SendPartnerInvoiceByEmailInput(
+                    partner_invoice_id=invoice_id,
+                    company_id=company_id,
+                    recipient_email=recipient_email,
+                    force_regenerate_pdf=force_regenerate_pdf,
+                )
+
+                result = send_use_case.execute(input_data)
+
+                if not result.success:
+                    return {
+                        "success": False,
+                        "error": result.error,
+                    }, result.status_code
+
+                return success_response(
+                    data={
+                        "invoice_id": result.partner_invoice_id,
+                        "recipient": result.recipient,
+                        "sent_at": result.sent_at.isoformat()
+                        if result.sent_at
+                        else None,
+                        "send_method": "email",
+                    },
+                    message=f"Facture partenaire envoyée par email à {result.recipient}",
                 )
 
             if send_method == "email":
@@ -2538,9 +2618,7 @@ class SendInvoice(Resource):
 
             # send_method == "paper" : Marquer comme envoyée
             # Facture partenaire (PartnerInvoice) : seul executing_company peut envoyer, uniquement si DRAFT
-            partner_invoice = PartnerInvoice.query.filter_by(
-                id=invoice_id, executing_company_id=company_id
-            ).first()
+            # Note: partner_invoice est déjà chargé plus haut
             if partner_invoice:
                 if partner_invoice.status != PartnerInvoiceStatus.DRAFT:
                     return APIErrorHandler.handle_validation_error(
@@ -3764,7 +3842,7 @@ class InstitutionsList(Resource):
                         "id": inst.id,
                         "institution_name": inst.institution_name
                         or "Institution sans nom",
-                        "clinic_company_id": inst.default_billed_to_company_id,
+                        "clinic_company_id": inst.default_billed_to_company_id or inst.company_id,
                         "contact_email": inst.contact_email,
                         "contact_phone": inst.contact_phone,
                         "billing_address": inst.billing_address,
@@ -5183,9 +5261,25 @@ class ExportPaymentsCSV(Resource):
                         client_name = invoice.billed_to_company.name or ""
                 elif invoice.client and invoice.client.user:
                     # S1 : utiliser le nom du client
-                    first_name = invoice.client.user.first_name or ""
-                    last_name = invoice.client.user.last_name or ""
-                    client_name = f"{first_name} {last_name}".strip()
+                    # Pour institution + S1_PATIENT : nom du patient depuis booking
+                    if (
+                        getattr(invoice.client, "is_institution", False)
+                        and invoice.billing_strategy
+                        == InvoiceBillingStrategy.S1_PATIENT
+                    ):
+                        try:
+                            for _line in invoice.lines:
+                                if _line.reservation_id:
+                                    _bk = Booking.query.get(_line.reservation_id)
+                                    if _bk and _bk.customer_name:
+                                        client_name = _bk.customer_name
+                                        break
+                        except Exception:
+                            pass
+                    if not client_name:
+                        first_name = invoice.client.user.first_name or ""
+                        last_name = invoice.client.user.last_name or ""
+                        client_name = f"{first_name} {last_name}".strip()
                     if not client_name:
                         client_name = invoice.client.user.username or ""
 

@@ -2,10 +2,13 @@
 // Tracker GPS adaptatif avec fréquence variable selon mouvement
 
 import * as Location from "expo-location";
+import { getLogger } from "@/utils/logger";
 import { getDistanceInMeters } from "./location";
 import { sendDriverLocation } from "./location";
 import { type DriverLocationPayload } from "./api";
-import { getSocket } from "./socket";
+import { getSocket, getSocketRole } from "./socket";
+
+const log = getLogger("Tracker");
 
 /**
  * Tracker GPS adaptatif qui ajuste la fréquence selon la vitesse.
@@ -14,6 +17,8 @@ import { getSocket } from "./socket";
  * - Immobile : 30s
  * - Batterie < 20% : 60s (mode économie)
  */
+export type GpsStatus = "active" | "disabled" | "unavailable" | "unknown";
+
 export class AdaptiveLocationTracker {
   private locationSub: Location.LocationSubscription | null = null;
   private updateInterval: number = 5000; // 5s par défaut
@@ -23,6 +28,25 @@ export class AdaptiveLocationTracker {
   private isTracking: boolean = false;
   private batteryCheckInterval: ReturnType<typeof setInterval> | null = null;
   private trackingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  private _gpsStatus: GpsStatus = "unknown";
+  private gpsStatusListeners: Set<(status: GpsStatus) => void> = new Set();
+
+  onGpsStatusChange(listener: (status: GpsStatus) => void): () => void {
+    this.gpsStatusListeners.add(listener);
+    listener(this._gpsStatus);
+    return () => this.gpsStatusListeners.delete(listener);
+  }
+
+  get gpsStatus(): GpsStatus {
+    return this._gpsStatus;
+  }
+
+  private setGpsStatus(status: GpsStatus): void {
+    if (status === this._gpsStatus) return;
+    this._gpsStatus = status;
+    this.gpsStatusListeners.forEach((fn) => fn(status));
+  }
 
   // Seuils de vitesse (m/s)
   private readonly SPEED_THRESHOLD_MOVING = 1.0; // 3.6 km/h
@@ -38,7 +62,7 @@ export class AdaptiveLocationTracker {
    */
   async startTracking(): Promise<void> {
     if (this.isTracking) {
-      console.log("[AdaptiveLocationTracker] ⚠️ Tracking déjà actif");
+      log.warn("tracking already active");
       return;
     }
 
@@ -56,7 +80,7 @@ export class AdaptiveLocationTracker {
 
     // Démarrer le tracking
     this.scheduleNextUpdate();
-    console.log("[AdaptiveLocationTracker] ✅ Tracking adaptatif démarré");
+    log.success("adaptive tracking started");
   }
 
   /**
@@ -73,7 +97,7 @@ export class AdaptiveLocationTracker {
       try {
         this.locationSub.remove();
       } catch (e) {
-        console.warn("[AdaptiveLocationTracker] Erreur arrêt subscription:", e);
+        log.warn("stop subscription error", { error: e });
       }
       this.locationSub = null;
     }
@@ -88,7 +112,7 @@ export class AdaptiveLocationTracker {
       this.batteryCheckInterval = null;
     }
 
-    console.log("[AdaptiveLocationTracker] ⏹️ Tracking arrêté");
+    log.success("tracking stopped");
   }
 
   /**
@@ -116,9 +140,10 @@ export class AdaptiveLocationTracker {
       if (batteryLevel !== null && batteryLevel < 0.2) {
         // < 20% : mode économie
         this.updateInterval = this.INTERVAL_BATTERY_LOW_MS;
-        console.log(
-          `[AdaptiveLocationTracker] 🔋 Batterie faible (${(batteryLevel * 100).toFixed(0)}%), fréquence réduite à ${this.updateInterval}ms`
-        );
+        log.info("low battery interval reduced", {
+          batteryLevel: (batteryLevel * 100).toFixed(0),
+          intervalMs: this.updateInterval,
+        });
       }
     });
 
@@ -137,10 +162,34 @@ export class AdaptiveLocationTracker {
     }
 
     try {
-      // Récupérer position actuelle
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced, // Bon compromis précision/batterie
-      });
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        this.setGpsStatus("disabled");
+        log.warn("location services disabled, retrying later");
+        this.scheduleNextUpdate();
+        return;
+      }
+
+      let location: Location.LocationObject | null = null;
+
+      try {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 10000,
+        });
+      } catch {
+        log.warn("getCurrentPositionAsync failed, trying last known position");
+        location = await Location.getLastKnownPositionAsync();
+      }
+
+      if (!location) {
+        this.setGpsStatus("unavailable");
+        log.warn("no location available, retrying later");
+        this.scheduleNextUpdate();
+        return;
+      }
+
+      this.setGpsStatus("active");
 
       // Calculer vitesse
       const speed = this.calculateSpeedFromLocation(location);
@@ -159,7 +208,7 @@ export class AdaptiveLocationTracker {
       // Programmer prochaine mise à jour
       this.scheduleNextUpdate();
     } catch (error) {
-      console.error("[AdaptiveLocationTracker] ❌ Erreur mise à jour position:", error);
+      log.error("position update failed", { error });
       // Réessayer après un délai
       this.trackingTimeout = setTimeout(() => {
         this.updateLocation();
@@ -260,20 +309,24 @@ export class AdaptiveLocationTracker {
     try {
       // Essayer Socket.IO d'abord (plus efficace)
       const socket = getSocket();
-      if (socket && socket.connected) {
+      if (socket && socket.connected && getSocketRole() === "driver") {
         socket.emit("driver_location", payload);
-        console.log(
-          `[AdaptiveLocationTracker] 📍 Position envoyée via Socket.IO (speed=${(this.lastSpeed * 3.6).toFixed(1)} km/h, interval=${this.updateInterval}ms)`
-        );
+        log.success("position sent", {
+          via: "socket",
+          speedKmh: (this.lastSpeed * 3.6).toFixed(1),
+          intervalMs: this.updateInterval,
+        });
       } else {
         // Fallback HTTP
         await sendDriverLocation(payload);
-        console.log(
-          `[AdaptiveLocationTracker] 📍 Position envoyée via HTTP (speed=${(this.lastSpeed * 3.6).toFixed(1)} km/h, interval=${this.updateInterval}ms)`
-        );
+        log.success("position sent", {
+          via: "http",
+          speedKmh: (this.lastSpeed * 3.6).toFixed(1),
+          intervalMs: this.updateInterval,
+        });
       }
     } catch (error) {
-      console.error("[AdaptiveLocationTracker] ❌ Erreur envoi position:", error);
+      log.error("send position failed", { error });
       // Ne pas bloquer le tracking en cas d'erreur
     }
   }
@@ -286,9 +339,7 @@ export class AdaptiveLocationTracker {
     this.batteryCheckInterval = setInterval(() => {
       this.checkBatteryLevel().then((batteryLevel) => {
         if (batteryLevel !== null) {
-          console.log(
-            `[AdaptiveLocationTracker] 🔋 Niveau batterie: ${(batteryLevel * 100).toFixed(0)}%`
-          );
+          log.info("battery level", { level: (batteryLevel * 100).toFixed(0) });
         }
       });
     }, 60000);
@@ -307,7 +358,6 @@ export class AdaptiveLocationTracker {
       }
     } catch (error) {
       // API batterie non disponible (normal sur certaines plateformes)
-      // console.log("[AdaptiveLocationTracker] API batterie non disponible");
     }
     return null;
   }

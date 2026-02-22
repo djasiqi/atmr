@@ -1,25 +1,50 @@
 // src/components/layout/Sidebar/CompanySidebar/CompanySidebar.js
-import React, { useState, useEffect } from 'react';
+/**
+ * Sidebar professionnelle — Espace Entreprise
+ *
+ * Design aligné sur le portail Institution :
+ * - Branding Lirie en haut
+ * - Navigation segmentée (principale + outils)
+ * - Bloc utilisateur en bas
+ * - Fond brand (#00796B)
+ * - Responsive automatique : ouvert grand écran, icônes seules petit écran
+ */
+
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { NavLink, useParams, useLocation } from 'react-router-dom';
 import {
-  FaHome,
-  FaCar,
-  FaUser,
-  FaUsers,
-  FaFileInvoice,
-  FaCog,
-  FaChartLine,
-  FaChartBar,
-  FaBars,
-  FaTimes,
-} from 'react-icons/fa';
+  HiOutlineViewGrid,
+  HiOutlineClipboardList,
+  HiOutlineUserCircle,
+  HiOutlineUserGroup,
+  HiOutlineDocumentText,
+  HiOutlineLightningBolt,
+  HiOutlineChartBar,
+  HiOutlineCog,
+} from 'react-icons/hi';
+import { FaSignOutAlt, FaChevronDown } from 'react-icons/fa';
+import useCompanyData from '../../../../hooks/useCompanyData';
+import { logoutUser } from '../../../../utils/apiClient';
 import styles from './CompanySidebar.module.css';
+
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'CO';
+}
+
+// Breakpoint widths — synchronized with CSS media queries
+function getSidebarWidth() {
+  const w = window.innerWidth;
+  if (w <= 480) return 56;
+  if (w <= 768) return 64;
+  if (w <= 1024) return 220;
+  return 256;
+}
 
 const CompanySidebar = () => {
   const params = useParams();
   const location = useLocation();
 
-  // Récupérer public_id depuis useParams() ou extraire de l'URL
   const public_id =
     params.public_id ||
     (() => {
@@ -27,117 +52,200 @@ const CompanySidebar = () => {
       return match ? match[1] : null;
     })();
 
-  // État du toggle (sauvegardé dans localStorage)
-  const [isExpanded, setIsExpanded] = useState(() => {
-    const saved = localStorage.getItem('companySidebarExpanded');
-    return saved !== null ? saved === 'true' : true; // Par défaut ouvert
-  });
+  const companyData = useCompanyData() || {};
+  const company = companyData.company || null;
+  const companyName = company?.name || 'Entreprise';
 
-  // Sauvegarder l'état dans localStorage
-  useEffect(() => {
-    localStorage.setItem('companySidebarExpanded', String(isExpanded));
-  }, [isExpanded]);
+  // User dropdown
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
-  // Mettre à jour la variable CSS pour la responsivité du contenu principal
-  // S'exécute au montage et à chaque changement d'état
+  // Sync --sidebar-w CSS variable on resize
   useEffect(() => {
-    const sidebarWidth = isExpanded ? 240 : 72; // Largeur en pixels
-    document.documentElement.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
-    
-    // Cleanup : restaurer la valeur par défaut si nécessaire
+    const update = () => {
+      document.documentElement.style.setProperty('--sidebar-w', `${getSidebarWidth()}px`);
+    };
+    update();
+    window.addEventListener('resize', update);
     return () => {
+      window.removeEventListener('resize', update);
       document.documentElement.style.setProperty('--sidebar-w', '72px');
     };
-  }, [isExpanded]);
+  }, []);
 
-  const toggleSidebar = () => {
-    setIsExpanded(!isExpanded);
-  };
+  // Close user menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
-  // Si pas de public_id, ne rien afficher
-  if (!public_id) {
-    return null;
-  }
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch {
+      window.location.href = '/login';
+    }
+  }, []);
 
-  const menuItems = [
-    {
-      icon: FaHome,
-      label: 'Tableau de bord',
-      to: `/dashboard/company/${public_id}`,
-      end: true,
-    },
-    {
-      icon: FaCar,
-      label: 'Réservations',
-      to: `/dashboard/company/${public_id}/reservations`,
-    },
-    {
-      icon: FaUser,
-      label: 'Chauffeurs',
-      to: `/dashboard/company/${public_id}/drivers`,
-    },
-    {
-      icon: FaUsers,
-      label: 'Gestion Clients',
-      to: `/dashboard/company/${public_id}/clients`,
-    },
-    {
-      icon: FaFileInvoice,
-      label: 'Facturation par Client',
-      to: `/dashboard/company/${public_id}/invoices/clients`,
-    },
-    {
-      icon: FaChartLine,
-      label: 'Dispatch & Planification',
-      to: `/dashboard/company/${public_id}/dispatch`,
-    },
-    {
-      icon: FaChartBar,
-      label: 'Analytics',
-      to: `/dashboard/company/${public_id}/analytics`,
-    },
-    {
-      icon: FaCog,
-      label: 'Paramètres',
-      to: `/dashboard/company/${public_id}/settings`,
-    },
+  // User data from localStorage
+  const userData = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('user') || localStorage.getItem('company_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const userEmail = userData?.email || '';
+  const userRole = userData?.role || 'company';
+  const roleLabel = userRole === 'admin' ? 'Administrateur' : 'Entreprise';
+
+  const displayName = useMemo(() => {
+    if (userData?.first_name && userData?.last_name)
+      return `${userData.first_name} ${userData.last_name}`;
+    if (userData?.first_name) return userData.first_name;
+    return companyName;
+  }, [userData, companyName]);
+
+  const initials = useMemo(() => {
+    if (userData?.first_name || userData?.last_name) {
+      const f = userData.first_name?.[0] || '';
+      const l = userData.last_name?.[0] || '';
+      return `${f}${l}`.toUpperCase() || 'CO';
+    }
+    return getInitials(companyName);
+  }, [userData, companyName]);
+
+  if (!public_id) return null;
+
+  const basePath = `/dashboard/company/${public_id}`;
+
+  // ── Navigation items ──
+  const mainNav = [
+    { path: basePath, label: 'Tableau de bord', icon: <HiOutlineViewGrid />, end: true },
+    { path: `${basePath}/reservations`, label: 'Réservations', icon: <HiOutlineClipboardList /> },
+    { path: `${basePath}/drivers`, label: 'Chauffeurs', icon: <HiOutlineUserCircle /> },
+    { path: `${basePath}/clients`, label: 'Gestion Clients', icon: <HiOutlineUserGroup /> },
+  ];
+
+  const toolsNav = [
+    { path: `${basePath}/invoices/clients`, label: 'Facturation', icon: <HiOutlineDocumentText /> },
+    { path: `${basePath}/dispatch`, label: 'Dispatch', icon: <HiOutlineLightningBolt /> },
+    { path: `${basePath}/analytics`, label: 'Analytics', icon: <HiOutlineChartBar /> },
+  ];
+
+  const secondaryNav = [
+    { path: `${basePath}/settings`, label: 'Paramètres', icon: <HiOutlineCog /> },
   ];
 
   return (
-    <nav className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed}`}>
-      {/* Bouton toggle */}
-      <button
-        type="button"
-        className={styles.toggleButton}
-        onClick={toggleSidebar}
-        aria-label={isExpanded ? 'Réduire la barre latérale' : 'Agrandir la barre latérale'}
-        aria-expanded={isExpanded}
-      >
-        {isExpanded ? <FaTimes /> : <FaBars />}
-      </button>
+    <aside className={styles.sidebar}>
+      {/* ── Branding ── */}
+      <div className={styles.sidebarBrand}>
+        <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} />
+        <div className={styles.brandText}>
+          <span className={styles.brandName}>Lirie</span>
+          <span className={styles.brandSub}>Espace Entreprise</span>
+        </div>
+      </div>
 
-      {/* Liste des liens */}
-      <ul className={styles.menuList}>
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.to} className={styles.menuItem}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `${styles.menuLink} ${isActive ? styles.active : ''}`
-                }
-                title={!isExpanded ? item.label : undefined}
-              >
-                <Icon className={styles.icon} />
-                {isExpanded && <span className={styles.label}>{item.label}</span>}
-              </NavLink>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+      {/* ── Navigation principale ── */}
+      <div className={styles.navSection}>
+        <div className={styles.navLabel}>Navigation</div>
+        <nav className={styles.nav}>
+          {mainNav.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.end || false}
+              className={({ isActive }) =>
+                `${styles.navItem} ${isActive ? styles.navActive : ''}`
+              }
+            >
+              <span className={styles.navIcon}>{item.icon}</span>
+              <span className={styles.navText}>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+
+      {/* ── Outils ── */}
+      <div className={styles.navSection}>
+        <div className={styles.navDivider} />
+        <div className={styles.navLabel}>Outils</div>
+        <nav className={styles.nav}>
+          {toolsNav.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `${styles.navItem} ${isActive ? styles.navActive : ''}`
+              }
+            >
+              <span className={styles.navIcon}>{item.icon}</span>
+              <span className={styles.navText}>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+
+      {/* ── Paramètres ── */}
+      <div className={styles.navSection}>
+        <div className={styles.navDivider} />
+        <nav className={styles.nav}>
+          {secondaryNav.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `${styles.navItem} ${isActive ? styles.navActive : ''}`
+              }
+            >
+              <span className={styles.navIcon}>{item.icon}</span>
+              <span className={styles.navText}>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+
+      {/* ── Spacer ── */}
+      <div className={styles.sidebarSpacer} />
+
+      {/* ── User block ── */}
+      <div className={styles.userBlock} ref={userMenuRef}>
+        <button
+          className={styles.userBtn}
+          onClick={() => setUserMenuOpen((p) => !p)}
+          aria-label="Menu utilisateur"
+        >
+          <div className={styles.userAvatar}>{initials}</div>
+          <div className={styles.userMeta}>
+            <span className={styles.userDisplayName}>{displayName}</span>
+            <span className={styles.userRole}>{roleLabel}</span>
+          </div>
+          <FaChevronDown
+            className={`${styles.userChevron} ${userMenuOpen ? styles.userChevronOpen : ''}`}
+          />
+        </button>
+
+        {userMenuOpen && (
+          <div className={styles.userDropdown}>
+            {userEmail && <div className={styles.userDropdownEmail}>{userEmail}</div>}
+            <div className={styles.userDropdownDivider} />
+            <button className={styles.userDropdownItem} onClick={handleLogout}>
+              <FaSignOutAlt />
+              <span>Se déconnecter</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </aside>
   );
 };
 

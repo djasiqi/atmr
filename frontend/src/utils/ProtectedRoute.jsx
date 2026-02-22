@@ -20,6 +20,15 @@ const STORAGE_KEYS = {
     user: 'driver_user',
     publicId: 'driver_public_id',
   },
+  // ✅ ÉTAPE 6: Clés pour les utilisateurs institution
+  institution: {
+    token: 'institution_access_token',
+    refresh: 'institution_refresh_token',
+    tokenLegacy: null,
+    refreshLegacy: null,
+    user: 'institution_user',
+    publicId: 'institution_public_id',
+  },
   legacy: { token: 'authToken', refresh: 'refreshToken', tokenLegacy: null, refreshLegacy: null, user: 'user', publicId: 'public_id' },
 };
 
@@ -31,6 +40,8 @@ const getStorageKeys = (allowedRoles) => {
   const roles = allowedRoles.map((r) => String(r).toLowerCase());
   if (roles.includes('company') || roles.includes('admin')) return STORAGE_KEYS.company;
   if (roles.includes('driver')) return STORAGE_KEYS.driver;
+  // ✅ ÉTAPE 6: Support rôle institution
+  if (roles.includes('institution')) return STORAGE_KEYS.institution;
   return STORAGE_KEYS.legacy;
 };
 

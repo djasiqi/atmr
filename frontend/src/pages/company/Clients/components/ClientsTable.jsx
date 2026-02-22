@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiHome, FiPhone, FiMail, FiInbox } from 'react-icons/fi';
 import styles from './ClientsTable.module.css';
 import ClientTableRowActions from './ClientTableRowActions';
 import { getClientDisplayName } from '../../../../utils/clientSearchUtils';
@@ -7,20 +8,43 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
   if (!clients || clients.length === 0) {
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyIcon}>👥</div>
-        <h3>Aucun client trouvé</h3>
-        <p>Créez votre premier client pour commencer</p>
+        <FiInbox size={48} className={styles.emptyIcon} />
+        <h3>Aucun client trouve</h3>
+        <p>Modifiez vos filtres ou ajoutez un client</p>
       </div>
     );
   }
 
   const formatDate = (dateString) => {
-    if (!dateString) return '-';
+    if (!dateString) return '\u2014';
     try {
       return new Date(dateString).toLocaleDateString('fr-FR');
     } catch {
-      return '-';
+      return '\u2014';
     }
+  };
+
+  const getContactDisplay = (client) => {
+    if (client.contact_phone) {
+      return { value: client.contact_phone, type: 'phone' };
+    }
+    if (client.contact_email) {
+      return { value: client.contact_email, type: 'email' };
+    }
+    return { value: '\u2014', type: null };
+  };
+
+  const getAddressDisplay = (client) => {
+    const dom = client.domicile;
+    if (dom?.city && dom?.zip) {
+      const short = `${dom.zip} ${dom.city}`;
+      const full = dom.address ? `${dom.address}, ${short}` : short;
+      return { short, full };
+    }
+    if (dom?.address) {
+      return { short: dom.address, full: dom.address };
+    }
+    return { short: '\u2014', full: '' };
   };
 
   return (
@@ -29,11 +53,10 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
         <thead>
           <tr>
             <th>Client</th>
-            <th>Type</th>
             <th>Contact</th>
             <th>Adresse</th>
             <th>Statut</th>
-            <th>Date création</th>
+            <th>Cree le</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -41,102 +64,63 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
           {clients.map((client) => {
             const displayName = getClientDisplayName(client);
             const isSelected = selectedClientId === client.id;
-            const cityZip = client.domicile?.city
-              ? `${client.domicile.zip || ''} ${client.domicile.city}`.trim()
-              : client.domicile?.zip || '-';
+            const contact = getContactDisplay(client);
+            const address = getAddressDisplay(client);
 
             return (
-            <tr
-              key={client.id}
-              className={`${!client.is_active ? styles.inactive : ''} ${isSelected ? styles.selected : ''}`}
-              onClick={() => onSelect && onSelect(client)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelect && onSelect(client);
-                }
-              }}
-              aria-label={`Voir les détails de ${displayName}`}
-            >
-              <td>
-                <div className={styles.clientInfo}>
+              <tr
+                key={client.id}
+                className={`${!client.is_active ? styles.rowInactive : ''} ${isSelected ? styles.selected : ''}`}
+                onClick={() => onSelect && onSelect(client)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect && onSelect(client);
+                  }
+                }}
+                aria-label={`Voir les details de ${displayName}`}
+              >
+                <td>
                   <div className={styles.clientName}>
-                    {client.is_institution ? (
-                      <>
-                        <span className={styles.institutionBadge}>🏢</span>
-                        <strong>{displayName}</strong>
-                      </>
-                    ) : (
-                      <>
-                        <strong>{displayName}</strong>
-                        {/* Indicateurs contextuels */}
-                        {client.has_active_stay && (
-                          <span className={styles.contextBadge} title="Client hospitalisé">
-                            🏥
-                          </span>
-                        )}
-                        {client.has_billing_party && (
-                          <span className={styles.contextBadge} title="Tiers payeur configuré">
-                            💰
-                          </span>
-                        )}
-                      </>
+                    {client.is_institution && (
+                      <FiHome size={12} className={styles.institutionIcon} />
                     )}
+                    <strong title={displayName}>{displayName}</strong>
                   </div>
-                </div>
-              </td>
-              <td>
-                <span
-                  className={`${styles.typeBadge} ${
-                    client.is_institution ? styles.institution : styles.regular
-                  }`}
-                >
-                  {client.is_institution ? 'Institution' : 'Client'}
-                </span>
-              </td>
-              <td>
-                <div className={styles.contactInfo}>
-                  {client.contact_email ? (
-                    <div className={styles.email} title={client.contact_email}>
-                      📧 {client.contact_email.length > 25
-                        ? `${client.contact_email.substring(0, 22)}...`
-                        : client.contact_email}
-                    </div>
-                  ) : client.contact_phone ? (
-                    <div className={styles.phone} title={client.contact_phone}>
-                      📞 {client.contact_phone}
-                    </div>
-                  ) : (
-                    <span className={styles.noContact}>-</span>
-                  )}
-                </div>
-              </td>
-              <td>
-                <div className={styles.address} title={client.domicile?.address || client.billing_address || ''}>
-                  {cityZip}
-                </div>
-              </td>
-              <td>
-                <span
-                  className={`${styles.statusBadge} ${
-                    client.is_active ? styles.active : styles.inactive
-                  }`}
-                >
-                  {client.is_active ? 'Actif' : 'Inactif'}
-                </span>
-              </td>
-              <td>{formatDate(client.created_at)}</td>
-              <td onClick={(e) => e.stopPropagation()}>
-                <ClientTableRowActions
-                  client={client}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onView={onSelect}
-                />
-              </td>
-            </tr>
+                </td>
+                <td>
+                  <div className={styles.contactCell} title={contact.value !== '\u2014' ? contact.value : undefined}>
+                    {contact.type === 'phone' && <FiPhone size={12} className={styles.contactIcon} />}
+                    {contact.type === 'email' && <FiMail size={12} className={styles.contactIcon} />}
+                    <span>{contact.value}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className={styles.addressCell} title={address.full || undefined}>
+                    {address.short}
+                  </div>
+                </td>
+                <td>
+                  <span
+                    className={`${styles.statusBadge} ${
+                      client.is_active ? styles.statusActive : styles.statusInactive
+                    }`}
+                  >
+                    {client.is_active ? 'Actif' : 'Inactif'}
+                  </span>
+                </td>
+                <td className={styles.dateCell}>{formatDate(client.created_at)}</td>
+                <td onClick={(e) => e.stopPropagation()}>
+                  <ClientTableRowActions
+                    client={client}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onView={onSelect}
+                  />
+                </td>
+              </tr>
             );
           })}
         </tbody>

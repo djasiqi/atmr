@@ -3,6 +3,9 @@
  * P1.C — Support subscription pour OfflineBanner (event-driven, pas de poll).
  */
 
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Network");
 let cachedState: Record<string, unknown> | null = null;
 let unsubscribe: (() => void) | null = null;
 type Listener = () => void;
@@ -13,7 +16,7 @@ function notifyListeners(): void {
     try {
       fn();
     } catch (e) {
-      if (__DEV__) console.warn("[networkState] listener error:", e);
+      log.warn("listener error", { error: e });
     }
   });
 }

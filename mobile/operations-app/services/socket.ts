@@ -1,4 +1,5 @@
 // services/socket.ts
+import { getLogger } from "@/utils/logger";
 import { io, type Socket } from "socket.io-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
@@ -12,6 +13,8 @@ import { getNetworkStateSnapshot } from "./networkState";
 import { extractAuthStatus } from "./socketAuthUtils";
 import { secureStorage } from "./storage";
 import { logAuthEvent } from "./authLogging";
+
+const log = getLogger("Socket");
 
 /** Rôle socket stable — source unique de vérité (éviter strings magiques). */
 export type SocketRole = "driver" | "enterprise";
@@ -70,7 +73,7 @@ class SimpleEventEmitter {
         try {
           callback(...args);
         } catch (error) {
-          console.warn(`[EventEmitter] Error in listener for ${event}:`, error);
+          log.warn("listener error", { event, error });
         }
       });
     }
@@ -122,7 +125,7 @@ function emitSocketStatusChange() {
     try {
       cb(payload);
     } catch (e) {
-      console.warn("[socket] SocketStatus listener error:", e);
+      log.warn("socket status listener error", { error: e });
     }
   });
 }
@@ -146,14 +149,7 @@ function checkAndAddEventId(eventId: string | undefined | null, eventName: strin
   }
   
   if (seenEventIds.has(eventId)) {
-    console.warn(
-      JSON.stringify({
-        event: "duplicate_event_ignored",
-        event_id: eventId,
-        event_name: eventName,
-        timestamp: new Date().toISOString()
-      })
-    );
+    log.warn("duplicate event ignored", { event_id: eventId, event_name: eventName });
     return false; // Doublon, ignorer
   }
   
@@ -177,10 +173,7 @@ const getSocketOrigin = (): string => {
     // Validation en production : doit être HTTPS
     const isProduction = !__DEV__ || Constants.expoConfig?.extra?.APP_VARIANT === "prod";
     if (isProduction && !socketUrl.startsWith("https://")) {
-      console.error(
-        "[Socket.IO] EXPO_PUBLIC_SOCKET_URL doit commencer par 'https://' en production. " +
-        `Valeur actuelle: ${socketUrl}`
-      );
+      log.error("invalid socket url in production", { socketUrl });
       throw new Error("EXPO_PUBLIC_SOCKET_URL invalide en production");
     }
     // ✅ Normaliser : supprimer slash final pour éviter //socket.io
@@ -202,18 +195,18 @@ const getSocketOrigin = (): string => {
     const socketOrigin = `${apiUrl.protocol}//${apiUrl.host}`;
     // ✅ Log pour debug
     if (__DEV__) {
-      console.log(`[Socket] SOCKET_ORIGIN=${socketOrigin} (from baseURL=${baseURL})`);
+      log.info("socket origin from baseurl", { socketOrigin, baseURL });
     }
     // ✅ Normaliser : supprimer slash final (déjà normalisé mais on s'assure)
     return socketOrigin.replace(/\/+$/, "");
   } catch (e) {
     // Fallback: regex si URL malformée
-    console.warn(`[Socket] Erreur parsing baseURL=${baseURL}, fallback regex:`, e);
+    log.warn("baseurl parse error, using fallback", { baseURL, error: e });
     let socketOrigin = baseURL.replace(/\/api(?:\/v\d+)?$/, "");
     // ✅ Normaliser : supprimer slash final pour éviter //socket.io
     socketOrigin = socketOrigin.replace(/\/+$/, "");
     if (__DEV__) {
-      console.log(`[Socket] SOCKET_ORIGIN=${socketOrigin} (from baseURL=${baseURL}, regex fallback)`);
+      log.info("socket origin regex fallback", { socketOrigin, baseURL });
     }
     return socketOrigin;
   }
@@ -231,10 +224,7 @@ const getSocketOrigin = (): string => {
 
   // PRIORITÉ 5: Production - erreur si non défini
   // ✅ AMÉLIORATION: Logger l'erreur mais utiliser baseURL comme dernier recours
-  console.error(
-    "[Socket.IO] ⚠️ EXPO_PUBLIC_SOCKET_URL non défini en production. " +
-    "Utilisation de baseURL comme fallback (non recommandé)."
-  );
+  log.error("socket url undefined in production, using baseurl fallback", {});
   // Utiliser baseURL comme dernier recours au lieu de throw
   try {
     const apiUrl = new URL(baseURL);
@@ -263,7 +253,7 @@ const isAndroidEmulator = Platform.OS === "android" &&
 if (isAndroidEmulator && SOCKET_ORIGIN.includes("localhost")) {
   SOCKET_ORIGIN = SOCKET_ORIGIN.replace("localhost", "10.0.2.2");
   if (__DEV__) {
-    console.log(`[Socket] Android emulator détecté, SOCKET_ORIGIN ajusté: ${SOCKET_ORIGIN}`);
+    log.info("android emulator origin adjusted", { SOCKET_ORIGIN });
   }
 }
 
@@ -326,12 +316,12 @@ export async function connectSocket(
   // ✅ Feature flag : désactiver Socket.IO si EXPO_PUBLIC_SOCKET_ENABLED=false
   const socketEnabled = process.env.EXPO_PUBLIC_SOCKET_ENABLED !== 'false';
   if (!socketEnabled) {
-    console.log('[Socket] Socket.IO désactivé (EXPO_PUBLIC_SOCKET_ENABLED=false)');
+    log.info("socket disabled by env", {});
     return null;
   }
   
   if (!token) {
-    console.warn("❌ Aucun token fourni à connectSocket");
+    log.warn("no token provided", {});
     return null;
   }
 
@@ -373,7 +363,7 @@ export async function connectSocket(
   // ✅ Setup centralized booking event listeners
   function setupBookingListeners(s: Socket | null) {
     if (!s || !s.connected) {
-      console.warn("⚠️ Cannot setup booking listeners: socket not connected");
+      log.warn("cannot setup booking listeners", { reason: "socket not connected" });
       return;
     }
 
@@ -391,12 +381,7 @@ export async function connectSocket(
         return; // Doublon, ignorer
       }
       
-      console.log(JSON.stringify({
-        event: "booking_new_received",
-        booking_id: data?.id,
-        event_id: eventId,
-        timestamp: new Date().toISOString()
-      }));
+      log.info("booking new received", { booking_id: data?.id, event_id: eventId });
       bookingEmitter.emit("new_booking", data);
     });
 
@@ -408,13 +393,7 @@ export async function connectSocket(
         return; // Doublon, ignorer
       }
       
-      console.log(JSON.stringify({
-        event: "booking_updated_received",
-        booking_id: data?.id,
-        status: data?.status,
-        event_id: eventId,
-        timestamp: new Date().toISOString()
-      }));
+      log.info("booking updated received", { booking_id: data?.id, status: data?.status, event_id: eventId });
       bookingEmitter.emit("booking_updated", data);
     });
 
@@ -427,12 +406,7 @@ export async function connectSocket(
       }
       
       const bookingId = typeof data === "object" && "id" in data ? data.id : null;
-      console.log(JSON.stringify({
-        event: "booking_cancelled_received",
-        booking_id: bookingId,
-        event_id: eventId,
-        timestamp: new Date().toISOString()
-      }));
+      log.info("booking cancelled received", { booking_id: bookingId, event_id: eventId });
       bookingEmitter.emit("booking_cancelled", data);
     });
 
@@ -444,25 +418,21 @@ export async function connectSocket(
       }
 
       const bookingId = (data as any)?.booking_id ?? (data as any)?.id ?? null;
-      console.log(
-        JSON.stringify({
-          event: "booking_reassigned_received",
-          booking_id: bookingId,
-          new_driver_id: (data as any)?.new_driver_id,
-          event_id: eventId,
-          timestamp: new Date().toISOString(),
-        })
-      );
+      log.info("booking reassigned received", {
+        booking_id: bookingId,
+        new_driver_id: (data as any)?.new_driver_id,
+        event_id: eventId,
+      });
       bookingEmitter.emit("booking_reassigned", data);
     });
 
-    console.log("✅ Booking event listeners setup complete");
+    log.info("booking listeners setup complete", {});
   }
 
   // ✅ P2: Setup centralized message event listeners
   function setupMessageListeners(s: Socket | null) {
     if (!s || !s.connected) {
-      console.warn("⚠️ Cannot setup message listeners: socket not connected");
+      log.warn("cannot setup message listeners", { reason: "socket not connected" });
       return;
     }
 
@@ -477,17 +447,15 @@ export async function connectSocket(
         return; // Doublon, ignorer
       }
       
-      console.log(JSON.stringify({
-        event: "team_chat_message_received",
+      log.info("team chat message received", {
         message_id: message?.id,
         sender_id: message?.sender_id,
         event_id: eventId,
-        timestamp: new Date().toISOString()
-      }));
+      });
       messageEmitter.emit("team_chat_message", message);
     });
 
-    console.log("✅ Message event listeners setup complete");
+    log.info("message listeners setup complete", {});
   }
 
   // ✅ P0.3: Un disconnect ultérieur est "explicite" seulement si disconnectSocket() a été appelé
@@ -515,7 +483,7 @@ export async function connectSocket(
     session_diag = getSessionDiagHeaderValue(); // peut être null, auth envoyé quand même (token seul minimum)
   }
 
-  console.log(`[connectSocket] 📍 Avant création socket, SOCKET_ORIGIN=${SOCKET_ORIGIN}`);
+  log.info("before socket creation", { SOCKET_ORIGIN });
   
   const authExtras: SocketAuthExtras =
     socketRole === "driver" ? { device_id, session_diag: session_diag ?? undefined } : {};
@@ -525,10 +493,10 @@ export async function connectSocket(
       // ✅ Normalisation finale avant l'appel io() pour éviter //socket.io
       const normalizedOrigin = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
       const opts = buildOptions(token, socketRole ?? "driver", authExtras);
-      console.log(`[connectSocket] 📍 Appel io() avec SOCKET_ORIGIN=${normalizedOrigin}`);
+      log.info("calling io()", { SOCKET_ORIGIN: normalizedOrigin });
       // ⚠️ Utiliser l'origine sans /api sinon 404 sur /api/socket.io
       socket = io(normalizedOrigin, opts);
-      console.log(`[connectSocket] ✅ Socket créé:`, socket ? `id=${socket.id || 'pending'}` : 'NULL');
+      log.info("socket created", { id: socket ? (socket.id || "pending") : null });
 
       socket.on("connect", async () => {
         // ✅ P2.1.1: Reset backoff après connexion réussie
@@ -553,13 +521,7 @@ export async function connectSocket(
         }
         logAuthEvent("SOCKET_CONNECT", { role: socketRole, outcome: "success" });
         emitSocketStatusChange();
-        // ✅ Logs structurés
-        console.log(JSON.stringify({
-          event: "socket_connect",
-          socket_id: socket?.id,
-          timestamp: new Date().toISOString(),
-          user_type: socketRole || "unknown"
-        }));
+        log.info("connected", { socket_id: socket?.id, user_type: socketRole || "unknown" });
         
         if (socketRole === "driver") {
           await joinDriverRoom().catch(() => {});  // ✅ Corrigé : enlever le + (syntaxe incorrecte)
@@ -582,12 +544,10 @@ export async function connectSocket(
               // ✅ Utiliser le timestamp de dernière sync pour resync incrémental
               const since = lastSync ? new Date(Number(lastSync)).toISOString() : undefined;
               
-              console.log(JSON.stringify({
-                event: "resync_start",
+              log.info("resync start", {
                 last_sync: lastSync ? new Date(Number(lastSync)).toISOString() : null,
                 since: since || null,
-                timestamp: new Date().toISOString()
-              }));
+              });
               
               try {
                 // ✅ Charger les données serveur avec filtre "since" pour resync incrémental
@@ -602,11 +562,9 @@ export async function connectSocket(
                   try {
                     localBookings = JSON.parse(localBookingsRaw);
                   } catch (parseError) {
-                    console.warn(JSON.stringify({
-                      event: "resync_parse_local_error",
+                    log.warn("resync parse local error", {
                       error: parseError instanceof Error ? parseError.message : String(parseError),
-                      timestamp: new Date().toISOString()
-                    }));
+                    });
                   }
                 }
                 
@@ -615,8 +573,7 @@ export async function connectSocket(
                 
                 // ✅ Logger les conflits détectés
                 if (resolutionResult.hasConflicts) {
-                  console.log(JSON.stringify({
-                    event: "resync_conflicts_detected",
+                  log.info("resync conflicts detected", {
                     conflicts_count: resolutionResult.conflicts.length,
                     conflicts: resolutionResult.conflicts.map(c => ({
                       id: c.id,
@@ -624,8 +581,7 @@ export async function connectSocket(
                       conflictingFields: c.conflictingFields,
                       resolution: c.resolution
                     })),
-                    timestamp: new Date().toISOString()
-                  }));
+                  });
                   
                   // ✅ Stocker l'historique des conflits (pour debugging)
                   try {
@@ -645,40 +601,29 @@ export async function connectSocket(
                     await AsyncStorage.setItem("conflict_history", JSON.stringify(trimmedHistory));
                   } catch (historyError) {
                     // Ignorer les erreurs de stockage de l'historique
-                    console.warn(JSON.stringify({
-                      event: "resync_conflict_history_error",
+                    log.warn("resync conflict history error", {
                       error: historyError instanceof Error ? historyError.message : String(historyError),
-                      timestamp: new Date().toISOString()
-                    }));
+                    });
                   }
                 }
                 
                 // ✅ Émettre les données résolues (pas les données serveur brutes)
                 resyncEmitter.emit("bookings:resync", resolutionResult.resolved);
-                console.log(JSON.stringify({
-                  event: "resync_complete",
+                log.info("resync complete", {
                   bookings_count: resolutionResult.resolved.length,
                   conflicts_count: resolutionResult.conflicts.length,
                   has_conflicts: resolutionResult.hasConflicts,
-                  timestamp: new Date().toISOString()
-                }));
+                });
                 
                 // ✅ Mettre à jour le timestamp de dernière synchronisation
                 await AsyncStorage.setItem("last_sync_timestamp", now.toString());
               } catch (resyncError) {
-                console.warn(JSON.stringify({
-                  event: "resync_error",
+                log.warn("resync error", {
                   error: resyncError instanceof Error ? resyncError.message : String(resyncError),
-                  timestamp: new Date().toISOString()
-                }));
+                });
               }
             } else {
-              console.log(JSON.stringify({
-                event: "resync_skipped",
-                reason: "recent_sync",
-                last_sync: new Date(Number(lastSync)).toISOString(),
-                timestamp: new Date().toISOString()
-              }));
+              log.info("resync skipped", { reason: "recent_sync", last_sync: new Date(Number(lastSync)).toISOString() });
             }
 
             // ✅ P2: Resync messages manquant
@@ -696,11 +641,9 @@ export async function connectSocket(
                 if (storedCompanyId) {
                   const companyId = parseInt(storedCompanyId, 10);
                   if (!isNaN(companyId)) {
-                    console.log(JSON.stringify({
-                      event: "messages_resync_start",
+                    log.info("messages resync start", {
                       last_sync: lastMessagesSync ? new Date(Number(lastMessagesSync)).toISOString() : null,
-                      timestamp: new Date().toISOString()
-                    }));
+                    });
                     
                     try {
                       // ✅ Charger les données serveur
@@ -715,11 +658,9 @@ export async function connectSocket(
                         try {
                           localMessages = JSON.parse(localMessagesRaw);
                         } catch (parseError) {
-                          console.warn(JSON.stringify({
-                            event: "messages_resync_parse_local_error",
+                          log.warn("messages resync parse local error", {
                             error: parseError instanceof Error ? parseError.message : String(parseError),
-                            timestamp: new Date().toISOString()
-                          }));
+                          });
                         }
                       }
                       
@@ -728,8 +669,7 @@ export async function connectSocket(
                       
                       // ✅ Logger les conflits détectés (rare pour les messages)
                       if (resolutionResult.hasConflicts) {
-                        console.log(JSON.stringify({
-                          event: "messages_resync_conflicts_detected",
+                        log.info("messages resync conflicts detected", {
                           conflicts_count: resolutionResult.conflicts.length,
                           conflicts: resolutionResult.conflicts.map(c => ({
                             id: c.id,
@@ -737,58 +677,43 @@ export async function connectSocket(
                             conflictingFields: c.conflictingFields,
                             resolution: c.resolution
                           })),
-                          timestamp: new Date().toISOString()
-                        }));
+                        });
                       }
                       
                       // ✅ Émettre les données résolues
                       messageEmitter.emit("messages:resync", resolutionResult.resolved);
-                      console.log(JSON.stringify({
-                        event: "messages_resync_complete",
+                      log.info("messages resync complete", {
                         messages_count: resolutionResult.resolved.length,
                         conflicts_count: resolutionResult.conflicts.length,
                         has_conflicts: resolutionResult.hasConflicts,
-                        timestamp: new Date().toISOString()
-                      }));
+                      });
                       
                       // ✅ Mettre à jour le timestamp de dernière synchronisation
                       await AsyncStorage.setItem("last_messages_sync_timestamp", nowMessages.toString());
                     } catch (messagesResyncError) {
-                      console.warn(JSON.stringify({
-                        event: "messages_resync_error",
+                      log.warn("messages resync error", {
                         error: messagesResyncError instanceof Error ? messagesResyncError.message : String(messagesResyncError),
-                        timestamp: new Date().toISOString()
-                      }));
+                      });
                     }
                   }
                 } else {
-                  console.log(JSON.stringify({
-                    event: "messages_resync_skipped",
-                    reason: "no_company_id",
-                    timestamp: new Date().toISOString()
-                  }));
+                  log.info("messages resync skipped", { reason: "no_company_id" });
                 }
               } else {
-                console.log(JSON.stringify({
-                  event: "messages_resync_skipped",
+                log.info("messages resync skipped", {
                   reason: "recent_sync",
                   last_sync: new Date(Number(lastMessagesSync)).toISOString(),
-                  timestamp: new Date().toISOString()
-                }));
+                });
               }
             } catch (messagesError) {
-              console.warn(JSON.stringify({
-                event: "messages_resync_setup_error",
+              log.warn("messages resync setup error", {
                 error: messagesError instanceof Error ? messagesError.message : String(messagesError),
-                timestamp: new Date().toISOString()
-              }));
+              });
             }
           } catch (error) {
-            console.warn(JSON.stringify({
-              event: "resync_setup_error",
+            log.warn("resync setup error", {
               error: error instanceof Error ? error.message : String(error),
-              timestamp: new Date().toISOString()
-            }));
+            });
           }
         } else if (socketRole === "enterprise") {
           joinCompanyRoom().catch(() => {});  // ✅ Corrigé : enlever le + (syntaxe incorrecte)
@@ -801,11 +726,7 @@ export async function connectSocket(
         if (socket) {
           socket.on("pong", (data: any) => {
             lastHeartbeat = Date.now();
-            console.log(JSON.stringify({
-              event: "heartbeat_pong",
-              timestamp: data?.timestamp,
-              received_at: new Date().toISOString()
-            }));
+            log.info("heartbeat pong", { timestamp: data?.timestamp });
           });
         }
         
@@ -819,22 +740,16 @@ export async function connectSocket(
             const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
             // Si pas de pong depuis >60s, forcer reconnexion
             if (timeSinceLastHeartbeat > 60000) {
-              console.warn(JSON.stringify({
-                event: "heartbeat_timeout",
+              log.warn("heartbeat timeout, force reconnect", {
                 time_since_last_ms: timeSinceLastHeartbeat,
                 threshold_ms: 60000,
-                action: "force_reconnect",
-                timestamp: new Date().toISOString()
-              }));
+              });
               currentSocket.disconnect();
               currentSocket.connect();
               lastHeartbeat = Date.now();
             } else {
               currentSocket.emit("ping");
-              console.log(JSON.stringify({
-                event: "heartbeat_ping",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("heartbeat ping", {});
             }
           }
         }, 30000); // Toutes les 30s
@@ -846,27 +761,19 @@ export async function connectSocket(
             const currentSocket = socket;
             
             if (!isConnected && currentSocket?.connected) {
-              console.log(JSON.stringify({
-                event: "network_offline",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("network offline", {});
               currentSocket.disconnect();
             }
             
             if (isConnected && !currentSocket?.connected) {
-              console.log(JSON.stringify({
-                event: "network_online",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("network online", {});
               // Reconnecter explicitement (Socket.IO ne le fait pas toujours après disconnect manuel)
               try {
                 currentSocket?.connect();
               } catch (e) {
-                console.warn(JSON.stringify({
-                  event: "network_online_reconnect_failed",
+                log.warn("network online reconnect failed", {
                   error: e instanceof Error ? e.message : String(e),
-                  timestamp: new Date().toISOString()
-                }));
+                });
               }
             }
           });
@@ -890,22 +797,13 @@ export async function connectSocket(
             emitSocketStatusChange();
           }
         }
-        // ✅ Logs structurés
-        console.log(JSON.stringify({
-          event: "socket_disconnect",
-          reason: reason,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("disconnected", { reason });
         connectPromise = null;
         
         // ✅ Ne pas reconnecter si serveur a déconnecté volontairement (io server disconnect / unauthorized)
         const reasonStr = String(reason);
         if (reasonStr === "io server disconnect" || reasonStr === "unauthorized") {
-          console.log(JSON.stringify({
-            event: "socket_disconnect_stop_reconnect",
-            reason: reasonStr,
-            timestamp: new Date().toISOString()
-          }));
+          log.info("disconnect stop reconnect", { reason: reasonStr });
           if (socket && socket.io) {
             (socket.io.opts as any).reconnection = false;
           }
@@ -941,12 +839,7 @@ export async function connectSocket(
           }
           reconnectExhausted = true;
           pushSessionEvent("SOCKET_RECONNECT_FAILED");
-          console.log(JSON.stringify({
-            event: "socket_reconnect_failed",
-            role: "enterprise",
-            reconnectExhausted: true,
-            timestamp: new Date().toISOString()
-          }));
+          log.info("reconnect failed", { role: "enterprise", reconnectExhausted: true });
         }
       });
 
@@ -963,12 +856,7 @@ export async function connectSocket(
           enterpriseReconnectAttemptCount = 0;
         }
         emitSocketStatusChange();
-        // ✅ Logs structurés
-        console.log(JSON.stringify({
-          event: "socket_reconnect",
-          attempt: attempt,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("reconnected", { attempt });
         lastHeartbeat = Date.now();
         
         if (socketRole === "driver") {
@@ -977,18 +865,10 @@ export async function connectSocket(
           setupBookingListeners(socket);
           // ✅ P2: Re-setup message listeners on reconnect
           setupMessageListeners(socket);
-          console.log(JSON.stringify({
-            event: "socket_rejoin_room",
-            room: "driver",
-            timestamp: new Date().toISOString()
-          }));
+          log.info("joined room", { room: "driver" });
         } else if (socketRole === "enterprise") {
           joinCompanyRoom().catch(() => {});
-          console.log(JSON.stringify({
-            event: "socket_rejoin_room",
-            room: "company",
-            timestamp: new Date().toISOString()
-          }));
+          log.info("joined room", { room: "company" });
         }
       });
 
@@ -1010,29 +890,17 @@ export async function connectSocket(
                            errorMsg.includes("Trop de tentatives") ||
                            errorMsg.includes("retry_after");
 
-        console.error(JSON.stringify({
-          event: "socket_connect_error",
-          error: errorMsg,
-          is_rate_limit: isRateLimit,
-          timestamp: new Date().toISOString()
-        }));
+        log.error("connect error", { error: errorMsg, is_rate_limit: isRateLimit });
 
         // ✅ Si rate limit, désactiver reconnexion automatique pour éviter boucle
         if (isRateLimit && socket && socket.io) {
-          console.warn(JSON.stringify({
-            event: "socket_rate_limit_detected",
-            action: "disabling_auto_reconnect",
-            timestamp: new Date().toISOString()
-          }));
+          log.warn("rate limit detected, disabling auto reconnect", {});
           (socket.io.opts as any).reconnection = false;
           // Réactiver après 30 secondes (le retry_after du serveur)
           setTimeout(() => {
             if (socket && socket.io) {
               (socket.io.opts as any).reconnection = true;
-              console.log(JSON.stringify({
-                event: "socket_reconnect_reenabled",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("reconnect reenabled", {});
             }
           }, 30000);
         }
@@ -1111,20 +979,11 @@ export async function connectSocket(
                               errorMsg.includes("expiré") ||
                               errorMsg.includes("expired");
         
-        console.error(JSON.stringify({
-          event: "socket_unauthorized",
-          error: errorMsg,
-          is_token_expired: isTokenExpired,
-          timestamp: new Date().toISOString()
-        }));
+        log.error("unauthorized", { error: errorMsg, is_token_expired: isTokenExpired });
         
         // ✅ Si token expiré, arrêter reconnexion auto et déclencher refresh
         if (isTokenExpired && socket && socket.io) {
-          console.warn(JSON.stringify({
-            event: "socket_token_expired_detected",
-            action: "disabling_auto_reconnect_and_refreshing_token",
-            timestamp: new Date().toISOString()
-          }));
+          log.warn("token expired, disabling auto reconnect", {});
           
           // Désactiver reconnexion automatique pour éviter boucle
           (socket.io.opts as any).reconnection = false;
@@ -1143,10 +1002,7 @@ export async function connectSocket(
             
             const refreshToken = await secureStorage.getRefreshToken();
             if (refreshToken) {
-              console.log(JSON.stringify({
-                event: "socket_refreshing_token",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("refreshing token", {});
               
               const refreshResponse = await refreshAccessToken(refreshToken);
               
@@ -1157,11 +1013,7 @@ export async function connectSocket(
                   await secureStorage.setRefreshToken(refreshResponse.refresh_token);
                 }
                 
-                console.log(JSON.stringify({
-                  event: "socket_token_refreshed_successfully",
-                  action: "will_reconnect_manually",
-                  timestamp: new Date().toISOString()
-                }));
+                log.info("token refreshed, will reconnect manually", {});
                 
                 // Réactiver reconnexion et reconnecter manuellement après un court délai
                 setTimeout(() => {
@@ -1171,23 +1023,15 @@ export async function connectSocket(
                   }
                 }, 1000);
               } else {
-                console.error(JSON.stringify({
-                  event: "socket_token_refresh_failed_no_token",
-                  timestamp: new Date().toISOString()
-                }));
+                log.error("token refresh failed, no token", {});
               }
             } else {
-              console.error(JSON.stringify({
-                event: "socket_token_refresh_failed_no_refresh_token",
-                timestamp: new Date().toISOString()
-              }));
+              log.error("token refresh failed, no refresh token", {});
             }
           } catch (refreshError: any) {
-            console.error(JSON.stringify({
-              event: "socket_token_refresh_error",
+            log.error("token refresh error", {
               error: refreshError?.message || String(refreshError),
-              timestamp: new Date().toISOString()
-            }));
+            });
             // En cas d'erreur de refresh, ne pas reconnecter automatiquement
             // L'utilisateur devra se reconnecter manuellement
           }
@@ -1202,97 +1046,58 @@ export async function connectSocket(
                            errorData?.error?.includes("Trop de tentatives") ||
                            errorData?.retry_after !== undefined;
         
-        console.error(JSON.stringify({
-          event: "socket_error",
+        log.error("socket error", {
           error: errorMsg,
           error_data: errorData,
           is_rate_limit: isRateLimit,
           retry_after: errorData?.retry_after,
-          timestamp: new Date().toISOString()
-        }));
+        });
         
         // ✅ Si rate limit, désactiver reconnexion automatique temporairement
         if (isRateLimit && socket && socket.io) {
           const retryAfter = errorData?.retry_after || 30;
-          console.warn(JSON.stringify({
-            event: "socket_rate_limit_error_detected",
-            action: "disabling_auto_reconnect",
-            retry_after: retryAfter,
-            timestamp: new Date().toISOString()
-          }));
+          log.warn("rate limit error, disabling auto reconnect", { retry_after: retryAfter });
           (socket.io.opts as any).reconnection = false;
           // Réactiver après retry_after + marge de sécurité
           setTimeout(() => {
             if (socket && socket.io) {
               (socket.io.opts as any).reconnection = true;
-              console.log(JSON.stringify({
-                event: "socket_reconnect_reenabled_after_rate_limit",
-                timestamp: new Date().toISOString()
-              }));
+              log.info("reconnect reenabled after rate limit", {});
             }
           }, (retryAfter + 5) * 1000); // +5s marge de sécurité
         }
       });
 
       socket.on("connected", (data: any) => {
-        console.log(JSON.stringify({
-          event: "socket_handshake_ok",
-          data: data,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("handshake ok", { data });
       });
 
       // ✅ Événements supplémentaires du backend
       socket.on("joined_room", (data: any) => {
-        console.log(JSON.stringify({
-          event: "socket_joined_room",
-          rooms: data?.rooms,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("joined room", { rooms: data?.rooms });
       });
 
       socket.on("joined_company", (data: any) => {
-        console.log(JSON.stringify({
-          event: "socket_joined_company",
-          company_id: data?.company_id,
-          room: data?.room,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("joined company", { company_id: data?.company_id, room: data?.room });
       });
 
       socket.on("typing_indicator", (data: any) => {
-        console.log(JSON.stringify({
-          event: "user_typing",
-          user_id: data?.user_id,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("user typing", { user_id: data?.user_id });
         // TODO: Afficher indicateur de frappe dans UI
       });
 
       socket.on("stop_typing", (data: any) => {
-        console.log(JSON.stringify({
-          event: "user_stop_typing",
-          user_id: data?.user_id,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("user stop typing", { user_id: data?.user_id });
       });
 
       // ✅ Événements d'arrivée driver
       socket.on("driver_arrived_at_pickup", (data: any) => {
-        console.log(JSON.stringify({
-          event: "driver_arrived_pickup",
-          driver_id: data?.driver_id,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("driver arrived pickup", { driver_id: data?.driver_id });
         // TODO: Afficher notification "Driver arrivé au point de départ"
       });
 
       socket.on("driver_arrived_at_dropoff", (data: any) => {
-        console.log(JSON.stringify({
-          event: "driver_arrived_dropoff",
-          driver_id: data?.driver_id,
-          timestamp: new Date().toISOString()
-        }));
+        log.info("driver arrived dropoff", { driver_id: data?.driver_id });
         // TODO: Afficher notification "Driver arrivé à destination"
       });
     } catch (e) {
@@ -1326,16 +1131,11 @@ export function disconnectSocket() {
       networkUnsubscribe = null;
     }
     
-    console.log(JSON.stringify({
-      event: "socket_disconnect_cleanup",
-      timestamp: new Date().toISOString()
-    }));
+    log.info("disconnect cleanup", {});
   } catch (err) {
-    console.error(JSON.stringify({
-      event: "socket_disconnect_error",
+    log.error("disconnect error", {
       error: err instanceof Error ? err.message : String(err),
-      timestamp: new Date().toISOString()
-    }));
+    });
   } finally {
     socket = null;
     socketRole = null;
@@ -1359,11 +1159,7 @@ export async function reconnectSocketManually(role: SocketRole): Promise<Socket 
     token = await secureStorage.getEnterpriseToken();
   }
   if (!token) {
-    console.warn(JSON.stringify({
-      event: "reconnect_socket_manual_no_token",
-      role,
-      timestamp: new Date().toISOString()
-    }));
+    log.warn("reconnect manual no token", { role });
     return null;
   }
   // Réinitialiser flags avant tentative
@@ -1383,13 +1179,10 @@ export async function sendDriverHeartbeat(payload: {
   last_mission_id?: number;
   location?: { lat: number; lon: number };
 }) {
+  if (socketRole !== "driver") return;
   const s = socket ?? (connectPromise ? await connectPromise : null);
   if (!s || !s.connected) {
-    console.warn(JSON.stringify({
-      event: "driver_heartbeat_skipped",
-      reason: "socket_not_connected",
-      timestamp: new Date().toISOString()
-    }));
+    log.warn("driver heartbeat skipped", { reason: "socket_not_connected" });
     return;
   }
   
@@ -1398,19 +1191,17 @@ export async function sendDriverHeartbeat(payload: {
     timestamp: Date.now(),
   });
   
-  console.log(JSON.stringify({
-    event: "driver_heartbeat_sent",
+  log.info("driver heartbeat sent", {
     last_mission_id: payload.last_mission_id,
     has_location: !!payload.location,
-    timestamp: new Date().toISOString()
-  }));
+  });
 }
 
 // Helpers côté driver
 export async function joinDriverRoom() {
   const s = socket ?? (connectPromise ? await connectPromise : null);
   if (!s) {
-    console.warn("⚠️ Socket non connecté, impossible de rejoindre la room");
+    log.warn("cannot join driver room", { reason: "socket not connected" });
     return;
   }
 
@@ -1420,27 +1211,25 @@ export async function joinDriverRoom() {
     // ✅ FIX: Validation stricte du driver_id
     if (driver_id && Number.isFinite(driver_id) && driver_id > 0) {
       s?.emit("join_driver_room", { driver_id });
-      console.log(`📍 join_driver_room émis avec driver_id=${driver_id}`);
+      log.info("join driver room emitted", { driver_id });
     } else {
       s?.emit("join_driver_room");
-      console.log("📍 join_driver_room émis sans driver_id (fallback JWT)");
+      log.info("join driver room emitted", { driver_id: null });
     }
   } catch {
     s?.emit("join_driver_room");
-    console.log(
-      "📍 join_driver_room émis sans driver_id (erreur AsyncStorage)"
-    );
+    log.info("join driver room emitted", { reason: "async storage error" });
   }
 }
 
 export async function joinCompanyRoom() {
   const s = socket ?? (connectPromise ? await connectPromise : null);
   if (!s) {
-    console.warn("⚠️ Socket non connecté, impossible de rejoindre la room entreprise");
+    log.warn("cannot join company room", { reason: "socket not connected" });
     return;
   }
   s.emit("join_company");
-  console.log("🏢 join_company émis");
+  log.info("join company emitted", {});
 }
 
 export async function sendDriverLocation(payload: {
@@ -1451,11 +1240,13 @@ export async function sendDriverLocation(payload: {
   accuracy?: number;
   timestamp?: number | string;
 }) {
+  if (socketRole !== "driver") {
+    log.warn("cannot send location", { reason: "socket_not_driver", currentRole: socketRole });
+    return;
+  }
   const s = socket ?? (connectPromise ? await connectPromise : null);
   if (!s) {
-    console.warn(
-      "⚠️ Socket non connecté, impossible d'envoyer la localisation"
-    );
+    log.warn("cannot send location", { reason: "socket not connected" });
     return;
   }
 
@@ -1470,14 +1261,14 @@ export async function sendDriverLocation(payload: {
     const has_driver_id =
       "driver_id" in (body as Record<string, unknown>) &&
       typeof (body as any).driver_id === "number";
-    console.log(`📍 driver_location émis:`, {
+    log.info("driver location emitted", {
       has_driver_id,
       lat: payload.latitude,
       lon: payload.longitude,
     });
   } catch {
     s?.emit("driver_location", payload);
-    console.log("📍 driver_location émis sans driver_id (erreur)");
+    log.info("driver location emitted", { reason: "no driver_id" });
   }
 }
 

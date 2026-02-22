@@ -3743,12 +3743,26 @@ class MobileCancelRide(Resource):
             log_cancellation_persisted,
         )
 
+        from models.invoice import CompanyBillingSettings
+
+        status_at_cancel = booking.status
+        if hasattr(status_at_cancel, "value"):
+            status_at_cancel = status_at_cancel.value
+
+        billing = CompanyBillingSettings.query.filter_by(
+            company_id=booking.company_id
+        ).first() if getattr(booking, "company_id", None) else None
+        cancellation_policy = getattr(billing, "cancellation_policy", None) if billing else None
+
         already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
         cancel_fields = compute_cancellation_fields(
             reason_code=reason_code,
             reason_text=reason_text,
             cancelled_by_role="company",
             now=datetime.now(UTC),
+            booking=booking,
+            policy=cancellation_policy,
+            status_at_cancel=status_at_cancel,
         )
         for key, val in cancel_fields.items():
             if hasattr(booking, key):

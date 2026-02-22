@@ -191,6 +191,11 @@ services:
       API_LEGACY_ENABLED: "false" # Désactiver API legacy pour éviter conflit endpoint specs
       API_DOCS: "off" # Désactiver Swagger UI en production
 
+      # Sécurité — feature flags
+      SECURITY_2FA_ENABLED: "false"
+      IP_MASK_MODE: "first_octet"
+      AUDIT_LOG_RETENTION_DAYS: "730"
+
       # ML Models
       ML_MODELS_PATH: /app/data/ml
       RL_MODELS_PATH: /app/data/rl
@@ -205,11 +210,15 @@ services:
       # ✅ AUDIT 100 USERS: Configuration Gunicorn pour 100 utilisateurs simultanés
       GUNICORN_WORKERS: 6 # Augmenté de 4 à 6 pour supporter 100 utilisateurs (laisser 2 CPU pour système/overhead)
 
+      # Firebase Cloud Messaging (FCM)
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+
     volumes:
       - backend_logs:/app/logs
       - backend_data:/app/data
       - backend_cache:/app/cache
       - backend_uploads:/app/uploads # Volume pour les logos de compagnie et autres uploads
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
       # Les modèles ML/RL sont inclus dans l'image Docker
     ports:
       - "5000:5000"
@@ -338,10 +347,15 @@ services:
       ML_MODELS_PATH: /app/data/ml
       RL_MODELS_PATH: /app/data/rl
       APP_ENCRYPTION_KEY_B64: ${APP_ENCRYPTION_KEY_B64}
+
+      # Firebase Cloud Messaging (FCM)
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+
     volumes:
       - backend_logs:/app/logs
       - backend_data:/app/data
       - backend_cache:/app/cache
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
       # Les modèles ML/RL sont inclus dans l'image Docker
     networks:
       - atmr-network

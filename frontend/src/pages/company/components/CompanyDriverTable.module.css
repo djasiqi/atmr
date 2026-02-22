@@ -1,137 +1,307 @@
-/* Table pour les chauffeurs de l'entreprise - Design comme Facturation */
+/* ============================================================
+   CompanyDriverTable — Table chauffeurs (SaaS Ops Pro)
+   ============================================================ */
 
 .tableContainer {
   background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
   overflow-x: auto;
-  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 800px;
+  min-width: 640px;
 }
 
 .table th {
-  background-color: var(--bg-tertiary);
-  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary, #f8fafc);
+  padding: 10px 16px;
   text-align: left;
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-tertiary);
-  border-bottom: 2px solid var(--border-primary);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-primary);
   position: sticky;
   top: 0;
-  z-index: 10;
-  font-size: var(--font-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  z-index: 5;
+  white-space: nowrap;
+}
+
+.thActions {
+  text-align: right !important;
+  width: 100px;
 }
 
 .table td {
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border-primary);
   vertical-align: middle;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-secondary, #475569);
 }
 
 .table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.table tbody tr:hover {
-  background-color: var(--bg-hover);
+.row {
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
 
-/* --- Styles pour la cellule utilisateur (avatar + nom) --- */
-.userCell {
+.row:hover {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+/* ── Driver cell (name + avatar) ── */
+.driverCell {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-full);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   object-fit: cover;
   border: 2px solid var(--bg-primary);
   box-shadow: 0 0 0 1px var(--border-primary);
+  flex-shrink: 0;
 }
 
-.fullName {
-  font-weight: var(--font-weight-semibold);
+.avatarFallback {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg-tertiary, #f1f5f9);
+  color: var(--text-tertiary, #94a3b8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1px solid var(--border-primary);
 }
 
-.username {
-  font-size: var(--font-size-xs);
-  color: var(--text-tertiary);
+.driverInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-/* --- Styles pour la cellule véhicule --- */
-.vehicleCell {
-  line-height: 1.4;
+.driverName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.vehicleModel {
-  font-weight: 500;
+.driverSub {
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.vehicleBrand {
-  font-size: 0.8rem;
-  color: #64748b;
+/* ── Vehicle ── */
+.vehicleText {
+  font-size: 13px;
+  color: var(--text-secondary, #475569);
 }
 
-/* --- Styles pour les badges de statut --- */
+/* ── Status badges (availability) ── */
 .statusBadge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-weight: 500;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.active {
-  background-color: #dcfce7; /* Vert clair */
-  color: #16a34a;
+.statusAvailable {
+  background: #ecfdf5;
+  color: #059669;
 }
 
-.inactive {
-  background-color: #f1f5f9; /* Gris clair */
-  color: #64748b;
+.statusOnTrip {
+  background: #fef3c7;
+  color: #d97706;
 }
 
-/* --- Styles pour la cellule des actions --- */
+.statusOffline {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* ── Account badge ── */
+.accountBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.accountActive {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.accountInactive {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+/* ── Actions cell ── */
 .actionsCell {
   text-align: right;
   white-space: nowrap;
 }
 
-.actionButton {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  margin: 0 4px;
-  border-radius: 50%;
-  color: #64748b;
-  transition: all 0.2s ease;
+.editBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  margin-right: 4px;
 }
 
-.actionButton:hover {
-  background-color: #e5e7eb;
-  color: #334155;
+.editBtn:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+  color: var(--text-primary, #1e293b);
+  border-color: var(--text-tertiary, #94a3b8);
 }
 
-.deleteButton:hover {
-  background-color: #fee2e2; /* Rouge clair au survol */
-  color: #dc2626; /* Rouge foncé */
+/* ── 3-dot menu ── */
+.menuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.menuTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.menuTrigger:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+  color: var(--text-primary, #1e293b);
+}
+
+.menuDropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  padding: 4px;
+  animation: menuFadeIn 0.1s ease;
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+  text-align: left;
+}
+
+.menuItem:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+}
+
+.menuItemDanger {
+  color: #dc2626;
+}
+
+.menuItemDanger:hover {
+  background: #fef2f2;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 768px) {
+  .table {
+    min-width: 520px;
+  }
+
+  .table th,
+  .table td {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .avatar,
+  .avatarFallback {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+
+  .driverName {
+    font-size: 12px;
+  }
+
+  .statusBadge,
+  .accountBadge {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .table th,
+  .table td {
+    padding: 6px 8px;
+  }
 }

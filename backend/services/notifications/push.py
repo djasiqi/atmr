@@ -237,26 +237,38 @@ def send_push_message(
     driver_id: int | None = None,
     bypass_rate_limit: bool = False,
     correlation_id: str | None = None,
+    provider: str | None = None,
+    platform: str | None = None,
 ) -> Dict[str, Any]:
-    """Envoie une notification push via Expo Push Notification Service.
+    """Envoie une notification push (FCM natif ou Expo Push fallback).
 
-    Args:
-        token: Token Expo Push du destinataire
-        title: Titre de la notification
-        body: Corps du message
-        data: Données additionnelles (pour deep linking, etc.)
-        timeout: Timeout en secondes (défaut: 5)
-        use_retry: Si True, utilise le retry automatique (défaut: True)
-        driver_id: ID du chauffeur pour rate limiting (optionnel)
-        bypass_rate_limit: Si True, contourne le rate limiting (pour alertes urgentes)
-
-    Returns:
-        Dict avec "ok" (bool) et "error" (str) ou "data" selon le résultat.
-        Si use_retry=True, contient aussi "attempts" (int) et "final_error" (str) en cas d'échec.
+    Routing:
+    - provider="fcm" + platform="android" → data-only via firebase-admin
+    - provider="fcm" + platform="ios" → notification+data via firebase-admin
+    - provider="expo" / ExponentPushToken → Expo Push API (legacy)
     """
-    # ✅ INSTRUMENTATION: Correlation ID pour traçabilité
     if correlation_id is None:
         correlation_id = str(uuid.uuid4())
+
+    # Auto-detect provider from token format
+    if provider is None:
+        provider = "expo" if token.startswith("ExponentPushToken") else "fcm"
+
+    # FCM native path
+    if provider == "fcm":
+        from services.notifications.firebase_push import send_fcm_android, send_fcm_ios
+
+        app_logger.info(
+            "[push] FCM native send (platform=%s, driver=%s)",
+            platform,
+            driver_id,
+            extra={"correlation_id": correlation_id},
+        )
+        if platform == "ios":
+            return send_fcm_ios(token, title, body, data)
+        return send_fcm_android(token, title, body, data)
+
+    # Expo Push API path (legacy fallback)
     notification_type = data.get("type") if data else None
 
     # ✅ INSTRUMENTATION: Token hash pour anonymisation
@@ -301,20 +313,25 @@ def send_push_message(
             correlation_id=correlation_id,
         )
 
-    # ✅ AMÉLIORATION: Déterminer la priorité selon le type de notification
-    # P0: priority "high" pour missions → affichage quand app killed (Android Doze)
-    priority = (
-        "high"
-        if notification_type
-        in ["urgent_alert", "booking", "booking_assigned", "booking_cancelled"]
-        else "default"
-    )
+    # Priorité haute par défaut pour que FCM livre immédiatement (Doze bypass).
+    # Seuls les types purement informatifs ou silencieux restent en "default".
+    LOW_PRIORITY_TYPES = {
+        "info",
+        "stats",
+        "dispatch_completed",
+        "silent_update",
+        "missions_preload",
+        "profile_sync",
+        "maps_precache",
+        "config_update",
+    }
+    priority = "default" if notification_type in LOW_PRIORITY_TYPES else "high"
 
     # P0: channelId à la RACINE du message Expo (pas seulement dans data)
     # Si channelId dans data mais pas à la racine, l'OS Android peut ne pas afficher
     # quand l'app est killed (Expo docs: channelId = champ racine Android-only)
     data_dict = data or {}
-    channel_id = data_dict.get("channelId", "missions")
+    channel_id = data_dict.get("channelId", "missions_v2")
     trace_id = data_dict.get("trace_id")
 
     message: Dict[str, Any] = {

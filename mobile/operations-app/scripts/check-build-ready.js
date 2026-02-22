@@ -105,8 +105,8 @@ function checkAppConfig() {
     checkFile('assets/images/icon.png', 'Icône de l\'application', true);
   }
   
-  if (configContent.includes('./assets/images/splash-icon.png')) {
-    checkFile('assets/images/splash-icon.png', 'Image de splash screen', true);
+  if (configContent.includes('./assets/images/splash.png')) {
+    checkFile('assets/images/splash.png', 'Image de splash screen', true);
   }
 }
 

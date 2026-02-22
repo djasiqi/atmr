@@ -4,20 +4,27 @@ from logging.config import fileConfig
 
 from alembic import context
 from flask import current_app, has_app_context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import MetaData, engine_from_config, pool
 from sqlalchemy.engine import URL
 
-# ✅ Permettre l'autogénération hors contexte Flask (ex: via Docker)
-# Alembic doit recevoir un MetaData (target_metadata) même sans current_app.
-try:
-    # Importer db + models pour enregistrer les tables sur le metadata.
-    from ext import db as ext_db
+# ✅ MIGRATION-SAFE: Pour éviter que eventlet.monkey_patch() casse les transactions,
+# utiliser DISABLE_EVENTLET=1 lors de l'exécution des migrations.
+# Voir docs/migrations.md pour plus de détails.
 
-    import models  # side-effect: charger tous les modèles
+FALLBACK_METADATA = None
 
-    FALLBACK_METADATA = ext_db.metadata
-except Exception:  # pragma: no cover
-    FALLBACK_METADATA = None
+if not has_app_context():
+    try:
+        # Importer db + models pour enregistrer les tables sur le metadata.
+        # Note: Si DISABLE_EVENTLET=1 est défini, ext.py utilisera threading mode
+        # et n'initialisera pas eventlet, ce qui permet aux migrations de fonctionner.
+        from ext import db as ext_db
+
+        import models  # side-effect: charger tous les modèles
+
+        FALLBACK_METADATA = ext_db.metadata
+    except Exception:  # pragma: no cover
+        FALLBACK_METADATA = None
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

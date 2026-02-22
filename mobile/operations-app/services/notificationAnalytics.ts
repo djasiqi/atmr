@@ -6,6 +6,10 @@
  * Track les événements liés aux notifications pour mesurer leur efficacité
  */
 
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("NotifAnalytics");
+
 /**
  * Types d'événements de notification
  */
@@ -46,7 +50,7 @@ export function trackNotificationEvent(
       timestamp: data.timestamp || Date.now(),
     };
 
-    console.log(`📊 [Analytics] ${event}:`, eventPayload);
+    log.info("notification event", { event, ...eventPayload });
 
     // TODO: Envoyer à votre service d'analytics (Firebase, Mixpanel, etc.)
     // Example avec Firebase:
@@ -58,7 +62,7 @@ export function trackNotificationEvent(
     // Pour l'instant: log uniquement
     // En production, décommenter l'envoi à votre service d'analytics
   } catch (error) {
-    console.error("❌ Erreur tracking notification event:", error);
+    log.error("track notification event failed", { error });
   }
 }
 
@@ -173,8 +177,8 @@ export async function exportLocalMetrics(): Promise<void> {
     // TODO: Récupérer les métriques depuis AsyncStorage
     // TODO: Les envoyer au backend via API
 
-    console.log("📤 Export métriques notifications (TODO)");
+    log.info("export notification metrics (todo)");
   } catch (error) {
-    console.error("❌ Erreur export métriques:", error);
+    log.error("export metrics failed", { error });
   }
 }

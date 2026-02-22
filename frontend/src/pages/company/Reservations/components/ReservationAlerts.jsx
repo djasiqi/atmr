@@ -1,54 +1,65 @@
 import React from 'react';
+import { FiAlertCircle, FiClock, FiUserX } from 'react-icons/fi';
+import { formatDelay } from '../../../../utils/formatDelay';
 import styles from './ReservationAlerts.module.css';
 
-const ReservationAlerts = ({ alerts }) => {
-  const getAlertIcon = (type) => {
-    switch (type) {
-      case 'delay':
-        return '⏰';
-      case 'unassigned':
-        return '👤';
-      case 'urgent':
-        return '🚨';
-      default:
-        return '⚠️';
-    }
-  };
-
-  const getSeverityClass = (severity) => {
-    switch (severity) {
-      case 'high':
-        return styles.high;
-      case 'medium':
-        return styles.medium;
-      case 'low':
-        return styles.low;
-      default:
-        return styles.medium;
-    }
-  };
-
-  if (alerts.length === 0) {
+const ReservationAlerts = ({ alerts, onFilterByAlert }) => {
+  if (!alerts || alerts.length === 0) {
     return null;
   }
 
+  const delayAlerts = alerts.filter((a) => a.type === 'delay');
+  const unassignedAlert = alerts.find((a) => a.type === 'unassigned');
+
+  const delayCount = delayAlerts.length;
+  const unassignedCount = unassignedAlert?.count || 0;
+
+  if (delayCount === 0 && unassignedCount === 0) {
+    return null;
+  }
+
+  const maxDelayMinutes = delayCount > 0
+    ? Math.max(...delayAlerts.map((a) => {
+        const scheduled = new Date(a.reservation?.scheduled_time);
+        const now = new Date();
+        return Math.floor((now - scheduled) / (1000 * 60));
+      }).filter((v) => v > 0))
+    : 0;
+
+  const maxDelayFormatted = formatDelay(maxDelayMinutes);
+
   return (
-    <div className={styles.alertsContainer}>
-      <div className={styles.alertsHeader}>
-        <span className={styles.alertsIcon}>🔔</span>
-        <span className={styles.alertsTitle}>Alertes ({alerts.length})</span>
-      </div>
-      <div className={styles.alertsList}>
-        {alerts.slice(0, 3).map((alert) => (
-          <div key={alert.id} className={`${styles.alert} ${getSeverityClass(alert.severity)}`}>
-            <span className={styles.alertIcon}>{getAlertIcon(alert.type)}</span>
-            <span className={styles.alertMessage}>{alert.message}</span>
-          </div>
-        ))}
-        {alerts.length > 3 && (
-          <div className={styles.moreAlerts}>+{alerts.length - 3} autres alertes</div>
-        )}
-      </div>
+    <div className={styles.alertBar}>
+      <FiAlertCircle size={13} className={styles.barIcon} />
+
+      {delayCount > 0 && (
+        <button
+          type="button"
+          className={styles.alertChip}
+          onClick={() => onFilterByAlert?.('delays')}
+        >
+          <FiClock size={12} />
+          <span>
+            {delayCount} retard{delayCount > 1 ? 's' : ''}
+            {maxDelayFormatted && ` (max ${maxDelayFormatted})`}
+          </span>
+        </button>
+      )}
+
+      {delayCount > 0 && unassignedCount > 0 && (
+        <span className={styles.barSep} />
+      )}
+
+      {unassignedCount > 0 && (
+        <button
+          type="button"
+          className={styles.alertChip}
+          onClick={() => onFilterByAlert?.('unassigned')}
+        >
+          <FiUserX size={12} />
+          <span>{unassignedCount} sans chauffeur</span>
+        </button>
+      )}
     </div>
   );
 };

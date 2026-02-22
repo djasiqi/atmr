@@ -36,11 +36,16 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 # ✅ CRITIQUE : monkey_patch eventlet AVANT tout import Flask/SocketIO
+# ✅ FIX: Permettre de désactiver eventlet pour les migrations
+# eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+_disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
 _async_mode = (os.getenv("SOCKETIO_ASYNC_MODE") or "eventlet").strip().lower()
 
-if _async_mode == "eventlet":
+if _disable_eventlet:
+    print("⚠️ [WSGI] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)
+elif _async_mode == "eventlet":
     try:
-        import eventlet  # pyright: ignore[reportMissingImports]
+        import eventlet
 
         eventlet.monkey_patch()
         print("✅ [WSGI] eventlet.monkey_patch() appliqué", flush=True)

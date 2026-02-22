@@ -1,6 +1,18 @@
 // frontend/src/pages/company/Settings/CompanySettings.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import {
+  FiEdit2,
+  FiSave,
+  FiX,
+  FiHome,
+  FiActivity,
+  FiUsers,
+  FiTruck,
+  FiFileText,
+  FiBell,
+  FiShield,
+} from 'react-icons/fi';
 import styles from './CompanySettings.module.css';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
@@ -80,7 +92,7 @@ export default function CompanySettings() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const [editMode, setEditMode] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -94,6 +106,10 @@ export default function CompanySettings() {
   const [logoUrlInput, setLogoUrlInput] = useState('');
   const [logoBusy, setLogoBusy] = useState(false);
   const fileInputRef = useRef(null);
+  const billingRef = useRef(null);
+  const partnershipsRef = useRef(null);
+  const vehiclesRef = useRef(null);
+  const pendingSaveBillingRef = useRef(false);
 
   useEffect(() => {
     const resolved = resolveLogoUrl(company?.logo_url);
@@ -144,7 +160,7 @@ export default function CompanySettings() {
   }, [company]);
 
   const fieldErrors = useMemo(() => {
-    if (!editMode) return {};
+    if (!isEditing) return {};
     const errs = {};
     if (form.contact_email && !emailRx.test(form.contact_email))
       errs.contact_email = 'Email invalide.';
@@ -157,7 +173,7 @@ export default function CompanySettings() {
     if (form.iban && !ibanChecksumIsValid(form.iban)) errs.iban = 'IBAN invalide (checksum).';
     if (!form.name?.trim()) errs.name = "Le nom de l'entreprise est requis.";
     return errs;
-  }, [form, editMode]);
+  }, [form, isEditing]);
   const hasErrors = Object.keys(fieldErrors).length > 0;
 
   const handleChange = (e) => {
@@ -169,7 +185,6 @@ export default function CompanySettings() {
   };
 
   const handleAddressSelect = (selectedItem) => {
-    // ✅ Utiliser le label complet qui contient déjà "Rue, Numéro, CP, Ville"
     setForm((prev) => ({
       ...prev,
       address: selectedItem?.label || selectedItem?.address || prev.address,
@@ -179,14 +194,7 @@ export default function CompanySettings() {
   };
 
   const handleDomicileAddressSelect = (selectedItem) => {
-    // ✅ Extraire les différentes parties de l'adresse pour les champs séparés
-    // selectedItem contient : { label, address, postcode, city, country, lat, lon, raw }
-    
     let streetAddress = selectedItem?.address || selectedItem?.label || '';
-    
-    // ✅ Photon retourne "Rue, Numéro" (ex: "Route de Chevrens, 145")
-    // Certaines sources peuvent retourner "Numéro Rue", on normalise au format suisse
-    // Format suisse standard : "Rue Numéro" SANS virgule (ex: "Route de Chevrens 145")
     if (streetAddress.includes(',')) {
       const parts = streetAddress.split(',').map(p => p.trim());
       // Si le premier élément est un nombre, on inverse
@@ -211,7 +219,7 @@ export default function CompanySettings() {
   const onClickEdit = () => {
     setMessage('');
     setError('');
-    setEditMode(true);
+    setIsEditing(true);
   };
 
   const onClickCancel = () => {
@@ -235,7 +243,8 @@ export default function CompanySettings() {
         domicile_country: company.domicile_country || 'CH',
       });
     }
-    setEditMode(false);
+    billingRef.current?.reset();
+    setIsEditing(false);
     setError('');
     setMessage('');
   };
@@ -248,56 +257,112 @@ export default function CompanySettings() {
       setError('Veuillez corriger les erreurs du formulaire.');
       return;
     }
-    const payload = {
-      name: form.name || undefined,
-      address: form.address || undefined,
-      latitude: form.latitude || undefined,
-      longitude: form.longitude || undefined,
-      contact_email: form.contact_email || undefined,
-      contact_phone: form.contact_phone || undefined,
-      billing_email: form.billing_email || undefined,
-      billing_notes: form.billing_notes || undefined,
-      iban: normalizeIban(form.iban) || undefined,
-      uid_ide: form.uid_ide || undefined,
-      domicile_address_line1: form.domicile_address_line1 || undefined,
-      domicile_address_line2: form.domicile_address_line2 || undefined,
-      domicile_zip: form.domicile_zip || undefined,
-      domicile_city: form.domicile_city || undefined,
-      domicile_country: form.domicile_country || undefined,
-    };
+
+    if (billingRef.current?.isReady && !billingRef.current.isReady()) {
+      setError('Chargement en cours, veuillez patienter...');
+      return;
+    }
 
     setSaving(true);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:start',message:'Starting company info update',data:{has_name:!!payload.name,name:payload.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     try {
+      // Sauvegarder GeneralTab (infos entreprise)
+      const payload = {
+        name: form.name || undefined,
+        address: form.address || undefined,
+        latitude: form.latitude || undefined,
+        longitude: form.longitude || undefined,
+        contact_email: form.contact_email || undefined,
+        contact_phone: form.contact_phone || undefined,
+        billing_email: form.billing_email || undefined,
+        billing_notes: form.billing_notes || undefined,
+        iban: normalizeIban(form.iban) || undefined,
+        uid_ide: form.uid_ide || undefined,
+        domicile_address_line1: form.domicile_address_line1 || undefined,
+        domicile_address_line2: form.domicile_address_line2 || undefined,
+        domicile_zip: form.domicile_zip || undefined,
+        domicile_city: form.domicile_city || undefined,
+        domicile_country: form.domicile_country || undefined,
+      };
       const updated = await updateCompanyInfo(payload);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:success',message:'Company info update succeeded',data:{has_updated:!!updated},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      setMessage('Paramètres enregistrés avec succès.');
-      setEditMode(false);
+
+      // Sauvegarder BillingTab si le ref existe (onglet monte)
+      let billingError = null;
+      if (billingRef.current?.save) {
+        try {
+          await billingRef.current.save();
+        } catch (billingErr) {
+          billingError = billingErr;
+        }
+      }
+
+      // Sauvegarder PartnershipsTab si le ref existe (onglet monte)
+      let partnershipsError = null;
+      if (partnershipsRef.current?.save) {
+        try {
+          await partnershipsRef.current.save();
+        } catch (partnerErr) {
+          partnershipsError = partnerErr;
+        }
+      }
+
+      // Sauvegarder VehiclesTab si le ref existe (onglet monte)
+      let vehiclesError = null;
+      if (vehiclesRef.current?.save) {
+        try {
+          await vehiclesRef.current.save();
+        } catch (vErr) {
+          vehiclesError = vErr;
+        }
+      }
+
       await reloadCompany?.();
       setForm((prev) => ({
         ...prev,
         iban: updated?.iban ? formatIbanPretty(updated.iban) : prev.iban,
         uid_ide: updated?.uid_ide ?? prev.uid_ide,
       }));
+
+      if (billingError || partnershipsError || vehiclesError) {
+        const parts = [];
+        if (billingError) {
+          parts.push(`facturation : ${billingError?.response?.data?.error || billingError?.message || ''}`);
+        }
+        if (partnershipsError) {
+          parts.push(`partenariats : ${partnershipsError?.response?.data?.error || partnershipsError?.message || ''}`);
+        }
+        if (vehiclesError) {
+          parts.push(`véhicules : ${vehiclesError?.response?.data?.error || vehiclesError?.message || ''}`);
+        }
+        setError(`Infos entreprise enregistrees, mais erreur ${parts.join(' / ')}`);
+      } else {
+        setMessage('Parametres enregistres avec succes.');
+        setIsEditing(false);
+      }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:handleSubmit:error',message:'Company info update error',data:{is_fresh_token_required:err?.isFreshTokenRequired,status:err?.response?.status,error_data:err?.response?.data,error_msg:err?.response?.data?.msg,error_error:err?.response?.data?.error,error_message:err?.response?.data?.message,err_message:err?.message,all_error_keys:err?.response?.data ? Object.keys(err.response.data) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      // ✅ Gestion spéciale pour les erreurs de token "fresh" requis
       if (err?.isFreshTokenRequired) {
-        // Demander le mot de passe pour obtenir un token fresh
+        const payload = {
+          name: form.name || undefined,
+          address: form.address || undefined,
+          latitude: form.latitude || undefined,
+          longitude: form.longitude || undefined,
+          contact_email: form.contact_email || undefined,
+          contact_phone: form.contact_phone || undefined,
+          billing_email: form.billing_email || undefined,
+          billing_notes: form.billing_notes || undefined,
+          iban: normalizeIban(form.iban) || undefined,
+          uid_ide: form.uid_ide || undefined,
+          domicile_address_line1: form.domicile_address_line1 || undefined,
+          domicile_address_line2: form.domicile_address_line2 || undefined,
+          domicile_zip: form.domicile_zip || undefined,
+          domicile_city: form.domicile_city || undefined,
+          domicile_country: form.domicile_country || undefined,
+        };
         setPendingPayload(payload);
+        pendingSaveBillingRef.current = true;
         setShowPasswordModal(true);
-        setError(''); // Effacer l'erreur précédente
+        setError('');
       } else {
         const errorMsg = err?.response?.data?.error || err?.message || 'Erreur lors de la sauvegarde.';
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CompanySettings.jsx:setError:other',message:'Setting error message for other error',data:{error_msg:errorMsg},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         setError(errorMsg);
       }
     } finally {
@@ -324,8 +389,6 @@ export default function CompanySettings() {
       // Réessayer la modification avec le nouveau token
       if (pendingPayload) {
         const updated = await updateCompanyInfo(pendingPayload);
-        setMessage('Paramètres enregistrés avec succès.');
-        setEditMode(false);
         await reloadCompany?.();
         setForm((prev) => ({
           ...prev,
@@ -334,6 +397,17 @@ export default function CompanySettings() {
         }));
         setPendingPayload(null);
       }
+
+      if (pendingSaveBillingRef.current && billingRef.current?.save) {
+        try {
+          await billingRef.current.save();
+        } finally {
+          pendingSaveBillingRef.current = false;
+        }
+      }
+
+      setMessage('Parametres enregistres avec succes.');
+      setIsEditing(false);
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || 'Mot de passe incorrect ou erreur lors de l\'obtention du token.');
     } finally {
@@ -454,16 +528,21 @@ export default function CompanySettings() {
     }
   };
 
-  // ======== Configuration des onglets ========
+  // ======== Configuration des onglets (V5) ========
   const tabs = [
-    { id: 'general', label: 'Général', icon: '🏢' },
-    { id: 'operations', label: 'Opérations', icon: '🚗' },
-    { id: 'partnerships', label: 'Partenariats', icon: '🤝' },
-    { id: 'vehicles', label: 'Véhicules', icon: '🚙' },
-    { id: 'billing', label: 'Facturation', icon: '💰' },
-    { id: 'notifications', label: 'Notifications', icon: '📧' },
-    { id: 'security', label: 'Sécurité', icon: '🔐' },
+    { id: 'general', label: 'General', Icon: FiHome },
+    { id: 'operations', label: 'Operations', Icon: FiActivity },
+    { id: 'partnerships', label: 'Partenariats', Icon: FiUsers },
+    { id: 'vehicles', label: 'Vehicules', Icon: FiTruck },
+    { id: 'billing', label: 'Facturation', Icon: FiFileText },
+    { id: 'notifications', label: 'Notifications', Icon: FiBell },
+    { id: 'security', label: 'Securite', Icon: FiShield },
   ];
+
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    window.location.hash = tabId;
+  };
 
   // ======== RENDER ========
   return (
@@ -472,140 +551,123 @@ export default function CompanySettings() {
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
-          {/* Header */}
+          {/* Zone A — Header sticky (V1/V7) */}
           <div className={styles.settingsHeader}>
             <div className={styles.headerLeft}>
-              <h1>⚙️ Paramètres de l'entreprise</h1>
-              <p className={styles.headerSubtitle}>Gérez tous les aspects de votre entreprise</p>
+              <h1>Parametres entreprise</h1>
+              <p className={styles.headerSubtitle}>
+                Gerez les informations, l'exploitation et la facturation
+              </p>
+            </div>
+            <div className={styles.headerActions}>
+              {!isEditing ? (
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.primary}`}
+                  onClick={onClickEdit}
+                >
+                  <FiEdit2 size={14} /> Modifier
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`${styles.button} ${styles.secondary}`}
+                    onClick={onClickCancel}
+                    disabled={saving}
+                  >
+                    <FiX size={14} /> Annuler
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.button} ${styles.primary}`}
+                    onClick={handleSubmit}
+                    disabled={saving || hasErrors}
+                  >
+                    <FiSave size={14} /> {saving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* Messages globaux */}
-          {loadingCompany && <p>Chargement…</p>}
+          {loadingCompany && <p>Chargement...</p>}
           {loadError && <div className={styles.error}>{loadError}</div>}
-          {activeTab === 'general' && message && <div className={styles.success}>{message}</div>}
-          {activeTab === 'general' && error && <div className={styles.error}>{error}</div>}
+          {message && <div className={styles.success}>{message}</div>}
+          {error && !showPasswordModal && <div className={styles.error}>{error}</div>}
 
-          {/* Navigation par onglets avec bouton Modifier */}
-          <div className={styles.tabsContainer}>
-            <div className={styles.tabs}>
-              {tabs.map((tab) => (
+          {/* Zone B — Tabs segmentees (V4/V5) */}
+          <div className={styles.tabsContainer} role="tablist">
+            {tabs.map((tab) => {
+              const TabIcon = tab.Icon;
+              const active = activeTab === tab.id;
+              return (
                 <button
                   key={tab.id}
-                  className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
+                  role="tab"
+                  aria-selected={active}
+                  className={`${styles.tab} ${active ? styles.tabActive : ''}`}
+                  onClick={() => handleTabClick(tab.id)}
                 >
-                  <span>
-                    {tab.icon} {tab.label}
-                  </span>
+                  <TabIcon size={14} />
+                  <span>{tab.label}</span>
                 </button>
-              ))}
-            </div>
-            {activeTab === 'general' && !editMode && (
-              <button className={`${styles.submitButton} ${styles.primary}`} onClick={onClickEdit}>
-                ✏️ Modifier
-              </button>
-            )}
+              );
+            })}
           </div>
 
-          {/* Contenu de l'onglet actif */}
+          {/* Zone C — Contenu de l'onglet actif */}
           {company && (
             <div className={styles.tabContent}>
               {activeTab === 'general' && (
-                <>
-                  <GeneralTab
-                    company={company}
-                    editMode={editMode}
-                    form={form}
-                    fieldErrors={fieldErrors}
-                    handleChange={handleChange}
-                    handleAddressSelect={handleAddressSelect}
-                    handleDomicileAddressSelect={handleDomicileAddressSelect}
-                    logoPreview={logoPreview}
-                    onClickPickFile={() => fileInputRef.current?.click()}
-                    onPickFile={onPickFile}
-                    logoUrlEditOpen={logoUrlEditOpen}
-                    setLogoUrlEditOpen={setLogoUrlEditOpen}
-                    logoUrlInput={logoUrlInput}
-                    setLogoUrlInput={setLogoUrlInput}
-                    onSaveLogoUrl={onSaveLogoUrl}
-                    onRemoveLogo={onRemoveLogo}
-                    logoBusy={logoBusy}
-                  />
-
-                  {editMode && (
-                    <div className={styles.actionsRow}>
-                      <button
-                        type="button"
-                        onClick={onClickCancel}
-                        className={`${styles.button} ${styles.secondary}`}
-                      >
-                        Annuler
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSubmit}
-                        className={`${styles.button} ${styles.primary}`}
-                        disabled={saving || hasErrors}
-                      >
-                        {saving ? '💾 Enregistrement…' : '💾 Enregistrer'}
-                      </button>
-                    </div>
-                  )}
-                </>
+                <GeneralTab
+                  company={company}
+                  isEditing={isEditing}
+                  form={form}
+                  fieldErrors={fieldErrors}
+                  handleChange={handleChange}
+                  handleAddressSelect={handleAddressSelect}
+                  handleDomicileAddressSelect={handleDomicileAddressSelect}
+                  logoPreview={logoPreview}
+                  onClickPickFile={() => fileInputRef.current?.click()}
+                  onPickFile={onPickFile}
+                  logoUrlEditOpen={logoUrlEditOpen}
+                  setLogoUrlEditOpen={setLogoUrlEditOpen}
+                  logoUrlInput={logoUrlInput}
+                  setLogoUrlInput={setLogoUrlInput}
+                  onSaveLogoUrl={onSaveLogoUrl}
+                  onRemoveLogo={onRemoveLogo}
+                  logoBusy={logoBusy}
+                />
               )}
 
-              {activeTab === 'operations' && <OperationsTab />}
-              {activeTab === 'partnerships' && <PartnershipsTab />}
-              {activeTab === 'vehicles' && <VehiclesTab />}
-              {activeTab === 'billing' && <BillingTab companyId={company?.id} />}
-              {activeTab === 'notifications' && <NotificationsTab />}
-              {activeTab === 'security' && <SecurityTab />}
+              {activeTab === 'operations' && <OperationsTab isEditing={isEditing} />}
+              {activeTab === 'partnerships' && <PartnershipsTab ref={partnershipsRef} isEditing={isEditing} />}
+              {activeTab === 'vehicles' && <VehiclesTab ref={vehiclesRef} isEditing={isEditing} />}
+              {activeTab === 'billing' && <BillingTab ref={billingRef} companyId={company?.id} isEditing={isEditing} />}
+              {activeTab === 'notifications' && <NotificationsTab isEditing={isEditing} />}
+              {activeTab === 'security' && <SecurityTab isEditing={isEditing} />}
             </div>
           )}
         </main>
       </div>
 
-      {/* Modal pour demander le mot de passe */}
+      {/* Modal mot de passe (V3) */}
       {showPasswordModal && (
         <div
-          className="modal-overlay"
+          className={styles.modalOverlay}
           onClick={() => {
             setShowPasswordModal(false);
             setPasswordInput('');
             setPendingPayload(null);
             setError('');
           }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-          }}
         >
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              padding: '24px',
-              maxWidth: '400px',
-              width: '90%',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-            }}
-          >
-            <h2 style={{ marginTop: 0, marginBottom: '16px' }}>
-              🔒 Vérification requise
-            </h2>
-            <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-              Pour des raisons de sécurité, veuillez entrer votre mot de passe pour confirmer cette modification.
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>Verification requise</h2>
+            <p className={styles.modalText}>
+              Pour des raisons de securite, veuillez entrer votre mot de passe pour confirmer cette modification.
             </p>
             <form onSubmit={handlePasswordSubmit}>
               <div className={styles.formGroup}>
@@ -620,8 +682,8 @@ export default function CompanySettings() {
                   disabled={saving}
                 />
               </div>
-              {error && <div className={styles.error} style={{ marginBottom: '16px' }}>{error}</div>}
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              {error && <div className={styles.error}>{error}</div>}
+              <div className={styles.modalActions}>
                 <button
                   type="button"
                   className={`${styles.button} ${styles.secondary}`}
@@ -640,7 +702,7 @@ export default function CompanySettings() {
                   className={`${styles.button} ${styles.primary}`}
                   disabled={saving || !passwordInput.trim()}
                 >
-                  {saving ? 'Vérification...' : 'Confirmer'}
+                  {saving ? 'Verification...' : 'Confirmer'}
                 </button>
               </div>
             </form>

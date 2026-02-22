@@ -1,0 +1,127 @@
+/* ── Editable input + calendar button ── */
+.inputWrapper {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 160px;
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 2.5px var(--brand-primary-lightest, #e0f2f1);
+}
+
+.inputWrapperError {
+  border-color: var(--color-danger, #dc2626) !important;
+  box-shadow: 0 0 0 2.5px rgba(220, 38, 38, 0.08) !important;
+}
+
+.inputField {
+  flex: 1;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #0f172a);
+  padding: 0 10px;
+  font-family: inherit;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inputField::placeholder {
+  color: var(--text-tertiary, #9ca3af);
+  font-weight: 400;
+}
+
+.inputField::selection {
+  background: var(--brand-primary-lightest, #e0f2f1);
+  color: #78909c;
+}
+
+.calBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #9ca3af);
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.calBtn:hover {
+  color: var(--brand-primary, #00796b);
+}
+
+/* ── Time picker row inside popover ── */
+.timeRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 4px 4px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.timeLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary, #9ca3af);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 2px;
+}
+
+.timeIcon {
+  color: var(--brand-primary, #00796b);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.timeSelect {
+  width: 48px;
+  height: 26px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 5px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #0f172a);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Consolas', monospace;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 2px;
+}
+
+.timeSelect:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 2px var(--brand-primary-lightest, #e0f2f1);
+}
+
+.timeSelect:hover {
+  border-color: var(--brand-primary, #00796b);
+}
+
+.timeSep {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary, #374151);
+  line-height: 1;
+}

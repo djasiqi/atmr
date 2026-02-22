@@ -9,11 +9,11 @@ la maintenabilité et la cohérence du code.
 import logging
 from typing import Literal, Tuple
 
-from flask import abort  # pyright: ignore[reportMissingImports]
-from flask_jwt_extended import get_jwt_identity  # pyright: ignore[reportMissingImports]
+from flask import abort
+from flask_jwt_extended import get_jwt_identity
 
 from ext import db
-from models import Booking, Client, Company, Driver, User, UserRole
+from models import Booking, Client, Company, Driver, Institution, User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +239,127 @@ class AuthorizationService:
         return client, user
 
     @staticmethod
+    def require_institution() -> Tuple["Institution", User]:
+        """Récupère l'institution de l'utilisateur actuel.
+
+        Returns:
+            Tuple (Institution, User)
+
+        Raises:
+            HTTPException: 404 si l'utilisateur ou l'institution n'est pas trouvée
+            HTTPException: 403 si l'utilisateur n'a pas de claim institution_id
+        """
+        from flask_jwt_extended import get_jwt
+
+        user = AuthorizationService.require_role(UserRole.INSTITUTION)
+
+        # Récupérer institution_id depuis le JWT claim
+        jwt_claims = get_jwt()
+        institution_id = jwt_claims.get("institution_id")
+
+        if not institution_id:
+            logger.warning(
+                "[Authorization] ⚠️ User %s has institution role but no institution_id claim",
+                user.username,
+            )
+            abort(403, description="No institution_id claim in token")
+
+        # Charger l'institution
+        institution = Institution.query.get(institution_id)
+
+        if institution is None:
+            logger.warning(
+                "[Authorization] ⚠️ Institution %s not found for user %s",
+                institution_id,
+                user.username,
+            )
+            abort(404, description="Institution not found")
+
+        return institution, user
+
+    @staticmethod
+    def get_institution_role_from_jwt() -> str | None:
+        """Récupère le rôle institution depuis le JWT claim.
+
+        Returns:
+            Le rôle institution (institution_admin, institution_requester, etc.) ou None
+        """
+        from flask_jwt_extended import get_jwt
+
+        try:
+            jwt_claims = get_jwt()
+            return jwt_claims.get("institution_role")
+        except Exception:
+            return None
+
+    @staticmethod
+    def require_institution_role(*allowed_roles: str) -> Tuple["Institution", User]:
+        """Vérifie que l'utilisateur a un des rôles institution autorisés.
+
+        Args:
+            *allowed_roles: Rôles autorisés (institution_admin, institution_requester, etc.)
+
+        Returns:
+            Tuple (Institution, User)
+
+        Raises:
+            HTTPException: 403 si le rôle institution n'est pas autorisé
+        """
+        institution, user = AuthorizationService.require_institution()
+
+        institution_role = AuthorizationService.get_institution_role_from_jwt()
+
+        if not institution_role or institution_role not in allowed_roles:
+            roles_str = ", ".join(allowed_roles)
+            msg = (
+                "[Authorization] ⛔ Accès refusé : %s (institution_role=%s) a tenté d'accéder "
+                "à une route restreinte (rôles autorisés: %s)"
+            )
+            logger.warning(msg, user.username, institution_role, roles_str)
+            abort(403, description="Institution role not authorized")
+
+        return institution, user
+
+    @staticmethod
+    def check_institution_resource_access(
+        resource_institution_id: int | None,
+        user: User,
+    ) -> Tuple[bool, Tuple[dict[str, str], int] | None]:
+        """Vérifie si l'utilisateur a accès à une ressource appartenant à une institution.
+
+        Args:
+            resource_institution_id: ID de l'institution propriétaire de la ressource
+            user: L'utilisateur authentifié
+
+        Returns:
+            (has_access: bool, error_response_tuple_or_none)
+        """
+        from flask_jwt_extended import get_jwt
+
+        if not resource_institution_id:
+            return False, ({"error": "Ressource sans institution_id"}, 400)
+
+        # Admin a tous les droits
+        if user.role == UserRole.ADMIN:
+            return True, None
+
+        # Institution doit être la propriétaire
+        if user.role == UserRole.INSTITUTION:
+            jwt_claims = get_jwt()
+            user_institution_id = jwt_claims.get("institution_id")
+            if user_institution_id and user_institution_id == resource_institution_id:
+                return True, None
+            # IDOR attempt détecté
+            msg = (
+                "[Authorization] ⚠️ IDOR attempt: Institution user %s (institution_id=%s) "
+                "a tenté d'accéder à une ressource de institution_id=%s"
+            )
+            logger.warning(msg, user.public_id, user_institution_id, resource_institution_id)
+            return False, ({"error": "Accès non autorisé à cette ressource"}, 403)
+
+        return False, ({"error": "Accès non autorisé"}, 403)
+
+    @staticmethod
     def check_booking_ownership(  # noqa: PLR0911
         booking: Booking,
         user: User,
@@ -430,6 +551,16 @@ class AuthorizationService:
                     description=error_dict.get("error", "Accès non autorisé"),
                 )
             abort(403, description="Accès non autorisé")
+
+
+# ── Helpers Curatelle ─────────────────────────────────────────────────────
+
+
+def get_user_team_ids(user_id: int) -> list[int]:
+    """Retourne les IDs des équipes de curateurs auxquelles l'utilisateur appartient."""
+    from models.curator_team import CuratorTeamMember
+
+    return [m.team_id for m in CuratorTeamMember.query.filter_by(user_id=user_id).all()]
 
 
 # Instance globale du service (singleton)

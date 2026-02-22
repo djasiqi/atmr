@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 
+import { getLogger } from "@/utils/logger";
 import { connectSocket } from "@/services/socket";
 import { useAuth } from "@/hooks/useAuth";
-import { enterpriseApi } from "@/services/enterpriseAuth";
-import { secureStorage } from "@/services/storage";
 import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
+import { isAuthNotReadyError } from "@/services/authGuards";
+
+const log = getLogger("EntTracking");
 
 type DriverMarker = {
   id: string;
@@ -45,14 +47,14 @@ export const useEnterpriseDriverTracking = () => {
   const socketRef = useRef<Socket | null>(null);
   const httpPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ✅ Fallback HTTP : récupérer les positions via API REST
   const fetchLocationsViaHTTP = useCallback(async () => {
     const companyId = enterpriseSession?.company?.id;
-    if (!companyId) return;
+    const token = enterpriseSession?.token;
+    if (!companyId || !token) return;
 
     try {
       const url = `/driver/company/${companyId}/live-locations`;
-      console.log("[useEnterpriseDriverTracking] 🔍 Fetching from:", url);
+      log.info("fetching live locations", { url });
 
       const response = await enterpriseStandardApi.get<{
         items: Array<{
@@ -69,9 +71,9 @@ export const useEnterpriseDriverTracking = () => {
         }>;
       }>(url);
 
-      console.log('[useEnterpriseDriverTracking] ✅ Response received:', response.status);
+      log.info("live locations response received", { status: response.status });
       const items = response.data?.items || [];
-      console.log('[useEnterpriseDriverTracking] 📍 Items count:', items.length);
+      log.info("live locations items count", { count: items.length });
       const newMarkers: DriverMarker[] = items
         .map((item) => {
           // ✅ FIX: Accepter les deux formats (lat/latitude, lon/longitude)
@@ -98,7 +100,7 @@ export const useEnterpriseDriverTracking = () => {
         })
         .filter((marker): marker is DriverMarker => marker !== null);
 
-      console.log('[useEnterpriseDriverTracking] 📌 New markers:', newMarkers.length);
+      log.info("new markers from http", { count: newMarkers.length });
       
       setMarkers((prev) => {
         // Fusionner avec les markers existants (priorité aux sockets si disponibles)
@@ -115,14 +117,17 @@ export const useEnterpriseDriverTracking = () => {
           }
         });
         const result = Array.from(merged.values());
-        console.log('[useEnterpriseDriverTracking] 🗺️ Final markers count:', result.length);
+        log.info("final markers count", { count: result.length });
         return result;
       });
     } catch (error) {
-      console.error('[useEnterpriseDriverTracking] ❌ Erreur récupération positions HTTP:', error);
-      // On garde les logs génériques; la couche enterpriseStandardApi gère déjà auth strict.
+      if (isAuthNotReadyError(error)) {
+        log.warn("http live locations skipped (auth not ready)");
+      } else {
+        log.error("http live locations fetch failed", { error });
+      }
     }
-  }, [enterpriseSession?.company?.id]);
+  }, [enterpriseSession?.company?.id, enterpriseSession?.token]);
 
   const refreshLocations = useCallback(() => {
     const socket = socketRef.current;
@@ -182,7 +187,7 @@ export const useEnterpriseDriverTracking = () => {
         socketInstance = await connectSocket(token, "enterprise");
         if (!socketInstance || !isActive) {
           // Si les sockets échouent, utiliser uniquement HTTP
-          console.warn("⚠️ Sockets non disponibles, utilisation du fallback HTTP");
+          log.warn("sockets unavailable, using http fallback", {});
           fetchLocationsViaHTTP();
           // Poll HTTP toutes les 10 secondes si pas de sockets
           httpPollIntervalRef.current = setInterval(() => {
@@ -207,14 +212,11 @@ export const useEnterpriseDriverTracking = () => {
           }
         }, 30000);
       } catch (error) {
-        console.warn("❗ Erreur connexion socket entreprise :", error);
-        // ✅ Si les sockets échouent, utiliser uniquement HTTP
+        log.warn("enterprise socket connection failed", { error });
+        if (!isActive) return;
         fetchLocationsViaHTTP();
-        // Poll HTTP toutes les 10 secondes
         httpPollIntervalRef.current = setInterval(() => {
-          if (isActive) {
-            fetchLocationsViaHTTP();
-          }
+          if (isActive) fetchLocationsViaHTTP();
         }, 10000);
       }
     })();

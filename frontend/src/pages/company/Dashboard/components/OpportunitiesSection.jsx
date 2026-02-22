@@ -1,154 +1,149 @@
 // src/pages/company/Dashboard/components/OpportunitiesSection.jsx
-/**
- * ✅ 3.4.2: Section affichant les opportunités d'optimisation depuis le dashboard temps réel
- */
-
 import React from 'react';
 import { Link } from 'react-router-dom';
-import styles from '../CompanyDashboard.module.css';
+import {
+  FiAlertTriangle,
+  FiArrowRight,
+  FiActivity,
+  FiUserPlus,
+  FiRefreshCw,
+  FiZap,
+  FiCheck,
+} from 'react-icons/fi';
+import styles from './OpportunitiesSection.module.css';
 
-const OpportunitiesSection = ({ opportunities, companyPublicId, loading }) => {
+const SEVERITY_CONFIG = {
+  critical: { label: 'Critique', cssClass: 'critical' },
+  high: { label: 'Élevée', cssClass: 'high' },
+  medium: { label: 'Moyenne', cssClass: 'medium' },
+  low: { label: 'Faible', cssClass: 'low' },
+};
+
+const getActionConfig = (opp) => {
+  if (opp.current_delay_minutes >= 15) {
+    return { label: 'Réassigner', Icon: FiRefreshCw, variant: 'critical' };
+  }
+  if (opp.severity === 'critical' || opp.severity === 'high') {
+    return { label: 'Assigner', Icon: FiUserPlus, variant: 'high' };
+  }
+  return { label: 'Optimiser', Icon: FiZap, variant: 'default' };
+};
+
+const OpportunitiesSection = ({ opportunities, companyPublicId, loading, onAction }) => {
   if (loading) {
     return (
-      <section className={styles.compactSection}>
-        <h2>🔍 Opportunités d'optimisation</h2>
-        <p style={{ color: '#666' }}>Chargement...</p>
+      <section className={styles.container}>
+        <div className={styles.compactStatus}>
+          <FiActivity className={styles.compactIcon} size={14} />
+          <span className={styles.compactText}>Analyse en cours...</span>
+        </div>
       </section>
     );
   }
 
   if (!opportunities || opportunities.length === 0) {
     return (
-      <section className={styles.compactSection}>
-        <h2>🔍 Opportunités d'optimisation</h2>
-        <p style={{ color: '#666' }}>Aucune opportunité détectée pour le moment.</p>
+      <section className={styles.container}>
+        <div className={styles.compactStatus}>
+          <FiCheck className={styles.compactIconOk} size={14} />
+          <span className={styles.compactTextOk}>Aucun problème détecté</span>
+        </div>
       </section>
     );
   }
 
-  // Filtrer les opportunités critiques et high
   const criticalOpportunities = opportunities.filter(
     (opp) => opp.severity === 'critical' || opp.severity === 'high'
   );
 
-  if (criticalOpportunities.length === 0) {
+  const displayOpportunities = criticalOpportunities.length > 0
+    ? criticalOpportunities
+    : opportunities;
+
+  if (displayOpportunities.length === 0) {
     return (
-      <section className={styles.compactSection}>
-        <h2>🔍 Opportunités d'optimisation</h2>
-        <p style={{ color: '#666' }}>Aucune opportunité critique détectée.</p>
+      <section className={styles.container}>
+        <div className={styles.compactStatus}>
+          <FiCheck className={styles.compactIconOk} size={14} />
+          <span className={styles.compactTextOk}>Aucune alerte critique</span>
+        </div>
       </section>
     );
   }
 
-  const getSeverityColor = (severity) => {
-    switch (severity) {
-      case 'critical':
-        return '#f44336';
-      case 'high':
-        return '#ff9800';
-      case 'medium':
-        return '#ffc107';
-      default:
-        return '#9e9e9e';
-    }
-  };
-
-  const getSeverityLabel = (severity) => {
-    switch (severity) {
-      case 'critical':
-        return 'Critique';
-      case 'high':
-        return 'Élevée';
-      case 'medium':
-        return 'Moyenne';
-      default:
-        return 'Faible';
-    }
-  };
-
   return (
-    <section className={styles.compactSection}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px',
-        }}
-      >
-        <h2>🔍 Opportunités d'optimisation</h2>
+    <section className={styles.container}>
+      <div className={styles.sectionHeader}>
+        <div className={styles.sectionTitleGroup}>
+          <FiAlertTriangle className={styles.sectionIcon} size={18} />
+          <h2 className={styles.sectionTitle}>Intelligence Dispatch</h2>
+          <span className={styles.alertCount}>{displayOpportunities.length}</span>
+        </div>
         {companyPublicId && (
           <Link
             to={`/dashboard/company/${companyPublicId}/dispatch`}
-            style={{ fontSize: '14px', color: '#1976d2' }}
+            className={styles.viewAllLink}
           >
-            Voir toutes →
+            Voir tout
+            <FiArrowRight size={14} />
           </Link>
         )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {criticalOpportunities.slice(0, 5).map((opp) => (
-          <div
-            key={opp.assignment_id || opp.booking_id}
-            style={{
-              padding: '12px',
-              border: `2px solid ${getSeverityColor(opp.severity)}`,
-              borderRadius: '8px',
-              backgroundColor: `${getSeverityColor(opp.severity)}15`,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 'bold',
-                  color: getSeverityColor(opp.severity),
-                  textTransform: 'uppercase',
-                }}
-              >
-                {getSeverityLabel(opp.severity)}
-              </span>
-              {opp.current_delay_minutes !== undefined && (
-                <span style={{ fontSize: '14px', fontWeight: 'bold' }}>
-                  {opp.current_delay_minutes > 0 ? '+' : ''}
-                  {opp.current_delay_minutes} min
+
+      <div className={styles.opportunitiesList}>
+        {displayOpportunities.slice(0, 5).map((opp) => {
+          const config = SEVERITY_CONFIG[opp.severity] || SEVERITY_CONFIG.low;
+          const action = getActionConfig(opp);
+
+          return (
+            <div
+              key={opp.assignment_id || opp.booking_id}
+              className={`${styles.opportunityCard} ${styles[config.cssClass] || ''}`}
+            >
+              <div className={styles.opportunityHeader}>
+                <span className={`${styles.severityLabel} ${styles[`severity_${config.cssClass}`] || ''}`}>
+                  {config.label}
                 </span>
+                <div className={styles.headerRight}>
+                  {opp.current_delay_minutes !== undefined && (
+                    <span className={styles.delayValue}>
+                      {opp.current_delay_minutes > 0 ? '+' : ''}
+                      {opp.current_delay_minutes} min
+                    </span>
+                  )}
+                  {onAction && (
+                    <button
+                      className={`${styles.actionCTA} ${styles[`cta_${action.variant}`] || ''}`}
+                      onClick={() => onAction(opp)}
+                      type="button"
+                    >
+                      <action.Icon size={12} />
+                      {action.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {opp.suggestions && opp.suggestions.length > 0 && (
+                <div className={styles.suggestionsList}>
+                  {opp.suggestions.slice(0, 2).map((suggestion, idx) => (
+                    <div
+                      key={idx}
+                      className={`${styles.suggestionItem} ${styles[`border_${config.cssClass}`] || ''}`}
+                    >
+                      {suggestion.message || suggestion.action}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            {opp.suggestions && opp.suggestions.length > 0 && (
-              <div style={{ marginTop: '8px' }}>
-                {opp.suggestions.slice(0, 2).map((suggestion, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      fontSize: '13px',
-                      color: '#555',
-                      marginTop: idx > 0 ? '4px' : 0,
-                      paddingLeft: '8px',
-                      borderLeft: `3px solid ${getSeverityColor(opp.severity)}`,
-                    }}
-                  >
-                    {suggestion.message || suggestion.action}
-                  </div>
-                ))}
-              </div>
-            )}
-            {companyPublicId && (
-              <div style={{ marginTop: '8px' }}>
-                <Link
-                  to={`/dashboard/company/${companyPublicId}/dispatch`}
-                  style={{ fontSize: '12px', color: '#1976d2' }}
-                >
-                  Voir détails →
-                </Link>
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
-      {criticalOpportunities.length > 5 && (
-        <p style={{ marginTop: '12px', fontSize: '13px', color: '#666' }}>
-          +{criticalOpportunities.length - 5} autre(s) opportunité(s)
+
+      {displayOpportunities.length > 5 && (
+        <p className={styles.moreOpportunities}>
+          +{displayOpportunities.length - 5} autre(s) opportunité(s) détectée(s)
         </p>
       )}
     </section>
@@ -156,4 +151,3 @@ const OpportunitiesSection = ({ opportunities, companyPublicId, loading }) => {
 };
 
 export default OpportunitiesSection;
-

@@ -398,6 +398,7 @@ def build_chat_push(
         "sender_name": sender,
         "deep_link": deep_link,
         "deepLink": deep_link,
+        "recipient_role": recipient_role,
     }
     if booking_id:
         data["booking_id"] = booking_id

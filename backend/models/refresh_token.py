@@ -34,6 +34,7 @@ class RefreshToken(db.Model):
         Index("ix_refresh_token_token_hash", "token_hash"),
         Index("ix_refresh_token_user_active", "user_id", "is_revoked"),
         Index("ix_refresh_token_expires_at", "expires_at"),
+        Index("ix_refresh_token_rotated_to_hash", "rotated_to_hash"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -72,6 +73,14 @@ class RefreshToken(db.Model):
         DateTime(timezone=True), nullable=True
     )
 
+    # Rotation soft : ancien token pointe vers le nouveau
+    rotated_to_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    rotated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Relation avec User
     user = relationship("User", backref="refresh_tokens")
 
@@ -86,6 +95,19 @@ class RefreshToken(db.Model):
             "last_used_at": _iso(self.last_used_at) if self.last_used_at else None,
             "is_revoked": self.is_revoked,
             "revoked_at": _iso(self.revoked_at) if self.revoked_at else None,
+        }
+
+    def serialize_masked(self, current_token_hash: str | None = None) -> dict[str, object]:
+        """Serialise le token avec IP masquee et device parse. Jamais de user_agent brut."""
+        from shared.security_helpers import mask_ip, parse_device
+
+        return {
+            "id": self.id,
+            "device_name": parse_device(self.user_agent) or self.device_name or "Appareil inconnu",
+            "ip_masked": mask_ip(self.ip_address),
+            "created_at": _iso(self.created_at),
+            "last_used_at": _iso(self.last_used_at) if self.last_used_at else None,
+            "is_current": (self.token_hash == current_token_hash) if current_token_hash else False,
         }
 
     @override

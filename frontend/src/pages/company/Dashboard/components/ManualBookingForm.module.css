@@ -1,8 +1,16 @@
 /* ManualBookingForm.module.css - Design pro SaaS */
 
 /* Variables locales */
+.formWrapper :global(.form-input),
+.formWrapper :global(.form-select) {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 13px !important;
+}
+
 .formWrapper {
-  --input-height: 44px;
+  --input-height: 30px;
   --input-border: 1px solid #e2e8f0;
   --input-focus-ring: 0 0 0 2px rgba(0, 121, 107, 0.2);
   --spacing-xs: 8px;
@@ -82,10 +90,10 @@
     gap: 8px;
   }
   .columnLeft .dateTimeRow {
-    gap: 8px;
+    gap: 6px;
   }
-  .columnLeft .datePresets {
-    gap: 8px;
+  .columnLeft .dateTimeRow {
+    gap: 6px;
   }
   .columnLeft .chipsRow {
     margin-top: 8px;
@@ -399,30 +407,17 @@
 
 .dateTimeRow {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.columnLeft .dateTimeRow {
-  gap: 6px;
-}
-
-.datePresets {
-  display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-}
-
-.columnLeft .datePresets {
   gap: 6px;
 }
 
 .datePresetBtn {
-  padding: 6px 12px;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  background: white;
-  font-size: 0.8rem;
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  font-size: 11px;
   font-weight: 500;
   color: #64748b;
   cursor: pointer;
@@ -430,9 +425,9 @@
 }
 
 .datePresetBtn:hover {
-  border-color: #00796b;
-  background: #f0fdfa;
-  color: #00796b;
+  border-color: var(--brand-primary, #00796b);
+  background: var(--brand-primary-lightest, #e0f2f1);
+  color: var(--brand-primary, #00796b);
 }
 
 /* Client option (react-select formatOptionLabel) */
@@ -495,7 +490,10 @@
 }
 
 .returnTimeGroup {
-  margin-top: 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* ========================
@@ -717,10 +715,10 @@
 
 /* Uniformisation AsyncCreatableSelect (react-select) - Style moderne */
 .formGroup :global(.react-select__control) {
-  min-height: 48px !important;
-  height: 48px !important;
-  border: 2px solid #e2e8f0 !important;
-  border-radius: 10px !important;
+  min-height: 30px !important;
+  height: 30px !important;
+  border: 1px solid var(--border-primary, #e5e7eb) !important;
+  border-radius: var(--radius-md, 6px) !important;
   box-shadow: none !important;
   font-size: 0.9rem !important;
   background: white !important;
@@ -743,9 +741,9 @@
   background: #f8fffe !important;
 }
 
-/* Container principal - EXACTEMENT même padding que les autres champs */
+/* Container principal */
 .formGroup :global(.react-select__value-container) {
-  padding: 12px 16px !important;
+  padding: 0 8px !important;
   gap: 0 !important;
   background: transparent !important;
   display: flex !important;
@@ -853,9 +851,10 @@
   color: #1e293b !important;
 }
 
-/* Indicateurs (flèche dropdown) - parfaitement aligné */
+/* Indicateurs (flèche dropdown) */
 .formGroup :global(.react-select__indicators) {
-  padding: 0 12px !important;
+  padding: 0 4px !important;
+  height: 30px !important;
   align-items: center !important;
   display: flex !important;
   height: 100% !important;
@@ -885,61 +884,52 @@
 /* P0.1: z-index via styles.menuPortal dans le JSX (menuPortalTarget + zIndex: 10000)
    Pas de règle globale pour éviter conflits avec autres modals/tooltips. */
 
-/* Menu principal (styles visuels uniquement, z-index géré par menuPortal) */
+/* Menu dropdown */
 :global(.react-select__menu) {
-  background: white !important;
-  border: 2px solid #00796b !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 40px rgba(0, 121, 107, 0.2) !important;
-  margin-top: 8px !important;
-  overflow: visible !important;
-  position: absolute !important;
+  background: var(--bg-primary, #fff) !important;
+  border: 1px solid var(--border-primary, #e5e7eb) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
+  margin-top: 4px !important;
+  overflow: hidden !important;
 }
 
-/* Liste des options */
 :global(.react-select__menu-list) {
-  padding: 8px !important;
-  max-height: 300px !important;
+  padding: 4px !important;
+  max-height: 240px !important;
   overflow-y: auto !important;
 }
 
-/* Chaque option de client */
 :global(.react-select__option) {
-  padding: 14px 16px !important;
-  border-radius: 8px !important;
-  margin-bottom: 4px !important;
+  padding: 6px 10px !important;
+  border-radius: 5px !important;
+  margin-bottom: 1px !important;
   cursor: pointer !important;
-  font-size: 0.95rem !important;
-  font-weight: 500 !important;
-  color: #1e293b !important;
-  background: white !important;
-  transition: all 0.2s ease !important;
+  font-size: 13px !important;
+  color: var(--text-primary, #0f172a) !important;
+  background: transparent !important;
+  transition: background 0.12s !important;
 }
 
-/* Option au survol */
 :global(.react-select__option:hover),
 :global(.react-select__option--is-focused) {
-  background: #f0fdfa !important;
-  color: #00796b !important;
+  background: var(--bg-tertiary, #f3f4f6) !important;
 }
 
-/* Option sélectionnée */
 :global(.react-select__option--is-selected) {
-  background: linear-gradient(135deg, #00796b 0%, #00695c 100%) !important;
-  color: white !important;
+  background: var(--brand-primary, #00796b) !important;
+  color: #fff !important;
   font-weight: 600 !important;
-  box-shadow: 0 2px 4px rgba(0, 121, 107, 0.2) !important;
 }
 
 :global(.react-select__option--is-selected:hover) {
-  background: linear-gradient(135deg, #00695c 0%, #005c50 100%) !important;
+  background: var(--brand-primary-dark, #00695c) !important;
 }
 
-/* Message "Aucun résultat" */
 :global(.react-select__menu-notice) {
-  padding: 16px !important;
-  color: #64748b !important;
-  font-size: 0.9rem !important;
+  padding: 10px !important;
+  color: var(--text-tertiary, #9ca3af) !important;
+  font-size: 12px !important;
   text-align: center !important;
 }
 
@@ -1202,12 +1192,13 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 2px solid #e2e8f0;
+  gap: 4px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: 999px;
-  background: white;
-  font-size: 0.875rem;
+  background: var(--bg-primary, #fff);
+  font-size: 12px;
   font-weight: 500;
   color: #64748b;
   cursor: pointer;
@@ -1278,9 +1269,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: 2px solid #e2e8f0;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-primary, #e5e7eb);
   border-radius: 50%;
   background: white;
   color: #64748b;
@@ -1477,14 +1468,15 @@
 }
 
 .returnTimeLabel {
-  margin-top: 12px;
+  margin-top: 0;
 }
 
 .returnTimeHint {
-  color: #64748b;
-  font-size: 0.85rem;
-  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  margin: 0;
   display: block;
+  font-style: italic;
 }
 
 /* Responsive */

@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour les liens Client ↔ BillingParty."""
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     fields,
     validate,

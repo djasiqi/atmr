@@ -17,29 +17,22 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { isCompletedStatus, normalizeBookingStatus } from "@/utils/bookingStatus";
+import { createShadow } from "@/styles/shadowStyles";
 import { isPickupSentinel } from "@/utils/urgentTime";
 import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
+import { getLogger } from "@/utils/logger";
 
-// ✅ Palette professionnelle cohérente avec les autres pages
-const palette = {
-  background: "#F5F7F6",
-  card: "#FFFFFF",
-  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
-  textStrong: "#15362B",
-  textSecondary: "#5F7369",
-  hintText: "#91A59D",
-  border: "rgba(15,54,43,0.08)",
-  primary: "#0A7F59",
-  primaryText: "#FFFFFF",
-  error: "#EF4444",
-  modalOverlay: "rgba(21,54,43,0.75)",
-  modalBackground: "#FFFFFF",
-  modalBorder: "rgba(15,54,43,0.12)",
-  sectionSurface: "#FFFFFF",
-  sectionBorder: "rgba(15,54,43,0.08)",
-};
+const log = getLogger("RideDetail");
+
+const BRAND = "#00796B";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+const DANGER = "#dc3545";
 
 // ✅ Couleurs de statut alignées avec le frontend web et RideSnippetCard
 const statusColors = {
@@ -189,7 +182,7 @@ export default function RideDetailsScreen() {
         message = error.message;
       }
 
-      console.error("[RideDetails] Erreur chargement détails:", {
+      log.error("load ride details failed", {
         status,
         message,
         error: errorData || error,
@@ -398,8 +391,8 @@ export default function RideDetailsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color="#4D6BFE" />
-        <Text style={styles.loadingText}>Chargement de la course…</Text>
+        <ActivityIndicator color={BRAND} />
+        <Text style={styles.loadingText}>Chargement…</Text>
       </View>
     );
   }
@@ -407,7 +400,7 @@ export default function RideDetailsScreen() {
   if (!detail || !summary) {
     return (
       <View style={styles.loadingContainer}>
-        <Ionicons name="alert-circle-outline" size={48} color={palette.error} style={{ marginBottom: 16 }} />
+        <Ionicons name="alert-circle-outline" size={48} color={DANGER} style={{ marginBottom: 16 }} />
         <Text style={styles.errorText}>
           {errorMessage ?? "Course introuvable."}
         </Text>
@@ -419,7 +412,7 @@ export default function RideDetailsScreen() {
         <View style={styles.errorActions}>
           <TouchableOpacity style={styles.primaryButton} onPress={loadDetail} disabled={loading}>
             {loading ? (
-              <ActivityIndicator color={palette.primaryText} />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.primaryButtonText}>Réessayer</Text>
             )}
@@ -434,16 +427,27 @@ export default function RideDetailsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* ✅ Header avec gradient cohérent */}
-      <LinearGradient
-        colors={palette.heroGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.title}>{headerTitle}</Text>
-        <Text style={styles.subtitle}>ID: {summary.id}</Text>
-      </LinearGradient>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerBack} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={20} color={TEXT_SEC} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+          <Text style={styles.headerSub}>#{summary.id.slice(-6)}</Text>
+        </View>
+        <View style={styles.headerStatusBadge}>
+          <View style={[styles.statusDot, { backgroundColor: getStatusColors(summary.status).text }]} />
+          <Text style={[styles.statusLabel, { color: getStatusColors(summary.status).text }]}>
+            {normalizeBookingStatus(summary.status) === "ASSIGNED" ? "Assignée"
+              : isCompletedStatus(summary.status) ? "Terminée"
+              : summary.status === "cancelled" ? "Annulée"
+              : summary.status === "en_route" ? "En route"
+              : summary.status === "in_progress" ? "En cours"
+              : "En attente"}
+          </Text>
+        </View>
+      </View>
 
       {/* ✅ Section Informations client (enrichie) */}
       <View style={styles.section}>
@@ -498,7 +502,7 @@ export default function RideDetailsScreen() {
               disabled={actionLoading}
             >
               {actionLoading ? (
-                <ActivityIndicator size="small" color={palette.primary} />
+                <ActivityIndicator size="small" color={BRAND} />
               ) : (
                 <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
               )}
@@ -626,13 +630,13 @@ export default function RideDetailsScreen() {
 
       {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
 
-      {/* ✅ Bouton retour amélioré */}
+      {/* Bouton retour */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => router.back()}
         activeOpacity={0.85}
       >
-        <Ionicons name="arrow-back" size={20} color={palette.primaryText} style={{ marginRight: 8 }} />
+        <Ionicons name="arrow-back" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
         <Text style={styles.backButtonText}>Retour aux courses</Text>
       </TouchableOpacity>
 
@@ -652,7 +656,7 @@ export default function RideDetailsScreen() {
               value={scheduleValue}
               onChangeText={setScheduleValue}
               placeholder="HH:mm"
-              placeholderTextColor={palette.hintText}
+              placeholderTextColor={TEXT_MUTED}
               keyboardType="numeric"
               autoFocus
             />
@@ -897,51 +901,90 @@ const formatEventDetails = (details: any, summary?: RideDetail["summary"]): stri
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
   },
   content: {
     paddingBottom: 60,
   },
+
+  /* ── Header ── */
   header: {
-    padding: 20,
-    paddingTop: 40,
-    paddingBottom: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: CARD,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    borderBottomColor: BORDER,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 }),
   },
-  title: {
-    color: palette.primaryText,
-    fontSize: 24,
+  headerBack: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: BG,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  headerCenter: {
+    flex: 1,
+  },
+  headerTitle: {
+    color: TEXT,
+    fontSize: 16,
     fontWeight: "700",
-    marginBottom: 4,
   },
-  subtitle: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 14,
-    marginTop: 4,
+  headerSub: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    marginTop: 2,
   },
+  headerStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: BG,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+
+  /* ── Section ── */
   section: {
-    backgroundColor: palette.sectionSurface,
-    borderRadius: 12,
+    backgroundColor: CARD,
+    borderRadius: 14,
     padding: 16,
     margin: 16,
     marginBottom: 0,
     borderWidth: 1,
-    borderColor: palette.sectionBorder,
+    borderColor: BORDER,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 }),
   },
   sectionTitle: {
-    color: palette.textStrong,
-    fontSize: 18,
-    fontWeight: "600",
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: "700",
     marginBottom: 12,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 12,
-    paddingBottom: 12,
+    marginBottom: 10,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    borderBottomColor: BORDER,
   },
   infoRowLast: {
     marginBottom: 0,
@@ -949,21 +992,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   infoLabel: {
-    color: palette.textSecondary,
-    fontSize: 14,
+    color: TEXT_SEC,
+    fontSize: 13,
     flex: 1,
   },
   infoValue: {
-    color: palette.textStrong,
-    fontSize: 14,
+    color: TEXT,
+    fontSize: 13,
     flex: 1,
     textAlign: "right",
     fontWeight: "500",
   },
   driverBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderWidth: 1,
     maxWidth: 140,
     minWidth: 80,
@@ -977,91 +1020,92 @@ const styles = StyleSheet.create({
   conflictCard: {
     borderRadius: 12,
     padding: 12,
-    marginBottom: 10,
-    backgroundColor: "rgba(251,191,36,0.12)",
+    marginBottom: 8,
+    backgroundColor: "rgba(251,191,36,0.08)",
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   conflictBlocking: {
-    backgroundColor: "rgba(239,68,68,0.12)",
+    backgroundColor: "rgba(220,53,69,0.06)",
   },
   conflictTitle: {
-    color: palette.textStrong,
-    fontSize: 15,
+    color: TEXT,
+    fontSize: 14,
     fontWeight: "600",
   },
   conflictMessage: {
-    color: palette.textSecondary,
+    color: TEXT_SEC,
     marginTop: 4,
-    fontSize: 14,
+    fontSize: 13,
   },
   conflictBadge: {
-    color: palette.error,
-    fontSize: 12,
-    marginTop: 6,
+    color: DANGER,
+    fontSize: 11,
+    marginTop: 4,
     fontWeight: "600",
   },
   suggestionCard: {
-    backgroundColor: palette.background,
+    backgroundColor: BG,
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   suggestionMain: {
     flex: 1,
     paddingRight: 12,
   },
   suggestionName: {
-    color: palette.textStrong,
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "600",
   },
   suggestionReason: {
-    color: palette.textSecondary,
-    marginTop: 4,
-    fontSize: 14,
-  },
-  suggestionMeta: {
-    color: palette.hintText,
-    marginTop: 4,
+    color: TEXT_SEC,
+    marginTop: 3,
     fontSize: 13,
   },
-  badgePreferred: {
-    color: palette.primary,
-    marginTop: 6,
-    fontWeight: "600",
+  suggestionMeta: {
+    color: TEXT_MUTED,
+    marginTop: 3,
     fontSize: 12,
   },
-  badgeEmergency: {
-    color: palette.error,
+  badgePreferred: {
+    color: BRAND,
     marginTop: 4,
     fontWeight: "600",
-    fontSize: 12,
+    fontSize: 11,
+  },
+  badgeEmergency: {
+    color: DANGER,
+    marginTop: 3,
+    fontWeight: "600",
+    fontSize: 11,
   },
   assignButton: {
     alignSelf: "center",
-    backgroundColor: palette.primary,
+    backgroundColor: BRAND,
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 10,
   },
   assignButtonText: {
-    color: palette.primaryText,
+    color: "#FFFFFF",
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: 13,
   },
   input: {
-    backgroundColor: palette.background,
+    backgroundColor: BG,
     borderRadius: 12,
     padding: 12,
-    color: palette.textStrong,
-    marginBottom: 12,
+    color: TEXT,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
+    fontSize: 14,
   },
   inputMultiline: {
     minHeight: 80,
@@ -1070,63 +1114,64 @@ const styles = StyleSheet.create({
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   checkbox: {
     width: 20,
     height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: palette.border,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: BORDER,
     marginRight: 10,
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxChecked: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
+    backgroundColor: BRAND,
+    borderColor: BRAND,
   },
   checkboxInner: {
     width: 10,
     height: 10,
     borderRadius: 2,
-    backgroundColor: palette.primaryText,
+    backgroundColor: "#FFFFFF",
   },
   checkboxLabel: {
-    color: palette.textSecondary,
-    fontSize: 14,
+    color: TEXT_SEC,
+    fontSize: 13,
   },
   primaryButton: {
-    backgroundColor: palette.primary,
+    backgroundColor: BRAND,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: "center",
     marginTop: 6,
+    ...createShadow({ shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }),
   },
   primaryButtonDisabled: {
     opacity: 0.5,
-    backgroundColor: palette.hintText,
+    backgroundColor: TEXT_MUTED,
   },
   primaryButtonText: {
-    color: palette.primaryText,
-    fontSize: 16,
+    color: "#FFFFFF",
+    fontSize: 15,
     fontWeight: "600",
   },
   actionsRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
     marginTop: 10,
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: "center",
-    backgroundColor: palette.card,
+    backgroundColor: CARD,
   },
   secondaryButtonText: {
-    color: palette.textStrong,
+    color: TEXT,
     fontWeight: "600",
     fontSize: 14,
   },
@@ -1135,122 +1180,117 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   quickActionButton: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
     borderRadius: 12,
     paddingVertical: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   quickActionText: {
-    color: palette.textStrong,
+    color: TEXT,
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: 13,
   },
-  // ✅ Bouton retour amélioré (remplace linkButton)
   backButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: palette.primary,
+    backgroundColor: BRAND,
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 13,
     paddingHorizontal: 20,
-    marginTop: 24,
+    marginTop: 20,
     marginBottom: 20,
     marginHorizontal: 16,
-    shadowColor: "rgba(10,127,89,0.2)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+    ...createShadow({ shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }),
   },
   backButtonText: {
-    color: palette.primaryText,
-    fontSize: 16,
+    color: "#FFFFFF",
+    fontSize: 15,
     fontWeight: "600",
   },
   errorText: {
-    color: palette.error,
+    color: DANGER,
     marginTop: 8,
-    fontSize: 16,
+    fontSize: 15,
     marginHorizontal: 16,
     textAlign: "center",
     fontWeight: "600",
     lineHeight: 22,
   },
   errorHint: {
-    color: palette.textSecondary,
-    marginTop: 8,
+    color: TEXT_SEC,
+    marginTop: 6,
     fontSize: 13,
     marginHorizontal: 16,
     textAlign: "center",
     lineHeight: 18,
   },
   errorActions: {
-    marginTop: 24,
+    marginTop: 20,
     width: "100%",
-    gap: 12,
+    gap: 10,
     paddingHorizontal: 16,
   },
   muted: {
-    color: palette.hintText,
-    fontSize: 14,
+    color: TEXT_MUTED,
+    fontSize: 13,
   },
   historyItem: {
-    marginBottom: 12,
+    marginBottom: 10,
     padding: 12,
-    backgroundColor: palette.background,
-    borderRadius: 8,
+    backgroundColor: BG,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   historyHeader: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   historyTitle: {
-    color: palette.textStrong,
+    color: TEXT,
     fontWeight: "600",
-    fontSize: 15,
-    marginBottom: 4,
+    fontSize: 13,
+    marginBottom: 2,
   },
   historyDate: {
-    color: palette.textSecondary,
-    fontSize: 12,
+    color: TEXT_MUTED,
+    fontSize: 11,
     marginTop: 2,
   },
   historyDetails: {
-    color: palette.textSecondary,
+    color: TEXT_SEC,
     fontSize: 12,
-    marginTop: 8,
+    marginTop: 6,
   },
   historyDetailsFormatted: {
-    color: palette.textSecondary,
-    fontSize: 13,
-    marginTop: 8,
-    lineHeight: 20,
+    color: TEXT_SEC,
+    fontSize: 12,
+    marginTop: 6,
+    lineHeight: 18,
   },
   noteItem: {
-    color: palette.textSecondary,
-    marginBottom: 6,
-    fontSize: 14,
-    lineHeight: 20,
+    color: TEXT_SEC,
+    marginBottom: 4,
+    fontSize: 13,
+    lineHeight: 19,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
   },
   loadingText: {
-    color: palette.hintText,
-    marginTop: 12,
-    fontSize: 14,
+    color: TEXT_MUTED,
+    marginTop: 10,
+    fontSize: 13,
   },
   overlay: {
     position: "absolute",
@@ -1258,138 +1298,137 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: palette.modalOverlay,
+    backgroundColor: "rgba(0,0,0,0.4)",
     alignItems: "center",
     justifyContent: "center",
   },
   overlayText: {
-    color: palette.primaryText,
+    color: "#FFFFFF",
     marginTop: 8,
     fontSize: 14,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: palette.modalOverlay,
+    backgroundColor: "rgba(0,0,0,0.35)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
   },
   modalCard: {
-    backgroundColor: palette.modalBackground,
+    backgroundColor: CARD,
     width: "100%",
     maxWidth: 420,
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: palette.modalBorder,
-    gap: 16,
+    borderColor: BORDER,
+    gap: 14,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 10 }),
   },
   modalTitle: {
-    color: palette.textStrong,
-    fontSize: 20,
+    color: TEXT,
+    fontSize: 17,
     fontWeight: "700",
   },
   modalInput: {
-    backgroundColor: palette.background,
+    backgroundColor: BG,
     borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    color: palette.textStrong,
-    fontSize: 16,
+    paddingHorizontal: 14,
+    color: TEXT,
+    fontSize: 15,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    gap: 12,
+    gap: 10,
   },
   modalCancel: {
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
   modalCancelText: {
-    color: palette.textSecondary,
+    color: TEXT_SEC,
     fontWeight: "600",
     fontSize: 14,
   },
   modalConfirm: {
-    backgroundColor: palette.primary,
-    paddingVertical: 12,
+    backgroundColor: BRAND,
+    paddingVertical: 11,
     paddingHorizontal: 18,
     borderRadius: 12,
   },
   modalConfirmText: {
-    color: palette.primaryText,
+    color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
   },
-  // ✅ Styles pour le dropdown de sélection de chauffeur
   pickerInput: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   pickerText: {
-    color: palette.textStrong,
-    fontSize: 15,
+    color: TEXT,
+    fontSize: 14,
     flex: 1,
   },
   pickerPlaceholder: {
-    color: palette.hintText,
+    color: TEXT_MUTED,
   },
   inputDisabled: {
     opacity: 0.5,
   },
   disabledHint: {
-    color: palette.error,
-    fontSize: 12,
-    marginTop: 8,
+    color: DANGER,
+    fontSize: 11,
+    marginTop: 6,
     fontStyle: "italic",
   },
   driverListModal: {
     maxHeight: 400,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   driverOption: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 14,
+    padding: 12,
     borderRadius: 12,
-    backgroundColor: palette.background,
-    marginBottom: 10,
+    backgroundColor: BG,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: palette.border,
+    borderColor: BORDER,
   },
   driverOptionSelected: {
-    backgroundColor: "rgba(10,127,89,0.1)",
-    borderWidth: 1,
-    borderColor: palette.primary,
+    backgroundColor: "rgba(0,121,107,0.06)",
+    borderColor: BRAND,
   },
   driverOptionContent: {
     flex: 1,
   },
   driverOptionName: {
-    color: palette.textStrong,
-    fontSize: 16,
+    color: TEXT,
+    fontSize: 15,
     fontWeight: "600",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   driverOptionMeta: {
-    color: palette.textSecondary,
-    fontSize: 13,
+    color: TEXT_SEC,
+    fontSize: 12,
   },
   driverOptionReset: {
-    color: palette.textSecondary,
-    fontSize: 15,
+    color: TEXT_SEC,
+    fontSize: 14,
     fontStyle: "italic",
   },
   assignButtonDisabled: {
     opacity: 0.5,
-    backgroundColor: palette.hintText,
+    backgroundColor: TEXT_MUTED,
   },
   assignButtonTextDisabled: {
-    color: palette.textSecondary,
+    color: TEXT_SEC,
   },
 });

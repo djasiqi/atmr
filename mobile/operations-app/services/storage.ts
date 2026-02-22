@@ -2,7 +2,10 @@
 // Helper pour le stockage sécurisé et non-sécurisé des tokens et données d'authentification
 
 import * as SecureStore from "expo-secure-store";
+import { getLogger } from "@/utils/logger";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
+
+const log = getLogger("Storage");
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
@@ -16,6 +19,7 @@ import {
 // Enterprise: enterprise.* pour le mode entreprise.
 const SECURE_KEYS = {
   REFRESH_TOKEN: "driver_refresh_token",
+  REFRESH_TOKEN_BACKUP: "driver_refresh_token_backup",
   ACCESS_TOKEN: "driver_access_token",
   USER_PUBLIC_ID: "driver_user_public_id",
   ENTERPRISE_TOKEN: "enterprise.token",
@@ -79,18 +83,25 @@ export const secureStorage = {
    */
   async setRefreshToken(token: string): Promise<void> {
     try {
+      // Double-slot : sauvegarder le token actuel en backup avant d'ecrire le nouveau
+      const currentPrimary = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+      if (currentPrimary) {
+        try {
+          await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP, currentPrimary);
+        } catch {
+          log.warn("refresh_backup_save_failed (non-blocking)");
+        }
+      }
+
       await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, token);
 
-      // Mettre à jour le cache immédiatement
       cachedRefreshToken = token;
       refreshTokenCacheTime = Date.now();
     } catch (error) {
-      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
-      console.error("[Storage] ❌ Erreur lors de la sauvegarde du refresh token:", error);
-      // Ne pas mettre à jour le cache si le stockage a échoué
+      log.error("refresh token save failed", { error });
       cachedRefreshToken = null;
       refreshTokenCacheTime = 0;
-      throw error; // Propager l'erreur pour que l'app puisse réagir
+      throw error;
     }
   },
 
@@ -102,7 +113,6 @@ export const secureStorage = {
     const startTime = __DEV__ ? Date.now() : 0;
     const now = Date.now();
 
-    // Vérifier le cache en mémoire
     if (
       cachedRefreshToken &&
       now - refreshTokenCacheTime < REFRESH_TOKEN_CACHE_TTL
@@ -117,20 +127,31 @@ export const secureStorage = {
       refreshTokenCacheMissCount++;
     }
 
-    // Lire depuis SecureStore
-    const token = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+    let token = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
 
-    // Mettre à jour le cache
+    // Fallback sur le backup si le primary est absent/corrompu
+    if (!token) {
+      const backup = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP);
+      if (backup) {
+        log.warn("refresh_fallback_used: primary missing, using backup");
+        token = backup;
+        // Restaurer le primary depuis le backup
+        try {
+          await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, backup);
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
     cachedRefreshToken = token;
     refreshTokenCacheTime = now;
 
-    // ⚡ Phase 4 : Métriques de performance (dev uniquement)
     if (__DEV__) {
       const readTime = Date.now() - startTime;
       refreshTokenTotalReadTime += readTime;
       refreshTokenReadCount++;
 
-      // Log périodique
       if (refreshTokenReadCount % METRICS_LOG_INTERVAL === 0) {
         const avgReadTime =
           refreshTokenTotalReadTime / refreshTokenReadCount;
@@ -140,9 +161,12 @@ export const secureStorage = {
           totalRequests > 0
             ? (refreshTokenCacheHitCount / totalRequests) * 100
             : 0;
-        console.log(
-          `[Storage] RefreshToken Performance: avg=${avgReadTime.toFixed(2)}ms, cache=${cacheHitRate.toFixed(1)}%, hits=${refreshTokenCacheHitCount}, misses=${refreshTokenCacheMissCount}`
-        );
+        log.info("refreshtoken performance", {
+          avgMs: avgReadTime.toFixed(2),
+          cacheHitRate: cacheHitRate.toFixed(1),
+          hits: refreshTokenCacheHitCount,
+          misses: refreshTokenCacheMissCount,
+        });
       }
     }
 
@@ -154,9 +178,11 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeRefreshToken(): Promise<void> {
-    await SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+    await Promise.all([
+      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
+    ]);
 
-    // Nettoyer le cache
     cachedRefreshToken = null;
     refreshTokenCacheTime = 0;
   },
@@ -195,8 +221,7 @@ export const secureStorage = {
       cachedAccessToken = token;
       tokenCacheTime = Date.now();
     } catch (error) {
-      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
-      console.error("[Storage] ❌ Erreur lors de la sauvegarde du access token:", error);
+      log.error("access token save failed", { error });
       // Ne pas mettre à jour le cache si le stockage a échoué
       cachedAccessToken = null;
       tokenCacheTime = 0;
@@ -247,9 +272,12 @@ export const secureStorage = {
           totalRequests > 0
             ? (accessTokenCacheHitCount / totalRequests) * 100
             : 0;
-        console.log(
-          `[Storage] AccessToken Performance: avg=${avgReadTime.toFixed(2)}ms, cache=${cacheHitRate.toFixed(1)}%, hits=${accessTokenCacheHitCount}, misses=${accessTokenCacheMissCount}`
-        );
+        log.info("accesstoken performance", {
+          avgMs: avgReadTime.toFixed(2),
+          cacheHitRate: cacheHitRate.toFixed(1),
+          hits: accessTokenCacheHitCount,
+          misses: accessTokenCacheMissCount,
+        });
       }
     }
 
@@ -317,13 +345,12 @@ export const secureStorage = {
    */
   async clearAll(): Promise<void> {
     if (!__DEV__) {
-      console.warn(
-        "[Storage] clearAll() bloqué en production — utiliser clearDriverAuthOnly/clearEnterpriseAuthOnly"
-      );
+      log.warn("clearall blocked in production", {});
       return;
     }
     await Promise.all([
       SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
       SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN),
       SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID),
       SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN),
@@ -368,11 +395,9 @@ export const secureStorage = {
         SecureStore.setItemAsync(SECURE_KEYS.SAVED_EMAIL, email),
         SecureStore.setItemAsync(SECURE_KEYS.SAVED_PASSWORD, password),
       ]);
-      if (__DEV__) {
-        console.log("[Storage] ✅ Identifiants sauvegardés pour auto-login");
-      }
+      log.success("credentials saved for auto-login", {});
     } catch (error) {
-      console.error("[Storage] ❌ Erreur lors de la sauvegarde des identifiants:", error);
+      log.error("credentials save failed", { error });
       throw error;
     }
   },
@@ -392,7 +417,7 @@ export const secureStorage = {
       ]);
       return { email, password };
     } catch (error) {
-      console.error("[Storage] ❌ Erreur lors de la récupération des identifiants:", error);
+      log.error("credentials get failed", { error });
       return { email: null, password: null };
     }
   },
@@ -406,11 +431,9 @@ export const secureStorage = {
         SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_EMAIL),
         SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_PASSWORD),
       ]);
-      if (__DEV__) {
-        console.log("[Storage] ✅ Identifiants sauvegardés supprimés");
-      }
+      log.success("saved credentials cleared", {});
     } catch (error) {
-      console.error("[Storage] ❌ Erreur lors de la suppression des identifiants:", error);
+      log.error("credentials clear failed", { error });
     }
   },
 
@@ -427,8 +450,7 @@ export const secureStorage = {
       cachedEnterpriseToken = token;
       enterpriseTokenCacheTime = Date.now();
     } catch (error) {
-      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
-      console.error("[Storage] ❌ Erreur lors de la sauvegarde du token Enterprise:", error);
+      log.error("enterprise token save failed", { error });
       // Ne pas mettre à jour le cache si le stockage a échoué
       cachedEnterpriseToken = null;
       enterpriseTokenCacheTime = 0;
@@ -491,8 +513,7 @@ export const secureStorage = {
         });
       }
     } catch (error) {
-      // ✅ CORRECTION : Gérer les erreurs de stockage (ex: Keychain/Keystore inaccessible)
-      console.error("[Storage] ❌ Erreur lors de la sauvegarde du refresh token Enterprise:", error);
+      log.error("enterprise refresh token save failed", { error });
       // Ne pas mettre à jour le cache si le stockage a échoué
       cachedEnterpriseRefreshToken = null;
       enterpriseRefreshTokenCacheTime = 0;

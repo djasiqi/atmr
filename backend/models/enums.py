@@ -11,10 +11,137 @@ class UserRole(str, PyEnum):
     CLIENT = "CLIENT"
     DRIVER = "DRIVER"
     COMPANY = "COMPANY"
+    INSTITUTION = "INSTITUTION"
     admin = ADMIN
     client = CLIENT
     driver = DRIVER
     company = COMPANY
+    institution = INSTITUTION
+
+
+class InstitutionRole(str, PyEnum):
+    """Rôles spécifiques au sein d'une institution.
+
+    - ADMIN: Gestion complète de l'institution
+    - REQUESTER: Peut créer et suivre des demandes de transport
+    - READER: Lecture seule (suivi des demandes)
+    - BILLING: Accès aux fonctions de facturation
+    - CURATOR: Curateur (curatelle) — gère demandes + facturation pour ses protégés assignés
+    """
+
+    ADMIN = "institution_admin"
+    REQUESTER = "institution_requester"
+    READER = "institution_reader"
+    BILLING = "institution_billing"
+    CURATOR = "institution_curator"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class RequestStatus(str, PyEnum):
+    """Statut d'une demande de transport institutionnelle.
+
+    - DRAFT: Brouillon, pas encore envoyé aux transporteurs
+    - SENT: Envoyé à un ou plusieurs transporteurs
+    - CANCELLED: Annulé par l'institution
+    - EXPIRED: Aucune réponse dans le délai imparti
+    - ACCEPTED: Accepté par un transporteur
+    - CONVERTED: Converti en Booking
+    """
+
+    DRAFT = "DRAFT"
+    SENT = "SENT"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
+    ACCEPTED = "ACCEPTED"
+    CONVERTED = "CONVERTED"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+    @classmethod
+    def editable_statuses(cls) -> list["RequestStatus"]:
+        """Statuts permettant la modification de la demande."""
+        return [cls.DRAFT, cls.SENT]
+
+    @classmethod
+    def cancellable_statuses(cls) -> list["RequestStatus"]:
+        """Statuts permettant l'annulation."""
+        return [cls.DRAFT, cls.SENT, cls.ACCEPTED]
+
+
+class MissionType(str, PyEnum):
+    """Type de mission de transport.
+
+    - PATIENT_TRANSPORT: Transport de patient
+    - MATERIAL_DELIVERY: Livraison de matériel/documents
+    """
+
+    PATIENT_TRANSPORT = "patient_transport"
+    MATERIAL_DELIVERY = "material_delivery"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class BillingIntent(str, PyEnum):
+    """Intention de facturation pour une demande.
+
+    - PATIENT: Le patient paie
+    - INSTITUTION: L'institution paie
+    - CURATOR: Le curateur paie
+    - SPC: Service de Protection des Citoyens
+    - OTHER: Autre payeur
+    """
+
+    PATIENT = "patient"
+    INSTITUTION = "institution"
+    CURATOR = "curator"
+    SPC = "spc"
+    OTHER = "other"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class ScheduledTimeType(str, PyEnum):
+    """Type d'horaire pour une demande de transport.
+
+    - DEPARTURE: L'heure indiquée est l'heure de départ souhaitée.
+      Le transporteur doit être prêt à cette heure.
+    - ARRIVAL: L'heure indiquée est l'heure du rendez-vous (arrivée).
+      Le transporteur doit proposer une heure de prise en charge
+      pour arriver à temps.
+    """
+
+    DEPARTURE = "departure"
+    ARRIVAL = "arrival"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class LocationType(str, PyEnum):
+    """Type de lieu (départ ou arrivée) pour une demande de transport.
+
+    - INSTITUTION: L'institution elle-même (clinique, EMS, hôpital)
+    - DOMICILE: Domicile du patient
+    - OTHER: Autre lieu (adresse libre)
+    """
+
+    INSTITUTION = "institution"
+    DOMICILE = "domicile"
+    OTHER = "other"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
 
 
 class BookingStatus(str, PyEnum):
@@ -339,6 +466,45 @@ class TransportVoucherStatus(str, PyEnum):
     VALIDATED = "validated"  # Validé (peut être utilisé pour facturation)
     REJECTED = "rejected"  # Rejeté (non valide)
     EXPIRED = "expired"  # Expiré (hors période de validité)
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+# ========== ENUMS REQUEST OFFERS (ÉTAPE 4) ==========
+
+
+class OfferStatus(str, PyEnum):
+    """Statut d'une offre de transport envoyée à une entreprise.
+
+    - PENDING: En attente de réponse
+    - ACCEPTED: Acceptée par l'entreprise
+    - REJECTED: Refusée par l'entreprise
+    - UNAVAILABLE: Indisponible (acceptée par une autre entreprise)
+    - EXPIRED: Expirée (timeout sans réponse)
+    """
+
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    UNAVAILABLE = "UNAVAILABLE"
+    EXPIRED = "EXPIRED"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class OfferMode(str, PyEnum):
+    """Mode d'envoi d'une offre.
+
+    - SEQUENTIAL: Envoi séquentiel selon préférences (1 par 1 avec timeout)
+    - BROADCAST: Envoi simultané à toutes les entreprises éligibles
+    """
+
+    SEQUENTIAL = "sequential"
+    BROADCAST = "broadcast"
 
     @classmethod
     def choices(cls):

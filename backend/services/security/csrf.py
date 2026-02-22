@@ -258,7 +258,7 @@ def require_csrf_token(f: Any) -> Any:
         # Récupérer user_id depuis JWT (si disponible)
         user_id = None
         try:
-            from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+            from flask_jwt_extended import (
                 get_jwt_identity,
             )
 
@@ -305,11 +305,12 @@ def setup_csrf_protection(app: Any) -> None:
         "/api/v1/prometheus/metrics",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
-        "/api/v1/auth/login-test",  # ✅ Endpoint login pour tests de charge (dev/test)
-        "/api/auth/login-test",  # ✅ Variante sans /v1 (compatibilité)
-        "/api/v1/csrf-token",  # Endpoint pour obtenir le token
-        "/api/v1/app/version-check",  # ✅ Endpoint public de vérification de version
-        "/api/v1/company_mobile/auth/login",  # ✅ Endpoint de login mobile (public)
+        "/api/v1/auth/refresh-token",
+        "/api/v1/auth/login-test",
+        "/api/auth/login-test",
+        "/api/v1/csrf-token",
+        "/api/v1/app/version-check",
+        "/api/v1/company_mobile/auth/login",
     }
 
     @app.before_request
@@ -368,31 +369,17 @@ def setup_csrf_protection(app: Any) -> None:
         if request.path in csrf_exempt_paths:
             should_check = False
 
-        # Ignorer les endpoints qui commencent par certains préfixes (ex: webhooks, dispatch mobile)
-        if request.path.startswith("/api/v1/webhooks/"):
-            should_check = False
-        # ✅ Routes mobile dispatch protégées par JWT, pas besoin de CSRF
-        if request.path.startswith("/api/v1/company_mobile/dispatch/"):
-            should_check = False
-        # ✅ Routes partnerships protégées par JWT, pas besoin de CSRF
-        if request.path.startswith("/api/v1/company_mobile/partnerships/"):
-            should_check = False
-        # ✅ Routes company_mobile/auth protégées par JWT, pas besoin de CSRF (sauf login qui est déjà exempté)
-        if request.path.startswith("/api/v1/company_mobile/auth/"):
-            should_check = False
-        # ✅ Routes driver protégées par JWT, pas besoin de CSRF (même modèle que company_mobile)
-        if request.path.startswith("/api/v1/driver/"):
-            should_check = False
-        # ✅ Routes companies protégées par JWT, pas besoin de CSRF
-        if request.path.startswith("/api/v1/companies/"):
-            should_check = False
-        # ✅ Routes company_dispatch protégées par JWT, pas besoin de CSRF
-        if request.path.startswith("/api/v1/company_dispatch/"):
-            should_check = False
-        # ✅ Routes dispatch protégées par JWT, pas besoin de CSRF (tests de charge C2)
-        if request.path.startswith("/api/v1/dispatch/") or request.path.startswith(
-            "/api/dispatch/"
-        ):
+        csrf_exempt_prefixes = (
+            "/api/v1/auth/",
+            "/api/v1/webhooks/",
+            "/api/v1/company_mobile/",
+            "/api/v1/driver/",
+            "/api/v1/companies/",
+            "/api/v1/company_dispatch/",
+            "/api/v1/dispatch/",
+            "/api/dispatch/",
+        )
+        if request.path.startswith(csrf_exempt_prefixes):
             should_check = False
 
         if not should_check:
@@ -418,7 +405,7 @@ def setup_csrf_protection(app: Any) -> None:
         # Récupérer user_id depuis JWT (si disponible)
         user_id = None
         try:
-            from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+            from flask_jwt_extended import (
                 get_jwt_identity,
             )
 

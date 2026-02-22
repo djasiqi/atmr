@@ -85,6 +85,12 @@ class Driver(db.Model):
     )
 
     # Véhicule
+    vehicle_id = Column(
+        Integer,
+        ForeignKey("vehicle.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     vehicle_assigned: Mapped[str] = mapped_column(String(100), nullable=True)
     brand: Mapped[str] = mapped_column(String(100), nullable=True)
     license_plate: Mapped[str] = mapped_column(String(50), nullable=True)
@@ -120,9 +126,16 @@ class Driver(db.Model):
     trainings = Column(JSON, nullable=False, server_default=text("'[]'"))
     medical_valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    # Identite & Urgence
+    avs_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    nationality: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+
     # Relations
     user = relationship("User", back_populates="driver", passive_deletes=True)
     company = relationship("Company", back_populates="drivers", passive_deletes=True)
+    vehicle = relationship("Vehicle", foreign_keys=[vehicle_id])
     vacations = relationship(
         "DriverVacation",
         back_populates="driver",
@@ -224,8 +237,11 @@ class Driver(db.Model):
                     if driver_type_raw is not None
                     else None
                 ),
+                "vehicle_id": getattr(self, "vehicle_id", None),
+                "vehicle": self.vehicle.serialize if getattr(self, "vehicle", None) else None,
                 "vehicle_assigned": getattr(self, "vehicle_assigned", None),
                 "brand": getattr(self, "brand", None),
+                "license_plate": getattr(self, "license_plate", None),
                 "latitude": getattr(self, "latitude", None),
                 "longitude": getattr(self, "longitude", None),
                 "last_position_update": (
@@ -247,6 +263,17 @@ class Driver(db.Model):
                 "medical_valid_until": medical_valid.isoformat()
                 if medical_valid
                 else None,
+                "avs_number": getattr(self, "avs_number", None),
+                "nationality": getattr(self, "nationality", None),
+                "emergency_contact_name": getattr(self, "emergency_contact_name", None),
+                "emergency_contact_phone": getattr(self, "emergency_contact_phone", None),
+                "phone": getattr(user, "phone", None) if user else None,
+                "birth_date": (
+                    bd.isoformat()
+                    if (bd := getattr(user, "birth_date", None) if user else None)
+                    else None
+                ),
+                "address": getattr(user, "address", None) if user else None,
             }
         except Exception as e:
             # Log l'erreur mais retourne un profil minimal pour éviter une erreur 500
@@ -270,8 +297,11 @@ class Driver(db.Model):
                 "is_active": False,
                 "is_available": False,
                 "driver_type": None,
+                "vehicle_id": None,
+                "vehicle": None,
                 "vehicle_assigned": None,
                 "brand": None,
+                "license_plate": None,
                 "latitude": None,
                 "longitude": None,
                 "last_position_update": None,
@@ -287,6 +317,13 @@ class Driver(db.Model):
                 "license_valid_until": None,
                 "trainings": [],
                 "medical_valid_until": None,
+                "avs_number": None,
+                "nationality": None,
+                "emergency_contact_name": None,
+                "emergency_contact_phone": None,
+                "phone": None,
+                "birth_date": None,
+                "address": None,
             }
 
     def to_dict(self):

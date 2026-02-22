@@ -5,6 +5,9 @@ import {
   updateDriverLocation,
   type DriverLocationPayload, // ← on réutilise le type exporté par api.ts
 } from "@/services/api";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("LocationSvc");
 
 
 /** Distance en mètres via Haversine */
@@ -26,7 +29,7 @@ export const getDistanceInMeters = (
 
 /** Envoi simple (utilisé par le watcher) */
 export const sendDriverLocation = async (payload: DriverLocationPayload) => {  try {
-    console.log("📍 sendDriverLocation START:", payload);
+    log.info("send start", { payload });
     
     // Validation robuste (0 autorisé, NaN rejeté, bornes checkées)
     const { latitude, longitude } = payload as any;
@@ -56,26 +59,23 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
       ts,  // ✅ Toujours string ISO pour le backend
     };
 
-    console.log("📍 Clean payload:", cleanPayload);
+    log.info("clean payload", cleanPayload);
 
     const res = await updateDriverLocation(cleanPayload);
-    console.log("✅ Localisation envoyée:", res?.ok ?? true, res?.source ? `(${res.source})` : "");
-    
-    if (res?.message) console.log("ℹ️", res.message);
+    log.success("position sent", { ok: res?.ok ?? true, source: res?.source });
+
+    if (res?.message) log.info("api message", { message: res.message });
     return res;
     
   } catch (e: any) {
     // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
     const status = e?.response?.status;
     if (status === 401 || status === 403 || status === 404) {
-      console.debug(
-        "[sendDriverLocation] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
-        status
-      );
+      log.debug("access not authorized", { status });
       // Ne pas lancer d'erreur, juste retourner
       return { ok: false, message: "Accès non autorisé" };
     }
-    console.error("❌ Erreur envoi localisation:", e);
+    log.error("send location failed", { error: e });
     throw e;
   }
 };
@@ -97,7 +97,7 @@ export async function startLocationTracking(
   minDistanceM = 50
 ) {
   if (locationSub) {
-    console.log("⚠️ Tracking déjà actif");
+    log.warn("tracking already active");
     return;
   }
 
@@ -132,8 +132,8 @@ export async function startLocationTracking(
             ts: new Date().toISOString(),
           };
 
-          console.log("📍 Tracking payload:", payload);
-          
+          log.info("tracking payload", payload);
+
           await sendDriverLocation(payload);
           
           lastSentAt = now;
@@ -141,12 +141,12 @@ export async function startLocationTracking(
           lastLon = longitude;
         }
       } catch (e: any) {
-        console.warn("⚠️ Envoi localisation échoué (ignoré):", e?.message || e);
+        log.warn("send failed ignored", { message: e?.message || e });
       }
     }
   );
 
-  console.log("▶️ Tracking localisation démarré");
+  log.success("tracking started");
 }
 
 /** Arrête le tracking en continu */
@@ -156,6 +156,6 @@ export async function stopLocationTracking() {
       locationSub.remove();
     } catch {}
     locationSub = null;
-    console.log("⏹️ Tracking localisation arrêté");
+    log.success("tracking stopped");
   }
 }

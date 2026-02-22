@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
@@ -42,6 +41,9 @@ import { RideSummary } from "@/types/enterpriseDispatch";
 import { useRideActions } from "@/hooks/useRideActions";
 import { router } from "expo-router";
 import { secureStorage } from "@/services/storage";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("Rides");
 
 /**
  * Décoder un JWT et extraire le timestamp d'expiration (exp)
@@ -52,7 +54,7 @@ const getTokenExpiration = (token: string): number | null => {
     const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.exp ? payload.exp * 1000 : null; // Convertir en ms
   } catch (error) {
-    console.warn("[getTokenExpiration] Erreur décodage JWT:", error);
+    log.warn("jwt decode error", { error });
     return null;
   }
 };
@@ -60,38 +62,14 @@ const getTokenExpiration = (token: string): number | null => {
 dayjs.locale("fr");
 
 
-// ✅ Palette professionnelle cohérente avec le dashboard driver
-const palette = {
-  background: "#F5F7F6",
-  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
-  heroBorder: "rgba(15,54,43,0.08)",
-  heroText: "#FFFFFF",
-  heroMeta: "rgba(255,255,255,0.9)",
-  searchBackground: "#FFFFFF",
-  searchBorder: "rgba(15,54,43,0.08)",
-  searchPlaceholder: "#91A59D",
-  tabBackground: "#FFFFFF",
-  tabBorder: "rgba(15,54,43,0.08)",
-  tabActive: "#0A7F59",
-  tabActiveShadow: "rgba(10,127,89,0.2)",
-  tabText: "#5F7369",
-  tabTextActive: "#FFFFFF",
-  listGap: 18,
-  emptyState: "#91A59D",
-  error: "#EF4444",
-  modalOverlay: "rgba(21,54,43,0.75)",
-  modalBackground: "#FFFFFF",
-  modalBorder: "rgba(15,54,43,0.12)",
-  modalTitle: "#15362B",
-  modalText: "#5F7369",
-  modalButton: "#0A7F59",
-  modalButtonText: "#FFFFFF",
-  modalCancelText: "#5F7369",
-  divider: "rgba(15,54,43,0.08)",
-  countPillBg: "rgba(10,127,89,0.12)",
-  countPillText: "#0A7F59",
-  loadingText: "#91A59D",
-};
+const BRAND = "#00796B";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+const DANGER = "#dc3545";
 
 export default function EnterpriseRidesScreen() {
   const { enterpriseSession, refreshEnterprise } = useAuth();
@@ -122,10 +100,9 @@ export default function EnterpriseRidesScreen() {
     ride: RideSummary | null;
   }>({ ride: null });
 
-  // 🔍 DEBUG: Logger les changements de clientCreateModalVisible (dev only)
   useEffect(() => {
     if (__DEV__) {
-      console.log('[rides.tsx] 🔍 clientCreateModalVisible changed:', clientCreateModalVisible);
+      log.info("client create modal visibility changed", { clientCreateModalVisible });
     }
   }, [clientCreateModalVisible]);
 
@@ -165,13 +142,13 @@ export default function EnterpriseRidesScreen() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      console.log("[rides.tsx] Chargement courses pour date:", currentDate);
+      log.info("loading rides for date", { currentDate });
       const response = await getDispatchRides({
         date: currentDate,
         query: search || undefined,
         page_size: 120,
       });
-      console.log("[rides.tsx] Courses reçues:", response.items.length, "courses");
+      log.info("rides loaded", { count: response.items.length });
       setRides(response.items);
     } catch (error: any) {
       // ✅ Invariant C: refresh_token absent → forcer login (pas "connexion en cours" infini)
@@ -226,7 +203,7 @@ export default function EnterpriseRidesScreen() {
         const currentAppState = AppState.currentState;
         // Seulement charger si l'app est active
         if (currentAppState === "active") {
-          console.log("[rides.tsx] Polling automatique : rechargement des courses");
+          log.info("polling refresh rides");
           throttledLoadRides();
         }
       }, 30000); // 30 secondes
@@ -245,7 +222,7 @@ export default function EnterpriseRidesScreen() {
       ) {
         // ✅ CORRECTION #3 : Vérifier la validité du token au retour foreground
         // Évite les erreurs 401 dues à un token expiré pendant que l'app était en background
-        console.log("[rides.tsx] Application revenue au premier plan : vérification du token");
+        log.info("app foreground, checking token");
         try {
           // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
           const token = await secureStorage.getEnterpriseToken();
@@ -254,21 +231,19 @@ export default function EnterpriseRidesScreen() {
             const now = Date.now();
             // Si le token expire dans moins de 5 minutes, le rafraîchir
             if (expiresAt && expiresAt - now < 5 * 60 * 1000) {
-              console.log("[rides.tsx] 🔄 Token proche de l'expiration, rafraîchissement...");
+              log.info("token near expiry, refreshing");
               await refreshEnterprise();
             }
           }
         } catch (error) {
-          console.warn("[rides.tsx] ⚠️ Erreur lors de la vérification du token:", error);
+          log.warn("token check failed", { error });
         }
 
-        // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
-        console.log("[rides.tsx] Application revenue au premier plan : rechargement des courses");
+        log.info("app foreground, reloading rides");
         throttledLoadRides();
         startPolling();
       } else if (nextAppState.match(/inactive|background/)) {
-        // L'app passe en arrière-plan : arrêter le polling
-        console.log("[rides.tsx] Application en arrière-plan : arrêt du polling");
+        log.info("app background, stopping polling");
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -291,7 +266,7 @@ export default function EnterpriseRidesScreen() {
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
-        console.log("[rides.tsx] Écran au focus : rechargement des courses");
+        log.info("screen focused, reloading rides");
         throttledLoadRides();
       }
     }, [enterpriseSession, throttledLoadRides])
@@ -463,70 +438,65 @@ export default function EnterpriseRidesScreen() {
           <RefreshControl refreshing={loading} onRefresh={loadRides} />
         }
       >
-        <LinearGradient
-          colors={palette.heroGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.hero}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroKicker}>Plan de transport</Text>
-            <Text style={styles.heroTitle}>{formattedDay}</Text>
-            <Text style={styles.heroSubtitle}>
-              {sortedRides.length} course{sortedRides.length !== 1 ? "s" : ""} planifiée
-              {sortedRides.length !== 1 ? "s" : ""}
-            </Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="car-outline" size={20} color={BRAND} />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Courses</Text>
+              <Text style={styles.headerDate}>{formattedDay}</Text>
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.heroFab}
-            onPress={() => setCreateModalVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </LinearGradient>
+          <View style={styles.headerRight}>
+            <View style={styles.countPill}>
+              <Text style={styles.countPillText}>
+                {sortedRides.length}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => setCreateModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
+        {/* Search */}
         <View style={styles.searchBar}>
-          <Ionicons
-            name="search-outline"
-            size={18}
-            color={palette.searchPlaceholder}
-          />
+          <Ionicons name="search-outline" size={16} color={TEXT_MUTED} />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Rechercher client, adresse ou chauffeur"
-            placeholderTextColor={palette.searchPlaceholder}
+            placeholder="Client, adresse ou chauffeur…"
+            placeholderTextColor={TEXT_MUTED}
             style={styles.searchInput}
             returnKeyType="search"
             onSubmitEditing={onSubmitSearch}
           />
-          <TouchableOpacity
-            style={styles.searchTrigger}
-            onPress={onSubmitSearch}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="arrow-forward" size={18} color={palette.heroText} />
-          </TouchableOpacity>
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => { setSearch(""); loadRides(); }} style={styles.searchClear}>
+              <Ionicons name="close-circle" size={16} color={TEXT_MUTED} />
+            </TouchableOpacity>
+          )}
         </View>
-
-        <View style={styles.divider} />
 
         {loading ? (
           <View style={styles.loading}>
-            <ActivityIndicator color={palette.tabActive} />
-            <Text style={styles.loadingText}>Préparation des courses…</Text>
+            <ActivityIndicator color={BRAND} />
+            <Text style={styles.loadingText}>Chargement…</Text>
           </View>
         ) : sortedRides.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons
-              name="leaf-outline"
-              size={32}
-              color={palette.emptyState}
-            />
-            <Text style={styles.emptyStateTitle}>Pas de course ici</Text>
-            <Text style={styles.emptyStateText}>
-              Ajuste la date ou change d'onglet pour consulter d'autres trajets.
+            <View style={styles.emptyIcon}>
+              <Ionicons name="car-outline" size={28} color={BRAND} />
+            </View>
+            <Text style={styles.emptyTitle}>Aucune course</Text>
+            <Text style={styles.emptySubtitle}>
+              Aucune course pour cette date. Utilisez le bouton + pour en créer une.
             </Text>
           </View>
         ) : (
@@ -583,84 +553,50 @@ export default function EnterpriseRidesScreen() {
                       onQuickAction: undefined,
                       onPrimaryAction: undefined,
                       footerActions: (
-                        <View style={styles.footerActionsContainer}>
+                        <View style={styles.footerActions}>
                           {isCompleted ? (
-                            // ✅ Si la course est terminée, afficher uniquement "Détails"
-                            <TouchableOpacity
-                              style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                              onPress={() => handleOpenDetails(ride.id)}
-                            >
-                              <View style={styles.actionButtonIcon}>
-                                <Ionicons name="open-outline" size={16} color={palette.modalText} />
-                              </View>
-                              <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
+                            <TouchableOpacity style={styles.actionChip} onPress={() => handleOpenDetails(ride.id)}>
+                              <Ionicons name="open-outline" size={14} color={TEXT_SEC} />
+                              <Text style={[styles.actionChipText, { color: TEXT_SEC }]}>Détails</Text>
                             </TouchableOpacity>
                           ) : (
-                            // ✅ Sinon, afficher toutes les actions
                             <>
-                              <TouchableOpacity
-                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                onPress={() => handleEdit(ride)}
-                              >
-                                <View style={styles.actionButtonIcon}>
-                                  <Ionicons name="create-outline" size={16} color={palette.modalButton} />
-                                </View>
-                                <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Éditer</Text>
+                              <TouchableOpacity style={styles.actionChip} onPress={() => handleEdit(ride)}>
+                                <Ionicons name="create-outline" size={14} color={BRAND} />
+                                <Text style={[styles.actionChipText, { color: BRAND }]}>Éditer</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                onPress={() => handleSchedule(ride)}
-                              >
-                                <View style={styles.actionButtonIcon}>
-                                  <Ionicons name="time-outline" size={16} color={palette.modalButton} />
-                                </View>
-                                <Text style={[styles.actionButtonGhostText, { color: palette.modalButton }]}>Planifier</Text>
+                              <TouchableOpacity style={styles.actionChip} onPress={() => handleSchedule(ride)}>
+                                <Ionicons name="time-outline" size={14} color={BRAND} />
+                                <Text style={[styles.actionChipText, { color: BRAND }]}>Planifier</Text>
                               </TouchableOpacity>
                               {isPickupSentinel(ride.time?.pickup_at) && (
                                 <TouchableOpacity
-                                  style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
+                                  style={styles.actionChip}
                                   onPress={() => handleUrgent(ride)}
                                   disabled={!!actionLoading || urgentLoadingRideId === ride.id}
                                 >
-                                  <View style={styles.actionButtonIcon}>
-                                    {urgentLoadingRideId === ride.id ? (
-                                      <ActivityIndicator size="small" color="#F59E0B" />
-                                    ) : (
-                                      <Ionicons name="flash" size={16} color="#F59E0B" />
-                                    )}
-                                  </View>
-                                  <Text style={[styles.actionButtonGhostText, { color: "#F59E0B" }]}>
-                                    {urgentLoadingRideId === ride.id ? "..." : "Urgent +15min"}
+                                  {urgentLoadingRideId === ride.id ? (
+                                    <ActivityIndicator size="small" color="#F59E0B" />
+                                  ) : (
+                                    <Ionicons name="flash" size={14} color="#F59E0B" />
+                                  )}
+                                  <Text style={[styles.actionChipText, { color: "#F59E0B" }]}>
+                                    {urgentLoadingRideId === ride.id ? "…" : "Urgent"}
                                   </Text>
                                 </TouchableOpacity>
                               )}
-                              <TouchableOpacity
-                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                onPress={() => handleOpenDetails(ride.id)}
-                              >
-                                <View style={styles.actionButtonIcon}>
-                                  <Ionicons name="open-outline" size={16} color={palette.modalText} />
-                                </View>
-                                <Text style={[styles.actionButtonGhostText, { color: palette.modalText }]}>Détails</Text>
+                              <TouchableOpacity style={styles.actionChip} onPress={() => handleOpenDetails(ride.id)}>
+                                <Ionicons name="open-outline" size={14} color={TEXT_SEC} />
+                                <Text style={[styles.actionChipText, { color: TEXT_SEC }]}>Détails</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity
-                                style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                onPress={() => handleTransfer(ride)}
-                              >
-                                <View style={styles.actionButtonIcon}>
-                                  <Ionicons name="swap-horizontal-outline" size={16} color="#0EA5E9" />
-                                </View>
-                                <Text style={[styles.actionButtonGhostText, { color: "#0EA5E9" }]}>Transférer</Text>
+                              <TouchableOpacity style={styles.actionChip} onPress={() => handleTransfer(ride)}>
+                                <Ionicons name="swap-horizontal-outline" size={14} color="#0EA5E9" />
+                                <Text style={[styles.actionChipText, { color: "#0EA5E9" }]}>Transférer</Text>
                               </TouchableOpacity>
                               {ride.status !== "cancelled" && (
-                                <TouchableOpacity
-                                  style={[styles.actionButtonGhost, { flexBasis: "30%" }]}
-                                  onPress={() => handleCancel(ride)}
-                                >
-                                  <View style={styles.actionButtonIcon}>
-                                    <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
-                                  </View>
-                                  <Text style={[styles.actionButtonGhostText, { color: "#EF4444" }]}>Annuler</Text>
+                                <TouchableOpacity style={styles.actionChip} onPress={() => handleCancel(ride)}>
+                                  <Ionicons name="close-circle-outline" size={14} color={DANGER} />
+                                  <Text style={[styles.actionChipText, { color: DANGER }]}>Annuler</Text>
                                 </TouchableOpacity>
                               )}
                             </>
@@ -681,7 +617,7 @@ export default function EnterpriseRidesScreen() {
 
         {errorMessage && (
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle" size={18} color={palette.error} />
+            <Ionicons name="alert-circle" size={16} color={DANGER} />
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         )}
@@ -705,12 +641,9 @@ export default function EnterpriseRidesScreen() {
         onSuccess={refreshData}
         onOpenClientCreate={() => {
           if (__DEV__) {
-            console.log('[rides.tsx] 🔴 Opening client create modal');
+            log.info("opening client create modal");
           }
           setClientCreateModalVisible(true);
-          if (__DEV__) {
-            console.log('[rides.tsx] 🔴 clientCreateModalVisible set to true');
-          }
         }}
         onClientCreated={async (client) => {
           // Le client créé sera automatiquement sélectionné dans RideCreateModal
@@ -734,90 +667,77 @@ export default function EnterpriseRidesScreen() {
               // via le callback onClientCreated qui sera implémenté
             }
           } catch (error) {
-            console.error("[rides.tsx] Erreur lors du rechargement du client:", error);
+            log.error("reload client after create failed", { error });
           }
           setClientCreateModalVisible(false);
         }}
       />
 
-      {/* Modal de confirmation d'annulation avec option de facturation */}
-      <Modal visible={!!cancelModal.ride} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Annuler la course</Text>
-                {cancelModal.ride && (
-                  <Text style={styles.modalSubtitle}>
-                    Course #{cancelModal.ride.id.slice(-4)} - {cancelModal.ride.client.name}
-                  </Text>
-                )}
+      {/* Modal d'annulation – bottom sheet */}
+      <Modal visible={!!cancelModal.ride} transparent animationType="slide">
+        <Pressable style={styles.sheetOverlay} onPress={() => setCancelModal({ ride: null, shouldBill: false })}>
+          <View />
+        </Pressable>
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetIconWrap}>
+              <Ionicons name="close-circle-outline" size={20} color={DANGER} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sheetTitle}>Annuler la course</Text>
+              {cancelModal.ride && (
+                <Text style={styles.sheetSubtitle}>
+                  #{cancelModal.ride.id.slice(-4)} · {cancelModal.ride.client.name}
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <Text style={styles.sheetBody}>
+            Cette action est irréversible. Souhaitez-vous facturer cette annulation ?
+          </Text>
+
+          <View style={styles.billingOptions}>
+            <TouchableOpacity
+              style={[styles.billingOption, !cancelModal.shouldBill && styles.billingOptionActive]}
+              onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: false }))}
+            >
+              <View style={styles.radioOuter}>
+                {!cancelModal.shouldBill && <View style={styles.radioInner} />}
               </View>
-              <TouchableOpacity
-                onPress={() => setCancelModal({ ride: null, shouldBill: false })}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color={palette.modalText} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalText}>
-                Voulez-vous vraiment annuler cette course ?
-              </Text>
-              <View style={styles.billingSection}>
-                <Text style={styles.billingLabel}>Facturation</Text>
-                <View style={styles.billingOptions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.billingOption,
-                      !cancelModal.shouldBill && styles.billingOptionActive,
-                    ]}
-                    onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: false }))}
-                  >
-                    <View style={styles.radioButton}>
-                      {!cancelModal.shouldBill && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                    <Text style={styles.billingOptionText}>Non facturée</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.billingOption,
-                      cancelModal.shouldBill && styles.billingOptionActive,
-                    ]}
-                    onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: true }))}
-                  >
-                    <View style={styles.radioButton}>
-                      {cancelModal.shouldBill && (
-                        <View style={styles.radioButtonInner} />
-                      )}
-                    </View>
-                    <Text style={styles.billingOptionText}>À facturer</Text>
-                  </TouchableOpacity>
-                </View>
+              <Text style={styles.billingOptionText}>Non facturée</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.billingOption, cancelModal.shouldBill && styles.billingOptionActive]}
+              onPress={() => setCancelModal((prev) => ({ ...prev, shouldBill: true }))}
+            >
+              <View style={styles.radioOuter}>
+                {cancelModal.shouldBill && <View style={styles.radioInner} />}
               </View>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancel}
-                onPress={() => setCancelModal({ ride: null, shouldBill: false })}
-                disabled={actionLoading}
-              >
-                <Text style={styles.modalCancelText}>Retour</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirm, actionLoading && styles.modalConfirmDisabled]}
-                onPress={confirmCancel}
-                disabled={actionLoading}
-              >
-                {actionLoading ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Confirmer l'annulation</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.billingOptionText}>À facturer</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.sheetActions}>
+            <TouchableOpacity
+              style={styles.sheetCancelBtn}
+              onPress={() => setCancelModal({ ride: null, shouldBill: false })}
+              disabled={actionLoading}
+            >
+              <Text style={styles.sheetCancelText}>Retour</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sheetConfirmBtn, actionLoading && { opacity: 0.5 }]}
+              onPress={confirmCancel}
+              disabled={actionLoading}
+            >
+              {actionLoading ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <Text style={styles.sheetConfirmText}>Confirmer</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -888,331 +808,308 @@ export default function EnterpriseRidesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
   },
   scroll: {
     flex: 1,
   },
   content: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 32,
   },
-  hero: {
-    borderRadius: 24,
-    padding: 20,
-    height: 150,
+
+  /* ── Header ── */
+  header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: palette.heroBorder,
-    ...createShadow({
-      shadowColor: "rgba(10,127,89,0.15)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      elevation: 8,
-    }), // ✅ Compatible web/native
+    borderColor: BORDER,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 }),
   },
-  heroKicker: {
-    color: palette.heroMeta,
-    textTransform: "uppercase",
-    letterSpacing: 3,
-    fontSize: 11,
-    marginBottom: 4,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  heroTitle: {
-    color: palette.heroText,
-    fontSize: 24,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-    textTransform: "capitalize",
-  },
-  heroSubtitle: {
-    color: palette.heroMeta,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  heroFab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: palette.modalButton,
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,121,107,0.08)",
     alignItems: "center",
     justifyContent: "center",
-    ...createShadow({
-      shadowColor: "rgba(10,127,89,0.3)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 1,
-      shadowRadius: 12,
-      elevation: 6,
-    }), // ✅ Compatible web/native
-    marginLeft: 18,
   },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: TEXT,
+  },
+  headerDate: {
+    fontSize: 12,
+    color: TEXT_SEC,
+    textTransform: "capitalize",
+    marginTop: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  countPill: {
+    backgroundColor: "rgba(0,121,107,0.1)",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  countPillText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: BRAND,
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: BRAND,
+    alignItems: "center",
+    justifyContent: "center",
+    ...createShadow({ shadowColor: BRAND, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }),
+  },
+
+  /* ── Search ── */
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: palette.searchBackground,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 4,
+    backgroundColor: CARD,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: palette.searchBorder,
-    ...createShadow({
-      shadowColor: "rgba(15,54,43,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 8,
-      elevation: 2,
-    }), // ✅ Compatible web/native
-    marginTop: 20,
+    borderColor: BORDER,
+    marginTop: 12,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 }),
   },
   searchInput: {
     flex: 1,
-    color: palette.modalTitle, // ✅ Corrigé : texte visible (vert foncé au lieu de blanc)
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    fontSize: 15,
+    color: TEXT,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    fontSize: 14,
   },
-  searchTrigger: {
-    borderRadius: 999,
-    padding: 8,
+  searchClear: {
+    padding: 6,
   },
-  divider: {
-    height: 1,
-    backgroundColor: palette.divider,
-    marginTop: 20,
-  },
+
+  /* ── Loading ── */
   loading: {
     alignItems: "center",
-    paddingVertical: 40,
-    marginTop: 20,
+    paddingVertical: 48,
   },
   loadingText: {
-    color: palette.loadingText,
-    fontSize: 14,
-    marginTop: 12,
+    color: TEXT_MUTED,
+    fontSize: 13,
+    marginTop: 10,
   },
+
+  /* ── Empty ── */
   emptyState: {
     alignItems: "center",
-    paddingVertical: 48,
-    marginTop: 20,
+    paddingVertical: 56,
   },
-  emptyStateTitle: {
-    color: palette.heroText,
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    color: TEXT,
     fontWeight: "600",
-    fontSize: 16,
-    marginTop: 12,
+    fontSize: 15,
   },
-  emptyStateText: {
-    color: palette.emptyState,
-    fontSize: 14,
+  emptySubtitle: {
+    color: TEXT_MUTED,
+    fontSize: 13,
     textAlign: "center",
-    paddingHorizontal: 20,
-    marginTop: 12,
+    paddingHorizontal: 32,
+    marginTop: 6,
+    lineHeight: 19,
   },
+
+  /* ── List ── */
   ridesListContainer: {
-    // Les cards auront leur propre marginBottom
-    marginTop: 20,
+    marginTop: 14,
   },
   rideCardWrapper: {
-    marginBottom: 18, // équivalent à palette.listGap
+    marginBottom: 10,
   },
-  cardActions: {
+
+  /* ── Footer actions (chips) ── */
+  footerActions: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginRight: -10, // Compenser les marges des boutons
+    gap: 6,
+    marginTop: 10,
   },
-  actionButtonPrimary: {
+  actionChip: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
-    backgroundColor: palette.modalButton,
-    marginRight: 10,
-  },
-  actionButtonPrimaryText: {
-    color: palette.modalButtonText,
-    fontWeight: "600",
-    fontSize: 13,
-  },
-  actionButtonGhost: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 16,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: BG,
     borderWidth: 1,
-    borderColor: palette.tabBorder,
-    backgroundColor: "#FFFFFF",
-    ...createShadow({
-      shadowColor: "rgba(15,54,43,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 4,
-      elevation: 1,
-    }), // ✅ Compatible web/native
-    marginRight: 8,
-    marginBottom: 8,
+    borderColor: BORDER,
   },
-  actionButtonIcon: {
-    marginRight: 8,
-  },
-  actionButtonGhostText: {
-    color: palette.heroText,
+  actionChipText: {
+    fontSize: 12,
     fontWeight: "600",
-    fontSize: 13,
   },
-  footerActionsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
+
+  /* ── Error ── */
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
-    backgroundColor: "rgba(248,113,113,0.12)",
-    borderRadius: 14,
+    padding: 12,
+    backgroundColor: "rgba(220,53,69,0.06)",
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.24)",
-    marginTop: 20,
+    borderColor: "rgba(220,53,69,0.15)",
+    marginTop: 14,
   },
   errorText: {
-    color: palette.error,
+    color: DANGER,
     flex: 1,
     fontSize: 13,
-    marginLeft: 10,
+    marginLeft: 8,
   },
-  modalOverlay: {
+
+  /* ── Bottom sheet (cancel) ── */
+  sheetOverlay: {
     flex: 1,
-    backgroundColor: palette.modalOverlay,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  sheet: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    ...createShadow({ shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 12 }),
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 16,
+  },
+  sheetIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(220,53,69,0.08)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: palette.modalBackground,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: palette.modalBorder,
-  },
-  modalTitle: {
-    color: palette.modalTitle,
-    fontSize: 20,
+  sheetTitle: {
+    fontSize: 17,
     fontWeight: "700",
+    color: TEXT,
   },
-  modalSubtitle: {
-    color: palette.modalText,
+  sheetSubtitle: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    marginTop: 2,
+  },
+  sheetBody: {
     fontSize: 14,
-  },
-  modalInput: {
-    backgroundColor: "rgba(10,34,26,0.82)",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    color: palette.heroText,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: palette.searchBorder,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 16,
-  },
-  modalCancel: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginRight: 12,
-  },
-  modalCancelText: {
-    color: palette.modalCancelText,
-    fontWeight: "600",
-  },
-  modalConfirm: {
-    backgroundColor: palette.modalButton,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
-  },
-  modalConfirmText: {
-    color: palette.modalButtonText,
-    fontWeight: "700",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    padding: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.divider,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalContent: {
-    padding: 24,
-    marginTop: 16,
-  },
-  modalConfirmDisabled: {
-    opacity: 0.5,
-  },
-  modalText: {
-    color: palette.modalText,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  billingSection: {
-    marginTop: 20,
-  },
-  billingLabel: {
-    color: palette.modalTitle,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 12,
+    color: TEXT_SEC,
+    lineHeight: 20,
+    marginBottom: 16,
   },
   billingOptions: {
-    // Les options auront leur propre marginBottom
+    gap: 8,
+    marginBottom: 20,
   },
   billingOption: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: palette.divider,
-    backgroundColor: palette.background,
-    marginBottom: 10,
+    borderColor: BORDER,
+    backgroundColor: BG,
   },
   billingOptionActive: {
-    borderColor: palette.modalButton,
-    backgroundColor: "rgba(10,127,89,0.06)",
+    borderColor: BRAND,
+    backgroundColor: "rgba(0,121,107,0.05)",
   },
-  radioButton: {
+  radioOuter: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: palette.modalButton,
+    borderColor: BRAND,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
   },
-  radioButtonInner: {
+  radioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: palette.modalButton,
+    backgroundColor: BRAND,
   },
   billingOptionText: {
-    color: palette.modalTitle,
-    fontSize: 15,
+    color: TEXT,
+    fontSize: 14,
     fontWeight: "500",
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  sheetCancelBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: CARD,
+  },
+  sheetCancelText: {
+    color: TEXT_SEC,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  sheetConfirmBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: DANGER,
+    ...createShadow({ shadowColor: DANGER, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }),
+  },
+  sheetConfirmText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 14,
   },
 });

@@ -42,29 +42,28 @@ export type RideSnippet = {
   delayMinutes?: number | null; // ✅ Minutes de retard (positif) ou d'avance (négatif)
 };
 
-// ✅ Palette professionnelle cohérente avec le dashboard driver
 const palette = {
-  time: "#0A7F59",
+  time: "#00796B",
   timeUndefined: "#F59E0B",
-  client: "#15362B",
-  chevron: "#91A59D",
-  badgeText: "#15362B",
-  badgeDefaultBg: "rgba(95,115,105,0.12)",
-  badgeAssignedBg: "rgba(10,127,89,0.12)",
-  badgeCompletedBg: "rgba(95,115,105,0.15)", // ✅ Gris pour terminé
-  badgeCompletedText: "#5F7369", // ✅ Texte gris pour terminé
+  client: "#1E293B",
+  chevron: "#94A3B8",
+  badgeText: "#1E293B",
+  badgeDefaultBg: "rgba(100,116,139,0.1)",
+  badgeAssignedBg: "rgba(0,121,107,0.1)",
+  badgeCompletedBg: "rgba(100,116,139,0.12)",
+  badgeCompletedText: "#64748B",
   badgeWarningBg: "rgba(251,191,36,0.12)",
-  badgeDangerBg: "rgba(239,68,68,0.12)",
-  badgeInfoBg: "rgba(59,130,246,0.12)",
-  badgeBorder: "rgba(15,54,43,0.12)",
-  routeText: "#5F7369",
-  pickupIcon: "#0A7F59",
-  dropoffIcon: "#0A7F59",
-  chipBg: "rgba(10,127,89,0.08)",
-  chipIcon: "#0A7F59",
-  assignBg: "#0A7F59",
+  badgeDangerBg: "rgba(239,68,68,0.1)",
+  badgeInfoBg: "rgba(59,130,246,0.1)",
+  badgeBorder: "rgba(0,121,107,0.1)",
+  routeText: "#64748B",
+  pickupIcon: "#00796B",
+  dropoffIcon: "#00796B",
+  chipBg: "rgba(0,121,107,0.07)",
+  chipIcon: "#00796B",
+  assignBg: "#00796B",
   assignIcon: "#FFFFFF",
-  expandedDivider: "rgba(15,54,43,0.08)",
+  expandedDivider: "rgba(0,121,107,0.06)",
 };
 
 // ✅ Couleurs de statut alignées avec le frontend web (ReservationTable.module.css)
@@ -486,29 +485,29 @@ export const RideSnippetCard: React.FC<{
 
 const styles = StyleSheet.create({
   card: {
-    padding: 16,
+    padding: 12,
   },
   summaryRow: {
     flexDirection: "row",
     alignItems: "center",
   },
   timeContainer: {
-    width: 54,
+    width: 50,
     alignItems: "flex-start",
-    marginRight: 12,
+    marginRight: 10,
   },
   time: {
     color: palette.time,
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0.2,
   },
   client: {
     color: palette.client,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
-    width: 130,
-    marginRight: 12,
+    width: 120,
+    marginRight: 10,
   },
   chevronContainer: {
     width: 24,
@@ -521,21 +520,22 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   badge: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    maxWidth: 140,
-    minWidth: 80,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: 130,
+    minWidth: 60,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: palette.badgeBorder,
   },
   badgeLabel: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 10,
+    fontWeight: "700",
     color: palette.badgeText,
     letterSpacing: 0.3,
     textTransform: "uppercase",
+    textAlign: "center",
   },
   badgeDefault: {
     backgroundColor: palette.badgeDefaultBg,
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 14,
+    marginTop: 10,
   },
   routeColumn: {
     flex: 1,
@@ -639,6 +639,6 @@ const styles = StyleSheet.create({
     marginLeft: -10, // Compenser les marges des boutons
   },
   footerActions: {
-    marginTop: 12,
+    marginTop: 10,
   },
 });

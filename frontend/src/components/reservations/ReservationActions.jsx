@@ -1,6 +1,6 @@
 // src/components/reservations/ReservationActions.jsx
 import React from 'react';
-import { FiClock, FiZap, FiUserPlus, FiTrash2, FiEdit, FiShare2 } from 'react-icons/fi';
+import { FiClock, FiZap, FiUserPlus, FiShare2 } from 'react-icons/fi';
 import styles from './ReservationActions.module.css';
 
 /**
@@ -123,12 +123,6 @@ const ReservationActions = ({
     });
   }
 
-  const handleDelete = (e) => {
-    e.stopPropagation();
-    // Le callback doit ouvrir la modal de confirmation
-    onDelete?.(reservation);
-  };
-
   return (
     <div className={`${styles.actionsContainer} ${className}`}>
       {/* Planifier l'heure */}
@@ -164,17 +158,6 @@ const ReservationActions = ({
         </button>
       )}
 
-      {/* Éditer */}
-      {showEdit && (
-        <button
-          onClick={() => onEdit?.(reservation)}
-          title="Éditer la réservation"
-          className={styles.actionButton}
-        >
-          <FiEdit />
-        </button>
-      )}
-
       {/* Transférer à un partenaire */}
       {showTransfer && (
         <button
@@ -183,17 +166,6 @@ const ReservationActions = ({
           className={styles.actionButton}
         >
           <FiShare2 />
-        </button>
-      )}
-
-      {/* Supprimer */}
-      {showDelete && (
-        <button
-          onClick={handleDelete}
-          title="Annuler/Supprimer"
-          className={`${styles.actionButton} ${styles.deleteButton}`}
-        >
-          <FiTrash2 />
         </button>
       )}
     </div>

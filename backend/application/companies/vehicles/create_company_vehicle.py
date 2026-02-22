@@ -77,11 +77,19 @@ class CreateCompanyVehicleUseCase:
             vin_val = data.get("vin")
             vin = str(vin_val).strip() if vin_val and str(vin_val).strip() else None
 
+            insurance_company_name_val = data.get("insurance_company_name")
+            insurance_company_name = (
+                str(insurance_company_name_val).strip()
+                if insurance_company_name_val and str(insurance_company_name_val).strip()
+                else None
+            )
+
             wheelchair_accessible = bool(data.get("wheelchair_accessible", False))
             is_active = bool(data.get("is_active", True))
 
             insurance_expires_at = _parse_dt(data.get("insurance_expires_at"))
             inspection_expires_at = _parse_dt(data.get("inspection_expires_at"))
+            tachograph_expires_at = _parse_dt(data.get("tachograph_expires_at"))
         except Exception as e:
             return _fail(str(e))
 
@@ -95,8 +103,10 @@ class CreateCompanyVehicleUseCase:
             # compat champ alternatif
             "is_wheelchair_accessible": wheelchair_accessible,
             "is_active": is_active,
+            "insurance_company_name": insurance_company_name,
             "insurance_expires_at": insurance_expires_at,
             "inspection_expires_at": inspection_expires_at,
+            "tachograph_expires_at": tachograph_expires_at,
         }
 
         try:

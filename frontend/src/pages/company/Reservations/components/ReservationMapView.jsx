@@ -1,331 +1,267 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
+import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
+import MapPlaceholder from '../../../../components/common/MapPlaceholder';
+import {
+  DEFAULT_MAP_OPTIONS,
+  MAP_COLORS,
+  makePinMarkerIcon,
+  getRouteColor,
+  ROUTE_OPTIONS,
+  INFOWINDOW_FONT,
+} from '../../../../utils/mapUtils';
 import styles from './ReservationMapView.module.css';
 
-const ReservationMapView = ({ reservations }) => {
-  const mapRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markersLayerRef = useRef(null); // Groupe de marqueurs pour pouvoir les nettoyer
-  const [geocodingStatus, setGeocodingStatus] = useState('idle');
+const CONTAINER_STYLE = { width: '100%', height: '100%' };
+const DEFAULT_CENTER = { lat: 46.2044, lng: 6.1432 };
 
-  // Déterminer la date affichée (première réservation ou aujourd'hui)
+const ReservationMapView = ({ reservations }) => {
+  const { isLoaded: gmLoaded } = useGoogleMapsLoaded();
+  const mapRef = useRef(null);
+  const [geocodingStatus, setGeocodingStatus] = useState('idle');
+  const [markerData, setMarkerData] = useState([]);
+  const [activeRoute, setActiveRoute] = useState(null);
+  const [activeInfoWindow, setActiveInfoWindow] = useState(null);
+
   const displayDate = useMemo(() => {
     if (reservations.length > 0) {
-      const firstReservation = reservations[0];
-      const date = new Date(firstReservation.scheduled_time || firstReservation.pickup_time);
+      const date = new Date(reservations[0].scheduled_time || reservations[0].pickup_time);
       return date.toLocaleDateString('fr-FR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
       });
     }
-    // Si pas de réservations, afficher aujourd'hui
     return new Date().toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     });
   }, [reservations]);
 
-  // Fonction de géocodification simple avec Nominatim
   const geocodeAddress = useCallback(async (address) => {
     try {
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          address
-        )}&limit=1&countrycodes=ch`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=ch`
       );
       const data = await response.json();
-      if (data.length > 0) {
-        return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-      }
+      if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
     } catch (error) {
       console.error('Erreur de géocodification:', error);
     }
     return null;
   }, []);
 
-  // Fonction pour obtenir l'itinéraire OSRM via le backend
   const getOSRMRoute = useCallback(async (pickupCoords, dropoffCoords) => {
     try {
-      // Essayer d'utiliser le backend API qui a accès à OSRM
       const url =
         `${process.env.REACT_APP_API_URL || 'http://localhost:3000/api'}/osrm/route?` +
-        `pickup_lat=${pickupCoords[0]}&pickup_lon=${pickupCoords[1]}&` +
-        `dropoff_lat=${dropoffCoords[0]}&dropoff_lon=${dropoffCoords[1]}`;
-
+        `pickup_lat=${pickupCoords.lat}&pickup_lon=${pickupCoords.lng}&` +
+        `dropoff_lat=${dropoffCoords.lat}&dropoff_lon=${dropoffCoords.lng}`;
       const response = await fetch(url);
-
       if (response.ok) {
         const data = await response.json();
-
         if (data.route && data.route.length > 0) {
-          return data.route;
+          return data.route.map(([lat, lng]) => ({ lat, lng }));
         }
-      } else {
-        // eslint-disable-next-line no-console
-        console.error('❌ Erreur HTTP:', response.status, await response.text());
       }
     } catch (error) {
-      console.error('❌ OSRM erreur:', error);
+      console.error('OSRM erreur:', error);
     }
-
-    // Fallback : retourner une ligne droite
-    console.warn('⚠️ Fallback: ligne droite');
     return [pickupCoords, dropoffCoords];
   }, []);
 
-  // Initialiser la carte (une seule fois)
+  // Préparer les données de marqueurs
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-
-    // Initialiser la carte
-    const map = L.map(mapRef.current).setView([46.2044, 6.1432], 12);
-    mapInstanceRef.current = map;
-
-    // Créer un groupe de couches pour les marqueurs
-    const markersLayer = L.layerGroup().addTo(map);
-    markersLayerRef.current = markersLayer;
-
-    // Ajouter les tuiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-    }).addTo(map);
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-        markersLayerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Mettre à jour les marqueurs quand les réservations changent
-  useEffect(() => {
-    if (!mapInstanceRef.current || !markersLayerRef.current) return;
-
-    const map = mapInstanceRef.current;
-    const markersLayer = markersLayerRef.current;
     let isCancelled = false;
 
-    // Nettoyer les marqueurs existants
-    markersLayer.clearLayers();
-
-    // Ajouter les marqueurs pour chaque réservation
-    const addMarkers = async () => {
-      if (isCancelled) return;
+    const prepareMarkers = async () => {
       setGeocodingStatus('loading');
-      let markersCount = 0;
+      const markers = [];
 
       for (const reservation of reservations) {
-        if (isCancelled || !mapInstanceRef.current) break;
+        if (isCancelled) break;
 
-        // Essayer différentes sources de coordonnées
         let pickupCoords = null;
         let dropoffCoords = null;
 
-        // Coordonnées de prise en charge
         const pickupLat = reservation.pickup_lat || reservation.pickupLat;
         const pickupLon = reservation.pickup_lon || reservation.pickupLon;
-
         if (pickupLat && pickupLon && !isNaN(pickupLat) && !isNaN(pickupLon)) {
-          pickupCoords = [parseFloat(pickupLat), parseFloat(pickupLon)];
+          pickupCoords = { lat: parseFloat(pickupLat), lng: parseFloat(pickupLon) };
         } else if (reservation.pickup_location) {
-          // Géocodification si pas de coordonnées
           pickupCoords = await geocodeAddress(reservation.pickup_location);
         }
 
-        // Coordonnées de destination
         const dropoffLat = reservation.dropoff_lat || reservation.dropoffLat;
         const dropoffLon = reservation.dropoff_lon || reservation.dropoffLon;
-
         if (dropoffLat && dropoffLon && !isNaN(dropoffLat) && !isNaN(dropoffLon)) {
-          dropoffCoords = [parseFloat(dropoffLat), parseFloat(dropoffLon)];
+          dropoffCoords = { lat: parseFloat(dropoffLat), lng: parseFloat(dropoffLon) };
         } else if (reservation.dropoff_location) {
-          // Géocodification si pas de coordonnées
           dropoffCoords = await geocodeAddress(reservation.dropoff_location);
         }
 
-        // Vérifier que la carte existe toujours avant d'ajouter les marqueurs
-        if (isCancelled || !mapInstanceRef.current) break;
+        if (isCancelled) break;
 
-        // Créer des icônes personnalisées avec emojis
-        const pickupIcon = L.divIcon({
-          html: '<div style="font-size: 32px; text-align: center; line-height: 1;">📍</div>',
-          className: 'custom-marker-icon',
-          iconSize: [32, 32],
-          iconAnchor: [16, 32],
-          popupAnchor: [0, -32],
-        });
-
-        const dropoffIcon = L.divIcon({
-          html: '<div style="font-size: 32px; text-align: center; line-height: 1;">🎯</div>',
-          className: 'custom-marker-icon',
-          iconSize: [32, 32],
-          iconAnchor: [16, 32],
-          popupAnchor: [0, -32],
-        });
-
-        // Créer le marqueur de destination (caché par défaut, ne l'ajoute pas à la carte)
-        let dropoffMarker = null;
-        if (dropoffCoords && !isCancelled && mapInstanceRef.current) {
-          dropoffMarker = L.marker(dropoffCoords, {
-            icon: dropoffIcon,
-          });
-          dropoffMarker.bindPopup(`
-            <div class="${styles.popupContent}">
-              <h4>🎯 Destination</h4>
-              <p><strong>Client:</strong> ${
-                reservation.client_name || reservation.client?.full_name || 'N/A'
-              }</p>
-              <p><strong>Adresse:</strong> ${reservation.dropoff_location}</p>
-              <p><strong>Montant:</strong> ${Number(reservation.amount || 0).toFixed(2)} CHF</p>
-              <p><strong>ID:</strong> #${reservation.id}</p>
-            </div>
-          `);
-        }
-
-        // Ajouter le marqueur de prise en charge avec logique d'affichage
         if (pickupCoords) {
-          try {
-            const pickupMarker = L.marker(pickupCoords, {
-              icon: pickupIcon,
-            }).addTo(markersLayer); // Ajouter au groupe plutôt qu'à la carte
-            pickupMarker.bindPopup(`
-              <div class="${styles.popupContent}">
-                <h4>📍 Prise en charge</h4>
-                <p><strong>Client:</strong> ${
-                  reservation.client_name || reservation.client?.full_name || 'N/A'
-                }</p>
-                <p><strong>Adresse:</strong> ${reservation.pickup_location}</p>
-                <p><strong>Heure:</strong> ${new Date(
-                  reservation.scheduled_time
-                ).toLocaleTimeString('fr-FR')}</p>
-                <p><strong>Statut:</strong> ${reservation.status}</p>
-                <p><strong>ID:</strong> #${reservation.id}</p>
-              </div>
-            `);
-            markersCount++;
-
-            // Variable pour stocker la polyline
-            let routePolyline = null;
-
-            // Événement lors du clic sur le marqueur de prise en charge
-            pickupMarker.on('click', async () => {
-              if (dropoffCoords && dropoffMarker) {
-                // Afficher le marqueur de destination
-                if (!markersLayer.hasLayer(dropoffMarker)) {
-                  dropoffMarker.addTo(markersLayer);
-                }
-
-                // Obtenir et afficher l'itinéraire réel
-                if (!routePolyline && pickupCoords && dropoffCoords) {
-                  const route = await getOSRMRoute(pickupCoords, dropoffCoords);
-                  if (route && route.length > 0) {
-                    // Déterminer la couleur selon le statut
-                    let lineColor = '#00796b';
-                    switch (reservation.status) {
-                      case 'pending':
-                        lineColor = '#ff9800';
-                        break;
-                      case 'accepted':
-                      case 'assigned':
-                        lineColor = '#2196f3';
-                        break;
-                      case 'in_progress':
-                        lineColor = '#00796b';
-                        break;
-                      case 'completed':
-                        lineColor = '#4caf50';
-                        break;
-                      case 'canceled':
-                        lineColor = '#f44336';
-                        break;
-                      default:
-                        lineColor = '#00796b';
-                    }
-
-                    routePolyline = L.polyline(route, {
-                      color: lineColor,
-                      weight: 4,
-                      opacity: 0.7,
-                    }).addTo(map);
-
-                    // Ajuster la vue pour voir tout l'itinéraire
-                    const bounds = L.latLngBounds([pickupCoords, dropoffCoords]);
-                    map.fitBounds(bounds, { padding: [50, 50] });
-                  }
-                }
-              }
-            });
-
-            // Événement lors de la fermeture du popup
-            pickupMarker.on('popupclose', () => {
-              // Cacher le marqueur de destination
-              if (dropoffMarker && markersLayer.hasLayer(dropoffMarker)) {
-                markersLayer.removeLayer(dropoffMarker);
-              }
-              // Supprimer l'itinéraire
-              if (routePolyline && map.hasLayer(routePolyline)) {
-                map.removeLayer(routePolyline);
-                routePolyline = null;
-              }
-            });
-          } catch (error) {
-            console.error("Erreur lors de l'ajout du marqueur de prise en charge:", error);
-          }
+          markers.push({
+            id: `pickup-${reservation.id}`,
+            reservationId: reservation.id,
+            type: 'pickup',
+            position: pickupCoords,
+            dropoffCoords,
+            reservation,
+          });
         }
       }
 
       if (!isCancelled) {
-        setGeocodingStatus(markersCount > 0 ? 'success' : 'no-data');
+        setMarkerData(markers);
+        setGeocodingStatus(markers.length > 0 ? 'success' : 'no-data');
+
+        // Fit bounds sur tous les marqueurs
+        if (markers.length > 0 && mapRef.current && window.google) {
+          const bounds = new window.google.maps.LatLngBounds();
+          markers.forEach((m) => bounds.extend(m.position));
+          mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
+        }
       }
     };
 
-    addMarkers();
+    prepareMarkers();
+    return () => { isCancelled = true; };
+  }, [reservations, geocodeAddress]);
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [reservations, geocodeAddress, getOSRMRoute]);
+  // Clic sur un marqueur pickup : afficher route + dropoff
+  const handlePickupClick = useCallback(async (marker) => {
+    setActiveInfoWindow(marker.id);
+
+    if (marker.dropoffCoords) {
+      const lineColor = getRouteColor(marker.reservation.status);
+
+      const routePath = await getOSRMRoute(marker.position, marker.dropoffCoords);
+      setActiveRoute({
+        path: routePath,
+        color: lineColor,
+        dropoff: marker.dropoffCoords,
+        reservation: marker.reservation,
+      });
+
+      // Fit bounds sur pickup + dropoff
+      if (mapRef.current && window.google) {
+        const bounds = new window.google.maps.LatLngBounds();
+        bounds.extend(marker.position);
+        bounds.extend(marker.dropoffCoords);
+        mapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
+      }
+    }
+  }, [getOSRMRoute]);
+
+  const onMapLoad = useCallback((map) => {
+    mapRef.current = map;
+  }, []);
+
+  if (!gmLoaded) {
+    return (
+      <div className={styles.mapContainer}>
+        <MapPlaceholder />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.mapContainer}>
-      <div ref={mapRef} className={styles.map}></div>
+      <div className={styles.map}>
+        <GoogleMap
+          mapContainerStyle={CONTAINER_STYLE}
+          center={DEFAULT_CENTER}
+          zoom={12}
+          options={DEFAULT_MAP_OPTIONS}
+          onLoad={onMapLoad}
+        >
+          {/* Marqueurs pickup */}
+          {markerData.map((m) => (
+            <Marker
+              key={m.id}
+              position={m.position}
+              icon={{
+                url: makePinMarkerIcon('pickup'),
+                scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
+                anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
+              }}
+              onClick={() => handlePickupClick(m)}
+            />
+          ))}
 
-      {/* Message d'état */}
+          {/* Marqueur dropoff actif */}
+          {activeRoute?.dropoff && (
+            <Marker
+              position={activeRoute.dropoff}
+              icon={{
+                url: makePinMarkerIcon('dropoff'),
+                scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
+                anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
+              }}
+            />
+          )}
+
+          {/* Route active */}
+          {activeRoute?.path && (
+            <Polyline
+              path={activeRoute.path}
+              options={{ ...ROUTE_OPTIONS, strokeColor: activeRoute.color }}
+            />
+          )}
+
+          {/* InfoWindow sur le marqueur actif */}
+          {activeInfoWindow && (() => {
+            const m = markerData.find((md) => md.id === activeInfoWindow);
+            if (!m) return null;
+            const r = m.reservation;
+            return (
+              <InfoWindow
+                position={m.position}
+                onCloseClick={() => {
+                  setActiveInfoWindow(null);
+                  setActiveRoute(null);
+                }}
+              >
+                <div style={{ fontFamily: INFOWINDOW_FONT, padding: '4px 2px', minWidth: 160, lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 600, color: MAP_COLORS.textPrimary, fontSize: 13, marginBottom: 6, borderBottom: `1px solid ${MAP_COLORS.border}`, paddingBottom: 4 }}>
+                    Prise en charge
+                  </div>
+                  <div style={{ fontSize: 12, color: MAP_COLORS.textSecondary, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span>Client : {r.client_name || r.client?.full_name || 'N/A'}</span>
+                    <span>Adresse : {r.pickup_location}</span>
+                    <span>Heure : {new Date(r.scheduled_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span style={{ color: MAP_COLORS.brand, fontWeight: 500 }}>#{r.id}</span>
+                  </div>
+                </div>
+              </InfoWindow>
+            );
+          })()}
+        </GoogleMap>
+      </div>
+
       {geocodingStatus === 'loading' && (
         <div className={styles.statusMessage}>
-          <span>🔄 Chargement des positions...</span>
+          <span>Chargement des positions...</span>
         </div>
       )}
-
       {geocodingStatus === 'no-data' && (
         <div className={styles.statusMessage}>
-          <span>📍 Aucune réservation pour cette journée</span>
+          <span>Aucune réservation pour cette journée</span>
         </div>
       )}
-
       {reservations.length === 0 && geocodingStatus === 'idle' && (
         <div className={styles.statusMessage}>
-          <span>📭 Aucune réservation à afficher</span>
+          <span>Aucune réservation à afficher</span>
         </div>
       )}
 
-      {/* Info sur les réservations affichées - Seulement si > 0 */}
       {reservations.length > 0 && (
         <div className={styles.mapInfo}>
           <div className={styles.mapInfoRow}>
-            <span className={styles.mapInfoIcon}>📅</span>
             <span className={styles.mapInfoText}>{displayDate}</span>
           </div>
           <div className={styles.mapInfoRow}>
-            <span className={styles.mapInfoIcon}>🗺️</span>
-            <span className={styles.mapInfoText}>
+            <span className={styles.mapInfoText} style={{ fontWeight: 600, color: MAP_COLORS.brand }}>
               {reservations.length} réservation{reservations.length > 1 ? 's' : ''}
             </span>
           </div>
@@ -334,11 +270,11 @@ const ReservationMapView = ({ reservations }) => {
 
       <div className={styles.mapLegend}>
         <div className={styles.legendItem}>
-          <span className={styles.legendIcon}>📍</span>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: MAP_COLORS.brand, display: 'inline-block' }} />
           <span>Prise en charge</span>
         </div>
         <div className={styles.legendItem}>
-          <span className={styles.legendIcon}>🎯</span>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: MAP_COLORS.danger, display: 'inline-block' }} />
           <span>Destination</span>
         </div>
       </div>

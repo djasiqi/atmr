@@ -1,113 +1,66 @@
 #!/bin/bash
-# Script de backup PostgreSQL pour ATMR
-# Usage: ./scripts/backup_db.sh [backup_dir]
+# =============================================================================
+# Script de backup automatique PostgreSQL pour ATMR
+# Usage: ./scripts/backup_db.sh
+# Cron recommandé: 0 2 * * * /path/to/atmr/scripts/backup_db.sh
+# =============================================================================
 
-set -euo pipefail
+set -e
 
 # Configuration
-BACKUP_DIR="${1:-./backups}"
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
+RETENTION_DAYS="${RETENTION_DAYS:-14}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/atmr_backup_$TIMESTAMP.sql"
-BACKUP_FILE_CUSTOM="$BACKUP_DIR/atmr_backup_$TIMESTAMP.dump"
+BACKUP_NAME="atmr_${TIMESTAMP}.dump"
 
-# Variables d'environnement par défaut (docker-compose)
-POSTGRES_HOST="${POSTGRES_HOST:-postgres}"
-POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-POSTGRES_DB="${POSTGRES_DB:-atmr}"
-POSTGRES_USER="${POSTGRES_USER:-atmr}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-atmr}"
+# Couleurs
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Créer le répertoire de backup
-mkdir -p "$BACKUP_DIR"
+echo -e "${GREEN}📦 [Backup] Démarrage du backup PostgreSQL...${NC}"
 
-echo "🔄 Backup base de données PostgreSQL..."
-echo "   Database: $POSTGRES_DB"
-echo "   Host: $POSTGRES_HOST:$POSTGRES_PORT"
+# Créer le dossier backups s'il n'existe pas
+mkdir -p "${BACKUP_DIR}"
 
-# Vérifier si on est dans docker-compose ou local
-if command -v docker-compose &> /dev/null && docker-compose ps postgres &> /dev/null; then
-    echo "   Mode: Docker Compose"
-    
-    # Export PGPASSWORD pour éviter prompt
-    export PGPASSWORD="$POSTGRES_PASSWORD"
-    
-    # Backup avec pg_dump (format custom pour restauration plus rapide)
-    docker-compose exec -T postgres pg_dump \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -F c \
-        -f "/tmp/atmr_backup_$TIMESTAMP.dump"
-    
-    # Copier depuis le container
-    docker-compose cp postgres:/tmp/atmr_backup_$TIMESTAMP.dump "$BACKUP_FILE_CUSTOM"
-    
-    # Backup SQL également (format texte, plus lisible)
-    docker-compose exec -T postgres pg_dump \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -F p \
-        -f "/tmp/atmr_backup_$TIMESTAMP.sql"
-    
-    docker-compose cp postgres:/tmp/atmr_backup_$TIMESTAMP.sql "$BACKUP_FILE"
-    
-    # Nettoyer dans le container
-    docker-compose exec -T postgres rm -f "/tmp/atmr_backup_$TIMESTAMP.dump" "/tmp/atmr_backup_$TIMESTAMP.sql"
-    
-    unset PGPASSWORD
-    
-elif command -v pg_dump &> /dev/null; then
-    echo "   Mode: Local"
-    export PGPASSWORD="$POSTGRES_PASSWORD"
-    
-    # Backup format custom (recommandé)
-    pg_dump \
-        -h "$POSTGRES_HOST" \
-        -p "$POSTGRES_PORT" \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -F c \
-        -f "$BACKUP_FILE_CUSTOM"
-    
-    # Backup format SQL (texte)
-    pg_dump \
-        -h "$POSTGRES_HOST" \
-        -p "$POSTGRES_PORT" \
-        -U "$POSTGRES_USER" \
-        -d "$POSTGRES_DB" \
-        -F p \
-        -f "$BACKUP_FILE"
-    
-    unset PGPASSWORD
-else
-    echo "❌ Erreur: pg_dump non trouvé et docker-compose non disponible"
+# Vérifier que postgres est accessible
+echo -e "${YELLOW}🔍 [Backup] Vérification de la connexion PostgreSQL...${NC}"
+if ! docker compose exec -T postgres pg_isready -U atmr -d atmr > /dev/null 2>&1; then
+    echo -e "${RED}❌ [Backup] PostgreSQL n'est pas accessible${NC}"
     exit 1
 fi
 
-# Vérifier que le backup existe
-if [ ! -f "$BACKUP_FILE_CUSTOM" ] && [ ! -f "$BACKUP_FILE" ]; then
-    echo "❌ Erreur: Backup non créé"
+# Créer le backup dans le container
+echo -e "${YELLOW}💾 [Backup] Création du dump...${NC}"
+docker compose exec -T postgres pg_dump -U atmr -d atmr \
+    --format=custom \
+    --verbose \
+    -f "/var/lib/postgresql/data/${BACKUP_NAME}"
+
+# Copier le backup hors du container
+echo -e "${YELLOW}📋 [Backup] Copie vers ${BACKUP_DIR}/${BACKUP_NAME}...${NC}"
+docker cp "$(docker compose ps -q postgres):/var/lib/postgresql/data/${BACKUP_NAME}" "${BACKUP_DIR}/${BACKUP_NAME}"
+
+# Supprimer le backup du container
+docker compose exec -T postgres rm -f "/var/lib/postgresql/data/${BACKUP_NAME}"
+
+# Vérifier que le fichier existe et a une taille > 0
+if [ ! -s "${BACKUP_DIR}/${BACKUP_NAME}" ]; then
+    echo -e "${RED}❌ [Backup] Le fichier backup est vide ou n'existe pas${NC}"
     exit 1
 fi
 
-# Afficher informations
-echo ""
-echo "✅ Backup créé avec succès!"
-if [ -f "$BACKUP_FILE_CUSTOM" ]; then
-    SIZE_CUSTOM=$(du -h "$BACKUP_FILE_CUSTOM" | cut -f1)
-    echo "   📦 Format custom: $BACKUP_FILE_CUSTOM ($SIZE_CUSTOM)"
-fi
-if [ -f "$BACKUP_FILE" ]; then
-    SIZE_SQL=$(du -h "$BACKUP_FILE" | cut -f1)
-    echo "   📄 Format SQL: $BACKUP_FILE ($SIZE_SQL)"
-fi
+# Afficher la taille
+BACKUP_SIZE=$(du -h "${BACKUP_DIR}/${BACKUP_NAME}" | cut -f1)
+echo -e "${GREEN}✅ [Backup] Backup créé: ${BACKUP_DIR}/${BACKUP_NAME} (${BACKUP_SIZE})${NC}"
 
-# Créer un lien symbolique vers le dernier backup
-if [ -f "$BACKUP_FILE_CUSTOM" ]; then
-    ln -sf "$(basename "$BACKUP_FILE_CUSTOM")" "$BACKUP_DIR/latest.dump" 2>/dev/null || true
-fi
-if [ -f "$BACKUP_FILE" ]; then
-    ln -sf "$(basename "$BACKUP_FILE")" "$BACKUP_DIR/latest.sql" 2>/dev/null || true
-fi
+# Rotation : supprimer les backups de plus de RETENTION_DAYS jours
+echo -e "${YELLOW}🔄 [Backup] Rotation des anciens backups (> ${RETENTION_DAYS} jours)...${NC}"
+find "${BACKUP_DIR}" -name "atmr_*.dump" -type f -mtime +${RETENTION_DAYS} -delete 2>/dev/null || true
 
-echo "   🔗 Liens: $BACKUP_DIR/latest.dump, $BACKUP_DIR/latest.sql"
+# Lister les backups restants
+echo -e "${GREEN}📋 [Backup] Backups disponibles:${NC}"
+ls -lh "${BACKUP_DIR}"/atmr_*.dump 2>/dev/null || echo "  (aucun)"
 
+echo -e "${GREEN}✅ [Backup] Terminé avec succès${NC}"

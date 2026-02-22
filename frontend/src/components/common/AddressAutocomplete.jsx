@@ -169,9 +169,6 @@ export default function AddressAutocomplete({
 
   // Fetch proxy backend puis fallback Photon direct
   const fetchSuggestions = useCallback(async (queryText, signal) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:136',message:'fetchSuggestions entry',data:{queryText,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     const q = (queryText || '').toString().trim();
 
     // ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
@@ -187,9 +184,6 @@ export default function AddressAutocomplete({
       const url = `geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
         BIAS.lat
       )}&lon=${encodeURIComponent(BIAS.lon)}&limit=${encodeURIComponent(maxResults)}`;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:153',message:'Before backend fetch',data:{url,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       const res = await apiClient.get(url, { signal });
       if (res.status === 200) {
         const data = res.data || [];
@@ -213,17 +207,11 @@ export default function AddressAutocomplete({
       if (isCanceledError(error)) {
         return [];
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:168',message:'Backend fetch error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
     }
 
     // 2) Fallback Photon direct
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:175',message:'Before Photon fallback',data:{queryText:q,signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       const url = new URL('/api', PHOTON_BASE);
       url.searchParams.set('q', q);
       url.searchParams.set('limit', String(maxResults));
@@ -231,9 +219,6 @@ export default function AddressAutocomplete({
       url.searchParams.set('lat', String(BIAS.lat));
       url.searchParams.set('lon', String(BIAS.lon));
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:182',message:'Before Photon fetch',data:{url:url.toString(),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       const res = await fetch(url.toString(), { signal });
       if (!res.ok) throw new Error(`Photon error: ${res.status}`);
       const data = await res.json();
@@ -250,9 +235,6 @@ export default function AddressAutocomplete({
       if (isCanceledError(error)) {
         return [];
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:193',message:'Photon fallback error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error),signalAborted:signal?.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
@@ -260,23 +242,14 @@ export default function AddressAutocomplete({
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:199',message:'useEffect triggered',data:{justSelected,deferredQuery,query,minChars},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     // Ne pas charger si on vient de sélectionner une adresse
     if (justSelected) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:203',message:'Early return: justSelected',data:{justSelected},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
     // ✅ PERF: Utiliser deferredQuery pour réduire le travail urgent
     const queryToUse = deferredQuery;
     if (!queryToUse || (typeof queryToUse === 'string' ? queryToUse.trim().length : 0) < minChars) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:210',message:'Early return: query too short',data:{queryToUse,minChars},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       startTransition(() => {
       setItems([]);
       setOpen(false);
@@ -286,23 +259,14 @@ export default function AddressAutocomplete({
     }
     debounce(async () => {
       try {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:217',message:'Before abort previous request',data:{hasPreviousController:!!abortRef.current,queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         abortRef.current?.abort();
         const ctl = new AbortController();
         abortRef.current = ctl;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:220',message:'New AbortController created',data:{queryToUse,signalAborted:ctl.signal.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         startTransition(() => {
         setLoading(true);
         });
 
         const queryStr = String(queryToUse || '');
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:225',message:'Before fetchSuggestions',data:{queryStr,signalAborted:ctl.signal.aborted},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         const next = await fetchSuggestions(queryStr, ctl.signal);
         let enriched = Array.isArray(next) ? next : [];
 
@@ -323,9 +287,6 @@ export default function AddressAutocomplete({
         }
 
         // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:245',message:'fetchSuggestions success',data:{queryStr,resultsCount:enriched.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
         startTransition(() => {
         setItems(enriched);
         // Ne rouvrir le menu que si l'utilisateur tape activement
@@ -336,14 +297,8 @@ export default function AddressAutocomplete({
           setLoading(false);
         });
       } catch (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:255',message:'debounce catch error',data:{errorName:error?.name,errorMessage:error?.message,isCanceledError:isCanceledError(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
         // ✅ PHASE 3: Ignorer les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
         if (isCanceledError(error)) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:259',message:'CanceledError in debounce ignored',data:{queryToUse},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-          // #endregion
           return; // Ne pas mettre à jour l'état si la requête a été annulée
         }
         startTransition(() => {
@@ -358,9 +313,6 @@ export default function AddressAutocomplete({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // ✅ PHASE 3: Cleanup function pour annuler les requêtes en cours lors du démontage
     return () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AddressAutocomplete.jsx:268',message:'useEffect cleanup',data:{hasAbortController:!!abortRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       abortRef.current?.abort();
       abortRef.current = null;
     };
@@ -648,65 +600,43 @@ export default function AddressAutocomplete({
             ref={dropdownRef}
             id={listboxId}
             role="listbox"
+            className={acStyles.dropdown}
             style={(() => {
-              // Calculer la position avec fallback si nécessaire
               let top = dropdownPosition.top;
               let left = dropdownPosition.left;
               let width = dropdownPosition.width;
-              
-              // Si la position n'est pas encore calculée ou invalide, la calculer directement
               if ((top <= 0 || left < 0 || width <= 0) && inputRef.current) {
                 const rect = inputRef.current.getBoundingClientRect();
-                top = rect.bottom + 2;
+                top = rect.bottom + 4;
                 left = rect.left;
                 width = rect.width;
               }
-              
               return {
                 position: 'fixed',
                 top: `${top}px`,
                 left: `${left}px`,
                 width: `${width}px`,
-                zIndex: 10000, /* P0: Au-dessus du footer sticky (20) et du modal backdrop */
-                background: '#fff',
-                border: '1px solid #e6e6e6',
-                borderTop: 'none',
-                borderRadius: '0 0 8px 8px',
-                maxHeight: 280,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-                marginTop: '2px', /* Petit espace pour éviter que la bordure ne touche l'input */
+                zIndex: 10000,
               };
             })()}
           >
-          {loading && <div style={{ padding: '10px 12px', color: '#6b7280' }}>Recherche…</div>}
+          {loading && <div className={acStyles.notice}>Recherche…</div>}
 
           {!loading && visibleItems.length === 0 && (
-            <div style={{ padding: '10px 12px', color: '#6b7280' }}>Aucun résultat</div>
+            <div className={acStyles.notice}>Aucun résultat</div>
           )}
 
           {!loading && visibleItems.length > 0 && (
             <>
               {favorites.length > 0 && (
                 <>
-                  <div
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      color: '#6b7280',
-                    }}
-                  >
-                    Favoris & alias
-                  </div>
+                  <div className={acStyles.sectionHeader}>Favoris & alias</div>
                   {favorites.map((it, idx) => {
                     const globalIndex = idx;
                     const active = globalIndex === highlight;
                     const line =
                       [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||
                       it.label;
-                    // Clé unique : coordonnées + index pour éviter les doublons
                     const key =
                       it.lat != null && it.lon != null
                         ? `${it.lat},${it.lon}-${idx}`
@@ -717,31 +647,12 @@ export default function AddressAutocomplete({
                         key={key}
                         role="option"
                         aria-selected={active}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          chooseItem(it);
-                        }}
+                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
                         onMouseEnter={() => setHighlight(globalIndex)}
-                        style={{
-                          padding: '10px 12px',
-                          cursor: 'pointer',
-                          background: active ? '#f5f7fb' : '#fff',
-                        }}
+                        className={`${acStyles.optionItem} ${active ? acStyles.optionItemActive : ''}`}
                       >
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>
-                          {it.label || it.address}
-                        </div>
-                        {line && (
-                          <div
-                            style={{
-                              color: '#666',
-                              fontSize: 12,
-                              marginTop: 2,
-                            }}
-                          >
-                            {line}
-                          </div>
-                        )}
+                        <div className={acStyles.optionLabel}>{it.label || it.address}</div>
+                        {line && <div className={acStyles.optionSecondary}>{line}</div>}
                       </div>
                     );
                   })}
@@ -750,19 +661,7 @@ export default function AddressAutocomplete({
 
               {googlePlaces.length > 0 && (
                 <>
-                  <div
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      color: '#4285F4',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}
-                  >
-                    🌍 Google Places
-                  </div>
+                  <div className={acStyles.sectionHeaderGoogle}>Suggestions</div>
                   {googlePlaces.map((it, idx) => {
                     const globalIndex = favorites.length + idx;
                     const active = globalIndex === highlight;
@@ -772,32 +671,12 @@ export default function AddressAutocomplete({
                         key={it.place_id || `google-${idx}`}
                         role="option"
                         aria-selected={active}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          chooseItem(it);
-                        }}
+                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
                         onMouseEnter={() => setHighlight(globalIndex)}
-                        style={{
-                          padding: '10px 12px',
-                          cursor: 'pointer',
-                          background: active ? '#f5f7fb' : '#fff',
-                          borderLeft: '3px solid #4285F4',
-                        }}
+                        className={`${acStyles.optionItem} ${acStyles.optionItemGoogle} ${active ? acStyles.optionItemActive : ''}`}
                       >
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>
-                          {it.main_text || it.label}
-                        </div>
-                        {it.secondary_text && (
-                          <div
-                            style={{
-                              color: '#666',
-                              fontSize: 12,
-                              marginTop: 2,
-                            }}
-                          >
-                            {it.secondary_text}
-                          </div>
-                        )}
+                        <div className={acStyles.optionLabel}>{it.main_text || it.label}</div>
+                        {it.secondary_text && <div className={acStyles.optionSecondary}>{it.secondary_text}</div>}
                       </div>
                     );
                   })}
@@ -806,23 +685,13 @@ export default function AddressAutocomplete({
 
               {others.length > 0 && (
                 <>
-                  <div
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      color: '#6b7280',
-                    }}
-                  >
-                    Autres résultats
-                  </div>
+                  <div className={acStyles.sectionHeader}>Autres résultats</div>
                   {others.map((it, idx) => {
                     const globalIndex = favorites.length + googlePlaces.length + idx;
                     const active = globalIndex === highlight;
                     const line =
                       [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||
                       it.label;
-                    // Clé unique : coordonnées + index pour éviter les doublons
                     const key =
                       it.lat != null && it.lon != null
                         ? `${it.lat},${it.lon}-${idx}`
@@ -833,31 +702,12 @@ export default function AddressAutocomplete({
                         key={key}
                         role="option"
                         aria-selected={active}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          chooseItem(it);
-                        }}
+                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
                         onMouseEnter={() => setHighlight(globalIndex)}
-                        style={{
-                          padding: '10px 12px',
-                          cursor: 'pointer',
-                          background: active ? '#f5f7fb' : '#fff',
-                        }}
+                        className={`${acStyles.optionItem} ${active ? acStyles.optionItemActive : ''}`}
                       >
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>
-                          {it.label || it.address}
-                        </div>
-                        {line && (
-                          <div
-                            style={{
-                              color: '#666',
-                              fontSize: 12,
-                              marginTop: 2,
-                            }}
-                          >
-                            {line}
-                          </div>
-                        )}
+                        <div className={acStyles.optionLabel}>{it.label || it.address}</div>
+                        {line && <div className={acStyles.optionSecondary}>{line}</div>}
                       </div>
                     );
                   })}

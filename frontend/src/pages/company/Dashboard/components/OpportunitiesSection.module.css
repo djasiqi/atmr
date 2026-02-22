@@ -1,88 +1,155 @@
-/* Opportunities Section Styles */
+/* ============================================================
+   INTELLIGENCE DISPATCH — Module d'aide à la décision
+   Opportunités d'optimisation, alertes critiques
+   ============================================================ */
 
-.opportunitiesHeader {
+.container {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  width: 100%;
+}
+
+/* ---- En-tête de section ---- */
+
+.sectionHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-tertiary, var(--bg-secondary));
 }
 
-.opportunitiesLink {
+.sectionTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.sectionIcon {
+  color: var(--brand-primary);
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.alertCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--spacing-xs);
+  background: var(--warning-bg);
+  color: var(--warning-hover, #d97706);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.viewAllLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--font-sm);
   color: var(--brand-primary);
   text-decoration: none;
   font-weight: var(--font-weight-medium);
   transition: color var(--transition-base);
+  white-space: nowrap;
 }
 
-.opportunitiesLink:hover {
+.viewAllLink:hover {
   color: var(--brand-hover);
   text-decoration: underline;
 }
 
-/* État vide amélioré */
-.emptyState {
-  padding: var(--spacing-xl);
-  text-align: center;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  margin: var(--spacing-md);
+/* ---- État compact (1 ligne) ---- */
+
+.compactStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
 }
 
-.emptyIcon {
-  font-size: var(--font-4xl);
-  margin-bottom: var(--spacing-sm);
-  opacity: 0.6;
+.compactIcon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
-.emptyText {
-  color: var(--text-secondary);
+.compactText {
   font-size: var(--font-sm);
-  margin: 0;
-  font-style: italic;
+  color: var(--text-tertiary);
 }
+
+.compactIconOk {
+  color: var(--success-primary);
+  flex-shrink: 0;
+}
+
+.compactTextOk {
+  font-size: var(--font-sm);
+  color: var(--success-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ---- Liste des opportunités ---- */
 
 .opportunitiesList {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
   padding: var(--spacing-md) var(--spacing-lg);
 }
+
+/* ---- Carte opportunité ---- */
 
 .opportunityCard {
   padding: var(--spacing-md);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
-  box-shadow: var(--shadow-sm);
   transition: all var(--transition-base);
+  border-left-width: 4px;
 }
 
 .opportunityCard:hover {
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
 }
 
-/* Classes conditionnelles pour les severities */
-.opportunityCard.severity-critical {
-  border-color: var(--danger-primary);
-  border-left-width: 4px;
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.05) 0%, var(--bg-primary) 100%);
+/* Variantes de sévérité */
+.critical {
+  border-left-color: var(--error-primary);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.04) 0%, var(--bg-primary) 100%);
 }
-.opportunityCard.severity-high {
-  border-color: var(--warning-primary);
-  border-left-width: 4px;
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.05) 0%, var(--bg-primary) 100%);
+
+.high {
+  border-left-color: var(--warning-primary);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, var(--bg-primary) 100%);
 }
-.opportunityCard.severity-medium {
-  border-color: #ffc107;
-  border-left-width: 3px;
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, var(--bg-primary) 100%);
+
+.medium {
+  border-left-color: #ffc107;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.04) 0%, var(--bg-primary) 100%);
 }
-.opportunityCard.severity-low {
-  border-color: var(--border-primary);
+
+.low {
+  border-left-color: var(--border-primary);
   background: var(--bg-primary);
 }
+
+/* ---- Header de l'opportunité ---- */
 
 .opportunityHeader {
   display: flex;
@@ -94,46 +161,101 @@
 .severityLabel {
   font-size: var(--font-xs);
   font-weight: var(--font-weight-semibold);
-  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: var(--spacing-xxs) var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
   border-radius: var(--radius-sm);
-  background: var(--bg-secondary);
 }
 
-/* Classes conditionnelles pour les couleurs de severity label */
-.severityLabel.severity-critical {
-  color: var(--danger-dark);
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-border);
+.severity_critical {
+  color: var(--error-primary);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
 }
-.severityLabel.severity-high {
-  color: var(--warning-dark);
+
+.severity_high {
+  color: var(--warning-hover, #d97706);
   background: var(--warning-bg);
   border: 1px solid var(--warning-border);
 }
-.severityLabel.severity-medium {
+
+.severity_medium {
   color: #856404;
-  background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
-  border: 1px solid #ffeaa7;
+  background: #fff3cd;
+  border: 1px solid #fde68a;
 }
-.severityLabel.severity-low {
+
+.severity_low {
   color: var(--text-tertiary);
   background: var(--bg-secondary);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 .delayValue {
   font-size: var(--font-sm);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
-  padding: var(--spacing-xxs) var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
 }
 
+/* ---- CTA actionnable ---- */
+
+.actionCTA {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.actionCTA:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.cta_critical {
+  background: var(--error-primary);
+}
+
+.cta_critical:hover {
+  background: var(--error-hover, #dc2626);
+}
+
+.cta_high {
+  background: var(--warning-hover, #d97706);
+}
+
+.cta_high:hover {
+  background: var(--warning-primary);
+}
+
+.cta_default {
+  background: var(--brand-primary);
+}
+
+.cta_default:hover {
+  background: var(--brand-hover);
+}
+
+/* ---- Suggestions ---- */
+
 .suggestionsList {
-  margin-top: var(--spacing-sm);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
@@ -146,27 +268,27 @@
   padding-left: var(--spacing-md);
   border-left: 3px solid var(--border-primary);
   background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   line-height: 1.5;
 }
 
-/* Classes conditionnelles pour les bordures de suggestion */
-.suggestionItem.severity-critical {
-  border-left-color: var(--danger-primary);
-  background: linear-gradient(135deg, rgba(244, 67, 54, 0.05) 0%, var(--bg-secondary) 100%);
+.border_critical {
+  border-left-color: var(--error-primary);
 }
-.suggestionItem.severity-high {
+
+.border_high {
   border-left-color: var(--warning-primary);
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.05) 0%, var(--bg-secondary) 100%);
 }
-.suggestionItem.severity-medium {
+
+.border_medium {
   border-left-color: #ffc107;
-  background: linear-gradient(135deg, rgba(255, 193, 7, 0.05) 0%, var(--bg-secondary) 100%);
 }
-.suggestionItem.severity-low {
+
+.border_low {
   border-left-color: var(--border-primary);
-  background: var(--bg-secondary);
 }
+
+/* ---- Lien détails ---- */
 
 .detailsLink {
   margin-top: var(--spacing-sm);
@@ -175,6 +297,8 @@
 }
 
 .detailsLink a {
+  display: inline-flex;
+  align-items: center;
   font-size: var(--font-xs);
   color: var(--brand-primary);
   text-decoration: none;
@@ -182,18 +306,120 @@
   transition: color var(--transition-base);
 }
 
+.detailsArrow {
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
 .detailsLink a:hover {
   color: var(--brand-hover);
   text-decoration: underline;
 }
 
+/* ---- Plus d'opportunités ---- */
+
 .moreOpportunities {
-  margin-top: var(--spacing-md);
+  margin: 0;
   padding: var(--spacing-sm) var(--spacing-lg);
   font-size: var(--font-sm);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   text-align: center;
   font-style: italic;
   border-top: 1px solid var(--border-primary);
 }
 
+/* ============================================================
+   RESPONSIVE — Opportunités adaptatives
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .container {
+    border-width: 1px;
+  }
+
+  .sectionHeader {
+    padding: var(--spacing-sm) var(--spacing-md);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .sectionTitle {
+    font-size: var(--font-sm);
+  }
+
+  .opportunitiesList {
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-xs);
+  }
+
+  .opportunityCard {
+    padding: var(--spacing-sm);
+  }
+
+  .opportunityHeader {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .compactStatus {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  .sectionHeader {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .opportunitiesList {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    gap: 4px;
+  }
+
+  .opportunityCard {
+    padding: var(--spacing-xs);
+    border-left-width: 3px;
+  }
+
+  .severityLabel {
+    font-size: 0.65rem;
+    padding: 1px var(--spacing-xs);
+  }
+
+  .delayValue {
+    font-size: var(--font-xs);
+    padding: 1px var(--spacing-xs);
+  }
+
+  .actionCTA {
+    font-size: 0.65rem;
+    padding: 3px 8px;
+  }
+
+  .suggestionItem {
+    font-size: var(--font-xs);
+    padding: var(--spacing-xxs) var(--spacing-xs);
+    padding-left: var(--spacing-sm);
+  }
+
+  .viewAllLink {
+    font-size: var(--font-xs);
+  }
+}
+
+@media (max-width: 390px) {
+  .sectionHeader {
+    padding: 4px var(--spacing-xs);
+  }
+
+  .sectionTitle {
+    font-size: var(--font-xs);
+  }
+
+  .alertCount {
+    min-width: 18px;
+    height: 18px;
+    font-size: 0.6rem;
+  }
+}

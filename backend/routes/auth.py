@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -55,12 +55,15 @@ from routes.api_error_models import (
     create_permission_error_model,
     create_validation_error_model,
 )
+from routes.api_error_utils import auth_error
 from schemas.auth_schemas import LoginSchema, RegisterSchema
 from schemas.validation_utils import handle_validation_error, validate_request
 from security.audit_log import AuditLogger
 from security.refresh_token_service import (
+    _hash_refresh_token,
     get_user_active_sessions,
     is_token_revoked,
+    mark_token_rotated,
     revoke_all_user_tokens,
     revoke_refresh_token,
     store_refresh_token,
@@ -74,6 +77,7 @@ from security.security_metrics import (
 )
 from services.security.authentication import RefreshTokenService
 from services.security.csrf import generate_csrf_token
+from shared.constants import AuthErrorCodes
 from shared.error_handlers import APIErrorHandler
 from shared.logging_utils import mask_email
 
@@ -596,13 +600,13 @@ class Login(Resource):
                     mask_email(email),
                     trace_id,
                 )
-                error_response, status_code = APIErrorHandler.handle_permission_error(
-                    "Email ou mot de passe invalide.",
-                    logger_instance=logger,
+                # ✅ FIX: Utiliser le format standard v2
+                return auth_error(
+                    AuthErrorCodes.INVALID_CREDENTIALS,
+                    "Email ou mot de passe invalide",
+                    401,
+                    details={"trace_id": trace_id},
                 )
-                # Ajouter trace_id à la réponse d'erreur
-                error_response["trace_id"] = trace_id
-                return error_response, status_code
 
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
@@ -634,8 +638,10 @@ class Login(Resource):
             # #endregion
             claims = {
                 "role": user.role.value,
-                "company_id": getattr(user, "company_id", None),
+                "company_id": _resolve_company_id(user),
                 "driver_id": getattr(user, "driver_id", None),
+                "institution_id": getattr(user, "institution_id", None),
+                "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",  # Audience claim pour sécurité
             }
             access_token = create_access_token(
@@ -699,11 +705,14 @@ class Login(Resource):
                     device_name=request.headers.get("X-Device-Name"),
                 )
 
-                # Limiter le nombre de tokens actifs (max 5 par défaut)
-                max_active_tokens = int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS", "5"))
+                # Limite de tokens actifs : plus haute pour les drivers (multi-device, reinstall)
+                is_driver = user.role == UserRole.driver
+                max_active_tokens = int(os.getenv(
+                    "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
+                    "15" if is_driver else "5",
+                ))
                 token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
-                # Ne pas bloquer le login si le stockage échoue (fallback)
                 logger.warning(
                     "Échec stockage refresh token: %s - %s",
                     type(store_error).__name__,
@@ -923,6 +932,19 @@ class Login(Resource):
 
 
 # ========================
+# Helper: résolution company_id pour JWT claims
+# ========================
+def _resolve_company_id(user: User) -> int | None:
+    """Résout le company_id depuis la relation User -> Company.
+
+    Le modèle User n'a pas de colonne company_id directe ;
+    la relation est Company.user_id -> User.id.
+    """
+    company = getattr(user, "company", None)
+    return company.id if company else None
+
+
+# ========================
 # Helper Functions pour Refresh Token
 # ========================
 def _get_password_hash_version(user: User) -> str:
@@ -973,6 +995,13 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
         active_clients = [c for c in user.clients if c.is_active]
         if not active_clients:
             return False, "Compte désactivé"
+
+    # Institution: vérifier account_status
+    if user.role == UserRole.INSTITUTION:
+        if getattr(user, "account_status", None) == "disabled":
+            return False, "Compte désactivé"
+        if getattr(user, "account_status", None) == "invited":
+            return False, "Compte non encore activé. Vérifiez votre email d'invitation."
 
     # Pour les autres rôles (admin, company) ou si pas de profil, on considère comme actif
     return True, None
@@ -1038,9 +1067,12 @@ def _validate_refresh_token(
                         }
 
         # ✅ SECURITY: Vérifier si le token est révoqué dans la DB (Phase 2)
-        # Cette vérification permet la déconnexion forcée par l'admin
+        # Cette vérification permet la déconnexion forcée par l'admin.
+        # grace_window=True : si le token a été révoqué par rotation automatique
+        # dans les 30 dernières secondes, on l'accepte quand même (anti race-condition
+        # mobile où un ancien refresh est réutilisé avant que le nouveau soit stocké).
         try:
-            if is_token_revoked(refresh_token):
+            if is_token_revoked(refresh_token, grace_window=True):
                 logger.warning(
                     "Refresh token rejeté : token révoqué pour user %s",
                     user_public_id,
@@ -1166,19 +1198,31 @@ class LoginTest(Resource):
         # Récupérer les données
         data = request.get_json()
         if not data:
-            return {"error": "Pas de données JSON fournies"}, 400
+            return auth_error(
+                "invalid_request",
+                "Pas de données JSON fournies",
+                400,
+            )
 
         email = data.get("email")
         password = data.get("password")
 
         if not email or not password:
-            return {"error": "Email et mot de passe requis"}, 400
+            return auth_error(
+                "invalid_request",
+                "Email et mot de passe requis",
+                400,
+            )
 
         # Chercher l'utilisateur
         user = User.query.filter_by(email=email).first()
 
         if not user or not user.check_password(password):
-            return {"error": "Identifiants invalides"}, 401
+            return auth_error(
+                AuthErrorCodes.INVALID_CREDENTIALS,
+                "Identifiants invalides",
+                401,
+            )
 
         # Note: Pas de vérification is_active car c'est un endpoint de test simplifié
 
@@ -1186,8 +1230,10 @@ class LoginTest(Resource):
         claims = {
             "user_id": user.id,  # ⚠️ ID numérique attendu par dispatch_routes
             "role": user.role.value,
-            "company_id": getattr(user, "company_id", None),
+            "company_id": _resolve_company_id(user),
             "driver_id": getattr(user, "driver_id", None),
+            "institution_id": getattr(user, "institution_id", None),
+            "institution_role": getattr(user, "institution_role", None),
             "aud": "atmr-api",  # ✅ Audience claim pour passer validation JWT
         }
         access_token = create_access_token(
@@ -1333,12 +1379,12 @@ class RefreshToken(Resource):
                 )
             is_active, error_message = _check_user_profile_active(user)
             if not is_active:
+                trace_id = get_trace_id()
                 logger.warning(
                     "Refresh token rejeté : compte désactivé pour user %s (role: %s)",
                     user_public_id,
                     user.role.value if user.role else "unknown",
                 )
-                # ✅ P0.1: Log structuré refresh failure (cause compte désactivé)
                 logger.info(
                     "auth_refresh_failure",
                     extra={
@@ -1347,19 +1393,22 @@ class RefreshToken(Resource):
                         "user_public_id": user_public_id,
                         "device_id": request.headers.get("X-Device-ID"),
                         "session_diag": request.headers.get("X-Session-Diag"),
-                        "trace_id": get_trace_id(),
+                        "trace_id": trace_id,
                     },
                 )
-                return APIErrorHandler.handle_permission_error(
-                    error_message or "Compte désactivé",
-                    logger_instance=logger,
-                )
+                return {
+                    "error": error_message or "Compte désactivé",
+                    "reason": "account_disabled",
+                    "trace_id": trace_id,
+                }, 403
 
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
             claims = {
                 "role": user.role.value,
-                "company_id": getattr(user, "company_id", None),
+                "company_id": _resolve_company_id(user),
                 "driver_id": getattr(user, "driver_id", None),
+                "institution_id": getattr(user, "institution_id", None),
+                "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",  # Audience claim pour sécurité
             }
 
@@ -1386,26 +1435,27 @@ class RefreshToken(Resource):
             # ✅ PHASE 2: Utiliser RefreshTokenService pour rotation et limitation
             token_service = RefreshTokenService()
 
-            # ✅ SECURITY: Révoquer l'ancien token via Redis (rotation automatique)
-            try:
-                token_service.revoke_token(refresh_token)
-                # Révoquer aussi dans la DB pour compatibilité
-                revoke_refresh_token(
-                    refresh_token, reason="Rotation automatique du token"
-                )
+            # Mettre a jour le score ZSET Redis pour que la purge evince par last_used_at
+            with suppress(Exception):
+                token_service.touch_token_score(user.id, refresh_token)
 
-                # ✅ PHASE 3: Métrique Prometheus pour rotation
+            # ✅ ROTATION SOFT : marquer l'ancien token comme rotate (pas revoque)
+            # L'ancien reste valide tant que le nouveau n'a pas ete utilise par le client.
+            # Cela evite les pertes de session si le mobile crash avant de sauvegarder le nouveau.
+            try:
+                mark_token_rotated(refresh_token, new_refresh_token)
+                token_service.revoke_token(refresh_token)
+
                 try:
                     from security.security_metrics import tokens_rotation_total
 
                     tokens_rotation_total.inc()
                 except Exception:
-                    pass  # Ne pas bloquer si métriques indisponibles
-            except Exception as revoke_error:
-                # Ne pas bloquer la rotation si la révocation échoue
+                    pass
+            except Exception as rotate_error:
                 logger.warning(
-                    "Échec révocation ancien token lors rotation automatique: %s",
-                    str(revoke_error),
+                    "Soft rotation marking failed (non-blocking): %s",
+                    str(rotate_error),
                 )
 
             # ✅ SECURITY: Stocker le nouveau token dans Redis et DB
@@ -1423,13 +1473,15 @@ class RefreshToken(Resource):
                     device_name=request.headers.get("X-Device-Name"),
                 )
 
-                # Limiter le nombre de tokens actifs (max 5 par défaut)
-                max_active_tokens = int(os.getenv("MAX_ACTIVE_REFRESH_TOKENS", "5"))
+                is_driver = user.role == UserRole.driver
+                max_active_tokens = int(os.getenv(
+                    "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
+                    "15" if is_driver else "5",
+                ))
                 token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
-                # Ne pas bloquer la rotation si le stockage échoue
                 logger.warning(
-                    "Échec stockage nouveau refresh token lors rotation automatique: %s",
+                    "Soft rotation storage failed (non-blocking): %s",
                     str(store_error),
                 )
 
@@ -1476,7 +1528,7 @@ class RefreshToken(Resource):
                 "user": {
                     "public_id": user.public_id,
                     "role": user.role.value,
-                    "company_id": getattr(user, "company_id", None),
+                    "company_id": _resolve_company_id(user),
                     "driver_id": getattr(user, "driver_id", None),
                 },
                 "trace_id": trace_id,
@@ -1551,21 +1603,37 @@ class FreshToken(Resource):
             # 1. Récupérer l'utilisateur actuel
             user_public_id = get_jwt_identity()
             if not user_public_id:
-                return {"error": "Utilisateur non authentifié"}, 401
+                return auth_error(
+                    AuthErrorCodes.MISSING_TOKEN,
+                    "Utilisateur non authentifié",
+                    401,
+                )
 
             user_dto = user_repo.find_by_public_id(user_public_id)
             if not user_dto or not user_dto.email:
-                return {"error": "Utilisateur non trouvé"}, 401
+                return auth_error(
+                    AuthErrorCodes.INVALID_CREDENTIALS,
+                    "Utilisateur non trouvé",
+                    401,
+                )
 
             user = user_repo.find_model_by_email(user_dto.email)
             if not user:
-                return {"error": "Utilisateur non trouvé"}, 401
+                return auth_error(
+                    AuthErrorCodes.INVALID_CREDENTIALS,
+                    "Utilisateur non trouvé",
+                    401,
+                )
 
             # 2. Récupérer le mot de passe depuis la requête
             data = request.get_json(silent=True) or {}
             password = data.get("password")
             if not password:
-                return {"error": "Mot de passe requis"}, 400
+                return auth_error(
+                    "invalid_request",
+                    "Mot de passe requis",
+                    400,
+                )
 
             # 3. Vérifier le mot de passe
             if not user.check_password(password):
@@ -1573,15 +1641,21 @@ class FreshToken(Resource):
                     "[Auth] Échec vérification mot de passe pour fresh token (user: %s)",
                     user_public_id,
                 )
-                return {"error": "Mot de passe incorrect"}, 401
+                return auth_error(
+                    AuthErrorCodes.INVALID_CREDENTIALS,
+                    "Mot de passe incorrect",
+                    401,
+                )
 
             # 4. Créer un token fresh
             claims = {
                 "role": user.role.value
                 if hasattr(user.role, "value")
                 else str(user.role),
-                "company_id": getattr(user, "company_id", None),
+                "company_id": _resolve_company_id(user),
                 "driver_id": getattr(user, "driver_id", None),
+                "institution_id": getattr(user, "institution_id", None),
+                "institution_role": getattr(user, "institution_role", None),
                 "aud": "atmr-api",
             }
             fresh_token = create_access_token(
@@ -1902,7 +1976,9 @@ class UserInfo(Resource):
 # ========================
 @auth_ns.route("/register")
 class Register(Resource):
-    @auth_ns.expect(register_model, validate=True)
+    # ✅ FIX: validate=False pour laisser Marshmallow + PasswordPolicyService
+    # gérer la validation avec des messages d'erreur clairs
+    @auth_ns.expect(register_model, validate=False)
     @limiter.limit(
         "10 per minute"
     )  # ✅ SECURITY: Rate limiting pour prévenir spam d'inscriptions
@@ -1929,10 +2005,9 @@ class Register(Resource):
             try:
                 validated_data = validate_request(RegisterSchema(), data, strict=False)
             except ValidationError as e:
-                # Utiliser abort au lieu de return pour réduire le nombre de returns
+                # ✅ FIX: Retourner un dict directement (Flask-RESTX le convertit en JSON)
                 body, code = handle_validation_error(e)
-                auth_ns.abort(code or 400, body.get("error", "Validation error"))
-                validated_data = {}  # Never reached, but satisfies type checker
+                return body, code or 400
 
             logger.info("Données validées : %s", validated_data)
 
@@ -1953,7 +2028,12 @@ class Register(Resource):
                     password, user_id=None, check_history=False
                 )
             except PasswordPolicyError as e:
-                auth_ns.abort(400, e.message)
+                # ✅ FIX: Retourner un message d'erreur clair via helper standard
+                return auth_error(
+                    AuthErrorCodes.PASSWORD_POLICY_ERROR,
+                    e.message,
+                    400,
+                )
 
             uc = RegisterUserUseCase()
             input_data = RegisterUserInput(
@@ -1971,20 +2051,32 @@ class Register(Resource):
             register_result = uc.execute(input_data)
 
             if not register_result.success:
-                HTTP_BAD_REQUEST = 400
-                if register_result.status_code == HTTP_BAD_REQUEST:
-                    error_msg = (
-                        register_result.error.get("error", "Validation error")
-                        if register_result.error
-                        else "Validation error"
-                    )
-                    auth_ns.abort(HTTP_BAD_REQUEST, error_msg)
+                # ✅ FIX: Retourner un dict directement via helper standard
+                # Déterminer le code d'erreur approprié
                 error_msg = (
-                    register_result.error.get("error", "Registration error")
+                    register_result.error.get("error", "Erreur lors de l'inscription")
                     if register_result.error
-                    else "Registration error"
+                    else "Erreur lors de l'inscription"
                 )
-                auth_ns.abort(register_result.status_code or 500, error_msg)
+
+                # Mapper les messages aux codes d'erreur spécifiques
+                lower_msg = error_msg.lower()
+                if "existe" in lower_msg:
+                    err_code = (
+                        AuthErrorCodes.EMAIL_EXISTS
+                        if "email" in lower_msg
+                        else AuthErrorCodes.USERNAME_EXISTS
+                        if "utilisateur" in lower_msg
+                        else AuthErrorCodes.REGISTRATION_ERROR
+                    )
+                    return auth_error(err_code, error_msg, 409)
+
+                # Code générique pour les autres erreurs
+                return auth_error(
+                    AuthErrorCodes.REGISTRATION_ERROR,
+                    error_msg,
+                    register_result.status_code or 400,
+                )
 
             user = register_result.user
             if not user:
@@ -2298,14 +2390,428 @@ class ListSessions(Resource):
             # 2. Récupérer les sessions actives
             sessions = get_user_active_sessions(user.id)
 
-            # 3. Sérialiser les sessions
-            sessions_data = [session.serialize() for session in sessions]
+            # 3. Déterminer la session courante via le refresh token cookie (G6)
+            refresh_cookie = request.cookies.get("refresh_token_cookie")
+            current_hash = _hash_refresh_token(refresh_cookie) if refresh_cookie else None
 
-            # 4. Retourner la réponse
+            # 4. Sérialiser avec IP masquée et is_current
+            sessions_data = [
+                s.serialize_masked(current_token_hash=current_hash) for s in sessions
+            ]
+
+            # 5. Retourner la réponse
             return {
                 "sessions": sessions_data,
                 "count": len(sessions_data),
             }, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# Endpoint : Révoquer une session spécifique
+# ========================
+@auth_ns.route("/sessions/<int:session_id>")
+class RevokeSession(Resource):
+    @jwt_required()
+    @limiter.limit("30 per hour")
+    def delete(self, session_id: int):
+        """Révoque une session spécifique de l'utilisateur courant.
+
+        Protection IDOR : seul le propriétaire de la session peut la révoquer.
+        Stratégie refresh-boundary (G9) : l'access token reste valide jusqu'à expiration.
+        """
+        try:
+            from models.refresh_token import RefreshToken
+
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            session = RefreshToken.query.get(session_id)
+            if not session or session.user_id != user.id:
+                return {"error": "Session non trouvée"}, 404
+
+            if session.is_revoked:
+                return {"error": "Session déjà révoquée"}, 409
+
+            session.is_revoked = True
+            session.revoked_at = datetime.now(UTC)
+            session.revoked_reason = "Session révoquée manuellement"
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("session_revoked", "security", resource_type="session", resource_id=session_id)
+
+            return "", 204
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# Endpoint : Révoquer toutes les sessions sauf la courante
+# ========================
+@auth_ns.route("/sessions/revoke-others")
+class RevokeOtherSessions(Resource):
+    @jwt_required()
+    @limiter.limit("10 per hour")
+    def post(self):
+        """Révoque toutes les sessions de l'utilisateur sauf la session courante.
+
+        La session courante est identifiée via le refresh token cookie (G6).
+        Stratégie refresh-boundary (G9).
+        """
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            refresh_cookie = request.cookies.get("refresh_token_cookie")
+            current_hash = _hash_refresh_token(refresh_cookie) if refresh_cookie else None
+
+            now = datetime.now(UTC)
+            sessions = get_user_active_sessions(user.id)
+            revoked_count = 0
+
+            for s in sessions:
+                if current_hash and s.token_hash == current_hash:
+                    continue
+                s.is_revoked = True
+                s.revoked_at = now
+                s.revoked_reason = "Toutes les autres sessions révoquées"
+                revoked_count += 1
+
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("sessions_bulk_revoked", "security", action_details={"revoked_count": revoked_count})
+
+            return {"revoked_count": revoked_count}, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ========================
+# Endpoint : Obtenir un token CSRF
+# ========================
+TOTP_CODE_LENGTH = 6
+RECOVERY_CODE_LENGTH = 8
+MAX_2FA_FAILURES = 10
+
+# ========================
+# Endpoints TOTP 2FA (Sprint 2)
+# ========================
+@auth_ns.route("/totp/setup")
+class TOTPSetup(Resource):
+    @jwt_required(fresh=True)
+    @limiter.limit("5 per 15 minutes")
+    def post(self):
+        """Génère un secret TOTP et retourne le QR code + URI.
+
+        Gardé par feature flag SECURITY_2FA_ENABLED.
+        """
+        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
+            return {"error": "2FA non disponible"}, 403
+
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            if user.totp_enabled:
+                return {"error": "2FA déjà activée. Désactivez d'abord."}, 409
+
+            from security.totp_service import generate_totp_secret
+            result = generate_totp_secret(user.email or user.username)
+
+            user.totp_secret_encrypted = result["secret_encrypted"]
+            db.session.commit()
+
+            return {
+                "provisioning_uri": result["provisioning_uri"],
+                "qr_code_base64": result["qr_code_base64"],
+                "secret_display": result["secret_display"],
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/verify")
+class TOTPVerify(Resource):
+    @jwt_required(fresh=True)
+    @limiter.limit("5 per 15 minutes")
+    def post(self):  # noqa: PLR0911
+        """Vérifie un code TOTP et active le 2FA. Retourne les recovery codes."""
+        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
+            return {"error": "2FA non disponible"}, 403
+
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            data = request.get_json() or {}
+            code = str(data.get("code", "")).strip()
+            if not code or len(code) != TOTP_CODE_LENGTH:
+                return {"error": "Code à 6 chiffres requis"}, 400
+
+            if not user.totp_secret_encrypted:
+                return {"error": "Appelez /totp/setup d'abord"}, 400
+
+            from security.totp_service import (
+                generate_recovery_codes,
+                verify_totp_code,
+            )
+            if not verify_totp_code(user.totp_secret_encrypted, code):
+                return {"error": "Code invalide"}, 401
+
+            codes, hashes_json = generate_recovery_codes()
+            user.totp_enabled = True
+            user.totp_enabled_at = datetime.now(UTC)
+            user.recovery_codes_hash = hashes_json
+            user.recovery_codes_remaining = len(codes)
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("totp_enabled", "security")
+
+            return {
+                "message": "Validation en deux étapes activée.",
+                "recovery_codes": codes,
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/disable")
+class TOTPDisable(Resource):
+    @jwt_required(fresh=True)
+    @limiter.limit("5 per 15 minutes")
+    def post(self):
+        """Désactive le 2FA. Requiert le mot de passe actuel."""
+        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
+            return {"error": "2FA non disponible"}, 403
+
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            data = request.get_json() or {}
+            password = data.get("password", "")
+            if not password or not user.check_password(password):
+                return {"error": "Mot de passe incorrect"}, 401
+
+            user.totp_enabled = False
+            user.totp_secret_encrypted = None
+            user.totp_enabled_at = None
+            user.recovery_codes_hash = None
+            user.recovery_codes_remaining = 0
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("totp_disabled", "security")
+
+            return {"message": "Validation en deux étapes désactivée."}, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/status")
+class TOTPStatus(Resource):
+    @jwt_required()
+    def get(self):
+        """Retourne le statut 2FA de l'utilisateur courant."""
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            return {
+                "enabled": bool(user.totp_enabled),
+                "enabled_at": user.totp_enabled_at.isoformat() if user.totp_enabled_at else None,
+                "recovery_codes_remaining": user.recovery_codes_remaining or 0,
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/recovery-codes")
+class TOTPRecoveryCodes(Resource):
+    @jwt_required(fresh=True)
+    @limiter.limit("5 per 15 minutes")
+    def post(self):
+        """Régénère les codes de secours. Requiert un code TOTP valide."""
+        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
+            return {"error": "2FA non disponible"}, 403
+
+        try:
+            current_user_public_id = get_jwt_identity()
+            user = user_repo.find_by_public_id(current_user_public_id)
+            if not user:
+                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+
+            if not user.totp_enabled or not user.totp_secret_encrypted:
+                return {"error": "2FA non activée"}, 400
+
+            data = request.get_json() or {}
+            code = str(data.get("code", "")).strip()
+
+            from security.totp_service import generate_recovery_codes, verify_totp_code
+            if not verify_totp_code(user.totp_secret_encrypted, code):
+                return {"error": "Code TOTP invalide"}, 401
+
+            codes, hashes_json = generate_recovery_codes()
+            user.recovery_codes_hash = hashes_json
+            user.recovery_codes_remaining = len(codes)
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("recovery_codes_regenerated", "security")
+
+            return {
+                "message": "Codes de secours régénérés.",
+                "recovery_codes": codes,
+            }, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@auth_ns.route("/totp/challenge")
+class TOTPChallenge(Resource):
+    @limiter.limit("5 per 15 minutes")
+    def post(self):  # noqa: PLR0911
+        """Vérifie un code TOTP après login (temp_token anti-replay G7).
+
+        Reçoit temp_token + code TOTP, retourne les vrais tokens si valide.
+        """
+        if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
+            return {"error": "2FA non disponible"}, 403
+
+        try:
+            data = request.get_json() or {}
+            temp_token = data.get("temp_token", "")
+            code = str(data.get("code", "")).strip()
+
+            if not temp_token or not code:
+                return {"error": "temp_token et code requis"}, 400
+
+            decoded = decode_token(temp_token)
+            if decoded.get("purpose") != "2fa_challenge":
+                return {"error": "Token invalide"}, 401
+
+            jti = decoded.get("jti")
+            user_public_id = decoded.get("sub")
+
+            if not jti or not user_public_id:
+                return {"error": "Token invalide"}, 401
+
+            from security.totp_service import (
+                check_2fa_lockout,
+                consume_2fa_challenge_jti,
+                record_2fa_failure,
+                reset_2fa_failures,
+                verify_recovery_code,
+                verify_totp_code,
+            )
+
+            if not consume_2fa_challenge_jti(jti):
+                return {"error": "Token déjà utilisé ou expiré"}, 401
+
+            user = user_repo.find_by_public_id(user_public_id)
+            if not user:
+                return {"error": "Utilisateur non trouvé"}, 404
+
+            if check_2fa_lockout(user.id):
+                return {"error": "Trop de tentatives. Réessayez dans 30 minutes."}, 429
+
+            is_valid = False
+            if len(code) == TOTP_CODE_LENGTH and code.isdigit():
+                is_valid = verify_totp_code(user.totp_secret_encrypted, code)
+            elif len(code) == RECOVERY_CODE_LENGTH and code.isdigit():
+                is_valid, updated_hashes = verify_recovery_code(
+                    user.recovery_codes_hash or "[]", code
+                )
+                if is_valid:
+                    user.recovery_codes_hash = updated_hashes
+                    user.recovery_codes_remaining = max(0, (user.recovery_codes_remaining or 0) - 1)
+
+            if not is_valid:
+                failures = record_2fa_failure(user.id)
+                from shared.audit_helpers import audit_log
+                audit_log("totp_challenge_failed", "security", user=user, result="failure")
+                if failures >= MAX_2FA_FAILURES:
+                    return {"error": "Trop de tentatives. Réessayez dans 30 minutes."}, 429
+                return {"error": "Code invalide"}, 401
+
+            reset_2fa_failures(user.id)
+
+            additional_claims = {
+                "role": user.role.value if user.role else "unknown",
+            }
+            if user.company:
+                additional_claims["company_id"] = user.company.id
+
+            access_token = create_access_token(
+                identity=user.public_id,
+                additional_claims=additional_claims,
+                fresh=True,
+            )
+            refresh_token = create_refresh_token(identity=user.public_id)
+
+            device_id = request.headers.get("X-Device-Id")
+            from security.refresh_token_service import store_refresh_token
+            from shared.security_helpers import parse_device
+            store_refresh_token(
+                token=refresh_token,
+                user_id=user.id,
+                expires_at=datetime.now(UTC) + timedelta(days=30),
+                device_id=device_id,
+                device_name=parse_device(request.headers.get("User-Agent")),
+            )
+
+            db.session.commit()
+
+            from shared.audit_helpers import audit_log
+            audit_log("user_login", "security", user=user)
+
+            resp = make_response({
+                "message": "2FA validée",
+                "user": {
+                    "id": user.id,
+                    "public_id": user.public_id,
+                    "username": user.username,
+                    "email": user.email,
+                    "role": user.role.value if user.role else None,
+                },
+                "token": access_token,
+                "refresh_token": refresh_token,
+            })
+
+            from services.security.csrf import generate_csrf_token
+            csrf_token = generate_csrf_token()
+            resp.set_cookie("csrf_token", csrf_token, httponly=False, samesite="Lax", secure=False, path="/")
+            resp.set_cookie("access_token_cookie", access_token, httponly=True, samesite="Lax", secure=False, path="/")
+            resp.set_cookie("refresh_token_cookie", refresh_token, httponly=True, samesite="Lax", secure=False, path="/api")
+
+            return resp
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -2380,3 +2886,196 @@ class CSRFTokenResource(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             return APIErrorHandler.handle_exception(e, logger)
+
+
+# ============================================================================
+# INVITATION - Endpoints publics (pas de JWT requis)
+# ============================================================================
+
+
+@auth_ns.route("/invite/<string:token>")
+class InviteVerify(Resource):
+    """Endpoint public pour vérifier un token d'invitation."""
+
+    @auth_ns.doc(description="Vérifie la validité d'un token d'invitation.")
+    @auth_ns.response(200, "Token valide")
+    @auth_ns.response(400, "Token invalide ou expiré")
+    @limiter.limit("20 per hour")
+    def get(self, token):
+        """Vérifie un token d'invitation (public, pas de JWT).
+
+        Retourne les infos de base si le token est valide.
+        """
+        from application.institutions.invitation_service import hash_token
+
+        try:
+            token_hash = hash_token(token)
+
+            user = User.query.filter_by(invite_token_hash=token_hash).first()
+
+            # Message générique pour ne pas fuiter d'info
+            generic_error = "Ce lien d'invitation est invalide ou a expiré."
+
+            if not user:
+                return {"error": generic_error, "code": "invalid_token"}, 400
+
+            # Vérifier expiration
+            if user.invite_expires_at and user.invite_expires_at < datetime.now(UTC):
+                return {
+                    "error": "Ce lien d'invitation a expiré. Demandez à votre administrateur d'en envoyer un nouveau.",
+                    "code": "expired",
+                }, 400
+
+            # Vérifier que l'utilisateur est bien en statut "invited"
+            if user.account_status not in ("invited", None):
+                return {
+                    "error": "Ce compte a déjà été activé.",
+                    "code": "already_activated",
+                }, 400
+
+            # Retourner les infos de base (pas de données sensibles)
+            institution_name = None
+            if user.institution_id:
+                from models.institution import Institution
+
+                inst = Institution.query.get(user.institution_id)
+                institution_name = inst.name if inst else None
+
+            return {
+                "valid": True,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "institution_name": institution_name,
+                "role": user.institution_role,
+            }, 200
+
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error("[Auth] Erreur vérification invite token: %s", e)
+            return {"error": "Erreur lors de la vérification"}, 500
+
+
+@auth_ns.route("/activate-account")
+class ActivateAccount(Resource):
+    """Endpoint public pour activer un compte via invitation."""
+
+    @auth_ns.doc(description="Active un compte invité en définissant le mot de passe.")
+    @auth_ns.response(200, "Compte activé avec succès")
+    @auth_ns.response(400, "Token invalide, expiré ou données manquantes")
+    @limiter.limit("10 per hour")
+    def post(self):
+        """Active un compte invité (public, pas de JWT).
+
+        Body JSON:
+            token (str): Token d'invitation brut
+            password (str): Nouveau mot de passe (min 8 caractères)
+        """
+        from application.institutions.invitation_service import hash_token
+
+        try:
+            data = request.get_json() or {}
+            token = data.get("token", "").strip()
+            password = data.get("password", "")
+
+            min_password_length = 8
+            if not token or not password or len(password) < min_password_length:
+                error_msg = (
+                    "Token manquant"
+                    if not token
+                    else f"Le mot de passe doit contenir au moins {min_password_length} caractères"
+                )
+                return {"error": error_msg}, 400
+
+            token_hash = hash_token(token)
+            user = User.query.filter_by(invite_token_hash=token_hash).first()
+
+            generic_error = "Ce lien d'invitation est invalide ou a expiré."
+
+            if not user:
+                return {"error": generic_error, "code": "invalid_token"}, 400
+
+            # Vérifier expiration
+            if user.invite_expires_at and user.invite_expires_at < datetime.now(UTC):
+                return {
+                    "error": "Ce lien d'invitation a expiré. Demandez à votre administrateur d'en envoyer un nouveau.",
+                    "code": "expired",
+                }, 400
+
+            # Vérifier statut
+            if user.account_status not in ("invited", None):
+                return {
+                    "error": "Ce compte a déjà été activé.",
+                    "code": "already_activated",
+                }, 400
+
+            # Activer le compte
+            user.set_password(password)
+            user.account_status = "active"
+            user.force_password_change = False
+            # Invalider le token (one-time use)
+            user.invite_token_hash = None
+            user.invite_expires_at = None
+
+            db.session.commit()
+
+            # Audit log
+            try:
+                from security.audit_log import AuditLogger
+
+                AuditLogger.log_action(
+                    action_type="institution_account_activated",
+                    action_category="authentication",
+                    user_id=user.id,
+                    user_type="institution",
+                    institution_id=user.institution_id,
+                    result_status="success",
+                    action_details={
+                        "email": user.email,
+                        "institution_role": user.institution_role,
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+            except Exception as audit_err:
+                logger.warning("[Auth] Audit log activate failed: %s", audit_err)
+
+            logger.info(
+                "[Auth] Compte activé: user_id=%s, email=%s",
+                user.id,
+                user.email,
+            )
+
+            # Auto-login : générer un JWT pour connexion immédiate
+            claims = {
+                "user_id": user.id,
+                "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+                "company_id": _resolve_company_id(user),
+                "driver_id": getattr(user, "driver_id", None),
+                "institution_id": getattr(user, "institution_id", None),
+                "institution_role": getattr(user, "institution_role", None),
+                "aud": "atmr-api",
+            }
+            access_token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims=claims,
+                fresh=True,
+            )
+            refresh_token = create_refresh_token(
+                identity=str(user.public_id),
+                additional_claims={"aud": "atmr-api"},
+            )
+
+            return {
+                "message": "Compte activé avec succès.",
+                "email": user.email,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "user": user.serialize,
+            }, 200
+
+        except Exception as e:
+            db.session.rollback()
+            sentry_sdk.capture_exception(e)
+            logger.error("[Auth] Erreur activation compte: %s", e)
+            return {"error": "Erreur lors de l'activation"}, 500

@@ -10,6 +10,7 @@ export type DriverLogoutReason =
   | "manual_logout"
   | "refresh_rejected_401"
   | "refresh_rejected_403"
+  | "account_disabled"
   | "profile_401_403"
   | "profile_auth_invalid"
   | "boot_autologin_failed"
@@ -19,7 +20,8 @@ export type DriverLogoutReason =
 export type EnterpriseLogoutReason =
   | "manual_logout"
   | "refresh_rejected_401"
-  | "refresh_rejected_403";
+  | "refresh_rejected_403"
+  | "account_disabled";
 
 /** Union centralisée — tous les reasons possibles */
 export type AuthLogoutReason = DriverLogoutReason | EnterpriseLogoutReason;
@@ -31,6 +33,15 @@ export const SESSION_EXPIRED_REASONS: readonly AuthLogoutReason[] = [
   "profile_auth_invalid",
 ] as const;
 
+/** Reasons qui déclenchent la bannière "Compte désactivé" sur login. */
+export const ACCOUNT_DISABLED_REASONS: readonly AuthLogoutReason[] = [
+  "account_disabled",
+] as const;
+
 export function isSessionExpiredReason(reason: string): boolean {
   return (SESSION_EXPIRED_REASONS as readonly string[]).includes(reason);
+}
+
+export function isAccountDisabledReason(reason: string): boolean {
+  return (ACCOUNT_DISABLED_REASONS as readonly string[]).includes(reason);
 }

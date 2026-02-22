@@ -1,16 +1,25 @@
-// frontend/src/pages/company/Clients/components/ClientReadView.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import {
+  FiX,
+  FiEdit2,
+  FiUser,
+  FiHome,
+  FiCheckCircle,
+  FiAlertTriangle,
+  FiHash,
+  FiFileText,
+  FiMapPin,
+  FiCreditCard,
+  FiClock,
+  FiCornerUpLeft,
+} from 'react-icons/fi';
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 import { fetchClientReservations } from '../../../../services/companyService';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
 import styles from './ClientReadView.module.css';
 
-/**
- * Vue en mode LECTURE du drawer client
- * Affiche toutes les informations de manière organisée et lisible
- */
 const ClientReadView = ({ client, onEdit, onClose, loading }) => {
   const [reservations, setReservations] = useState([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
@@ -34,7 +43,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
   }, [searchParams]);
 
   const formatDate = (dateString) => {
-    if (!dateString) return 'Non renseigné';
+    if (!dateString) return null;
     try {
       return new Date(dateString).toLocaleDateString('fr-FR', {
         day: '2-digit',
@@ -42,15 +51,14 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
         year: 'numeric',
       });
     } catch {
-      return 'Non renseigné';
+      return null;
     }
   };
 
-  // Gérer les deux formats de données : DTO (user_first_name) et serialize (first_name)
   const firstName = client.user_first_name || client.first_name || client.user?.first_name || '';
   const lastName = client.user_last_name || client.last_name || client.user?.last_name || '';
   const fullName = client.full_name || `${firstName} ${lastName}`.trim();
-  
+
   const displayName = client.is_institution
     ? client.institution_name || `Institution #${client.id}`
     : fullName || `Client #${client.id}`;
@@ -116,14 +124,14 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
     const normalized = String(status || '').toLowerCase();
     const labels = {
       pending: 'En attente',
-      assigned: 'Assignée',
-      accepted: 'Acceptée',
+      assigned: 'Assignee',
+      accepted: 'Acceptee',
       in_progress: 'En cours',
-      completed: 'Terminée',
-      canceled: 'Annulée',
-      cancelled: 'Annulée',
-      rejected: 'Refusée',
-      confirmed: 'Confirmée',
+      completed: 'Terminee',
+      canceled: 'Annulee',
+      cancelled: 'Annulee',
+      rejected: 'Refusee',
+      confirmed: 'Confirmee',
     };
     return labels[normalized] || (status ? String(status) : 'Statut inconnu');
   };
@@ -134,14 +142,57 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
         reservation?.pickup_location ||
         reservation?.pickup_address ||
         reservation?.origin ||
-        '—'
+        '\u2014'
       );
     }
     return (
       reservation?.dropoff_location ||
       reservation?.dropoff_address ||
       reservation?.destination ||
-      '—'
+      '\u2014'
+    );
+  };
+
+  const getGenderLabel = () => {
+    const gender = String(client.user_gender || client.user?.gender || '').toUpperCase();
+    if (gender === 'HOMME' || gender === 'MALE') return 'Monsieur';
+    if (gender === 'FEMME' || gender === 'FEMALE') return 'Madame';
+    return 'Autre';
+  };
+
+  const birthDate = formatDate(client.user_birth_date || client.user?.birth_date);
+  const hasGender = !!(client.user_gender || client.user?.gender);
+  const hasAvs = !!client.avs_number;
+  const hasEmail = !!client.contact_email;
+  const hasPhone = !!(client.contact_phone || client.phone);
+  const hasEssentialInfo = !client.is_institution
+    ? (birthDate || hasGender || hasAvs || hasEmail || hasPhone)
+    : (hasEmail || hasPhone);
+
+  const address = client.domicile_address || client.domicile?.address || '';
+  const zip = client.domicile_zip || client.domicile?.zip || '';
+  const city = client.domicile_city || client.domicile?.city || '';
+  const hasAddress = !!(address || zip || city);
+  const hasFacility = !!client.residence_facility;
+  const hasLocationSection = hasAddress || hasFacility;
+
+  const addressText = hasAddress
+    ? [address, zip, city].filter(Boolean).join(', ')
+    : null;
+
+  const hasPreferentialRate = !!client.preferential_rate;
+  const hasBillingCompany = client.is_institution && !!client.default_billing?.billed_to_company;
+  const hasBillingContact = !!client.default_billing?.billed_to_contact;
+  const hasBillingType = !!client.default_billing?.billed_to_type;
+  const hasBillingSection = hasPreferentialRate || hasBillingCompany || hasBillingContact || hasBillingType;
+
+  const Field = ({ label, children }) => {
+    if (!children) return null;
+    return (
+      <div className={styles.infoItem}>
+        <span className={styles.infoLabel}>{label}</span>
+        <span className={styles.infoValue}>{children}</span>
+      </div>
     );
   };
 
@@ -156,22 +207,37 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             aria-label="Fermer"
             title="Fermer (ESC)"
           >
-            ✕
+            <FiX size={18} />
           </button>
           <div className={styles.headerTitle}>
             <h2 className={styles.clientName}>{displayName}</h2>
             <div className={styles.headerBadges}>
               {client.is_institution ? (
-                <span className={styles.badgeInstitution}>🏢 Institution</span>
+                <span className={styles.badgeInstitution}>
+                  <FiHome size={11} />
+                  Institution
+                </span>
               ) : (
-                <span className={styles.badgeClient}>👤 Client</span>
+                <span className={styles.badgeClient}>
+                  <FiUser size={11} />
+                  Client
+                </span>
               )}
               {client.is_active ? (
-                <span className={styles.badgeActive}>✅ Actif</span>
+                <span className={styles.badgeActive}>
+                  <FiCheckCircle size={11} />
+                  Actif
+                </span>
               ) : (
-                <span className={styles.badgeInactive}>⚠️ Inactif</span>
+                <span className={styles.badgeInactive}>
+                  <FiAlertTriangle size={11} />
+                  Inactif
+                </span>
               )}
-              <span className={styles.badgeId}>#{client.id}</span>
+              <span className={styles.badgeId}>
+                <FiHash size={11} />
+                {client.id}
+              </span>
             </div>
           </div>
           <button
@@ -180,15 +246,17 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             disabled={loading}
             title="Modifier le client"
           >
-            ✏️ Modifier
+            <FiEdit2 size={14} />
+            Modifier
           </button>
           {returnTo && (
             <button
               onClick={() => window.location.assign(returnTo)}
               className={styles.returnButton}
-              title="Retour au contrôle facturation"
+              title="Retour au controle facturation"
             >
-              ↩ Retour au contrôle facturation
+              <FiCornerUpLeft size={14} />
+              Retour
             </button>
           )}
         </div>
@@ -197,203 +265,147 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
       {/* Contenu scrollable */}
       <div className={styles.content}>
         {/* Informations essentielles */}
-        <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>📋 Informations essentielles</h3>
-          <div className={styles.infoGrid}>
-            {!client.is_institution && (
-              <>
-                {(client.user_birth_date || client.user?.birth_date) && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Date de naissance</span>
-                    <span className={styles.infoValue}>
-                      {formatDate(client.user_birth_date || client.user?.birth_date)}
-                    </span>
-                  </div>
-                )}
-                {(client.user_gender || client.user?.gender) && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Civilité</span>
-                    <span className={styles.infoValue}>
-                      {(() => {
-                        const gender = String(client.user_gender || client.user?.gender || '').toUpperCase();
-                        if (gender === 'HOMME' || gender === 'MALE') return 'Monsieur';
-                        if (gender === 'FEMME' || gender === 'FEMALE') return 'Madame';
-                        return 'Autre';
-                      })()}
-                    </span>
-                  </div>
-                )}
-                {client.avs_number && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Numéro AVS</span>
-                    <span className={styles.infoValue}>{client.avs_number}</span>
-                  </div>
-                )}
-              </>
-            )}
-            {client.contact_email && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Email de contact</span>
-                <span className={styles.infoValue}>
+        {hasEssentialInfo && (
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <FiFileText size={14} className={styles.sectionIcon} />
+              Informations essentielles
+            </h3>
+            <div className={styles.infoGrid}>
+              {!client.is_institution && (
+                <>
+                  <Field label="Date de naissance">{birthDate}</Field>
+                  {hasGender && <Field label="Civilite">{getGenderLabel()}</Field>}
+                  {hasAvs && <Field label="Numero AVS">{client.avs_number}</Field>}
+                </>
+              )}
+              {hasEmail && (
+                <Field label="Email de contact">
                   <a href={`mailto:${client.contact_email}`}>{client.contact_email}</a>
-                </span>
-              </div>
-            )}
-            {(client.contact_phone || client.phone) && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Téléphone</span>
-                <span className={styles.infoValue}>
+                </Field>
+              )}
+              {hasPhone && (
+                <Field label="Telephone">
                   <a href={`tel:${client.contact_phone || client.phone}`}>
                     {client.contact_phone || client.phone}
                   </a>
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
+                </Field>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Localisation */}
-        <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>📍 Localisation</h3>
-          <div className={styles.infoGrid}>
-            {client.residence_facility && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Établissement de résidence</span>
-                <span className={styles.infoValue}>{client.residence_facility}</span>
-              </div>
-            )}
-            <div className={styles.infoItem}>
-              <span className={styles.infoLabel}>Adresse de domicile</span>
-              <span className={styles.infoValue}>
-                {(() => {
-                  // Gérer les deux formats : DTO (domicile_address) et serialize (domicile.address)
-                  const address = client.domicile_address || client.domicile?.address || '';
-                  const zip = client.domicile_zip || client.domicile?.zip || '';
-                  const city = client.domicile_city || client.domicile?.city || '';
-                  
-                  if (address || zip || city) {
-                    const parts = [address, zip, city].filter(Boolean);
-                    return parts.join(', ');
-                  }
-                  return 'Non renseignée';
-                })()}
-              </span>
+        {hasLocationSection && (
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <FiMapPin size={14} className={styles.sectionIcon} />
+              Localisation
+            </h3>
+            <div className={styles.infoGrid}>
+              {hasFacility && (
+                <Field label="Etablissement de residence">{client.residence_facility}</Field>
+              )}
+              {hasAddress && (
+                <Field label="Adresse de domicile">{addressText}</Field>
+              )}
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Facturation */}
-        <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>💰 Facturation</h3>
-          <div className={styles.infoGrid}>
-            {client.preferential_rate && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Tarif préférentiel</span>
-                <span className={styles.infoValue}>
+        {hasBillingSection && (
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>
+              <FiCreditCard size={14} className={styles.sectionIcon} />
+              Facturation
+            </h3>
+            <div className={styles.infoGrid}>
+              {hasPreferentialRate && (
+                <Field label="Tarif preferentiel">
                   {parseFloat(client.preferential_rate).toFixed(2)} CHF / trajet
-                </span>
-              </div>
-            )}
-            
-            {/* Informations de la Company payeur (pour institutions) */}
-            {client.is_institution && client.default_billing?.billed_to_company && (
-              <>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Entreprise payeur</span>
-                  <span className={styles.infoValue}>
-                    {client.default_billing.billed_to_company.name || '—'}
-                  </span>
-                </div>
-                {client.default_billing.billed_to_company.address && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Adresse de l'entreprise</span>
-                    <span className={styles.infoValue}>
+                </Field>
+              )}
+
+              {hasBillingCompany && (
+                <>
+                  <Field label="Entreprise payeur">
+                    {client.default_billing.billed_to_company.name || null}
+                  </Field>
+                  {client.default_billing.billed_to_company.address && (
+                    <Field label="Adresse de l'entreprise">
                       {client.default_billing.billed_to_company.address}
-                      {client.default_billing.billed_to_company.domicile_zip && 
+                      {client.default_billing.billed_to_company.domicile_zip &&
                        client.default_billing.billed_to_company.domicile_city && (
                         <span>
                           , {client.default_billing.billed_to_company.domicile_zip}{' '}
                           {client.default_billing.billed_to_company.domicile_city}
                         </span>
                       )}
-                    </span>
-                  </div>
-                )}
-                {client.default_billing.billed_to_company.contact_email && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Email entreprise</span>
-                    <span className={styles.infoValue}>
+                    </Field>
+                  )}
+                  {client.default_billing.billed_to_company.contact_email && (
+                    <Field label="Email entreprise">
                       <a href={`mailto:${client.default_billing.billed_to_company.contact_email}`}>
                         {client.default_billing.billed_to_company.contact_email}
                       </a>
-                    </span>
-                  </div>
-                )}
-                {client.default_billing.billed_to_company.contact_phone && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Téléphone entreprise</span>
-                    <span className={styles.infoValue}>
+                    </Field>
+                  )}
+                  {client.default_billing.billed_to_company.contact_phone && (
+                    <Field label="Telephone entreprise">
                       <a href={`tel:${client.default_billing.billed_to_company.contact_phone}`}>
                         {client.default_billing.billed_to_company.contact_phone}
                       </a>
-                    </span>
-                  </div>
-                )}
-                {client.default_billing.billed_to_company.preferential_rate && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Tarif préférentiel entreprise</span>
-                    <span className={styles.infoValue}>
+                    </Field>
+                  )}
+                  {client.default_billing.billed_to_company.preferential_rate && (
+                    <Field label="Tarif preferentiel entreprise">
                       {parseFloat(client.default_billing.billed_to_company.preferential_rate).toFixed(2)} CHF / trajet
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
+                    </Field>
+                  )}
+                </>
+              )}
 
-            {/* Contact de facturation */}
-            {client.default_billing?.billed_to_contact && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Contact de facturation</span>
-                <span className={styles.infoValue}>
+              {hasBillingContact && (
+                <Field label="Contact de facturation">
                   {client.default_billing.billed_to_contact}
-                </span>
-              </div>
-            )}
+                </Field>
+              )}
 
-            {/* Type de facturation */}
-            {client.default_billing?.billed_to_type && (
-              <div className={styles.infoItem}>
-                <span className={styles.infoLabel}>Type de facturation</span>
-                <span className={styles.infoValue}>
+              {hasBillingType && (
+                <Field label="Type de facturation">
                   {client.default_billing.billed_to_type === 'clinic' ? 'Clinique' :
                    client.default_billing.billed_to_type === 'patient' ? 'Patient' :
                    client.default_billing.billed_to_type}
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
+                </Field>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Tiers payeur (uniquement pour clients) */}
         {!client.is_institution && (
           <ClientBillingPartiesSection clientId={client.id} readOnly={true} />
         )}
 
-        {/* Séjours d'hospitalisation (uniquement pour clients) */}
+        {/* Sejours d'hospitalisation (uniquement pour clients) */}
         {!client.is_institution && (
           <ClientStaysSection clientId={client.id} />
         )}
 
-        {/* Dernières courses (uniquement pour clients) */}
+        {/* Dernieres courses (uniquement pour clients) */}
         {!client.is_institution && (
           <section className={styles.section}>
-            <h3 className={styles.sectionTitle}>🚕 Dernières courses (3)</h3>
+            <h3 className={styles.sectionTitle}>
+              <FiClock size={14} className={styles.sectionIcon} />
+              Dernieres courses (3)
+            </h3>
             {reservationsLoading ? (
               <div className={styles.mutedText}>Chargement des courses...</div>
             ) : reservationsError ? (
               <div className={styles.errorText}>{reservationsError}</div>
             ) : recentReservations.length === 0 ? (
-              <div className={styles.mutedText}>Aucune course récente.</div>
+              <div className={styles.mutedText}>Aucune course recente.</div>
             ) : (
               <div className={styles.reservationsList}>
                 {recentReservations.map((reservation) => {
@@ -410,13 +422,13 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
                       </div>
                       <div className={styles.reservationRoute}>
                         <div className={styles.reservationRow}>
-                          <span className={styles.reservationLabel}>Départ</span>
+                          <span className={styles.reservationLabel}>Depart</span>
                           <span className={styles.reservationValue}>
                             {getLocationValue(reservation, 'pickup')}
                           </span>
                         </div>
                         <div className={styles.reservationRow}>
-                          <span className={styles.reservationLabel}>Arrivée</span>
+                          <span className={styles.reservationLabel}>Arrivee</span>
                           <span className={styles.reservationValue}>
                             {getLocationValue(reservation, 'dropoff')}
                           </span>

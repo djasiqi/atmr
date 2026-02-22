@@ -41,10 +41,9 @@ module.exports = withAndroidR8Enabled(
 
   icon: "./assets/images/icon.png",
   splash: {
-    image: "./assets/images/splash-icon.png",
-    imageWidth: 200,
-    resizeMode: "contain",
-    backgroundColor: "#ffffff",
+    image: "./assets/images/splash.png",
+    resizeMode: "cover",
+    backgroundColor: "#0D7F72",
   },
 
   ios: {
@@ -61,6 +60,7 @@ module.exports = withAndroidR8Enabled(
     // (nécessite un rebuild natif iOS)
     infoPlist: {
       UIBackgroundModes: ["fetch", "remote-notification"],
+      LSApplicationQueriesSchemes: ["tel", "comgooglemaps"],
     },
     config: {
       usesNonExemptEncryption: false, // À définir selon vos besoins de conformité
@@ -76,14 +76,16 @@ module.exports = withAndroidR8Enabled(
     // Fallback local: fichier à la racine du projet.
     googleServicesFile: envOrExistingFile(process.env.GOOGLE_SERVICES_JSON, "./google-services.json"),
     adaptiveIcon: {
-      foregroundImage: "./assets/images/adaptive-icon.png",
-      backgroundColor: "#ffffff",
+      foregroundImage: "./assets/images/adaptive-foreground.png",
+      backgroundColor: "#0D7F72",
     },
     permissions: [
       "android.permission.POST_NOTIFICATIONS",
       "android.permission.ACCESS_BACKGROUND_LOCATION",
       "android.permission.FOREGROUND_SERVICE",
       "android.permission.FOREGROUND_SERVICE_LOCATION",
+      "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+      "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     ],
     config: {
       googleMaps: {
@@ -99,18 +101,20 @@ module.exports = withAndroidR8Enabled(
   },
 
   plugins: [
+    "@react-native-firebase/app",
+    "@react-native-firebase/messaging",
     "expo-router",
     "expo-font",
     "expo-web-browser",
     "expo-secure-store",
-    "expo-local-authentication", // ✅ PHASE 2 : Authentification biométrique
+    "expo-local-authentication",
     "sentry-expo",
-    "expo-task-manager", // ✅ Nécessaire pour le tracking en arrière-plan
+    "expo-task-manager",
     [
       "expo-notifications",
       {
-        icon: "./assets/icons/notification-icon.png",
-        color: "#ffffff",
+        icon: "./assets/icons/notification.png",
+        color: "#0A7F59",
         // sounds: [] // `sounds` est vide, peut être omis si vous utilisez le son par défaut
       },
     ],
@@ -122,7 +126,7 @@ module.exports = withAndroidR8Enabled(
           notificationTitle: "Liri Opérations est active",
           notificationBody:
             "Suivi de la localisation en cours pour vos opérations.",
-          notificationColor: "#ffffff",
+          notificationColor: "#0A7F59",
         },
       },
     ],

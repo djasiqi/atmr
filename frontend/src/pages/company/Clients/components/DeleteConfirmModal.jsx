@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import styles from './DeleteConfirmModal.module.css';
 
 const DeleteConfirmModal = ({ client, onClose, onConfirm }) => {
-  const [deleteType, setDeleteType] = useState('soft'); // 'soft' ou 'hard'
+  const [deleteType, setDeleteType] = useState('soft');
   const [loading, setLoading] = useState(false);
 
   const handleConfirm = async () => {
@@ -22,80 +22,72 @@ const DeleteConfirmModal = ({ client, onClose, onConfirm }) => {
     : `${client.first_name || ''} ${client.last_name || ''}`.trim() || 'ce client';
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">Supprimer {isInstitution ? "l'institution" : 'le client'}</h2>
-          <button className="modal-close" onClick={onClose}>
-            ✕
-          </button>
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h3 className={styles.title}>
+          Supprimer {isInstitution ? "l'institution" : 'le client'}
+        </h3>
+        <p className={styles.message}>
+          Voulez-vous vraiment supprimer <strong>{displayName}</strong> ?
+        </p>
+
+        <div className={styles.options}>
+          <label
+            className={`${styles.option} ${deleteType === 'soft' ? styles.optionActive : ''}`}
+          >
+            <input
+              type="radio"
+              value="soft"
+              checked={deleteType === 'soft'}
+              onChange={(e) => setDeleteType(e.target.value)}
+              disabled={loading}
+              className={styles.radio}
+            />
+            <div className={styles.optionContent}>
+              <span className={styles.optionTitle}>Désactiver (recommandé)</span>
+              <span className={styles.optionHint}>Le client sera masqué mais les données seront conservées</span>
+            </div>
+          </label>
+
+          <label
+            className={`${styles.option} ${deleteType === 'hard' ? styles.optionActiveDanger : ''}`}
+          >
+            <input
+              type="radio"
+              value="hard"
+              checked={deleteType === 'hard'}
+              onChange={(e) => setDeleteType(e.target.value)}
+              disabled={loading}
+              className={styles.radio}
+            />
+            <div className={styles.optionContent}>
+              <span className={styles.optionTitle}>Supprimer définitivement</span>
+              <span className={styles.optionHintDanger}>Action irréversible — toutes les données seront perdues</span>
+            </div>
+          </label>
         </div>
 
-        <div className="modal-body">
-          <div className="text-center text-6xl mb-md">⚠️</div>
-
-          <p className="text-center text-secondary mb-lg">
-            Voulez-vous vraiment supprimer <strong className="text-primary">{displayName}</strong> ?
-          </p>
-
-          <div className={styles.optionsGroup}>
-            <label className={styles.optionLabel}>
-              <input
-                type="radio"
-                className="form-radio"
-                value="soft"
-                checked={deleteType === 'soft'}
-                onChange={(e) => setDeleteType(e.target.value)}
-                disabled={loading}
-              />
-              <div className="flex-col gap-xs">
-                <strong className="text-sm text-primary">Désactiver (recommandé)</strong>
-                <small className="text-xs text-tertiary">
-                  Le client sera masqué mais les données seront conservées
-                </small>
-              </div>
-            </label>
-
-            <label className={styles.optionLabel}>
-              <input
-                type="radio"
-                className="form-radio"
-                value="hard"
-                checked={deleteType === 'hard'}
-                onChange={(e) => setDeleteType(e.target.value)}
-                disabled={loading}
-              />
-              <div className="flex-col gap-xs">
-                <strong className="text-sm text-primary">Supprimer définitivement</strong>
-                <small className="text-xs text-error font-medium">
-                  ⚠️ Action irréversible - Toutes les données seront perdues
-                </small>
-              </div>
-            </label>
-          </div>
-
-          <div className="modal-footer">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              className="btn btn-danger"
-              disabled={loading}
-            >
-              {loading
-                ? 'Suppression...'
-                : deleteType === 'soft'
-                  ? 'Désactiver'
-                  : 'Supprimer définitivement'}
-            </button>
-          </div>
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={styles.cancelBtn}
+            onClick={onClose}
+            disabled={loading}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            className={`${styles.confirmBtn} ${deleteType === 'hard' ? styles.confirmBtnDanger : styles.confirmBtnDefault}`}
+            onClick={handleConfirm}
+            disabled={loading}
+          >
+            {loading
+              ? 'Traitement...'
+              : deleteType === 'soft'
+                ? 'Désactiver'
+                : 'Supprimer définitivement'}
+          </button>
         </div>
       </div>
     </div>

@@ -4,7 +4,13 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { isSessionExpiredReason as isSessionExpiredFromReasons } from "./authLogoutReasons";
+import { getLogger } from "@/utils/logger";
+import {
+  isSessionExpiredReason as isSessionExpiredFromReasons,
+  isAccountDisabledReason as isAccountDisabledFromReasons,
+} from "./authLogoutReasons";
+
+const log = getLogger("Logout");
 
 const LOGOUT_MARKER_KEY = "auth.logout_marker";
 const TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -17,6 +23,12 @@ export type LogoutMarker = {
 
 /** Re-export depuis authLogoutReasons (source unique). */
 export const isSessionExpiredReason = isSessionExpiredFromReasons;
+export const isAccountDisabledReason = isAccountDisabledFromReasons;
+
+/** True if the reason should trigger the logout banner (session expired OR account disabled). */
+export function shouldShowLogoutBanner(reason: string): boolean {
+  return isSessionExpiredReason(reason) || isAccountDisabledReason(reason);
+}
 
 /**
  * Enregistre un marqueur de logout (appelé dans forceLogout*Internal).
@@ -28,9 +40,7 @@ export async function setLogoutMarker(params: LogoutMarker): Promise<void> {
       JSON.stringify({ ...params, ts: Date.now() })
     );
   } catch (e) {
-    if (__DEV__) {
-      console.warn("[logoutMarker] setLogoutMarker failed:", e);
-    }
+    log.warn("set logout marker failed", { error: e });
   }
 }
 

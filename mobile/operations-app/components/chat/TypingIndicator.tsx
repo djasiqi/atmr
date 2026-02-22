@@ -1,92 +1,71 @@
-// components/chat/TypingIndicator.tsx
-// ✅ Animation 3 points pulsants style WhatsApp
-
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Animated, {
-    useSharedValue,
-    useAnimatedStyle,
-    withTiming,
-    withRepeat,
-    withSequence,
-    interpolate,
-    SharedValue,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  withSequence,
+  withDelay,
+  interpolate,
+  SharedValue,
 } from "react-native-reanimated";
 
+const BRAND = "#00796b";
+
 export default function TypingIndicator() {
-    const dot1 = useSharedValue(0);
-    const dot2 = useSharedValue(0);
-    const dot3 = useSharedValue(0);
+  const dot1 = useSharedValue(0);
+  const dot2 = useSharedValue(0);
+  const dot3 = useSharedValue(0);
 
-    React.useEffect(() => {
-        const animate = (dot: SharedValue<number>, delay: number) => {
-            dot.value = withRepeat(
-                withSequence(
-                    withTiming(1, { duration: 350 }),
-                    withTiming(0, { duration: 350 })
-                ),
-                -1,
-                false
-            );
-        };
+  React.useEffect(() => {
+    const anim = (sv: SharedValue<number>, delay: number) => {
+      sv.value = withDelay(
+        delay,
+        withRepeat(
+          withSequence(withTiming(1, { duration: 300 }), withTiming(0, { duration: 300 })),
+          -1,
+          false
+        )
+      );
+    };
+    anim(dot1, 0);
+    anim(dot2, 100);
+    anim(dot3, 200);
+  }, []);
 
-        animate(dot1, 0);
-        animate(dot2, 150);
-        animate(dot3, 300);
-    }, []);
+  const mkStyle = (sv: SharedValue<number>) =>
+    useAnimatedStyle(() => ({
+      opacity: interpolate(sv.value, [0, 1], [0.3, 1]),
+      transform: [{ scale: interpolate(sv.value, [0, 1], [0.7, 1]) }],
+    }));
 
-    const styleDot = (dot: SharedValue<number>) =>
-        useAnimatedStyle(() => ({
-            opacity: interpolate(dot.value, [0, 1], [0.3, 1]),
-            transform: [
-                {
-                    scale: interpolate(dot.value, [0, 1], [0.6, 1]),
-                },
-            ],
-        }));
+  const s1 = mkStyle(dot1);
+  const s2 = mkStyle(dot2);
+  const s3 = mkStyle(dot3);
 
-    const dot1Style = styleDot(dot1);
-    const dot2Style = styleDot(dot2);
-    const dot3Style = styleDot(dot3);
-
-    return (
-        <View style={styles.container}>
-            <View style={styles.bubble}>
-                <Animated.View style={[styles.dot, dot1Style]} />
-                <Animated.View style={[styles.dot, dot2Style]} />
-                <Animated.View style={[styles.dot, dot3Style]} />
-            </View>
-        </View>
-    );
+  return (
+    <View style={st.container}>
+      <View style={st.bubble}>
+        <Animated.View style={[st.dot, s1]} />
+        <Animated.View style={[st.dot, s2]} />
+        <Animated.View style={[st.dot, s3]} />
+      </View>
+    </View>
+  );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        alignSelf: "flex-start",
-        marginLeft: 16,
-        marginVertical: 6,
-    },
-    bubble: {
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderWidth: 1,
-        borderColor: "rgba(0,0,0,0.05)",
-        shadowColor: "rgba(0,0,0,0.08)",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: "#0A7F59", // vert Liri
-        marginHorizontal: 3,
-    },
+const st = StyleSheet.create({
+  container: { alignSelf: "flex-start", marginLeft: 16, marginVertical: 4 },
+  bubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: BRAND, marginHorizontal: 2 },
 });
-

@@ -1,4 +1,4 @@
-/* frontend/src/pages/company/Clients/components/ClientReadView.module.css */
+/* ClientReadView - Panel lateral lecture */
 
 .readView {
   display: flex;
@@ -7,51 +7,43 @@
   overflow: hidden;
 }
 
+/* Header */
 .header {
   flex-shrink: 0;
-  padding: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
-  background: linear-gradient(to bottom, #ffffff 0%, #f9fafb 100%);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-  position: relative;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+  background: var(--bg-primary, #fff);
 }
 
 .headerTop {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .closeButton {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: transparent;
-  color: #6b7280;
-  font-size: 1.25rem;
+  color: var(--text-tertiary, #6b7280);
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
+  transition: all 0.2s;
 }
 
 .closeButton:hover {
-  background: #e5e7eb;
-  color: #111827;
-  transform: scale(1.05);
+  background: var(--bg-tertiary, #f3f4f6);
+  color: var(--text-primary, #111827);
 }
 
 .closeButton:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--brand-primary, #00796b);
   outline-offset: 2px;
-}
-
-.closeButton:active {
-  transform: scale(0.95);
 }
 
 .headerTitle {
@@ -60,10 +52,10 @@
 }
 
 .clientName {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #111827;
+  margin: 0 0 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -72,7 +64,7 @@
 .headerBadges {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 6px;
   align-items: center;
 }
 
@@ -81,69 +73,67 @@
 .badgeActive,
 .badgeInactive,
 .badgeId {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .badgeClient {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #e0f2f1;
+  color: var(--brand-primary, #00796b);
 }
 
 .badgeInstitution {
-  background: #e0e7ff;
-  color: #3730a3;
+  background: #e0f2f1;
+  color: var(--brand-primary, #00796b);
 }
 
 .badgeActive {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--success-bg, #d1fae5);
+  color: var(--success-primary, #065f46);
 }
 
 .badgeInactive {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--error-bg, #fee2e2);
+  color: var(--error-primary, #991b1b);
 }
 
 .badgeId {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-tertiary, #f3f4f6);
+  color: var(--text-tertiary, #6b7280);
   font-family: monospace;
 }
 
 .editButton {
   flex-shrink: 0;
-  padding: 0.625rem 1.25rem;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border-primary, #d1d5db);
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #374151);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s;
 }
 
 .editButton:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #9ca3af;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.editButton:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
 }
 
 .editButton:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--brand-primary, #00796b);
   outline-offset: 2px;
 }
 
@@ -154,114 +144,100 @@
 
 .returnButton {
   flex-shrink: 0;
-  padding: 0.625rem 1rem;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  color: #374151;
-  border-radius: 8px;
-  font-size: 0.8125rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary, #d1d5db);
+  background: var(--bg-tertiary, #f9fafb);
+  color: var(--text-secondary, #374151);
+  border-radius: 10px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
+  transition: all 0.2s;
 }
 
 .returnButton:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
 }
 
+/* Content */
 .content {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 1.5rem;
+  padding: 18px 20px;
   scroll-behavior: smooth;
-  /* Amélioration du scroll avec padding pour éviter que le contenu touche les bords */
-  scroll-padding-top: 1rem;
-  scroll-padding-bottom: 1rem;
 }
 
 .section {
-  margin-bottom: 2rem;
-  animation: fadeIn 0.3s ease-in-out;
+  margin-bottom: 24px;
 }
 
 .section:last-child {
   margin-bottom: 0;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 .sectionTitle {
-  margin: 0 0 1rem 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #111827;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px solid #e5e7eb;
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
 }
 
-.sectionTitle::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 40px;
-  height: 2px;
-  background: #3b82f6;
-  border-radius: 2px;
+.sectionIcon {
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .infoGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
 }
 
 .infoItem {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
-  padding: 0.75rem;
-  background: #fafafa;
-  border-radius: 6px;
+  gap: 3px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #f8fafc);
+  border-radius: 10px;
   border: 1px solid transparent;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
 }
 
 .infoItem:hover {
-  background: #f5f5f5;
-  border-color: #e5e7eb;
+  border-color: var(--border-primary, #e5e7eb);
 }
 
 .infoLabel {
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-tertiary, #6b7280);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.3px;
 }
 
 .infoValue {
-  font-size: 0.875rem;
-  color: #111827;
+  font-size: 13px;
+  color: var(--text-primary, #111827);
   word-break: break-word;
   line-height: 1.5;
 }
 
 .infoValue a {
-  color: #3b82f6;
+  color: var(--brand-primary, #00796b);
   text-decoration: none;
 }
 
@@ -269,111 +245,112 @@
   text-decoration: underline;
 }
 
+/* Reservations */
 .reservationsList {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .reservationCard {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 0.75rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 8px;
 }
 
 .reservationMeta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .reservationDate {
-  font-size: 0.85rem;
+  font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary, #111827);
 }
 
 .reservationStatus {
-  font-size: 0.75rem;
+  font-size: 10px;
   font-weight: 600;
-  padding: 0.2rem 0.45rem;
+  padding: 2px 8px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--bg-tertiary, #f3f4f6);
+  color: var(--text-tertiary, #6b7280);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.3px;
 }
 
 .reservationStatus[data-status='completed'] {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--success-bg, #d1fae5);
+  color: var(--success-primary, #065f46);
 }
 
 .reservationStatus[data-status='assigned'],
 .reservationStatus[data-status='accepted'],
 .reservationStatus[data-status='confirmed'] {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #e0f2f1;
+  color: var(--brand-primary, #00796b);
 }
 
 .reservationStatus[data-status='in_progress'] {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-primary, #92400e);
 }
 
 .reservationStatus[data-status='pending'] {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #e0f2f1;
+  color: #004d40;
 }
 
 .reservationStatus[data-status='canceled'],
 .reservationStatus[data-status='cancelled'],
 .reservationStatus[data-status='rejected'] {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--error-bg, #fee2e2);
+  color: var(--error-primary, #991b1b);
 }
 
 .reservationRoute {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 4px;
 }
 
 .reservationRow {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
 .reservationLabel {
-  font-size: 0.75rem;
+  font-size: 10px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-tertiary, #6b7280);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  min-width: 70px;
+  letter-spacing: 0.3px;
+  min-width: 56px;
 }
 
 .reservationValue {
-  font-size: 0.85rem;
-  color: #111827;
+  font-size: 13px;
+  color: var(--text-primary, #111827);
   word-break: break-word;
 }
 
 .mutedText {
-  color: #6b7280;
-  font-size: 0.875rem;
+  color: var(--text-tertiary, #6b7280);
+  font-size: 13px;
+  padding: 8px 0;
 }
 
 .errorText {
-  color: #b91c1c;
-  font-size: 0.875rem;
+  color: var(--error-primary, #b91c1c);
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -381,5 +358,9 @@
 @media (max-width: 768px) {
   .infoGrid {
     grid-template-columns: 1fr;
+  }
+
+  .headerTop {
+    flex-wrap: wrap;
   }
 }

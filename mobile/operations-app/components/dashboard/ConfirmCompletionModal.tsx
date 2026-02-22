@@ -4,7 +4,9 @@ import React from 'react';
 import { Modal, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { modalStyles } from '@/styles/ConfirmCompletionModalStyles';
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("Completion");
 // Props pour le modal de confirmation de fin de mission
 type Props = {
   visible: boolean; 
@@ -45,7 +47,7 @@ const ConfirmCompletionModal: React.FC<Props> = ({
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                console.log("Bouton Confirmer pressé !");
+                log.info("confirm button pressed");
                 onConfirm();
               }}
               style={[modalStyles.confirmButton, isLoading && { opacity: 0.6 }]}

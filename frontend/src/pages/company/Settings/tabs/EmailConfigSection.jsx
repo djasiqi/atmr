@@ -9,6 +9,20 @@
 
 import React, { useState, useEffect } from 'react';
 import {
+  FiCheck,
+  FiX,
+  FiMail,
+  FiClipboard,
+  FiLoader,
+  FiRefreshCw,
+  FiSearch,
+  FiBarChart2,
+  FiInfo,
+  FiAlertTriangle,
+  FiTool,
+  FiHelpCircle,
+} from 'react-icons/fi';
+import {
   getEmailConfig,
   setupEmailDomain,
   verifyEmailDomain,
@@ -70,49 +84,9 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
         from_name: fromName,
       });
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'EmailConfigSection.jsx:70',
-          message: 'Received result from setupEmailDomain',
-          data: {
-            result: result,
-            dns_records_in_result: result?.dns_records,
-            dns_records_type: typeof result?.dns_records,
-          },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'initial',
-          hypothesisId: 'C',
-        }),
-      }).catch(() => {});
-      // #endregion
-
       if (result.success) {
         setMessage(result.message);
         setDnsRecords(result.dns_records);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'EmailConfigSection.jsx:78',
-            message: 'After setDnsRecords',
-            data: {
-              dns_records_value: result.dns_records,
-              dns_records_spf: result.dns_records?.spf,
-              dns_records_dkim: result.dns_records?.dkim,
-            },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'initial',
-            hypothesisId: 'D',
-          }),
-        }).catch(() => {});
-        // #endregion
 
         setDomainVerified(result.verified);
         setConfig({
@@ -190,12 +164,20 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
 
   const getStatusBadge = () => {
     if (!config?.configured) {
-      return <span className={styles.badgeDefault}>⚪ Non configuré</span>;
+      return <span className={styles.badgeDefault}>Non configuré</span>;
     }
     if (domainVerified) {
-      return <span className={styles.badgeSuccess}>✅ Vérifié</span>;
+      return (
+        <span className={`${styles.badgeSuccess} ${styles.badgeWithIcon}`}>
+          <FiCheck /> Vérifié
+        </span>
+      );
     }
-    return <span className={styles.badgeWarning}>⏳ En attente de validation DNS</span>;
+    return (
+      <span className={`${styles.badgeWarning} ${styles.badgeWithIcon}`}>
+        <FiLoader className={styles.spinnerInline} /> En attente de validation DNS
+      </span>
+    );
   };
 
   if (loading) {
@@ -203,10 +185,14 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
       <div
         className={`${styles.emailConfigCard} ${compact ? styles.emailConfigCompact : ''}`}
       >
-        {showHeader && <h2>📧 Configuration Email Transactionnel</h2>}
+        {showHeader && (
+          <h2 className={styles.headerTitleWithIcon}>
+            <FiMail /> Configuration Email Transactionnel
+          </h2>
+        )}
         {!showHeader && <div className={styles.headerCompact}>{getStatusBadge()}</div>}
         <div className={styles.loading}>
-          <div className={styles.spinner}></div>
+          <div className={styles.spinner} />
           <p>Chargement...</p>
         </div>
       </div>
@@ -217,7 +203,9 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
     <div className={`${styles.emailConfigCard} ${compact ? styles.emailConfigCompact : ''}`}>
       {showHeader ? (
         <div className={styles.header}>
-          <h2>📧 Configuration Email Transactionnel</h2>
+          <h2 className={styles.headerTitleWithIcon}>
+            <FiMail /> Configuration Email Transactionnel
+          </h2>
           {getStatusBadge()}
         </div>
       ) : (
@@ -285,38 +273,24 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
           className={styles.primaryButton}
           disabled={configuring || domainVerified}
         >
-          {configuring
-            ? '⏳ Configuration...'
-            : config?.configured
-            ? 'Mettre à jour'
-            : 'Configurer'}
+          {configuring ? (
+            <span className={styles.buttonWithIcon}>
+              <FiLoader className={styles.spinnerInline} /> Configuration...
+            </span>
+          ) : config?.configured ? (
+            'Mettre à jour'
+          ) : (
+            'Configurer'
+          )}
         </button>
       </form>
 
       {/* Section DNS Records */}
       {dnsRecords && !domainVerified && (
         <div className={styles.dnsSection}>
-          {/* #region agent log */}
-          {fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              location: 'EmailConfigSection.jsx:228',
-              message: 'Rendering DNS section',
-              data: {
-                dnsRecords: dnsRecords,
-                dnsRecords_spf: dnsRecords?.spf,
-                dnsRecords_dkim: dnsRecords?.dkim,
-                dnsRecords_keys: Object.keys(dnsRecords || {}),
-              },
-              timestamp: Date.now(),
-              sessionId: 'debug-session',
-              runId: 'initial',
-              hypothesisId: 'E',
-            }),
-          }).catch(() => {}) && null}
-          {/* #endregion */}
-          <h3>📋 Étape suivante : Configurer les enregistrements DNS</h3>
+          <h3 className={styles.sectionTitleWithIcon}>
+            <FiClipboard /> Étape suivante : Configurer les enregistrements DNS
+          </h3>
 
           <div className={styles.warningBox}>
             <p>
@@ -327,7 +301,7 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
               DNS chez votre hébergeur (ex: Infomaniak, OVH, GoDaddy).
             </p>
             <p>
-              <strong>⏱ Délai :</strong> La propagation DNS peut prendre de 15 minutes à 24 heures.
+              <strong>Délai :</strong> La propagation DNS peut prendre de 15 minutes à 24 heures.
               Une fois ajoutés, cliquez sur "Vérifier" ci-dessous.
             </p>
           </div>
@@ -350,7 +324,9 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
                 onClick={() => copyToClipboard(dnsRecords.spf, 'SPF')}
                 className={styles.secondaryButton}
               >
-                📋 Copier
+                <span className={styles.buttonWithIcon}>
+                  <FiClipboard /> Copier
+                </span>
               </button>
             </div>
           </div>
@@ -373,20 +349,30 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
                 onClick={() => copyToClipboard(dnsRecords.dkim, 'DKIM')}
                 className={styles.secondaryButton}
               >
-                📋 Copier
+                <span className={styles.buttonWithIcon}>
+                  <FiClipboard /> Copier
+                </span>
               </button>
             </div>
           </div>
 
           {/* Bouton de vérification */}
-          <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <div className={styles.verifyButtonWrap}>
             <button
               type="button"
               onClick={handleVerify}
               disabled={verifying}
               className={styles.primaryButton}
             >
-              {verifying ? '⏳ Vérification...' : '🔄 Vérifier la configuration DNS'}
+              {verifying ? (
+                <span className={styles.buttonWithIcon}>
+                  <FiLoader className={styles.spinnerInline} /> Vérification...
+                </span>
+              ) : (
+                <span className={styles.buttonWithIcon}>
+                  <FiRefreshCw /> Vérifier la configuration DNS
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -396,7 +382,9 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
       {domainVerified && (
         <div className={styles.successBox}>
           <p>
-            <strong>✅ Domaine vérifié avec succès !</strong>
+            <strong className={styles.badgeWithIcon}>
+              <FiCheck /> Domaine vérifié avec succès !
+            </strong>
           </p>
           <p>
             Vous pouvez maintenant envoyer des emails depuis votre domaine. Vos factures seront
@@ -407,11 +395,13 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
 
       {/* Bouton de diagnostic (visible uniquement si domaine configuré mais pas vérifié) */}
       {config?.configured && !domainVerified && (
-        <div style={{ textAlign: 'center', marginTop: '24px', padding: '16px', background: '#f8f9fa', borderRadius: '8px' }}>
-          <p style={{ marginBottom: '12px', color: '#666' }}>
-            <strong>🔍 Outil de diagnostic</strong>
+        <div className={styles.diagnosticWrap}>
+          <p className={styles.diagnosticWrapTitle}>
+            <strong className={styles.sectionTitleWithIcon}>
+              <FiSearch /> Outil de diagnostic
+            </strong>
           </p>
-          <p style={{ marginBottom: '16px', fontSize: '14px', color: '#666' }}>
+          <p className={styles.diagnosticWrapDesc}>
             Vérifiez le statut exact de votre domaine dans Brevo et obtenez des détails sur chaque enregistrement DNS.
           </p>
           <button
@@ -420,89 +410,109 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
             disabled={diagnosing}
             className={styles.secondaryButton}
           >
-            {diagnosing ? '⏳ Diagnostic en cours...' : '🔍 Lancer le diagnostic complet'}
+            {diagnosing ? (
+              <span className={styles.buttonWithIcon}>
+                <FiLoader className={styles.spinnerInline} /> Diagnostic en cours...
+              </span>
+            ) : (
+              <span className={styles.buttonWithIcon}>
+                <FiSearch /> Lancer le diagnostic complet
+              </span>
+            )}
           </button>
         </div>
       )}
 
       {/* Résultats du diagnostic */}
       {diagnostic && (
-        <div className={diagnostic.success ? styles.infoBox : styles.warningBox} style={{ marginTop: '16px' }}>
-          <h4>📊 Résultats du diagnostic pour {diagnostic.domain}</h4>
-          
+        <div className={`${diagnostic.success ? styles.infoBox : styles.warningBox} ${styles.diagnosticResultsBox}`}>
+          <h4 className={styles.sectionTitleWithIcon}>
+            <FiBarChart2 /> Résultats du diagnostic pour {diagnostic.domain}
+          </h4>
+
           {/* Statut Brevo */}
-          <div style={{ marginTop: '16px' }}>
+          <div className={styles.diagnosticBlock}>
             <strong>Statut Brevo :</strong>
-            <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-              <li>
-                Vérifié : {diagnostic.brevo_status?.verified ? '✅ Oui' : '❌ Non'}
+            <ul className={styles.diagnosticList}>
+              <li className={styles.badgeWithIcon}>
+                Vérifié : {diagnostic.brevo_status?.verified ? <><FiCheck /> Oui</> : <><FiX /> Non</>}
               </li>
-              <li>
-                Authentifié : {diagnostic.brevo_status?.authenticated ? '✅ Oui' : '❌ Non'}
+              <li className={styles.badgeWithIcon}>
+                Authentifié : {diagnostic.brevo_status?.authenticated ? <><FiCheck /> Oui</> : <><FiX /> Non</>}
               </li>
             </ul>
           </div>
 
           {/* Validation DNS */}
-          <div style={{ marginTop: '16px' }}>
+          <div className={styles.diagnosticBlock}>
             <strong>Validation DNS :</strong>
-            <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-              <li>
-                Brevo Code (SPF) : {diagnostic.dns_validation?.brevo_code_valid ? '✅ Valide' : '❌ Non valide'}
+            <ul className={styles.diagnosticList}>
+              <li className={styles.badgeWithIcon}>
+                Brevo Code (SPF) : {diagnostic.dns_validation?.brevo_code_valid ? <><FiCheck /> Valide</> : <><FiX /> Non valide</>}
               </li>
-              <li>
-                DKIM 1 : {diagnostic.dns_validation?.dkim1_valid ? '✅ Valide' : '❌ Non valide'}
+              <li className={styles.badgeWithIcon}>
+                DKIM 1 : {diagnostic.dns_validation?.dkim1_valid ? <><FiCheck /> Valide</> : <><FiX /> Non valide</>}
               </li>
-              <li>
-                DKIM 2 : {diagnostic.dns_validation?.dkim2_valid ? '✅ Valide' : '❌ Non valide'}
+              <li className={styles.badgeWithIcon}>
+                DKIM 2 : {diagnostic.dns_validation?.dkim2_valid ? <><FiCheck /> Valide</> : <><FiX /> Non valide</>}
               </li>
             </ul>
           </div>
 
           {/* Détails des enregistrements */}
-          <details style={{ marginTop: '16px' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-              📋 Voir les détails des enregistrements DNS
+          <details className={styles.diagnosticDetails}>
+            <summary className={styles.diagnosticDetailsSummary}>
+              <span className={styles.sectionTitleWithIcon}>
+                <FiClipboard /> Voir les détails des enregistrements DNS
+              </span>
             </summary>
-            <div style={{ marginTop: '12px', fontSize: '13px', fontFamily: 'monospace', background: '#f5f5f5', padding: '12px', borderRadius: '4px' }}>
-              <div style={{ marginBottom: '12px' }}>
+            <div className={styles.diagnosticDetailsContent}>
+              <div className={styles.diagnosticDetailItem}>
                 <strong>Brevo Code (SPF) :</strong>
                 <div>Hôte : {diagnostic.dns_records?.brevo_code?.host}</div>
                 <div>Valeur : {diagnostic.dns_records?.brevo_code?.value}</div>
-                <div>Statut : {diagnostic.dns_records?.brevo_code?.is_valid ? '✅' : '❌'}</div>
+                <div className={styles.badgeWithIcon}>Statut : {diagnostic.dns_records?.brevo_code?.is_valid ? <><FiCheck /> Valide</> : <><FiX /> Invalide</>}</div>
               </div>
-              <div style={{ marginBottom: '12px' }}>
+              <div className={styles.diagnosticDetailItem}>
                 <strong>DKIM 1 :</strong>
                 <div>Hôte : {diagnostic.dns_records?.dkim1?.host}</div>
                 <div>Valeur : {diagnostic.dns_records?.dkim1?.value}</div>
-                <div>Statut : {diagnostic.dns_records?.dkim1?.is_valid ? '✅' : '❌'}</div>
+                <div className={styles.badgeWithIcon}>Statut : {diagnostic.dns_records?.dkim1?.is_valid ? <><FiCheck /> Valide</> : <><FiX /> Invalide</>}</div>
               </div>
-              <div>
+              <div className={styles.diagnosticDetailItem}>
                 <strong>DKIM 2 :</strong>
                 <div>Hôte : {diagnostic.dns_records?.dkim2?.host}</div>
                 <div>Valeur : {diagnostic.dns_records?.dkim2?.value}</div>
-                <div>Statut : {diagnostic.dns_records?.dkim2?.is_valid ? '✅' : '❌'}</div>
+                <div className={styles.badgeWithIcon}>Statut : {diagnostic.dns_records?.dkim2?.is_valid ? <><FiCheck /> Valide</> : <><FiX /> Invalide</>}</div>
               </div>
             </div>
           </details>
 
           {/* Message d'action */}
-          <div style={{ marginTop: '16px', padding: '12px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px' }}>
-            <strong>💡 Prochaine étape :</strong>
-            <p style={{ marginTop: '8px' }}>{diagnostic.message}</p>
-            
+          <div className={styles.diagnosticActionBox}>
+            <strong className={styles.sectionTitleWithIcon}>
+              <FiInfo /> Prochaine étape :
+            </strong>
+            <p>{diagnostic.message}</p>
+
             {!diagnostic.dns_validation?.all_valid && (
-              <p style={{ marginTop: '8px', color: '#d32f2f' }}>
-                <strong>⚠️ Action requise :</strong> Certains enregistrements DNS ne sont pas encore détectés par Brevo. 
-                Vérifiez que vous avez bien configuré TOUS les enregistrements (SPF + les 2 DKIM) et attendez quelques heures 
+              <p className={styles.diagnosticActionDanger}>
+                <strong className={styles.badgeWithIcon}>
+                  <FiAlertTriangle /> Action requise :
+                </strong>{' '}
+                Certains enregistrements DNS ne sont pas encore détectés par Brevo.
+                Vérifiez que vous avez bien configuré TOUS les enregistrements (SPF + les 2 DKIM) et attendez quelques heures
                 pour la propagation DNS.
               </p>
             )}
 
             {diagnostic.dns_validation?.all_valid && !diagnostic.brevo_status?.verified && (
-              <p style={{ marginTop: '8px', color: '#f57c00' }}>
-                <strong>✅ Tous les DNS sont valides !</strong> Brevo n'a pas encore marqué le domaine comme vérifié. 
-                Cela peut prendre jusqu'à 72h. Si le problème persiste après ce délai, contactez le support Brevo à 
+              <p className={styles.diagnosticActionWarning}>
+                <strong className={styles.badgeWithIcon}>
+                  <FiCheck /> Tous les DNS sont valides !
+                </strong>{' '}
+                Brevo n'a pas encore marqué le domaine comme vérifié.
+                Cela peut prendre jusqu'à 72h. Si le problème persiste après ce délai, contactez le support Brevo à
                 support@brevo.com ou via le chat sur app.brevo.com
               </p>
             )}
@@ -510,11 +520,13 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
 
           {/* Réponse API complète (mode debug) */}
           {diagnostic.raw_response && (
-            <details style={{ marginTop: '16px' }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 'bold', color: '#666' }}>
-                🔧 Réponse API Brevo complète (debug)
+            <details className={styles.diagnosticDebugDetails}>
+              <summary className={styles.diagnosticDebugSummary}>
+                <span className={styles.sectionTitleWithIcon}>
+                  <FiTool /> Réponse API Brevo complète (debug)
+                </span>
               </summary>
-              <pre style={{ marginTop: '12px', fontSize: '11px', background: '#f5f5f5', padding: '12px', borderRadius: '4px', overflow: 'auto', maxHeight: '300px' }}>
+              <pre className={styles.diagnosticDebugPre}>
                 {JSON.stringify(diagnostic.raw_response, null, 2)}
               </pre>
             </details>
@@ -524,7 +536,9 @@ const EmailConfigSection = ({ companyId, showHeader = true, compact = false }) =
 
       {/* Aide */}
       <div className={styles.helpSection}>
-        <h4>❓ Besoin d'aide ?</h4>
+        <h4 className={styles.sectionTitleWithIcon}>
+          <FiHelpCircle /> Besoin d'aide ?
+        </h4>
         <ul>
           <li>
             <strong>Où ajouter les enregistrements DNS ?</strong> Connectez-vous à l'interface de

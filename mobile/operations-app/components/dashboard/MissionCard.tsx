@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Alert, Modal, Pressable, ScrollView, Touc
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { Booking as Mission, BookingStatus } from "@/services/api";
-import { styles, palette } from "@/styles/missionCardStyles";
+import { styles, palette, dsStyles } from "@/styles/missionCardStyles";
 import { styles as groupStyles } from "@/styles/missionGroupStyles";
 import { updateTripStatus } from "@/services/api";
 import CancelJustificationModal from "./CancelJustificationModal";
@@ -14,7 +14,9 @@ import {
   shouldShowAuthNotReadyAlert,
 } from "@/services/authGuards";
 import { getPickupHints, getDropoffHints } from "@/src/domain/missionHints";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("MissionCard");
 // ——— Helpers (pas de logique métier dans le JSX) ———
 const formatTime = (d: Date) =>
   d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -114,10 +116,17 @@ const EmptyStateComponent: React.FC<{ contentWidth?: number }> = ({ contentWidth
         : Platform.OS === "web" && styles.emptyStateWebFixed,
     ]}
   >
-    <Text style={styles.emptyStateTitle}>🚗 En attente de mission</Text>
+    <View style={styles.emptyStateIconWrap}>
+      <Ionicons name="car-outline" size={32} color="#00796b" />
+    </View>
+    <Text style={styles.emptyStateTitle}>Aucune course pour le moment</Text>
     <Text style={styles.emptyStateSubtitle}>
-      Vous serez notifié dès qu'une mission vous sera assignée.
+      Vous serez notifie des qu'une course vous sera assignee.
     </Text>
+    <View style={styles.emptyStateBadge}>
+      <Ionicons name="notifications-outline" size={14} color="#16a34a" />
+      <Text style={styles.emptyStateBadgeText}>Notifications actives</Text>
+    </View>
   </View>
 );
 
@@ -162,17 +171,17 @@ const MissionCard: MissionCardType = ({
     const normalized = s?.toUpperCase();
     switch (normalized) {
       case "ASSIGNED":
-        return "📦 Assignée";
+        return "Assignée";
       case "EN_ROUTE":
-        return "🚗 En route";
+        return "En route";
       case "IN_PROGRESS":
-        return "🟡 En cours";
+        return "En cours";
       case "COMPLETED":
-        return "✅ Terminée";
+        return "Terminée";
       case "CANCELED":
-        return "❌ Annulée";
+        return "Annulée";
       default:
-        return "🕓 À venir";
+        return "À venir";
     }
   };
 
@@ -230,48 +239,15 @@ const MissionCard: MissionCardType = ({
   };
 
   const handleReleaseConfirm = () => {
+    log.info("release confirmed");
     handleStatusUpdate("CANCELED", "RELEASE");
     setReleaseModalVisible(false);
   };
 
   const handleReleasePress = () => {
-    console.log("[MissionCard] Bouton Libérer pressé");
-    Alert.alert(
-      "Libérer la course",
-      "Êtes-vous sûr de vouloir libérer cette course pour réassignation ?",
-      [
-        {
-          text: "Non",
-          style: "cancel",
-          onPress: () => {
-            console.log("[MissionCard] Libération annulée");
-            setReleaseModalVisible(false);
-          },
-        },
-        {
-          text: "Oui, libérer",
-          style: "default",
-          onPress: () => {
-            console.log("[MissionCard] Confirmation de libération");
-            handleReleaseConfirm();
-          },
-        },
-      ],
-      { cancelable: true, onDismiss: () => setReleaseModalVisible(false) }
-    );
+    log.info("release button pressed");
+    setReleaseModalVisible(true);
   };
-
-  // Gérer le modal de libération avec un hook (fallback si appelé depuis ailleurs)
-  React.useEffect(() => {
-    if (releaseModalVisible) {
-      // Délai pour éviter les doubles appels
-      const timer = setTimeout(() => {
-        handleReleasePress();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [releaseModalVisible]);
 
   // ✅ P0-1: Normaliser le statut pour les comparaisons
   const normalizedStatus = normalizeBookingStatus(status) as BookingStatus;
@@ -324,19 +300,25 @@ const MissionCard: MissionCardType = ({
               "Non spécifié"}
           </Text>
           {mission.client?.birth_date != null && mission.client.birth_date !== "" && (
-            <Text style={styles.clientBirthDate}>
-              📅 {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 6 }}>
+              <Ionicons name="calendar-outline" size={13} color={palette.secondary} style={{ marginRight: 4 }} />
+              <Text style={styles.clientBirthDate}>
+                {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
+              </Text>
+            </View>
           )}
         </View>
         <View style={styles.headerBadgesWrap}>
           {isDelivery && (
             <View style={[styles.statusBadgeContainer, styles.deliveryTypeBadge]}>
-              <Text style={styles.deliveryTypeBadgeText}>🚚 Livraison</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Ionicons name="cube-outline" size={13} color="#B45309" />
+                <Text style={styles.deliveryTypeBadgeText}>Livraison</Text>
+              </View>
             </View>
           )}
           <View style={styles.statusBadgeContainer}>
@@ -348,7 +330,8 @@ const MissionCard: MissionCardType = ({
       {/* 1b. Ligne description livraison (si material_delivery) */}
       {isDelivery && getDeliveryDescriptionDisplay(mission) && (
         <View style={[styles.deliveryDescRow, isCompact && styles.deliveryDescRowCompact]}>
-          <Text style={styles.deliveryDescLabel}>📦 Livraison — </Text>
+          <Ionicons name="cube" size={14} color="#B45309" style={{ marginRight: 4 }} />
+          <Text style={styles.deliveryDescLabel}>Livraison — </Text>
           <Text style={styles.deliveryDescText} numberOfLines={1} ellipsizeMode="tail">
             {getDeliveryDescriptionDisplay(mission)}
           </Text>
@@ -461,8 +444,9 @@ const MissionCard: MissionCardType = ({
         ) : (
           <>
             <View style={styles.routeRow}>
-              <View style={styles.routeIconWrap}>
-                <Ionicons name="location-outline" size={18} color={palette.accent} />
+              <View style={styles.routeTimelineWrap}>
+                <View style={styles.routeDot} />
+                <View style={styles.routeConnector} />
               </View>
               <View style={styles.routeContentWrap}>
                 <Text style={styles.routeLabel}>{isDelivery ? "Point de retrait" : "Départ"}</Text>
@@ -472,8 +456,8 @@ const MissionCard: MissionCardType = ({
               </View>
             </View>
             <View style={[styles.routeRow, styles.routeRowLast]}>
-              <View style={styles.routeIconWrap}>
-                <Ionicons name="flag-outline" size={18} color={palette.accent} />
+              <View style={styles.routeTimelineWrap}>
+                <View style={[styles.routeDot, styles.routeDotDropoff]} />
               </View>
               <View style={styles.routeContentWrap}>
                 <Text style={styles.routeLabel}>{isDelivery ? "Point de dépôt" : "Destination"}</Text>
@@ -683,7 +667,7 @@ const MissionCard: MissionCardType = ({
             accessibilityRole="button"
             accessibilityLabel="Appeler le client"
           >
-            <Ionicons name="call" size={18} color="white" />
+            <Ionicons name="call" size={15} color="white" />
             <Text style={styles.actionLabel}>Appeler</Text>
           </TouchableOpacity>
         )}
@@ -694,7 +678,7 @@ const MissionCard: MissionCardType = ({
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
-            <MaterialIcons name="navigation" size={18} color="white" />
+            <MaterialIcons name="navigation" size={15} color="white" />
             <Text style={styles.actionLabel}>GPS</Text>
           </TouchableOpacity>
         )}
@@ -705,7 +689,7 @@ const MissionCard: MissionCardType = ({
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
-            <Ionicons name="walk" size={18} color="white" />
+            <Ionicons name="walk" size={15} color="white" />
             <Text style={styles.actionLabel}>En route</Text>
           </TouchableOpacity>
         )}
@@ -716,7 +700,7 @@ const MissionCard: MissionCardType = ({
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
-            <Ionicons name={isDelivery ? "cube-outline" : "person"} size={18} color="white" />
+            <Ionicons name={isDelivery ? "cube-outline" : "person"} size={15} color="white" />
             <Text style={styles.actionLabel}>
               {isDelivery ? "Colis récupéré" : "À bord"}
             </Text>
@@ -735,7 +719,7 @@ const MissionCard: MissionCardType = ({
             style={styles.actionItemEnhanced}
             disabled={isUpdatingStatus}
           >
-            <Ionicons name="checkmark-done" size={18} color="white" />
+            <Ionicons name="checkmark-done" size={15} color="white" />
             <Text style={styles.actionLabel}>Terminer</Text>
           </TouchableOpacity>
         )}
@@ -748,60 +732,89 @@ const MissionCard: MissionCardType = ({
             accessibilityRole="button"
             accessibilityLabel="Plus d’actions"
           >
-            <Ionicons name="ellipsis-horizontal" size={20} color={palette.text} />
+            <Ionicons name="ellipsis-horizontal" size={16} color={palette.text} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Sheet Plus : slide depuis le bas, backdrop plus sombre */}
+      {/* Bottom sheet — même structure que RideEditModal / RideCreateModal */}
       <Modal
         visible={detailsSheetVisible}
         transparent
         animationType="slide"
         onRequestClose={() => setDetailsSheetVisible(false)}
       >
-        <Pressable style={styles.detailsSheetBackdrop} onPress={() => setDetailsSheetVisible(false)}>
-          <TouchableWithoutFeedback onPress={() => { }}>
-            <View style={styles.detailsSheetCard}>
-              <Text style={styles.detailsSheetTitle}>Actions</Text>
+        <View style={dsStyles.dsRoot}>
+          <Pressable style={dsStyles.dsOverlay} onPress={() => setDetailsSheetVisible(false)} />
+          <View style={dsStyles.dsSheet}>
+            <View style={dsStyles.dsHandle} />
 
-              <ScrollView style={styles.detailsSheetScroll} showsVerticalScrollIndicator>
-                {/* Client */}
-                <View style={styles.detailsSheetSection}>
-                  <Text style={styles.detailsSheetSectionTitle}>Client</Text>
-                  {getCivilityLabel(mission.client?.gender) != null && (
-                    <Text style={styles.detailsSheetLine}>
-                      <Text style={styles.detailsSheetLineLabel}>Civilité : </Text>
-                      {getCivilityLabel(mission.client?.gender)}
-                    </Text>
-                  )}
-                  <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>Nom : </Text>
-                    {mission.client_name || mission.client?.full_name || "Non spécifié"}
-                  </Text>
-                  {mission.client?.birth_date != null && mission.client.birth_date !== "" && (
-                    <Text style={styles.detailsSheetLine}>
-                      <Text style={styles.detailsSheetLineLabel}>Date de naissance : </Text>
-                      {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
-                    </Text>
-                  )}
-                  <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>Statut : </Text>
-                    {formatStatus(status ?? "")}
-                  </Text>
+            {/* Header */}
+            <View style={dsStyles.dsHeaderBar}>
+              <View style={dsStyles.dsHeaderIcon}>
+                <Ionicons name="document-text-outline" size={17} color="#00796B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={dsStyles.dsHeaderTitle}>Informations course</Text>
+                <Text style={dsStyles.dsHeaderSub}>{mission.client_name || mission.client?.full_name || "Client"}</Text>
+              </View>
+              <View style={dsStyles.dsStatusBadge}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.accent }} />
+                <Text style={dsStyles.dsStatusText}>{formatStatus(status ?? "")}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setDetailsSheetVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable content */}
+            <ScrollView style={dsStyles.dsScroll} contentContainerStyle={dsStyles.dsScrollContent} showsVerticalScrollIndicator={false}>
+              {/* Client */}
+              <View style={dsStyles.dsCard}>
+                <View style={dsStyles.dsCardHeader}>
+                  <Ionicons name="person-outline" size={14} color="#00796B" />
+                  <Text style={dsStyles.dsCardTitle}>Client</Text>
                 </View>
+                <View style={dsStyles.dsCardBody}>
+                  {getCivilityLabel(mission.client?.gender) != null && (
+                    <Text style={dsStyles.dsSecText}>{getCivilityLabel(mission.client?.gender)}</Text>
+                  )}
+                  <Text style={dsStyles.dsMainText}>{mission.client_name || mission.client?.full_name || "Non spécifié"}</Text>
+                  {mission.client?.birth_date != null && mission.client.birth_date !== "" && (
+                    <View style={dsStyles.dsChipRow}>
+                      <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                      <Text style={dsStyles.dsSecText}>
+                        {new Date(mission.client.birth_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                      </Text>
+                    </View>
+                  )}
+                  {mission.client?.contact_phone && (
+                    <View style={dsStyles.dsChipRow}>
+                      <Ionicons name="call-outline" size={12} color="#00796B" />
+                      <Text style={dsStyles.dsPhoneText}>{mission.client.contact_phone}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
 
-                {/* Horaires */}
-                <View style={styles.detailsSheetSection}>
-                  <Text style={styles.detailsSheetSectionTitle}>Horaires</Text>
-                  <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>Heure prévue : </Text>
-                    {formatTime(new Date(mission.scheduled_time))}
-                  </Text>
+              {/* Horaire + Infos trajet — combinés en une seule carte */}
+              <View style={dsStyles.dsCard}>
+                <View style={dsStyles.dsCardHeader}>
+                  <Ionicons name="time-outline" size={14} color="#00796B" />
+                  <Text style={dsStyles.dsCardTitle}>Horaire & trajet</Text>
+                </View>
+                <View style={dsStyles.dsCardBody}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#1E293B" }}>{formatTime(new Date(mission.scheduled_time))}</Text>
+                    {mission.is_return && (
+                      <View style={dsStyles.dsReturnChip}>
+                        <Ionicons name="repeat-outline" size={11} color="#B45309" />
+                        <Text style={{ fontSize: 11, fontWeight: "600", color: "#B45309" }}>
+                          Retour{mission.return_time ? ` ${formatTime(new Date(mission.return_time))}` : ""}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   {(getEstimatedArrival != null || getEstimatedArrivalDropoff != null) && (() => {
                     const isAfterPickup = normalizedStatus === "IN_PROGRESS";
                     const arrivalTime = isAfterPickup
@@ -813,164 +826,215 @@ const MissionCard: MissionCardType = ({
                     const minutesRounded = secondsToTarget != null ? formatDurationMinutes(secondsToTarget) : null;
                     if (arrivalTime && minutesRounded != null) {
                       return (
-                        <Text style={styles.detailsSheetLine}>
-                          <Text style={styles.detailsSheetLineLabel}>Arrivée estimée : </Text>
-                          {minutesRounded > 0 ? `${formatTime(arrivalTime)} (dans ${minutesRounded} min)` : formatTime(arrivalTime)}
-                        </Text>
+                        <View style={dsStyles.dsChipRow}>
+                          <Ionicons name="timer-outline" size={12} color="#64748B" />
+                          <Text style={dsStyles.dsSecText}>
+                            Arrivée {minutesRounded > 0 ? `${formatTime(arrivalTime)} (dans ${minutesRounded} min)` : formatTime(arrivalTime)}
+                          </Text>
+                        </View>
                       );
                     }
                     return null;
                   })()}
+                  {(mission.distance_meters || mission.duration_seconds) && (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+                      {mission.distance_meters != null && mission.distance_meters > 0 && (
+                        <View style={dsStyles.dsMetricChip}>
+                          <Ionicons name="car-outline" size={12} color="#00796B" />
+                          <Text style={dsStyles.dsMetricText}>{(mission.distance_meters / 1000).toFixed(1)} km</Text>
+                        </View>
+                      )}
+                      {mission.duration_seconds != null && mission.duration_seconds > 0 && (
+                        <View style={dsStyles.dsMetricChip}>
+                          <Ionicons name="hourglass-outline" size={12} color="#00796B" />
+                          <Text style={dsStyles.dsMetricText}>{Math.round(mission.duration_seconds / 60)} min</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
                 </View>
+              </View>
 
-                {/* Livraison (si material_delivery) */}
-                {isMaterialDelivery(mission) && (
-                  <View style={styles.detailsSheetSection}>
-                    <Text style={styles.detailsSheetSectionTitle}>Livraison</Text>
-                    <Text style={styles.detailsSheetLine}>
-                      <Text style={styles.detailsSheetLineLabel}>Contenu : </Text>
-                      {getDeliveryDescriptionDisplay(mission) ?? "—"}
-                    </Text>
+              {/* Livraison */}
+              {isMaterialDelivery(mission) && (
+                <View style={dsStyles.dsCard}>
+                  <View style={[dsStyles.dsCardHeader, { backgroundColor: "rgba(245,158,11,0.08)", borderBottomColor: "rgba(245,158,11,0.12)" }]}>
+                    <Ionicons name="cube-outline" size={14} color="#B45309" />
+                    <Text style={[dsStyles.dsCardTitle, { color: "#B45309" }]}>Livraison</Text>
                   </View>
-                )}
-
-                {/* Adresses */}
-                <View style={styles.detailsSheetSection}>
-                  <Text style={styles.detailsSheetSectionTitle}>Adresses</Text>
-                  <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>
-                      {isMaterialDelivery(mission) ? "Point de retrait : " : "Prise en charge : "}
-                    </Text>
-                    {formatAddressFallback(mission.pickup_location)}
-                  </Text>
-                  <Text style={styles.detailsSheetLine}>
-                    <Text style={styles.detailsSheetLineLabel}>
-                      {isMaterialDelivery(mission) ? "Point de dépôt : " : "Destination : "}
-                    </Text>
-                    {formatAddressFallback(mission.dropoff_location)}
-                  </Text>
+                  <View style={dsStyles.dsCardBody}>
+                    <Text style={dsStyles.dsMainText}>{getDeliveryDescriptionDisplay(mission) ?? "—"}</Text>
+                  </View>
                 </View>
+              )}
 
-                {/* Hints prise en charge */}
-                {(() => {
-                  const pickupHints = getPickupHints(mission);
-                  if (pickupHints.length === 0) return null;
-                  return (
-                    <View style={styles.detailsSheetSection}>
-                      <Text style={styles.detailsSheetSectionTitle}>Infos prise en charge</Text>
+              {/* Trajet */}
+              <View style={dsStyles.dsCard}>
+                <View style={dsStyles.dsCardHeader}>
+                  <Ionicons name="navigate-outline" size={14} color="#00796B" />
+                  <Text style={dsStyles.dsCardTitle}>Trajet</Text>
+                </View>
+                <View style={dsStyles.dsCardBody}>
+                  <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+                    <View style={{ alignItems: "center", width: 14, paddingTop: 5 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#00796B" }} />
+                      <View style={{ width: 2, flex: 1, backgroundColor: "#E2E8F0", marginVertical: 3, minHeight: 14 }} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={dsStyles.dsRouteLabel}>{isMaterialDelivery(mission) ? "Point de retrait" : "Prise en charge"}</Text>
+                      <Text style={dsStyles.dsMainText}>{formatAddressFallback(mission.pickup_location)}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <View style={{ alignItems: "center", width: 14, paddingTop: 5 }}>
+                      <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: "#1E293B" }} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={dsStyles.dsRouteLabel}>{isMaterialDelivery(mission) ? "Point de dépôt" : "Destination"}</Text>
+                      <Text style={dsStyles.dsMainText}>{formatAddressFallback(mission.dropoff_location)}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Infos prise en charge */}
+              {(() => {
+                const pickupHints = getPickupHints(mission);
+                if (pickupHints.length === 0) return null;
+                return (
+                  <View style={dsStyles.dsCard}>
+                    <View style={dsStyles.dsCardHeader}>
+                      <Ionicons name="log-in-outline" size={14} color="#00796B" />
+                      <Text style={dsStyles.dsCardTitle}>Infos prise en charge</Text>
+                    </View>
+                    <View style={dsStyles.dsCardBody}>
                       {pickupHints.map((h, i) => (
-                        <Text key={i} style={styles.detailsSheetLine}>
-                          <Text style={styles.detailsSheetLineLabel}>{h.label} : </Text>
-                          {h.value}
-                        </Text>
+                        <View key={i} style={[dsStyles.dsInfoRow, i === pickupHints.length - 1 && { marginBottom: 0 }]}>
+                          <Ionicons name={h.icon as any} size={14} color="#64748B" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={dsStyles.dsInfoLabel}>{h.label}</Text>
+                            <Text style={dsStyles.dsMainText}>{h.value}</Text>
+                          </View>
+                        </View>
                       ))}
                     </View>
-                  );
-                })()}
-
-                {/* Hints destination */}
-                {(() => {
-                  const dropoffHints = getDropoffHints(mission);
-                  if (dropoffHints.length === 0) return null;
-                  return (
-                    <View style={styles.detailsSheetSection}>
-                      <Text style={styles.detailsSheetSectionTitle}>Infos destination</Text>
-                      {dropoffHints.map((h, i) => (
-                        <Text key={i} style={styles.detailsSheetLine}>
-                          <Text style={styles.detailsSheetLineLabel}>{h.label} : </Text>
-                          {h.value}
-                        </Text>
-                      ))}
-                    </View>
-                  );
-                })()}
-
-                {/* Notes générales (pas notes_medical, affichées dans Médical) */}
-                {mission.notes?.trim() && (
-                  <View style={styles.detailsSheetSection}>
-                    <Text style={styles.detailsSheetSectionTitle}>Notes</Text>
-                    <Text style={styles.detailsSheetLine}>{mission.notes.trim()}</Text>
                   </View>
-                )}
+                );
+              })()}
 
-                {/* Médical */}
-                {(mission.medical_facility ?? mission.hospital_service ?? mission.doctor_name ?? mission.notes_medical) && (
-                  <View style={styles.detailsSheetSection}>
-                    <Text style={styles.detailsSheetSectionTitle}>Médical</Text>
+              {/* Infos destination */}
+              {(() => {
+                const dropoffHints = getDropoffHints(mission);
+                if (dropoffHints.length === 0) return null;
+                return (
+                  <View style={dsStyles.dsCard}>
+                    <View style={dsStyles.dsCardHeader}>
+                      <Ionicons name="log-out-outline" size={14} color="#00796B" />
+                      <Text style={dsStyles.dsCardTitle}>Infos destination</Text>
+                    </View>
+                    <View style={dsStyles.dsCardBody}>
+                      {dropoffHints.map((h, i) => (
+                        <View key={i} style={[dsStyles.dsInfoRow, i === dropoffHints.length - 1 && { marginBottom: 0 }]}>
+                          <Ionicons name={h.icon as any} size={14} color="#64748B" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={dsStyles.dsInfoLabel}>{h.label}</Text>
+                            <Text style={dsStyles.dsMainText}>{h.value}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Médical */}
+              {(mission.medical_facility ?? mission.hospital_service ?? mission.doctor_name ?? mission.notes_medical) && (
+                <View style={dsStyles.dsCard}>
+                  <View style={dsStyles.dsCardHeader}>
+                    <Ionicons name="medkit-outline" size={14} color="#00796B" />
+                    <Text style={dsStyles.dsCardTitle}>Médical</Text>
+                  </View>
+                  <View style={dsStyles.dsCardBody}>
                     {mission.medical_facility?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Établissement : </Text>
-                        {mission.medical_facility.trim()}
-                      </Text>
+                      <View style={dsStyles.dsInfoRow}>
+                        <Ionicons name="business-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Établissement</Text><Text style={dsStyles.dsMainText}>{mission.medical_facility.trim()}</Text></View>
+                      </View>
                     )}
                     {mission.hospital_service?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Service : </Text>
-                        {mission.hospital_service.trim()}
-                      </Text>
+                      <View style={dsStyles.dsInfoRow}>
+                        <Ionicons name="layers-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Service</Text><Text style={dsStyles.dsMainText}>{mission.hospital_service.trim()}</Text></View>
+                      </View>
                     )}
                     {mission.doctor_name?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Médecin : </Text>
-                        {mission.doctor_name.trim()}
-                      </Text>
+                      <View style={dsStyles.dsInfoRow}>
+                        <Ionicons name="person-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Médecin</Text><Text style={dsStyles.dsMainText}>Dr {mission.doctor_name.trim()}</Text></View>
+                      </View>
                     )}
                     {mission.notes_medical?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Notes médicales : </Text>
-                        {mission.notes_medical.trim()}
-                      </Text>
+                      <View style={[dsStyles.dsInfoRow, { marginBottom: 0 }]}>
+                        <Ionicons name="document-text-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Notes médicales</Text><Text style={dsStyles.dsMainText}>{mission.notes_medical.trim()}</Text></View>
+                      </View>
                     )}
                   </View>
-                )}
+                </View>
+              )}
 
-                {/* Instructions accès */}
-                {(mission.pickup_access_notes?.trim() || mission.dropoff_access_notes?.trim()) && (
-                  <View style={styles.detailsSheetSection}>
-                    <Text style={styles.detailsSheetSectionTitle}>Instructions d'accès</Text>
+              {/* Instructions accès */}
+              {(mission.pickup_access_notes?.trim() || mission.dropoff_access_notes?.trim()) && (
+                <View style={dsStyles.dsCard}>
+                  <View style={dsStyles.dsCardHeader}>
+                    <Ionicons name="enter-outline" size={14} color="#00796B" />
+                    <Text style={dsStyles.dsCardTitle}>Instructions d'accès</Text>
+                  </View>
+                  <View style={dsStyles.dsCardBody}>
                     {mission.pickup_access_notes?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Prise en charge : </Text>
-                        {mission.pickup_access_notes.trim()}
-                      </Text>
+                      <View style={dsStyles.dsInfoRow}>
+                        <Ionicons name="location-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Prise en charge</Text><Text style={dsStyles.dsMainText}>{mission.pickup_access_notes.trim()}</Text></View>
+                      </View>
                     )}
                     {mission.dropoff_access_notes?.trim() && (
-                      <Text style={styles.detailsSheetLine}>
-                        <Text style={styles.detailsSheetLineLabel}>Destination : </Text>
-                        {mission.dropoff_access_notes.trim()}
-                      </Text>
+                      <View style={[dsStyles.dsInfoRow, { marginBottom: 0 }]}>
+                        <Ionicons name="flag-outline" size={14} color="#64748B" />
+                        <View style={{ flex: 1 }}><Text style={dsStyles.dsInfoLabel}>Destination</Text><Text style={dsStyles.dsMainText}>{mission.dropoff_access_notes.trim()}</Text></View>
+                      </View>
                     )}
                   </View>
-                )}
+                </View>
+              )}
 
-                {/* Mobilité : déjà présente dans Infos prise en charge / Infos destination (getPickupHints / getDropoffHints), pas de section dédiée pour éviter duplication */}
-              </ScrollView>
+              {/* Notes */}
+              {mission.notes?.trim() && (
+                <View style={dsStyles.dsCard}>
+                  <View style={dsStyles.dsCardHeader}>
+                    <Ionicons name="chatbox-ellipses-outline" size={14} color="#00796B" />
+                    <Text style={dsStyles.dsCardTitle}>Notes</Text>
+                  </View>
+                  <View style={dsStyles.dsCardBody}>
+                    <Text style={{ fontSize: 13, color: "#1E293B", lineHeight: 19 }}>{mission.notes.trim()}</Text>
+                  </View>
+                </View>
+              )}
 
-              <TouchableOpacity
-                onPress={() => {
-                  setDetailsSheetVisible(false);
-                  onPressDetails?.();
-                }}
-                style={styles.detailsSheetItem}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel="Voir les détails complets"
-              >
-                <Ionicons name="information-circle-outline" size={22} color={palette.accent} />
-                <Text style={styles.detailsSheetItemText}>Voir les détails complets</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setDetailsSheetVisible(false)}
-                style={styles.notesModalCloseButton}
-                accessible
-                accessibilityRole="button"
-                accessibilityLabel="Fermer"
-              >
-                <Text style={styles.notesModalCloseText}>Fermer</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
-        </Pressable>
+              {/* Entreprise */}
+              {mission.company_name && (
+                <View style={dsStyles.dsCard}>
+                  <View style={dsStyles.dsCardHeader}>
+                    <Ionicons name="business-outline" size={14} color="#00796B" />
+                    <Text style={dsStyles.dsCardTitle}>Entreprise</Text>
+                  </View>
+                  <View style={dsStyles.dsCardBody}>
+                    <Text style={dsStyles.dsMainText}>{mission.company_name}</Text>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
       </Modal>
 
       {/* 7. MissionActionsDanger : Libérer / Annuler (uniquement ASSIGNED ou EN_ROUTE) */}
@@ -981,15 +1045,15 @@ const MissionCard: MissionCardType = ({
             activeOpacity={0.7}
             style={styles.actionItemSecondary}
           >
-            <Ionicons name="refresh" size={18} color="white" />
+            <Ionicons name="refresh" size={15} color="white" />
             <Text style={styles.actionLabel}>Libérer</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => setCancelModalVisible(true)}
             style={styles.actionItemDanger}
           >
-            <Ionicons name="close-circle" size={18} color="white" />
-            <Text style={styles.actionLabel}>Annuler course</Text>
+            <Ionicons name="close-circle" size={15} color="white" />
+            <Text style={styles.actionLabel}>Annuler</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1000,6 +1064,154 @@ const MissionCard: MissionCardType = ({
         onClose={() => setCancelModalVisible(false)}
         onConfirm={handleCancelJustification}
       />
+
+      {/* Modal de libération de course */}
+      <Modal
+        visible={releaseModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setReleaseModalVisible(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "flex-end",
+          }}
+          onPress={() => setReleaseModalVisible(false)}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingBottom: Platform.OS === "ios" ? 32 : 16,
+              ...(Platform.OS === "web"
+                ? { boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }
+                : {
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: -4 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 16,
+                    elevation: 12,
+                  }),
+            }}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 20,
+                paddingTop: 20,
+                paddingBottom: 14,
+                borderBottomWidth: 1,
+                borderBottomColor: "rgba(0,121,107,0.08)",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    backgroundColor: "rgba(0,121,107,0.08)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="swap-horizontal" size={16} color="#00796B" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#1E293B", letterSpacing: -0.2 }}>
+                  Libérer la course
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setReleaseModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ width: 28, height: 28, borderRadius: 6, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name="close" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Body */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 14, color: "#1E293B", fontWeight: "500", lineHeight: 21, marginBottom: 10 }}>
+                Voulez-vous libérer cette course ?
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 19 }}>
+                La course sera remise dans le pool de dispatch et pourra être réassignée à un autre chauffeur.
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 14,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  backgroundColor: "rgba(0,121,107,0.04)",
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "rgba(0,121,107,0.08)",
+                }}
+              >
+                <Ionicons name="information-circle-outline" size={16} color="#00796B" />
+                <Text style={{ fontSize: 12, color: "#64748B", flex: 1, lineHeight: 17 }}>
+                  Aucune facturation ne sera appliquée pour une libération.
+                </Text>
+              </View>
+            </View>
+
+            {/* Footer */}
+            <View
+              style={{
+                flexDirection: "row",
+                gap: 10,
+                paddingHorizontal: 20,
+                paddingTop: 16,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setReleaseModalVisible(false)}
+                style={{
+                  flex: 1,
+                  height: 40,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#f8fafc",
+                  borderWidth: 1,
+                  borderColor: "rgba(0,0,0,0.08)",
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "500", color: "#64748B" }}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleReleaseConfirm}
+                style={{
+                  flex: 1.5,
+                  height: 40,
+                  borderRadius: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#00796B",
+                  gap: 6,
+                }}
+              >
+                <Ionicons name="swap-horizontal-outline" size={15} color="#fff" />
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Libérer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
     </View>
   );

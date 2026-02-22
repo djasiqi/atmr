@@ -113,8 +113,8 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
 
   // Mutation pour supprimer une réservation
   const deleteMutation = useOptimisticMutation({
-    mutationFn: async ({ reservationId }) => {
-      return await deleteReservation(reservationId);
+    mutationFn: async ({ reservationId, reasonCode, reasonText }) => {
+      return await deleteReservation(reservationId, reasonCode, reasonText);
     },
     optimisticUpdate: (data, saveOriginal) => {
       const { reservationId } = data;
@@ -193,15 +193,10 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
   );
 
   const handleDeleteReservation = useCallback(
-    async (reservationId) => {
-      try {
-        await deleteMutation.mutate({ reservationId }, {
-          successMessage: 'Réservation supprimée avec succès',
-        });
-        return true;
-      } catch (err) {
-        return false;
-      }
+    async (reservationId, reasonCode = null, reasonText = null) => {
+      await deleteMutation.mutate({ reservationId, reasonCode, reasonText }, {
+        successMessage: 'Réservation supprimée avec succès',
+      });
     },
     [deleteMutation]
   );

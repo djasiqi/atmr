@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { connectSocket, getSocket } from "@/services/socket";
 import type { Socket } from "socket.io-client";
 import { secureStorage } from "@/services/storage";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("EntSocket");
 
 export const useEnterpriseSocket = (
   onTeamMessage?: (msg: any) => void
@@ -27,7 +30,7 @@ export const useEnterpriseSocket = (
       s.off("unauthorized");
 
       s.on("connect", () => {
-        console.log("✅ Enterprise Socket connecté");
+        log.success("enterprise socket connected", {});
         backoffRef.current = 2000;
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current);
@@ -38,21 +41,21 @@ export const useEnterpriseSocket = (
       });
 
       s.on("disconnect", () => {
-        console.log("⚠️ Enterprise Socket déconnecté");
+        log.info("enterprise socket disconnected", {});
       });
 
       s.on("connect_error", (err: any) => {
-        console.warn("❗ Enterprise socket connect_error:", err?.message || err);
+        log.warn("enterprise socket connect_error", { message: err?.message || err });
         scheduleReconnection();
       });
 
       s.on("reconnect", () => {
-        console.log("🔄 Reconnexion Enterprise Socket");
+        log.info("enterprise socket reconnected", {});
         s.emit("join_company_room");
       });
 
       s.on("team_chat_message", (message: any) => {
-        console.log("💬 Message équipe (enterprise):", message);
+        log.info("team message received", { message });
         onTeamMessage?.(message);
       });
 
@@ -65,11 +68,11 @@ export const useEnterpriseSocket = (
       });
 
       s.on("error", (data: any) => {
-        console.error("❌ Erreur Enterprise Socket.IO:", data);
+        log.error("enterprise socket error", { data });
       });
 
       s.on("unauthorized", async (data: any) => {
-        console.error("❌ Enterprise Socket unauthorized:", data);
+        log.error("enterprise socket unauthorized", { data });
         scheduleReconnection();
       });
     };
@@ -78,7 +81,7 @@ export const useEnterpriseSocket = (
       if (reconnectTimerRef.current || !isMountedRef.current) return;
 
       const delay = Math.min(backoffRef.current, 30000);
-      console.log(`⏳ Reconnexion enterprise socket dans ${Math.round(delay / 1000)}s`);
+      log.info("enterprise socket reconnecting", { delaySeconds: Math.round(delay / 1000) });
 
       reconnectTimerRef.current = setTimeout(async () => {
         reconnectTimerRef.current = null;
@@ -86,7 +89,7 @@ export const useEnterpriseSocket = (
 
         const token = await secureStorage.getEnterpriseToken();
         if (!token) {
-          console.warn("🔒 Aucun token entreprise — arrêt des tentatives socket.");
+          log.warn("no enterprise token, stopping socket attempts", {});
           return;
         }
 
@@ -98,7 +101,7 @@ export const useEnterpriseSocket = (
             backoffRef.current = 2000;
           }
         } catch (e) {
-          console.warn("♻️ Reconnexion enterprise échouée, on re-tentera.", e);
+          log.warn("enterprise reconnection failed, will retry", { error: e });
           backoffRef.current = Math.min(backoffRef.current * 2, 30000);
           scheduleReconnection();
         }
@@ -109,7 +112,7 @@ export const useEnterpriseSocket = (
     (async () => {
       const token = await secureStorage.getEnterpriseToken();
       if (!token) {
-        console.warn("🔒 Aucun token entreprise — socket non initialisé.");
+        log.warn("no enterprise token, socket not initialized", {});
         return;
       }
       try {

@@ -545,6 +545,14 @@ def _serialize_client_stay_with_clinic_details(
 def _serialize_client_billing_party_link(
     link: ClientBillingParty,
 ) -> dict[str, Any]:
+    bp = link.billing_party
+    bp_type = ""
+    if bp:
+        bp_type = bp.type.value if hasattr(bp.type, "value") else str(bp.type)
+    is_curatelle = (
+        (link.role or "").lower() == "curatelle"
+        and bp_type in ("opad", "curatorship")
+    )
     return {
         "id": link.id,
         "client_id": link.client_id,
@@ -555,7 +563,8 @@ def _serialize_client_billing_party_link(
         "contact_email": link.contact_email,
         "contact_phone": link.contact_phone,
         "client_reference": link.client_reference,
-        "billing_party": link.billing_party.to_dict() if link.billing_party else None,
+        "billing_party": bp.to_dict() if bp else None,
+        "is_curatelle_protected": is_curatelle,
     }
 
 
@@ -1158,7 +1167,7 @@ class ClientBillingPartyLink(Resource):
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def delete(self, link_id: int):
+    def delete(self, link_id: int):  # noqa: PLR0911
         """Supprimer un lien client ↔ tiers payeur."""
         from routes.companies import get_company_from_token
 
@@ -1180,6 +1189,18 @@ class ClientBillingPartyLink(Resource):
                 "Accès refusé (client hors entreprise).",
                 logger_instance=logger,
             )
+
+        # Protéger les liens issus d'un mandat de curatelle (sync automatique)
+        if (link.role or "").lower() == "curatelle":
+            bp = link.billing_party
+            bp_type = (bp.type.value if hasattr(bp.type, "value") else str(bp.type)) if bp else ""
+            if bp_type in ("opad", "curatorship"):
+                msg = (
+                    "Ce tiers payeur est lié par un mandat de curatelle. "
+                    "Il ne peut pas être supprimé par le transporteur. "
+                    "Seule l'institution curatrice peut retirer ce mandat."
+                )
+                return {"error": msg, "code": "CURATELLE_PROTECTED"}, 403
 
         try:
             db.session.delete(link)

@@ -15,12 +15,18 @@ const DashboardRedirect = () => {
         return;
       }
 
-      if (user.role === 'driver') {
+      // Normaliser le rôle en minuscules pour la comparaison
+      const role = (user.role || '').toLowerCase();
+
+      if (role === 'driver') {
         navigate(`/dashboard/driver/${user.public_id}`, { replace: true });
-      } else if (user.role === 'company') {
+      } else if (role === 'company') {
         navigate(`/dashboard/company/${user.public_id}`, { replace: true });
+      } else if (role === 'institution') {
+        // ✅ ÉTAPE 6: Redirection portail Institution
+        navigate(`/dashboard/institution/${user.public_id}`, { replace: true });
       } else {
-        navigate(`/dashboard/${user.role}/${user.public_id}`, { replace: true });
+        navigate(`/dashboard/${role}/${user.public_id}`, { replace: true });
       }
     }
   }, [user, navigate]);

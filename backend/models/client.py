@@ -108,6 +108,11 @@ class Client(db.Model):
     is_institution = Column(Boolean, nullable=False, server_default="false")
     institution_name: Mapped[str] = mapped_column(String(200), nullable=True)
 
+    # Liaison vers une Institution officielle de la plateforme
+    linked_institution_id: Mapped[int | None] = mapped_column(
+        ForeignKey("institutions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # Établissement de résidence (EMS, Foyer, etc.)
     # Nom de l'établissement (ex: "EMS Maison de Vessy")
     residence_facility: Mapped[str] = mapped_column(String(200), nullable=True)
@@ -139,6 +144,11 @@ class Client(db.Model):
         back_populates="clients",
         foreign_keys=[company_id],
         passive_deletes=True,
+    )
+    linked_institution = relationship(
+        "Institution",
+        foreign_keys=[linked_institution_id],
+        lazy="joined",
     )
     default_billed_to_company = relationship(
         "Company",
@@ -351,6 +361,20 @@ class Client(db.Model):
         except ImportError:
             self.billing_address = value
 
+    def _serialize_linked_institution(self) -> dict[str, object] | None:
+        """Retourne les données de l'institution officielle liée, ou None."""
+        inst = getattr(self, "linked_institution", None)
+        if not inst:
+            return None
+        return {
+            "id": inst.id,
+            "name": inst.name,
+            "institution_type": inst.institution_type,
+            "address": inst.address,
+            "contact_email": inst.contact_email,
+            "contact_phone": inst.contact_phone,
+        }
+
     # Serialization
     @property
     def serialize(self):
@@ -415,6 +439,8 @@ class Client(db.Model):
             },
             "is_institution": _as_bool(self.is_institution),
             "institution_name": self.institution_name,
+            "linked_institution_id": self.linked_institution_id,
+            "linked_institution": self._serialize_linked_institution(),
             "residence_facility": self.residence_facility,
             "preferential_rate": (
                 float(preferential_rate)

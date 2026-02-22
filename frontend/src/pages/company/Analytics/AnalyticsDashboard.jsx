@@ -11,6 +11,14 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  FiBarChart2,
+  FiTrendingUp,
+  FiClock,
+  FiCheckCircle,
+  FiTool,
+  FiActivity,
+} from 'react-icons/fi';
+import {
   LineChart,
   Line,
   BarChart,
@@ -118,7 +126,7 @@ const AnalyticsDashboard = () => {
     );
   }
 
-  // Données vides
+  // Données vides / En construction
   if (!analytics || !analytics.trends || analytics.trends.length === 0) {
     return (
       <div className={styles.companyContainer}>
@@ -126,11 +134,53 @@ const AnalyticsDashboard = () => {
         <div className={styles.dashboardLayout}>
           <CompanySidebar />
           <div className={styles.mainContent}>
-            <div className={styles.emptyState}>
-              <h2>📊 Analytics</h2>
-              <p>Aucune donnée disponible pour le moment.</p>
+            {/* Header */}
+            <div className={styles.emptyHeader}>
+              <div className={styles.emptyHeaderLeft}>
+                <h1 className={styles.emptyTitle}>Analytics & Performance</h1>
+                <p className={styles.emptySubtitle}>Analyse de la performance de votre activité</p>
+              </div>
+              <span className={styles.wipBadge}>
+                <FiTool size={12} />
+                En construction
+              </span>
+            </div>
+
+            {/* Illustration + message */}
+            <div className={styles.emptyCard}>
+              <div className={styles.emptyIconGrid}>
+                <div className={styles.emptyIconItem}><FiBarChart2 size={24} /></div>
+                <div className={styles.emptyIconItem}><FiTrendingUp size={24} /></div>
+                <div className={styles.emptyIconItem}><FiActivity size={24} /></div>
+                <div className={styles.emptyIconItem}><FiClock size={24} /></div>
+              </div>
+              <h2 className={styles.emptyCardTitle}>Module en cours de développement</h2>
+              <p className={styles.emptyCardMessage}>
+                Ce tableau de bord affichera les métriques clés de votre activité : volume de courses,
+                taux de ponctualité, retards moyens et score qualité.
+              </p>
+
+              <div className={styles.emptyFeatures}>
+                <div className={styles.emptyFeature}>
+                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+                  <span>KPIs en temps réel</span>
+                </div>
+                <div className={styles.emptyFeature}>
+                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+                  <span>Graphiques de tendances</span>
+                </div>
+                <div className={styles.emptyFeature}>
+                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+                  <span>Insights automatiques</span>
+                </div>
+                <div className={styles.emptyFeature}>
+                  <FiCheckCircle size={14} className={styles.emptyFeatureIcon} />
+                  <span>Export CSV / JSON</span>
+                </div>
+              </div>
+
               <p className={styles.emptyHint}>
-                Lancez des dispatches pour commencer à collecter des métriques.
+                Les données seront collectées automatiquement à mesure que vous utilisez la plateforme.
               </p>
             </div>
           </div>

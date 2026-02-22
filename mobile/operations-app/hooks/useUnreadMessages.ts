@@ -4,7 +4,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
 import { useAuth } from "@/hooks/useAuth";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("UnreadMsg");
 const LAST_READ_MESSAGE_KEY = "enterprise_chat_last_read_message_id";
 const LAST_READ_TIMESTAMP_KEY = "enterprise_chat_last_read_timestamp";
 
@@ -31,7 +33,7 @@ export const useUnreadMessages = () => {
           lastReadTimestampRef.current = parseInt(lastReadTimestamp, 10);
         }
       } catch (error) {
-        console.warn("[useUnreadMessages] Erreur lors du chargement du dernier message lu:", error);
+        log.warn("load last read failed", { error });
       }
     };
     
@@ -56,7 +58,7 @@ export const useUnreadMessages = () => {
       unreadMessagesRef.current.clear();
       setUnreadCount(0);
     } catch (error) {
-      console.warn("[useUnreadMessages] Erreur lors de la sauvegarde du dernier message lu:", error);
+      log.warn("save last read failed", { error });
     }
   }, []);
 

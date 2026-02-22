@@ -1,80 +1,343 @@
-.loginContainer {
+/* ============================================================
+   Login — Cohérence design plateforme Lirie
+   ============================================================ */
+
+.pageWrapper {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin: 0 auto;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(0, 121, 107, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(0, 121, 107, 0.04) 0%, transparent 50%),
+    var(--bg-secondary);
   padding: var(--spacing-lg);
-  max-width: 400px;
-  background-color: var(--gray-100);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+}
+
+.loginCard {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-primary);
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Header (logo + titre) ── */
+
+.header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  margin-bottom: var(--spacing-md);
 }
 
 .title {
-  font-size: var(--font-3xl);
+  font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
-  color: var(--brand-primary);
-  margin-bottom: var(--spacing-lg);
-  text-align: center;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
 }
 
+.subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ── Form ── */
+
 .form {
-  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
 }
 
 .inputWrapper {
+  position: relative;
   display: flex;
-  flex-direction: column;
+  align-items: center;
 }
 
-.inputWrapper label {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-bold);
+.inputIcon {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px 10px 38px;
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family-base);
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
-}
-
-.inputWrapper input {
-  font-size: var(--font-md);
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-secondary);
-  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
   transition:
-    border-color var(--transition-base),
-    box-shadow var(--transition-base);
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.inputWrapper input:focus {
+.input::placeholder {
+  color: var(--text-disabled);
+}
+
+.input:hover {
+  border-color: var(--border-secondary);
+}
+
+.input:focus {
+  background: var(--bg-primary);
   border-color: var(--brand-primary);
   box-shadow: var(--focus-ring);
-  outline: none;
 }
 
-.submitButton {
-  padding: var(--spacing-sm) var(--spacing-lg);
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-bold);
-  color: #fff;
-  background-color: var(--brand-primary);
+.inputPasswordPadding {
+  padding-right: 42px;
+}
+
+.togglePassword {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition:
-    background-color var(--transition-base),
-    transform var(--transition-base);
+  color: var(--text-tertiary);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
-.submitButton:hover {
-  background-color: var(--brand-hover);
-  transform: scale(1.05);
+.togglePassword:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+/* ── Meta row (remember + forgot) ── */
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: calc(-1 * var(--spacing-sm));
+}
+
+/* ── Remember me checkbox ── */
+
+.rememberLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rememberCheckbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.checkboxCustom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--border-secondary);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.rememberCheckbox:checked + .checkboxCustom {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.rememberCheckbox:checked + .checkboxCustom::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-0.5px, -0.5px);
+}
+
+.forgotLink {
+  font-size: var(--font-size-sm);
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.forgotLink:hover {
+  color: var(--brand-primary-dark);
+  text-decoration: underline;
+}
+
+/* ── Messages ── */
+
+.successMessage {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 14px;
+  font-size: var(--font-size-sm);
+  color: var(--success-primary);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius-md);
+  margin: 0;
 }
 
 .errorMessage {
-  color: var(--danger-primary);
-  font-size: var(--font-sm);
-  margin-top: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 14px;
+  font-size: var(--font-size-sm);
+  color: var(--error-primary);
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-md);
+  margin: 0;
+}
+
+/* ── Submit button ── */
+
+.submitButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 12px var(--spacing-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-base);
+  color: var(--text-inverse);
+  background: var(--brand-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--brand-primary-dark);
+  box-shadow: var(--shadow-brand);
+}
+
+.submitButton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.submitButton:disabled {
+  background: var(--bg-disabled);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+/* ── Spinner ── */
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Footer ── */
+
+.footer {
+  text-align: center;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-primary);
+}
+
+.footerText {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 480px) {
+  .pageWrapper {
+    padding: var(--spacing-md);
+    align-items: flex-start;
+    padding-top: 10vh;
+  }
+
+  .loginCard {
+    padding: var(--spacing-xl) var(--spacing-lg);
+    border-radius: var(--radius-lg);
+  }
+
+  .title {
+    font-size: var(--font-size-xl);
+  }
 }

@@ -56,6 +56,11 @@
   font-style: italic;
 }
 
+/* Header centré */
+.numericHeader {
+  text-align: center;
+}
+
 /* Style pour mettre en valeur les chiffres */
 .numericCell {
   font-weight: var(--font-weight-medium);

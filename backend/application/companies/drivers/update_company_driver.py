@@ -37,6 +37,10 @@ class _UserRepo(Protocol):
     ) -> Any | None: ...
 
 
+class _DriverRepo(Protocol):
+    def find_models_by_company_id(self, company_id: int) -> list[Any]: ...
+
+
 class _VehicleRepo(Protocol):
     def find_by_id_and_company(
         self, vehicle_id: int, company_id: int
@@ -54,10 +58,17 @@ class UpdateCompanyDriverResult:
 class UpdateCompanyDriverUseCase:
     """Use-case Application: mise à jour d'un chauffeur (user + driver + vehicle)."""
 
-    def __init__(self, *, user_repo: _UserRepo, vehicle_repo: _VehicleRepo) -> None:
+    def __init__(
+        self,
+        *,
+        user_repo: _UserRepo,
+        vehicle_repo: _VehicleRepo,
+        driver_repo: _DriverRepo | None = None,
+    ) -> None:
         super().__init__()
         self._user_repo = user_repo
         self._vehicle_repo = vehicle_repo
+        self._driver_repo = driver_repo
 
     def execute(
         self,
@@ -97,6 +108,71 @@ class UpdateCompanyDriverUseCase:
                     user.email = email
             if "address" in data:
                 user.address = str(data["address"]).strip() if data["address"] else None
+            if "phone" in data:
+                user.phone = str(data["phone"]).strip() if data["phone"] else None
+            if "birth_date" in data:
+                bd_raw = data["birth_date"]
+                if bd_raw:
+                    from datetime import date as _date
+
+                    if isinstance(bd_raw, str):
+                        try:
+                            user.birth_date = _date.fromisoformat(bd_raw)
+                        except ValueError:
+                            validation_error = {"error": "Format de date invalide (AAAA-MM-JJ)"}
+                            validation_status = 400
+                    elif isinstance(bd_raw, _date):
+                        user.birth_date = bd_raw
+                else:
+                    user.birth_date = None
+
+        # Champs identite / urgence (sur le driver)
+        if not validation_error:
+            _str_fields = [
+                ("avs_number", 16),
+                ("nationality", 60),
+                ("emergency_contact_name", 120),
+                ("emergency_contact_phone", 30),
+            ]
+            for field_name, max_len in _str_fields:
+                if field_name in data:
+                    val = data[field_name]
+                    val = str(val).strip()[:max_len] if val else None
+                    setattr(driver, field_name, val)
+
+        # Champs HR
+        if not validation_error:
+            if "contract_type" in data:
+                driver.contract_type = str(data["contract_type"]).strip() if data["contract_type"] else "CDI"
+            if "weekly_hours" in data:
+                wh = data["weekly_hours"]
+                driver.weekly_hours = int(wh) if wh else None
+            if "hourly_rate_cents" in data:
+                hrc = data["hourly_rate_cents"]
+                driver.hourly_rate_cents = int(hrc) if hrc else None
+            _date_fields = [
+                "employment_start_date",
+                "employment_end_date",
+                "license_valid_until",
+                "medical_valid_until",
+            ]
+            for df in _date_fields:
+                if df in data:
+                    import contextlib
+                    from datetime import date as _date
+
+                    dv = data[df]
+                    if dv:
+                        if isinstance(dv, str):
+                            with contextlib.suppress(ValueError):
+                                setattr(driver, df, _date.fromisoformat(dv))
+                        elif isinstance(dv, _date):
+                            setattr(driver, df, dv)
+                    else:
+                        setattr(driver, df, None)
+            if "license_categories" in data:
+                lc = data["license_categories"]
+                driver.license_categories = lc if isinstance(lc, list) else []
 
         if not validation_error and "is_active" in data:
             driver.is_active = bool(data["is_active"])
@@ -114,6 +190,9 @@ class UpdateCompanyDriverUseCase:
             vehicle_id = data["vehicle_id"]
             if vehicle_id is None or vehicle_id == "":
                 driver.vehicle_id = None
+                driver.vehicle_assigned = None
+                driver.brand = None
+                driver.license_plate = None
             else:
                 try:
                     vehicle_id_int = int(vehicle_id)
@@ -127,7 +206,22 @@ class UpdateCompanyDriverUseCase:
                         vehicle_id_int, company_id
                     )
                     if vehicle:
+                        if self._driver_repo:
+                            all_drivers = self._driver_repo.find_models_by_company_id(
+                                company_id
+                            )
+                            for d in all_drivers:
+                                if (
+                                    getattr(d, "vehicle_id", None) == vehicle_id_int
+                                    and getattr(d, "id", None) != getattr(driver, "id", None)
+                                ):
+                                    d.vehicle_id = None
+                                    d.vehicle_assigned = None
+                                    d.brand = None
+                                    d.license_plate = None
                         driver.vehicle_id = vehicle_id_int
+                        driver.vehicle_assigned = getattr(vehicle, "model", None)
+                        driver.license_plate = getattr(vehicle, "license_plate", None)
                     else:
                         validation_error = {
                             "error": (

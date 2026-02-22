@@ -63,6 +63,9 @@ statsmodels>=0.14.0
 marshmallow>=3.0.0
 marshmallow-sqlalchemy>=1.0.0
 
+# ========== Push Notifications (FCM) ==========
+firebase-admin>=6.0
+
 # ========== Monitoring & Error Tracking ==========
 sentry-sdk>=2.0.0
 
@@ -137,4 +140,5 @@ python-stdnum>=1.20
 
 # ========== Additional Base ==========
 Werkzeug>=3.0.0
+openpyxl>=3.1.0
 

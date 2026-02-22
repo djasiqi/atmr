@@ -18,10 +18,150 @@
  * IMPORTANT : Chaque facture est toujours pour UN client, mais peut être adressée à différents tiers payeurs selon le contexte.
  */
 import React, { useState, useEffect, useCallback, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import {
+  FiBriefcase,
+  FiPlus,
+  FiMapPin,
+  FiMail,
+  FiPhone,
+  FiEdit2,
+  FiStar,
+  FiUser,
+  FiChevronDown,
+  FiSearch,
+} from 'react-icons/fi';
 import { fetchBillingParties, createBillingParty, updateBillingParty } from '../../../../services/settingsService';
 import { fetchClientBillingParties, linkClientBillingParty, unlinkClientBillingParty, updateClientBillingPartyLink } from '../../../../services/companyService';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import styles from './ClientBillingPartiesSection.module.css';
+import ntStyles from '../../Settings/tabs/NotificationsTab.module.css';
+
+function SearchableChipDropdown({ options, value, onChange, placeholder, onCreateNew }) {
+  const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const ref = React.useRef(null);
+  const inputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (open && inputRef.current) inputRef.current.focus();
+    if (!open) setSearch('');
+  }, [open]);
+
+  const selected = options.find((o) => String(o.value) === String(value));
+  const filtered = search
+    ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  return (
+    <div className={styles.chipDrop} ref={ref}>
+      <div
+        className={`${styles.chipInputWrap} ${open ? styles.chipInputWrapOpen : ''} ${value ? styles.chipInputWrapActive : ''}`}
+        onClick={() => { if (!open) setOpen(true); }}
+      >
+        <FiSearch size={12} className={styles.chipInputIcon} />
+        {open ? (
+          <input
+            ref={inputRef}
+            type="text"
+            className={styles.chipInput}
+            placeholder={placeholder || 'Rechercher…'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        ) : (
+          <span className={styles.chipInputDisplay}>
+            {selected?.label || placeholder || 'Sélectionner'}
+          </span>
+        )}
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </div>
+      {open && (
+        <div className={styles.chipMenu}>
+          <div className={styles.chipOptions}>
+            {filtered.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`${styles.chipOption} ${String(o.value) === String(value) ? styles.chipOptionActive : ''}`}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+              >
+                <span className={styles.chipOptionLabel}>{o.label}</span>
+                {o.hint && <span className={styles.chipOptionHint}>{o.hint}</span>}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className={styles.chipEmpty}>Aucun résultat</div>
+            )}
+            {onCreateNew && (
+              <button
+                type="button"
+                className={styles.chipCreateBtn}
+                onClick={() => { onCreateNew(); setOpen(false); }}
+              >
+                <FiPlus size={12} />
+                Créer un nouveau tiers payeur
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SimpleChipDropdown({ value, options, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div className={styles.chipDrop} ref={ref}>
+      <div
+        className={`${styles.chipInputWrap} ${open ? styles.chipInputWrapOpen : ''} ${value ? styles.chipInputWrapActive : ''}`}
+        onClick={() => setOpen((p) => !p)}
+        style={{ cursor: 'pointer' }}
+      >
+        <span className={styles.chipInputDisplay}>{selected?.label || '—'}</span>
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </div>
+      {open && (
+        <div className={styles.chipMenu}>
+          <div className={styles.chipOptions}>
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`${styles.chipOption} ${o.value === value ? styles.chipOptionActive : ''}`}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ClientBillingPartiesSection = forwardRef(({
   clientId,
@@ -146,12 +286,8 @@ const ClientBillingPartiesSection = forwardRef(({
         is_active: true,
       };
 
-      console.log('📤 Création du tiers payeur:', payload);
       const response = await createBillingParty(payload);
-      console.log('📥 Réponse complète:', response);
-      // Le backend retourne {success: true, data: {...}}
       const newParty = response.data?.data || response.data;
-      console.log('✅ Tiers payeur créé:', newParty);
       
       if (!newParty || !newParty.id) {
         throw new Error('Réponse invalide du serveur : tiers payeur non créé');
@@ -365,7 +501,10 @@ const ClientBillingPartiesSection = forwardRef(({
     <>
       {showTitle && (
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>💰 Tiers payeur / Curateur</h3>
+          <h3 className={styles.sectionTitle}>
+            <FiBriefcase size={14} className={styles.sectionIcon} />
+            Tiers payeur / Curateur
+          </h3>
           {!readOnly && !showForm && (
             <button
               type="button"
@@ -383,7 +522,8 @@ const ClientBillingPartiesSection = forwardRef(({
               }}
               className={styles.addButton}
             >
-              ➕ Ajouter un tiers payeur
+              <FiPlus size={12} />
+              Ajouter un tiers payeur
             </button>
           )}
         </div>
@@ -404,11 +544,17 @@ const ClientBillingPartiesSection = forwardRef(({
                 <label htmlFor="billing_party_id" className={styles.label}>
                   Tiers payeur *
                 </label>
-                <select
-                  id="billing_party_id"
+                <SearchableChipDropdown
+                  placeholder="Sélectionner un tiers payeur"
                   value={formData.billing_party_id}
-                  onChange={(e) => {
-                    const selectedId = e.target.value;
+                  options={billingParties
+                    .filter((party) => party.type !== 'clinic')
+                    .map((party) => ({
+                      value: String(party.id),
+                      label: party.display_name,
+                      hint: party.type,
+                    }))}
+                  onChange={(selectedId) => {
                     const existingLink = clientLinks.find(
                       (link) => String(link.billing_party_id) === String(selectedId)
                     );
@@ -434,35 +580,8 @@ const ClientBillingPartiesSection = forwardRef(({
                       client_reference: '',
                     });
                   }}
-                  required
-                  className={styles.input}
-                >
-                  <option value="">-- Sélectionnez un tiers payeur --</option>
-                  {billingParties
-                    .filter((party) => party.type !== 'clinic')
-                    .map((party) => (
-                      <option key={party.id} value={party.id}>
-                        {party.display_name} ({party.type})
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setCreateMode(true)}
-                  style={{
-                    marginTop: '0.5rem',
-                    padding: '0.5rem 1rem',
-                    background: 'transparent',
-                    border: '1px solid #3b82f6',
-                    color: '#3b82f6',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                  }}
-                >
-                  ➕ Créer un nouveau tiers payeur
-                </button>
+                  onCreateNew={() => setCreateMode(true)}
+                />
               </div>
 
               {selectedParty && (
@@ -474,46 +593,47 @@ const ClientBillingPartiesSection = forwardRef(({
                       {selectedParty.display_name} ({selectedParty.type})
                     </span>
                   </div>
-                  <div className={styles.mappingRow}>
-                    <span className={styles.mappingLabel}>Coordonnées OPAD</span>
-                    <div className={styles.mappingValue}>
-                      {!showEditPartyForm ? (
-                        <>
-                          {selectedParty.billing_address ? (
-                            <div className={styles.mappingValueMultiline}>
-                              {selectedParty.billing_address}
-                            </div>
-                          ) : (
-                            <div className={styles.mappingValueMuted}>Adresse non renseignée</div>
-                          )}
-                          {selectedParty.contact_email && (
-                            <div className={styles.mappingValue}>
-                              ✉️{' '}
-                              <a href={`mailto:${selectedParty.contact_email}`}>
-                                {selectedParty.contact_email}
-                              </a>
-                            </div>
-                          )}
-                          {selectedParty.contact_phone && (
-                            <div className={styles.mappingValue}>
-                              📞{' '}
-                              <a href={`tel:${selectedParty.contact_phone}`}>
-                                {selectedParty.contact_phone}
-                              </a>
-                            </div>
-                          )}
-                          {hasExistingLink && (
-                            <button
-                              type="button"
-                              onClick={handleOpenEditParty}
-                              className={styles.editCoordsButton}
-                              title="Mettre à jour l'adresse, le code postal, l'email ou le téléphone"
-                            >
-                              ✏️ Éditer les coordonnées
-                            </button>
-                          )}
-                        </>
-                      ) : (
+                  <div className={styles.coordsBlock}>
+                    <div className={styles.coordsLabel}>Coordonnees</div>
+                    {!showEditPartyForm ? (
+                      <div className={styles.coordsList}>
+                        {selectedParty.billing_address ? (
+                          <div className={styles.coordsItem}>
+                            <FiMapPin size={12} className={styles.mappingContactIcon} />
+                            <span>{selectedParty.billing_address}</span>
+                          </div>
+                        ) : (
+                          <div className={styles.coordsItemMuted}>Adresse non renseignee</div>
+                        )}
+                        {selectedParty.contact_email && (
+                          <div className={styles.coordsItem}>
+                            <FiMail size={12} className={styles.mappingContactIcon} />
+                            <a href={`mailto:${selectedParty.contact_email}`}>
+                              {selectedParty.contact_email}
+                            </a>
+                          </div>
+                        )}
+                        {selectedParty.contact_phone && (
+                          <div className={styles.coordsItem}>
+                            <FiPhone size={12} className={styles.mappingContactIcon} />
+                            <a href={`tel:${selectedParty.contact_phone}`}>
+                              {selectedParty.contact_phone}
+                            </a>
+                          </div>
+                        )}
+                        {hasExistingLink && (
+                          <button
+                            type="button"
+                            onClick={handleOpenEditParty}
+                            className={styles.editCoordsButton}
+                            title="Mettre a jour l'adresse, le code postal, l'email ou le telephone"
+                          >
+                            <FiEdit2 size={12} />
+                            Editer les coordonnees
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                         <div className={styles.editPartyForm}>
                           <div className={styles.formGroup}>
                             <label htmlFor="edit_party_display_name" className={styles.label}>
@@ -610,7 +730,6 @@ const ClientBillingPartiesSection = forwardRef(({
                           </div>
                         </div>
                       )}
-                    </div>
                   </div>
                   {hasExistingLink ? (
                     <>
@@ -628,7 +747,10 @@ const ClientBillingPartiesSection = forwardRef(({
                       )}
                       {formData.is_default && (
                         <div className={styles.mappingRow}>
-                          <span className={styles.mappingTag}>⭐ Payeur par défaut</span>
+                          <span className={styles.mappingTag}>
+                            <FiStar size={11} />
+                            Payeur par defaut
+                          </span>
                         </div>
                       )}
                       {(formData.contact_name ||
@@ -638,12 +760,13 @@ const ClientBillingPartiesSection = forwardRef(({
                           <div className={styles.mappingLabel}>Curateur</div>
                           {formData.contact_name && (
                             <div className={styles.mappingValue}>
-                              👤 {formData.contact_name}
+                              <FiUser size={12} className={styles.mappingContactIcon} />
+                              {formData.contact_name}
                             </div>
                           )}
                           {formData.contact_email && (
                             <div className={styles.mappingValue}>
-                              ✉️{' '}
+                              <FiMail size={12} className={styles.mappingContactIcon} />
                               <a href={`mailto:${formData.contact_email}`}>
                                 {formData.contact_email}
                               </a>
@@ -651,7 +774,7 @@ const ClientBillingPartiesSection = forwardRef(({
                           )}
                           {formData.contact_phone && (
                             <div className={styles.mappingValue}>
-                              📞{' '}
+                              <FiPhone size={12} className={styles.mappingContactIcon} />
                               <a href={`tel:${formData.contact_phone}`}>
                                 {formData.contact_phone}
                               </a>
@@ -754,20 +877,21 @@ const ClientBillingPartiesSection = forwardRef(({
             </>
           )}
 
-          <div className={styles.checkboxGroup}>
-            <label className={styles.checkboxLabel}>
+          <label className={`${ntStyles.notifRow} ${styles.toggleRow}`} htmlFor="toggle-is-default">
+            <div className={ntStyles.notifInfo}>
+              <span className={ntStyles.notifLabel}>Définir comme payeur par défaut</span>
+              <span className={ntStyles.notifHint}>Ce payeur sera utilisé automatiquement pour la facturation</span>
+            </div>
+            <div className={ntStyles.miniToggle}>
               <input
+                id="toggle-is-default"
                 type="checkbox"
                 checked={formData.is_default}
                 onChange={(e) => setFormData({ ...formData, is_default: e.target.checked })}
-                className={styles.checkbox}
               />
-              <span className={styles.checkboxText}>
-                <strong>Définir comme payeur par défaut</strong>
-                <small>Ce payeur sera utilisé automatiquement pour la facturation</small>
-              </span>
-            </label>
-          </div>
+              <span className={ntStyles.miniSlider} />
+            </div>
+          </label>
 
               {error && <div className={styles.error}>{error}</div>}
 
@@ -817,22 +941,18 @@ const ClientBillingPartiesSection = forwardRef(({
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="new_party_type" className={styles.label}>
-                  Type *
-                </label>
-                <select
-                  id="new_party_type"
+                <label className={styles.label}>Type *</label>
+                <SimpleChipDropdown
                   value={newPartyData.type}
-                  onChange={(e) => setNewPartyData({ ...newPartyData, type: e.target.value })}
-                  required
-                  className={styles.input}
-                >
-                  <option value="family">Famille</option>
-                  <option value="curatorship">Curatelle</option>
-                  <option value="lawyer">Avocat</option>
-                  <option value="insurance">Assurance</option>
-                  <option value="other">Autre</option>
-                </select>
+                  options={[
+                    { value: 'family', label: 'Famille' },
+                    { value: 'curatorship', label: 'Curatelle' },
+                    { value: 'lawyer', label: 'Avocat' },
+                    { value: 'insurance', label: 'Assurance' },
+                    { value: 'other', label: 'Autre' },
+                  ]}
+                  onChange={(v) => setNewPartyData({ ...newPartyData, type: v })}
+                />
               </div>
 
               <div className={styles.formGroup}>
@@ -1009,79 +1129,94 @@ const ClientBillingPartiesSection = forwardRef(({
                     }}
                     className={styles.addButton}
                   >
-                    ➕ Ajouter un tiers payeur
+                    <FiPlus size={12} />
+                    Ajouter un tiers payeur
                   </button>
                 </div>
               )}
               <div className={styles.linksList}>
-                {clientLinks.map((link) => (
-                  <div key={link.id} className={styles.linkCard}>
-                    <div className={styles.linkHeader}>
-                      <div className={styles.linkInfo}>
-                        <strong>{link.billing_party?.display_name || 'Tiers payeur'}</strong>
-                        <div className={styles.linkDetails}>
-                          {link.client_reference
-                            ? `No. SPC ${link.client_reference} / Type: ${link.billing_party?.type || 'N/A'}`
-                            : `Type: ${link.billing_party?.type || 'N/A'}`}
-                          {link.role && ` • Rôle: ${link.role}`}
-                          {link.is_default && (
-                            <span className={styles.defaultBadge}>⭐ Par défaut</span>
+                {clientLinks.map((link) => {
+                  const isCuratelleProtected = !!link.is_curatelle_protected;
+                  return (
+                    <div key={link.id} className={`${styles.linkCard} ${isCuratelleProtected ? styles.linkCardProtected : ''}`}>
+                      <div className={styles.linkHeader}>
+                        <div className={styles.linkInfo}>
+                          <strong>{link.billing_party?.display_name || 'Tiers payeur'}</strong>
+                          <div className={styles.linkDetails}>
+                            {link.client_reference
+                              ? `No. SPC ${link.client_reference} / Type: ${link.billing_party?.type || 'N/A'}`
+                              : `Type: ${link.billing_party?.type || 'N/A'}`}
+                            {link.role && ` • Rôle: ${link.role}`}
+                            {link.is_default && (
+                              <span className={styles.defaultBadge}>Par défaut</span>
+                            )}
+                          </div>
+                          {isCuratelleProtected && (
+                            <div className={styles.curatelleProtectedBadge}>
+                              <span className={styles.curatelleIcon}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg>
+                              </span>
+                              Mandat de curatelle — non modifiable
+                            </div>
+                          )}
+                          {(link.contact_name ||
+                            link.contact_email ||
+                            link.contact_phone) && (
+                            <div className={styles.linkContacts}>
+                              {link.contact_name && (
+                                <div>Curateur : {link.contact_name}</div>
+                              )}
+                              {link.contact_email && (
+                                <div>
+                                  <a href={`mailto:${link.contact_email}`}>
+                                    {link.contact_email}
+                                  </a>
+                                </div>
+                              )}
+                              {link.contact_phone && (
+                                <div>
+                                  <a href={`tel:${link.contact_phone}`}>
+                                    {link.contact_phone}
+                                  </a>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
-                        {(link.contact_name ||
-                          link.contact_email ||
-                          link.contact_phone) && (
-                          <div className={styles.linkContacts}>
-                            {link.contact_name && (
-                              <div>👤 {link.contact_name}</div>
-                            )}
-                            {link.contact_email && (
-                              <div>
-                                ✉️{' '}
-                                <a href={`mailto:${link.contact_email}`}>
-                                  {link.contact_email}
-                                </a>
-                              </div>
-                            )}
-                            {link.contact_phone && (
-                              <div>
-                                📞{' '}
-                                <a href={`tel:${link.contact_phone}`}>
-                                  {link.contact_phone}
-                                </a>
-                              </div>
-                            )}
+                        {!isCuratelleProtected && !readOnly && (
+                          <div className={styles.linkActions}>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm('Voulez-vous supprimer ce lien avec le tiers payeur ?')) {
+                                  try {
+                                    await unlinkClientBillingParty(link.id);
+                                    await loadClientLinks();
+                                  } catch (err) {
+                                    if (err.response?.status === 404) {
+                                      alert(
+                                        'L\'endpoint backend pour supprimer un lien n\'est pas encore disponible.'
+                                      );
+                                    } else {
+                                      alert(err.response?.data?.error || 'Erreur lors de la suppression');
+                                    }
+                                  }
+                                }
+                              }}
+                              className={styles.deleteButton}
+                              title="Supprimer le lien"
+                            >
+                              Supprimer
+                            </button>
                           </div>
                         )}
                       </div>
-                      <div className={styles.linkActions}>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (window.confirm('Voulez-vous supprimer ce lien avec le tiers payeur ?')) {
-                              try {
-                                await unlinkClientBillingParty(link.id);
-                                await loadClientLinks();
-                              } catch (err) {
-                                if (err.response?.status === 404) {
-                                  alert(
-                                    'L\'endpoint backend pour supprimer un lien n\'est pas encore disponible.'
-                                  );
-                                } else {
-                                  alert(err.response?.data?.error || 'Erreur lors de la suppression');
-                                }
-                              }
-                            }
-                          }}
-                          className={styles.deleteButton}
-                          title="Supprimer le lien"
-                        >
-                          🗑️
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           ) : null}

@@ -1,13 +1,14 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { FiInfo } from 'react-icons/fi';
 
-/**
- * Composant réutilisable pour afficher des conseils professionnels
- */
-const ProTip = ({ title = '💡 Conseil Pro', message, styles = {} }) => {
+const ProTip = ({ title, message, styles = {} }) => {
   return (
     <div className={styles.proTip}>
-      <h4>{title}</h4>
+      <h4>
+        <FiInfo size={14} />
+        {title || 'Conseil'}
+      </h4>
       <p>{message}</p>
     </div>
   );

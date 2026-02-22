@@ -1,6 +1,9 @@
 // mobile/operations-app/services/notificationActions.ts
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("NotifActions");
 
 /**
  * Catégories de notifications avec actions
@@ -8,6 +11,7 @@ import { Platform } from "react-native";
 export enum NotificationCategory {
   MISSION_AVAILABLE = "mission_available",
   MISSION_URGENT = "mission_urgent",
+  MISSION_ACTIVE = "mission_active",
   MESSAGE_RECEIVED = "message_received",
 }
 
@@ -24,6 +28,10 @@ export enum NotificationActionId {
   CALL_DISPATCHER = "call_dispatcher",
   VIEW_DETAILS = "view_details",
 
+  // Actions mission active (Mission Bar)
+  MISSION_QUICK_ACTIONS = "mission_quick_actions",
+  MISSION_CALL = "mission_call",
+
   // Actions messages
   REPLY = "reply",
   MARK_READ = "mark_read",
@@ -35,7 +43,7 @@ export enum NotificationActionId {
  */
 export async function setupNotificationActions(): Promise<void> {
   try {
-    console.log("🔧 Configuration des actions notifications...");
+    log.info("configuring notification actions");
 
     // ✅ Catégorie : Mission disponible
     await Notifications.setNotificationCategoryAsync(
@@ -76,7 +84,7 @@ export async function setupNotificationActions(): Promise<void> {
       }
     );
 
-    console.log("✅ Catégorie 'mission_available' créée");
+    log.success("category mission_available created");
 
     // ✅ Catégorie : Mission urgente
     await Notifications.setNotificationCategoryAsync(
@@ -108,7 +116,7 @@ export async function setupNotificationActions(): Promise<void> {
       }
     );
 
-    console.log("✅ Catégorie 'mission_urgent' créée");
+    log.success("category mission_urgent created");
 
     // ✅ Catégorie : Message reçu
     await Notifications.setNotificationCategoryAsync(
@@ -140,11 +148,44 @@ export async function setupNotificationActions(): Promise<void> {
       }
     );
 
-    console.log("✅ Catégorie 'message_received' créée");
+    log.success("category message_received created");
 
-    console.log("🎉 Toutes les catégories d'actions configurées");
+    // ✅ Catégorie : Mission active (Mission Bar — iOS uniquement via Notifee,
+    // mais on la déclare aussi via expo-notifications pour cohérence)
+    await Notifications.setNotificationCategoryAsync(
+      NotificationCategory.MISSION_ACTIVE,
+      [
+        {
+          identifier: NotificationActionId.MISSION_QUICK_ACTIONS,
+          buttonTitle: "Actions rapides",
+          options: {
+            opensAppToForeground: true,
+            isDestructive: false,
+          },
+        },
+        {
+          identifier: NotificationActionId.MISSION_CALL,
+          buttonTitle: "Appeler",
+          options: {
+            opensAppToForeground: true,
+            isDestructive: false,
+          },
+        },
+      ],
+      {
+        previewPlaceholder: "Mission en cours",
+        intentIdentifiers: [],
+        allowInCarPlay: true,
+        showTitle: true,
+        showSubtitle: true,
+      }
+    );
+
+    log.success("category mission_active created");
+
+    log.success("all notification action categories configured");
   } catch (error) {
-    console.error("❌ Erreur configuration actions:", error);
+    log.error("notification actions configuration failed", { error });
   }
 }
 
@@ -163,6 +204,9 @@ export function getCategoryForNotificationType(
     case "accident":
     case "emergency":
       return NotificationCategory.MISSION_URGENT;
+
+    case "mission_active":
+      return NotificationCategory.MISSION_ACTIVE;
 
     case "message":
     case "chat_message":

@@ -8,8 +8,11 @@
  * - Jamais de secrets/PII
  */
 
+import { getLogger } from "@/utils/logger";
 import { getLogContextSnapshot } from "./logContext";
 import { getNetworkStateSnapshot } from "./networkState";
+
+const log = getLogger("AuthLog");
 
 /** Champs interdits (jamais logger de secrets). */
 const FORBIDDEN_KEYS = ["token", "password", "refresh_token", "authorization", "cookie"];
@@ -109,9 +112,9 @@ export function logAuthEvent(
     const safe = sanitize(base);
     const line = JSON.stringify(safe);
     if (__DEV__) {
-      console.debug("[AUTH_LOG]", line);
+      log.debug("auth event", { line });
     } else {
-      console.log("[AUTH_LOG]", line);
+      log.info("auth event", { line });
     }
   } catch {
     // Fire-and-forget : ne jamais faire échouer l'appelant

@@ -3,11 +3,45 @@
 # Note: E402 est une règle Flake8, pas Ruff
 # Les directives # noqa: E402 sont nécessaires pour Flake8 dans le CI
 
-import eventlet
+import os
+import sys
 
-eventlet.monkey_patch()
+# ✅ FIX: Permettre de désactiver eventlet pour les migrations
+# eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+# Utiliser DISABLE_EVENTLET=1 pour les commandes de migration
+_disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
 
-import os  # noqa: E402
+# ✅ RECOMMANDATION A: Auto-détection des commandes de migration
+# Si la commande contient 'db' ou 'alembic', désactiver eventlet automatiquement
+_is_migration_command = any(
+    arg in ("db", "alembic", "migrate", "upgrade", "downgrade", "stamp", "heads", "current")
+    for arg in sys.argv
+)
+
+if _is_migration_command and not _disable_eventlet:
+    # ✅ RECOMMANDATION B: Warning si migrations sans DISABLE_EVENTLET
+    print(
+        "⚠️  [manage.py] Commande de migration détectée sans DISABLE_EVENTLET=1",
+        flush=True,
+    )
+    print(
+        "    → Désactivation automatique d'eventlet pour éviter les problèmes de transaction.",
+        flush=True,
+    )
+    print(
+        "    → Pour supprimer ce warning, utilisez: DISABLE_EVENTLET=1 flask db ...",
+        flush=True,
+    )
+    _disable_eventlet = True
+
+if not _disable_eventlet:
+    import eventlet
+
+    eventlet.monkey_patch()
+elif os.getenv("DISABLE_EVENTLET", "0") == "1":
+    # Explicitement désactivé par l'utilisateur
+    print("✅ [manage.py] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)
+# else: auto-désactivé pour migration (message déjà affiché)
 
 import click  # noqa: E402
 from flask_migrate import init as _init  # noqa: E402
@@ -33,7 +67,7 @@ def cli():
     pass
 
 
-@cli.group(name="db")  # type: ignore[reportFunctionMemberAccess]
+@cli.group(name="db")
 def dbcli():
     """Commandes pour les migrations de base de données."""
 

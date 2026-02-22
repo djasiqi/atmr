@@ -36,7 +36,7 @@ from werkzeug.security import (  # pyright: ignore[reportMissingImports]
 from ext import db
 
 from .base import _coerce_enum, _iso
-from .enums import GenderEnum, UserRole
+from .enums import GenderEnum, InstitutionRole, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,13 @@ class User(db.Model):
     # ✅ S3: Date d'expiration du mot de passe (optionnel)
     password_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
+    # ✅ Security V2: TOTP 2FA
+    totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    totp_enabled_at = Column(DateTime(timezone=True), nullable=True)
+    recovery_codes_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recovery_codes_remaining: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
     # ✅ D2: Colonnes chiffrées (stockage)
     phone_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     email_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -103,8 +110,34 @@ class User(db.Model):
     address_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     encryption_migrated = Column(Boolean, default=False, nullable=False)
 
+    # ✅ Institution: Support multi-tenant institutionnel
+    # Un user peut appartenir à une institution (clinique/EMS/IMAD/hôpital)
+    # avec un rôle spécifique au sein de cette institution
+    institution_id: Mapped[int | None] = mapped_column(
+        Integer,
+        db.ForeignKey("institutions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    institution_role: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )  # institution_admin, institution_requester, institution_reader, institution_billing
+
+    # ✅ Invitation par email pour institution users
+    account_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, default=None
+    )  # None (legacy/active), "invited", "active", "disabled"
+    invite_token_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )  # sha256 du token d'invitation
+    invite_expires_at = Column(DateTime(timezone=True), nullable=True)
+    invite_sent_at = Column(DateTime(timezone=True), nullable=True)
+
     # ✅ Ajout de l'index sur `public_id` pour optimiser les recherches
-    __table_args__ = (Index("idx_public_id", "public_id"),)
+    __table_args__ = (
+        Index("idx_public_id", "public_id"),
+        Index("idx_user_institution_id", "institution_id"),
+    )
 
     # ✅ Relations bidirectionnelles avec suppression en cascade
     clients = relationship(
@@ -123,6 +156,12 @@ class User(db.Model):
         uselist=False,
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    # ✅ Institution: Relation vers Institution (Many-to-One)
+    institution = relationship(
+        "Institution",
+        back_populates="users",
+        foreign_keys=[institution_id],
     )
 
     # 🔒 Gestion des mots de passe
@@ -236,8 +275,19 @@ class User(db.Model):
         try:
             return _coerce_enum(role_value, UserRole)
         except (ValueError, KeyError):
-            msg = "Invalid role value. Allowed values: admin, client, driver, company."
+            msg = "Invalid role value. Allowed values: admin, client, driver, company, institution."
             raise ValueError(msg) from None
+
+    @validates("institution_role")
+    def validate_institution_role(self, _key, role_value):
+        """Valide le rôle institution si fourni."""
+        if role_value is None:
+            return None
+        valid_roles = [e.value for e in InstitutionRole]
+        if role_value not in valid_roles:
+            msg = f"Invalid institution_role. Allowed values: {', '.join(valid_roles)}"
+            raise ValueError(msg)
+        return role_value
 
     @validates("email")
     def validate_email(self, _key, email):
@@ -425,7 +475,7 @@ class User(db.Model):
     @property
     def serialize(self):
         role_val = getattr(self, "role", None)
-        return {
+        result = {
             "id": self.id,
             "user_id": self.id,  # ✅ correction ici
             "public_id": self.public_id,
@@ -446,6 +496,12 @@ class User(db.Model):
             "created_at": _iso(self.created_at),
             "force_password_change": self.force_password_change,
         }
+        # ✅ Institution: Ajouter les champs institution si présents
+        if self.institution_id:
+            result["institution_id"] = self.institution_id
+            result["institution_role"] = self.institution_role
+            result["account_status"] = self.account_status or "active"
+        return result
 
     @property
     def full_name(self):

@@ -147,23 +147,30 @@ const processQueue = (error, token = null) => {
 };
 
 export const cleanLocalSession = () => {
+  // Legacy
   localStorage.removeItem('user');
   localStorage.removeItem('public_id');
   localStorage.removeItem('authToken');
   localStorage.removeItem('refreshToken');
-  // Séparation company / driver (snake_case + ancien camelCase pendant migration)
+  // Company (snake_case + ancien camelCase pendant migration)
   localStorage.removeItem('company_user');
   localStorage.removeItem('company_public_id');
   localStorage.removeItem('company_access_token');
   localStorage.removeItem('company_refresh_token');
   localStorage.removeItem('company_authToken');
   localStorage.removeItem('company_refreshToken');
+  // Driver
   localStorage.removeItem('driver_user');
   localStorage.removeItem('driver_public_id');
   localStorage.removeItem('driver_access_token');
   localStorage.removeItem('driver_refresh_token');
   localStorage.removeItem('driver_authToken');
   localStorage.removeItem('driver_refreshToken');
+  // Institution
+  localStorage.removeItem('institution_user');
+  localStorage.removeItem('institution_public_id');
+  localStorage.removeItem('institution_access_token');
+  localStorage.removeItem('institution_refresh_token');
   if (apiRest.defaults?.headers?.common) {
     delete apiRest.defaults.headers.common.Authorization;
     delete apiRest.defaults.headers.common.authorization;
@@ -184,6 +191,17 @@ export const logoutUser = async (options = { redirect: true }) => {
   } finally {
     cleanLocalSession();
 
+    // Vider le cache React Query pour éviter les données stale entre comptes
+    try {
+      const { queryClient } = require('../App');
+      queryClient.clear();
+    } catch (_) {
+      // Silencieux si App pas encore chargé
+    }
+
+    // Notifier useAuthToken du changement dans le même onglet
+    window.dispatchEvent(new Event('auth-changed'));
+
     if (options?.redirect !== false) {
       window.location.href = '/login';
     }
@@ -196,13 +214,6 @@ apiClient.interceptors.response.use(
     const status = error?.response?.status;
     const cfg = error?.config || {};
 
-    // ✅ Log uniquement en développement
-    if (process.env.NODE_ENV === 'development') {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:interceptor:entry',message:'Response interceptor triggered',data:{status,url:cfg.url,method:cfg.method,has_response_data:!!error?.response?.data,response_data_keys:error?.response?.data ? Object.keys(error?.response?.data) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-    }
-
     // Message sympa pour 429 (limiter)
     if (status === 429) {
       console.warn('Vous avez effectué trop de requêtes. Merci de patienter un peu.');
@@ -210,13 +221,6 @@ apiClient.interceptors.response.use(
 
     // ✅ Gestion 401 avec refresh automatique
     if (status === 401 && !cfg.skipAuthRedirect) {
-      // ✅ Log uniquement en développement
-      if (process.env.NODE_ENV === 'development') {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:401_detected',message:'401 error detected, checking if fresh token required',data:{url:cfg.url,error_data:error?.response?.data,error_msg:error?.response?.data?.msg,error_error:error?.response?.data?.error,error_message:error?.response?.data?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-      }
-      
       // ✅ Détecter AVANT le refresh si c'est un problème de token fresh
       const errorData = error?.response?.data || {};
       const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();
@@ -229,21 +233,8 @@ apiClient.interceptors.response.use(
         errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
         errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
       
-      // ✅ Log uniquement en développement
-      if (process.env.NODE_ENV === 'development') {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:check_fresh_before_refresh',message:'Checking if fresh token required before refresh',data:{url:cfg.url,error_msg:errorMsg,is_fresh_token_required:isFreshTokenRequired},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-      }
-      
       // Si c'est un problème de token fresh, ne pas tenter le refresh mais retourner l'erreur avec le flag
       if (isFreshTokenRequired) {
-        // ✅ Log uniquement en développement
-        if (process.env.NODE_ENV === 'development') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:fresh_token_detected_before_refresh',message:'Fresh token required detected before refresh, rejecting with flag',data:{url:cfg.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-          // #endregion
-        }
         return Promise.reject({
           ...error,
           isFreshTokenRequired: true,
@@ -305,29 +296,11 @@ apiClient.interceptors.response.use(
         cfg._retryAfterRefresh = true;
         // ⚡ Supprimer l'erreur de la config pour éviter les logs Axios
         delete cfg._isRetry;
-        // ✅ Log uniquement en développement
-        if (process.env.NODE_ENV === 'development') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:retry_after_refresh',message:'Retrying request after successful refresh',data:{url:cfg.url,using_cookies:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
-        }
         try {
           const retryResponse = await apiClient(cfg);
-          // ✅ Log uniquement en développement
-          if (process.env.NODE_ENV === 'development') {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:retry_success',message:'Retry after refresh succeeded',data:{url:cfg.url,status:retryResponse?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
-          }
           // ✅ Refresh réussi → retourner la réponse réussie (pas l'erreur 401 initiale)
           return retryResponse;
         } catch (retryError) {
-          // ✅ Log uniquement en développement
-          if (process.env.NODE_ENV === 'development') {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:retry_failed',message:'Retry after refresh failed',data:{url:cfg.url,status:retryError?.response?.status,error_data:retryError?.response?.data,error_msg:retryError?.response?.data?.msg,error_error:retryError?.response?.data?.error,error_message:retryError?.response?.data?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
-          }
           // Si le retry échoue aussi, propager l'erreur
           throw retryError;
         }
@@ -346,33 +319,13 @@ apiClient.interceptors.response.use(
           errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
           errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
         
-        // ✅ Log uniquement en développement
-        if (process.env.NODE_ENV === 'development') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:refresh_error_catch',message:'Refresh error caught',data:{status:refreshError?.response?.status,error_data:errorData,error_msg:errorMsg,is_fresh_token_required:isFreshTokenRequired,all_error_keys:Object.keys(errorData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
-        }
-        
         // Si c'est un problème de token fresh, ne pas déconnecter mais laisser le composant gérer l'erreur
         if (isFreshTokenRequired) {
-          // ✅ Log uniquement en développement
-          if (process.env.NODE_ENV === 'development') {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:fresh_token_detected',message:'Fresh token required detected, rejecting with flag',data:{url:cfg.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-          }
           return Promise.reject({
             ...refreshError,
             isFreshTokenRequired: true,
             message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
           });
-        }
-        
-        // ✅ Log uniquement en développement
-        if (process.env.NODE_ENV === 'development') {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:logout_triggered',message:'Logging out user after refresh error',data:{url:cfg.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-          // #endregion
         }
         logoutUser();
         return Promise.reject(refreshError);
@@ -393,32 +346,12 @@ apiClient.interceptors.response.use(
       errorMsg.includes("n'est pas frais") || // Français: "n'est pas frais"
       errorMsg.includes('token n\'est pas frais'); // Français: "token n'est pas frais"
     
-    // ✅ Log uniquement en développement
-    if (process.env.NODE_ENV === 'development') {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:check_fresh_token_initial',message:'Checking if initial error is fresh token required',data:{status,url:cfg.url,error_data:errorData,error_msg:errorMsg,is_fresh_token_required:isFreshTokenRequired,all_error_keys:Object.keys(errorData)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-    }
-    
     if (isFreshTokenRequired && status === 401) {
-      // ✅ Log uniquement en développement
-      if (process.env.NODE_ENV === 'development') {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:fresh_token_initial_detected',message:'Fresh token required detected in initial error',data:{url:cfg.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-      }
       return Promise.reject({
         ...error,
         isFreshTokenRequired: true,
         message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
       });
-    }
-
-    // ✅ Log uniquement en développement
-    if (process.env.NODE_ENV === 'development') {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'apiClient.js:rejecting_error',message:'Rejecting error without special handling',data:{status,url:cfg.url,error_data:errorData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
     }
     // Pas de fallback automatique vers /api/v1: on reste sur la vérité du backend
     return Promise.reject(error);

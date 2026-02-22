@@ -276,7 +276,7 @@ const NewInvoiceModal = ({
   );
 
   const clinicsForS2 = useMemo(
-    () => institutions.filter((i) => i.clinic_company_id),
+    () => institutions,
     [institutions]
   );
 
@@ -845,33 +845,18 @@ const NewInvoiceModal = ({
     const loadPartners = async () => {
       try {
         setPartnersLoading(true);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Loading partners entry',data:{companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         let response;
         try {
           response = await invoiceService.fetchBillablePartners(companyId);
         } catch (err) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Error fetching partners',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data,fullError:JSON.stringify(err)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-          // #endregion
           throw err;
         }
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Response received',data:{hasResponse:!!response,responseType:typeof response,responseKeys:response ? Object.keys(response) : [],responseData:response?.data,responseDataData:response?.data?.data,responseDataType:typeof response?.data,partnersCount:response?.data?.data?.length||0,partners:response?.data?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         if (!isMounted) return;
         // La réponse est {data: [...]}, donc on accède à response.data.data
         const partnersList = response?.data?.data || response?.data || [];
         setPartners(partnersList);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Partners set in state',data:{partnersCount:partnersList.length,partnersList},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
       } catch (err) {
         console.error('Erreur lors du chargement des partenaires:', err);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:loadPartners',message:'Error loading partners',data:{errorMessage:err?.message,errorStatus:err?.response?.status,errorData:err?.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-        // #endregion
         if (isMounted) {
           setError('Erreur lors du chargement des partenaires');
         }
@@ -1501,7 +1486,9 @@ const NewInvoiceModal = ({
 
   const formatClientLabel = useCallback((client) => {
     if (!client) return 'Client';
+    // Pour les clients institution facturés au patient : afficher le nom du patient
     const name =
+      (client.display_name && client.display_name.trim()) ||
       (client.full_name && client.full_name.trim()) ||
       `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
       client.username ||
@@ -1566,15 +1553,7 @@ const NewInvoiceModal = ({
           payload.overrides = overridePayload;
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Appel generateInvoice',data:{companyId,payload:{client_id:payload.client_id,period_year:payload.period_year,period_month:payload.period_month,has_reservation_ids:!!payload.reservation_ids}},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-        // #endregion
-
         result = await generateInvoice(companyId, payload);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Réponse generateInvoice reçue',data:{has_result:!!result,result_type:result ? typeof result : 'null',result_keys:result ? Object.keys(result) : [],has_pdf_url:!!result?.pdf_url,has_data:!!result?.data,has_data_pdf_url:!!result?.data?.pdf_url,has_id:!!result?.id,result_stringified:JSON.stringify(result).substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
 
         // Ouvrir le PDF dans un nouvel onglet
         if (result?.pdf_url) {
@@ -1585,19 +1564,11 @@ const NewInvoiceModal = ({
         }
 
         // Vérifier la structure de la réponse avant de notifier le parent
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Avant onInvoiceGenerated',data:{has_result_data:!!result?.data,has_result:!!result,will_call_with_data:!!result?.data,will_call_with_result:!result?.data && !!result,result_id:result?.id || result?.data?.id,result_period_year:result?.period_year || result?.data?.period_year,result_period_month:result?.period_month || result?.data?.period_month},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-
         if (result?.data) {
           onInvoiceGenerated(result.data);
         } else if (result) {
         onInvoiceGenerated(result);
         }
-        
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NewInvoiceModal.jsx:handleSubmit',message:'Après onInvoiceGenerated',data:{called:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
       } else if (billingType === 'third_party') {
         // Facturation tierce
 
@@ -1855,7 +1826,7 @@ const NewInvoiceModal = ({
             const patientNames = formData.client_ids
               .map((id) => {
                 const client = clients.find((c) => c.id === parseInt(id));
-                return client ? `${client.first_name} ${client.last_name}` : `Client ${id}`;
+                return client ? (client.display_name || `${client.first_name} ${client.last_name}`) : `Client ${id}`;
               })
               .join(', ');
 
@@ -1894,7 +1865,7 @@ const NewInvoiceModal = ({
               .map((e) => {
                 const clientName = clients.find((c) => c.id === e.client_id);
                 const name = clientName 
-                  ? `${clientName.first_name} ${clientName.last_name}` 
+                  ? (clientName.display_name || `${clientName.first_name} ${clientName.last_name}`) 
                   : `Client ${e.client_id}`;
                 return `${name}: ${formatApiError(e?.error ?? e)}`;
               })
@@ -2420,7 +2391,7 @@ const NewInvoiceModal = ({
                                   return transportCount > 0;
                                 })
                                 .map((client) => {
-                                  const clientName = `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username;
+                                  const clientName = client.display_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.username;
                                   const isExpanded = expandedPatientId === client.id;
                                   const bookings = patientBookings[client.id] || [];
                                   const isLoading = patientBookingsLoading[client.id] || false;
@@ -3324,7 +3295,7 @@ const NewInvoiceModal = ({
                                   disabled={loading}
                                 />
                                 <span>
-                                  {`${client.first_name || ''} ${client.last_name || ''}`.trim() ||
+                                  {client.display_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() ||
                                     client.username}
                                 </span>
                               </label>

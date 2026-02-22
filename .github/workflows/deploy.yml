@@ -278,6 +278,8 @@ jobs:
       FLASK_ENV: ${{ secrets.FLASK_ENV }}
       FLASK_CONFIG: ${{ secrets.FLASK_CONFIG }}
       ENVIRONMENT: ${{ secrets.ENVIRONMENT }}
+      # Firebase Cloud Messaging
+      FIREBASE_SERVICE_ACCOUNT_B64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}
 
     steps:
       - name: Checkout code
@@ -393,6 +395,19 @@ jobs:
           port: ${{ env.SSH_PORT }}
           source: "scripts/smoke_tests.sh,scripts/deploy-production.sh"
           target: "/srv/atmr/"
+
+      - name: Deploy Firebase service account to server
+        if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > /srv/atmr/firebase-service-account.json
+            chmod 600 /srv/atmr/firebase-service-account.json
+            echo "✅ Firebase service account deployed"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master

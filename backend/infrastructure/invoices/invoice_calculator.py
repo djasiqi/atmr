@@ -147,3 +147,126 @@ class InvoiceCalculator:
             vat_total = vat_total.quantize(two_places, rounding=ROUND_HALF_UP)
 
         return subtotal, vat_total, total, vat_breakdown
+
+
+def recompute_invoice_totals(invoice_id: int, commit: bool = True) -> dict[str, object] | None:
+    """Recalcule et met à jour les totaux d'une facture à partir de ses lignes.
+
+    Filet de sécurité pour réparer les factures dont les totaux sont désynchronisés
+    (ex: subtotal_amount=0 alors que des invoice_lines existent avec des montants).
+
+    Args:
+        invoice_id: ID de la facture à recalculer
+        commit: Si True, commit la transaction et met à jour la facture.
+                Si False, calcule seulement et retourne les valeurs (preview).
+
+    Returns:
+        Dict avec les nouveaux totaux si réussi, None si facture introuvable.
+
+    Exemple:
+        >>> result = recompute_invoice_totals(345)
+        >>> print(result)
+        {'subtotal': Decimal('2810.00'), 'vat_total': Decimal('0.00'),
+         'total': Decimal('2810.00'), 'lines_count': 71}
+
+        >>> # Preview mode (pas de modification)
+        >>> result = recompute_invoice_totals(345, commit=False)
+    """
+    from decimal import ROUND_HALF_UP
+
+    from ext import db
+    from models import Invoice
+    from models.invoice import InvoiceLine
+
+    invoice = db.session.get(Invoice, invoice_id)
+    if not invoice:
+        logger.warning("[recompute_invoice_totals] Invoice %s introuvable.", invoice_id)
+        return None
+
+    # Calculer les sommes à partir des lignes
+    lines = InvoiceLine.query.filter_by(invoice_id=invoice_id).all()
+    two_places = Decimal("0.01")
+
+    subtotal = Decimal("0.00")
+    vat_total = Decimal("0.00")
+
+    for line in lines:
+        subtotal += line.line_total or Decimal("0.00")
+        vat_total += line.vat_amount or Decimal("0.00")
+
+    subtotal = subtotal.quantize(two_places, rounding=ROUND_HALF_UP)
+    vat_total = vat_total.quantize(two_places, rounding=ROUND_HALF_UP)
+    total = (subtotal + vat_total).quantize(two_places, rounding=ROUND_HALF_UP)
+    # Arrondir à 5 centimes
+    total = round_to_5_cents(total)
+    # Ajuster la TVA si nécessaire
+    if vat_total > Decimal("0.00"):
+        vat_total = (total - subtotal).quantize(two_places, rounding=ROUND_HALF_UP)
+        vat_total = max(vat_total, Decimal("0.00"))
+
+    # Calculer le balance_due en tenant compte des paiements existants
+    amount_paid = invoice.amount_paid or Decimal("0.00")
+    balance_due = (total - amount_paid).quantize(two_places, rounding=ROUND_HALF_UP)
+    balance_due = max(balance_due, Decimal("0.00"))
+
+    old_values = {
+        "subtotal": invoice.subtotal_amount,
+        "vat_total": invoice.vat_total_amount,
+        "total": invoice.total_amount,
+        "balance_due": invoice.balance_due,
+    }
+
+    # Mode preview: ne pas modifier la facture
+    if not commit:
+        logger.info(
+            "[recompute_invoice_totals] Invoice %s (%s): PREVIEW total %s → %s (%d lignes).",
+            invoice_id,
+            invoice.invoice_number,
+            old_values["total"],
+            total,
+            len(lines),
+        )
+        return {
+            "invoice_id": invoice_id,
+            "invoice_number": invoice.invoice_number,
+            "subtotal": subtotal,
+            "vat_total": vat_total,
+            "total": total,
+            "balance_due": balance_due,
+            "lines_count": len(lines),
+            "old_total": old_values["total"],
+            "old_subtotal": old_values["subtotal"],
+            "old_balance_due": old_values["balance_due"],
+            "preview": True,
+        }
+
+    # Mettre à jour la facture
+    invoice.subtotal_amount = subtotal
+    invoice.vat_total_amount = vat_total
+    invoice.total_amount = total
+    invoice.balance_due = balance_due
+
+    db.session.commit()
+
+    logger.info(
+        "[recompute_invoice_totals] Invoice %s (%s): total %s → %s (%d lignes).",
+        invoice_id,
+        invoice.invoice_number,
+        old_values["total"],
+        total,
+        len(lines),
+    )
+
+    return {
+        "invoice_id": invoice_id,
+        "invoice_number": invoice.invoice_number,
+        "subtotal": subtotal,
+        "vat_total": vat_total,
+        "total": total,
+        "balance_due": balance_due,
+        "lines_count": len(lines),
+        "old_total": old_values["total"],
+        "old_subtotal": old_values["subtotal"],
+        "old_balance_due": old_values["balance_due"],
+        "preview": False,
+    }

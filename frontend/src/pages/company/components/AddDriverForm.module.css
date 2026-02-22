@@ -1,136 +1,553 @@
-/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\AddDriverForm.module.css */
+/* AddDriverForm — Professional side panel
+   Aligned with Lirie design system & EditDriverForm */
 
-/* --- Structure générale du formulaire --- */
-.form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-2xl);
-  width: 100%;
-  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl) var(--spacing-2xl);
-  color: var(--text-secondary);
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-  margin: 0;
+/* ============================================================
+   PANEL LAYOUT
+   ============================================================ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 
-/* --- Groupe : Label + Input --- */
+/* ============================================================
+   HEADER — sticky top
+   ============================================================ */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  background: #fff;
+  flex-shrink: 0;
+  gap: 12px;
+  z-index: 2;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f0fdfa, #e0f2fe);
+  color: var(--brand-primary, #00796b);
+  flex-shrink: 0;
+}
+
+.headerTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* ============================================================
+   BODY — scrollable
+   ============================================================ */
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+.section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.section:last-of-type {
+  border-bottom: none;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sectionHeader svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* Also support h4 fallback if ever used */
+.section > h4 {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   FORM GROUPS
+   ============================================================ */
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.formGroup:last-child {
+  margin-bottom: 0;
 }
 
 .formGroup label {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  color: var(--brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  letter-spacing: 0.3px;
+  gap: 2px;
 }
 
-.formGroup input {
+/* ── Inputs ── */
+.formRow > .formGroup {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.formGroup input[type='text'],
+.formGroup input[type='email'],
+.formGroup input[type='tel'],
+.formGroup input[type='password'],
+.formGroup input[type='date'] {
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 2px solid var(--border-secondary);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-size-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-medium);
-  transition: all var(--transition-base);
+  height: 30px;
+  padding: 0 10px;
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #1e293b);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 
-.formGroup input:hover {
-  border-color: var(--border-hover);
+.formGroup input:hover:not(:disabled),
+.formGroup select:hover:not(:disabled) {
+  border-color: var(--border-hover, #cbd5e1);
 }
 
-.formGroup input:focus {
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
-  background: var(--bg-primary);
+.formGroup input:focus,
+.formGroup select:focus {
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+  outline: none;
 }
 
 .formGroup input::placeholder {
-  color: var(--text-placeholder);
-  font-weight: var(--font-weight-normal);
+  color: var(--text-tertiary, #94a3b8);
+  font-weight: 400;
 }
 
-/* --- Conteneur pour les boutons --- */
-.formActions {
-  grid-column: 1 / -1;
+.formGroup input:disabled,
+.formGroup select:disabled {
+  background: var(--bg-tertiary, #f8fafc);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.inputError {
+  border-color: #fca5a5 !important;
+  background: #fef2f2 !important;
+}
+
+.inputError:focus {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+
+.inputSuccess {
+  border-color: #059669 !important;
+  background: #f0fdf4 !important;
+}
+
+.inputSuccess:focus {
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12) !important;
+}
+
+.successHint {
+  font-size: 11px;
+  font-weight: 500;
+  color: #059669;
+  animation: fadeIn 0.15s ease;
+}
+
+/* ── Chip dropdown ── */
+.chipDrop {
+  position: relative;
+}
+
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  width: 100%;
+  padding: 0 10px;
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #4b5563);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
+}
+
+.chipBtn:hover {
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.chipBtnActive {
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+}
+
+.chipText {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipArrow {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.chipArrowOpen {
+  transform: rotate(180deg);
+}
+
+.chipMenu {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+}
+
+.chipOption {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+}
+
+.chipOption:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+}
+
+.chipOptionActive {
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+  background: #f0fdfa;
+}
+
+.required {
+  color: #ef4444;
+  margin-left: 1px;
+}
+
+/* ============================================================
+   HELPER TEXTS
+   ============================================================ */
+.hint {
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+  line-height: 1.3;
+}
+
+.error {
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 500;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.loadingText {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: var(--bg-tertiary, #f8fafc);
+  color: var(--text-tertiary, #94a3b8);
+  font-style: italic;
+}
+
+.warningText {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   PASSWORD FIELD
+   ============================================================ */
+.passwordWrap {
+  position: relative;
   display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-lg);
-  border-top: 2px solid var(--border-primary);
+  align-items: center;
 }
 
-/* --- Style de base partagé par les deux boutons --- */
+.passwordWrap input {
+  padding-right: 40px !important;
+}
+
+.eyeBtn {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.eyeBtn:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+  color: var(--text-secondary, #475569);
+}
+
+/* ── Strength indicator ── */
+.strengthRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strengthBar {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+
+.strengthSegment {
+  height: 3px;
+  flex: 1;
+  border-radius: 2px;
+  transition: background 0.2s ease;
+}
+
+.strengthLabel {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   FOOTER — sticky bottom
+   ============================================================ */
+.footer {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+  background: #fff;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
 .submitButton,
 .cancelButton {
-  padding: var(--spacing-sm) var(--spacing-xl);
+  flex: 1;
+  height: 36px;
+  padding: 0 14px;
   border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: 4px;
 }
 
-/* Styles spécifiques au bouton de soumission */
 .submitButton {
-  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
-  color: white;
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(180deg, #00796b, #00695c);
+  color: #fff;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: linear-gradient(180deg, #00695c, #005a4f);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.25);
 }
 
-/* Styles spécifiques au bouton d'annulation */
 .cancelButton {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 2px solid var(--border-primary);
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  border: 1px solid var(--border-primary, #e2e8f0);
 }
 
 .cancelButton:hover:not(:disabled) {
-  background-color: var(--bg-hover);
-  border-color: var(--border-hover);
+  background: var(--bg-tertiary, #f8fafc);
+  border-color: var(--text-tertiary, #94a3b8);
 }
 
-/* --- Styles pour les boutons désactivés (partagé) --- */
 .submitButton:disabled,
 .cancelButton:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* --- Style pour les messages d'erreur --- */
-.error {
-  color: var(--danger-primary);
-  font-size: var(--font-size-xs);
-  margin-top: var(--spacing-xxs);
-  font-weight: var(--font-weight-medium);
+/* ============================================================
+   TOGGLE ROW
+   ============================================================ */
+.toggleRow {
+  margin: 0 !important;
+  padding: 8px 0 !important;
+}
+.toggleRow:hover {
+  margin: 0 !important;
+  padding: 8px 0 !important;
 }
 
-/* --- Responsive --- */
-@media (max-width: 768px) {
-  .form {
+/* ============================================================
+   CHECKBOX
+   ============================================================ */
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-primary, #fff);
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.checkboxGroup:hover {
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.checkboxGroup:has(input[type='checkbox']:checked) {
+  background: #f0fdfa;
+  border-color: var(--brand-primary, #00796b);
+}
+
+.checkboxGroup input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--brand-primary, #00796b);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.checkboxGroup label {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0 !important;
+  cursor: pointer;
+  color: var(--text-primary, #1e293b);
+  user-select: none;
+}
+
+/* ============================================================
+   ADDRESS AUTOCOMPLETE FIX
+   ============================================================ */
+.formGroup :global(div[style*="position: relative"]) {
+  width: 100% !important;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 420px) {
+  .formRow {
     grid-template-columns: 1fr;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg);
+    gap: 0;
+  }
+
+  .header,
+  .section,
+  .footer {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }

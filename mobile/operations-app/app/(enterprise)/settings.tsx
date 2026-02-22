@@ -11,12 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
-import { createShadow } from "@/styles/shadowStyles";
 import {
   getMyDriverAccount,
   DriverAccountInfo,
@@ -24,96 +22,107 @@ import {
 } from "@/services/enterpriseDispatch";
 import { secureStorage, asyncStorage } from "@/services/storage";
 import { fetchDriverProfile, invalidateInterceptorCache } from "@/services/api";
+import { notifyAuthReady } from "@/services/authSync";
 import { sendIngestEvent } from "@/src/config/telemetry";
+import { getLogger } from "@/utils/logger";
 
-// ✅ Palette professionnelle cohérente avec le dashboard driver
-const palette = {
-  background: "#F5F7F6",
-  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
-  heroBorder: "rgba(15,54,43,0.08)",
-  heroText: "#FFFFFF",
-  heroMeta: "rgba(255,255,255,0.9)",
-  cardBg: "#FFFFFF",
-  cardBorder: "rgba(15,54,43,0.08)",
-  cardShadow: "rgba(15,54,43,0.08)",
-  muted: "#91A59D",
-  primary: "#0A7F59",
-  primaryText: "#FFFFFF",
-  logoutBg: "rgba(239,68,68,0.08)",
-  logoutBorder: "rgba(239,68,68,0.2)",
-  error: "#EF4444",
-  switchBg: "rgba(10,127,89,0.1)",
-  switchBorder: "rgba(10,127,89,0.25)",
-};
+const log = getLogger("EntSettings");
+
+const BRAND = "#00796B";
+const BRAND_DARK = "#00695C";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "rgba(0,121,107,0.08)";
+const BG = "#f4f7fc";
+const CARD = "#FFFFFF";
+const DANGER = "#dc3545";
+
+const cardShadow = Platform.select({
+  ios: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+  },
+  android: { elevation: 2 },
+  default: {},
+});
+
+const btnShadow = Platform.select({
+  ios: {
+    shadowColor: BRAND,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  android: { elevation: 3 },
+  default: {},
+});
+
+const sheetShadow = Platform.select({
+  ios: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+  },
+  android: { elevation: 12 },
+  default: {},
+});
 
 export default function EnterpriseSettingsScreen() {
-  const { enterpriseSession, logoutEnterprise, switchMode, loadDriverSession } = useAuth();
+  const { enterpriseSession, logoutEnterprise, switchMode, loadDriverSession } =
+    useAuth();
 
-  const [driverAccount, setDriverAccount] = useState<DriverAccountInfo | null>(null);
+  const [driverAccount, setDriverAccount] = useState<DriverAccountInfo | null>(
+    null
+  );
   const [checkingDriverAccount, setCheckingDriverAccount] = useState(true);
   const [switchingToDriver, setSwitchingToDriver] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
 
-  // Charger l'info du compte chauffeur (avec cache AsyncStorage)
   useEffect(() => {
     const checkDriverAccount = async () => {
       setCheckingDriverAccount(true);
       try {
-        // 1. D'abord, essayer de charger depuis le cache
         const cachedInfo = await asyncStorage.getDriverAccountInfo();
         if (cachedInfo) {
-          console.log("[Settings] Info compte chauffeur chargée depuis le cache:", cachedInfo);
-          // #region agent log
+          log.info("driver account loaded from cache", { cachedInfo });
           sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from cache', data: { hasDriverAccount: cachedInfo.has_driver_account, driverType: cachedInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-          // #endregion
           setDriverAccount(cachedInfo);
           setCheckingDriverAccount(false);
 
-          // 2. En arrière-plan, vérifier si l'info est toujours à jour
           try {
             const freshInfo = await getMyDriverAccount();
-            console.log("[Settings] Réponse getMyDriverAccount (fresh):", freshInfo);
-            // #region agent log
+            log.info("getMyDriverAccount fresh response", { freshInfo });
             sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API', data: { hasDriverAccount: freshInfo.has_driver_account, driverType: freshInfo.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-            // #endregion
-            // Mettre à jour le cache et l'état si différent
             if (JSON.stringify(cachedInfo) !== JSON.stringify(freshInfo)) {
               await asyncStorage.setDriverAccountInfo(freshInfo);
               setDriverAccount(freshInfo);
             }
           } catch (error) {
-            // Si l'appel échoue, on garde le cache
-            console.warn("[Settings] Impossible de rafraîchir l'info du compte chauffeur:", error);
-            // #region agent log
+            log.warn("could not refresh driver account info", { error });
             sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Error refreshing driver account', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-            // #endregion
           }
           return;
         }
 
-        // 3. Si pas de cache, faire l'appel API
-        console.log("[Settings] Vérification du compte chauffeur...");
+        log.info("checking driver account");
         const info = await getMyDriverAccount();
-        console.log("[Settings] Réponse getMyDriverAccount:", info);
-        // #region agent log
+        log.info("getMyDriverAccount response", { info });
         sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Driver account from API (no cache)', data: { hasDriverAccount: info.has_driver_account, driverType: info.driver_type }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-        // #endregion
         setDriverAccount(info);
-        // Sauvegarder dans le cache
         await asyncStorage.setDriverAccountInfo(info);
       } catch (error: any) {
-        console.error("[Settings] Erreur lors de la vérification du compte chauffeur:", error);
-        console.error("[Settings] Détails de l'erreur:", {
+        log.error("driver account check failed", {
           message: error?.message,
           response: error?.response?.data,
           status: error?.response?.status,
         });
-        // #region agent log
         sendIngestEvent({ location: 'settings.tsx:checkDriverAccount', message: 'Error checking driver account', data: { error: String(error), status: error?.response?.status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-        // #endregion
         setDriverAccount({ has_driver_account: false });
-        // Sauvegarder dans le cache même en cas d'erreur
         await asyncStorage.setDriverAccountInfo({ has_driver_account: false });
       } finally {
         setCheckingDriverAccount(false);
@@ -122,34 +131,24 @@ export default function EnterpriseSettingsScreen() {
     checkDriverAccount();
   }, []);
 
-  // Fonction pour basculer vers le compte chauffeur
   const handleSwitchToDriver = useCallback(async () => {
-    // #region agent log
     sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'handleSwitchToDriver entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-    // #endregion
 
     setShowSwitchModal(false);
     setSwitchingToDriver(true);
     try {
-      // 1. Obtenir un token driver à partir du token entreprise
-      // #region agent log
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchToDriverToken', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
       const driverTokenResponse = await switchToDriverToken();
 
-      // #region agent log
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token, userPublicId: driverTokenResponse.user?.public_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
-      console.log("[Settings] Tokens driver reçus:", {
+      log.info("driver tokens received", {
         hasToken: !!driverTokenResponse.token,
         hasRefreshToken: !!driverTokenResponse.refresh_token,
         userPublicId: driverTokenResponse.user.public_id,
       });
 
-      // 2. Stocker les tokens driver AVANT de nettoyer l'entreprise
-      // Cela garantit que les tokens driver sont sauvegardés avant toute opération de nettoyage
       await secureStorage.setAccessToken(driverTokenResponse.token);
       if (driverTokenResponse.refresh_token) {
         await secureStorage.setRefreshToken(driverTokenResponse.refresh_token);
@@ -157,50 +156,33 @@ export default function EnterpriseSettingsScreen() {
       if (driverTokenResponse.user.public_id) {
         await secureStorage.setUserPublicId(driverTokenResponse.user.public_id);
       }
-      // Invalider le cache de l'intercepteur pour forcer l'utilisation des nouveaux tokens driver
       invalidateInterceptorCache();
-      console.log("[Settings] Tokens driver stockés dans SecureStorage et cache intercepteur invalidé");
+      log.success("driver tokens stored and cache invalidated");
 
-      // 3. Basculer vers le mode driver AVANT de nettoyer l'entreprise
-      // Cela garantit que le contexte auth est mis à jour avec le bon mode
-      // #region agent log
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
       await switchMode("driver");
 
-      // #region agent log
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
-      console.log("[Settings] Mode changé vers 'driver'");
+      log.success("mode switched to driver");
 
-      // 4. Nettoyer l'entreprise (cela ne devrait pas affecter les tokens driver déjà stockés)
       await logoutEnterprise();
-      console.log("[Settings] Stockage entreprise nettoyé");
+      log.success("enterprise storage cleared");
 
-      // 5. Charger la session driver depuis SecureStorage et mettre à jour le contexte
-      // Au lieu d'appeler fetchDriverProfile et refreshProfile (qui peuvent échouer),
-      // nous chargeons directement la session que nous venons de stocker
+      notifyAuthReady();
+
       await loadDriverSession();
-      console.log("[Settings] Session driver chargée depuis SecureStorage");
+      log.success("driver session loaded from secure storage");
 
-      // 6. Attendre un peu pour que le state se mette à jour
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // 7. Naviguer vers la page driver
-      // Le système de navigation dans _layout.tsx gérera automatiquement la redirection
-      // mais on force la navigation ici pour être sûr
-      // #region agent log
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Avant navigation mission', data: { target: '/(tabs)/mission' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
       router.replace("/(tabs)/mission" as any);
     } catch (error: any) {
-      console.error("Erreur lors du basculement:", error);
-      // #region agent log
+      log.error("switch to driver failed", { error });
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Erreur handleSwitchToDriver', data: { error: String(error), status: error?.response?.status, errorMessage: error?.response?.data?.error }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
-      // #endregion
 
       const errorMessage =
         error?.response?.data?.error ??
@@ -212,386 +194,449 @@ export default function EnterpriseSettingsScreen() {
     }
   }, [logoutEnterprise, switchMode, loadDriverSession]);
 
-  const heroSubtitle = "Gérez votre compte et basculez entre les modes entreprise et chauffeur.";
+  const companyName = enterpriseSession?.company?.name || "Entreprise";
+  const userName = enterpriseSession?.user
+    ? `${enterpriseSession.user.first_name || ""} ${enterpriseSession.user.last_name || ""}`.trim()
+    : "";
+  const userEmail = enterpriseSession?.user?.email || "";
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <LinearGradient
-        colors={palette.heroGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Paramètres</Text>
-          <Text style={styles.heroSubtitle}>{heroSubtitle}</Text>
-        </View>
-        <View style={styles.heroBadge}>
-          <Ionicons name="settings-outline" size={18} color={palette.primaryText} />
-          <Text style={styles.heroBadgeText}>
-            {enterpriseSession?.company?.name || "Entreprise"}
-          </Text>
-        </View>
-      </LinearGradient>
-
-      {/* Indicateur de chargement */}
-      {checkingDriverAccount && (
-        <View style={styles.card}>
-          <View style={styles.switchAccountHeader}>
-            <ActivityIndicator size="small" color={palette.primary} />
-            <Text style={[styles.sectionDescription, { marginLeft: 12 }]}>
-              Vérification du compte chauffeur...
-            </Text>
+    <>
+    <ScrollView
+      style={s.container}
+      contentContainerStyle={s.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+        {/* ——— Compte entreprise ——— */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <Ionicons name="business-outline" size={16} color={BRAND} />
+            <Text style={s.cardTitle}>Compte entreprise</Text>
           </View>
+          <InfoRow label="Entreprise" value={companyName} />
+          {userName ? <InfoRow label="Utilisateur" value={userName} /> : null}
+          {userEmail ? (
+            <InfoRow label="Email" value={userEmail} last />
+          ) : (
+            <InfoRow label="Entreprise" value={companyName} last />
+          )}
         </View>
-      )}
 
-      {/* Message informatif si pas de compte chauffeur - seulement si on a vérifié et qu'il n'y a vraiment pas de compte */}
-      {!checkingDriverAccount && driverAccount && driverAccount.has_driver_account === false && (
-        <View style={styles.card}>
-          <View style={styles.switchAccountHeader}>
-            <Ionicons name="information-circle-outline" size={24} color={palette.muted} />
-            <Text style={[styles.sectionDescription, { marginLeft: 12, flex: 1 }]}>
-              Aucun compte chauffeur associé à votre compte entreprise. Vous pouvez demander à votre administrateur d'en créer un.
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* Section Switch de compte */}
-      {!checkingDriverAccount && driverAccount?.has_driver_account && (
-        <View style={styles.card}>
-          <View style={styles.switchAccountHeader}>
-            <Ionicons name="swap-horizontal" size={24} color={palette.primary} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.sectionTitle}>Compte chauffeur</Text>
-              <Text style={styles.sectionDescription}>
-                {driverAccount.driver_type === "EMERGENCY"
-                  ? "Vous êtes également chauffeur d'urgence"
-                  : "Vous avez également un compte chauffeur"}
+        {/* ——— Compte chauffeur (loading) ——— */}
+        {checkingDriverAccount && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <ActivityIndicator size="small" color={BRAND} />
+              <Text style={[s.cardTitle, { color: TEXT_SEC }]}>
+                Vérification du compte chauffeur…
               </Text>
             </View>
           </View>
+        )}
 
-          <TouchableOpacity
-            style={[styles.switchButton, switchingToDriver && styles.switchButtonDisabled]}
-            onPress={() => setShowSwitchModal(true)}
-            disabled={checkingDriverAccount || switchingToDriver}
-          >
-            {switchingToDriver ? (
-              <>
-                <ActivityIndicator size="small" color={palette.primaryText} />
-                <Text style={styles.switchButtonText}>Basculement en cours...</Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="car-outline" size={20} color={palette.primaryText} />
-                <Text style={styles.switchButtonText}>
-                  Basculer vers le compte chauffeur
+        {/* ——— Pas de compte chauffeur ——— */}
+        {!checkingDriverAccount &&
+          driverAccount &&
+          !driverAccount.has_driver_account && (
+            <View style={s.card}>
+              <View style={s.cardHeader}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color={TEXT_MUTED}
+                />
+                <Text style={[s.cardTitle, { color: TEXT_MUTED }]}>
+                  Compte chauffeur
                 </Text>
-              </>
-            )}
+              </View>
+              <Text style={s.cardMessage}>
+                Aucun compte chauffeur associé.{"\n"}Contactez votre
+                administrateur pour en créer un.
+              </Text>
+            </View>
+          )}
+
+        {/* ——— Basculer vers chauffeur ——— */}
+        {!checkingDriverAccount && driverAccount?.has_driver_account && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <Ionicons name="swap-horizontal" size={16} color={BRAND} />
+              <Text style={s.cardTitle}>Compte chauffeur</Text>
+            </View>
+            <Text style={s.cardMessage}>
+              {driverAccount.driver_type === "EMERGENCY"
+                ? "Vous êtes également chauffeur d'urgence."
+                : "Vous avez également un compte chauffeur."}
+            </Text>
+            <TouchableOpacity
+              style={[s.primaryBtn, switchingToDriver && s.primaryBtnDisabled]}
+              onPress={() => setShowSwitchModal(true)}
+              disabled={checkingDriverAccount || switchingToDriver}
+              activeOpacity={0.7}
+            >
+              {switchingToDriver ? (
+                <>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={s.primaryBtnText}>Basculement…</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="car-outline" size={16} color="#fff" />
+                  <Text style={s.primaryBtnText}>
+                    Basculer vers le compte chauffeur
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ——— Déconnexion ——— */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <Ionicons name="log-out-outline" size={16} color={DANGER} />
+            <Text style={[s.cardTitle, { color: DANGER }]}>Déconnexion</Text>
+          </View>
+          <Text style={s.cardMessage}>
+            Se déconnecter de l'espace entreprise.
+          </Text>
+          <TouchableOpacity
+            style={s.dangerBtn}
+            onPress={() => setShowLogoutModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="log-out-outline" size={15} color="#fff" />
+            <Text style={s.dangerBtnText}>Se déconnecter</Text>
           </TouchableOpacity>
         </View>
-      )}
 
-      {/* Bouton de déconnexion */}
-      <TouchableOpacity
-        style={styles.logoutButton}
-        onPress={() => setShowLogoutModal(true)}
-      >
-        <Text style={styles.logoutButtonText}>Se déconnecter</Text>
-      </TouchableOpacity>
+        <View style={s.bottomSpacing} />
+      </ScrollView>
 
-      {/* Modal de confirmation de switch */}
+      {/* ——— Modal switch chauffeur (bottom sheet) ——— */}
+      {/* Modals rendered outside ScrollView for proper overlay */}
       <Modal
         visible={showSwitchModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowSwitchModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconContainer}>
-              <Ionicons
-                name="swap-horizontal"
-                size={32}
-                color={palette.primary}
-              />
+        <Pressable
+          style={s.modalOverlay}
+          onPress={() => setShowSwitchModal(false)}
+        >
+          <View
+            style={s.sheetContainer}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={s.sheetHandle} />
+            <View style={[s.sheetIcon, { backgroundColor: "rgba(0,121,107,0.08)" }]}>
+              <Ionicons name="swap-horizontal" size={22} color={BRAND} />
             </View>
-            <Text style={styles.modalTitle}>Basculer vers le compte chauffeur</Text>
-            <Text style={styles.modalMessage}>
-              Vous allez être automatiquement connecté en tant que chauffeur. La connexion au compte entreprise sera fermée.
+            <Text style={s.sheetTitle}>Basculer vers le compte chauffeur</Text>
+            <Text style={s.sheetMessage}>
+              Vous allez être automatiquement connecté en tant que chauffeur. La
+              connexion entreprise sera fermée.
             </Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancel}
+            <View style={s.sheetActions}>
+              <TouchableOpacity
+                style={s.sheetCancel}
                 onPress={() => setShowSwitchModal(false)}
               >
-                <Text style={styles.modalCancelText}>Annuler</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalConfirm}
+                <Text style={s.sheetCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.sheetConfirm, { backgroundColor: BRAND }]}
                 onPress={handleSwitchToDriver}
               >
-                <Text style={styles.modalConfirmText}>Continuer</Text>
-              </Pressable>
+                <Ionicons
+                  name="swap-horizontal-outline"
+                  size={15}
+                  color="#fff"
+                />
+                <Text style={s.sheetConfirmText}>Basculer</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </Pressable>
       </Modal>
 
-      {/* Modal de confirmation de déconnexion */}
+      {/* ——— Modal déconnexion (bottom sheet) ——— */}
       <Modal
         visible={showLogoutModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowLogoutModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIconContainer}>
-              <Ionicons
-                name="log-out-outline"
-                size={32}
-                color={palette.error}
-              />
+        <Pressable
+          style={s.modalOverlay}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <View
+            style={s.sheetContainer}
+            onStartShouldSetResponder={() => true}
+            onTouchEnd={(e) => e.stopPropagation()}
+          >
+            <View style={s.sheetHandle} />
+            <View style={[s.sheetIcon, { backgroundColor: "rgba(220,53,69,0.08)" }]}>
+              <Ionicons name="log-out-outline" size={22} color={DANGER} />
             </View>
-            <Text style={styles.modalTitle}>Déconnexion</Text>
-            <Text style={styles.modalMessage}>
+            <Text style={s.sheetTitle}>Déconnexion</Text>
+            <Text style={s.sheetMessage}>
               Voulez-vous quitter l'espace entreprise ?
             </Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancel}
+            <View style={s.sheetActions}>
+              <TouchableOpacity
+                style={s.sheetCancel}
                 onPress={() => setShowLogoutModal(false)}
               >
-                <Text style={styles.modalCancelText}>Annuler</Text>
-              </Pressable>
-              <Pressable
-                style={styles.modalConfirm}
+                <Text style={s.sheetCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.sheetConfirm, { backgroundColor: DANGER }]}
                 onPress={async () => {
                   setShowLogoutModal(false);
                   await logoutEnterprise();
-                  // Rediriger vers l'écran de connexion entreprise après déconnexion
                   router.replace("/(enterprise-auth)/login" as any);
                 }}
               >
-                <Text style={styles.modalConfirmText}>Se déconnecter</Text>
-              </Pressable>
+                <Ionicons name="log-out-outline" size={15} color="#fff" />
+                <Text style={s.sheetConfirmText}>Se déconnecter</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </Pressable>
       </Modal>
-    </ScrollView>
+    </>
   );
 }
 
-const styles = StyleSheet.create({
+function InfoRow({
+  label,
+  value,
+  last,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  return (
+    <View style={[s.infoRow, last && s.infoRowLast]}>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: palette.background,
+    backgroundColor: BG,
   },
-  content: {
-    padding: 20,
+
+  // ——— Scroll ———
+  scrollContent: {
+    padding: 16,
     paddingBottom: Platform.OS === "ios" ? 94 : 84,
-    gap: 22,
+    gap: 12,
   },
-  hero: {
-    borderRadius: 24,
-    padding: 24,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 18,
-    borderWidth: 1,
-    borderColor: palette.heroBorder,
-    ...createShadow({
-      shadowColor: "rgba(10,127,89,0.15)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      elevation: 8,
-    }), // ✅ Compatible web/native
-  },
-  heroTitle: {
-    color: palette.heroText,
-    fontSize: 26,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  heroSubtitle: {
-    color: palette.heroMeta,
-    fontSize: 14,
-    marginTop: 6,
-  },
-  heroBadge: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: palette.cardBorder,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  heroBadgeText: {
-    color: palette.primaryText,
-    fontWeight: "700",
-    fontSize: 13,
-  },
+
+  // ——— Cards ———
   card: {
-    backgroundColor: palette.cardBg,
-    borderRadius: 20,
-    padding: 22,
+    backgroundColor: CARD,
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
-    borderColor: palette.cardBorder,
-    ...createShadow({
-      shadowColor: palette.cardShadow,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 1,
-      shadowRadius: 12,
-      elevation: 2,
-    }), // ✅ Compatible web/native
-    gap: 16,
+    borderColor: BORDER,
+    ...cardShadow,
   },
-  switchAccountHeader: {
+  cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
   },
-  sectionTitle: {
-    color: "#15362B",
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.2,
-  },
-  sectionDescription: {
-    color: palette.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
-  },
-  switchButton: {
-    backgroundColor: palette.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    ...createShadow({
-      shadowColor: palette.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 12,
-      elevation: 6,
-    }), // ✅ Compatible web/native
-  },
-  switchButtonDisabled: {
-    opacity: 0.6,
-  },
-  switchButtonText: {
-    color: palette.primaryText,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-  },
-  logoutButton: {
-    backgroundColor: palette.logoutBg,
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    ...createShadow({
-      shadowColor: palette.logoutBg,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.35,
-      shadowRadius: 18,
-      elevation: 6,
-    }), // ✅ Compatible web/native
-  },
-  logoutButtonText: {
-    color: palette.heroText,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.4,
-  },
-  modalOverlay: {
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: TEXT,
+    marginLeft: 10,
     flex: 1,
-    backgroundColor: "rgba(5,22,16,0.82)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    letterSpacing: -0.1,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 400,
-    backgroundColor: palette.cardBg,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: palette.cardBorder,
-    gap: 20,
-    alignItems: "center",
-  },
-  modalIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(10,127,89,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
+  cardMessage: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    lineHeight: 19,
     marginBottom: 4,
   },
-  modalTitle: {
-    color: "#15362B",
-    fontSize: 22,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  modalMessage: {
-    color: palette.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  modalActions: {
+
+  // ——— Info rows ———
+  infoRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    width: "100%",
-    marginTop: 8,
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,121,107,0.05)",
   },
-  modalCancel: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: palette.cardBorder,
+  infoRowLast: {
+    borderBottomWidth: 0,
   },
-  modalCancelText: {
-    color: palette.muted,
+  infoLabel: {
+    fontSize: 12,
     fontWeight: "600",
-    fontSize: 15,
+    color: TEXT_SEC,
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+    flex: 1,
   },
-  modalConfirm: {
-    backgroundColor: palette.primary,
-    paddingHorizontal: 20,
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: TEXT,
+    textAlign: "right",
+    flex: 1.5,
+  },
+
+  // ——— Buttons ———
+  primaryBtn: {
+    backgroundColor: BRAND,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 12,
-    borderRadius: 14,
-    ...createShadow({
-      shadowColor: palette.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 12,
-      elevation: 6,
-    }), // ✅ Compatible web/native
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 8,
+    ...btnShadow,
   },
-  modalConfirmText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 15,
+  primaryBtnDisabled: {
+    opacity: 0.6,
+  },
+  primaryBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  dangerBtn: {
+    backgroundColor: DANGER,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 8,
+    ...Platform.select({
+      ios: {
+        shadowColor: DANGER,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+  dangerBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  bottomSpacing: {
+    height: 20,
+  },
+
+  // ——— Modal overlay ———
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+
+  // ——— Bottom sheet ———
+  sheetContainer: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 36 : 20,
+    alignItems: "center",
+    ...sheetShadow,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    marginBottom: 18,
+  },
+  sheetIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: TEXT,
+    textAlign: "center",
+    letterSpacing: -0.2,
+  },
+  sheetMessage: {
+    fontSize: 13,
+    color: TEXT_SEC,
+    textAlign: "center",
+    lineHeight: 19,
+    marginTop: 8,
+    maxWidth: 300,
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+    marginTop: 20,
+  },
+  sheetCancel: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BG,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.08)",
+  },
+  sheetCancelText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: TEXT_SEC,
+  },
+  sheetConfirm: {
+    flex: 1.2,
+    height: 42,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  sheetConfirmText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
   },
 });

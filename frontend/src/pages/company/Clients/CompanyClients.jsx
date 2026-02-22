@@ -1,6 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  FiPlus,
+  FiSearch,
+  FiArrowUp,
+  FiArrowDown,
+  FiUsers,
+  FiUser,
+  FiHome,
+  FiCheckCircle,
+  FiChevronLeft,
+  FiChevronRight,
+  FiChevronDown,
+  FiRefreshCw,
+  FiX,
+  FiList,
+} from 'react-icons/fi';
+import {
   fetchCompanyClients,
   createClient,
   updateClient,
@@ -15,7 +31,8 @@ import ClientsTable from './components/ClientsTable';
 import EditClientModal from './components/EditClientModal';
 import NewClientModal from './components/NewClientModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
-import ClientDrawer from './components/ClientDrawer';
+import ClientReadView from './components/ClientReadView';
+import ClientEditForm from './components/ClientEditForm';
 import styles from './CompanyClients.module.css';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 import {
@@ -24,25 +41,67 @@ import {
   getClientDisplayName,
 } from '../../../utils/clientSearchUtils';
 
+function ChipDropdown({ icon, value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const selected = options.find((o) => String(o.value) === String(value));
+
+  return (
+    <div className={styles.chipDrop} ref={ref}>
+      <button
+        type="button"
+        className={styles.chipBtn}
+        onClick={() => setOpen((p) => !p)}
+      >
+        {icon}
+        <span className={styles.chipText}>{selected?.label || '—'}</span>
+        <FiChevronDown size={11} className={`${styles.chipArrow} ${open ? styles.chipArrowOpen : ''}`} />
+      </button>
+      {open && (
+        <div className={styles.chipMenu}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              className={`${styles.chipOption} ${String(o.value) === String(value) ? styles.chipOptionActive : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CompanyClients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'regular', 'institution'
+  const [filterType, setFilterType] = useState('all');
   const [editingClient, setEditingClient] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
-  // Nouveaux états pour pagination et tri
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [sortBy, setSortBy] = useState('name'); // 'name', 'email', 'created'
-  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
 
-  // États pour le drawer Master-Detail
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -51,30 +110,19 @@ const CompanyClients = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [pendingOpenClientId, setPendingOpenClientId] = useState(null);
 
-  // URL params pour deep linking
   const [searchParams, setSearchParams] = useSearchParams();
   const didInitOpenClientRef = useRef(false);
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
 
-  // Cache pour les détails des clients
   const clientCache = useMemo(() => new Map(), []);
 
-  // Charger les clients
   const loadClients = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await fetchCompanyClients();
       const clientsArray = Array.isArray(data) ? data : [];
-      
-      // 🐛 DEBUG: Afficher les 3 premiers clients pour voir la structure
-      if (clientsArray.length > 0) {
-        console.log('📊 Structure des clients (3 premiers):');
-        console.log(JSON.stringify(clientsArray.slice(0, 3), null, 2));
-        console.log('🔑 Clés disponibles:', Object.keys(clientsArray[0] || {}));
-      }
-      
       setClients(clientsArray);
     } catch (err) {
       console.error('Erreur lors du chargement des clients:', err);
@@ -118,7 +166,6 @@ const CompanyClients = () => {
     }
   }, [searchParams]);
 
-  // Pré-calcul des haystacks normalisés (une fois par liste clients) — perf 563+ clients
   const clientsWithHaystack = useMemo(
     () =>
       clients.map((c) => ({
@@ -128,9 +175,7 @@ const CompanyClients = () => {
     [clients]
   );
 
-  // Filtrer et trier les clients
   const filteredAndSortedClients = useMemo(() => {
-    // 1. Filtrer (réutilise haystackNorm, normalise le query une seule fois)
     const qNorm = searchTerm ? normalizeText(searchTerm) : '';
     let filtered = clientsWithHaystack.filter(({ client, haystackNorm }) => {
       const matchesSearch = !qNorm || haystackNorm.includes(qNorm);
@@ -143,20 +188,22 @@ const CompanyClients = () => {
       return matchesSearch && matchesType;
     });
 
-    // 2. Trier (sur les clients)
     const list = filtered.map(({ client }) => client);
     list.sort((a, b) => {
       let compareA, compareB;
 
       switch (sortBy) {
-        case 'name':
-          compareA = getClientDisplayName(a).toLowerCase();
-          compareB = getClientDisplayName(b).toLowerCase();
+        case 'name': {
+          const getNameKey = (c) => {
+            if (c.is_institution) return getClientDisplayName(c).toLowerCase();
+            const last = (c.last_name || '').toLowerCase();
+            const first = (c.first_name || '').toLowerCase();
+            return last ? `${last} ${first}` : getClientDisplayName(c).toLowerCase();
+          };
+          compareA = getNameKey(a);
+          compareB = getNameKey(b);
           break;
-        case 'email':
-          compareA = (a.contact_email || '').toLowerCase();
-          compareB = (b.contact_email || '').toLowerCase();
-          break;
+        }
         case 'created':
           compareA = new Date(a.created_at || 0);
           compareB = new Date(b.created_at || 0);
@@ -173,29 +220,23 @@ const CompanyClients = () => {
     return list;
   }, [clientsWithHaystack, searchTerm, filterType, sortBy, sortOrder]);
 
-  // 3. Paginer
   const totalPages = Math.ceil(filteredAndSortedClients.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedClients = filteredAndSortedClients.slice(startIndex, endIndex);
 
-  // Réinitialiser à la page 1 quand les filtres changent
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterType]);
 
-  // Gérer le changement de page
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
-      // Scroll vers le haut du tableau
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
-  // Charger les détails d'un client (pour le drawer)
   const loadClientDetails = useCallback(async (clientId, forceRefresh = false) => {
-    // Vérifier le cache (sauf si forceRefresh est true)
     if (!forceRefresh && clientCache.has(clientId)) {
       setClientDetails(clientCache.get(clientId));
       return;
@@ -207,72 +248,64 @@ const CompanyClients = () => {
       clientCache.set(clientId, details);
       setClientDetails(details);
     } catch (err) {
-      console.error('Erreur lors du chargement des détails:', err);
-      setError('Erreur lors du chargement des détails du client');
+      console.error('Erreur lors du chargement des details:', err);
+      setError('Erreur lors du chargement des details du client');
     } finally {
       setLoadingDetails(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ouvrir le drawer pour un client
   const handleSelectClient = useCallback((client) => {
     const clientId = client.id;
     setSelectedClientId(clientId);
     setIsDrawerOpen(true);
     setIsEditMode(false);
     setHasUnsavedChanges(false);
-    
-    // Mettre à jour l'URL
+
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.set('selected', clientId.toString());
     setSearchParams(newSearchParams);
-    
-    // Charger les détails
+
     loadClientDetails(clientId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadClientDetails]);
 
-  // Fermer le drawer
   const handleCloseDrawer = useCallback(() => {
     if (hasUnsavedChanges) {
       const confirmed = window.confirm(
-        'Modifications non sauvegardées. Voulez-vous vraiment fermer ?'
+        'Modifications non sauvegardees. Voulez-vous vraiment fermer ?'
       );
       if (!confirmed) return;
     }
-    
+
     setIsDrawerOpen(false);
     setSelectedClientId(null);
     setIsEditMode(false);
     setHasUnsavedChanges(false);
     setClientDetails(null);
-    
-    // Nettoyer l'URL
+
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.delete('selected');
     setSearchParams(newSearchParams);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basculer en mode édition
   const handleEditInDrawer = useCallback(() => {
     setIsEditMode(true);
     setHasUnsavedChanges(false);
   }, []);
 
-  // Annuler l'édition
   const handleCancelEdit = useCallback(() => {
     if (hasUnsavedChanges) {
       const confirmed = window.confirm(
-        'Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?'
+        'Vous avez des modifications non sauvegardees. Voulez-vous vraiment annuler ?'
       );
       if (!confirmed) return;
     }
-    
+
     setIsEditMode(false);
     setHasUnsavedChanges(false);
-    // Recharger les données originales
     if (selectedClientId) {
       clientCache.delete(selectedClientId);
       loadClientDetails(selectedClientId);
@@ -280,53 +313,36 @@ const CompanyClients = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadClientDetails]);
 
-  // Sauvegarder les modifications (pour modal et drawer)
   const handleSaveClient = useCallback(async (clientData, clientId = null) => {
     const targetClientId = clientId || editingClient?.id;
     if (!targetClientId) return;
 
     try {
-      console.log('💾 [handleSaveClient] Début sauvegarde client ID:', targetClientId);
-      console.log('💾 [handleSaveClient] Données:', clientData);
-      
-      // Utiliser l'API complète de mise à jour du client
-      const result = await updateClient(targetClientId, clientData);
-      console.log('✅ [handleSaveClient] Réponse backend:', result);
-
-      // Recharger la liste
-      console.log('🔄 [handleSaveClient] Rechargement de la liste...');
+      await updateClient(targetClientId, clientData);
       await loadClients();
-      console.log('✅ [handleSaveClient] Liste rechargée');
-      
-      // Si c'était depuis le modal, fermer le modal
+
       if (showEditModal) {
         setShowEditModal(false);
         setEditingClient(null);
       }
 
-      // Invalider le cache pour ce client et recharger les détails
       if (targetClientId) {
         clientCache.delete(targetClientId);
-        // Recharger les détails si le drawer est ouvert pour ce client (forcer le refresh)
         if (selectedClientId === targetClientId && isDrawerOpen) {
           await loadClientDetails(targetClientId, true);
         }
       }
     } catch (err) {
-      console.error('❌ [handleSaveClient] Erreur lors de la sauvegarde:', err);
-      console.error('❌ [handleSaveClient] Détails erreur:', err.response?.data || err.message);
+      console.error('Erreur lors de la sauvegarde:', err);
       throw err;
     }
   }, [editingClient, showEditModal, clientCache, selectedClientId, isDrawerOpen, loadClients, loadClientDetails]);
 
-  // Sauvegarder depuis le drawer
   const handleSaveInDrawer = useCallback(async (clientData) => {
     if (!selectedClientId) return;
-    
+
     try {
       await handleSaveClient(clientData, selectedClientId);
-      
-      // Retour en mode lecture
       setIsEditMode(false);
       setHasUnsavedChanges(false);
     } catch (err) {
@@ -336,19 +352,15 @@ const CompanyClients = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleSaveClient]);
 
-  // Ouvrir le modal d'édition (pour compatibilité avec l'ancien comportement)
   const handleEditClient = (client) => {
-    // Si le drawer est ouvert pour ce client, basculer en mode édition
     if (selectedClientId === client.id && isDrawerOpen) {
       handleEditInDrawer();
     } else {
-      // Sinon, ouvrir le modal (ancien comportement)
       setEditingClient(client);
       setShowEditModal(true);
     }
   };
-  
-  // Gérer l'ouverture du drawer depuis l'URL
+
   useEffect(() => {
     const selectedId = searchParams.get('selected');
     if (selectedId) {
@@ -375,25 +387,21 @@ const CompanyClients = () => {
     }
   }, [pendingOpenClientId, clients, selectedClientId, isDrawerOpen, handleSelectClient]);
 
-  // Ouvrir le modal de suppression
   const handleDeleteClick = (client) => {
     setClientToDelete(client);
     setShowDeleteModal(true);
   };
 
-  // Fermer le modal
   const handleCloseModal = () => {
     setShowEditModal(false);
     setEditingClient(null);
   };
 
-  // Fermer le modal de suppression
   const handleCloseDeleteModal = () => {
     setShowDeleteModal(false);
     setClientToDelete(null);
   };
 
-  // Confirmer la suppression
   const handleConfirmDelete = async (hardDelete = false) => {
     if (!clientToDelete) return;
 
@@ -404,7 +412,6 @@ const CompanyClients = () => {
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
 
-      // Message d'erreur détaillé
       let errorMessage = err.error || err.message || 'Erreur lors de la suppression';
 
       if (err.reason) {
@@ -412,27 +419,23 @@ const CompanyClients = () => {
       }
 
       if (err.suggestion) {
-        errorMessage += '\n\n💡 ' + err.suggestion;
+        errorMessage += '\n\n' + err.suggestion;
       }
 
       alert(errorMessage);
     }
   };
 
-  // Créer un nouveau client
   const handleCreateClient = async (clientData, { existingClient } = {}) => {
     let createdClient = existingClient || null;
     try {
-      console.log('Création client avec données:', clientData);
-
       const { hospitalization, billing_party_link, ...clientPayload } = clientData || {};
       const newClient = createdClient || (await createClient(clientPayload));
       createdClient = newClient;
-      console.log('Client créé:', newClient);
 
       const createdClientId = newClient?.id || newClient?.data?.id || newClient?.client?.id;
       if (!createdClientId) {
-        throw new Error('Client créé mais identifiant introuvable.');
+        throw new Error('Client cree mais identifiant introuvable.');
       }
 
       if (hospitalization) {
@@ -455,13 +458,11 @@ const CompanyClients = () => {
         });
       }
 
-      // Recharger la liste complète
       await loadClients();
       return newClient;
     } catch (err) {
-      console.error('Erreur lors de la création du client:', err);
-      console.error('Détails:', err.response?.data);
-      const errorMessage = err?.response?.data?.error || err.message || 'Erreur création client';
+      console.error('Erreur lors de la creation du client:', err);
+      const errorMessage = err?.response?.data?.error || err.message || 'Erreur creation client';
       if (createdClient || err?.createdClient) {
         const wrappedError = new Error(errorMessage);
         wrappedError.createdClient = createdClient || err?.createdClient;
@@ -471,252 +472,280 @@ const CompanyClients = () => {
     }
   };
 
-  // Statistiques
-  const stats = {
+  const stats = useMemo(() => ({
     total: clients.length,
     regular: clients.filter((c) => !c.is_institution).length,
     institutions: clients.filter((c) => c.is_institution).length,
     active: clients.filter((c) => c.is_active).length,
-  };
+  }), [clients]);
+
+  const panelOpen = isDrawerOpen && clientDetails;
+
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleCloseDrawer();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isDrawerOpen, handleCloseDrawer]);
 
   return (
     <>
       <CompanyHeader />
       <div className={styles.layout}>
         <CompanySidebar />
-        <div className={styles.container}>
-          {/* Section Header + Filtres */}
-          <section className={styles.headerSection}>
+        <div className={`${styles.contentArea} ${panelOpen ? styles.contentAreaWithPanel : ''}`}>
+          <main className={styles.main}>
+            {/* Zone A -- Header */}
             <div className={styles.header}>
               <div className={styles.headerLeft}>
-                <h1 className={styles.title}>Gestion des clients</h1>
-                <p className={styles.subtitle}>Gérez vos clients et institutions</p>
+                <h1 className={styles.title}>Clients</h1>
+                <p className={styles.subtitle}>Gerez vos clients et institutions</p>
               </div>
               <button
                 onClick={() => setShowNewClientModal(true)}
-                className={`btn btn-primary ${styles.addBtn}`}
+                className={styles.addBtn}
               >
-                ➕ Ajouter un client
+                <FiPlus size={16} />
+                Ajouter un client
               </button>
             </div>
 
-            {/* Filtres dans le même conteneur */}
-            <div className={styles.filters}>
-              <div className={styles.searchBox}>
-                <label className={styles.searchLabel}>🔍 Recherche globale</label>
+            {/* Zone B -- CommandBar */}
+            <div className={styles.commandBar}>
+              <div className={styles.searchWrap}>
+                <FiSearch className={styles.searchIcon} size={14} />
                 <input
                   type="text"
-                  placeholder="ID, nom, email, téléphone, type de client..."
+                  placeholder="Rechercher..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={styles.searchInput}
                   ref={searchInputRef}
                 />
+                {searchTerm && (
+                  <button className={styles.clearBtn} onClick={() => setSearchTerm('')} type="button">
+                    <FiX size={11} />
+                  </button>
+                )}
               </div>
 
-              <div className={styles.typeFilters}>
+              <ChipDropdown
+                icon={sortOrder === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />}
+                value={sortBy}
+                options={[
+                  { value: 'name', label: 'Nom' },
+                  { value: 'created', label: 'Date de création' },
+                ]}
+                onChange={setSortBy}
+              />
+
+              <button
+                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                className={styles.sortOrderBtn}
+                title={sortOrder === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}
+              >
+                {sortOrder === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
+              </button>
+
+              <ChipDropdown
+                icon={<FiList size={12} />}
+                value={itemsPerPage}
+                options={[
+                  { value: 10, label: '10 / page' },
+                  { value: 25, label: '25 / page' },
+                  { value: 50, label: '50 / page' },
+                ]}
+                onChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
+              />
+
+              <div className={styles.segmented}>
                 <button
-                  className={`${styles.filterBtn} ${filterType === 'all' ? styles.active : ''}`}
+                  type="button"
+                  className={`${styles.segBtn} ${filterType === 'all' ? styles.segBtnActive : ''}`}
                   onClick={() => setFilterType('all')}
                 >
                   Tous
+                  <span className={styles.segCount}>{stats.total}</span>
                 </button>
                 <button
-                  className={`${styles.filterBtn} ${filterType === 'regular' ? styles.active : ''}`}
+                  type="button"
+                  className={`${styles.segBtn} ${filterType === 'regular' ? styles.segBtnActive : ''}`}
                   onClick={() => setFilterType('regular')}
                 >
                   Clients
+                  <span className={styles.segCount}>{stats.regular}</span>
                 </button>
                 <button
-                  className={`${styles.filterBtn} ${
-                    filterType === 'institution' ? styles.active : ''
-                  }`}
+                  type="button"
+                  className={`${styles.segBtn} ${filterType === 'institution' ? styles.segBtnActive : ''}`}
                   onClick={() => setFilterType('institution')}
                 >
                   Institutions
+                  <span className={styles.segCount}>{stats.institutions}</span>
+                </button>
+              </div>
+
+              <div className={styles.barSpacer} />
+
+              <div className={styles.barMeta}>
+                <span className={styles.barResultCount}>
+                  {filteredAndSortedClients.length} résultat{filteredAndSortedClients.length !== 1 ? 's' : ''}
+                </span>
+                <button type="button" className={styles.refreshBtn} title="Rafraîchir" onClick={loadClients}>
+                  <FiRefreshCw size={14} />
                 </button>
               </div>
             </div>
-          </section>
 
-          {/* Statistiques KPI */}
-          <div className={styles.statsGrid}>
-            <div className={styles.statCard}>
-              <span className={styles.statIcon}>👥</span>
-              <div className={styles.statContent}>
-                <h3 className={styles.statLabel}>Total clients</h3>
-                <p className={styles.statValue}>{stats.total}</p>
+            {/* Zone C -- KPIs inline */}
+            <div className={styles.kpiBar}>
+              <div className={styles.kpiItem}>
+                <FiUsers size={14} className={styles.kpiIcon} />
+                <span className={styles.kpiLabel}>Total</span>
+                <span className={styles.kpiValue}>{stats.total}</span>
+              </div>
+              <div className={styles.kpiSep} />
+              <div className={styles.kpiItem}>
+                <FiUser size={14} className={styles.kpiIcon} />
+                <span className={styles.kpiLabel}>Clients</span>
+                <span className={styles.kpiValue}>{stats.regular}</span>
+              </div>
+              <div className={styles.kpiSep} />
+              <div className={styles.kpiItem}>
+                <FiHome size={14} className={styles.kpiIcon} />
+                <span className={styles.kpiLabel}>Institutions</span>
+                <span className={styles.kpiValue}>{stats.institutions}</span>
+              </div>
+              <div className={styles.kpiSep} />
+              <div className={styles.kpiItem}>
+                <FiCheckCircle size={14} className={styles.kpiIcon} />
+                <span className={styles.kpiLabel}>Actifs</span>
+                <span className={styles.kpiValue}>{stats.active}</span>
               </div>
             </div>
-            <div className={styles.statCard}>
-              <span className={styles.statIcon}>👤</span>
-              <div className={styles.statContent}>
-                <h3 className={styles.statLabel}>Clients réguliers</h3>
-                <p className={styles.statValue}>{stats.regular}</p>
+
+            {/* Loading / Error */}
+            {loading && <div className={styles.loading}>Chargement des clients...</div>}
+
+            {error && (
+              <div className={styles.error}>
+                <span>{error}</span>
+                <button onClick={loadClients} className={styles.retryBtn}>
+                  <FiRefreshCw size={14} />
+                  Reessayer
+                </button>
               </div>
-            </div>
-            <div className={styles.statCard}>
-              <span className={styles.statIcon}>🏢</span>
-              <div className={styles.statContent}>
-                <h3 className={styles.statLabel}>Institutions</h3>
-                <p className={styles.statValue}>{stats.institutions}</p>
-              </div>
-            </div>
-            <div className={styles.statCard}>
-              <span className={styles.statIcon}>✅</span>
-              <div className={styles.statContent}>
-                <h3 className={styles.statLabel}>Actifs</h3>
-                <p className={styles.statValue}>{stats.active}</p>
-              </div>
-            </div>
-          </div>
+            )}
 
-          {/* Contenu principal */}
-          {loading && <div className={styles.loading}>Chargement des clients...</div>}
+            {!loading && !error && (
+              <>
+                {/* Zone D -- Table */}
+                <ClientsTable
+                  clients={paginatedClients}
+                  onSelect={handleSelectClient}
+                  onEdit={handleEditClient}
+                  onDelete={handleDeleteClick}
+                  selectedClientId={selectedClientId}
+                  onRefresh={loadClients}
+                />
 
-          {error && (
-            <div className={styles.error}>
-              {error}
-              <button onClick={loadClients} className="btn btn-sm btn-danger">
-                🔄 Réessayer
-              </button>
-            </div>
-          )}
-
-          {!loading && !error && (
-            <>
-              {/* Barre d'outils : tri + pagination */}
-              <div className={styles.toolbar}>
-                <div className={styles.toolbarLeft}>
-                  <div className={styles.sortControls}>
-                    <label htmlFor="sortBy">Trier par:</label>
-                    <select
-                      id="sortBy"
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className={styles.sortSelect}
-                    >
-                      <option value="name">Nom</option>
-                      <option value="email">Email</option>
-                      <option value="created">Date de création</option>
-                    </select>
-
-                    <button
-                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                      className={styles.sortOrderBtn}
-                      title={sortOrder === 'asc' ? 'Ordre croissant' : 'Ordre décroissant'}
-                    >
-                      {sortOrder === 'asc' ? '↑' : '↓'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className={styles.toolbarRight}>
-                  <label htmlFor="itemsPerPage">Afficher:</label>
-                  <select
-                    id="itemsPerPage"
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className={styles.perPageSelect}
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Tableau des clients */}
-              <ClientsTable
-                clients={paginatedClients}
-                onSelect={handleSelectClient}
-                onEdit={handleEditClient}
-                onDelete={handleDeleteClick}
-                selectedClientId={selectedClientId}
-                onRefresh={loadClients}
-              />
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className={styles.paginationContainer}>
-                  <div className={styles.pagination}>
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className={styles.paginationBtn}
-                    >
-                      ← Précédent
-                    </button>
-
-                    <span className={styles.pageInfo}>
-                      Page {currentPage} sur {totalPages}
+                {/* Pagination compacte */}
+                {totalPages > 1 && (
+                  <div className={styles.paginationBar}>
+                    <span className={styles.paginationInfo}>
+                      Affichage {startIndex + 1}&ndash;{Math.min(endIndex, filteredAndSortedClients.length)} sur{' '}
+                      {filteredAndSortedClients.length} resultats
                     </span>
-
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className={styles.paginationBtn}
-                    >
-                      Suivant →
-                    </button>
+                    <div className={styles.paginationControls}>
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={styles.paginationBtn}
+                        aria-label="Page precedente"
+                      >
+                        <FiChevronLeft size={16} />
+                      </button>
+                      <span className={styles.pageInfo}>
+                        Page {currentPage} sur {totalPages}
+                      </span>
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className={styles.paginationBtn}
+                        aria-label="Page suivante"
+                      >
+                        <FiChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
+          </main>
 
-          {/* Modal d'édition */}
-          {showEditModal && editingClient && (
-            <EditClientModal
-              client={editingClient}
-              onClose={handleCloseModal}
-              onSave={handleSaveClient}
-            />
-          )}
-
-          {/* Modal création */}
-          {showNewClientModal && (
-            <NewClientModal
-              onClose={() => setShowNewClientModal(false)}
-              onSave={handleCreateClient}
-            />
-          )}
-
-          {/* Modal suppression */}
-          {showDeleteModal && clientToDelete && (
-            <DeleteConfirmModal
-              client={clientToDelete}
-              onClose={handleCloseDeleteModal}
-              onConfirm={handleConfirmDelete}
-            />
-          )}
-
-          {/* Side Drawer */}
-          {isDrawerOpen && clientDetails && (
-            <ClientDrawer
-              client={clientDetails}
-              isOpen={isDrawerOpen}
-              isEditMode={isEditMode}
-              onClose={handleCloseDrawer}
-              onEdit={handleEditInDrawer}
-              onSave={handleSaveInDrawer}
-              onCancelEdit={handleCancelEdit}
-              loading={loadingDetails}
-              hasUnsavedChanges={hasUnsavedChanges}
-              onReloadClient={() => {
-                if (selectedClientId) {
-                  clientCache.delete(selectedClientId);
-                  loadClientDetails(selectedClientId, true);
-                }
-              }}
-            />
+          {/* Side Panel (inline, same pattern as CompanyDriver) */}
+          {panelOpen && (
+            <aside className={styles.sidePanel}>
+              <div className={styles.sidePanelInner}>
+                {isEditMode ? (
+                  <ClientEditForm
+                    client={clientDetails}
+                    onSave={handleSaveInDrawer}
+                    onCancel={handleCancelEdit}
+                    onClose={handleCloseDrawer}
+                    loading={loadingDetails}
+                    hasUnsavedChanges={hasUnsavedChanges}
+                    onUnsavedChangesChange={setHasUnsavedChanges}
+                    onReloadClient={() => {
+                      if (selectedClientId) {
+                        clientCache.delete(selectedClientId);
+                        loadClientDetails(selectedClientId, true);
+                      }
+                    }}
+                  />
+                ) : (
+                  <ClientReadView
+                    client={clientDetails}
+                    onEdit={handleEditInDrawer}
+                    onClose={handleCloseDrawer}
+                    loading={loadingDetails}
+                  />
+                )}
+              </div>
+            </aside>
           )}
         </div>
       </div>
+
+      {/* Modals (rendered outside layout to avoid z-index issues) */}
+      {showEditModal && editingClient && (
+        <EditClientModal
+          client={editingClient}
+          onClose={handleCloseModal}
+          onSave={handleSaveClient}
+        />
+      )}
+
+      {showNewClientModal && (
+        <NewClientModal
+          onClose={() => setShowNewClientModal(false)}
+          onSave={handleCreateClient}
+        />
+      )}
+
+      {showDeleteModal && clientToDelete && (
+        <DeleteConfirmModal
+          client={clientToDelete}
+          onClose={handleCloseDeleteModal}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
     </>
   );
 };

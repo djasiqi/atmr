@@ -418,6 +418,38 @@
 }
 .modal-xl .modal-content {
   max-width: 1200px !important;
+  width: 95%;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 0;
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  display: flex;
+  flex-direction: column;
+  height: 80vh;
+  max-height: 860px;
+}
+
+@media (min-width: 1200px) {
+  .modal-xl .modal-content {
+    max-width: 1200px !important;
+    width: min(95%, 1200px);
+  }
+}
+
+@media (max-height: 700px) {
+  .modal-xl .modal-content {
+    height: 95vh;
+    max-height: none;
+  }
+}
+
+/* Enfant direct remplit toute la hauteur — le scroll est géré par le formulaire */
+.modal-xl .modal-content > * {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
 }
 
 /* Taille spéciale pour les modales compactes (planification, assignation) */

@@ -117,6 +117,26 @@ export const fetchCompanies = async () => {
 };
 
 /**
+ * Récupère la liste de toutes les institutions (cliniques, EMS, hôpitaux).
+ * Utilise GET /admin/institutions (admin uniquement).
+ */
+export const fetchInstitutions = async () => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/institutions', { headers });
+    console.log('📌 Données reçues de /admin/institutions :', response.data);
+    return response.data?.institutions ?? (Array.isArray(response.data) ? response.data : []);
+  } catch (error) {
+    console.error(
+      '❌ Erreur lors de la récupération des institutions :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
  * Met à jour le rôle d'un utilisateur.
  * Si le rôle 'driver' est sélectionné sans fournir de company_id,
  * affiche la liste des entreprises et demande à l'admin de choisir.

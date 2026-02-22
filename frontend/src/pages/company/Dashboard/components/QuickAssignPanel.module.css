@@ -1,0 +1,335 @@
+/* ============================================================
+   QUICK ASSIGN PANEL — Drawer assignation rapide
+   Sobre, opérationnel, actionnable
+   ============================================================ */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 1100;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 400px;
+  max-width: 90vw;
+  background: var(--bg-primary);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1);
+  z-index: 1101;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* ---- Header ---- */
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--spacing-xs);
+  color: var(--text-tertiary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---- Body ---- */
+
+.panelBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+}
+
+/* ---- Résumé course ---- */
+
+.bookingSummary {
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  border: 1px solid var(--border-primary);
+}
+
+.summaryRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.summaryIcon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.summaryLabel {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.summaryValue {
+  display: block;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.summaryDelay {
+  background: var(--warning-bg);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--warning-primary);
+  margin-top: var(--spacing-xxs);
+}
+
+.summaryDelay .summaryIcon {
+  color: var(--warning-primary);
+}
+
+.summaryValueDanger {
+  display: block;
+  font-size: var(--font-sm);
+  color: var(--error-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---- Section chauffeurs ---- */
+
+.driverSection {
+  margin-top: var(--spacing-xs);
+}
+
+.driverSectionTitle {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--spacing-sm) 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.driverList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.noDrivers {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: var(--spacing-xl);
+  margin: 0;
+}
+
+.driverCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+}
+
+.driverCard:hover {
+  border-color: var(--brand-primary);
+  background: var(--bg-secondary);
+}
+
+.driverCardSelected {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-lightest, #e0f2f1);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.12);
+}
+
+.driverCardBusy {
+  opacity: 0.55;
+}
+
+.driverCardBusy:hover {
+  opacity: 0.75;
+}
+
+.driverInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.driverName {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.driverStatus {
+  font-size: var(--font-xs);
+}
+
+.statusAvailable {
+  color: var(--success-primary);
+}
+
+.statusBusy {
+  color: var(--warning-hover, #d97706);
+}
+
+.checkIcon {
+  color: var(--brand-primary);
+  flex-shrink: 0;
+}
+
+/* ---- Footer ---- */
+
+.panelFooter {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.confirmBtn {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: inherit;
+  box-shadow: var(--shadow-brand);
+}
+
+.confirmBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.confirmBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 768px) {
+  .panel {
+    width: 85vw;
+    max-width: 85vw;
+  }
+
+  .panelBody {
+    padding: var(--spacing-md);
+  }
+
+  .bookingSummary {
+    padding: var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  .summaryValue {
+    font-size: var(--font-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .panel {
+    width: 100vw;
+    max-width: 100vw;
+    border-radius: 0;
+  }
+
+  .panelHeader {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .panelTitle {
+    font-size: var(--font-md);
+  }
+
+  .panelBody {
+    padding: var(--spacing-sm);
+  }
+
+  .panelFooter {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .bookingSummary {
+    padding: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .driverCard {
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .driverName {
+    font-size: var(--font-xs);
+  }
+
+  .confirmBtn {
+    padding: var(--spacing-sm);
+    font-size: var(--font-xs);
+    min-height: 40px;
+  }
+}

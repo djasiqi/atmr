@@ -1,5 +1,8 @@
 // src/config/env.ts
-import Constants from 'expo-constants';
+import { getLogger } from "@/utils/logger";
+import Constants from "expo-constants";
+
+const log = getLogger("Env");
 
 const get = (name: string) =>
   process.env[name as keyof typeof process.env] ??
@@ -10,8 +13,8 @@ const required = (name: string) => {
   if (val && String(val).trim().length > 0) return String(val);
   const msg = `[ENV] Missing ${name}. Ajoute ${name} dans .env.local (ou dans EAS Secrets).`;
   if (__DEV__) throw new Error(msg);
-  console.warn(msg);
-  return '';
+  log.warn(msg);
+  return "";
 };
 
 export const GOOGLE_API_KEY = required('EXPO_PUBLIC_GOOGLE_API_KEY');            // Directions API (REST)

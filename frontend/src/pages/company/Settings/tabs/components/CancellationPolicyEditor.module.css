@@ -1,0 +1,200 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.toggleRow,
+.optionRow {
+  display: flex;
+  align-items: center;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.toggle input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--primary, #2563eb);
+}
+
+.minMaxRow {
+  display: flex;
+  gap: 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.field label {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
+}
+
+.field input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.tiersSection {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.tierTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text-primary, #1e293b);
+}
+
+.emptyHint {
+  font-size: 0.8rem;
+  color: var(--text-tertiary, #94a3b8);
+  margin: 0 0 0.5rem;
+}
+
+.tierRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  flex-wrap: wrap;
+}
+
+.tierField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 80px;
+}
+
+.tierField label {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
+}
+
+.tierField input,
+.tierField select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 5px;
+  font-size: 0.8rem;
+  width: 100px;
+}
+
+.tierPreview {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #94a3b8);
+  padding-bottom: 0.35rem;
+  white-space: nowrap;
+}
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: var(--danger, #ef4444);
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.removeBtn:hover {
+  background: var(--danger-bg, #fef2f2);
+}
+
+.addBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed var(--border, #cbd5e1);
+  border-radius: 6px;
+  background: none;
+  color: var(--primary, #2563eb);
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.addBtn:hover {
+  background: var(--primary-bg, #eff6ff);
+}
+
+.overridesGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.overrideRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  gap: 0.5rem;
+}
+
+.overrideLabel {
+  font-size: 0.8rem;
+  color: var(--text-primary, #1e293b);
+  flex: 1;
+}
+
+.overrideBtns {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.overrideBtn {
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 4px;
+  background: var(--bg-surface, #fff);
+  font-size: 0.7rem;
+  cursor: pointer;
+  color: var(--text-secondary, #64748b);
+}
+
+.overrideBtn:hover {
+  background: var(--bg-hover, #f8fafc);
+}
+
+.activeNo {
+  background: var(--danger-bg, #fef2f2);
+  border-color: var(--danger, #ef4444);
+  color: var(--danger, #ef4444);
+}
+
+.activeYes {
+  background: var(--success-bg, #f0fdf4);
+  border-color: var(--success, #22c55e);
+  color: var(--success, #22c55e);
+}
+
+.overrideDefault {
+  font-size: 0.7rem;
+  color: var(--text-tertiary, #94a3b8);
+}

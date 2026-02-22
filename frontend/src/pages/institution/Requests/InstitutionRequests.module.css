@@ -1,0 +1,799 @@
+/* InstitutionRequests.module.css
+ * Master-detail layout — liste + panel détail
+ */
+
+/* ── Design tokens ── */
+.masterDetail {
+  display: flex;
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --brand: #00796B;
+  --brand-hover: #00695C;
+  --brand-light: #F0FDFA;
+  --border: #E2E8F0;
+  --border-hover: #CBD5E1;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --bg-surface: #FFFFFF;
+  --bg-muted: #F8FAFC;
+  --danger: #EF4444;
+  --success: #059669;
+  --warning: #D97706;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --transition: 0.2s ease;
+
+  /* Stretch into the parent content area */
+  margin: -24px -28px;
+  min-height: calc(100vh - 64px);
+}
+
+/* ── List column ── */
+.listColumn {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 20px 48px;
+  overflow-y: auto;
+}
+
+/* ── Detail column ── */
+.detailColumn {
+  width: 440px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  overflow: hidden;
+  animation: panelSlideIn 0.2s ease;
+}
+
+@keyframes panelSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Selected card state ── */
+.requestCardSelected {
+  border-color: var(--brand) !important;
+  background: var(--brand-light) !important;
+  box-shadow: 0 0 0 1px var(--brand) !important;
+}
+
+/* ═══ TOOLBAR (search + filters) ═══ */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.searchBox {
+  flex: 1;
+  position: relative;
+}
+
+.searchBox input {
+  width: 100%;
+  height: 38px;
+  padding: 0 14px 0 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  outline: none;
+  transition: border-color var(--transition);
+  box-sizing: border-box;
+}
+
+.searchBox input:hover { border-color: var(--border-hover); }
+.searchBox input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.08); }
+.searchBox input::placeholder { color: var(--text-muted); }
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.filterBtn {
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.filterBtn:hover { border-color: var(--border-hover); background: var(--bg-muted); }
+.filterBtnActive { border-color: var(--brand); background: var(--brand-light); color: var(--brand); }
+
+.filtersPanel {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filterGroup label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.filterGroup select,
+.filterGroup input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  min-width: 130px;
+  outline: none;
+}
+
+.filterGroup select:focus,
+.filterGroup input:focus { border-color: var(--brand); }
+
+.clearBtn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.clearBtn:hover { background: var(--bg-muted); color: var(--text-primary); }
+
+/* ═══ STATUS PILLS (quick filter) ═══ */
+.statusPills {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-surface);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.statusPill:hover { border-color: var(--border-hover); background: var(--bg-muted); }
+
+.statusPillActive {
+  border-color: var(--brand);
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.pillCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.statusPillActive .pillCount {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ═══ DATE GROUP ═══ */
+.dateGroup {
+  margin-bottom: 8px;
+}
+
+.dateGroupLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 0;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+/* ═══ REQUEST CARD (row) ═══ */
+.requestCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.requestCard:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.requestCard:active {
+  transform: translateY(0);
+}
+
+/* Status indicator (left bar) */
+.cardIndicator {
+  width: 4px;
+  height: 44px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.indicatorCompleted { background: var(--success); }
+.indicatorReturnCompleted { background: var(--success); }
+.indicatorInProgress { background: #2563EB; }
+.indicatorEnRoute { background: #2563EB; }
+.indicatorAssigned { background: var(--brand); }
+.indicatorAccepted { background: var(--brand); }
+.indicatorPending { background: var(--text-muted); }
+.indicatorDraft { background: var(--text-muted); }
+.indicatorSent { background: #2563EB; }
+.indicatorConverted { background: var(--success); }
+.indicatorCancelled { background: var(--danger); }
+.indicatorExpired { background: var(--text-muted); }
+
+/* Col 1 — nom patient + statut (2 lignes, aligné en haut) */
+.colLeft {
+  min-width: 130px;
+  max-width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: flex-start;
+}
+
+.patientName {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusLine {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Col 2 — trajet (centré verticalement) */
+.colCenter {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+}
+
+/* ═══ BILLING SWITCH ═══ */
+.billingSwitch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  align-self: center;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.billingSwitch:hover:not(.billLocked) {
+  box-shadow: 0 0 0 2px rgba(10, 136, 239, 0.15);
+}
+
+/* Patient = bleu clair */
+.billPatient {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+}
+
+.billPatient .billLabel {
+  color: #1D4ED8;
+}
+
+.billPatient .billToggle {
+  background: #93C5FD;
+}
+
+.billPatient .billDot {
+  transform: translateX(0);
+  background: #1D4ED8;
+}
+
+/* Clinique = teal */
+.billClinic {
+  background: #F0FDFA;
+  border-color: #99F6E4;
+}
+
+.billClinic .billLabel {
+  color: #0F766E;
+}
+
+.billClinic .billToggle {
+  background: #5EEAD4;
+}
+
+.billClinic .billDot {
+  transform: translateX(12px);
+  background: #0F766E;
+}
+
+/* Locked (déjà facturé) */
+.billLocked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.billLabel {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.billToggle {
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.billDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s ease, background 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Col 3 — date/heure + billing switch (aligné à droite) */
+.colRight {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  align-self: flex-start;
+}
+
+.cardDateTime {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.timeTypeBadge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #1D4ED8;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.routeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.routeDotStart { background: var(--brand); }
+.routeDotEnd { background: var(--danger); }
+
+.routeArrow {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.routeText {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.companyTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #DBEAFE;
+  color: #1E40AF;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.waitingTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Status badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badgeCompleted { background: #ECFDF5; color: #15803D; }
+.badgeReturnCompleted { background: #ECFDF5; color: #15803D; }
+.badgeInProgress { background: #EFF6FF; color: #2563EB; }
+.badgeEnRoute { background: #EFF6FF; color: #2563EB; }
+.badgeAssigned { background: #F0FDFA; color: var(--brand); }
+.badgeAccepted { background: #F0FDFA; color: var(--brand); }
+.badgePending { background: #FEF9C3; color: #92400E; }
+.badgeDraft { background: var(--bg-muted); color: var(--text-muted); }
+.badgeSent { background: #EFF6FF; color: #2563EB; }
+.badgeConverted { background: #ECFDF5; color: #15803D; }
+.badgeCancelled { background: #FEF2F2; color: var(--danger); }
+.badgeExpired { background: var(--bg-muted); color: var(--text-muted); }
+
+/* ═══ ACTIONS (inline) ═══ */
+.cardActions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.actBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.actBtn:hover { border-color: var(--brand); background: var(--brand-light); color: var(--brand); }
+.actBtnDanger:hover { border-color: var(--danger); background: #FEF2F2; color: var(--danger); }
+.actBtnSend:hover { border-color: #2563EB; background: #EFF6FF; color: #2563EB; }
+.actBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ═══ STATES ═══ */
+.loading {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.error {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.empty p {
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  margin: 0 0 4px;
+}
+
+.emptyHint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+/* ═══ PAGINATION ═══ */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.pagination button {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.pagination button:not(:disabled):hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-light);
+}
+
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.pagination span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ═══ RESPONSIVE — Medium desktop (≤ 1200px) ═══ */
+@media (max-width: 1200px) {
+  .detailColumn {
+    width: 380px;
+  }
+}
+
+/* ═══ RESPONSIVE — Tablet (≤ 1024px) ═══ */
+@media (max-width: 1024px) {
+  .masterDetail {
+    margin: -20px;
+  }
+
+  .listColumn {
+    padding: 16px 16px 40px;
+  }
+
+  .detailColumn {
+    width: 340px;
+  }
+
+  /* Card: route wraps below patient + date row */
+  .requestCard {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .cardIndicator {
+    height: auto;
+    align-self: stretch;
+    min-height: 44px;
+  }
+
+  .colLeft {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .colCenter {
+    flex: 1 1 100%;
+    order: 3;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding-left: 12px;
+  }
+
+  .colRight {
+    flex-shrink: 0;
+  }
+
+  .routeText {
+    font-size: 0.74rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .billingSwitch {
+    align-self: flex-end;
+  }
+}
+
+/* ═══ RESPONSIVE — Small tablet (≤ 860px) ═══ */
+@media (max-width: 860px) {
+  /* Panel overlay en mobile */
+  .masterDetail {
+    position: relative;
+    margin: -16px;
+  }
+
+  .listColumn {
+    padding: 14px 12px 36px;
+  }
+
+  .detailColumn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 380px;
+    z-index: 20;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .colCenter {
+    padding-left: 0;
+  }
+}
+
+/* ═══ RESPONSIVE — Mobile (≤ 600px) ═══ */
+@media (max-width: 600px) {
+  .masterDetail {
+    margin: -16px;
+  }
+
+  .listColumn {
+    padding: 12px 10px 36px;
+  }
+
+  .detailColumn {
+    width: 100%;
+  }
+
+  /* Toolbar empile */
+  .toolbar { flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .searchBox { flex: 1 1 100%; }
+  .filterBtn { flex: 0 0 auto; }
+
+  /* Pills horizontales scrollables */
+  .statusPills {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    margin-bottom: 12px;
+    scrollbar-width: none;
+  }
+  .statusPills::-webkit-scrollbar { display: none; }
+  .statusPill { flex-shrink: 0; }
+
+  /* Filtres empiles */
+  .filtersPanel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+  .filterGroup select,
+  .filterGroup input { min-width: 100%; width: 100%; box-sizing: border-box; }
+
+  /* Card: full stack on mobile */
+  .requestCard {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .cardIndicator {
+    width: 100%;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  .colCenter {
+    padding-left: 0;
+  }
+
+  .colRight {
+    flex-shrink: 0;
+  }
+
+  .routeText {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.76rem;
+  }
+
+  /* Pagination compacte */
+  .pagination { gap: 8px; }
+  .pagination button { padding: 0 12px; font-size: 0.74rem; }
+  .pagination span { font-size: 0.74rem; }
+}
+
+/* ═══ RESPONSIVE — Small mobile (≤ 400px) ═══ */
+@media (max-width: 400px) {
+  .searchBox input { font-size: 0.78rem; height: 36px; }
+  .filterBtn { height: 36px; font-size: 0.72rem; padding: 0 10px; }
+  .statusPill { height: 28px; padding: 0 10px; font-size: 0.68rem; }
+  .pillCount { min-width: 16px; height: 16px; font-size: 0.6rem; }
+  .requestCard { padding: 10px; }
+  .patientName { font-size: 0.82rem; }
+  .badge { font-size: 0.64rem; padding: 2px 8px; }
+  .actBtn { width: 28px; height: 28px; font-size: 11px; }
+  .dateGroupLabel { font-size: 0.65rem; }
+}

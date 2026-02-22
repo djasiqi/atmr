@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { FiPlus, FiDownload, FiInbox, FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import useCompanyData from '../../../hooks/useCompanyData';
@@ -13,34 +15,81 @@ import {
   updateReservation,
 } from '../../../services/companyService';
 import ReservationTable from '../Dashboard/components/ReservationTable';
-import ReservationDetailsModal from '../Dashboard/components/ReservationDetailsModal';
-import ConfirmationModal from '../../../components/common/ConfirmationModal';
+import ReservationDetailPanel from './components/ReservationDetailPanel';
+import CancellationModal from '../../../components/reservations/CancellationModal';
 import ReservationStats from './components/ReservationStats';
 import ReservationFilters from './components/ReservationFilters';
 import ReservationMapView from './components/ReservationMapView';
-import ReservationAlerts from './components/ReservationAlerts';
 import TopClients from './components/TopClients';
 import ReservationModals from '../../../components/reservations/ReservationModals';
 import TransferBookingModal from '../../../components/reservations/TransferBookingModal';
+import ManualBookingForm from '../Dashboard/components/ManualBookingForm';
+import Modal from '../../../components/common/Modal';
 import { toast } from 'sonner';
 import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
+import { exportReservationsExcel } from '../../../utils/exportReservationsExcel';
 import styles from './CompanyReservations.module.css';
 
+const PER_PAGE_OPTIONS = [10, 25, 50, 100];
+
+function PerPageChip({ value, onChange }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  return (
+    <div className={styles.perPageChipWrap} ref={ref}>
+      <button
+        type="button"
+        className={styles.perPageChipBtn}
+        onClick={() => setOpen((p) => !p)}
+      >
+        {value} / page
+        <FiChevronDown size={11} className={`${styles.perPageArrow} ${open ? styles.perPageArrowOpen : ''}`} />
+      </button>
+      {open && (
+        <div className={styles.perPageMenu}>
+          {PER_PAGE_OPTIONS.map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`${styles.perPageOption} ${n === value ? styles.perPageOptionActive : ''}`}
+              onClick={() => { onChange(n); setOpen(false); }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const CompanyReservations = () => {
-  // ✅ Récupérer les infos de l'entreprise connectée pour gérer les transferts
   const { company } = useCompanyData();
-  
-  // États existants
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Data states
   const [reservations, setReservations] = useState([]);
-  const [selectedDay, setSelectedDay] = useState('all'); // Par défaut : toutes les dates
+  const [selectedDay, setSelectedDay] = useState('all');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter] = useState('all');
-  const [sortOrder, setSortOrder] = useState('desc'); // Par défaut : ordre décroissant (plus récent d'abord)
+  const [sortOrder, setSortOrder] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [reservationsPerPage, setReservationsPerPage] = useState(25); // Nombre de réservations par page
+  const [reservationsPerPage, setReservationsPerPage] = useState(25);
   const [totalReservations, setTotalReservations] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+
+  // Modal states
   const [selectedReservation, setSelectedReservation] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [reservationToDelete, setReservationToDelete] = useState(null);
@@ -48,12 +97,15 @@ const CompanyReservations = () => {
   const [scheduleModalReservation, setScheduleModalReservation] = useState(null);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferModalReservation, setTransferModalReservation] = useState(null);
-  const searchInputRef = useRef(null);
-  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalReservation, setEditModalReservation] = useState(null);
+  const [newBookingOpen, setNewBookingOpen] = useState(false);
 
-  // Nouveaux états pour les améliorations
+  // UI states (parent-owned)
   const [activeTab, setActiveTab] = useState('all');
-  const [viewMode, setViewMode] = useState('table'); // "table" ou "map"
+  const [viewMode, setViewMode] = useState('table');
+  const [alertFilter, setAlertFilter] = useState(null);
+  const [topClientsOpen, setTopClientsOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -64,7 +116,12 @@ const CompanyReservations = () => {
     revenue: 0,
   });
 
-  // Forcer le mode tableau quand une plage de dates est sélectionnée
+  const [exporting, setExporting] = useState(false);
+
+  const searchInputRef = useRef(null);
+  const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+
+  // Force table mode for date ranges
   useEffect(() => {
     const isDateRange = selectedDay && selectedDay.includes(':');
     if (isDateRange && viewMode === 'map') {
@@ -72,7 +129,7 @@ const CompanyReservations = () => {
     }
   }, [selectedDay, viewMode]);
 
-  // Calculer les statistiques
+  // Calculate stats
   const calculateStats = useCallback((reservationsData) => {
     const newStats = {
       total: reservationsData.length,
@@ -89,11 +146,48 @@ const CompanyReservations = () => {
     setStats(newStats);
   }, []);
 
-  // Chargement des réservations avec calculs des statistiques et alertes
+  // Generate alerts
+  const generateAlerts = (reservationsData) => {
+    const newAlerts = [];
+
+    reservationsData
+      .filter((r) => r.status === 'assigned' || r.status === 'in_progress')
+      .forEach((r) => {
+        const scheduledTime = new Date(r.scheduled_time);
+        const now = new Date();
+        const delayMinutes = Math.floor((now - scheduledTime) / (1000 * 60));
+
+        if (delayMinutes > 15) {
+          newAlerts.push({
+            id: `delay-${r.id}`,
+            type: 'delay',
+            severity: delayMinutes > 30 ? 'high' : 'medium',
+            message: `Course #${r.id} en retard`,
+            reservation: r,
+          });
+        }
+      });
+
+    const unassignedCount = reservationsData.filter(
+      (r) => r.status === 'accepted' && !r.driver_id
+    ).length;
+    if (unassignedCount > 0) {
+      newAlerts.push({
+        id: 'unassigned',
+        type: 'unassigned',
+        severity: 'medium',
+        message: `${unassignedCount} sans chauffeur`,
+        count: unassignedCount,
+      });
+    }
+
+    setAlerts(newAlerts);
+  };
+
+  // Load reservations
   const loadReservations = useCallback(async () => {
     try {
       setLoading(true);
-      // Si "Toutes les dates" ou une plage de dates, charger toutes les réservations
       const isDateRange = selectedDay && selectedDay.includes(':');
       const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
       const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
@@ -111,41 +205,22 @@ const CompanyReservations = () => {
         excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
       };
 
-      if (process.env.REACT_APP_DEBUG_FILTERS === 'true') {
-        // eslint-disable-next-line no-console
-        console.debug('[Reservations] loadReservations params:', params);
-      }
-
       const data = await fetchCompanyReservationsPaginated(params);
-
-      const reservationsData = Array.isArray(data?.reservations)
-        ? data.reservations
-        : [];
-
-      if (process.env.REACT_APP_DEBUG_FILTERS === 'true') {
-        // eslint-disable-next-line no-console
-        console.debug('[Reservations] API response:', {
-          total: data?.total,
-          count: reservationsData.length,
-          sample: reservationsData[0]?.client_name,
-        });
-      }
+      const reservationsData = Array.isArray(data?.reservations) ? data.reservations : [];
 
       setReservations(reservationsData);
       setTotalReservations(data?.total ?? reservationsData.length);
       setTotalPages(data?.total_pages ?? 0);
 
-      // Calculer les statistiques
       if (data?.stats) {
         setStats(data.stats);
       } else {
         calculateStats(reservationsData);
       }
 
-      // Générer les alertes
       generateAlerts(reservationsData);
     } catch (err) {
-      console.error('Erreur lors du chargement des réservations :', err);
+      console.error('Erreur lors du chargement des reservations :', err);
     } finally {
       setLoading(false);
     }
@@ -160,49 +235,53 @@ const CompanyReservations = () => {
     activeTab,
   ]);
 
-  // Générer les alertes
-  const generateAlerts = (reservationsData) => {
-    const newAlerts = [];
-
-    // Alertes de retard
-    reservationsData
-      .filter((r) => r.status === 'assigned' || r.status === 'in_progress')
-      .forEach((r) => {
-        const scheduledTime = new Date(r.scheduled_time);
-        const now = new Date();
-        const delayMinutes = Math.floor((now - scheduledTime) / (1000 * 60));
-
-        if (delayMinutes > 15) {
-          newAlerts.push({
-            id: `delay-${r.id}`,
-            type: 'delay',
-            severity: delayMinutes > 30 ? 'high' : 'medium',
-            message: `Course #${r.id} en retard de ${delayMinutes} minutes`,
-            reservation: r,
-          });
-        }
-      });
-
-    // Alertes de chauffeurs non assignés
-    const unassignedCount = reservationsData.filter(
-      (r) => r.status === 'accepted' && !r.driver_id
-    ).length;
-    if (unassignedCount > 0) {
-      newAlerts.push({
-        id: 'unassigned',
-        type: 'unassigned',
-        severity: 'medium',
-        message: `${unassignedCount} course(s) sans chauffeur assigné`,
-        count: unassignedCount,
-      });
-    }
-
-    setAlerts(newAlerts);
-  };
-
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
+
+  // Auto-open reservation from ?booking= query param (e.g. from notification click)
+  useEffect(() => {
+    const bookingIdParam = searchParams.get('booking');
+    if (!bookingIdParam || loading) return;
+
+    const bookingId = Number(bookingIdParam);
+    if (!bookingId) return;
+
+    // Try to find in current page first
+    const found = reservations.find((r) => r.id === bookingId);
+    if (found) {
+      setSelectedReservation(found);
+      setSearchParams((prev) => {
+        prev.delete('booking');
+        return prev;
+      }, { replace: true });
+      return;
+    }
+
+    // If not in current page, fetch it via search
+    const fetchAndOpen = async () => {
+      try {
+        const data = await fetchCompanyReservationsPaginated({
+          search: String(bookingId),
+          page: 1,
+          perPage: 5,
+          sortOrder: 'desc',
+        });
+        const match = (data?.reservations || []).find((r) => r.id === bookingId);
+        if (match) {
+          setSelectedReservation(match);
+        }
+      } catch (err) {
+        console.error('[CompanyReservations] Auto-open booking error:', err);
+      } finally {
+        setSearchParams((prev) => {
+          prev.delete('booking');
+          return prev;
+        }, { replace: true });
+      }
+    };
+    fetchAndOpen();
+  }, [searchParams, reservations, loading, setSearchParams]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -222,8 +301,101 @@ const CompanyReservations = () => {
     setCurrentPage(1);
   }, [selectedDay, searchTerm, statusFilter, sortOrder, activeTab, reservationsPerPage]);
 
-  // Dans le composant CompanyReservations
+  // --- CTA "Voir" handler ---
+  const handleFilterByAlert = useCallback((type) => {
+    if (type === 'delays') {
+      setAlertFilter('delays');
+    } else if (type === 'unassigned') {
+      setAlertFilter('unassigned');
+      setActiveTab('all');
+    } else if (type === 'cancelled') {
+      setAlertFilter(null);
+      setActiveTab('canceled');
+    }
+  }, []);
 
+  const handleClearAlertFilter = useCallback(() => {
+    setAlertFilter(null);
+  }, []);
+
+  // Tab change always resets alertFilter
+  const handleTabChange = useCallback((tabId) => {
+    setActiveTab(tabId);
+    setAlertFilter(null);
+  }, []);
+
+  // Apply alertFilter in display filtering
+  const filteredReservations = useMemo(() => {
+    if (!alertFilter) return reservations;
+
+    if (alertFilter === 'delays') {
+      return reservations.filter((r) => {
+        const scheduledTime = new Date(r.scheduled_time);
+        const now = new Date();
+        const delayMinutes = Math.floor((now - scheduledTime) / (1000 * 60));
+        return delayMinutes > 0 && ['assigned', 'in_progress'].includes(r.status);
+      });
+    }
+
+    if (alertFilter === 'unassigned') {
+      return reservations.filter((r) => r.status === 'accepted' && !r.driver_id);
+    }
+
+    return reservations;
+  }, [reservations, alertFilter]);
+
+  // Map reservations (single day only)
+  const mapReservations = useMemo(() => {
+    if (selectedDay === 'all') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return reservations.filter((r) => {
+        const d = new Date(r.scheduled_time || r.pickup_time);
+        return d >= today && d < tomorrow;
+      });
+    }
+
+    if (selectedDay && selectedDay.includes(':')) {
+      const [s] = selectedDay.split(':');
+      const start = new Date(s);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return reservations.filter((r) => {
+        const d = new Date(r.scheduled_time || r.pickup_time);
+        return d >= start && d < end;
+      });
+    }
+
+    const target = new Date(selectedDay);
+    target.setHours(0, 0, 0, 0);
+    const next = new Date(target);
+    next.setDate(next.getDate() + 1);
+    return reservations.filter((r) => {
+      const d = new Date(r.scheduled_time || r.pickup_time);
+      return d >= target && d < next;
+    });
+  }, [reservations, selectedDay]);
+
+  // Visible page numbers
+  const pageNumbers = useMemo(() => {
+    if (totalPages <= 1) return [];
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }, [currentPage, totalPages]);
+
+  // --- Action handlers ---
   const handleDeleteRequest = (reservation) => {
     setReservationToDelete(reservation);
     setShowConfirmModal(true);
@@ -234,27 +406,20 @@ const CompanyReservations = () => {
     setReservationToDelete(null);
   };
 
-  const handleConfirmDelete = async () => {
-    if (!reservationToDelete) return;
-    try {
-      await deleteReservation(reservationToDelete.id);
-      setReservations((prev) => prev.filter((r) => r.id !== reservationToDelete.id));
-    } catch (err) {
-      console.error('Erreur lors de la suppression:', err);
-    } finally {
-      handleCloseConfirmModal();
-    }
+  const handleConfirmDelete = async (reservationId, reasonCode = null, reasonText = null) => {
+    const id = reservationId || reservationToDelete?.id;
+    if (!id) return;
+    await deleteReservation(id, reasonCode, reasonText);
+    setReservations((prev) => prev.filter((r) => r.id !== id));
+    handleCloseConfirmModal();
   };
 
-  // Gestion des actions sur les réservations
   const handleAccept = async (reservationId) => {
     try {
       await acceptReservation(reservationId);
-      // Mettre à jour la réservation dans la liste locale
       setReservations((prev) =>
         prev.map((r) => (r.id === reservationId ? { ...r, status: 'accepted' } : r))
       );
-      // Recharger les réservations pour avoir les données fraîches
       loadReservations();
     } catch (err) {
       console.error("Erreur lors de l'acceptation:", err);
@@ -264,7 +429,6 @@ const CompanyReservations = () => {
   const handleReject = async (reservationId) => {
     try {
       await rejectReservation(reservationId);
-      // Mettre à jour localement
       setReservations((prev) =>
         prev.map((r) => (r.id === reservationId ? { ...r, status: 'rejected' } : r))
       );
@@ -274,19 +438,13 @@ const CompanyReservations = () => {
     }
   };
 
-  // États pour la modale d'édition
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editModalReservation, setEditModalReservation] = useState(null);
-
   const handleEdit = (reservation) => {
-    // Passer l'objet complet
     const resObj =
       typeof reservation === 'object'
         ? reservation
         : reservations.find((r) => r.id === reservation);
     if (!resObj) return;
-    setEditModalReservation(resObj);
-    setEditModalOpen(true);
+    setSelectedReservation(resObj);
   };
 
   const handleConfirmEdit = async (updatedData) => {
@@ -297,13 +455,12 @@ const CompanyReservations = () => {
       setEditModalReservation(null);
       loadReservations();
     } catch (err) {
-      console.error("Erreur lors de l'édition:", err);
+      console.error("Erreur lors de l'edition:", err);
       throw err;
     }
   };
 
   const handleSchedule = (reservation) => {
-    // Passer l'objet complet
     const resObj =
       typeof reservation === 'object'
         ? reservation
@@ -320,10 +477,8 @@ const CompanyReservations = () => {
     try {
       let isoDatetime;
       if (typeof data === 'string') {
-        // Format "YYYY-MM-DD HH:mm"
         isoDatetime = data;
       } else if (data?.return_time) {
-        // Format { return_time: "YYYY-MM-DDTHH:mm" }
         isoDatetime = data.return_time.replace('T', ' ');
       } else {
         throw new Error('Format de date invalide');
@@ -335,11 +490,10 @@ const CompanyReservations = () => {
     } catch (err) {
       console.error('Erreur lors de la planification:', err);
       setScheduleModalReservation(null);
-      throw err; // Laisser le modal afficher l'erreur
+      throw err;
     }
   };
 
-  // Handler pour ouvrir le modal de transfert
   const handleOpenTransferModal = (reservation) => {
     const resObj =
       typeof reservation === 'object'
@@ -350,207 +504,160 @@ const CompanyReservations = () => {
     setTransferModalOpen(true);
   };
 
-  // Callback après transfert réussi
   const handleTransferSuccess = () => {
     loadReservations();
-    toast.success('Course transférée avec succès');
+    toast.success('Course transferee avec succes');
   };
 
   const handleDispatchNow = async (reservation) => {
     try {
-      // Dispatch urgent : +15 min depuis maintenant
       await dispatchNowForReservation(reservation.id, 15);
       loadReservations();
     } catch (err) {
       console.error('Erreur lors du dispatch urgent:', err);
-      alert(err?.response?.data?.error || 'Erreur lors du dispatch urgent');
     }
   };
 
-  // Gestion des onglets
+  // Export Excel handler
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const dataToExport = filteredReservations.length > 0 ? filteredReservations : reservations;
+      const periodLabel = selectedDay === 'all'
+        ? 'Toutes les periodes'
+        : selectedDay.includes(':')
+          ? `Du ${selectedDay.split(':')[0]} au ${selectedDay.split(':')[1]}`
+          : selectedDay;
+
+      const fileName = await exportReservationsExcel(dataToExport, {
+        companyName: company?.name || 'Entreprise',
+        periodLabel,
+        stats,
+      });
+      toast.success(`Export termine : ${fileName}`);
+    } catch (err) {
+      console.error("Erreur lors de l'export:", err);
+      toast.error("Erreur lors de l'export Excel");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, filteredReservations, reservations, selectedDay, company, stats]);
+
+  // Tabs
   const tabs = [
     { id: 'all', label: 'Toutes', count: stats.total },
     { id: 'pending', label: 'En attente', count: stats.pending },
     { id: 'in_progress', label: 'En cours', count: stats.inProgress },
-    { id: 'completed', label: 'Terminées', count: stats.completed },
-    { id: 'canceled', label: 'Annulées', count: stats.canceled },
+    { id: 'completed', label: 'Terminees', count: stats.completed },
+    { id: 'canceled', label: 'Annulees', count: stats.canceled },
   ];
-
-  // Fonction pour formater l'affichage de la période sélectionnée
-  const _getDateDisplay = () => {
-    if (selectedDay === 'all') {
-      return 'Toutes les dates';
-    }
-
-    if (selectedDay && selectedDay.includes(':')) {
-      // Plage de dates
-      const [startDate, endDate] = selectedDay.split(':');
-      const start = new Date(startDate).toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-      const end = new Date(endDate).toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      });
-      return `Du ${start} au ${end}`;
-    }
-
-    // Date unique
-    return new Date(selectedDay).toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
-  // Réservations pour la carte (une seule journée uniquement)
-  const mapReservations = useMemo(() => {
-    // Si "toutes les dates" sélectionné, utiliser aujourd'hui
-    if (selectedDay === 'all') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const filtered = reservations.filter((r) => {
-        const reservationDate = new Date(r.scheduled_time || r.pickup_time);
-        return reservationDate >= today && reservationDate < tomorrow;
-      });
-
-      return filtered;
-    }
-
-    // Si plage de dates, utiliser la première date uniquement
-    if (selectedDay && selectedDay.includes(':')) {
-      const [startDate] = selectedDay.split(':');
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-
-      const filtered = reservations.filter((r) => {
-        const reservationDate = new Date(r.scheduled_time || r.pickup_time);
-        return reservationDate >= start && reservationDate < end;
-      });
-
-      return filtered;
-    }
-
-    // Date unique : utiliser cette date
-    const targetDate = new Date(selectedDay);
-    targetDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    const filtered = reservations.filter((r) => {
-      const reservationDate = new Date(r.scheduled_time || r.pickup_time);
-      return reservationDate >= targetDate && reservationDate < nextDay;
-    });
-
-    return filtered;
-  }, [reservations, selectedDay]);
 
   return (
     <div className={styles.companyContainer}>
       <CompanyHeader />
       <div className={styles.dashboard}>
         <CompanySidebar />
+        <div className={`${styles.contentArea} ${selectedReservation ? styles.contentAreaWithPanel : ''}`}>
         <main className={styles.content}>
-          {/* Section Header + Filtres */}
-          <section className={styles.headerSection}>
-            {/* En-tête avec titre et vue */}
-            <div className={styles.pageHeader}>
-              <div className={styles.headerLeft}>
-                <h1>📋 Réservations</h1>
-                <p className={styles.subtitle}>
-                  Gérez toutes vos réservations et suivez leur statut en temps réel
-                </p>
-              </div>
-              <div className={styles.headerRight}>
-                <button
-                  className={`${styles.viewToggle} ${viewMode === 'table' ? styles.active : ''}`}
-                  onClick={() => setViewMode('table')}
-                >
-                  📋 Tableau
-                </button>
-                <button
-                  className={`${styles.viewToggle} ${viewMode === 'map' ? styles.active : ''} ${
-                    selectedDay && selectedDay.includes(':') ? styles.disabled : ''
-                  }`}
-                  onClick={() => {
-                    // Désactiver la carte pour les plages de dates
-                    if (!(selectedDay && selectedDay.includes(':'))) {
-                      setViewMode('map');
-                    }
-                  }}
-                  disabled={selectedDay && selectedDay.includes(':')}
-                  title={
-                    selectedDay && selectedDay.includes(':')
-                      ? "La carte n'est disponible que pour une seule journée"
-                      : 'Afficher la carte'
-                  }
-                >
-                  🗺️ Carte
-                </button>
-              </div>
+
+          {/* ===== ZONE A - Page Header ===== */}
+          <div className={styles.pageHeader}>
+            <div className={styles.pageHeaderLeft}>
+              <h1 className={styles.pageTitle}>Reservations</h1>
+              <p className={styles.pageSubtitle}>
+                Gerez vos reservations et suivez leur statut en temps reel
+              </p>
             </div>
-
-            {/* Filtres dans le même conteneur */}
-            <ReservationFilters
-              selectedDay={selectedDay}
-              setSelectedDay={setSelectedDay}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              sortOrder={sortOrder}
-              setSortOrder={setSortOrder}
-              searchInputRef={searchInputRef}
-            />
-          </section>
-
-          {/* Widgets de statistiques KPI */}
-          <ReservationStats stats={stats} />
-
-          {/* Alertes */}
-          {alerts.length > 0 && <ReservationAlerts alerts={alerts} />}
-
-          {/* Onglets */}
-          <div className={styles.tabsContainer}>
-            <div className={styles.tabs}>
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <span>{tab.label}</span>
-                  <span className={styles.tabBadge}>{tab.count}</span>
-                </button>
-              ))}
+            <div className={styles.pageHeaderActions}>
+              <button
+                type="button"
+                className={styles.btnPrimary}
+                onClick={() => setNewBookingOpen(true)}
+              >
+                <FiPlus size={16} />
+                Nouvelle reservation
+              </button>
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                onClick={handleExport}
+                disabled={exporting || (totalReservations === 0 && !loading)}
+                title={totalReservations === 0 ? 'Aucune donnee a exporter' : 'Exporter en Excel'}
+              >
+                <FiDownload size={16} className={exporting ? styles.exportSpin : ''} />
+                {exporting ? 'Export...' : 'Exporter'}
+              </button>
             </div>
           </div>
 
-          {/* Contenu principal */}
+          {/* ===== ZONE B - Command Bar (sticky, alerts integrated) ===== */}
+          <ReservationFilters
+            selectedDay={selectedDay}
+            setSelectedDay={setSelectedDay}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            searchInputRef={searchInputRef}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            alertFilter={alertFilter}
+            onClearAlertFilter={handleClearAlertFilter}
+            onRefresh={loadReservations}
+            totalResults={totalReservations}
+            alerts={alerts}
+            onFilterByAlert={handleFilterByAlert}
+          />
+
+          {/* ===== ZONE C - Resume ===== */}
+          <ReservationStats stats={stats} />
+
+          {/* ===== ZONE D - Liste principale ===== */}
+
+          {/* Tabs pills */}
+          <div className={styles.tabsPills}>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`${styles.pill} ${activeTab === tab.id ? styles.pillActive : ''}`}
+                onClick={() => handleTabChange(tab.id)}
+              >
+                {tab.label}
+                <span className={styles.pillCount}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Main content */}
           {loading ? (
-            <div className={styles.loading}>
-              <div className={styles.spinner}></div>
-              <p>Chargement des réservations...</p>
+            <div className={styles.loadingState}>
+              <div className={styles.spinner} />
+              <p>Chargement des reservations...</p>
             </div>
-          ) : totalReservations === 0 ? (
+          ) : totalReservations === 0 && !alertFilter ? (
             <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>📋</div>
-              <h3>Aucune réservation trouvée</h3>
-              <p>Aucune réservation ne correspond à vos critères de recherche.</p>
+              <FiInbox size={40} className={styles.emptyIcon} />
+              <h3 className={styles.emptyTitle}>Aucune reservation trouvee</h3>
+              <p className={styles.emptySubtitle}>
+                Aucune reservation ne correspond a vos criteres de recherche.
+              </p>
+              <button
+                type="button"
+                className={styles.emptyCta}
+                onClick={() => setNewBookingOpen(true)}
+              >
+                <FiPlus size={14} />
+                Creer une reservation
+              </button>
             </div>
           ) : (
             <>
               {viewMode === 'table' ? (
                 <>
                   <ReservationTable
-                    reservations={reservations}
+                    reservations={filteredReservations}
                     onRowClick={(reservation) => setSelectedReservation(reservation)}
                     onDelete={handleDeleteRequest}
                     onAccept={handleAccept}
@@ -563,31 +670,19 @@ const CompanyReservations = () => {
                     hideUrgent={true}
                     currentCompanyId={company?.id}
                   />
-                  {/* Pagination avec sélecteur d'éléments par page */}
+
+                  {/* Pagination enrichie */}
                   <div className={styles.paginationContainer}>
                     <div className={styles.paginationInfo}>
                       <span className={styles.resultCount}>
-                        {totalReservations} résultat
-                        {totalReservations > 1 ? 's' : ''} trouvé
-                        {totalReservations > 1 ? 's' : ''}
+                        {totalReservations > 0
+                          ? `${totalReservations} reservation${totalReservations > 1 ? 's' : ''}`
+                          : 'Aucune reservation'}
                       </span>
-                      <div className={styles.perPageSelector}>
-                        <label htmlFor="perPage">Afficher:</label>
-                        <select
-                          id="perPage"
-                          value={reservationsPerPage}
-                          onChange={(e) => {
-                            setReservationsPerPage(Number(e.target.value));
-                            setCurrentPage(1); // Réinitialiser à la page 1
-                          }}
-                          className={styles.perPageSelect}
-                        >
-                          <option value={10}>10</option>
-                          <option value={25}>25</option>
-                          <option value={50}>50</option>
-                          <option value={100}>100</option>
-                        </select>
-                      </div>
+                      <PerPageChip
+                        value={reservationsPerPage}
+                        onChange={(v) => { setReservationsPerPage(v); setCurrentPage(1); }}
+                      />
                     </div>
 
                     {totalPages > 1 && (
@@ -596,18 +691,28 @@ const CompanyReservations = () => {
                           disabled={currentPage === 1}
                           onClick={() => setCurrentPage(currentPage - 1)}
                           className={styles.paginationButton}
+                          title="Page precedente"
                         >
-                          ← Précédent
+                          <FiChevronLeft size={14} />
                         </button>
-                        <span className={styles.pageInfo}>
-                          Page {currentPage} sur {totalPages || 1}
-                        </span>
+
+                        {pageNumbers.map((num) => (
+                          <button
+                            key={num}
+                            onClick={() => setCurrentPage(num)}
+                            className={`${styles.pageNumber} ${currentPage === num ? styles.pageNumberActive : ''}`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+
                         <button
                           disabled={currentPage === totalPages}
                           onClick={() => setCurrentPage(currentPage + 1)}
                           className={styles.paginationButton}
+                          title="Page suivante"
                         >
-                          Suivant →
+                          <FiChevronRight size={14} />
                         </button>
                       </div>
                     )}
@@ -619,88 +724,20 @@ const CompanyReservations = () => {
             </>
           )}
 
-          {/* Widgets supplémentaires */}
-          <div className={styles.widgetsGrid}>
-            <TopClients reservations={reservations} />
-          </div>
+          {/* Top clients collapsible */}
+          <TopClients
+            reservations={reservations}
+            isOpen={topClientsOpen}
+            onToggle={() => setTopClientsOpen((prev) => !prev)}
+          />
 
-          {/* Modals */}
-          {selectedReservation && (
-            <ReservationDetailsModal
-              reservation={selectedReservation}
-              onClose={() => setSelectedReservation(null)}
-            />
-          )}
-
-          <ConfirmationModal
+          <CancellationModal
             isOpen={showConfirmModal}
-            onClose={handleCloseConfirmModal}
+            reservation={reservationToDelete}
             onConfirm={handleConfirmDelete}
-            title={(() => {
-              if (!reservationToDelete) return "Confirmer l'action";
+            onClose={handleCloseConfirmModal}
+          />
 
-              const status = reservationToDelete.status?.toLowerCase();
-
-              // ASSIGNED → Annulation
-              if (status === 'assigned') {
-                return `Annuler la Réservation n°${reservationToDelete.id}`;
-              }
-              // PENDING, ACCEPTED → Suppression
-              return `Supprimer la Réservation n°${reservationToDelete.id}`;
-            })()}
-            confirmText={(() => {
-              if (!reservationToDelete) return 'Confirmer';
-
-              const status = reservationToDelete.status?.toLowerCase();
-              return status === 'assigned' ? 'Oui, annuler' : 'Oui, supprimer';
-            })()}
-          >
-            {reservationToDelete &&
-              (() => {
-                const status = reservationToDelete.status?.toLowerCase();
-                const isCancel = status === 'assigned';
-
-                return (
-                  <>
-                    <p>
-                      {isCancel ? (
-                        <>
-                          Êtes-vous sûr de vouloir <strong>annuler</strong> la réservation pour{' '}
-                          <strong>{reservationToDelete.client_name}</strong> ?
-                        </>
-                      ) : (
-                        <>
-                          Êtes-vous sûr de vouloir <strong>supprimer</strong> la réservation pour{' '}
-                          <strong>{reservationToDelete.client_name}</strong> ?
-                        </>
-                      )}
-                    </p>
-                    <p
-                      style={{
-                        color: isCancel ? '#f59e0b' : '#ef4444',
-                        fontStyle: 'italic',
-                        marginTop: '16px',
-                      }}
-                    >
-                      {isCancel ? (
-                        <>
-                          🚗 <strong>Course assignée à un chauffeur</strong> : La réservation sera
-                          annulée et conservée dans l'historique. Le chauffeur sera automatiquement
-                          libéré.
-                        </>
-                      ) : (
-                        <>
-                          ⚠️ Cette action est irréversible. La réservation sera définitivement
-                          supprimée de la base de données.
-                        </>
-                      )}
-                    </p>
-                  </>
-                );
-              })()}
-          </ConfirmationModal>
-
-          {/* Modales centralisées */}
           <ReservationModals
             scheduleModalOpen={scheduleModalOpen}
             scheduleModalReservation={scheduleModalReservation}
@@ -727,7 +764,6 @@ const CompanyReservations = () => {
             onDeleteClose={() => {}}
           />
 
-          {/* Modal de transfert */}
           <TransferBookingModal
             isOpen={transferModalOpen}
             onClose={() => {
@@ -737,7 +773,36 @@ const CompanyReservations = () => {
             reservation={transferModalReservation}
             onSuccess={handleTransferSuccess}
           />
+
+          {newBookingOpen && (
+            <Modal onClose={() => setNewBookingOpen(false)} size="xl" className="modal-booking">
+              <ManualBookingForm
+                onSuccess={() => {
+                  setNewBookingOpen(false);
+                  loadReservations();
+                  toast.success('Réservation créée');
+                }}
+                onClose={() => setNewBookingOpen(false)}
+              />
+            </Modal>
+          )}
         </main>
+
+        {/* Side panel */}
+        {selectedReservation && (
+          <aside className={styles.detailPanel}>
+            <ReservationDetailPanel
+              reservation={selectedReservation}
+              onClose={() => setSelectedReservation(null)}
+              onSave={async (id, data) => {
+                await updateReservation(id, data);
+                loadReservations();
+              }}
+              onDelete={handleDeleteRequest}
+            />
+          </aside>
+        )}
+        </div>
       </div>
     </div>
   );

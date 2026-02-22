@@ -2,7 +2,10 @@
 // ✅ PHASE 2 : Service d'authentification biométrique pour reconnexion rapide
 
 import * as LocalAuthentication from "expo-local-authentication";
+import { getLogger } from "@/utils/logger";
 import { loginDriver } from "@/services/api";
+
+const log = getLogger("Biometric");
 import { secureStorage } from "@/services/storage";
 import {
   getRememberedCredentials,
@@ -26,26 +29,20 @@ export async function isBiometricAvailable(): Promise<boolean> {
   try {
     const compatible = await LocalAuthentication.hasHardwareAsync();
     if (!compatible) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Appareil non compatible avec la biométrie");
-      }
+      log.info("device not compatible with biometrics", {});
       return false;
     }
 
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!enrolled) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Aucun identifiant biométrique enregistré sur l'appareil");
-      }
+      log.info("no biometric enrolled on device", {});
       return false;
     }
 
-    if (__DEV__) {
-      console.log("[BiometricAuth] ✅ Authentification biométrique disponible");
-    }
+    log.success("biometric auth available", {});
     return true;
   } catch (error) {
-    console.error("[BiometricAuth] ❌ Erreur lors de la vérification de disponibilité:", error);
+    log.error("biometric availability check failed", { error });
     return false;
   }
 }
@@ -59,12 +56,10 @@ export async function getAvailableBiometricTypes(): Promise<
 > {
   try {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    if (__DEV__) {
-      console.log("[BiometricAuth] Types disponibles:", types);
-    }
+    log.info("available biometric types", { types });
     return types;
   } catch (error) {
-    console.error("[BiometricAuth] ❌ Erreur lors de la récupération des types:", error);
+    log.error("get biometric types failed", { error });
     return [];
   }
 }
@@ -91,18 +86,14 @@ export async function authenticateWithBiometric(
     });
 
     if (result.success) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ✅ Authentification biométrique réussie");
-      }
+      log.success("biometric auth succeeded", {});
       return true;
     } else {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Authentification biométrique annulée ou échouée:", result.error);
-      }
+      log.info("biometric auth cancelled or failed", { error: result.error });
       return false;
     }
   } catch (error) {
-    console.error("[BiometricAuth] ❌ Erreur lors de l'authentification biométrique:", error);
+    log.error("biometric auth failed", { error });
     return false;
   }
 }
@@ -128,9 +119,7 @@ export async function autoLoginWithBiometric(
     // 1. Vérifier si la biométrie est disponible
     const available = await isBiometricAvailable();
     if (!available) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Biométrie non disponible, auto-login impossible");
-      }
+      log.info("biometrics not available, auto-login skipped", {});
       return false;
     }
 
@@ -151,16 +140,11 @@ export async function autoLoginWithBiometric(
     });
 
     if (!authenticated) {
-      if (__DEV__) {
-        console.log("[BiometricAuth] ⚠️ Authentification biométrique annulée par l'utilisateur");
-      }
+      log.info("biometric auth cancelled by user", {});
       return false;
     }
 
-    // 4. Si authentification biométrique réussie, procéder au login
-    if (__DEV__) {
-      console.log("[BiometricAuth] 🔄 Tentative de login avec identifiants sauvegardés...");
-    }
+    log.info("attempting login with saved credentials", {});
 
     const loginResponse = await loginDriver(savedCreds.email, savedCreds.password);
 
@@ -175,13 +159,11 @@ export async function autoLoginWithBiometric(
       await secureStorage.setUserPublicId(loginResponse.user.public_id);
     }
 
-    if (__DEV__) {
-      console.log("[BiometricAuth] ✅ Auto-login réussi avec authentification biométrique");
-    }
+    log.success("auto-login with biometric succeeded", {});
     return true;
   } catch (error: any) {
     if (error instanceof BiometricNoCredentialsError) throw error;
-    console.error("[BiometricAuth] ❌ Erreur lors de l'auto-login avec biométrie:", error);
+    log.error("auto-login with biometric failed", { error });
     return false;
   }
 }

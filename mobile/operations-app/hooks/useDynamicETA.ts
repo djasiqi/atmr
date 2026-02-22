@@ -1,6 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
+import { isAuthReadySync } from "@/services/authSync";
+import { isAuthNotReadyError } from "@/services/authGuards";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("ETA");
 
 /**
  * ETA chauffeur : l'app chauffeur utilise UNIQUEMENT GET /driver/me/bookings/eta
@@ -38,19 +43,22 @@ export function useDynamicETA(enabled: boolean = true) {
   // Vérifier que l'utilisateur est bien un chauffeur avant d'appeler l'API
   const isDriverMode = mode === "driver" && !!driver;
 
+  const fetchInFlight = useRef(false);
+
   const fetchETAs = useCallback(async () => {
     if (!enabled || !isDriverMode) return;
+    if (!isAuthReadySync()) return;
+    if (fetchInFlight.current) return;
 
+    fetchInFlight.current = true;
     try {
       setIsLoading(true);
 
-      // Utiliser l'instance api qui a déjà l'interceptor pour le token
       const response = await api.get<ETAResponse>("/driver/me/bookings/eta");
       const data = response.data;
 
       setHasGPS(data.has_gps);
 
-      // Convertir en Map pour accès rapide par ID
       const etaMap = new Map<number, BookingETA>();
       data.bookings.forEach((booking) => {
         etaMap.set(booking.id, booking);
@@ -58,28 +66,22 @@ export function useDynamicETA(enabled: boolean = true) {
 
       setEtas(etaMap);
 
-      console.log("[useDynamicETA] ETAs mis à jour:", {
+      log.info("etas updated", {
         has_gps: data.has_gps,
         count: data.bookings.length,
         driver_pos: data.driver_position,
       });
     } catch (error: any) {
-      // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
+      if (isAuthNotReadyError(error)) return;
       const status = error?.response?.status;
       if (status === 401 || status === 403 || status === 404) {
-        console.debug(
-          "[useDynamicETA] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
-          status
-        );
-        // Désactiver le hook si l'utilisateur n'a pas les permissions
+        log.debug("eta skipped", { status });
         return;
       }
-      console.error(
-        "[useDynamicETA] Erreur lors de la récupération des ETAs:",
-        error
-      );
+      log.warn("fetch etas failed", { error });
     } finally {
       setIsLoading(false);
+      fetchInFlight.current = false;
     }
   }, [enabled, isDriverMode]);
 

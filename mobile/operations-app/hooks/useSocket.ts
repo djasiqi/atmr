@@ -1,10 +1,13 @@
 // hooks/useSocket.ts
 import { useEffect, useRef, useState } from "react";
-import { connectSocket, getSocket } from "@/services/socket";
+import { connectSocket } from "@/services/socket";
 import * as Notifications from "expo-notifications";
 import { secureStorage } from "@/services/storage";
 import { useAuth } from "@/hooks/useAuth";
+import { getLogger } from "@/utils/logger";
 import type { Socket } from "socket.io-client";
+
+const log = getLogger("SocketHook");
 
 export const useSocket = (
   onNewBooking?: (data: any) => void,
@@ -14,7 +17,7 @@ export const useSocket = (
   const driverIdRef = useRef<number | undefined>(driver?.id);
   driverIdRef.current = driver?.id;
 
-  console.log("🔵 [useSocket] Hook exécuté (mount ou update)", {
+  log.info("hook executed", {
     timestamp: new Date().toISOString(),
     hasOnNewBooking: !!onNewBooking,
     hasOnTeamMessage: !!onTeamMessage
@@ -27,7 +30,7 @@ export const useSocket = (
   const lastReconnectAttemptRef = useRef<number>(0); // ✅ Cooldown entre reconnexions
 
   useEffect(() => {
-    console.log("🔵 [useSocket] useEffect START", {
+    log.info("useEffect start", {
       timestamp: new Date().toISOString()
     });
     isMountedRef.current = true;
@@ -45,10 +48,10 @@ export const useSocket = (
       s.off("unauthorized");
 
       s.on("connect", async () => {
-        console.log(JSON.stringify({
+        log.info("socket connect", {
           event: "socket_connect",
           timestamp: new Date().toISOString()
-        }));
+        });
         backoffRef.current = 5000; // ✅ Reset à 5s au lieu de 2s
         if (reconnectTimerRef.current) {
           clearTimeout(reconnectTimerRef.current);
@@ -61,50 +64,50 @@ export const useSocket = (
           const { syncLocationQueue } = await import("@/services/locationQueue");
           await syncLocationQueue(s);
         } catch (error) {
-          console.error("❌ [useSocket] Erreur resync queue GPS:", error);
+          log.error("resync queue gps failed", { error });
         }
       });
 
       s.on("disconnect", () => {
-        console.log(JSON.stringify({
+        log.info("socket disconnect", {
           event: "socket_disconnect",
           timestamp: new Date().toISOString()
-        }));
+        });
       });
 
       s.on("connect_error", (err: any) => {
-        console.warn(JSON.stringify({
+        log.warn("socket connect error", {
           event: "socket_connect_error",
           error: err?.message || String(err),
           timestamp: new Date().toISOString()
-        }));
+        });
         scheduleReconnection();
       });
 
       s.on("reconnect", (attempt) => {
-        console.log(JSON.stringify({
+        log.info("socket reconnect", {
           event: "socket_reconnect",
-          attempt: attempt,
+          attempt,
           timestamp: new Date().toISOString()
-        }));
+        });
         s.emit("join_driver_room");
       });
 
       // ✅ Listener pong pour heartbeat applicatif
       s.on("pong", (data: any) => {
-        console.log(JSON.stringify({
+        log.info("heartbeat pong", {
           event: "heartbeat_pong",
           timestamp: data?.timestamp,
           received_at: new Date().toISOString()
-        }));
+        });
       });
 
       s.on("new_booking", async (data: any) => {
-        console.log(JSON.stringify({
+        log.info("new booking", {
           event: "new_booking",
           booking_id: data?.id,
           timestamp: new Date().toISOString()
-        }));
+        });
         try {
           const bookingId = data?.booking_id ?? data?.id;
           const pickup = data?.pickup_address ?? data?.pickup_location;
@@ -123,23 +126,23 @@ export const useSocket = (
             trigger: null,
           });
         } catch (err) {
-          console.warn(JSON.stringify({
+          log.warn("notification error", {
             event: "notification_error",
             error: err instanceof Error ? err.message : String(err),
             timestamp: new Date().toISOString()
-          }));
+          });
         }
         onNewBooking?.(data);
       });
 
       // ✅ FIX: Écouter aussi "booking_updated" pour compatibilité (même handler)
       s.on("booking_updated", async (data: any) => {
-        console.log(JSON.stringify({
+        log.info("booking updated", {
           event: "booking_updated",
           booking_id: data?.id,
           status: data?.status,
           timestamp: new Date().toISOString()
-        }));
+        });
 
         // P0.5: Ne pas créer de notif locale si le chauffeur est l'acteur (self-notification)
         // Le driver reçoit booking_updated via company_room (il est dans les 2 rooms),
@@ -154,7 +157,7 @@ export const useSocket = (
           actorId === myDriverId
         ) {
           if (__DEV__) {
-            console.log("🔕 P0.5 useSocket: skip local notification (actor=driver self)", {
+            log.info("skip local notification (actor=self)", {
               booking_id: data?.id,
               actor_id: actorId,
             });
@@ -243,23 +246,23 @@ export const useSocket = (
             trigger: null,
           });
         } catch (err) {
-          console.warn(JSON.stringify({
+          log.warn("notification error", {
             event: "notification_error",
             error: err instanceof Error ? err.message : String(err),
             timestamp: new Date().toISOString()
-          }));
+          });
         }
         onNewBooking?.(data);
       });
 
       // ✅ Mission retirée (réassignée) → notifier + inviter à rafraîchir
       s.on("booking_reassigned", async (data: any) => {
-        console.log(JSON.stringify({
+        log.info("booking reassigned", {
           event: "booking_reassigned",
           booking_id: data?.booking_id,
           new_driver_id: data?.new_driver_id,
           timestamp: new Date().toISOString()
-        }));
+        });
         try {
           const bookingId = data?.booking_id ?? data?.id;
           await Notifications.scheduleNotificationAsync({
@@ -273,38 +276,38 @@ export const useSocket = (
             trigger: null,
           });
         } catch (err) {
-          console.warn(JSON.stringify({
+          log.warn("notification error", {
             event: "notification_error",
             error: err instanceof Error ? err.message : String(err),
             timestamp: new Date().toISOString()
-          }));
+          });
         }
       });
 
       s.on("team_chat_message", (message: any) => {
-        console.log(JSON.stringify({
+        log.info("team chat message", {
           event: "team_chat_message",
           sender_id: message?.sender_id,
           timestamp: new Date().toISOString()
-        }));
+        });
         onTeamMessage?.(message);
       });
 
       s.on("error", (data: any) => {
-        console.error(JSON.stringify({
+        log.error("socket error", {
           event: "socket_error",
           error: data?.error || String(data),
           timestamp: new Date().toISOString()
-        }));
+        });
       });
 
       // Si le serveur nous dit "unauthorized" → on ne tente PAS de refresh
       s.on("unauthorized", async (data: any) => {
-        console.error(JSON.stringify({
+        log.error("socket unauthorized", {
           event: "socket_unauthorized",
           error: data?.error || String(data),
           timestamp: new Date().toISOString()
-        }));
+        });
         // Option : purger le token si tu veux forcer un relogin
         // await secureStorage.removeAccessToken();
         scheduleReconnection();
@@ -321,11 +324,11 @@ export const useSocket = (
       
       if (timeSinceLastAttempt < cooldownMs) {
         const waitTime = cooldownMs - timeSinceLastAttempt;
-        console.log(JSON.stringify({
+        log.info("reconnect cooldown", {
           event: "socket_reconnect_cooldown",
           wait_ms: waitTime,
           timestamp: new Date().toISOString()
-        }));
+        });
         reconnectTimerRef.current = setTimeout(() => {
           reconnectTimerRef.current = null;
           scheduleReconnection();
@@ -334,11 +337,11 @@ export const useSocket = (
       }
 
       const delay = Math.min(backoffRef.current, 60000); // ✅ Augmenté max de 30s à 60s
-      console.log(JSON.stringify({
+      log.info("reconnect scheduled", {
         event: "socket_reconnect_scheduled",
         delay_ms: delay,
         timestamp: new Date().toISOString()
-      }));
+      });
 
       reconnectTimerRef.current = setTimeout(async () => {
         reconnectTimerRef.current = null;
@@ -348,11 +351,11 @@ export const useSocket = (
         // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
         const token = await secureStorage.getAccessToken();
         if (!token) {
-          console.warn(JSON.stringify({
+          log.warn("reconnect aborted (no token)", {
             event: "socket_reconnect_aborted",
             reason: "no_token",
             timestamp: new Date().toISOString()
-          }));
+          });
           return;
         }
 
@@ -364,12 +367,12 @@ export const useSocket = (
             backoffRef.current = 5000; // ✅ Reset à 5s si succès (au lieu de 2s)
           }
         } catch (e) {
-          console.warn(JSON.stringify({
+          log.warn("reconnect failed", {
             event: "socket_reconnect_failed",
             error: e instanceof Error ? e.message : String(e),
             next_attempt_ms: Math.min(backoffRef.current * 2, 60000),
             timestamp: new Date().toISOString()
-          }));
+          });
           backoffRef.current = Math.min(backoffRef.current * 2, 60000); // ✅ Max 60s (au lieu de 30s)
           scheduleReconnection();
         }
@@ -380,29 +383,29 @@ export const useSocket = (
     (async () => {
       // ✅ FIX: Utiliser secureStorage.getAccessToken() au lieu d'AsyncStorage
       const token = await secureStorage.getAccessToken();
-      console.log("[useSocket] 🔑 Token check:", {
+      log.info("token check", {
         hasToken: !!token,
         tokenLength: token?.length || 0,
         timestamp: new Date().toISOString()
       });
       
       if (!token) {
-        console.warn(JSON.stringify({
+        log.warn("init aborted (no token)", {
           event: "socket_init_aborted",
           reason: "no_token",
           timestamp: new Date().toISOString()
-        }));
+        });
         return;
       }
       
-      console.log("[useSocket] 🔌 Attempting to connect socket...");
+      log.info("attempting to connect socket");
       try {
         const s = await connectSocket(token).catch((err) => {
-          console.error("[useSocket] ❌ connectSocket failed:", err);
+          log.error("connectSocket failed", { err });
           return null;
         });
         
-        console.log("[useSocket] Socket connection result:", {
+        log.info("connection result", {
           success: !!s,
           connected: s?.connected,
           id: s?.id,
@@ -410,32 +413,26 @@ export const useSocket = (
         
         if (!s || !isMountedRef.current) {
           // échec initial → planifie une reconnexion
-          console.warn("[useSocket] ⚠️ Socket connection failed, scheduling reconnection");
+          log.warn("connection failed, scheduling reconnection");
           scheduleReconnection();
           return;
         }
         setSocketInstance(s);
         bindHandlers(s);
-        console.log("[useSocket] ✅ Socket initialized and handlers bound");
+        log.info("socket initialized and handlers bound");
       } catch (err) {
         // fallback: planifier une reconnexion
-        console.error("[useSocket] ❌ Unexpected error:", err);
+        log.error("unexpected error", { err });
         scheduleReconnection();
       }
     })();
 
-    // Cleanup
     return () => {
       isMountedRef.current = false;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      try {
-        const s = getSocket();
-        s?.off();
-        s?.disconnect();
-      } catch {}
     };
   }, []);
 

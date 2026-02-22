@@ -204,6 +204,9 @@ class CreateCompanyClientUseCase:
             "institution_name": validated_data.get("institution_name")
             if bool(validated_data.get("is_institution", False))
             else None,
+            "linked_institution_id": validated_data.get("linked_institution_id")
+            if bool(validated_data.get("is_institution", False))
+            else None,
             "domicile_address": validated_data.get("domicile_address"),
             "domicile_zip": validated_data.get("domicile_zip"),
             "domicile_city": validated_data.get("domicile_city"),

@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
 import { Alert } from "react-native";
 
+import { getLogger } from "@/utils/logger";
 import { api } from "@/services/api";
 import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
 import { NotificationActionId } from "@/services/notificationActions";
@@ -12,6 +13,8 @@ import {
   trackNotificationOpened,
   trackNotificationActionClicked,
 } from "@/services/notificationAnalytics";
+
+const log = getLogger("NotifAction");
 
 /**
  * Hook pour gérer les réponses aux actions des notifications
@@ -44,7 +47,7 @@ export function useNotificationActions() {
       const { actionIdentifier, notification } = response;
       const { data } = notification.request.content;
 
-      console.log("🎬 Action notification:", actionIdentifier, data);
+      log.info("notification action", { actionIdentifier, data });
 
       const notificationType = (data?.type as string) || "unknown";
       const notificationId = notification.request.identifier;
@@ -93,11 +96,19 @@ export function useNotificationActions() {
           handleReplyMessage(data);
           break;
 
+        case NotificationActionId.MISSION_QUICK_ACTIONS:
+          router.push("/quick-action?fromNavigation=true");
+          break;
+
+        case NotificationActionId.MISSION_CALL:
+          handleCallDispatcher(data);
+          break;
+
         default:
-          console.warn("⚠️ Action inconnue:", actionIdentifier);
+          log.warn("unknown action", { actionIdentifier });
       }
     } catch (error) {
-      console.error("❌ Erreur traitement action notification:", error);
+      log.error("notification action handling failed", { error });
       Alert.alert(
         "Erreur",
         "Impossible de traiter l'action. Veuillez réessayer."
@@ -131,13 +142,13 @@ export function useNotificationActions() {
     const bookingId = data?.booking_id;
 
     if (!bookingId) {
-      console.error("❌ booking_id manquant dans data");
+      log.error("missing booking_id in data", { data });
       Alert.alert("Erreur", "Impossible d'accepter la mission.");
       return;
     }
 
     try {
-      console.log(`🚗 Acceptation mission ${bookingId}...`);
+      log.info("accepting mission", { bookingId });
 
       // Appel API pour accepter la mission
       const response = await api.post(
@@ -146,7 +157,7 @@ export function useNotificationActions() {
       );
 
       if (response.status === 200 && response.data.ok) {
-        console.log(`✅ Mission ${bookingId} acceptée`);
+        log.success("mission accepted", { bookingId });
 
         // Afficher notification de confirmation locale
         await Notifications.scheduleNotificationAsync({
@@ -164,7 +175,7 @@ export function useNotificationActions() {
         throw new Error("Échec acceptation mission");
       }
     } catch (error) {
-      console.error("❌ Erreur acceptation mission:", error);
+      log.error("accept mission failed", { error });
       Alert.alert(
         "Erreur",
         "Impossible d'accepter la mission. Veuillez réessayer manuellement."
@@ -179,13 +190,13 @@ export function useNotificationActions() {
     const bookingId = data?.booking_id;
 
     if (!bookingId) {
-      console.error("❌ booking_id manquant dans data");
+      log.error("missing booking_id in data", { data });
       Alert.alert("Erreur", "Impossible de refuser la mission.");
       return;
     }
 
     try {
-      console.log(`❌ Refus mission ${bookingId}...`);
+      log.info("declining mission", { bookingId });
 
       // Appel API pour refuser la mission
       const response = await api.post(
@@ -194,7 +205,7 @@ export function useNotificationActions() {
       );
 
       if (response.status === 200 && response.data.ok) {
-        console.log(`✅ Mission ${bookingId} refusée`);
+        log.success("mission declined", { bookingId });
 
         // Notification de confirmation
         await Notifications.scheduleNotificationAsync({
@@ -209,7 +220,7 @@ export function useNotificationActions() {
         throw new Error("Échec refus mission");
       }
     } catch (error) {
-      console.error("❌ Erreur refus mission:", error);
+      log.error("decline mission failed", { error });
       Alert.alert(
         "Erreur",
         "Impossible de refuser la mission. Veuillez réessayer manuellement."
@@ -267,12 +278,12 @@ export function useNotificationActions() {
     const messageId = data?.message_id;
 
     if (!messageId) {
-      console.error("❌ message_id manquant dans data");
+      log.error("missing message_id in data", { data });
       return;
     }
 
     try {
-      console.log(`✓ Marquer message ${messageId} comme lu...`);
+      log.info("marking message as read", { messageId });
 
       const { mode, enterpriseSession } = modeRef.current;
       // Politique : mode=enterprise + session valide → enterpriseStandardApi ; sinon → api (driver).
@@ -284,9 +295,9 @@ export function useNotificationActions() {
         quick_action: true,
       });
 
-      console.log(`✅ Message ${messageId} marqué comme lu`);
+      log.success("message marked as read", { messageId });
     } catch (error) {
-      console.error("❌ Erreur marquer message lu:", error);
+      log.error("mark message read failed", { error });
     }
   }
 

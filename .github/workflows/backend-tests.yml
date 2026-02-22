@@ -201,16 +201,20 @@ jobs:
       - name: Run database migrations
         env:
           FLASK_APP: backend.wsgi
+          # ✅ FIX: DISABLE_EVENTLET=1 est OBLIGATOIRE pour que les migrations fonctionnent
+          # eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+          DISABLE_EVENTLET: "1"
         shell: bash
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
-          echo "🔄 Exécution des migrations de base de données..."
+          echo "🔄 Exécution des migrations de base de données (DISABLE_EVENTLET=1)..."
           echo "📋 Alembic heads before upgrade:"
           flask db heads || true
           # Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)
           if ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then
             echo "❌ Erreur lors de l'exécution des migrations"
+            echo "💡 Vérifiez que DISABLE_EVENTLET=1 est défini"
             echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"
             sed -n '1,200p' /tmp/alembic_upgrade.log || true
             echo "---- Diagnostics (upgrade failed) - État actuel ----"
@@ -407,6 +411,8 @@ jobs:
       - name: Run migrations
         env:
           FLASK_APP: backend.wsgi
+          # ✅ FIX: DISABLE_EVENTLET=1 est OBLIGATOIRE pour que les migrations fonctionnent
+          DISABLE_EVENTLET: "1"
         run: |
           cd backend && flask db upgrade heads
 
@@ -527,17 +533,24 @@ jobs:
       - name: Run database migrations
         env:
           FLASK_APP: backend.wsgi
+          # ✅ FIX: DISABLE_EVENTLET=1 est OBLIGATOIRE pour que les migrations fonctionnent
+          # eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+          DISABLE_EVENTLET: "1"
         run: |
           cd backend
-          echo "🔄 Exécution des migrations de base de données..."
+          echo "🔄 Exécution des migrations de base de données (DISABLE_EVENTLET=1)..."
           flask db upgrade heads || {
             echo "❌ Erreur lors de l'exécution des migrations"
+            echo "💡 Vérifiez que DISABLE_EVENTLET=1 est défini"
             exit 1
           }
           echo "✅ Migrations exécutées avec succès"
 
       - name: Run E2E tests
         timeout-minutes: 15
+        env:
+          # Les migrations sont déjà appliquées dans l'étape précédente
+          SKIP_E2E_MIGRATIONS: "1"
         run: |
           echo "🧪 Exécution des tests E2E..."
           pytest backend/tests/e2e/ \
@@ -545,8 +558,7 @@ jobs:
             --tb=short \
             --maxfail=5 \
             --timeout=300 \
-            --timeout-method=thread \
-            -m e2e || {
+            --timeout-method=thread || {
             echo "❌ Certains tests E2E ont échoué"
             exit 1
           }
@@ -780,16 +792,20 @@ jobs:
       - name: Run migrations (upgrade)
         env:
           FLASK_APP: backend.wsgi
+          # ✅ FIX: DISABLE_EVENTLET=1 est OBLIGATOIRE pour que les migrations fonctionnent
+          # eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
+          DISABLE_EVENTLET: "1"
         shell: bash
         run: |
           cd backend
           set -o errexit -o nounset -o pipefail -x
-          echo "🔄 Exécution des migrations de base de données..."
+          echo "🔄 Exécution des migrations de base de données (DISABLE_EVENTLET=1)..."
           echo "📋 Alembic heads before upgrade:"
           flask db heads || true
           # Run the upgrade (use 'heads' to handle multiple heads until merge migration is created)
           if ! flask db upgrade heads 2>&1 | tee /tmp/alembic_upgrade.log; then
             echo "❌ Erreur lors de l'exécution des migrations"
+            echo "💡 Vérifiez que DISABLE_EVENTLET=1 est défini"
             echo "---- Diagnostics (upgrade failed) - Log d'erreur ----"
             sed -n '1,200p' /tmp/alembic_upgrade.log || true
             echo "---- Diagnostics (upgrade failed) - État actuel ----"

@@ -1,11 +1,14 @@
 // src/lib/push.ts
-import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { getLogger } from "@/utils/logger";
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+
+const log = getLogger("Push");
 
 export async function registerForPushAsync() {
-  if (Constants.appOwnership === 'expo') {
-    console.warn('Use a Development Build (not Expo Go) to test push.');
+  if (Constants.appOwnership === "expo") {
+    log.warn("Use a Development Build (not Expo Go) to test push.");
     return null;
   }
 
@@ -25,6 +28,6 @@ export async function registerForPushAsync() {
   if (finalStatus !== 'granted') return null;
 
   const token = await Notifications.getExpoPushTokenAsync();
-  console.log('Expo push token:', token.data);
+  log.info("Expo push token", { token: token.data });
   return token.data;
 }

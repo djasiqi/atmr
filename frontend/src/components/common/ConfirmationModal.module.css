@@ -1,0 +1,155 @@
+.modal {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.iconPrimary,
+.iconDanger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.iconPrimary {
+  background: var(--brand-primary-lighter, rgba(0, 121, 107, 0.08));
+  color: var(--brand-primary);
+}
+
+.iconDanger {
+  background: var(--danger-bg);
+  color: var(--danger-primary);
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* --- Body --- */
+
+.body {
+  padding: 16px 20px;
+}
+
+.body p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.body p:last-child {
+  margin-bottom: 0;
+}
+
+.body p strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* --- Footer --- */
+
+.footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.cancelBtn,
+.primaryBtn,
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.cancelBtn {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+.cancelBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.primaryBtn {
+  background: var(--brand-primary);
+  color: white;
+}
+
+.primaryBtn:hover {
+  background: var(--brand-hover);
+}
+
+.dangerBtn {
+  background: var(--danger-primary);
+  color: white;
+}
+
+.dangerBtn:hover {
+  background: var(--danger-hover, #c62828);
+}

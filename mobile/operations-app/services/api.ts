@@ -2,7 +2,10 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import axios, { isAxiosError } from "axios";
+import { getLogger } from "@/utils/logger";
 import { secureStorage, asyncStorage } from "./storage";
+
+const log = getLogger("Api");
 import {
   AuthInvalidError,
   AuthNotReadyError,
@@ -132,8 +135,8 @@ try {
   // Astuce: cherche "[API] baseURL" dans les logs
   // On garde le log aussi en prod pour diagnostic, mais il ne contient pas de secrets
   // Désactive si besoin en commentant la ligne ci-dessous
-  // eslint-disable-next-line no-console
-  console.log("[API] baseURL:", baseURL, {
+  log.info("base url configured", {
+    baseURL,
     ENV_API_URL,
     DEV_API_URL,
     PROD_API_URL,
@@ -170,7 +173,7 @@ async function fetchCSRFToken(): Promise<string | null> {
       // ✅ P2-2: Récupérer le token CSRF depuis l'endpoint backend
       // Sur web: requête "simple" (fetch sans en-têtes custom) pour éviter preflight OPTIONS → GET jamais envoyé (preuve logs Docker)
       const url = `${baseURL}/auth/csrf-token`;
-      console.log(`🔄 [CSRF] Fetch token depuis: ${url}`);
+      log.info("csrf token fetch started", { url });
 
       let token: string | null = null;
       if (Platform.OS === "web" && typeof fetch !== "undefined") {
@@ -189,9 +192,9 @@ async function fetchCSRFToken(): Promise<string | null> {
 
       if (token) {
         csrfToken = token;
-        console.log("✅ [CSRF] Token CSRF récupéré avec succès");
+        log.success("csrf token fetched");
       } else {
-        console.warn("⚠️ [CSRF] Token CSRF non reçu du backend.");
+        log.warn("csrf token not received from backend");
       }
 
       return token;
@@ -203,17 +206,15 @@ async function fetchCSRFToken(): Promise<string | null> {
           error.message === "Network Error" ||
           error.response == null;
         if (isNetworkError) {
-          console.warn(
-            "⚠️ [CSRF] CSRF non disponible (optionnel). Auth Bearer uniquement pour les endpoints driver."
-          );
+          log.warn("csrf unavailable, bearer auth only", {});
         } else {
-          console.warn("⚠️ [CSRF] Erreur récupération token CSRF (optionnel):", {
+          log.warn("csrf fetch error (optional)", {
             status: error.response?.status,
             url: error.config?.url,
           });
         }
       } else {
-        console.warn("⚠️ [CSRF] CSRF non disponible (optionnel), poursuite avec Bearer uniquement.");
+        log.warn("csrf unavailable, continuing with bearer only", {});
       }
       csrfToken = null;
       return null;
@@ -232,7 +233,7 @@ export const initializeCSRFToken = async (): Promise<void> => {
   try {
     await fetchCSRFToken();
   } catch (error) {
-    console.warn("⚠️ [CSRF] Erreur lors de l'initialisation du token CSRF:", error);
+    log.warn("csrf init error", { error });
   }
 };
 
@@ -262,7 +263,7 @@ export const api = axios.create({
 // Log de la configuration des headers au démarrage (dev uniquement)
 if (__DEV__) {
   const hasXRequestedWith = Platform.OS !== "web";
-  console.log("[DEBUG] API instance created:", {
+  log.debug("api instance created", {
     platform: Platform.OS,
     hasXRequestedWith,
     baseURL,
@@ -330,7 +331,7 @@ api.interceptors.request.use(
       const msg =
         "Driver app must not call company_dispatch. Use /driver/me/bookings/eta only.";
       if (__DEV__) {
-        console.error("[API]", msg, "Blocked URL:", url);
+        log.error("driver app must not call company_dispatch", { url, msg });
       }
       throw new Error(msg);
     }
@@ -347,10 +348,7 @@ api.interceptors.request.use(
       } catch (error) {
         // ✅ P1 (strict): ne jamais envoyer une requête protégée sans auth prête
         if (__DEV__) {
-          console.warn(
-            "[API] AUTH_NOT_READY (timeout) - requête rejetée:",
-            config.url
-          );
+          log.warn("auth not ready timeout, request rejected", { url: config.url });
         }
         reportAuthNotReadyMetric({
           kind: "driver",
@@ -382,25 +380,25 @@ api.interceptors.request.use(
             ?.split("=")[1];
           
           if (cookieToken) {
-            console.log("✅ [CSRF] Token trouvé dans document.cookie");
+            log.success("csrf token from document.cookie");
             tokenToUse = cookieToken;
           } else {
-            console.log("ℹ️ [CSRF] Token non trouvé dans document.cookie (peut-être httpOnly)");
+            log.info("csrf not in document.cookie (may be httpOnly)");
           }
         } catch (error) {
-          console.warn("[CSRF] Erreur lors de la récupération du token CSRF depuis les cookies:", error);
+          log.warn("csrf cookie read error", { error });
         }
       }
 
       // Fallback: utiliser le token en cache (récupéré via initializeCSRFToken)
       if (!tokenToUse && csrfToken) {
-        console.log("✅ [CSRF] Utilisation du token en cache");
+        log.success("using cached csrf token");
         tokenToUse = csrfToken;
       }
 
       // Si toujours pas de token, essayer de le récupérer maintenant (dernière chance)
       if (!tokenToUse) {
-        console.log("🔄 [CSRF] Aucun token disponible, tentative de récupération...");
+        log.info("no csrf token, fetching");
         const token = await fetchCSRFToken();
         if (token) {
           tokenToUse = token;
@@ -410,9 +408,9 @@ api.interceptors.request.use(
       // Ajouter le token à la requête si disponible
       if (tokenToUse) {
         config.headers["X-CSRF-Token"] = tokenToUse;
-        console.log(`✅ [CSRF] Token ajouté pour ${config.method} ${config.url}`);
+        log.success("csrf token added to request", { method: config.method, url: config.url });
       } else {
-        console.warn(`⚠️ [CSRF] Aucun token disponible pour ${config.method} ${config.url}`);
+        log.warn("no csrf token for request", { method: config.method, url: config.url });
       }
     }
 
@@ -447,9 +445,12 @@ api.interceptors.request.use(
           totalRequests > 0
             ? (interceptorCacheHitCount / totalRequests) * 100
             : 0;
-        console.log(
-          `[API Interceptor] Performance: cache=${cacheHitRate.toFixed(1)}%, hits=${interceptorCacheHitCount}, misses=${interceptorCacheMissCount}, total=${interceptorRequestCount}`
-        );
+        log.info("interceptor performance", {
+          cacheHitRate: cacheHitRate.toFixed(1),
+          hits: interceptorCacheHitCount,
+          misses: interceptorCacheMissCount,
+          total: interceptorRequestCount,
+        });
       }
     }
 
@@ -477,14 +478,14 @@ api.interceptors.request.use(
       hypothesisId: "A",
     };
     if (__DEV__) {
-      console.log("[API] auth state (non sensible):", {
+      log.debug("auth state (non-sensitive)", {
         hasToken: !!token,
         isAuthReady: isAuthReadySync(),
         url: config.url,
         ts: Date.now(),
       });
     }
-    console.log("[DEBUG] Driver API interceptor:", JSON.stringify(logData, null, 2));
+    log.debug("driver api interceptor", logData);
     debugLog(logData);
     // #endregion
 
@@ -503,7 +504,7 @@ api.interceptors.request.use(
     if (!isPublic && !hasExplicitAuthHeader && !token) {
       // Option 1 — Assert soft en dev : attraper invariant cassé (isAuthReady mais pas de token)
       if (__DEV__ && isAuthReadySync()) {
-        console.warn("[AUTH] isAuthReady=true but no token (invariant broken)");
+        log.warn("isAuthReady but no token (invariant broken)", {});
       }
       const urlKey = config.url ?? "";
       const now = Date.now();
@@ -515,10 +516,7 @@ api.interceptors.request.use(
         lastAuthNotReadyTime = now;
       }
       if (__DEV__ && !isDedupe) {
-        console.warn(
-          "[API] AUTH_NOT_READY (missing access token) - requête rejetée:",
-          config.url
-        );
+        log.warn("auth not ready, request rejected", { url: config.url });
       }
       if (!isDedupe) {
         reportAuthNotReadyMetric({
@@ -548,7 +546,7 @@ api.interceptors.request.use(
         config.headers["X-Device-ID"] = deviceId;
       } catch (e) {
         if (__DEV__) {
-          console.warn("[API Interceptor] ⚠️ Impossible de générer X-Device-ID:", e);
+          log.warn("x-device-id generation failed", { error: e });
         }
       }
     }
@@ -605,15 +603,15 @@ export async function refreshDriverTokenSingleflight(): Promise<string> {
     // Stocker le nouveau token dans SecureStore
     await secureStorage.setAccessToken(newAccessToken);
 
-    // Mettre à jour refresh_token si rotation
+    // Rotation soft : sauvegarder le nouveau refresh token de maniere atomique.
+    // Ne jamais ecraser le token en memoire tant que la persistance n'a pas reussi.
+    // En cas d'echec, l'ancien reste valide grace a la rotation soft backend.
     if (refreshResponse.refresh_token) {
       try {
         await secureStorage.setRefreshToken(refreshResponse.refresh_token);
+        log.info("refresh_saved_ok");
       } catch (storageError) {
-        console.error(
-          "[API] ⚠️ Échec sauvegarde refresh token (non bloquant):",
-          storageError
-        );
+        log.warn("refresh_save_failed, keeping old token", { error: storageError });
       }
     }
 
@@ -650,11 +648,9 @@ api.interceptors.response.use(
       const refreshStatus = error.response?.status;
       const isNetworkError = !error.response;
 
-      // ✅ Ne déconnecter que si c'est vraiment un problème d'authentification
-      // (401 = refresh token expiré/invalide, 403 = refus côté refresh)
-      // Ne pas déconnecter pour erreurs réseau temporaires
-      if (refreshStatus === 401 || refreshStatus === 403) {
+      if (refreshStatus === 401) {
         pushSessionEvent("REFRESH_FAIL");
+        const reason = "refresh_rejected_401";
         logAuthEvent("AUTH_REFRESH_FAIL", {
           route: "driver",
           status: refreshStatus,
@@ -662,25 +658,38 @@ api.interceptors.response.use(
           outcome: "logout",
           source: "refresh_endpoint",
         });
-        console.error(
-          `[API Interceptor] ❌ Refresh token échoué (${refreshStatus}):`,
-          error.response?.data || error.message
-        );
-        const reason = refreshStatus === 401 ? "refresh_rejected_401" : "refresh_rejected_403";
+        log.warn("refresh token rejected (401), redirecting to login", {});
         processQueue(new AuthInvalidError({ route: "driver", reason }), null);
         await invokeForceLogoutDriver(reason);
         return Promise.reject(new AuthInvalidError({ route: "driver", reason }));
+      } else if (refreshStatus === 403) {
+        const serverReason = error.response?.data?.reason;
+        if (serverReason === "account_disabled") {
+          pushSessionEvent("REFRESH_FAIL");
+          logAuthEvent("AUTH_REFRESH_FAIL", {
+            route: "driver",
+            status: 403,
+            refresh_attempted: true,
+            outcome: "logout",
+            source: "refresh_endpoint",
+            server_reason: serverReason,
+          });
+          log.warn("refresh token rejected (account disabled)", {});
+          processQueue(new AuthInvalidError({ route: "driver", reason: "account_disabled" }), null);
+          await invokeForceLogoutDriver("account_disabled");
+          return Promise.reject(new AuthInvalidError({ route: "driver", reason: "account_disabled" }));
+        }
+        log.warn("refresh token 403 without account_disabled, treating as transient", {
+          serverError: error.response?.data?.error,
+        });
+        processQueue(error, null);
+        return Promise.reject(error);
       } else if (isNetworkError) {
-        // Erreur réseau → ne pas déconnecter, juste rejeter
-        console.warn(
-          "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté."
-        );
+        log.warn("refresh token network error, user stays connected", {});
         return Promise.reject(error);
       } else {
         // Autres erreurs → ne pas déconnecter non plus
-        console.warn(
-          `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
-        );
+        log.warn("refresh token server error, user stays connected", { status: refreshStatus });
         return Promise.reject(error);
       }
     }
@@ -700,9 +709,7 @@ api.interceptors.response.use(
           queue_count: failedQueue.length + 1,
         });
         if (__DEV__) {
-          console.log(
-            `[API Interceptor] REFRESH_WAIT — requête en file (refresh_inflight_count=${failedQueue.length + 1})`
-          );
+          log.info("refresh wait, request queued", { queueCount: failedQueue.length + 1 });
         }
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -726,9 +733,7 @@ api.interceptors.response.use(
         pushSessionEvent("REFRESH_SUCCESS");
         logAuthEvent("AUTH_REFRESH_SUCCESS", { route: "driver" });
         if (__DEV__) {
-          console.log(
-            `[API Interceptor] Token refreshed, cache updated. New token cached.`
-          );
+          log.success("token refreshed, cache updated");
         }
 
         // Traiter la queue
@@ -743,22 +748,14 @@ api.interceptors.response.use(
         const refreshData = refreshError?.response?.data;
         const isNetworkError = !refreshError?.response; // Pas de réponse = erreur réseau
         
-        console.error(
-          `[API Interceptor] ❌ Refresh token échoué (status: ${refreshStatus || "network"}):`,
-          refreshData || refreshError?.message || refreshError
-        );
-        
-        // ✅ Distinguer les types d'erreurs :
-        // - 401 = refresh token expiré → déconnecter
-        // - Erreur réseau = ne pas déconnecter, laisser l'utilisateur connecté
-        // - Autres erreurs (500, etc.) = ne pas déconnecter non plus
+        log.warn("refresh token failed", {
+          status: refreshStatus || "network",
+          data: refreshData || refreshError?.message || refreshError,
+        });
         
         if (refreshStatus === 401) {
-          // Refresh token expiré/invalide → déconnecter (uniquement après échec refresh)
           pushSessionEvent("REFRESH_FAIL");
-          console.error(
-            "[API Interceptor] 🚫 Refresh token expiré/invalide (401). Déconnexion forcée."
-          );
+          log.warn("refresh token expired, redirecting to login", {});
 
           const reason = "refresh_rejected_401";
           processQueue(new AuthInvalidError({ route: "driver", reason }), null);
@@ -771,9 +768,7 @@ api.interceptors.response.use(
             refresh_attempted: true,
             outcome: "retry_later",
           });
-          console.warn(
-            "[API Interceptor] ⚠️ Erreur réseau lors du refresh token. Utilisateur reste connecté. La requête originale échouera mais l'utilisateur ne sera pas déconnecté."
-          );
+          log.warn("refresh token network error, user stays connected", {});
           processQueue(refreshError, null);
           return Promise.reject(refreshError);
         } else {
@@ -783,9 +778,7 @@ api.interceptors.response.use(
             refresh_attempted: true,
             outcome: "retry_later",
           });
-          console.warn(
-            `[API Interceptor] ⚠️ Erreur serveur lors du refresh token (status: ${refreshStatus}). Utilisateur reste connecté.`
-          );
+          log.warn("refresh token server error, user stays connected", { status: refreshStatus });
           processQueue(refreshError, null);
           return Promise.reject(refreshError);
         }
@@ -796,10 +789,10 @@ api.interceptors.response.use(
     
     // ✅ 403 = forbidden fonctionnel → ne pas retry automatiquement (audit 34-38)
     if (error.response?.status === 403 && !originalRequest._retry) {
-      console.error(
-        `[API Interceptor] ❌ Accès refusé (403) pour ${originalRequest.url}:`,
-        error.response?.data || error.message
-      );
+      log.error("access denied (403)", {
+        url: originalRequest.url,
+        data: error.response?.data || error.message,
+      });
       // Si c'est un 403, ne pas retry automatiquement.
       return Promise.reject(error);
     }
@@ -807,7 +800,7 @@ api.interceptors.response.use(
     // Autres erreurs → log et rejeter
     if (isAxiosError(error)) {
       const code = (error as any)?.code;
-      console.warn("API Error", {
+      log.warn("api error", {
         url: error.config?.url,
         method: error.config?.method,
         status: error.response?.status,
@@ -816,19 +809,14 @@ api.interceptors.response.use(
         message: error.message,
       });
       if (code === "ECONNABORTED") {
-        console.warn(
-          "API Timeout (augmenté à 30s). Vérifiez la latence réseau/serveur."
-        );
+        log.warn("api timeout (30s), check network/server latency", {});
       }
       if (code === "ERR_NETWORK" && Platform.OS === "web") {
         const origin = typeof window !== "undefined" ? window.location.origin : "?";
-        console.warn(
-          "[ERR_NETWORK] Sur le web (8081) : vérifiez 1) que le backend tourne sur",
-          baseURL.replace("/api/v1", ""),
-          "2) que CORS autorise l’origine",
+        log.warn("err_network on web, check backend and cors", {
+          baseUrl: baseURL.replace("/api/v1", ""),
           origin,
-          "(ex: FLASK_CONFIG=development ou SOCKETIO_CORS_ORIGINS avec http://localhost:8081)."
-        );
+        })
         // #region agent log — H3: URL exacte appelée lors de ERR_NETWORK
         const fullURL = (originalRequest?.baseURL || "") + (originalRequest?.url || "");
         sendIngestEvent({
@@ -892,6 +880,7 @@ export const registerPushToken = async (payload: {
   device_id?: string;
   deviceId?: string;
   platform?: "ios" | "android";
+  provider?: "expo" | "fcm";
 }) => {
   const device_id =
     payload.device_id ||
@@ -900,12 +889,16 @@ export const registerPushToken = async (payload: {
   const platform =
     payload.platform ||
     (Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : undefined);
+  const provider =
+    payload.provider ||
+    (payload.token.startsWith("ExponentPushToken") ? "expo" : "fcm");
 
   const res = await api.post("/driver/save-push-token", {
     token: payload.token,
     driverId: payload.driverId,
     device_id,
     platform,
+    provider,
   });
   return res.data;
 };
@@ -949,7 +942,7 @@ export const loginDriver = async (
       runId: "run1",
       hypothesisId: "D",
     };
-    console.log("[DEBUG] loginDriver entry:", JSON.stringify(logData, null, 2));
+    log.debug("loginDriver entry", logData);
     debugLog(logData);
     // #endregion
     // #region agent log
@@ -972,7 +965,7 @@ export const loginDriver = async (
       runId: "run1",
       hypothesisId: "A",
     };
-    console.log("[DEBUG] loginDriver before request:", JSON.stringify(preRequestLog, null, 2));
+    log.debug("loginDriver before request", preRequestLog);
     debugLog(preRequestLog);
     // #endregion
     // Appel principal via Axios
@@ -1007,7 +1000,7 @@ export const loginDriver = async (
       runId: "run1",
       hypothesisId: "B",
     };
-    console.log("[DEBUG] loginDriver success:", JSON.stringify(successLogData, null, 2));
+    log.debug("loginDriver success", successLogData);
     debugLog(successLogData);
     // #endregion
     const data = response.data;
@@ -1029,7 +1022,7 @@ export const loginDriver = async (
       runId: "run1",
       hypothesisId: "C",
     };
-    console.log("[DEBUG] loginDriver storing tokens:", JSON.stringify(storageLog, null, 2));
+    log.debug("loginDriver storing tokens", storageLog);
     debugLog(storageLog);
     // #endregion
     
@@ -1122,7 +1115,7 @@ export const loginDriver = async (
       
       return data;
     } catch (fallbackError) {
-      console.warn("Login fallback (fetch) échec:", fallbackError);
+      log.warn("login fallback (fetch) failed", { error: fallbackError });
       throw err; // renvoyer l'erreur Axios originale pour la logique appelante
     }
   }
@@ -1233,7 +1226,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
     runId: "run1",
     hypothesisId: "A",
   };
-  console.log("[DEBUG] switchToEnterpriseToken entry:", JSON.stringify(logData, null, 2));
+  log.debug("switchToEnterpriseToken entry", logData);
   debugLog(logData);
   // #endregion
   try {
@@ -1255,7 +1248,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
       runId: "run1",
       hypothesisId: "B",
     };
-    console.log("[DEBUG] switchToEnterpriseToken success:", JSON.stringify(successLogData, null, 2));
+    log.success("switchToEnterpriseToken success", successLogData);
     debugLog(successLogData);
     // #endregion
     return response.data;
@@ -1277,7 +1270,7 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
       runId: "run1",
       hypothesisId: "E",
     };
-    console.error("[DEBUG] switchToEnterpriseToken error:", JSON.stringify(errorLogData, null, 2));
+    log.error("switchToEnterpriseToken error", errorLogData);
     debugLog(errorLogData);
     // #endregion
     throw error;
@@ -1334,10 +1327,7 @@ export const updateDriverLocation = async (
       // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
       const status = error.response?.status;
       if (status === 401 || status === 403 || status === 404) {
-        console.debug(
-          "[updateDriverLocation] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
-          status
-        );
+        log.debug("updateDriverLocation access denied (not driver)", { status });
         // Retourner une réponse vide au lieu de lancer une erreur
         return { ok: false, message: "Accès non autorisé" };
       }
@@ -1393,6 +1383,7 @@ export type Booking = {
   wheelchair?: boolean;
   notes?: string;
   is_return: boolean;
+  return_time?: string;
   // Nouveaux champs pour les informations médicales
   medical_facility?: string;
   doctor_name?: string;
@@ -1437,10 +1428,7 @@ export const getAssignedTrips = async (options?: { since?: string }): Promise<Bo
     // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur
     const status = error?.response?.status;
     if (status === 401 || status === 403 || status === 404) {
-      console.debug(
-        "[getAssignedTrips] Accès non autorisé (utilisateur n'est probablement pas un chauffeur):",
-        status
-      );
+      log.debug("getAssignedTrips access denied (not driver)", { status });
       // Retourner un tableau vide au lieu de lancer une erreur
       return [];
     }
@@ -1460,6 +1448,17 @@ export const getCompletedTrips = async (
 };
 
 // Détail d’une course : route conforme à backend driver.py
+export const getCompanyTodayTrips = async (): Promise<Booking[]> => {
+  try {
+    const response = await api.get<Booking[]>("/driver/me/company-bookings/today");
+    return response.data;
+  } catch (error: any) {
+    const status = error?.response?.status;
+    if (status === 401 || status === 403 || status === 404) return [];
+    throw error;
+  }
+};
+
 export const getTripDetails = async (bookingId: number): Promise<Booking> => {
   const response = await api.get<Booking>(`/driver/me/bookings/${bookingId}`);
   return response.data;
@@ -1566,6 +1565,16 @@ export const getInterceptorPerformanceMetrics = () => {
         : 0,
     totalInterceptorRequests: interceptorRequestCount,
   };
+};
+
+export const testPushNotification = async (): Promise<{
+  ok: boolean;
+  results?: Array<{ token_preview: string; platform: string; ok: boolean; error?: string }>;
+  tokens_count?: number;
+  error?: string;
+}> => {
+  const res = await api.post("/driver/me/test-push");
+  return res.data;
 };
 
 export default api;

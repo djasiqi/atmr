@@ -145,6 +145,110 @@ const ReservationDetailsModal = ({ reservation, onClose }) => {
           </p>
         )}
 
+        {/* ✅ P0.5: Section facturation — résolution payeur */}
+        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
+          <h4 style={{ marginBottom: '0.5rem' }}>💰 Facturation</h4>
+          {(() => {
+            const meta = reservation.metadata_json || {};
+            const billingStatus = meta.billing_resolution_status;
+            const billingSource = meta.billing_resolution_source;
+            const billingIntent = meta.billing_resolution_intent || reservation.billed_to_type;
+            const isFailed = billingStatus && billingStatus.startsWith('failed');
+            const isInstitutionBooking = !!meta.institution_id;
+
+            // Labels
+            const intentLabels = {
+              institution: 'Institution',
+              clinic: 'Clinique',
+              patient: 'Patient',
+              curator: 'Curateur',
+              spc: 'SPC',
+              other: 'Autre',
+            };
+            const statusLabels = {
+              success: 'Payeur résolu',
+              failed_missing_institution_address: 'Adresse institution manquante',
+              failed_missing_payer_info: 'Infos payeur manquantes',
+              failed_missing_patient_info: 'Infos patient incomplètes',
+              failed_error: 'Erreur de résolution',
+            };
+
+            // Si ce n'est pas un booking institution, afficher simplement le type
+            if (!isInstitutionBooking) {
+              return reservation.billed_to_type ? (
+                <p>
+                  <strong>Facturé à :</strong>{' '}
+                  {intentLabels[reservation.billed_to_type] || reservation.billed_to_type}
+                </p>
+              ) : (
+                <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  Informations de facturation standard.
+                </p>
+              );
+            }
+
+            return (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <strong>Facturé à :</strong>
+                  <span>{intentLabels[billingIntent] || billingIntent || '—'}</span>
+                  {billingStatus && (
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        background: isFailed ? '#fef2f2' : '#ecfdf5',
+                        color: isFailed ? '#dc2626' : '#059669',
+                        border: `1px solid ${isFailed ? '#fecaca' : '#a7f3d0'}`,
+                      }}
+                    >
+                      {isFailed ? '⚠️' : '✅'} {statusLabels[billingStatus] || billingStatus}
+                    </span>
+                  )}
+                </div>
+
+                {meta.institution_name && (
+                  <p style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    Institution : {meta.institution_name}
+                  </p>
+                )}
+
+                {isFailed && (
+                  <div
+                    style={{
+                      marginTop: '0.5rem',
+                      padding: '0.75rem',
+                      background: '#fffbeb',
+                      border: '1px solid #fcd34d',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      color: '#92400e',
+                    }}
+                  >
+                    <strong>Action requise :</strong>{' '}
+                    {billingStatus === 'failed_missing_institution_address'
+                      ? `L'institution${meta.institution_name ? ` (${meta.institution_name})` : ''} n'a pas d'adresse de facturation configurée. Contactez l'institution pour qu'elle renseigne son adresse dans Paramètres > Facturation, ou complétez manuellement le destinataire.`
+                      : billingStatus === 'failed_missing_payer_info'
+                        ? `Les coordonnées du tiers payeur (nom et adresse) n'ont pas été transmises par l'institution${meta.institution_name ? ` (${meta.institution_name})` : ''}. Contactez l'institution pour obtenir ces informations avant de facturer.`
+                        : billingStatus === 'failed_missing_patient_info'
+                          ? "Les informations du patient (nom ou adresse) sont incomplètes pour la facturation. Vérifiez le dossier client ou contactez l'institution pour obtenir l'adresse de domicile."
+                          : "Une erreur technique est survenue lors de la résolution automatique du destinataire. Veuillez saisir manuellement les informations de facturation."
+                    }
+                  </div>
+                )}
+
+                {billingSource && !isFailed && (
+                  <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.25rem' }}>
+                    Source : {billingSource.replace(/_/g, ' ')}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
         {/* ✅ P3: Bons de transport liés */}
         <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
           <h4 style={{ marginBottom: '0.5rem' }}>🎫 Bons de transport</h4>

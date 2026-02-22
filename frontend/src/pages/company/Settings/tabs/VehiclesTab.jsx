@@ -1,5 +1,6 @@
 // frontend/src/pages/company/Settings/tabs/VehiclesTab.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { FiTruck, FiPlus, FiCheck, FiX, FiTrash2 } from 'react-icons/fi';
 import {
   fetchCompanyVehicles,
   createVehicle,
@@ -7,17 +8,67 @@ import {
   deleteVehicle,
 } from '../../../../services/companyService';
 import styles from '../CompanySettings.module.css';
-import modalStyles from '../../Clients/components/ClientFormModal.module.css';
+import vehicleStyles from './VehiclesTab.module.css';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 
-const VehiclesTab = () => {
+const EMPTY_ROW = () => ({
+  _tempId: `new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+  model: '',
+  license_plate: '',
+  year: '',
+  seats: '',
+  wheelchair_accessible: false,
+  is_active: true,
+  insurance_company_name: '',
+  inspection_expires_at: '',
+  tachograph_expires_at: '',
+});
+
+function toDateOnly(dateStr) {
+  if (!dateStr) return null;
+  return dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+}
+
+function formatDateCH(isoDate) {
+  if (!isoDate) return '\u2014';
+  const [y, m, d] = isoDate.split('-');
+  if (!y || !m || !d) return isoDate;
+  return `${d}.${m}.${y}`;
+}
+
+/**
+ * Badge pour une date de controle avec duree de validite.
+ * @param {string|null} dateStr  Date du controle (YYYY-MM-DD ou ISO)
+ * @param {number}      validityYears  Duree de validite en annees
+ */
+function getControlBadge(dateStr, validityYears) {
+  const iso = toDateOnly(dateStr);
+  if (!iso) return { label: '\u2014', cls: vehicleStyles.dateBadgeNone };
+
+  const controlDate = new Date(iso + 'T00:00:00');
+  const expiryDate = new Date(controlDate);
+  expiryDate.setFullYear(expiryDate.getFullYear() + validityYears);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const warnDate = new Date(expiryDate);
+  warnDate.setDate(warnDate.getDate() - 30);
+
+  const label = formatDateCH(iso);
+  if (today >= expiryDate) return { label, cls: vehicleStyles.dateBadgeExpired };
+  if (today >= warnDate) return { label, cls: vehicleStyles.dateBadgeWarning };
+  return { label, cls: vehicleStyles.dateBadgeValid };
+}
+
+const VehiclesTab = forwardRef(({ isEditing }, ref) => {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [editingVehicle, setEditingVehicle] = useState(null);
-  const [vehicleToDelete, setVehicleToDelete] = useState(null);
+  const [message, setMessage] = useState(''); // eslint-disable-line no-unused-vars
+
+  const [rowEdits, setRowEdits] = useState({});
+  const [newRows, setNewRows] = useState([]);
+  const [deletedIds, setDeletedIds] = useState([]);
 
   const loadVehicles = async () => {
     try {
@@ -37,54 +88,120 @@ const VehiclesTab = () => {
     loadVehicles();
   }, []);
 
-  const handleCreate = () => {
-    setEditingVehicle(null);
-    setShowModal(true);
-  };
+  useEffect(() => {
+    if (isEditing) {
+      const edits = {};
+      vehicles.forEach((v) => {
+        edits[v.id] = {
+          model: v.model || '',
+          license_plate: v.license_plate || '',
+          year: v.year || '',
+          seats: v.seats || '',
+          wheelchair_accessible: v.wheelchair_accessible || false,
+          is_active: v.is_active !== undefined ? v.is_active : true,
+          inspection_expires_at: toDateOnly(v.inspection_expires_at) || '',
+          tachograph_expires_at: toDateOnly(v.tachograph_expires_at) || '',
+          insurance_company_name: v.insurance_company_name || '',
+        };
+      });
+      setRowEdits(edits);
+      setNewRows([]);
+      setDeletedIds([]);
+    } else {
+      setRowEdits({});
+      setNewRows([]);
+      setDeletedIds([]);
+    }
+  }, [isEditing, vehicles]);
 
-  const handleEdit = (vehicle) => {
-    setEditingVehicle(vehicle);
-    setShowModal(true);
-  };
+  const updateField = useCallback((id, field, value) => {
+    setRowEdits((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value },
+    }));
+  }, []);
 
-  const handleDelete = (vehicle) => {
-    setVehicleToDelete(vehicle);
-    setShowDeleteModal(true);
-  };
+  const updateNewRow = useCallback((tempId, field, value) => {
+    setNewRows((prev) =>
+      prev.map((r) => (r._tempId === tempId ? { ...r, [field]: value } : r))
+    );
+  }, []);
 
-  const handleSave = async (vehicleData) => {
-    try {
-      setError('');
-      setMessage('');
-      if (editingVehicle) {
-        await updateVehicle(editingVehicle.id, vehicleData);
-        setMessage('✅ Véhicule mis à jour avec succès');
-      } else {
-        await createVehicle(vehicleData);
-        setMessage('✅ Véhicule créé avec succès');
+  const handleAddRow = useCallback(() => {
+    setNewRows((prev) => [...prev, EMPTY_ROW()]);
+  }, []);
+
+  const handleRemoveNewRow = useCallback((tempId) => {
+    setNewRows((prev) => prev.filter((r) => r._tempId !== tempId));
+  }, []);
+
+  const handleMarkDelete = useCallback((vehicleId) => {
+    setDeletedIds((prev) => [...prev, vehicleId]);
+  }, []);
+
+  const _handleUnmarkDelete = useCallback((vehicleId) => {
+    setDeletedIds((prev) => prev.filter((id) => id !== vehicleId));
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    async save() {
+      const errors = [];
+
+      for (const id of deletedIds) {
+        try {
+          await deleteVehicle(id, false);
+        } catch (err) {
+          errors.push(err);
+        }
       }
-      setShowModal(false);
-      await loadVehicles();
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
-      setError(err?.error || err?.message || 'Erreur lors de la sauvegarde');
-    }
-  };
 
-  const handleConfirmDelete = async () => {
-    if (!vehicleToDelete) return;
-    try {
-      setError('');
-      await deleteVehicle(vehicleToDelete.id, false); // soft delete
-      setMessage('✅ Véhicule supprimé avec succès');
-      setShowDeleteModal(false);
-      setVehicleToDelete(null);
+      for (const [id, edits] of Object.entries(rowEdits)) {
+        if (deletedIds.includes(id)) continue;
+        const payload = {
+          model: edits.model.trim(),
+          license_plate: edits.license_plate.trim().toUpperCase(),
+          wheelchair_accessible: edits.wheelchair_accessible,
+          is_active: edits.is_active,
+          insurance_company_name: edits.insurance_company_name?.trim() || null,
+        };
+        if (edits.year && String(edits.year).trim()) payload.year = parseInt(edits.year);
+        if (edits.seats && String(edits.seats).trim()) payload.seats = parseInt(edits.seats);
+        payload.inspection_expires_at = edits.inspection_expires_at || null;
+        payload.tachograph_expires_at = edits.tachograph_expires_at || null;
+        try {
+          await updateVehicle(id, payload);
+        } catch (err) {
+          errors.push(err);
+        }
+      }
+
+      for (const row of newRows) {
+        if (!row.model.trim() && !row.license_plate.trim()) continue;
+        const payload = {
+          model: row.model.trim(),
+          license_plate: row.license_plate.trim().toUpperCase(),
+          wheelchair_accessible: row.wheelchair_accessible,
+          is_active: row.is_active,
+          insurance_company_name: row.insurance_company_name?.trim() || null,
+        };
+        if (row.year && String(row.year).trim()) payload.year = parseInt(row.year);
+        if (row.seats && String(row.seats).trim()) payload.seats = parseInt(row.seats);
+        payload.inspection_expires_at = row.inspection_expires_at || null;
+        payload.tachograph_expires_at = row.tachograph_expires_at || null;
+        try {
+          await createVehicle(payload);
+        } catch (err) {
+          errors.push(err);
+        }
+      }
+
       await loadVehicles();
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
-      setError(err?.error || err?.message || 'Erreur lors de la suppression');
-    }
-  };
+
+      if (errors.length > 0) {
+        throw errors[0];
+      }
+    },
+  }), [rowEdits, newRows, deletedIds]);
 
   if (loading) {
     return (
@@ -95,373 +212,293 @@ const VehiclesTab = () => {
     );
   }
 
+  const visibleVehicles = vehicles.filter((v) => !deletedIds.includes(v.id));
+
   return (
-    <div className={styles.settingsForm} style={{ display: 'block' }}>
+    <div className={`${styles.settingsForm} ${vehicleStyles.settingsFormBlock}`}>
       {message && <div className={styles.success}>{message}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 'var(--spacing-lg)',
-        }}
-      >
-        <h2>🚗 Gestion de la flotte</h2>
-        <button className="btn btn-primary" onClick={handleCreate}>
-          ➕ Ajouter un véhicule
-        </button>
-      </div>
-
-      {vehicles.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 'var(--spacing-2xl)', color: 'var(--text-secondary)' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 'var(--spacing-md)' }}>🚗</div>
-          <h3>Aucun véhicule</h3>
-          <p>Créez votre premier véhicule pour commencer</p>
+      <div className={styles.card}>
+        <div className={styles.cardHeader}>
+          <div className={styles.cardIcon}><FiTruck size={16} /></div>
+          <div className={styles.cardHeaderText}>
+            <h3 className={styles.cardTitle}>Flotte de vehicules</h3>
+            <p className={styles.cardHint}>
+              {vehicles.length} vehicule{vehicles.length !== 1 ? 's' : ''} enregistre{vehicles.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          {isEditing && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.primary}`}
+              onClick={handleAddRow}
+            >
+              <FiPlus size={14} aria-hidden />
+              Ajouter
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Modèle</th>
-                <th>Plaque</th>
-                <th>Année</th>
-                <th>Places</th>
-                <th>FAH</th>
-                <th>Statut</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((vehicle) => (
-                <tr
-                  key={vehicle.id}
-                  style={{ opacity: vehicle.is_active ? 1 : 0.6 }}
-                >
-                  <td>
-                    <strong>{vehicle.model || '-'}</strong>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontWeight: 'var(--font-weight-medium)' }}>
-                    {vehicle.license_plate || '-'}
-                  </td>
-                  <td>{vehicle.year || '-'}</td>
-                  <td>{vehicle.seats || '-'}</td>
-                  <td>{vehicle.wheelchair_accessible ? '✅' : '❌'}</td>
-                  <td>
-                    <span
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '0.85rem',
-                        backgroundColor: vehicle.is_active
-                          ? 'var(--success-light)'
-                          : 'var(--error-light)',
-                        color: vehicle.is_active ? 'var(--success)' : 'var(--error)',
-                        fontWeight: 'var(--font-weight-medium)',
-                      }}
-                    >
-                      {vehicle.is_active ? 'Actif' : 'Inactif'}
-                    </span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleEdit(vehicle)}
-                      style={{ marginRight: 'var(--spacing-xs)', padding: 'var(--spacing-xs)' }}
-                      title="Modifier"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleDelete(vehicle)}
-                      style={{ padding: 'var(--spacing-xs)' }}
-                      title="Supprimer"
-                    >
-                      🗑️
-                    </button>
-                  </td>
+
+        {visibleVehicles.length === 0 && newRows.length === 0 ? (
+          <div className={vehicleStyles.emptyState}>
+            <div className={vehicleStyles.emptyStateIcon}>
+              <FiTruck size={36} aria-hidden />
+            </div>
+            <p className={vehicleStyles.emptyStateText}>Aucun vehicule enregistre</p>
+            <p className={vehicleStyles.emptyStateHint}>Ajoutez votre premier vehicule pour commencer</p>
+          </div>
+        ) : (
+          <div className={vehicleStyles.tableContainer}>
+            <table className={vehicleStyles.fleetTable}>
+              <thead>
+                <tr>
+                  <th>Vehicule</th>
+                  <th>Plaque</th>
+                  <th>Annee</th>
+                  <th>Places</th>
+                  <th>FAH</th>
+                  <th>Statut</th>
+                  <th>Expertise</th>
+                  <th>Assureur</th>
+                  <th>Tachygraphe</th>
+                  {isEditing && <th className={vehicleStyles.actionsCell}>Actions</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {visibleVehicles.map((vehicle) => {
+                  const edits = rowEdits[vehicle.id];
+                  return (
+                    <tr key={vehicle.id}>
+                      {isEditing && edits ? (
+                        <>
+                          <td>
+                            <input
+                              type="text"
+                              value={edits.model}
+                              onChange={(e) => updateField(vehicle.id, 'model', e.target.value)}
+                              className={vehicleStyles.inlineInput}
+                              placeholder="Modèle"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              value={edits.license_plate}
+                              onChange={(e) => updateField(vehicle.id, 'license_plate', e.target.value)}
+                              className={`${vehicleStyles.inlineInput} ${vehicleStyles.inlineInputPlate}`}
+                              placeholder="GE 123456"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              value={edits.year}
+                              onChange={(e) => updateField(vehicle.id, 'year', e.target.value)}
+                              className={vehicleStyles.inlineInputSmall}
+                              placeholder="2024"
+                              min="1950"
+                              max="2100"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              value={edits.seats}
+                              onChange={(e) => updateField(vehicle.id, 'seats', e.target.value)}
+                              className={vehicleStyles.inlineInputSmall}
+                              placeholder="5"
+                              min="0"
+                            />
+                          </td>
+                          <td className={vehicleStyles.inlineToggleCell}>
+                            <label className={vehicleStyles.inlineToggleWrap}>
+                              <input
+                                type="checkbox"
+                                checked={edits.wheelchair_accessible}
+                                onChange={(e) => updateField(vehicle.id, 'wheelchair_accessible', e.target.checked)}
+                              />
+                              <span className={vehicleStyles.inlineSlider} />
+                            </label>
+                          </td>
+                          <td className={vehicleStyles.inlineToggleCell}>
+                            <label className={vehicleStyles.inlineToggleWrap}>
+                              <input
+                                type="checkbox"
+                                checked={edits.is_active}
+                                onChange={(e) => updateField(vehicle.id, 'is_active', e.target.checked)}
+                              />
+                              <span className={vehicleStyles.inlineSlider} />
+                            </label>
+                          </td>
+                          <td>
+                            <InlineDatePicker
+                              value={edits.inspection_expires_at || ''}
+                              onChange={(v) => updateField(vehicle.id, 'inspection_expires_at', v || null)}
+                              placeholder="CT"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              value={edits.insurance_company_name}
+                              onChange={(e) => updateField(vehicle.id, 'insurance_company_name', e.target.value)}
+                              className={vehicleStyles.inlineInput}
+                              placeholder="Assureur"
+                            />
+                          </td>
+                          <td>
+                            <InlineDatePicker
+                              value={edits.tachograph_expires_at || ''}
+                              onChange={(v) => updateField(vehicle.id, 'tachograph_expires_at', v || null)}
+                              placeholder="Tachy"
+                            />
+                          </td>
+                          <td className={vehicleStyles.actionsCell}>
+                            <button
+                              type="button"
+                              className={`${vehicleStyles.actionBtn} ${vehicleStyles.actionBtnDelete}`}
+                              onClick={() => handleMarkDelete(vehicle.id)}
+                              title="Supprimer"
+                            >
+                              <FiTrash2 size={15} aria-hidden />
+                            </button>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td><strong>{vehicle.model || '\u2014'}</strong></td>
+                          <td className={vehicleStyles.licensePlateCell}>{vehicle.license_plate || '\u2014'}</td>
+                          <td>{vehicle.year || '\u2014'}</td>
+                          <td>{vehicle.seats || '\u2014'}</td>
+                          <td>
+                            {vehicle.wheelchair_accessible ? (
+                              <span className={vehicleStyles.fahBadgeYes}><FiCheck size={13} /> Oui</span>
+                            ) : (
+                              <span className={vehicleStyles.fahBadgeNo}><FiX size={13} /> Non</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`${vehicleStyles.statusBadge} ${
+                              vehicle.is_active ? vehicleStyles.statusBadgeActive : vehicleStyles.statusBadgeInactive
+                            }`}>
+                              {vehicle.is_active ? 'Actif' : 'Inactif'}
+                            </span>
+                          </td>
+                          {(() => { const b = getControlBadge(vehicle.inspection_expires_at, 1); return <td><span className={`${vehicleStyles.dateBadge} ${b.cls}`}>{b.label}</span></td>; })()}
+                          <td>{vehicle.insurance_company_name || '\u2014'}</td>
+                          {(() => { const b = getControlBadge(vehicle.tachograph_expires_at, 2); return <td><span className={`${vehicleStyles.dateBadge} ${b.cls}`}>{b.label}</span></td>; })()}
+                        </>
+                      )}
+                    </tr>
+                  );
+                })}
 
-      {/* Modal Création/Édition */}
-      {showModal && (
-        <VehicleModal
-          vehicle={editingVehicle}
-          onSave={handleSave}
-          onClose={() => {
-            setShowModal(false);
-            setEditingVehicle(null);
-            setError('');
-          }}
-        />
-      )}
-
-      {/* Modal Suppression */}
-      {showDeleteModal && vehicleToDelete && (
-        <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
-          <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">🗑️ Confirmer la suppression</h2>
-              <button className="modal-close" onClick={() => setShowDeleteModal(false)}>
-                ✕
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>
-                Êtes-vous sûr de vouloir supprimer le véhicule{' '}
-                <strong>{vehicleToDelete.model}</strong> ({vehicleToDelete.license_plate}) ?
-              </p>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>
-                Annuler
-              </button>
-              <button className="btn btn-primary" onClick={handleConfirmDelete}>
-                Supprimer
-              </button>
-            </div>
+                {newRows.map((row) => (
+                  <tr key={row._tempId} className={vehicleStyles.newRow}>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.model}
+                        onChange={(e) => updateNewRow(row._tempId, 'model', e.target.value)}
+                        className={vehicleStyles.inlineInput}
+                        placeholder="Modèle *"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.license_plate}
+                        onChange={(e) => updateNewRow(row._tempId, 'license_plate', e.target.value)}
+                        className={`${vehicleStyles.inlineInput} ${vehicleStyles.inlineInputPlate}`}
+                        placeholder="GE 123456 *"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.year}
+                        onChange={(e) => updateNewRow(row._tempId, 'year', e.target.value)}
+                        className={vehicleStyles.inlineInputSmall}
+                        placeholder="2024"
+                        min="1950"
+                        max="2100"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.seats}
+                        onChange={(e) => updateNewRow(row._tempId, 'seats', e.target.value)}
+                        className={vehicleStyles.inlineInputSmall}
+                        placeholder="5"
+                        min="0"
+                      />
+                    </td>
+                    <td className={vehicleStyles.inlineToggleCell}>
+                      <label className={vehicleStyles.inlineToggleWrap}>
+                        <input
+                          type="checkbox"
+                          checked={row.wheelchair_accessible}
+                          onChange={(e) => updateNewRow(row._tempId, 'wheelchair_accessible', e.target.checked)}
+                        />
+                        <span className={vehicleStyles.inlineSlider} />
+                      </label>
+                    </td>
+                    <td className={vehicleStyles.inlineToggleCell}>
+                      <label className={vehicleStyles.inlineToggleWrap}>
+                        <input
+                          type="checkbox"
+                          checked={row.is_active}
+                          onChange={(e) => updateNewRow(row._tempId, 'is_active', e.target.checked)}
+                        />
+                        <span className={vehicleStyles.inlineSlider} />
+                      </label>
+                    </td>
+                    <td>
+                      <InlineDatePicker
+                        value={row.inspection_expires_at || ''}
+                        onChange={(v) => updateNewRow(row._tempId, 'inspection_expires_at', v || null)}
+                        placeholder="CT"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.insurance_company_name}
+                        onChange={(e) => updateNewRow(row._tempId, 'insurance_company_name', e.target.value)}
+                        className={vehicleStyles.inlineInput}
+                        placeholder="Assureur"
+                      />
+                    </td>
+                    <td>
+                      <InlineDatePicker
+                        value={row.tachograph_expires_at || ''}
+                        onChange={(v) => updateNewRow(row._tempId, 'tachograph_expires_at', v || null)}
+                        placeholder="Tachy"
+                      />
+                    </td>
+                    <td className={vehicleStyles.actionsCell}>
+                      <button
+                        type="button"
+                        className={`${vehicleStyles.actionBtn} ${vehicleStyles.actionBtnDelete}`}
+                        onClick={() => handleRemoveNewRow(row._tempId)}
+                        title="Retirer"
+                      >
+                        <FiX size={15} aria-hidden />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Modal de formulaire véhicule
-const VehicleModal = ({ vehicle, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    model: '',
-    license_plate: '',
-    year: '',
-    vin: '',
-    seats: '',
-    wheelchair_accessible: false,
-    is_active: true,
-  });
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (vehicle) {
-      setFormData({
-        model: vehicle.model || '',
-        license_plate: vehicle.license_plate || '',
-        year: vehicle.year || '',
-        vin: vehicle.vin || '',
-        seats: vehicle.seats || '',
-        wheelchair_accessible: vehicle.wheelchair_accessible || false,
-        is_active: vehicle.is_active !== undefined ? vehicle.is_active : true,
-      });
-    }
-  }, [vehicle]);
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      // ✅ Construire le payload en omettant les champs vides (pas de null)
-      const payload = {
-        model: formData.model.trim(),
-        license_plate: formData.license_plate.trim().toUpperCase(),
-        wheelchair_accessible: formData.wheelchair_accessible,
-        is_active: formData.is_active,
-      };
-      
-      // Ajouter les champs optionnels seulement s'ils ont une valeur
-      if (formData.year && String(formData.year).trim()) {
-        payload.year = parseInt(formData.year);
-      }
-      if (formData.vin && String(formData.vin).trim()) {
-        payload.vin = String(formData.vin).trim();
-      }
-      if (formData.seats && String(formData.seats).trim()) {
-        payload.seats = parseInt(formData.seats);
-      }
-      
-      await onSave(payload);
-    } catch (err) {
-      console.error('Erreur sauvegarde véhicule:', err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">
-            {vehicle ? '✏️ Modifier le véhicule' : '➕ Ajouter un véhicule'}
-          </h2>
-          <button className="modal-close" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className={modalStyles.form}>
-          {/* Informations du véhicule */}
-          <div className={modalStyles.section}>
-            <h3 className={modalStyles.sectionTitle}>🚗 Informations du véhicule</h3>
-
-            <div className={modalStyles.formGroup}>
-              <label htmlFor="model" className={modalStyles.label}>
-                Modèle <span style={{ color: 'var(--danger-primary)' }}>*</span>
-              </label>
-              <input
-                type="text"
-                id="model"
-                name="model"
-                value={formData.model}
-                onChange={handleChange}
-                className={modalStyles.input}
-                required
-                placeholder="Ex: Peugeot Expert"
-                disabled={saving}
-              />
-            </div>
-
-            <div className={modalStyles.formGroup}>
-              <label htmlFor="license_plate" className={modalStyles.label}>
-                Plaque d'immatriculation <span style={{ color: 'var(--danger-primary)' }}>*</span>
-              </label>
-              <input
-                type="text"
-                id="license_plate"
-                name="license_plate"
-                value={formData.license_plate}
-                onChange={handleChange}
-                className={modalStyles.input}
-                required
-                placeholder="Ex: GE-123-456"
-                style={{ fontFamily: 'monospace', textTransform: 'uppercase' }}
-                disabled={saving}
-              />
-            </div>
-
-            <div className={modalStyles.formRow}>
-              <div className={modalStyles.formGroup}>
-                <label htmlFor="year" className={modalStyles.label}>
-                  Année
-                </label>
-                <input
-                  type="number"
-                  id="year"
-                  name="year"
-                  value={formData.year}
-                  onChange={handleChange}
-                  className={modalStyles.input}
-                  min="1950"
-                  max="2100"
-                  placeholder="Ex: 2020"
-                  disabled={saving}
-                />
-              </div>
-
-              <div className={modalStyles.formGroup}>
-                <label htmlFor="seats" className={modalStyles.label}>
-                  Nombre de places
-                </label>
-                <input
-                  type="number"
-                  id="seats"
-                  name="seats"
-                  value={formData.seats}
-                  onChange={handleChange}
-                  className={modalStyles.input}
-                  min="0"
-                  placeholder="Ex: 7"
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            <div className={modalStyles.formGroup}>
-              <label htmlFor="vin" className={modalStyles.label}>
-                VIN (numéro de série)
-              </label>
-              <input
-                type="text"
-                id="vin"
-                name="vin"
-                value={formData.vin}
-                onChange={handleChange}
-                className={modalStyles.input}
-                placeholder="Optionnel"
-                disabled={saving}
-              />
-            </div>
-          </div>
-
-          {/* Caractéristiques */}
-          <div className={modalStyles.section}>
-            <h3 className={modalStyles.sectionTitle}>⚙️ Caractéristiques</h3>
-
-            <div className={modalStyles.checkboxGroup}>
-              <label className={modalStyles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  name="wheelchair_accessible"
-                  checked={formData.wheelchair_accessible}
-                  onChange={handleChange}
-                  disabled={saving}
-                />
-                <span className={modalStyles.checkboxText}>
-                  <strong>Accessible aux fauteuils roulants (FAH)</strong>
-                  <small>Véhicule équipé pour transporter des fauteuils roulants</small>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Statut */}
-          <div className={modalStyles.section}>
-            <h3 className={modalStyles.sectionTitle}>Statut</h3>
-
-            <div className={modalStyles.checkboxGroup}>
-              <label className={modalStyles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={formData.is_active}
-                  onChange={handleChange}
-                  disabled={saving}
-                />
-                <span className={modalStyles.checkboxText}>
-                  <strong>Véhicule actif</strong>
-                  <small>Les véhicules inactifs ne sont pas disponibles pour assignation</small>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
-              Annuler
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? '💾 Enregistrement...' : '💾 Enregistrer'}
-            </button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
   );
-};
+});
+
+VehiclesTab.displayName = 'VehiclesTab';
 
 export default VehiclesTab;
-

@@ -217,6 +217,16 @@ class QRBillService:
             }
 
         # Facturation directe : client
+        # Pour les clients institution avec facturation patient (S1_PATIENT),
+        # le débiteur est le patient réel, pas la clinique.
+        _is_inst_patient = (
+            client
+            and getattr(client, "is_institution", False)
+            and strategy_val == "s1_patient"
+        )
+        if _is_inst_patient:
+            return self._get_debtor_for_institution_patient(invoice, client)
+
         debtor_name = (
             (
                 f"{client.user.first_name or ''} {client.user.last_name or ''}"
@@ -246,6 +256,62 @@ class QRBillService:
                 debtor_pcode = parts[2]
             if len(parts) >= MIN_ADDRESS_PARTS_CITY:
                 debtor_city = parts[3]
+
+        return {
+            "name": debtor_name,
+            "street": debtor_street,
+            "pcode": debtor_pcode,
+            "city": debtor_city,
+            "country": "CH",
+        }
+
+    def _get_debtor_for_institution_patient(self, invoice, client) -> dict[str, Any]:
+        """Résout le débiteur pour une facture patient d'un client institution.
+
+        Cherche le nom du patient depuis booking.customer_name et l'adresse
+        depuis InstitutionPatient.
+        """
+        from models import Booking
+
+        debtor_name = "Patient"
+        debtor_street = "Adresse non renseignée"
+        debtor_pcode = "1200"
+        debtor_city = "Genève"
+
+        # Nom du patient depuis le premier booking
+        if hasattr(invoice, "lines") and invoice.lines:
+            for line in invoice.lines:
+                if line.reservation_id:
+                    bk = Booking.query.get(line.reservation_id)
+                    if bk and bk.customer_name:
+                        debtor_name = bk.customer_name
+                        break
+
+        # Adresse du patient depuis InstitutionPatient
+        linked_inst_id = getattr(client, "linked_institution_id", None)
+        if linked_inst_id:
+            try:
+                from models.institution_patient import InstitutionPatient
+                from models.transport_request import TransportRequest
+
+                tr = TransportRequest.query.filter_by(
+                    institution_id=linked_inst_id,
+                ).order_by(TransportRequest.id.desc()).first()
+                if tr and tr.patient_id:
+                    ip = InstitutionPatient.query.get(tr.patient_id)
+                    if ip:
+                        if debtor_name == "Patient":
+                            debtor_name = f"{ip.first_name or ''} {ip.last_name or ''}".strip() or "Patient"
+                        addr_parts = [ip.address or "", ip.postal_code or "", ip.city or ""]
+                        addr_str = ", ".join(p for p in addr_parts if p)
+                        if addr_str:
+                            debtor_street, debtor_pcode, debtor_city = (
+                                self._parse_address_for_qrbill(addr_str)
+                            )
+            except Exception as e:
+                logging.getLogger(__name__).warning(
+                    "[QR-Bill] Patient lookup error: %s", e
+                )
 
         return {
             "name": debtor_name,

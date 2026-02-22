@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
+import GoogleMapsProvider from './components/common/GoogleMapsProvider';
 
 // ✅ PERF: Pages critiques (eager loading - chargées immédiatement)
 import Home from './pages/Home/Home';
@@ -50,9 +51,20 @@ const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/Analytic
 const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
 const PrivacyPolicy = lazy(() => import('./pages/Legal/PrivacyPolicy'));
 
+// ✅ ÉTAPE 6: Pages Institution (lazy loading)
+const AcceptInvite = lazy(() => import('./pages/Auth/AcceptInvite'));
+const InstitutionLayout = lazy(() => import('./pages/institution/Layout/InstitutionLayout'));
+const InstitutionDashboard = lazy(() => import('./pages/institution/Dashboard/InstitutionDashboard'));
+const InstitutionRequests = lazy(() => import('./pages/institution/Requests/InstitutionRequests'));
+const InstitutionRequestCreate = lazy(() => import('./pages/institution/Requests/InstitutionRequestCreate'));
+const InstitutionRequestDetail = lazy(() => import('./pages/institution/Requests/InstitutionRequestDetail'));
+const InstitutionPatients = lazy(() => import('./pages/institution/Patients/InstitutionPatients'));
+const InstitutionSettings = lazy(() => import('./pages/institution/Settings/InstitutionSettings'));
+
 // ──────────────────────────────────────────────────────────
 // Query Client (déclaré hors composant pour éviter recréation)
-const queryClient = new QueryClient();
+// Exporté pour permettre le nettoyage du cache au logout
+export const queryClient = new QueryClient();
 
 // Keep-alive user activity
 let lastActivity = Date.now();
@@ -121,6 +133,7 @@ const App = () => {
   }, []);
 
   return (
+    <GoogleMapsProvider>
     <QueryClientProvider client={queryClient}>
       <Router>
         {/* ✅ PERF: Suspense pour gérer le lazy loading des routes */}
@@ -188,6 +201,10 @@ const App = () => {
                   <ResetPassword />
                 </DefaultLayout>
               }
+            />
+            <Route
+              path="/invite/:token"
+              element={<AcceptInvite />}
             />
             <Route
               path="/privacy"
@@ -444,12 +461,31 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+
+            {/* ✅ ÉTAPE 6: Routes Institution (layout commun avec sidebar) */}
+            <Route
+              path="/dashboard/institution/:public_id"
+              element={
+                <ProtectedRoute allowedRoles={['institution']}>
+                  <InstitutionLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<InstitutionDashboard />} />
+              <Route path="requests" element={<InstitutionRequests />} />
+              <Route path="requests/new" element={<InstitutionRequestCreate />} />
+              <Route path="requests/:requestId" element={<InstitutionRequestDetail />} />
+              <Route path="patients" element={<InstitutionPatients />} />
+              <Route path="settings" element={<InstitutionSettings />} />
+            </Route>
+
             <Route path="/unauthorized" element={<Unauthorized />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </Router>
     </QueryClientProvider>
+    </GoogleMapsProvider>
   );
 };
 

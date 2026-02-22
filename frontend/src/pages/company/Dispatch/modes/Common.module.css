@@ -194,6 +194,46 @@
     max-width var(--transition-base);
 }
 
+/* Panel lateral ouvert — mainContent devient flex horizontal */
+.mainContentWithPanel {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  padding: 0;
+}
+
+.mainContentWithPanel .content {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+}
+
+.dispatchDetailPanel {
+  width: 380px;
+  min-width: 380px;
+  background: #fff;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: slideInDetailPanel 0.2s ease;
+}
+
+.dispatchDetailPanel > * {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - var(--header-h, 60px) - var(--spacing-lg) * 2);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+@keyframes slideInDetailPanel {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 .unifiedDispatch {
   max-width: 100%;
   margin: 0 auto;
@@ -224,11 +264,16 @@
 }
 
 .bannerIcon {
-  font-size: var(--font-4xl);
+  font-size: 1.5rem;
   line-height: 1;
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
 }
 
 .bannerContent {
@@ -631,6 +676,10 @@
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
 }
 
 /* ================== Barre de Progression ================== */
@@ -1228,6 +1277,21 @@
     margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-md));
     max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-md) * 2));
     padding: var(--spacing-md);
+  }
+
+  .mainContentWithPanel {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .mainContentWithPanel .content {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .dispatchDetailPanel {
+    width: 100%;
+    min-width: unset;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
   }
 
   .summaryCards {

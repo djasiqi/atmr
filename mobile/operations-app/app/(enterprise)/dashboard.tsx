@@ -15,7 +15,7 @@ import {
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Crypto from "expo-crypto";
-import { LinearGradient } from "expo-linear-gradient";
+
 import { router } from "expo-router";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -60,58 +60,47 @@ import {
 } from "@/services/partnershipService";
 import { TransferCard } from "@/components/enterprise/transfers/TransferCard";
 import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
+import { getLogger } from "@/utils/logger";
 
-// ✅ Palette professionnelle cohérente avec le dashboard driver
+const log = getLogger("EntDash");
+
+const BRAND = "#00796B";
+
 const enterprisePalette = {
-  // Backgrounds - Clair et professionnel
-  background: "#F5F7F6",
+  background: "#f4f7fc",
   card: "#FFFFFF",
 
-  // Hero section - Gradient élégant
-  heroGradient: ["#0A7F59", "#0D5F3F"] as [string, string],
-  heroKpiSurface: "rgba(255,255,255,0.25)",
-  heroKpiBorder: "rgba(255,255,255,0.35)",
-  heroKicker: "rgba(255,255,255,0.85)",
-  heroTitle: "#FFFFFF",
-  heroMeta: "rgba(255,255,255,0.9)",
-  heroTick: "#A8E6CF",
 
-  // Surfaces - Cartes et sections
   surface: "#FFFFFF",
-  surfaceBorder: "rgba(15,54,43,0.08)",
-  surfaceMuted: "#5F7369",
+  surfaceBorder: "rgba(0,121,107,0.08)",
+  surfaceMuted: "#64748B",
   sectionSurface: "#FFFFFF",
-  sectionBorder: "rgba(15,54,43,0.08)",
+  sectionBorder: "rgba(0,121,107,0.08)",
 
-  // Alertes et états
-  alertSurface: "rgba(239,68,68,0.1)",
-  alertBorder: "rgba(239,68,68,0.25)",
-  alertText: "#15362B",
+  alertSurface: "rgba(239,68,68,0.06)",
+  alertBorder: "rgba(239,68,68,0.18)",
+  alertText: "#1E293B",
 
-  // Texte
-  textStrong: "#15362B",
-  textSecondary: "#5F7369",
-  hintText: "#91A59D",
+  textStrong: "#1E293B",
+  textSecondary: "#64748B",
+  hintText: "#94A3B8",
 
-  // Boutons et actions
-  dispatchButton: "#0A7F59",
-  dispatchButtonDisabled: "rgba(10,127,89,0.4)",
+  dispatchButton: BRAND,
+  dispatchButtonDisabled: "rgba(0,121,107,0.4)",
   dispatchText: "#FFFFFF",
 
-  // Cards
   cardOverlay: "#FFFFFF",
-  cardBorder: "rgba(15,54,43,0.08)",
+  cardBorder: "rgba(0,121,107,0.08)",
 
-  // Modales
-  modalOverlay: "rgba(21,54,43,0.75)",
+  modalOverlay: "rgba(30,41,59,0.6)",
   modalBackground: "#FFFFFF",
-  modalBorder: "rgba(15,54,43,0.12)",
-  modalTitle: "#15362B",
-  modalText: "#5F7369",
-  modalButton: "#0A7F59",
+  modalBorder: "rgba(0,121,107,0.12)",
+  modalTitle: "#1E293B",
+  modalText: "#64748B",
+  modalButton: BRAND,
   modalButtonText: "#FFFFFF",
-  modalCancelText: "#5F7369",
-  loadingText: "#91A59D",
+  modalCancelText: "#64748B",
+  loadingText: "#94A3B8",
 };
 
 dayjs.extend(utc);
@@ -201,8 +190,7 @@ export default function EnterpriseDashboardScreen() {
       const transfers = await fetchIncomingTransfers();
       setIncomingTransfers(transfers);
     } catch (error: any) {
-      console.error("[Dashboard] Erreur chargement transferts:", error);
-      // Ne pas afficher d'erreur, juste logger
+      log.error("load transfers failed", { error });
     } finally {
       setLoadingTransfers(false);
     }
@@ -237,7 +225,7 @@ export default function EnterpriseDashboardScreen() {
         }),
         // ✅ 3.4.2: Charger dashboard temps réel
         fetchRealtimeDashboard(currentDate).catch((err) => {
-          console.warn("[Dashboard] Failed to load realtime dashboard:", err);
+          log.warn("realtime dashboard load failed", { error: err });
           return null;
         }),
       ]);
@@ -307,7 +295,7 @@ export default function EnterpriseDashboardScreen() {
         const currentAppState = AppState.currentState;
         // Seulement charger si l'app est active
         if (currentAppState === "active") {
-          console.log("[dashboard.tsx] Polling automatique : rechargement des données");
+          log.info("polling refresh data");
           throttledLoadData();
         }
       }, 30000); // 30 secondes
@@ -324,13 +312,11 @@ export default function EnterpriseDashboardScreen() {
         appStateRef.current.match(/inactive|background/) &&
         nextAppState === "active"
       ) {
-        // L'app revient au premier plan : recharger immédiatement et redémarrer le polling
-        console.log("[dashboard.tsx] Application revenue au premier plan : rechargement des données");
+        log.info("app foreground, reloading data");
         throttledLoadData();
         startPolling();
       } else if (nextAppState.match(/inactive|background/)) {
-        // L'app passe en arrière-plan : arrêter le polling
-        console.log("[dashboard.tsx] Application en arrière-plan : arrêt du polling");
+        log.info("app background, stopping polling");
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -353,7 +339,7 @@ export default function EnterpriseDashboardScreen() {
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
-        console.log("[dashboard.tsx] Écran au focus : rechargement des données");
+        log.info("screen focused, reloading data");
         throttledLoadData();
       }
     }, [enterpriseSession, throttledLoadData])
@@ -392,36 +378,6 @@ export default function EnterpriseDashboardScreen() {
     };
   }, [allRides]);
 
-  const heroKpis = useMemo(() => {
-    if (dispatchMode === "manual") {
-      return [
-        {
-          id: "manual-total",
-          label: "Total",
-          value: String(manualStats.total),
-        },
-        {
-          id: "manual-assigned",
-          label: "En cours",
-          value: String(manualStats.assignedCount),
-        },
-      ];
-    }
-
-    const kpis = status?.kpis;
-    return [
-      {
-        id: "auto-total",
-        label: "Total",
-        value: kpis ? String(kpis.total_bookings) : "—",
-      },
-      {
-        id: "auto-assigned",
-        label: "En cours",
-        value: kpis ? String(kpis.assigned_bookings) : "—",
-      },
-    ];
-  }, [dispatchMode, manualStats, status?.kpis]);
 
   const sortedManualRides = useMemo(() => {
     const withTime: RideSummary[] = [];
@@ -567,33 +523,32 @@ export default function EnterpriseDashboardScreen() {
         )}
       </View>
 
-      {/* ✅ Filtres horizontaux compacts (tous visibles sur une ligne) */}
-      <View style={styles.filtersContainer}>
-        {[
-          { label: "Toutes", value: "all" as const, icon: "grid-outline" },
-          { label: "En attente", value: "pending" as const, icon: "hourglass-outline" },
-          { label: "Non assignées", value: "unassigned" as const, icon: "alert-circle-outline" },
-          { label: "Assignées", value: "assigned" as const, icon: "checkmark-circle-outline" },
-          { label: "Terminées", value: "completed" as const, icon: "checkmark-done-circle-outline" },
-          { label: "En retard", value: "delayed" as const, icon: "alarm-outline" },
-        ].map((filter) => {
+      <View style={styles.filtersRow}>
+        {([
+          { value: "all" as const, icon: "grid-outline" },
+          { value: "pending" as const, icon: "hourglass-outline" },
+          { value: "unassigned" as const, icon: "alert-circle-outline" },
+          { value: "assigned" as const, icon: "checkmark-circle-outline" },
+          { value: "completed" as const, icon: "checkmark-done-outline" },
+          { value: "delayed" as const, icon: "alarm-outline" },
+        ] as const).map((filter) => {
           const isActive = rideFilter === filter.value;
           const count = filterCounts[filter.value];
           return (
             <TouchableOpacity
               key={filter.value}
-              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              style={[styles.filterIcon, isActive && styles.filterIconActive]}
               onPress={() => setRideFilter(filter.value)}
               activeOpacity={0.7}
             >
               <Ionicons
                 name={filter.icon as any}
                 size={16}
-                color={isActive ? enterprisePalette.dispatchText : enterprisePalette.textSecondary}
+                color={isActive ? "#FFFFFF" : enterprisePalette.textSecondary}
               />
               {count > 0 && (
-                <View style={[styles.filterCount, isActive && styles.filterCountActive]}>
-                  <Text style={[styles.filterCountText, isActive && styles.filterCountTextActive]}>
+                <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+                  <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
                     {count}
                   </Text>
                 </View>
@@ -604,19 +559,33 @@ export default function EnterpriseDashboardScreen() {
       </View>
 
       {filteredRides.length === 0 ? (
-        <Text style={styles.muted}>
-          {rideFilter === "all"
-            ? "Aucune course planifiée pour cette date."
-            : rideFilter === "pending"
-              ? "Aucune course en attente."
-              : rideFilter === "unassigned"
-                ? "Aucune course non assignée."
-                : rideFilter === "assigned"
-                  ? "Aucune course assignée."
-                  : rideFilter === "completed"
-                    ? "Aucune course terminée."
-                    : "Aucune course en retard."}
-        </Text>
+        <View style={styles.emptyState}>
+          <View style={styles.emptyStateIcon}>
+            <Ionicons
+              name={rideFilter === "delayed" ? "alarm-outline" : "car-outline"}
+              size={28}
+              color={enterprisePalette.hintText}
+            />
+          </View>
+          <Text style={styles.emptyStateTitle}>
+            {rideFilter === "all"
+              ? "Aucune course planifiée"
+              : rideFilter === "pending"
+                ? "Aucune course en attente"
+                : rideFilter === "unassigned"
+                  ? "Aucune course non assignée"
+                  : rideFilter === "assigned"
+                    ? "Aucune course assignée"
+                    : rideFilter === "completed"
+                      ? "Aucune course terminée"
+                      : "Aucune course en retard"}
+          </Text>
+          <Text style={styles.emptyStateSubtitle}>
+            {rideFilter === "all"
+              ? "Les courses apparaîtront ici dès qu'elles seront créées."
+              : "Changez de filtre pour voir d'autres courses."}
+          </Text>
+        </View>
       ) : (
         filteredRides.map((ride) => {
           let pickupTime: string | null = null;
@@ -991,7 +960,12 @@ export default function EnterpriseDashboardScreen() {
 
   const semiAutoControls = (
     <View style={styles.semiAutoControls}>
-      <Text style={styles.sectionTitle}>Mode semi-automatique</Text>
+      <View style={styles.semiAutoHeader}>
+        <View style={styles.semiAutoIconWrap}>
+          <Ionicons name="flash-outline" size={16} color={BRAND} />
+        </View>
+        <Text style={styles.semiAutoTitle}>Mode semi-automatique</Text>
+      </View>
       <Text style={styles.dispatchHint}>
         Laisse l’optimisation préparer les assignations et finalise-les en un
         clic. Relance le dispatch à chaque nouvelle vague de courses.
@@ -1005,11 +979,11 @@ export default function EnterpriseDashboardScreen() {
         disabled={dispatching}
         activeOpacity={0.85}
       >
-        <Ionicons
-          name={dispatching ? "time-outline" : "flash-outline"}
-          size={18}
-          color="#0B1736"
-        />
+        {dispatching ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Ionicons name="flash" size={16} color="#FFFFFF" />
+        )}
         <Text style={styles.dispatchButtonText}>
           {dispatching ? "Dispatch en cours…" : "Lancer un dispatch"}
         </Text>
@@ -1026,9 +1000,12 @@ export default function EnterpriseDashboardScreen() {
   const isSemiAuto = dispatchMode === "semi_auto";
 
   const urgentSection = (
-    <Section title="Alertes urgentes">
+    <Section title="Alertes urgentes" icon="warning-outline">
       {urgentRides.length === 0 ? (
-        <Text style={styles.muted}>Aucune urgence en cours.</Text>
+        <View style={styles.emptyStateSmall}>
+          <Ionicons name="checkmark-circle-outline" size={20} color={enterprisePalette.hintText} />
+          <Text style={styles.emptyStateSmallText}>Aucune urgence en cours</Text>
+        </View>
       ) : (
         urgentRides.map((ride) => (
           <RideAlert key={ride.id} ride={ride} badge="Urgent" />
@@ -1039,7 +1016,7 @@ export default function EnterpriseDashboardScreen() {
 
   // ✅ Section transferts entrants
   const incomingTransfersSection = incomingTransfers.length > 0 ? (
-    <Section title={`Transferts entrants (${incomingTransfers.length})`}>
+    <Section title={`Transferts entrants (${incomingTransfers.length})`} icon="swap-horizontal-outline">
       {incomingTransfers.slice(0, 3).map((transfer) => (
         <View key={transfer.id} style={{ marginBottom: 12 }}>
           <TransferCard
@@ -1072,7 +1049,7 @@ export default function EnterpriseDashboardScreen() {
       realtimeDashboard.opportunities.filter(
         (opp) => opp.severity === "critical" || opp.severity === "high"
       ).length > 0 ? (
-      <Section title="Opportunités critiques">
+      <Section title="Opportunités critiques" icon="flash-outline">
         {realtimeDashboard.opportunities
           .filter((opp) => opp.severity === "critical" || opp.severity === "high")
           .slice(0, 3)
@@ -1164,37 +1141,6 @@ export default function EnterpriseDashboardScreen() {
         <RefreshControl refreshing={isRefreshing} onRefresh={loadData} />
       }
     >
-      <LinearGradient
-        colors={enterprisePalette.heroGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <View style={styles.heroHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.heroKicker}>Tableau de bord</Text>
-            <Text style={styles.heroCompany}>{companyName}</Text>
-          </View>
-          <View style={styles.heroMeta}>
-            <Text style={styles.heroDate}>{formattedDay}</Text>
-            <Text style={styles.heroTick}>
-              Agent {agent?.last_tick ? dayjs(agent.last_tick).fromNow() : "—"}
-            </Text>
-          </View>
-        </View>
-
-        {heroKpis.length > 0 && (
-          <View style={styles.heroKpiRow}>
-            {heroKpis.map((kpi) => (
-              <View key={kpi.id} style={styles.heroKpiCard}>
-                <Text style={styles.heroKpiValue}>{kpi.value}</Text>
-                <Text style={styles.heroKpiLabel}>{kpi.label}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </LinearGradient>
-
       {manualMapSection}
 
       {isManual && manualRidesList}
@@ -1349,8 +1295,8 @@ export default function EnterpriseDashboardScreen() {
         </View>
       )}
 
-      {/* ✅ 3.4.2: Sections dashboard temps réel */}
-      {criticalOpportunitiesSection}
+      {/* Sections dashboard temps réel (semi-auto / fully-auto uniquement) */}
+      {!isManual && criticalOpportunitiesSection}
 
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
 
@@ -1384,13 +1330,22 @@ export default function EnterpriseDashboardScreen() {
 
 const Section = ({
   title,
+  icon,
   children,
 }: {
   title: string;
+  icon?: string;
   children: React.ReactNode;
 }) => (
   <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title}</Text>
+    <View style={styles.sectionTitleRow}>
+      {icon && (
+        <View style={styles.sectionIconWrap}>
+          <Ionicons name={icon as any} size={16} color={BRAND} />
+        </View>
+      )}
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
     {children}
   </View>
 );
@@ -1415,37 +1370,49 @@ const StatusCard = ({
   );
 };
 
-const RideAlert = ({ ride, badge }: { ride: RideSummary; badge: string }) => (
-  <TouchableOpacity
-    style={styles.alertCard}
-    onPress={() =>
-      router.push({
-        pathname: "/(enterprise)/ride-details",
-        params: { rideId: ride.id },
-      } as any)
-    }
-  >
-    <View style={styles.alertHeader}>
-      <Text style={styles.alertBadge}>{badge}</Text>
-      <Text style={styles.alertTime}>
-        {ride.time.pickup_at
-          ? (() => {
-            const time = dayjs(ride.time.pickup_at);
-            // Si l'heure est à minuit (00:00), c'est probablement une heure non définie
-            // Afficher une icône d'horloge au lieu de "00:00"
-            if (time.hour() === 0 && time.minute() === 0) {
-              return "⏱️";
-            }
-            return time.format("HH:mm");
-          })()
-          : "⏱️"}
-      </Text>
-    </View>
-    <Text style={styles.alertClient}>{ride.client.name}</Text>
-    <Text style={styles.alertRoute}>{ride.route.pickup_address}</Text>
-    <Text style={styles.alertRoute}>→ {ride.route.dropoff_address}</Text>
-  </TouchableOpacity>
-);
+const RideAlert = ({ ride, badge }: { ride: RideSummary; badge: string }) => {
+  const pickupDisplay = ride.time.pickup_at
+    ? (() => {
+      const time = dayjs(ride.time.pickup_at);
+      if (time.hour() === 0 && time.minute() === 0) return null;
+      return time.format("HH:mm");
+    })()
+    : null;
+
+  return (
+    <TouchableOpacity
+      style={styles.alertCard}
+      activeOpacity={0.7}
+      onPress={() =>
+        router.push({
+          pathname: "/(enterprise)/ride-details",
+          params: { rideId: ride.id },
+        } as any)
+      }
+    >
+      <View style={styles.alertHeader}>
+        <View style={styles.alertBadgeWrap}>
+          <Ionicons name="warning-outline" size={14} color="#EF4444" />
+          <Text style={styles.alertBadge}>{badge}</Text>
+        </View>
+        {pickupDisplay ? (
+          <Text style={styles.alertTime}>{pickupDisplay}</Text>
+        ) : (
+          <Ionicons name="time-outline" size={16} color={enterprisePalette.hintText} />
+        )}
+      </View>
+      <Text style={styles.alertClient} numberOfLines={1}>{ride.client.name}</Text>
+      <View style={styles.alertRouteRow}>
+        <Ionicons name="location-outline" size={13} color={BRAND} />
+        <Text style={styles.alertRoute} numberOfLines={1}>{ride.route.pickup_address}</Text>
+      </View>
+      <View style={styles.alertRouteRow}>
+        <Ionicons name="flag-outline" size={13} color={BRAND} />
+        <Text style={styles.alertRoute} numberOfLines={1}>{ride.route.dropoff_address}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1453,107 +1420,8 @@ const styles = StyleSheet.create({
     backgroundColor: enterprisePalette.background,
   },
   content: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 80,
-  },
-  hero: {
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginBottom: 6,
-    height: 150,
-    overflow: "hidden",
-    ...createShadow({
-      shadowColor: "rgba(10,127,89,0.15)",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 1,
-      shadowRadius: 24,
-      elevation: 8,
-    }), // ✅ Compatible web/native
-    justifyContent: "space-between",
-  },
-  heroHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 4,
-  },
-  heroKpiRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 0,
-    justifyContent: "flex-end",
-  },
-  heroKpiCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-    backgroundColor: enterprisePalette.heroKpiSurface,
-    borderWidth: 1,
-    borderColor: enterprisePalette.heroKpiBorder,
-    backdropFilter: "blur(10px)",
-  },
-  heroKpiValue: {
-    color: enterprisePalette.heroTitle,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  heroKpiLabel: {
-    color: enterprisePalette.heroMeta,
-    fontSize: 11,
-  },
-  heroKicker: {
-    color: enterprisePalette.heroKicker,
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  heroCompany: {
-    color: enterprisePalette.heroTitle,
-    fontSize: 24,
-    fontWeight: "700",
-    lineHeight: 28,
-  },
-  heroMeta: {
-    alignItems: "flex-end",
-    gap: 2,
-  },
-  heroDate: {
-    color: enterprisePalette.heroMeta,
-    fontSize: 12,
-    textTransform: "capitalize",
-  },
-  heroTick: {
-    color: enterprisePalette.heroTick,
-    fontSize: 11,
-  },
-  modeSwitch: {
-    flexDirection: "row",
-    backgroundColor: "rgba(10,17,38,0.55)",
-    borderRadius: 16,
-    padding: 6,
-    gap: 6,
-  },
-  modePill: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  modePillActive: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  modePillText: {
-    color: "rgba(255,255,255,0.65)",
-    fontWeight: "600",
-  },
-  modePillTextActive: {
-    color: "#FFFFFF",
   },
   statusRow: {
     flexDirection: "row",
@@ -1589,97 +1457,152 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: enterprisePalette.sectionSurface,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
     ...createShadow({
-      shadowColor: "rgba(15,54,43,0.08)",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 1,
-      shadowRadius: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
       elevation: 2,
-    }), // ✅ Compatible web/native
+    }),
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sectionTitle: {
     color: enterprisePalette.textStrong,
-    fontSize: 17,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
   },
   sectionCount: {
     color: enterprisePalette.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
-  filtersContainer: {
+  filtersRow: {
     flexDirection: "row",
-    flexWrap: "nowrap",
     gap: 6,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  filterChip: {
+  filterIcon: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    flex: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
     backgroundColor: enterprisePalette.card,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
-    gap: 6,
-    minWidth: 0, // Permet au flex de réduire la taille
+    gap: 4,
   },
-  filterChipActive: {
-    backgroundColor: enterprisePalette.dispatchButton,
-    borderColor: enterprisePalette.dispatchButton,
+  filterIconActive: {
+    backgroundColor: BRAND,
+    borderColor: BRAND,
+    ...createShadow({
+      shadowColor: BRAND,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 2,
+    }),
   },
-  filterCount: {
-    backgroundColor: enterprisePalette.surfaceBorder,
-    borderRadius: 8,
+  filterBadge: {
+    backgroundColor: "rgba(0,121,107,0.12)",
+    borderRadius: 7,
     paddingHorizontal: 5,
-    paddingVertical: 2,
-    minWidth: 20,
+    paddingVertical: 1,
+    minWidth: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  filterCountActive: {
-    backgroundColor: "rgba(255,255,255,0.25)",
+  filterBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.28)",
   },
-  filterCountText: {
-    color: enterprisePalette.textSecondary,
+  filterBadgeText: {
+    color: BRAND,
     fontSize: 10,
     fontWeight: "700",
   },
-  filterCountTextActive: {
-    color: enterprisePalette.dispatchText,
+  filterBadgeTextActive: {
+    color: "#FFFFFF",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 28,
+    gap: 6,
+  },
+  emptyStateIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0,121,107,0.06)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  emptyStateTitle: {
+    color: enterprisePalette.textStrong,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyStateSubtitle: {
+    color: enterprisePalette.hintText,
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 17,
+  },
+  emptyStateSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+  },
+  emptyStateSmallText: {
+    color: enterprisePalette.hintText,
+    fontSize: 13,
+    fontWeight: "500",
   },
   muted: {
-    color: enterprisePalette.surfaceMuted,
+    color: enterprisePalette.hintText,
+    fontSize: 13,
   },
   alertCard: {
     backgroundColor: enterprisePalette.card,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
     ...createShadow({
-      shadowColor: "rgba(15,54,43,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 6,
-      elevation: 2,
-    }), // ✅ Compatible web/native
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+    }),
   },
   alertHeader: {
     flexDirection: "row",
@@ -1687,48 +1610,74 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 6,
   },
-  alertBadgeContainer: {
+  alertBadgeWrap: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 4,
   },
   alertBadge: {
     fontWeight: "700",
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    color: "#EF4444",
   },
   alertTime: {
     color: enterprisePalette.textStrong,
     fontSize: 14,
     fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  alertContent: {
-    gap: 3,
   },
   alertClient: {
     color: enterprisePalette.textStrong,
-    fontWeight: "700",
+    fontWeight: "600",
     fontSize: 14,
-    letterSpacing: 0.1,
+    marginBottom: 4,
   },
-  alertTimeRow: {
+  alertRouteRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 5,
+    marginBottom: 2,
   },
   alertRoute: {
     color: enterprisePalette.textSecondary,
     fontSize: 12,
     fontWeight: "500",
+    flex: 1,
   },
   semiAutoControls: {
-    marginTop: 24,
-    padding: 20,
-    borderRadius: 18,
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
     backgroundColor: enterprisePalette.surface,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
-    gap: 12,
+    gap: 10,
+    ...createShadow({
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    }),
+  },
+  semiAutoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  semiAutoIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  semiAutoTitle: {
+    color: enterprisePalette.textStrong,
+    fontSize: 16,
+    fontWeight: "700",
   },
   dispatchHint: {
     color: enterprisePalette.hintText,
@@ -1740,43 +1689,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     alignSelf: "flex-start",
-    backgroundColor: enterprisePalette.dispatchButton,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
+    backgroundColor: BRAND,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 12,
     ...createShadow({
-      shadowColor: enterprisePalette.dispatchButton,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
-      elevation: 6,
-    }), // ✅ Compatible web/native
+      shadowColor: BRAND,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    }),
   },
   dispatchButtonDisabled: {
     backgroundColor: enterprisePalette.dispatchButtonDisabled,
-    shadowOpacity: 0.15,
   },
   dispatchButtonText: {
-    color: enterprisePalette.dispatchText,
+    color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 14,
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
   rideCard: {
     backgroundColor: enterprisePalette.cardOverlay,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: enterprisePalette.cardBorder,
     ...createShadow({
-      shadowColor: "rgba(15,54,43,0.06)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 8,
-      elevation: 2,
-    }), // ✅ Compatible web/native
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 6,
+      elevation: 1,
+    }),
   },
   rideTitle: {
     color: enterprisePalette.textStrong,
@@ -1793,13 +1740,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   error: {
-    color: "#F87171",
-    marginTop: 12,
+    color: "#EF4444",
+    marginTop: 10,
+    fontSize: 13,
   },
   manualListSection: {
-    marginTop: 8,
-    marginBottom: 24,
-    gap: 12,
+    marginTop: 4,
+    marginBottom: 14,
+    gap: 10,
   },
   manualActionsRow: {
     flexDirection: "row",
@@ -1808,39 +1756,45 @@ const styles = StyleSheet.create({
   manualSecondaryAction: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(148,163,255,0.45)",
+    borderColor: enterprisePalette.surfaceBorder,
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
   manualSecondaryText: {
-    color: "rgba(214,224,255,0.85)",
+    color: enterprisePalette.textSecondary,
     fontWeight: "600",
     fontSize: 12,
   },
   manualPrimaryAction: {
     borderRadius: 999,
-    backgroundColor: "#5EEAD4",
+    backgroundColor: BRAND,
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
   manualPrimaryText: {
-    color: "#0B1736",
+    color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 12,
   },
   manualMapSection: {
     marginTop: 2,
-    gap: 12,
+    gap: 6,
     marginBottom: 8,
   },
-  // ✅ Styles pour le statut dispatch en cours
   dispatchRunBanner: {
     backgroundColor: enterprisePalette.sectionSurface,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
+    ...createShadow({
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    }),
   },
   dispatchRunHeader: {
     flexDirection: "row",
@@ -1855,12 +1809,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dispatchRunStatus: {
-    backgroundColor: "rgba(10,127,89,0.12)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: "rgba(0,121,107,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(10,127,89,0.2)",
+    borderColor: "rgba(0,121,107,0.2)",
   },
   dispatchRunStatusText: {
     color: enterprisePalette.dispatchButton,
@@ -1885,14 +1839,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  // ✅ Styles pour l'optimiseur temps réel
   optimizerSection: {
     backgroundColor: enterprisePalette.sectionSurface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
+    ...createShadow({
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    }),
   },
   optimizerHeader: {
     flexDirection: "row",
@@ -1913,16 +1873,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optimizerStatusBadge: {
-    backgroundColor: "rgba(239,68,68,0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: "rgba(239,68,68,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+    borderColor: "rgba(239,68,68,0.18)",
   },
   optimizerStatusBadgeActive: {
-    backgroundColor: "rgba(10,127,89,0.12)",
-    borderColor: enterprisePalette.dispatchButton,
+    backgroundColor: "rgba(0,121,107,0.1)",
+    borderColor: "rgba(0,121,107,0.25)",
   },
   optimizerStatusText: {
     color: "#EF4444",
@@ -1936,18 +1896,18 @@ const styles = StyleSheet.create({
   },
   optimizerToggleButton: {
     backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
     ...createShadow({
-      shadowColor: "rgba(15,54,43,0.08)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
       shadowRadius: 4,
-      elevation: 2,
-    }), // ✅ Compatible web/native
+      elevation: 1,
+    }),
   },
   optimizerToggleButtonActive: {
     backgroundColor: enterprisePalette.alertSurface,
@@ -1966,39 +1926,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  // ✅ Styles pour les actions rapides
   quickActionsSection: {
     backgroundColor: enterprisePalette.sectionSurface,
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: enterprisePalette.sectionBorder,
   },
   quickActionsRow: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 12,
+    gap: 10,
+    marginTop: 10,
   },
   quickActionButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 6,
     backgroundColor: "#FFFFFF",
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: enterprisePalette.surfaceBorder,
     ...createShadow({
-      shadowColor: "rgba(15,54,43,0.08)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 1,
-      shadowRadius: 8,
-      elevation: 2,
-    }), // ✅ Compatible web/native
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+    }),
   },
   quickActionButtonDanger: {
     backgroundColor: enterprisePalette.alertSurface,
@@ -2006,68 +1965,64 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     color: enterprisePalette.textStrong,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    letterSpacing: 0.2,
   },
   quickActionTextDanger: {
     color: "#EF4444",
   },
-  // ✅ Styles pour le bouton "Appliquer" sur les opportunités
   applyOpportunityButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: enterprisePalette.dispatchButton,
+    backgroundColor: BRAND,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginTop: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 10,
     alignSelf: "flex-start",
   },
   applyOpportunityButtonDisabled: {
     backgroundColor: enterprisePalette.dispatchButtonDisabled,
   },
   applyOpportunityText: {
-    color: enterprisePalette.dispatchText,
+    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "600",
   },
-  // ✅ Styles pour le bouton "Transférer" dans le footer (receveur)
   transferButtonFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    backgroundColor: "rgba(10,127,89,0.08)",
-    paddingVertical: 8,
+    gap: 5,
+    backgroundColor: "rgba(0,121,107,0.07)",
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginTop: 8,
     alignSelf: "flex-start",
   },
   transferButtonText: {
-    color: "#0A7F59",
-    fontSize: 14,
+    color: BRAND,
+    fontSize: 13,
     fontWeight: "600",
   },
-  // ✅ Styles pour le bouton "Annuler" dans le footer (émetteur)
   cancelButtonFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    backgroundColor: "rgba(239,68,68,0.08)",
-    paddingVertical: 8,
+    gap: 5,
+    backgroundColor: "rgba(239,68,68,0.06)",
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginTop: 8,
     alignSelf: "flex-start",
   },
   cancelButtonText: {
     color: "#EF4444",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
   },
 });

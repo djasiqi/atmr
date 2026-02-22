@@ -1,6 +1,9 @@
-/* src/pages/company/Dashboard/CompanyDashboard.module.css */
+/* ============================================================
+   COMPANY DASHBOARD — Centre de commandement transport
+   Design premium, sobre, institutionnel, orienté exploitation
+   ============================================================ */
 
-/* Page globale : le header sticky prend son espace naturellement */
+/* Page globale */
 .companyContainer {
   display: flex;
   flex-direction: column;
@@ -23,12 +26,9 @@
   padding: var(--spacing-lg);
   background-color: var(--bg-primary);
   border-radius: var(--radius-lg);
-
-  /* S'adapte à la largeur de la sidebar (72px ou 240px) */
   margin: var(--spacing-lg);
   margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
   max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-
   box-shadow: var(--shadow-md);
   overflow-x: hidden;
   overflow-y: visible;
@@ -40,58 +40,275 @@
     max-width var(--transition-base);
 }
 
-.separator {
-  margin-bottom: calc(var(--spacing-xl) * 1.5);
-}
+/* ============================================================
+   1. DASHBOARD HEADER — Contextualisé, orienté action
+   ============================================================ */
 
-/* Message d'erreur */
-.error {
-  color: var(--danger-primary);
-  text-align: center;
-  margin-bottom: var(--spacing-lg);
-}
-
-/* Titre principal (si utilisé) */
-.dashboard h1 {
-  text-align: center;
-  font-size: var(--font-3xl);
-  margin-bottom: var(--spacing-xl);
-  color: var(--brand-primary);
-}
-
-/* ================== Sections communes ================== */
-
-.sectionHeader {
+.dashboardHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+  gap: var(--spacing-md);
 }
 
-.sectionHeader h2 {
-  font-size: var(--font-lg);
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.headerTitle {
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
   margin: 0;
+  line-height: 1.2;
+}
+
+.headerMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.liveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  background: var(--success-bg);
+  color: var(--success-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--success-border);
+  white-space: nowrap;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  background: var(--success-primary);
+  border-radius: 50%;
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.headerDateInput {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 2px solid var(--border-primary);
+  border-radius: 10px;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  font-family: inherit;
+  transition: all var(--transition-base);
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.headerDateInput:focus {
+  border-color: var(--brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.headerBtnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-brand);
+  text-decoration: none;
+  white-space: nowrap;
+  height: 30px;
+  font-family: inherit;
+}
+
+.headerBtnPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+  text-decoration: none;
+  color: white;
+}
+
+.headerBtnPrimary:active {
+  transform: translateY(0);
+}
+
+.headerBtnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: transparent;
+  color: var(--brand-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  white-space: nowrap;
+  height: 40px;
+  font-family: inherit;
+}
+
+.headerBtnSecondary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--brand-primary);
+  text-decoration: none;
   color: var(--brand-primary);
 }
 
-.inlineControls {
+/* Badge alerte retards inline dans le header */
+.delayHeaderBadge {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--text-secondary);
-  font-size: var(--font-sm);
+  gap: 4px;
+  padding: 3px 10px;
+  background: var(--warning-bg);
+  color: var(--warning-hover, #d97706);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--warning-border);
+  white-space: nowrap;
 }
 
-.inlineControls input[type='date'] {
-  padding: var(--spacing-xs) var(--spacing-sm);
+/* ============================================================
+   2. LAYOUT CARTE + INTELLIGENCE DISPATCH
+   ============================================================ */
+
+.twoColumnLayout {
+  display: grid;
+  grid-template-columns: 55% 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* Mode Manuel : carte pleine largeur, pas de colonne IA */
+.singleColumnLayout {
+  display: block;
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.leftColumn,
+.rightColumn,
+.fullColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.rightColumn {
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fullColumn {
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .twoColumnLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   3. CARTE LIVE — Intégration premium
+   ============================================================ */
+
+.mapSection {
+  background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
-  background: var(--bg-primary);
-  font: inherit;
+  padding: 0;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: var(--z-base);
+  height: 360px;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
-/* Petits textes d'aide / états async */
+/* Google Maps : s'assurer que la carte prend tout l'espace */
+.mapSection > div:first-child {
+  height: 100% !important;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+/* Indicateur "Live" sur la carte */
+.mapLiveIndicator {
+  position: absolute;
+  top: var(--spacing-sm);
+  left: var(--spacing-sm);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--success-primary);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--success-border);
+  backdrop-filter: blur(4px);
+}
+
+.mapLiveDot {
+  width: 6px;
+  height: 6px;
+  background: var(--success-primary);
+  border-radius: 50%;
+  animation: livePulse 2s ease-in-out infinite;
+}
+
 .hint {
   display: inline-block;
   margin-top: var(--spacing-xs);
@@ -99,80 +316,7 @@
   font-size: var(--font-xs);
 }
 
-/* ================== Layout 2 colonnes ================== */
-
-.twoColumnLayout {
-  display: grid;
-  grid-template-columns: 40% 1fr;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  /* ⚡ Empêche le grid de dépasser */
-  min-width: 0;
-}
-
-.leftColumn,
-.rightColumn {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  min-width: 0; /* ⚡ Permet au flex de rétrécir si nécessaire */
-  overflow-x: hidden; /* ⚡ Empêche le débordement horizontal */
-}
-
-/* ⚡ Contrainte spécifique pour la colonne droite */
-.rightColumn {
-  max-width: 100%;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* Responsive : 1 colonne sur petits écrans */
-@media (max-width: 1200px) {
-  .twoColumnLayout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ================== Carte chauffeurs (réduite) ================== */
-
-.mapSection {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  padding: 0;
-  box-shadow: var(--shadow-md);
-  position: relative;
-  z-index: var(--z-base);
-  height: 400px;
-  width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.mapSection :global(.leaflet-container) {
-  height: 100% !important;
-  border-radius: var(--radius-lg);
-}
-
-/* Styles pour les tooltips personnalisés des chauffeurs */
-.mapSection :global(.custom-driver-tooltip) {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.mapSection :global(.custom-driver-tooltip .leaflet-tooltip-content) {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-/* Conteneur de recherche chauffeur */
+/* Recherche chauffeur */
 .searchDriverContainer {
   display: flex;
   align-items: center;
@@ -180,12 +324,11 @@
   position: relative;
 }
 
-/* Champ de recherche chauffeur */
 .searchDriverInput {
   flex: 1;
   padding: var(--spacing-xs) calc(var(--spacing-xl) * 1.8) var(--spacing-xs) var(--spacing-sm);
   border: 2px solid var(--border-primary);
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   font-size: var(--font-sm);
   transition: all var(--transition-base);
   background: white;
@@ -195,14 +338,13 @@
 .searchDriverInput:focus {
   outline: none;
   border-color: var(--brand-primary);
-  box-shadow: var(--focus-ring);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
 }
 
 .searchDriverInput::placeholder {
   color: var(--text-tertiary);
 }
 
-/* Bouton X pour effacer la recherche */
 .clearSearchButton {
   position: absolute;
   right: var(--spacing-xs);
@@ -224,7 +366,7 @@
 }
 
 .clearSearchButton:hover {
-  background: var(--border-hover);
+  background: var(--border-secondary, var(--border-primary));
   color: var(--text-secondary);
   transform: translateY(-50%) scale(1.1);
 }
@@ -233,8 +375,826 @@
   transform: translateY(-50%) scale(0.95);
 }
 
-/* ================== Actions rapides ================== */
+/* ============================================================
+   4. SECTION RESERVATIONS — Pleine largeur
+   ============================================================ */
 
+.reservationsFullSection {
+  margin-bottom: var(--spacing-lg);
+  width: 100%;
+}
+
+.urgenceSection {
+  background: rgba(245, 158, 11, 0.02);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm);
+  border: 1px solid var(--warning-border);
+  transition: all var(--transition-base);
+}
+
+/* Onglets - Style moderne segment control */
+.tabsHeader {
+  display: flex;
+  gap: var(--spacing-xxs);
+  background: var(--bg-secondary);
+  padding: var(--spacing-xxs);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-primary);
+  margin-bottom: var(--spacing-md);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.tab {
+  flex: 1;
+  padding: 0 var(--spacing-md);
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: var(--font-weight-medium);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+  min-width: 0;
+  overflow: hidden;
+  font-family: inherit;
+}
+
+.tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.tabActive {
+  background: white;
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-sm);
+}
+
+.tabBadge {
+  background: var(--text-tertiary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  min-width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.tabActive .tabBadge {
+  background: var(--brand-primary);
+}
+
+/* ============================================================
+   5. PERFORMANCE & FLOTTE — Section collapsible unique
+   Niveau 3 : secondaire, résumé inline quand fermé
+   ============================================================ */
+
+.performanceSection {
+  background: var(--bg-primary);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  margin-bottom: var(--spacing-lg);
+}
+
+.performanceHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-base);
+}
+
+.performanceHeader:hover {
+  background: var(--bg-secondary);
+}
+
+.performanceTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.performanceTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.performanceInline {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.perfStat {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.perfStatSep {
+  color: var(--border-primary);
+  font-size: var(--font-xs);
+}
+
+.collapseIcon {
+  font-size: var(--font-lg);
+  color: var(--text-tertiary);
+  transition: transform var(--transition-base);
+  flex-shrink: 0;
+}
+
+.performanceContent {
+  border-top: 1px solid var(--border-primary);
+  padding: var(--spacing-md);
+}
+
+.performanceGrid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+.performanceChart {
+  min-width: 0;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm);
+}
+
+.performanceDrivers {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================
+   6. ÉLÉMENTS COMMUNS
+   ============================================================ */
+
+.separator {
+  margin-bottom: calc(var(--spacing-xl) * 1.5);
+}
+
+.error {
+  color: var(--danger-primary);
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.sectionHeader h2 {
+  font-size: var(--font-lg);
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.inlineControls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.inlineControls input[type='date'] {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  font: inherit;
+}
+
+/* Wrapper tableaux avec scroll */
+.tableWrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  margin-bottom: var(--spacing-lg);
+  table-layout: auto;
+}
+
+.table thead,
+.table tbody {
+  width: 100%;
+}
+
+.table th,
+.table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--border-primary);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  background-color: var(--bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+}
+
+.table tbody tr:hover {
+  background-color: var(--bg-hover);
+}
+
+.table button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin-right: var(--spacing-xs);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background-color: var(--brand-primary);
+  color: white;
+  transition: background-color var(--transition-base);
+}
+
+.table button:hover {
+  background-color: var(--brand-hover);
+}
+
+/* ============================================================
+   7. MODALES
+   ============================================================ */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background-color: var(--overlay);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: var(--z-modal-backdrop);
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+}
+
+.modalContent {
+  background: var(--bg-primary);
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-xl);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modalContent h3 {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-xl);
+  color: var(--brand-primary);
+  border-bottom: 2px solid var(--border-primary);
+  padding-bottom: var(--spacing-sm);
+}
+
+.modalContent p {
+  margin-bottom: var(--spacing-sm);
+}
+
+.modalContent ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--spacing-sm);
+}
+
+.modalContent ul li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-primary);
+  padding-bottom: var(--spacing-xs);
+}
+
+.modalContent ul li:last-child {
+  border-bottom: none;
+}
+
+.modalContent button {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background-color: var(--brand-primary);
+  color: white;
+  transition: background-color var(--transition-base);
+}
+
+.modalContent button:hover {
+  background-color: var(--brand-hover);
+}
+
+/* OverviewCards utilise désormais son propre CSS module (OverviewCards.module.css) */
+
+/* ============================================================
+   8. EMPTY STATES
+   ============================================================ */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  text-align: center;
+}
+
+.emptyStateIcon {
+  font-size: var(--font-4xl);
+  color: var(--text-tertiary);
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+.emptyStateText {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  margin: 0;
+  max-width: 320px;
+}
+
+/* ============================================================
+   9. ALERTES RETARDS DISPATCH
+   ============================================================ */
+
+.delayAlert {
+  margin: 0 var(--spacing-md) var(--spacing-md) var(--spacing-md);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.delayAlertContent {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) calc(var(--spacing-md) * 1.5);
+  background: linear-gradient(135deg, var(--warning-bg) 0%, var(--warning-bg) 100%);
+  border-left: 4px solid var(--warning-primary);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.delayAlertContent:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateX(4px);
+}
+
+.delayAlertIcon {
+  font-size: var(--font-xl);
+  flex-shrink: 0;
+}
+
+.delayAlertText {
+  flex: 1;
+  color: var(--warning-hover);
+  font-size: var(--font-md);
+}
+
+.delayAlertText strong {
+  color: var(--danger-dark);
+  font-weight: var(--font-weight-bold);
+}
+
+.delayAlertLink {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--warning-primary);
+  color: black;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+  transition: all var(--transition-base);
+  white-space: nowrap;
+}
+
+.delayAlertLink:hover {
+  background: var(--warning-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ============================================================
+   10. RESPONSIVE — Approche mobile-first progressive
+   Fluid: clamp() pour transitions douces entre breakpoints
+   ============================================================ */
+
+/* ---- Tablette large / écran réduit ---- */
+@media (max-width: 1200px) {
+  .twoColumnLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .content {
+    margin: var(--spacing-md);
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-md));
+    max-width: calc(100% - var(--sidebar-w, 72px) - var(--spacing-md) * 2);
+    padding: var(--spacing-md);
+  }
+
+  .dashboardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .performanceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mapSection {
+    height: clamp(250px, 30vw, 360px);
+  }
+}
+
+/* ---- Tablette portrait / petit écran ---- */
+@media (max-width: 768px) {
+  .content {
+    margin: var(--spacing-xs);
+    margin-left: calc(64px + var(--spacing-xs));
+    max-width: calc(100vw - 64px - var(--spacing-xs) * 2);
+    width: calc(100vw - 64px - var(--spacing-xs) * 2);
+    padding: clamp(8px, 2vw, 16px);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+  }
+
+  .dashboardHeader {
+    padding-bottom: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+
+  .headerTitle {
+    font-size: clamp(var(--font-lg), 4vw, var(--font-xl));
+  }
+
+  .headerActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: var(--spacing-xs);
+  }
+
+  .headerBtnPrimary,
+  .headerBtnSecondary {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+    font-size: var(--font-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    height: 36px;
+  }
+
+  .twoColumnLayout {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .leftColumn,
+  .rightColumn,
+  .fullColumn {
+    gap: var(--spacing-sm);
+  }
+
+  .mapSection {
+    height: clamp(200px, 35vw, 280px);
+  }
+
+  .performanceGrid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .performanceHeader {
+    flex-wrap: wrap;
+    padding: var(--spacing-sm);
+  }
+
+  .performanceInline {
+    flex-wrap: wrap;
+    gap: var(--spacing-xxs);
+  }
+
+  .performanceTitle {
+    font-size: var(--font-sm);
+  }
+
+  /* Tabs scrollables avec touch */
+  .tabsHeader {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabsHeader::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-xs);
+    white-space: nowrap;
+    min-width: 0;
+    min-height: 38px;
+  }
+
+  .tabBadge {
+    min-width: 16px;
+    height: 16px;
+    font-size: 0.65rem;
+    padding: 0 var(--spacing-xs);
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .sectionHeader h2 {
+    font-size: var(--font-sm);
+  }
+
+  .inlineControls {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    font-size: var(--font-xs);
+  }
+
+  .searchDriverInput {
+    font-size: var(--font-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .table {
+    font-size: var(--font-xs);
+    min-width: 500px;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--spacing-xs);
+    font-size: 0.7rem;
+  }
+}
+
+/* ---- Smartphone ---- */
+@media (max-width: 480px) {
+  .content {
+    margin: 0;
+    margin-left: 56px;
+    max-width: calc(100vw - 56px);
+    width: calc(100vw - 56px);
+    padding: var(--spacing-xs);
+    border-radius: 0;
+    box-sizing: border-box;
+    box-shadow: none;
+  }
+
+  .dashboardHeader {
+    padding-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .headerTitle {
+    font-size: var(--font-lg);
+  }
+
+  .headerMeta {
+    gap: var(--spacing-xs);
+  }
+
+  .liveBadge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+  }
+
+  .headerDateInput {
+    font-size: var(--font-xs);
+    height: 32px;
+    padding: var(--spacing-xs);
+  }
+
+  .headerActions {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .headerBtnPrimary,
+  .headerBtnSecondary {
+    width: 100%;
+    height: 36px;
+    font-size: var(--font-xs);
+  }
+
+  .mapSection {
+    height: clamp(160px, 45vw, 220px);
+    border-width: 1px;
+  }
+
+  .tab {
+    padding: var(--spacing-xs);
+    font-size: 0.7rem;
+    min-height: 36px;
+  }
+
+  .tabBadge {
+    min-width: 14px;
+    height: 14px;
+    font-size: 0.6rem;
+    padding: 0 3px;
+  }
+
+  .performanceHeader {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    gap: var(--spacing-xs);
+  }
+
+  .performanceTitle {
+    font-size: var(--font-xs);
+  }
+
+  .performanceInline {
+    display: none;
+  }
+
+  .collapseIcon {
+    font-size: var(--font-md);
+  }
+
+  .performanceContent {
+    padding: var(--spacing-sm);
+  }
+
+  .table {
+    font-size: 0.65rem;
+    min-width: 400px;
+  }
+
+  .table th,
+  .table td {
+    padding: 3px var(--spacing-xs);
+    font-size: 0.65rem;
+  }
+}
+
+/* ---- Très petit écran ---- */
+@media (max-width: 390px) {
+  .content {
+    margin-left: 56px;
+    max-width: calc(100vw - 56px);
+    width: calc(100vw - 56px);
+    padding: 4px;
+  }
+
+  .dashboardHeader {
+    padding-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    border-bottom-width: 1px;
+  }
+
+  .headerTitle {
+    font-size: var(--font-md);
+  }
+
+  .mapSection {
+    height: clamp(140px, 40vw, 180px);
+    border-radius: var(--radius-md);
+  }
+
+  .sectionHeader {
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  .sectionHeader h2 {
+    font-size: var(--font-xs);
+  }
+
+  .tab {
+    padding: 4px 6px;
+    min-width: 0;
+    font-size: 0.65rem;
+    min-height: 32px;
+  }
+
+  .tabBadge {
+    min-width: 14px;
+    height: 14px;
+    font-size: 0.6rem;
+  }
+
+  .table {
+    min-width: 360px;
+    font-size: 0.65rem;
+  }
+
+  .table th,
+  .table td {
+    padding: 2px 4px;
+  }
+}
+
+/* ============================================================
+   11. DARK MODE (préférences système)
+   ============================================================ */
+
+@media (prefers-color-scheme: dark) {
+  .content,
+  .mapSection {
+    box-shadow: none;
+  }
+
+  .inlineControls input[type='date'] {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
+  }
+
+  .table th {
+    background: var(--bg-secondary);
+    color: var(--text-tertiary);
+  }
+
+  .table tbody tr:hover {
+    background: var(--bg-hover);
+  }
+}
+
+/* ============================================================
+   LEGACY — Classes anciennes conservées pour rétrocompatibilité
+   ============================================================ */
+
+/* Quick actions — déplacés dans le header mais classes conservées */
 .quickActions {
   display: flex;
   flex-direction: column;
@@ -303,13 +1263,12 @@
 
 .actionText small {
   font-size: var(--font-xs);
-  color: rgba(255, 255, 255, 0.85); /* White with 85% opacity for better readability on gradient */
+  color: rgba(255, 255, 255, 0.85);
   font-weight: var(--font-weight-normal);
   text-decoration: none !important;
   line-height: 1.3;
 }
 
-/* Effets visuels selon l'état du moteur reçu via data-dispatch-status */
 .dispatchSection[data-dispatch-status*='running'],
 .dispatchSection[data-dispatch-status*='optim'] {
   border-color: var(--warning-border);
@@ -322,8 +1281,6 @@
   border-color: var(--success-border);
 }
 
-/* ================== Réservations & Chauffeurs ================== */
-
 .reservationsSection {
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
@@ -331,71 +1288,6 @@
   box-shadow: var(--shadow-sm);
   width: 100%;
   max-width: 100%;
-}
-
-/* Onglets - Style moderne comme Réservations/Chauffeurs */
-.tabsHeader {
-  display: flex;
-  gap: var(--spacing-xxs);
-  background: var(--bg-secondary);
-  padding: var(--spacing-xxs);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-primary);
-  margin-bottom: var(--spacing-md);
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.tab {
-  flex: 1;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.4s ease-in-out;
-  font-weight: var(--font-weight-medium);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--text-tertiary);
-  font-size: var(--font-sm);
-  min-width: 0; /* ⚡ Permet au flex de rétrécir si nécessaire */
-  overflow: hidden; /* ⚡ Empêche le débordement du texte */
-}
-
-.tab:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
-}
-
-.tabActive {
-  background: white;
-  color: var(--brand-primary);
-  font-weight: var(--font-weight-semibold);
-  box-shadow: var(--shadow-sm);
-}
-
-.tabBadge {
-  background: var(--text-tertiary);
-  color: white;
-  padding: var(--spacing-xxs) var(--spacing-xs);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-semibold);
-  min-width: 20px;
-  text-align: center;
-  flex-shrink: 0; /* ⚡ Empêche le badge de rétrécir */
-  margin-left: var(--spacing-xs); /* ⚡ Ajoute un espace entre le texte et le badge */
-}
-
-.tabActive .tabBadge {
-  background: var(--brand-primary);
-}
-
-.tabContent {
-  position: relative;
 }
 
 .driverSection {
@@ -409,267 +1301,9 @@
   max-width: 100%;
 }
 
-.compactSection {
-  background: white;
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-xs);
-  width: 100%;
-  max-width: 100%;
-}
-
-.collapsibleHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  cursor: pointer;
-  transition: background var(--transition-base);
-  user-select: none;
-}
-
-.collapsibleHeader:hover {
-  background: var(--bg-secondary);
-}
-
-.collapsibleHeader h2 {
-  font-size: var(--font-lg);
-  margin: 0;
-  color: var(--brand-primary);
-  font-weight: 600;
-}
-
-.collapseIcon {
-  font-size: var(--font-xl);
-  color: var(--brand-primary);
-  transition: transform var(--transition-base);
-}
-
-/* Wrapper pour scroll horizontal des tableaux */
-.tableWrapper {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Table générique (si utilisée directement ici) */
-.table {
-  width: 100%;
-  min-width: 600px;
-  border-collapse: collapse;
-  margin-bottom: var(--spacing-lg);
-  table-layout: auto;
-}
-
-.table thead,
-.table tbody {
-  width: 100%;
-}
-
-.table th,
-.table td {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--border-primary);
-  text-align: left;
-  vertical-align: middle;
-}
-
-.table th {
-  background-color: var(--bg-secondary);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-secondary);
-}
-
-.table tbody tr:hover {
-  background-color: var(--bg-hover);
-}
-
-/* Boutons dans le tableau */
-.table button {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  margin-right: var(--spacing-xs);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background-color: var(--brand-primary);
-  color: white;
-  transition: background-color var(--transition-base);
-}
-
-.table button:hover {
-  background-color: var(--brand-hover);
-}
-
-/* ================== Modal générique (amélioré) ================== */
-
-.modal {
-  position: fixed;
-  inset: 0;
-  background-color: var(--overlay);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: var(--z-modal-backdrop);
-  padding: var(--spacing-lg);
-  overflow-y: auto;
-}
-
-.modalContent {
-  background: var(--bg-primary);
-  padding: var(--spacing-xl);
-  border-radius: var(--radius-xl);
-  width: 100%;
-  max-width: 800px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-2xl);
-  animation: modalSlideIn 0.3s ease-out;
-}
-
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.modalContent h3 {
-  margin: 0 0 var(--spacing-lg) 0;
-  font-size: var(--font-xl);
-  color: var(--brand-primary);
-  border-bottom: 2px solid var(--border-primary);
-  padding-bottom: var(--spacing-sm);
-}
-
-.modalContent p {
-  margin-bottom: var(--spacing-sm);
-}
-
-.modalContent ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 var(--spacing-sm);
-}
-
-.modalContent ul li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--border-primary);
-  padding-bottom: var(--spacing-xs);
-}
-
-.modalContent ul li:last-child {
-  border-bottom: none;
-}
-
-.modalContent button {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  background-color: var(--brand-primary);
-  color: white;
-  transition: background-color var(--transition-base);
-}
-
-.modalContent button:hover {
-  background-color: var(--brand-hover);
-}
-
-/* ================== Cartes Overview (KPIs compacts) ================== */
-
-.overviewCards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
-  width: 100%;
-  max-width: 100%;
-}
-
-.card {
-  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  transition: all var(--transition-base);
-  border: 1px solid var(--border-primary);
+.tabContent {
   position: relative;
-  z-index: auto;
 }
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--brand-primary);
-  z-index: auto;
-}
-
-.cardIcon {
-  font-size: var(--font-3xl);
-  line-height: 1;
-  opacity: 0.9;
-  flex-shrink: 0;
-}
-
-.cardContent {
-  flex: 1;
-  text-align: left;
-}
-
-.cardContent h3 {
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-medium);
-  margin: 0 0 var(--spacing-xxs) 0;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.cardContent p {
-  font-size: var(--font-2xl);
-  font-weight: var(--font-weight-bold);
-  margin: 0;
-  color: var(--brand-primary);
-}
-
-/* Responsive : passage en 2 colonnes sur petits écrans */
-@media (max-width: 1024px) {
-  .overviewCards {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .mapSection {
-    height: 300px;
-  }
-}
-
-@media (max-width: 768px) {
-  .overviewCards {
-    grid-template-columns: 1fr;
-  }
-
-  .mapSection {
-    height: 250px;
-  }
-
-  .card:hover {
-    transform: none;
-  }
-}
-
-/* ================== Zone graphiques ================== */
 
 .chartContainer {
   margin: var(--spacing-xl) 0;
@@ -681,676 +1315,4 @@
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
-}
-
-/* ================== Responsive ================== */
-
-@media (max-width: 1024px) {
-  .content {
-    margin: var(--spacing-md);
-    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-md));
-    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-md) * 2));
-    padding: var(--spacing-md);
-  }
-}
-
-@media (max-width: 768px) {
-  .content {
-    /* Sur mobile, sidebar 60px visible */
-    margin: var(--spacing-xs) !important;
-    margin-left: calc(60px + var(--spacing-xs)) !important;
-    max-width: calc(100vw - 60px - calc(var(--spacing-xs) * 2)) !important;
-    width: calc(100vw - 60px - calc(var(--spacing-xs) * 2)) !important;
-    padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    box-sizing: border-box;
-  }
-
-  /* Titre principal plus petit */
-  .dashboard h1 {
-    font-size: var(--font-xl);
-    margin-bottom: var(--spacing-md);
-  }
-
-  /* Sections avec moins d'espace */
-  .separator {
-    margin-bottom: var(--spacing-lg);
-  }
-
-  /* KPI Cards en 2 colonnes sur mobile */
-  .overviewCards {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-  }
-
-  .card {
-    padding: var(--spacing-sm) var(--spacing-md);
-    gap: var(--spacing-sm);
-  }
-
-  .cardIcon {
-    font-size: var(--font-2xl);
-  }
-
-  .cardContent h3 {
-    font-size: 0.7rem;
-  }
-
-  .cardContent p {
-    font-size: var(--font-xl);
-  }
-
-  .card:hover {
-    transform: none;
-  }
-
-  /* Map plus petite */
-  .mapSection {
-    height: 200px;
-    margin-bottom: var(--spacing-md);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .searchDriverInput {
-    font-size: var(--font-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
-  }
-
-  /* Layout 1 colonne */
-  .twoColumnLayout {
-    grid-template-columns: 1fr;
-    gap: var(--spacing-sm);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .leftColumn,
-  .rightColumn {
-    gap: var(--spacing-sm);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  /* Boutons d'action compacts */
-  .quickActions {
-    gap: var(--spacing-xs);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .actionButton {
-    padding: var(--spacing-sm);
-    font-size: var(--font-xs);
-    gap: var(--spacing-sm);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .actionIcon {
-    font-size: var(--font-lg);
-  }
-
-  .actionText strong {
-    font-size: var(--font-xs);
-  }
-
-  .actionText small {
-    font-size: 0.65rem;
-  }
-
-  /* Sections headers compacts */
-  .sectionHeader {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .sectionHeader h2 {
-    font-size: var(--font-sm);
-  }
-
-  .inlineControls {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: var(--spacing-xs);
-    font-size: var(--font-xs);
-  }
-
-  .inlineControls input[type='date'] {
-    font-size: var(--font-xs);
-    padding: var(--spacing-xs);
-  }
-
-  /* Tabs scrollables */
-  .tabsHeader {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-  }
-
-  .tab {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    font-size: var(--font-xs);
-    white-space: nowrap;
-    min-width: 80px;
-  }
-
-  .tabBadge {
-    min-width: 16px;
-    height: 16px;
-    font-size: 0.65rem;
-    padding: 0 var(--spacing-xs);
-  }
-
-  .tabContent {
-    padding: var(--spacing-xs);
-  }
-
-  /* Sections scrollables */
-  .reservationsSection,
-  .driverSection,
-  .compactSection {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    margin-bottom: var(--spacing-sm);
-    box-sizing: border-box;
-  }
-
-  .collapsibleHeader {
-    padding: var(--spacing-sm);
-  }
-
-  .collapsibleHeader h2 {
-    font-size: var(--font-sm);
-  }
-
-  /* Tables compactes */
-  .table {
-    font-size: var(--font-xs);
-    min-width: 500px;
-    width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .table th,
-  .table td {
-    padding: var(--spacing-xs);
-    font-size: 0.7rem;
-  }
-
-  .table button {
-    padding: var(--spacing-xs);
-    font-size: var(--font-xs);
-  }
-
-  /* Wrapper pour les tableaux */
-  .tableWrapper {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    box-sizing: border-box;
-  }
-
-  /* Charts compacts */
-  .chartContainer {
-    padding: var(--spacing-sm);
-    margin: var(--spacing-md) 0;
-    overflow-x: auto;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-}
-
-@media (max-width: 480px) {
-  .content {
-    margin: 0 !important;
-    margin-left: 60px !important;
-    max-width: calc(100vw - 60px) !important;
-    width: calc(100vw - 60px) !important;
-    padding: var(--spacing-xs);
-    border-radius: 0;
-    box-sizing: border-box;
-  }
-
-  /* Titre très compact */
-  .dashboard h1 {
-    font-size: var(--font-lg);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .separator {
-    margin-bottom: var(--spacing-sm);
-  }
-
-  /* KPI ultra compacts */
-  .overviewCards {
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .card {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    gap: var(--spacing-xs);
-    flex-direction: row;
-  }
-
-  .cardIcon {
-    font-size: var(--font-xl);
-  }
-
-  .cardContent {
-    text-align: left;
-  }
-
-  .cardContent h3 {
-    font-size: 0.6rem;
-    margin-bottom: 2px;
-  }
-
-  .cardContent p {
-    font-size: var(--font-md);
-    font-weight: var(--font-weight-bold);
-  }
-
-  /* Map ultra compacte */
-  .mapSection {
-    height: 180px;
-    margin-bottom: var(--spacing-sm);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .searchDriverContainer {
-    flex-direction: column;
-    gap: var(--spacing-xs);
-  }
-
-  .searchDriverInput {
-    font-size: 0.75rem;
-    padding: var(--spacing-xs);
-  }
-
-  .clearSearchButton {
-    width: 20px;
-    height: 20px;
-    font-size: 0.7rem;
-  }
-
-  /* Boutons d'action très compacts */
-  .quickActions {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .actionButton {
-    padding: var(--spacing-xs);
-    gap: var(--spacing-xs);
-    flex-direction: row;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .actionIcon {
-    font-size: var(--font-md);
-  }
-
-  .actionText strong {
-    font-size: 0.7rem;
-  }
-
-  .actionText small {
-    display: none;
-  }
-
-  /* Sections headers très compacts */
-  .sectionHeader h2 {
-    font-size: var(--font-xs);
-  }
-
-  .inlineControls {
-    font-size: 0.7rem;
-  }
-
-  .inlineControls input[type='date'] {
-    font-size: 0.7rem;
-    padding: 2px var(--spacing-xs);
-  }
-
-  /* Tabs ultra compacts */
-  .tab {
-    padding: var(--spacing-xs);
-    font-size: 0.65rem;
-    min-width: 60px;
-  }
-
-  .tabBadge {
-    min-width: 14px;
-    height: 14px;
-    font-size: 0.6rem;
-    padding: 0 2px;
-  }
-
-  .tabContent {
-    padding: var(--spacing-xs);
-  }
-
-  /* Tables ultra compactes */
-  .table {
-    font-size: 0.65rem;
-    min-width: 400px;
-    width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .tableWrapper {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    box-sizing: border-box;
-  }
-
-  .table th,
-  .table td {
-    padding: 2px var(--spacing-xs);
-    font-size: 0.65rem;
-  }
-
-  .table button {
-    padding: 2px var(--spacing-xs);
-    font-size: 0.65rem;
-  }
-
-  /* Charts */
-  .chartContainer {
-    padding: var(--spacing-xs);
-    margin: var(--spacing-sm) 0;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  /* Sections compactes */
-  .reservationsSection,
-  .driverSection,
-  .compactSection {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .twoColumnLayout,
-  .leftColumn,
-  .rightColumn {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  /* Collapsible headers */
-  .collapsibleHeader {
-    padding: var(--spacing-xs);
-  }
-
-  .collapsibleHeader h2 {
-    font-size: var(--font-xs);
-  }
-
-  .collapseIcon {
-    font-size: var(--font-md);
-  }
-}
-
-/* Téléphones très étroits (< 390px): compaction supplémentaire */
-@media (max-width: 390px) {
-  .content {
-    margin: 0 !important;
-    margin-left: 60px !important;
-    max-width: calc(100vw - 60px) !important;
-    width: calc(100vw - 60px) !important;
-    padding: 6px;
-    border-radius: 0;
-    box-sizing: border-box;
-  }
-
-  /* KPI en grille 2 colonnes pour réduire la hauteur */
-  .overviewCards {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-xs);
-  }
-  .card {
-    padding: var(--spacing-xs);
-    gap: var(--spacing-xs);
-  }
-  .cardIcon {
-    font-size: var(--font-lg);
-  }
-  .cardContent h3 {
-    font-size: 0.6rem;
-  }
-  .cardContent p {
-    font-size: var(--font-md);
-  }
-
-  /* Carte et contrôles plus petits */
-  .mapSection {
-    height: 170px;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-  .searchDriverContainer {
-    flex-direction: row;
-    gap: var(--spacing-xs);
-  }
-  .searchDriverInput {
-    font-size: 0.7rem;
-    padding: 4px 8px;
-    width: 100%;
-  }
-  .mapSection :global(.leaflet-control) {
-    transform: scale(0.85);
-    transform-origin: top left;
-  }
-
-  /* En-têtes de section compacts */
-  .sectionHeader {
-    gap: 4px;
-    margin-bottom: 4px;
-  }
-  .sectionHeader h2 {
-    font-size: var(--font-xs);
-  }
-
-  /* Boutons d'action compacts */
-  .quickActions {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  .actionButton {
-    padding: 6px;
-    gap: 6px;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-  .actionIcon {
-    font-size: var(--font-md);
-  }
-  .actionText small {
-    display: none;
-  }
-
-  /* Tabs sans scrollbar visible */
-  .tabsHeader {
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-  .tabsHeader::-webkit-scrollbar {
-    display: none;
-  }
-  .tab {
-    padding: 4px 6px;
-    min-width: 64px;
-    font-size: 0.65rem;
-  }
-  .tabBadge {
-    min-width: 14px;
-    height: 14px;
-    font-size: 0.6rem;
-  }
-
-  /* Sections */
-  .reservationsSection,
-  .driverSection,
-  .compactSection {
-    margin-bottom: var(--spacing-xs);
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box;
-  }
-
-  /* Table plus étroite */
-  .table {
-    min-width: 360px;
-    font-size: 0.65rem;
-    width: 100% !important;
-    box-sizing: border-box;
-  }
-  .table th,
-  .table td {
-    padding: 2px 6px;
-  }
-
-  .tableWrapper {
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow-x: auto;
-    box-sizing: border-box;
-  }
-}
-
-/* ================== Dark mode (préférences système) ================== */
-@media (prefers-color-scheme: dark) {
-  .content,
-  .mapSection,
-  .dispatchSection,
-  .manualBookingSection {
-    box-shadow: none;
-  }
-
-  .inlineControls input[type='date'] {
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border-color: var(--border-primary);
-  }
-
-  .table th {
-    background: var(--bg-secondary);
-    color: var(--text-tertiary);
-  }
-
-  .table tbody tr:hover {
-    background: var(--bg-hover);
-  }
-}
-
-/* ============================================================
-   🆕 BADGE D'ALERTE RETARDS DISPATCH
-   ============================================================ */
-.delayAlert {
-  margin: 0 var(--spacing-md) var(--spacing-md) var(--spacing-md);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.delayAlertContent {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) calc(var(--spacing-md) * 1.5);
-  background: linear-gradient(135deg, var(--warning-bg) 0%, var(--warning-bg) 100%);
-  border-left: 4px solid var(--warning-primary);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-warning);
-  transition: all var(--transition-base);
-}
-
-.delayAlertContent:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateX(4px);
-}
-
-.delayAlertIcon {
-  font-size: var(--font-xl);
-  flex-shrink: 0;
-}
-
-.delayAlertText {
-  flex: 1;
-  color: var(--warning-hover);
-  font-size: var(--font-md);
-}
-
-.delayAlertText strong {
-  color: var(--danger-dark);
-  font-weight: var(--font-weight-bold);
-}
-
-.delayAlertLink {
-  padding: var(--spacing-xs) var(--spacing-md);
-  background: var(--warning-primary);
-  color: black;
-  text-decoration: none;
-  border-radius: var(--radius-sm);
-  font-weight: var(--font-weight-semibold);
-  transition: all var(--transition-base);
-  white-space: nowrap;
-}
-
-.delayAlertLink:hover {
-  background: var(--warning-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-sm);
-}
-
-/* Variante critique (rouge) */
-.delayAlert:has(.delayAlertIcon:contains('🚨')) .delayAlertContent {
-  background: linear-gradient(135deg, var(--danger-bg) 0%, var(--danger-bg-hover) 100%);
-  border-left-color: var(--danger-primary);
-}
-
-.delayAlert:has(.delayAlertIcon:contains('🚨')) .delayAlertLink {
-  background: var(--danger-primary);
-  color: white;
-}
-
-.delayAlert:has(.delayAlertIcon:contains('🚨')) .delayAlertLink:hover {
-  background: var(--danger-hover);
 }

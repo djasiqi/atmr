@@ -1,8 +1,26 @@
 import React from 'react';
+import {
+  FiSettings,
+  FiZap,
+  FiPlay,
+  FiLoader,
+  FiSliders,
+  FiCheck,
+} from 'react-icons/fi';
+import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 
-/**
- * Composant d'en-tête pour la page de dispatch
- */
+const MODE_SUBTITLE = {
+  manual: 'Mode manuel - aucune assignation automatique',
+  semi_auto: 'Mode semi-automatique - suggestions a valider',
+  fully_auto: 'Mode automatique - assignation geree par le systeme',
+};
+
+const MODE_BADGE = {
+  manual: 'Manuel',
+  semi_auto: 'Semi-Auto',
+  fully_auto: 'Automatique',
+};
+
 const DispatchHeader = ({
   date,
   setDate,
@@ -17,42 +35,49 @@ const DispatchHeader = ({
   dispatchLabel = '',
   dispatchMode = 'semi_auto',
   styles = {},
-  onShowAdvancedSettings, // 🆕
-  hasOverrides = false, // 🆕
-  fastMode = false, // ⚡ Mode rapide
-  setFastMode, // ⚡ Setter pour mode rapide
+  onShowAdvancedSettings,
+  hasOverrides = false,
+  fastMode = false,
+  setFastMode,
 }) => {
-  const _makeToday = () => {
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  };
+  const isManual = dispatchMode === 'manual';
+  const isFullyAuto = dispatchMode === 'fully_auto';
 
   return (
     <div className={styles.headerSection}>
       <div className={styles.pageHeader}>
         <div className={styles.titleRow}>
-          <h1>
-            {dispatchMode === 'manual'
-              ? '✋ Dispatch Manuel'
-              : dispatchMode === 'semi_auto'
-                ? '⚙️ Dispatch Semi-Automatique'
-                : '🤖 Dispatch Automatique'}
-          </h1>
-          <span className={styles.modeBadge}>
-            Mode actuel:{' '}
-            {dispatchMode === 'manual'
-              ? '✋ Manuel'
-              : dispatchMode === 'semi_auto'
-                ? '⚙️ Semi-Automatique'
-                : '🤖 Totalement Automatique'}
-          </span>
+          <div className={styles.titleGroup}>
+            <h1 className={styles.dispatchTitle}>Dispatch</h1>
+            <span className={styles.modeBadge}>{MODE_BADGE[dispatchMode] || 'Manuel'}</span>
+          </div>
+          <div className={styles.headerActions}>
+            <InlineDatePicker
+              value={date}
+              onChange={(v) => setDate(v)}
+              placeholder="Date"
+            />
+            {isManual && (
+              <button
+                onClick={() => {
+                  const companyId = window.location.pathname.split('/')[3] || '';
+                  window.location.href = `/dashboard/company/${companyId}/settings#operations`;
+                }}
+                className={styles.btnSecondary}
+              >
+                <FiSettings size={14} />
+                Automatisation
+              </button>
+            )}
+          </div>
         </div>
+        <p className={styles.modeSubtitle}>
+          {MODE_SUBTITLE[dispatchMode] || MODE_SUBTITLE.manual}
+        </p>
       </div>
 
       {dispatchSuccess && <div className={styles.successMessage}>{dispatchSuccess}</div>}
 
-      {/* Barre de progression du dispatch */}
       {loading && dispatchProgress > 0 && (
         <div className={styles.progressBar}>
           <div className={styles.progressFill} style={{ width: `${dispatchProgress}%` }}>
@@ -62,86 +87,82 @@ const DispatchHeader = ({
         </div>
       )}
 
-      <div className={styles.compactFilters}>
-        {/* En mode fully_auto, afficher uniquement le sélecteur de date */}
-        {dispatchMode === 'fully_auto' ? (
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className={styles.dateInput}
-          />
-        ) : (
-          <>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={styles.dateInput}
-            />
-            {/* ⚡ En mode manuel, afficher uniquement le calendrier */}
-            {dispatchMode !== 'manual' && (
-              <>
-                <label className={styles.checkboxLabel}>
+      {/* Controles semi-auto / fully-auto uniquement */}
+      {!isManual && (
+        <div className={styles.compactFilters}>
+          {isFullyAuto ? null : (
+            <>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={regularFirst}
+                  onChange={(e) => setRegularFirst(e.target.checked)}
+                  className={styles.checkbox}
+                />
+                Chauffeurs reguliers prioritaires
+              </label>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={allowEmergency}
+                  onChange={(e) => setAllowEmergency(e.target.checked)}
+                  className={styles.checkbox}
+                />
+                Autoriser chauffeurs d'urgence
+              </label>
+              {setFastMode && (
+                <label
+                  className={styles.checkboxLabel}
+                  title="Garantit une solution en moins de 1 minute"
+                >
                   <input
                     type="checkbox"
-                    checked={regularFirst}
-                    onChange={(e) => setRegularFirst(e.target.checked)}
+                    checked={fastMode}
+                    onChange={(e) => setFastMode(e.target.checked)}
                     className={styles.checkbox}
                   />
-                  Chauffeurs réguliers prioritaires
+                  <FiZap size={12} />
+                  Dispatch rapide (&lt;1min)
                 </label>
-                <label className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={allowEmergency}
-                    onChange={(e) => setAllowEmergency(e.target.checked)}
-                    className={styles.checkbox}
-                  />
-                  Autoriser chauffeurs d'urgence
-                </label>
-                {/* ⚡ Option Dispatch rapide */}
-                {setFastMode && (
-                  <label
-                    className={styles.checkboxLabel}
-                    title="Garantit une solution en moins de 1 minute"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={fastMode}
-                      onChange={(e) => setFastMode(e.target.checked)}
-                      className={styles.checkbox}
-                    />
-                    ⚡ Dispatch rapide (&lt;1min)
-                  </label>
+              )}
+              <button onClick={onRunDispatch} disabled={loading} className={styles.dispatchBtn}>
+                {loading ? (
+                  <>
+                    <FiLoader size={14} className={styles.spinIcon} />
+                    En cours...
+                  </>
+                ) : (
+                  <>
+                    <FiPlay size={14} />
+                    Lancer Dispatch
+                  </>
                 )}
-                <button onClick={onRunDispatch} disabled={loading} className={styles.dispatchBtn}>
-                  {loading ? '⏳ En cours...' : '🚀 Lancer Dispatch'}
+              </button>
+
+              {onShowAdvancedSettings && (
+                <button
+                  onClick={onShowAdvancedSettings}
+                  className={`${styles.advancedBtn} ${hasOverrides ? styles.hasOverrides : ''}`}
+                  title={
+                    hasOverrides
+                      ? 'Parametres personnalises actifs'
+                      : 'Configurer parametres avances'
+                  }
+                >
+                  <FiSliders size={14} />
+                  {hasOverrides ? (
+                    <>
+                      Parametres <FiCheck size={12} />
+                    </>
+                  ) : (
+                    'Avance'
+                  )}
                 </button>
-
-                {/* 🆕 Bouton paramètres avancés */}
-                {onShowAdvancedSettings && (
-                  <button
-                    onClick={onShowAdvancedSettings}
-                    className={`${styles.advancedBtn} ${hasOverrides ? styles.hasOverrides : ''}`}
-                    title={
-                      hasOverrides
-                        ? 'Paramètres personnalisés actifs'
-                        : 'Configurer paramètres avancés'
-                    }
-                  >
-                    ⚙️ {hasOverrides ? 'Paramètres ✓' : 'Avancé'}
-                  </button>
-                )}
-              </>
-            )}
-
-            <span className={styles.courseCount}>
-              {/* On pourrait afficher le nombre de courses ici si disponible */}
-            </span>
-          </>
-        )}
-      </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

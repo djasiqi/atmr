@@ -18,7 +18,9 @@ import {
     Partnership,
 } from "@/services/partnershipService";
 import { RideSummary } from "@/types/enterpriseDispatch";
+import { getLogger } from "@/utils/logger";
 
+const log = getLogger("Transfer");
 // Palette de couleurs cohérente avec l'app
 const palette = {
     primary: "#0A7F59",
@@ -65,9 +67,8 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
         }
     }, [visible]);
 
-    // Logger l'état du partenariat sélectionné
     useEffect(() => {
-        console.log("[TransferRideModal] État - selectedPartnership:", selectedPartnership?.partner_company_name || "aucun");
+        log.info("selected partnership state", { selectedPartnership: selectedPartnership?.partner_company_name || "none" });
     }, [selectedPartnership]);
 
     /**
@@ -78,14 +79,14 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
             setLoading(true);
             setError("");
             const data = await fetchPartnershipsForTransfer();
-            console.log("[TransferRideModal] Partenariats chargés:", data.length, "partenariats");
+            log.info("partnerships loaded", { count: data.length });
             setPartnerships(data);
 
             if (data.length === 0) {
                 setError("Aucun partenariat actif disponible pour le transfert");
             }
         } catch (err: any) {
-            console.error("[TransferRideModal] Erreur lors du chargement des partenariats:", err);
+            log.error("load partnerships failed", { error: err });
             setError(err?.response?.data?.error || "Impossible de charger les partenariats");
         } finally {
             setLoading(false);
@@ -96,7 +97,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
      * Propose le transfert de la course au partenaire sélectionné
      */
     const handleTransfer = async () => {
-        console.log("[TransferRideModal] handleTransfer appelé - selectedPartnership:", selectedPartnership?.partner_company_name);
+        log.info("handleTransfer called", { selectedPartnership: selectedPartnership?.partner_company_name });
 
         if (!selectedPartnership) {
             if (Platform.OS === 'web') {
@@ -155,7 +156,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
             onSuccess();
             onClose();
         } catch (err: any) {
-            console.error("[TransferRideModal] Erreur lors du transfert:", err);
+            log.error("transfer failed", { error: err });
             const errorMessage =
                 err?.response?.data?.error || err?.message || "Erreur lors du transfert";
             setError(errorMessage);
@@ -174,7 +175,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
      * Sélectionne un partenariat
      */
     const handleSelectPartnership = (partnership: Partnership) => {
-        console.log("[TransferRideModal] Partenariat sélectionné:", partnership.partner_company_name);
+        log.info("partnership selected", { partnerCompanyName: partnership.partner_company_name });
         setSelectedPartnership(partnership);
         setError("");
     };

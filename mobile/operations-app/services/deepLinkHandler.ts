@@ -6,6 +6,9 @@
  * Types supportés: booking, chat, dispatch
  */
 
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("DeepLinks");
 export interface DeepLinkValidationResult {
   valid: boolean;
   type?: string;

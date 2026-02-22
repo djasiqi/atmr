@@ -1,51 +1,78 @@
-// components/dashboard/ChatHeader.tsx
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Platform } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSocketStatus } from "@/hooks/useSocketStatus";
 
-// ✅ Palette épurée et élégante (cohérente avec le login et autres pages)
-const palette = {
-  background: "#F5F7F6",
-  text: "#15362B",
-  secondary: "#5F7369",
-  border: "rgba(15,54,43,0.08)",
-};
+const BRAND = "#00796b";
+const TXT = "#0f172a";
+const TXT_SEC = "#6b7280";
+const BORDER = "#e5e7eb";
+const CARD = "#FFFFFF";
 
 export default function ChatHeader() {
+  const { connected, reconnecting } = useSocketStatus();
+
+  const statusColor = reconnecting ? "#f59e0b" : connected ? "#16a34a" : "#ef4444";
+  const statusBg = reconnecting ? "rgba(245,158,11,0.1)" : connected ? "rgba(22,163,74,0.1)" : "rgba(239,68,68,0.1)";
+  const statusText = reconnecting ? "Reconnexion" : connected ? "En ligne" : "Hors ligne";
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Équipe</Text>
-      <Text style={styles.subtitle}>
-        Discutez avec votre équipe en temps réel
-      </Text>
+    <View style={st.container}>
+      <View style={st.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={st.title}>Équipe</Text>
+          <Text style={st.subtitle}>Discussion en temps réel</Text>
+        </View>
+        <View style={[st.statusPill, { backgroundColor: statusBg }]}>
+          <View style={[st.statusDot, { backgroundColor: statusColor }]} />
+          <Text style={[st.statusLabel, { color: statusColor }]}>{statusText}</Text>
+        </View>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  // ✅ Container avec style épuré et élégant
+const st = StyleSheet.create({
   container: {
-    width: "100%",
-    paddingHorizontal: 28,
-    paddingTop: 32,
-    paddingBottom: 24,
-    backgroundColor: palette.background,
+    backgroundColor: CARD,
+    paddingTop: Platform.OS === "ios" ? 52 : 40,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    borderBottomColor: BORDER,
   },
-  // ✅ Titre avec typographie élégante
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: "700",
-    color: palette.text,
-    marginBottom: 8,
-    letterSpacing: -0.5,
+    color: TXT,
+    letterSpacing: -0.3,
   },
-  // ✅ Sous-titre avec style épuré
   subtitle: {
-    fontSize: 15,
-    color: palette.secondary,
-    marginBottom: 0,
-    lineHeight: 22,
+    fontSize: 12,
+    color: TXT_SEC,
+    marginTop: 1,
+  },
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.1,
   },
 });
-

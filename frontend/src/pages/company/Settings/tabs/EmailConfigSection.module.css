@@ -356,6 +356,137 @@
   100% { transform: rotate(360deg); }
 }
 
+.spinnerInline {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Utility / converted from inline */
+.verifyButtonWrap {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.diagnosticWrap {
+  text-align: center;
+  margin-top: 24px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.diagnosticWrapTitle {
+  margin-bottom: 12px;
+  color: #666;
+}
+
+.diagnosticWrapDesc {
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+.diagnosticResultsBox {
+  margin-top: 16px;
+}
+
+.diagnosticBlock {
+  margin-top: 16px;
+}
+
+.diagnosticList {
+  margin-top: 8px;
+  padding-left: 20px;
+}
+
+.diagnosticDetails {
+  margin-top: 16px;
+}
+
+.diagnosticDetailsSummary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.diagnosticDetailsContent {
+  margin-top: 12px;
+  font-size: 13px;
+  font-family: monospace;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.diagnosticDetailItem {
+  margin-bottom: 12px;
+}
+
+.diagnosticDetailItem:last-child {
+  margin-bottom: 0;
+}
+
+.diagnosticActionBox {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.diagnosticActionBox p {
+  margin-top: 8px;
+}
+
+.diagnosticActionDanger {
+  margin-top: 8px;
+  color: #d32f2f;
+}
+
+.diagnosticActionWarning {
+  margin-top: 8px;
+  color: #f57c00;
+}
+
+.diagnosticDebugDetails {
+  margin-top: 16px;
+}
+
+.diagnosticDebugSummary {
+  cursor: pointer;
+  font-weight: bold;
+  color: #666;
+}
+
+.diagnosticDebugPre {
+  margin-top: 12px;
+  font-size: 11px;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 300px;
+}
+
+.headerTitleWithIcon,
+.sectionTitleWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badgeWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.buttonWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .formRow {

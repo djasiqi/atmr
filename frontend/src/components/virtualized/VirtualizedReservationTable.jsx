@@ -40,18 +40,11 @@ const VirtualizedReservationTable = ({
   hideEdit = false,
   hideDelete = false,
 }) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:43',message:'Props reçues',data:{reservationsProp:reservationsProp?reservationsProp.length:0,isArray:Array.isArray(reservationsProp),type:typeof reservationsProp},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
-  
   // ✅ Sécurité: Garantir que reservations est toujours un array (jamais undefined/null)
   // Cela évite les erreurs dans useMemo et dans react-window
   const reservations = useMemo(
     () => {
       const result = Array.isArray(reservationsProp) ? reservationsProp : [];
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:49',message:'Reservations après useMemo',data:{length:result.length,firstItem:result[0]?Object.keys(result[0]):null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       return result;
     },
     [reservationsProp]
@@ -178,16 +171,9 @@ const VirtualizedReservationTable = ({
   // ✅ react-window v2 passe: index, style, data (qui correspond à rowProps)
   const Row = useCallback(
     ({ index, style, data, rowProps, itemData, columnWidths: rowColumnWidths, ...rest }) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:175',message:'Row appelé',data:{index,hasData:!!data,hasRowProps:!!rowProps,rowPropsKeys:rowProps?Object.keys(rowProps):null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      
       // ✅ Protection: vérifier que toutes les props sont valides
       if (typeof index !== 'number' || index < 0) {
         console.warn('[VirtualizedReservationTable] Row: index invalide', index);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:181',message:'Row: index invalide',data:{index},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         return null;
       }
       
@@ -197,9 +183,6 @@ const VirtualizedReservationTable = ({
       // ✅ Protection: garantir que resolvedData est un objet valide
       if (!resolvedData || typeof resolvedData !== 'object' || Array.isArray(resolvedData) || resolvedData === null) {
         console.warn('[VirtualizedReservationTable] Row: data invalide', { data, rowProps, itemData, resolvedData });
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:200',message:'Row: data invalide',data:{hasData:!!data,hasRowProps:!!rowProps,hasItemData:!!itemData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         return null;
       }
       
@@ -209,15 +192,8 @@ const VirtualizedReservationTable = ({
         : {};
 
       const r = resolvedData?.reservations?.[index] || reservations[index];
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:212',message:'Row: réservation récupérée',data:{index,hasR:!!r,reservationsLength:resolvedData?.reservations?.length||reservations.length,rId:r?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
-      
+
       if (!r) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:217',message:'Row: réservation null',data:{index,reservationsLength:resolvedData?.reservations?.length||reservations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         return null;
       }
 
@@ -462,10 +438,6 @@ const VirtualizedReservationTable = ({
         {/* ✅ Protection ultime: useState garantit toujours une valeur valide, même au premier render */}
         {Array.isArray(reservations) && reservations.length > 0 ? (
           (() => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:418',message:'Rendu List avec données',data:{reservationsLength:reservations.length,isArray:Array.isArray(reservations)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-            
             // ✅ Protection ultime: vérifier que toutes les props sont valides
             const safeHeight = typeof VIRTUALIZED_HEIGHT === 'number' && !isNaN(VIRTUALIZED_HEIGHT) && VIRTUALIZED_HEIGHT > 0
               ? VIRTUALIZED_HEIGHT
@@ -473,11 +445,7 @@ const VirtualizedReservationTable = ({
             const safeItemCount = typeof reservations.length === 'number' && reservations.length >= 0
               ? reservations.length
               : 0;
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:428',message:'Props List calculées',data:{safeHeight,safeItemCount,columnWidthsLength:columnWidths.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-            // #endregion
-            
+
             // ✅ CRITIQUE: rowProps doit TOUJOURS être un objet (au minimum {})
             // Sinon useMemoizedObject appelle Object.values(undefined) => crash
             const safeItemData = itemData && typeof itemData === 'object' && !Array.isArray(itemData) && itemData !== null
@@ -512,11 +480,7 @@ const VirtualizedReservationTable = ({
               },
               rowComponent: Row,
             };
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'VirtualizedReservationTable.jsx:520',message:'Avant rendu List',data:{rowCount:listProps.rowCount,hasRowComponent:!!listProps.rowComponent,rowPropsKeys:Object.keys(listProps.rowProps)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C,D'})}).catch(()=>{});
-            // #endregion
-            
+
             return <List {...listProps} />;
           })()
         ) : (

@@ -127,7 +127,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     }));
                     setAllDrivers(driverSuggestions);
                 } catch (driversError: any) {
-                    console.error("[useRideActions] Erreur chargement tous les chauffeurs:", driversError);
+                    log.error("load all drivers failed", { error: driversError });
                 } finally {
                     setLoadingAllDrivers(false);
                 }
@@ -148,7 +148,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     error?.response?.data?.error ??
                     error?.message ??
                     "Impossible de charger les suggestions de chauffeurs.";
-                console.warn("[useRideActions] Erreur chargement suggestions:", message);
+                log.warn("load suggestions failed", { message });
                 // Ne pas fermer le modal - l'utilisateur peut toujours réassigner manuellement
                 // Charger tous les chauffeurs disponibles en fallback
                 setLoadingAllDrivers(true);
@@ -166,7 +166,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     }));
                     setAllDrivers(driverSuggestions);
                 } catch (driversError: any) {
-                    console.error("[useRideActions] Erreur chargement tous les chauffeurs:", driversError);
+                    log.error("load all drivers failed", { error: driversError });
                     // Ne pas bloquer, juste logger
                 } finally {
                     setLoadingAllDrivers(false);
@@ -197,10 +197,10 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
     // ✅ Assigner/réassigner un chauffeur
     const handleAssignDriver = useCallback(
         async (driverId: string, reason?: string) => {
-            console.log("[useRideActions] handleAssignDriver appelé:", { driverId, selectedRide: selectedRide?.id });
+            log.info("handleAssignDriver called", { driverId, selectedRideId: selectedRide?.id });
 
             if (!selectedRide) {
-                console.error("[useRideActions] Aucune course sélectionnée");
+                log.error("no ride selected", {});
                 Alert.alert("Erreur", "Aucune course sélectionnée.");
                 return;
             }
@@ -209,7 +209,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                 selectedRide.status === "assigned" ||
                 !!selectedRide.driver?.id;
 
-            console.log("[useRideActions] Assignation:", {
+            log.info("assign action", {
                 rideId: selectedRide.id,
                 driverId,
                 isAssigned,
@@ -219,7 +219,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
             setAssigning(true);
             try {
                 if (isAssigned) {
-                    console.log("[useRideActions] Réassignation de la course");
+                    log.info("reassigning ride", { rideId: selectedRide.id });
                     await reassignRide(selectedRide.id, {
                         driver_id: driverId,
                         reason: reason ?? undefined,
@@ -228,7 +228,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                         idempotency_key: Crypto.randomUUID(),
                     });
                 } else {
-                    console.log("[useRideActions] Assignation de la course");
+                    log.info("assigning ride", { rideId: selectedRide.id });
                     await assignRide(selectedRide.id, {
                         driver_id: driverId,
                         reason: reason ?? undefined,
@@ -237,7 +237,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                         idempotency_key: Crypto.randomUUID(),
                     });
                 }
-                console.log("[useRideActions] Assignation réussie");
+                log.success("assignment done", { rideId: selectedRide.id });
                 Alert.alert(
                     "Assignation effectuée",
                     "La course a été mise à jour avec succès."
@@ -245,9 +245,11 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                 handleCloseAssignModal();
                 await onSuccess?.();
             } catch (error: any) {
-                console.error("[useRideActions] Erreur lors de l'assignation:", error);
-                console.error("[useRideActions] Erreur response:", error?.response?.data);
-                console.error("[useRideActions] Erreur status:", error?.response?.status);
+                log.error("assignment failed", {
+                    error,
+                    responseData: error?.response?.data,
+                    status: error?.response?.status,
+                });
 
                 const status = error?.response?.status;
                 const errorData = error?.response?.data;

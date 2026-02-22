@@ -1,7 +1,7 @@
 // frontend/tests/components/ClientDashboard.test.jsx
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ClientDashboard from 'pages/client/Dashboard/ClientDashboard';
 import apiClient from 'utils/apiClient';
@@ -9,16 +9,19 @@ import apiClient from 'utils/apiClient';
 // Mocks
 jest.mock('utils/apiClient');
 
-// Mock react-leaflet
-jest.mock('react-leaflet', () => ({
-  MapContainer: ({ children }) => <div data-testid="map-container">{children}</div>,
-  TileLayer: () => null,
+// Mock @react-google-maps/api
+jest.mock('@react-google-maps/api', () => ({
+  GoogleMap: ({ children }) => <div data-testid="map-container">{children}</div>,
   Polyline: () => null,
   Marker: () => null,
-  Popup: () => null,
-  useMap: () => ({
-    fitBounds: jest.fn(),
-  }),
+  InfoWindow: () => null,
+}));
+
+// Mock GoogleMapsProvider
+jest.mock('components/common/GoogleMapsProvider', () => ({
+  __esModule: true,
+  default: ({ children }) => <>{children}</>,
+  useGoogleMapsLoaded: () => ({ isLoaded: true, loadError: null }),
 }));
 
 // Mock react-slick
@@ -149,7 +152,7 @@ describe('ClientDashboard', () => {
     });
   });
 
-  it('devrait afficher la carte Leaflet', async () => {
+  it('devrait afficher la carte Google Maps', async () => {
     render(<ClientDashboard />, { wrapper: createWrapper() });
 
     expect(await screen.findByTestId('map-container')).toBeInTheDocument();

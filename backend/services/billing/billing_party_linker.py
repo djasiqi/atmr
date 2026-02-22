@@ -191,12 +191,49 @@ def resolve_billing_party_for_clinic(
 ) -> BillingParty | None:
     """Résout le destinataire BillingParty configuré pour une clinique.
 
-    Retourne None si aucun mapping actif n'est configuré.
+    1. Cherche un mapping ClinicBillingPartyMapping actif (flux classique).
+    2. Fallback: auto-crée un BillingParty pour les cliniques institution
+       (bookings créés via le flux institution n'ont pas de mapping préconfiguré).
     """
     mapping = ClinicBillingPartyMapping.query.filter_by(
         company_id=company_id, clinic_company_id=clinic_company_id, is_active=True
     ).first()
-    if not mapping:
-        return None
-    return BillingParty.query.filter_by(id=mapping.billing_party_id).first()
+    if mapping:
+        return BillingParty.query.filter_by(id=mapping.billing_party_id).first()
+
+    # Fallback pour les bookings institution :
+    # clinic_company_id == company_id signifie que le client institution
+    # a company_id = l'entreprise de transport (pas une vraie clinique Company).
+    # Dans ce cas, chercher le BillingParty institution existant (external_ref=institution:X).
+    if clinic_company_id == company_id:
+        logger.info(
+            "[billing_party_linker] clinic_company_id=%s == company_id (institution case). "
+            "Looking for existing institution BillingParty.",
+            clinic_company_id,
+        )
+        # Chercher un BP institution pour cette company
+        institution_bp = BillingParty.query.filter(
+            BillingParty.company_id == company_id,
+            BillingParty.external_ref.like("institution:%"),
+            BillingParty.type == BillingPartyType.CLINIC,
+        ).first()
+        if institution_bp:
+            logger.info(
+                "[billing_party_linker] Found institution BP id=%s: %s",
+                institution_bp.id,
+                institution_bp.display_name,
+            )
+            return institution_bp
+
+    # Fallback classique: auto-créer le billing party depuis la Company clinique
+    logger.info(
+        "[billing_party_linker] No mapping found for company_id=%s, clinic_company_id=%s. "
+        "Trying auto-create fallback.",
+        company_id,
+        clinic_company_id,
+    )
+    return get_or_create_billing_party_for_clinic_company(
+        company_id=company_id,
+        clinic_company_id=clinic_company_id,
+    )
 

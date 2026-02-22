@@ -18,8 +18,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
-// Import direct de l'image par défaut
-import DefaultDriver from "../../assets/images/default-driver.png";
+const DefaultDriver = require("../../assets/images/icon.png");
 
 export default function ProfileScreen() {
   const { driver, refreshProfile, logout } = useAuth();

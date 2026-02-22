@@ -5,12 +5,103 @@ Fournit des helpers pour créer des messages d'erreur structurés avec :
 - Des détails techniques pour le debugging
 - Un code d'erreur standardisé
 - Des suggestions de résolution quand approprié
+
+## Format standard (v2)
+
+Toutes les erreurs API suivent ce format :
+
+```json
+{
+  "error": "error_code",        // Code machine (snake_case)
+  "message": "Message FR",      // Message utilisateur lisible
+  "details": {}                 // Optionnel: infos supplémentaires
+}
+```
+
+Voir docs/api/errors.md pour la liste complète des codes.
 """
 
 import traceback
 from typing import Any, Dict, Tuple
 
 from flask import current_app  # pyright: ignore[reportMissingImports]
+
+# =============================================================================
+# ✅ NOUVEAU FORMAT STANDARD (v2) - À utiliser pour toutes les nouvelles erreurs
+# =============================================================================
+
+
+def api_error(
+    error_code: str,
+    message: str,
+    status: int = 400,
+    details: Dict[str, Any] | None = None,
+) -> Tuple[Dict[str, Any], int]:
+    """Crée une réponse d'erreur API au format standard v2.
+
+    C'est le helper principal à utiliser pour toutes les erreurs.
+
+    Args:
+        error_code: Code d'erreur machine (snake_case, ex: "email_exists")
+        message: Message utilisateur lisible (FR)
+        status: Code HTTP (défaut: 400)
+        details: Détails supplémentaires (optionnel)
+
+    Returns:
+        Tuple (response_json, status_code) pour Flask
+
+    Examples:
+        # Erreur simple
+        return api_error("email_exists", "Un utilisateur avec cet email existe déjà", 409)
+
+        # Erreur avec détails
+        return api_error(
+            "password_policy_error",
+            "Le mot de passe doit contenir au moins 12 caractères",
+            400,
+            details={"min_length": 12, "provided_length": 8}
+        )
+    """
+    response: Dict[str, Any] = {
+        "error": error_code,
+        "message": message,
+    }
+
+    if details:
+        response["details"] = details
+
+    return response, status
+
+
+def auth_error(
+    error_code: str,
+    message: str,
+    status: int = 400,
+    details: Dict[str, Any] | None = None,
+) -> Tuple[Dict[str, Any], int]:
+    """Wrapper pour les erreurs d'authentification.
+
+    Utilise api_error() avec les codes définis dans constants/auth_error_codes.py.
+
+    Args:
+        error_code: Code d'erreur auth (ex: "email_exists", "invalid_credentials")
+        message: Message utilisateur lisible (FR)
+        status: Code HTTP (défaut: 400)
+        details: Détails supplémentaires (optionnel)
+
+    Returns:
+        Tuple (response_json, status_code) pour Flask
+
+    Examples:
+        return auth_error("email_exists", "Un utilisateur avec cet email existe déjà", 409)
+        return auth_error("invalid_credentials", "Email ou mot de passe incorrect", 401)
+    """
+    return api_error(error_code, message, status, details)
+
+
+# =============================================================================
+# FORMAT LEGACY (v1) - Conservé pour compatibilité, à migrer progressivement
+# =============================================================================
 
 
 def create_error_response(

@@ -1167,6 +1167,64 @@ def init_chat_socket(socketio: SocketIO):
                         "request_trace_id": trace_id,
                     },
                 )
+
+            # =====================================================================
+            # ÉTAPE 5/6: Institution users - portail institutionnel
+            # =====================================================================
+            elif user.role == UserRole.institution:
+                institution_id = getattr(user, "institution_id", None)
+                if not institution_id:
+                    logger.error(
+                        "socket_connect_error",
+                        extra={
+                            "event": "connect_error",
+                            "reason": "institution_not_found",
+                            "user_id": user.id,
+                            "ip": client_ip,
+                            "timestamp": now.isoformat(),
+                            "request_trace_id": trace_id,
+                        },
+                    )
+                    ws_metrics.on_error("institution_not_found")
+                    raise SocketConnectionRefusedError("INSTITUTION_NOT_FOUND")
+
+                room = f"institution_{institution_id}"
+                join_room(room)
+                emit("connected", {"message": f"✅ Institution connectée à {room}"})
+
+                _SID_INDEX[sid] = {
+                    "user_public_id": public_id,
+                    "user_id": user.id,
+                    "institution_id": institution_id,
+                    "ip": client_ip,
+                    "role": "institution",
+                    "device_id": device_id,
+                    "session_diag": session_diag,
+                }
+
+                # ✅ Métriques
+                ws_metrics.on_connect(user_id=user.id)
+                # ✅ Tracking rooms
+                ws_metrics.on_room_join(room)
+
+                logger.info(
+                    "socket_connect_success",
+                    extra={
+                        "event": "socket_connect_success",
+                        "sid": sid,
+                        "user_id": user.id,
+                        "user_public_id": public_id,
+                        "institution_id": institution_id,
+                        "role": "institution",
+                        "rooms": [room],
+                        "ip": client_ip,
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+
             else:
                 # #region agent log
                 log_data_role_not_authorized = {
@@ -1510,7 +1568,7 @@ def init_chat_socket(socketio: SocketIO):
                 logger.info(
                     "📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'",
                     getattr(message, "id", "N/A"),
-                    getattr(message, "content", "N/A")[:50],
+                    (getattr(message, "content", None) or "")[:50],
                 )
                 logger.info("📨 [CHAT] Message créé, ajout à la session...")
                 db.session.add(message)
@@ -2611,6 +2669,82 @@ def init_chat_socket(socketio: SocketIO):
                     {"error": "Erreur lors de la connexion à la room entreprise."},
                 )
 
+    # =========================================================================
+    # ÉTAPE 5/6: Handler join_institution pour le portail Institution
+    # =========================================================================
+    @socketio.on("join_institution")
+    def handle_join_institution(data=None):  # noqa: ARG001
+        """Permet à un utilisateur institution de rejoindre sa room.
+
+        ÉTAPE 6: Les utilisateurs institution reçoivent les events:
+        - request_sent
+        - offer_accepted
+        - request_converted
+        - booking_status_updated
+        """
+        user_id_log: int | None = None
+        institution_id_log: int | None = None
+        user_public_id_log: str | None = None
+        try:
+            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
+            sid = _get_sid()
+            sid_data = _SID_INDEX.get(sid, {})
+            user_public_id = sid_data.get("user_public_id")
+            user_role = sid_data.get("role")
+            user_public_id_log = user_public_id
+
+            if not user_public_id:
+                emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
+                return
+
+            # Vérifier que c'est un utilisateur institution
+            if user_role != "institution":
+                emit(
+                    "error",
+                    {"error": "Seuls les utilisateurs institution peuvent rejoindre cette room."},
+                )
+                return
+
+            # Récupérer user depuis public_id
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if not user:
+                emit("error", {"error": "Utilisateur introuvable."})
+                return
+
+            user_id_log = user.id
+
+            # Vérifier institution_id
+            institution_id = getattr(user, "institution_id", None)
+            if not institution_id:
+                emit("error", {"error": "Institution non associée à cet utilisateur."})
+                return
+
+            institution_id_log = institution_id
+
+            # Joindre la room institution
+            room = f"institution_{institution_id}"
+            join_room(room)
+            # ✅ Tracking rooms
+            ws_metrics.on_room_join(room)
+            emit("joined_institution", {"institution_id": institution_id, "room": room})
+            logger.info("🏥 Institution user %s joined room: %s", user.id, room)
+
+        except Exception as e:
+            _log_socketio_exception(
+                exception=e,
+                event_name="join_institution",
+                user_id=user_id_log,
+                additional_context={
+                    "user_public_id": user_public_id_log,
+                    "institution_id": institution_id_log,
+                },
+            )
+            with suppress(Exception):
+                emit(
+                    "error",
+                    {"error": "Erreur lors de la connexion à la room institution."},
+                )
+
     @socketio.on("get_driver_locations")
     def handle_get_driver_locations():
         # Variables pour logging d'erreur
@@ -2789,6 +2923,23 @@ def init_chat_socket(socketio: SocketIO):
                         )
                 except Exception as e:
                     logger.warning("Unexpected error leaving room for company: %s", e)
+
+            # ✅ ÉTAPE 5/6: Gestion déconnexion institution
+            elif role == "institution":
+                institution_id = info.get("institution_id") if info else None
+                if institution_id:
+                    institution_room = f"institution_{institution_id}"
+                    try:
+                        ws_metrics.on_room_leave(institution_room)
+                    except (ConnectionError, OSError) as e:
+                        if getattr(e, "errno", None) != ERRNO_BAD_FILE_DESCRIPTOR:
+                            logger.warning(
+                                "Error leaving room for institution (network error: %s): %s",
+                                type(e).__name__,
+                                e,
+                            )
+                    except Exception as e:
+                        logger.warning("Unexpected error leaving room for institution: %s", e)
 
             # ✅ Métriques
             try:

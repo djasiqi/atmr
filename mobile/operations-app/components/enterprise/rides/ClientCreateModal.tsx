@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Modal,
   View,
@@ -11,6 +11,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
@@ -18,19 +19,21 @@ import { createClient, CreateClientPayload } from "@/services/enterpriseDispatch
 import { AddressSelector } from "./AddressSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { AddressSuggestion } from "@/types/enterpriseDispatch";
-import { shadowPresets } from "@/styles/shadowStyles";
+import { createShadow } from "@/styles/shadowStyles";
+import { getLogger } from "@/utils/logger";
 
-const palette = {
-  modalOverlay: "rgba(21,54,43,0.75)",
-  modalBackground: "#FFFFFF",
-  modalBorder: "rgba(15,54,43,0.12)",
-  modalTitle: "#15362B",
-  modalText: "#5F7369",
-  modalButton: "#0A7F59",
-  modalButtonText: "#FFFFFF",
-  modalCancelText: "#5F7369",
-  error: "#EF4444",
-};
+const log = getLogger("ClientCreate");
+
+const BRAND = "#00796B";
+const TEXT = "#1E293B";
+const TEXT_SEC = "#64748B";
+const TEXT_MUTED = "#94A3B8";
+const BORDER = "#E2E8F0";
+const BG = "#F8FAFC";
+const CARD = "#FFFFFF";
+const DANGER = "#EF4444";
+
+type AccordionKey = "identity" | "contact" | "residence" | "billing" | "curator" | null;
 
 interface ClientCreateModalProps {
   visible: boolean;
@@ -45,782 +48,596 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [openAccordion, setOpenAccordion] = useState<AccordionKey>("identity");
 
-  // 🔍 DEBUG: Logger la prop visible (dev only)
-  useEffect(() => {
-    if (__DEV__) {
-      console.log('[ClientCreateModal] 🔍 visible prop changed:', visible);
-    }
-  }, [visible]);
-
-  // Informations personnelles
+  // --- Identité ---
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [gender, setGender] = useState<'male' | 'female' | ''>(''); // ✅ Civilité obligatoire
-  const [avsNumber, setAvsNumber] = useState(''); // ✅ Numéro AVS optionnel
-  const [phone, setPhone] = useState("");
-  const [birthDate, setBirthDate] = useState<Date | null>(null); // ✅ Date de naissance
+  const [gender, setGender] = useState<"male" | "female" | "">("");
+  const [avsNumber, setAvsNumber] = useState("");
+  const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [isInstitution, setIsInstitution] = useState(false);
   const [institutionName, setInstitutionName] = useState("");
 
-  // ✅ Priority 2: Nouveaux champs de contact et tarif
+  // --- Contact & domicile ---
+  const [phone, setPhone] = useState("");
+  const [domicileAddress, setDomicileAddress] = useState("");
+  const [domicileSuggestion, setDomicileSuggestion] = useState<AddressSuggestion | undefined>();
+  const [doorCode, setDoorCode] = useState("");
+  const [floor, setFloor] = useState("");
+  const [accessNotes, setAccessNotes] = useState("");
+  const [gpName, setGpName] = useState("");
+  const [gpPhone, setGpPhone] = useState("");
+
+  // --- Établissement de résidence ---
+  const [residenceFacility, setResidenceFacility] = useState("");
+
+  // --- Facturation ---
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [preferentialRate, setPreferentialRate] = useState("");
-
-  // Adresse de domicile
-  const [domicileAddress, setDomicileAddress] = useState("");
-  const [domicileSuggestion, setDomicileSuggestion] = useState<AddressSuggestion | undefined>();
-  const [residenceFacility, setResidenceFacility] = useState(""); // Établissement de résidence
-
-  // ✅ Adresse de facturation séparée
-  const [showBillingInfo, setShowBillingInfo] = useState(false);
+  const [showBillingAddress, setShowBillingAddress] = useState(false);
   const [billingAddress, setBillingAddress] = useState("");
   const [billingSuggestion, setBillingSuggestion] = useState<AddressSuggestion | undefined>();
+  const [defaultBilledToType, setDefaultBilledToType] = useState("");
+  const [defaultBilledToContact, setDefaultBilledToContact] = useState("");
 
-  // Fonction utilitaire pour nettoyer les adresses avec doublons
-  const cleanAddressString = (address: string): string => {
-    if (!address) return address;
-
-    // Séparer par virgules
-    const parts = address.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
-
-    if (parts.length < 3) {
-      return address; // Pas assez de parties pour nettoyer
-    }
-
-    // Normaliser les abréviations de rue pour comparaison (retirer le préfixe)
-    const normalizeStreet = (street: string): string => {
-      return street
-        .toLowerCase()
-        .replace(/^(av\.|av|ave|avenue)\s+/i, "")
-        .replace(/^(rue|r\.)\s+/i, "")
-        .replace(/^(chemin|ch\.)\s+/i, "")
-        .replace(/^(boulevard|bd|bvd|bd\.)\s+/i, "")
-        .replace(/^(place|pl\.)\s+/i, "")
-        .trim();
-    };
-
-    // Extraire le numéro d'une partie
-    const extractNumber = (part: string): string | null => {
-      const match = part.match(/(\d+[a-z]?)$/i);
-      return match ? match[1].toLowerCase() : null;
-    };
-
-    // Extraire la rue d'une partie (sans le numéro)
-    const extractStreet = (part: string): string => {
-      return part.replace(/\s+\d+[a-z]?$/i, "").trim();
-    };
-
-    // Pattern de duplication: "Rue abrégée + numéro, Rue complète, Numéro, ..."
-    // Exemple: "Av. Ernest-Pictet 9, Avenue Ernest-Pictet, 9, 1203, Genève"
-    const firstPart = parts[0]; // "Av. Ernest-Pictet 9"
-    const secondPart = parts[1]; // "Avenue Ernest-Pictet"
-    const thirdPart = parts.length > 2 ? parts[2] : null; // "9"
-
-    const firstNum = extractNumber(firstPart); // "9"
-    const thirdNum = thirdPart ? extractNumber(thirdPart) : null; // "9"
-
-    // Si la première partie a un numéro et la troisième partie est juste un numéro identique
-    if (firstNum && thirdNum && firstNum === thirdNum) {
-      const firstStreetRaw = extractStreet(firstPart); // "Av. Ernest-Pictet"
-      const firstStreet = normalizeStreet(firstStreetRaw); // "ernest-pictet"
-      const secondStreet = normalizeStreet(secondPart); // "ernest-pictet"
-
-      // Vérifier si c'est la même rue (normalisée, sans le préfixe)
-      if (firstStreet === secondStreet && firstStreet.length > 0) {
-        // Construire l'adresse nettoyée: "Rue complète + numéro, code postal, ville"
-        const fullStreet = secondPart; // Garder la version complète "Avenue Ernest-Pictet"
-        const cleanedParts = [`${fullStreet} ${firstNum}`]; // "Avenue Ernest-Pictet 9"
-
-        // Ajouter le reste (code postal, ville, etc.) en sautant le numéro dupliqué (index 2)
-        for (let i = 3; i < parts.length; i++) {
-          cleanedParts.push(parts[i]);
-        }
-
-        return cleanedParts.join(", ");
-      }
-    }
-
-    // Si pas de pattern de duplication détecté, retourner l'adresse originale
-    return address;
-  };
+  // --- Curateur ---
+  const [curatorName, setCuratorName] = useState("");
+  const [curatorEmail, setCuratorEmail] = useState("");
+  const [curatorPhone, setCuratorPhone] = useState("");
 
   useEffect(() => {
     if (!visible) {
-      // Reset form when modal closes
-      setFirstName("");
-      setLastName("");
-      setGender(''); // ✅ Reset civilité
-      setAvsNumber(''); // ✅ Reset numéro AVS
-      setPhone("");
-      setBirthDate(null); // ✅ Reset date de naissance
-      setIsInstitution(false);
-      setInstitutionName("");
-      // ✅ Priority 2: Reset nouveaux champs
-      setContactEmail("");
-      setContactPhone("");
-      setPreferentialRate("");
-      setDomicileAddress("");
-      setDomicileSuggestion(undefined);
-      setResidenceFacility("");
-      // ✅ Reset facturation séparée
-      setShowBillingInfo(false);
-      setBillingAddress("");
-      setBillingSuggestion(undefined);
-      setError(null);
+      setFirstName(""); setLastName(""); setGender(""); setAvsNumber("");
+      setBirthDate(null); setIsInstitution(false); setInstitutionName("");
+      setPhone(""); setDomicileAddress(""); setDomicileSuggestion(undefined);
+      setDoorCode(""); setFloor(""); setAccessNotes("");
+      setGpName(""); setGpPhone(""); setResidenceFacility("");
+      setContactEmail(""); setContactPhone(""); setPreferentialRate("");
+      setShowBillingAddress(false); setBillingAddress(""); setBillingSuggestion(undefined);
+      setDefaultBilledToType(""); setDefaultBilledToContact("");
+      setCuratorName(""); setCuratorEmail(""); setCuratorPhone("");
+      setError(null); setOpenAccordion("identity");
     }
   }, [visible]);
 
+  const toggleAccordion = useCallback((key: AccordionKey) => {
+    setOpenAccordion((prev) => (prev === key ? null : key));
+  }, []);
+
+  const summaryName = isInstitution
+    ? institutionName || "Client non renseigné"
+    : `${firstName} ${lastName}`.trim() || "Client non renseigné";
+
   const handleSubmit = async () => {
-    // Validation
     if (!firstName.trim() || !lastName.trim()) {
-      setError("Le prénom et le nom sont requis");
-      return;
+      setError("Le prénom et le nom sont requis"); return;
     }
-
-    // ✅ Validation civilité obligatoire
     if (!gender) {
-      setError("La civilité (Madame/Monsieur) est obligatoire");
-      return;
+      setError("La civilité (Madame/Monsieur) est obligatoire"); return;
     }
-
     if (isInstitution && !institutionName.trim()) {
-      setError("Le nom de l'institution est requis");
-      return;
+      setError("Le nom de l'institution est requis"); return;
     }
-
     if (!domicileAddress.trim()) {
-      setError("L'adresse de domicile est requise");
-      return;
+      setError("L'adresse de domicile est requise"); return;
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      // Construire l'adresse complète (déjà nettoyée lors de la sélection)
-      let fullAddress = domicileAddress;
-      if (domicileSuggestion && !domicileAddress) {
-        // Si l'adresse n'est pas encore définie, utiliser la suggestion et la nettoyer
-        fullAddress = cleanAddressString(domicileSuggestion.label || domicileSuggestion.address || "");
-      }
-
-      // ✅ Parser l'adresse avec détection d'établissement
-      // Mots-clés pour détecter les établissements
-      const establishmentKeywords = [
-        'clinique', 'hôpital', 'hopital', 'hospital', 'ems', 'foyer', 'centre',
-        'maison', 'résidence', 'residence', 'institut', 'institution',
-        'établissement', 'etablissement', 'cabinet', 'dispensaire',
-        'polyclinique', 'sanatorium', 'maison de santé', 'maison de retraite',
-      ];
-
-      const isEstablishment = (text: string): boolean => {
-        if (!text) return false;
-        const lowerText = text.toLowerCase();
-        return establishmentKeywords.some((keyword) => lowerText.includes(keyword));
-      };
-
-      // Parser l'adresse pour extraire établissement, rue, code postal et ville
-      // Format attendu: "Établissement, Rue Numéro, Code postal, Ville" ou "Rue Numéro, Code postal, Ville"
-      let establishment = "";
-      let domicileStreet = fullAddress;
-      let domicileZip = "";
-      let domicileCity = "";
-
-      // Séparer par virgules
-      const parts = fullAddress.split(',').map((p) => p.trim()).filter((p) => p.length > 0);
-
-      if (parts.length >= 3) {
-        // Vérifier si la première partie est un établissement
-        if (isEstablishment(parts[0])) {
-          establishment = parts[0];
-          // La deuxième partie est la rue (avec ou sans numéro)
-          domicileStreet = parts[1];
-          // La troisième partie peut être le code postal ou la ville
-          if (/^\d{4}$/.test(parts[2])) {
-            domicileZip = parts[2];
-            // La quatrième partie est la ville
-            if (parts.length >= 4) {
-              domicileCity = parts[3].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-            }
-          } else {
-            // La troisième partie est la ville (code postal manquant ou dans la deuxième partie)
-            domicileCity = parts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-            // Essayer d'extraire le code postal de la deuxième partie si possible
-            const zipMatch = parts[1].match(/\b(\d{4})\b/);
-            if (zipMatch) {
-              domicileZip = zipMatch[1];
-              // Retirer le code postal de la rue
-              domicileStreet = parts[1].replace(/\b\d{4}\b/, '').trim();
-            }
-          }
-        } else {
-          // Pas d'établissement : format classique "Rue Numéro, CP, Ville"
-          domicileStreet = parts[0];
-          if (/^\d{4}$/.test(parts[1])) {
-            domicileZip = parts[1];
-            if (parts.length >= 3) {
-              domicileCity = parts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-            }
-          } else {
-            // Format "Rue, CP Ville"
-            const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
-            if (zipCityMatch) {
-              domicileZip = zipCityMatch[1];
-              domicileCity = zipCityMatch[2].trim();
-            } else {
-              domicileCity = parts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-            }
-          }
-        }
-      } else if (parts.length === 2) {
-        // Format "Rue Numéro, CP Ville" ou "Établissement, Rue"
-        if (isEstablishment(parts[0])) {
-          establishment = parts[0];
-          domicileStreet = parts[1];
-          // Code postal et ville manquants dans ce format
-        } else {
-          // Format classique "Rue Numéro, CP Ville"
-          domicileStreet = parts[0];
-          const zipCityMatch = parts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
-          if (zipCityMatch) {
-            domicileZip = zipCityMatch[1];
-            domicileCity = zipCityMatch[2].trim();
-          } else {
-            domicileCity = parts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-          }
-        }
-      } else {
-        // Format simple : essayer de trouver le code postal
-        const zipMatch = fullAddress.match(/(\d{4})/);
-        if (zipMatch) {
-          const zipIndex = fullAddress.indexOf(zipMatch[1]);
-          domicileStreet = fullAddress.substring(0, zipIndex).replace(/,\s*$/, "").trim();
-          domicileZip = zipMatch[1];
-          const afterZip = fullAddress.substring(zipIndex + 4).trim();
-          const cityMatch = afterZip.match(/^,\s*([^,]+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
-          if (cityMatch) {
-            domicileCity = cityMatch[1].trim();
-          }
-        }
-      }
-
-      // Construire l'adresse complète au format frontend: "Rue, Code postal, Ville"
-      const addressComplete = domicileZip && domicileCity
-        ? `${domicileStreet}, ${domicileZip}, ${domicileCity}`.trim()
-        : fullAddress;
-
-      // ✅ Construire l'adresse de facturation (séparée si checkbox activée)
-      let billingAddressComplete = addressComplete;
-      let billingLat = domicileSuggestion?.lat || null;
-      let billingLon = domicileSuggestion?.lon || null;
-
-      if (showBillingInfo && billingAddress.trim()) {
-        // Parser l'adresse de facturation séparée
-        let billingStreet = billingAddress;
-        let billingZip = "";
-        let billingCity = "";
-
-        const billingParts = billingAddress.split(',').map((p) => p.trim()).filter((p) => p.length > 0);
-
-        if (billingParts.length >= 3) {
-          billingStreet = billingParts[0];
-          if (/^\d{4}$/.test(billingParts[1])) {
-            billingZip = billingParts[1];
-            billingCity = billingParts[2].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-          } else {
-            billingCity = billingParts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-            const zipMatch = billingParts[0].match(/\b(\d{4})\b/);
-            if (zipMatch) {
-              billingZip = zipMatch[1];
-              billingStreet = billingParts[0].replace(/\b\d{4}\b/, '').trim();
-            }
-          }
-        } else if (billingParts.length === 2) {
-          billingStreet = billingParts[0];
-          const zipCityMatch = billingParts[1].match(/^(\d{4})\s+(.+?)(?:\s*,\s*(?:Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia))?$/i);
-          if (zipCityMatch) {
-            billingZip = zipCityMatch[1];
-            billingCity = zipCityMatch[2].trim();
-          } else {
-            billingCity = billingParts[1].replace(/\s*(Suisse|Switzerland|France|Deutschland|Germany|Italy|Italia)\s*$/i, '').trim();
-          }
-        }
-
-        billingAddressComplete = billingZip && billingCity
-          ? `${billingStreet}, ${billingZip}, ${billingCity}`.trim()
-          : billingAddress;
-
-        // Utiliser les coordonnées GPS de la suggestion de facturation
-        billingLat = billingSuggestion?.lat || null;
-        billingLon = billingSuggestion?.lon || null;
-      }
-
-      // ✅ Validation explicite de gender avant envoi
-      if (!gender || (gender !== 'male' && gender !== 'female')) {
-        setError("La civilité (Madame/Monsieur) est obligatoire");
-        return;
-      }
-
       const payload: CreateClientPayload = {
         client_type: "PRIVATE",
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        // ✅ Civilité obligatoire - validation stricte
-        gender: gender as 'male' | 'female',
+        gender: gender as "male" | "female",
         phone: phone.trim() || undefined,
-        // ✅ Numéro AVS optionnel
         avs_number: avsNumber.trim() || undefined,
-        // ✅ Date de naissance (format YYYY-MM-DD)
         birth_date: birthDate ? dayjs(birthDate).format("YYYY-MM-DD") : undefined,
         is_institution: isInstitution,
         institution_name: isInstitution ? institutionName.trim() : undefined,
-        // ✅ Établissement de résidence si détecté
-        residence_facility: establishment || undefined,
-        // ✅ Priority 2: Nouveaux champs de contact et tarif
+        address: domicileAddress,
+        domicile_lat: domicileSuggestion?.lat || null,
+        domicile_lon: domicileSuggestion?.lon || null,
+        residence_facility: residenceFacility.trim() || undefined,
         contact_email: contactEmail.trim() || undefined,
         contact_phone: contactPhone.trim() || undefined,
         preferential_rate: preferentialRate ? parseFloat(preferentialRate) : undefined,
-        // Adresse complète (comme dans le frontend)
-        address: addressComplete,
-        // Adresse de domicile structurée
-        domicile_address: domicileStreet || undefined,
-        domicile_zip: domicileZip || undefined,
-        domicile_city: domicileCity || undefined,
-        // Coordonnées GPS du domicile
-        domicile_lat: domicileSuggestion?.lat || null,
-        domicile_lon: domicileSuggestion?.lon || null,
-        // ✅ Adresse de facturation (séparée si checkbox activée)
-        billing_address: billingAddressComplete,
-        billing_lat: billingLat,
-        billing_lon: billingLon,
+        billing_address: showBillingAddress && billingAddress.trim() ? billingAddress.trim() : undefined,
+        billing_lat: showBillingAddress ? (billingSuggestion?.lat || null) : null,
+        billing_lon: showBillingAddress ? (billingSuggestion?.lon || null) : null,
+        door_code: doorCode.trim() || undefined,
+        floor: floor.trim() || undefined,
+        access_notes: accessNotes.trim() || undefined,
+        gp_name: gpName.trim() || undefined,
+        gp_phone: gpPhone.trim() || undefined,
+        default_billed_to_type: defaultBilledToType || undefined,
+        default_billed_to_contact: defaultBilledToContact.trim() || undefined,
       };
 
-      // ✅ Log détaillé pour diagnostic (toujours activé)
-      console.log("[ClientCreateModal] CREATE CLIENT PAYLOAD", JSON.stringify(payload, null, 2));
-      console.log("[ClientCreateModal] Gender value:", gender, "Type:", typeof gender);
-      console.log("[ClientCreateModal] Adresse parsée:", {
-        fullAddress,
-        domicileStreet,
-        domicileZip,
-        domicileCity,
-        addressComplete,
-      });
-
+      log.info("create client payload", { payload, gender });
       const newClient = await createClient(payload);
-
-      // Appeler onSuccess immédiatement avec toutes les données du client
-      onSuccess({
-        id: newClient.id,
-        name: newClient.name,
-      });
-
-      Alert.alert(
-        "Client créé",
-        `Le client ${newClient.name} a été créé avec succès.`,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              onClose();
-            },
-          },
-        ]
-      );
+      onSuccess({ id: newClient.id, name: newClient.name });
+      Alert.alert("Client créé", `Le client ${newClient.name} a été créé avec succès.`, [
+        { text: "OK", onPress: onClose },
+      ]);
     } catch (err: any) {
-      console.error("[ClientCreateModal] Erreur complète:", err);
-      console.error("[ClientCreateModal] Response data:", err?.response?.data);
-      console.error("[ClientCreateModal] Response status:", err?.response?.status);
-
-      // Essayer d'extraire les messages d'erreur de validation
-      let errorMessage = "Erreur lors de la création du client";
-
-      if (err?.response?.data) {
-        const data = err.response.data;
-
-        // Si c'est une erreur de validation Marshmallow
-        if (data.errors) {
-          const validationErrors = Object.entries(data.errors)
-            .map(([field, messages]: [string, any]) => {
-              const msg = Array.isArray(messages) ? messages.join(", ") : String(messages);
-              return `${field}: ${msg}`;
-            })
-            .join("\n");
-          errorMessage = `Erreurs de validation:\n${validationErrors}`;
-        } else if (data.error) {
-          errorMessage = data.error;
-        } else if (data.message) {
-          errorMessage = data.message;
-        } else if (typeof data === "string") {
-          errorMessage = data;
-        }
+      log.error("create client failed", { error: err, responseData: err?.response?.data });
+      let msg = "Erreur lors de la création du client";
+      if (err?.response?.data?.errors) {
+        msg = Object.entries(err.response.data.errors)
+          .map(([f, m]: [string, any]) => `${f}: ${Array.isArray(m) ? m.join(", ") : m}`)
+          .join("\n");
+      } else if (err?.response?.data?.error) {
+        msg = err.response.data.error;
       } else if (err?.message) {
-        errorMessage = err.message;
+        msg = err.message;
       }
-
-      setError(errorMessage);
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  const renderAccordion = (
+    key: AccordionKey,
+    icon: keyof typeof Ionicons.glyphMap,
+    title: string,
+    children: React.ReactNode,
+  ) => {
+    const isOpen = openAccordion === key;
+    return (
+      <View style={s.accordion}>
+        <TouchableOpacity
+          style={s.accordionHeader}
+          onPress={() => toggleAccordion(key)}
+          activeOpacity={0.7}
+        >
+          <View style={s.accordionIconWrap}>
+            <Ionicons name={icon} size={16} color={BRAND} />
+          </View>
+          <Text style={s.accordionTitle}>{title}</Text>
+          <Ionicons
+            name={isOpen ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={TEXT_SEC}
+          />
+        </TouchableOpacity>
+        {isOpen && <View style={s.accordionBody}>{children}</View>}
+      </View>
+    );
+  };
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.modalOverlay}
+        style={s.root}
       >
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>
+        <Pressable style={s.overlay} onPress={onClose} />
+        <View style={s.sheet}>
+          <View style={s.handle} />
+
+          {/* Header */}
+          <View style={s.header}>
+            <View style={s.headerIconWrap}>
+              <Ionicons name="person-add-outline" size={20} color={BRAND} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.headerTitle}>
                 {isInstitution ? "Nouvelle institution" : "Nouveau client"}
               </Text>
-              <Text style={styles.modalSubtitle}>
-                Remplissez les informations requises
+              <Text style={s.headerSub}>
+                Renseignez l'identité, l'adresse et la facturation.
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={palette.modalText} />
+            <TouchableOpacity onPress={onClose} style={s.closeBtn}>
+              <Ionicons name="close" size={22} color={TEXT_SEC} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.scrollContainer}>
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={styles.modalContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              {error && (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={18} color={palette.error} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
+          <ScrollView
+            style={s.scroll}
+            contentContainerStyle={s.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+          >
+            {error && (
+              <View style={s.errorBanner}>
+                <Ionicons name="alert-circle" size={16} color={DANGER} />
+                <Text style={s.errorText}>{error}</Text>
+              </View>
+            )}
 
-              {/* Type de client */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Type de client</Text>
+            {/* ====== 1. Identité ====== */}
+            {renderAccordion("identity", "person-outline", "Identité du client", (
+              <>
+                {/* Institution toggle */}
                 <TouchableOpacity
-                  style={styles.checkboxRow}
+                  style={s.checkboxRow}
                   onPress={() => setIsInstitution(!isInstitution)}
                 >
-                  <View style={styles.checkbox}>
-                    {isInstitution && (
-                      <Ionicons name="checkmark" size={16} color={palette.modalButton} />
-                    )}
+                  <View style={[s.checkbox, isInstitution && s.checkboxActive]}>
+                    {isInstitution && <Ionicons name="checkmark" size={14} color="#FFF" />}
                   </View>
-                  <Text style={styles.checkboxLabel}>
-                    Est une institution (clinique, hôpital, etc.)
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.checkboxLabel}>Est une institution</Text>
+                    <Text style={s.checkboxHint}>Clinique, hôpital, centre médical, etc.</Text>
+                  </View>
                 </TouchableOpacity>
 
                 {isInstitution && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Nom de l'institution *</Text>
-                    <View style={styles.textInputContainer}>
-                      <Ionicons name="business-outline" size={18} color={palette.modalButton} />
+                  <View style={s.field}>
+                    <Text style={s.label}>Nom de l'institution <Text style={s.req}>*</Text></Text>
+                    <View style={s.inputRow}>
+                      <Ionicons name="business-outline" size={16} color={TEXT_MUTED} />
                       <TextInput
-                        style={styles.textInput}
+                        style={s.input}
                         value={institutionName}
                         onChangeText={setInstitutionName}
                         placeholder="Ex: Clinique du Léman"
-                        placeholderTextColor={palette.modalText}
+                        placeholderTextColor={TEXT_MUTED}
                       />
                     </View>
                   </View>
                 )}
-              </View>
 
-              {/* Informations personnelles */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  {isInstitution
-                    ? "Contact principal"
-                    : "Informations personnelles"}
-                </Text>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Prénom *</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="person-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder="Prénom"
-                      placeholderTextColor={palette.modalText}
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Nom *</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="person-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder="Nom"
-                      placeholderTextColor={palette.modalText}
-                    />
-                  </View>
-                </View>
-
-                {/* ✅ Civilité obligatoire */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Civilité *</Text>
-                  <View style={styles.genderButtonGroup}>
+                {/* Civilité */}
+                <View style={s.field}>
+                  <Text style={s.label}>Civilité <Text style={s.req}>*</Text></Text>
+                  <View style={s.genderRow}>
                     <TouchableOpacity
-                      style={[
-                        styles.genderButton,
-                        gender === 'male' && styles.genderButtonActive
-                      ]}
-                      onPress={() => setGender('male')}
+                      style={[s.genderBtn, gender === "male" && s.genderBtnActive]}
+                      onPress={() => setGender("male")}
                     >
-                      <Ionicons
-                        name="male"
-                        size={18}
-                        color={gender === 'male' ? '#FFFFFF' : palette.modalButton}
-                      />
-                      <Text style={[
-                        styles.genderButtonText,
-                        gender === 'male' && styles.genderButtonTextActive
-                      ]}>
-                        Monsieur
-                      </Text>
+                      <Ionicons name="male" size={16} color={gender === "male" ? "#FFF" : BRAND} />
+                      <Text style={[s.genderText, gender === "male" && s.genderTextActive]}>Monsieur</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[
-                        styles.genderButton,
-                        gender === 'female' && styles.genderButtonActive
-                      ]}
-                      onPress={() => setGender('female')}
+                      style={[s.genderBtn, gender === "female" && s.genderBtnActive]}
+                      onPress={() => setGender("female")}
                     >
-                      <Ionicons
-                        name="female"
-                        size={18}
-                        color={gender === 'female' ? '#FFFFFF' : palette.modalButton}
-                      />
-                      <Text style={[
-                        styles.genderButtonText,
-                        gender === 'female' && styles.genderButtonTextActive
-                      ]}>
-                        Madame
-                      </Text>
+                      <Ionicons name="female" size={16} color={gender === "female" ? "#FFF" : BRAND} />
+                      <Text style={[s.genderText, gender === "female" && s.genderTextActive]}>Madame</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* ✅ Numéro AVS optionnel */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Numéro AVS</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="card-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={avsNumber}
-                      onChangeText={setAvsNumber}
-                      placeholder="756.XXXX.XXXX.XX"
-                      placeholderTextColor={palette.modalText}
-                      keyboardType="numbers-and-punctuation"
-                    />
+                {/* Prénom / Nom */}
+                <View style={s.rowTwo}>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Prénom <Text style={s.req}>*</Text></Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={firstName} onChangeText={setFirstName} placeholder="Prénom" placeholderTextColor={TEXT_MUTED} />
+                    </View>
+                  </View>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Nom <Text style={s.req}>*</Text></Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={lastName} onChangeText={setLastName} placeholder="Nom" placeholderTextColor={TEXT_MUTED} />
+                    </View>
                   </View>
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Téléphone</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="call-outline" size={18} color={palette.modalButton} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={phone}
-                      onChangeText={setPhone}
-                      placeholder="+41 22 123 45 67"
-                      placeholderTextColor={palette.modalText}
-                      keyboardType="phone-pad"
-                    />
-                  </View>
-                </View>
-
-                {/* ✅ Date de naissance (si pas institution) */}
+                {/* Date de naissance */}
                 {!isInstitution && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date de naissance</Text>
+                  <View style={s.field}>
+                    <Text style={s.label}>Date de naissance</Text>
                     <TimeDatePicker
                       label="Date de naissance"
                       value={birthDate}
                       onChange={setBirthDate}
                       mode="date"
-                      maximumDate={new Date()} // ✅ Limite à aujourd'hui (pas de dates futures)
-                      minimumDate={new Date(1900, 0, 1)} // ✅ Permet les dates à partir de 1900
+                      maximumDate={new Date()}
+                      minimumDate={new Date(1900, 0, 1)}
                     />
                   </View>
                 )}
-              </View>
 
-              {/* ✅ Priority 2: Coordonnées de facturation (optionnelles) */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>📋 Coordonnées de facturation</Text>
-                <Text style={styles.sectionDescription}>
-                  Informations optionnelles pour la facturation
-                </Text>
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Email de contact</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="mail-outline" size={18} color={palette.modalButton} />
+                {/* Numéro AVS */}
+                <View style={s.field}>
+                  <Text style={s.label}>Numéro AVS</Text>
+                  <View style={s.inputRow}>
+                    <Ionicons name="card-outline" size={16} color={TEXT_MUTED} />
                     <TextInput
-                      style={styles.textInput}
-                      value={contactEmail}
-                      onChangeText={setContactEmail}
-                      placeholder="facturation@example.com"
-                      placeholderTextColor={palette.modalText}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
+                      style={s.input}
+                      value={avsNumber}
+                      onChangeText={setAvsNumber}
+                      placeholder="756.XXXX.XXXX.XX"
+                      placeholderTextColor={TEXT_MUTED}
+                      keyboardType="numbers-and-punctuation"
                     />
                   </View>
                 </View>
+              </>
+            ))}
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Téléphone de contact</Text>
-                  <View style={styles.textInputContainer}>
-                    <Ionicons name="call-outline" size={18} color={palette.modalButton} />
+            {/* ====== 2. Contact et domicile ====== */}
+            {renderAccordion("contact", "home-outline", "Contact et domicile", (
+              <>
+                <View style={s.field}>
+                  <Text style={s.label}>Téléphone</Text>
+                  <View style={s.inputRow}>
+                    <Ionicons name="call-outline" size={16} color={TEXT_MUTED} />
                     <TextInput
-                      style={styles.textInput}
-                      value={contactPhone}
-                      onChangeText={setContactPhone}
+                      style={s.input}
+                      value={phone}
+                      onChangeText={setPhone}
                       placeholder="+41 22 123 45 67"
-                      placeholderTextColor={palette.modalText}
+                      placeholderTextColor={TEXT_MUTED}
                       keyboardType="phone-pad"
                     />
                   </View>
                 </View>
 
-                {!isInstitution && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>💰 Tarif préférentiel (CHF)</Text>
-                    <View style={styles.textInputContainer}>
-                      <Ionicons name="cash-outline" size={18} color={palette.modalButton} />
+                <View style={s.field}>
+                  <Text style={s.label}>Adresse de domicile <Text style={s.req}>*</Text></Text>
+                  <AddressSelector
+                    label=""
+                    value={domicileAddress}
+                    onChange={(address, suggestion) => {
+                      setDomicileAddress(address);
+                      setDomicileSuggestion(suggestion);
+                    }}
+                    icon="location-outline"
+                  />
+                </View>
+
+                <View style={s.rowTwo}>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Code porte</Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={doorCode} onChangeText={setDoorCode} placeholder="Ex: 4521" placeholderTextColor={TEXT_MUTED} />
+                    </View>
+                  </View>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Étage</Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={floor} onChangeText={setFloor} placeholder="Ex: 2e" placeholderTextColor={TEXT_MUTED} />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={s.field}>
+                  <Text style={s.label}>Notes d'accès</Text>
+                  <View style={[s.inputRow, { alignItems: "flex-start", minHeight: 60 }]}>
+                    <TextInput
+                      style={[s.input, { textAlignVertical: "top" }]}
+                      value={accessNotes}
+                      onChangeText={setAccessNotes}
+                      placeholder="Ex: appeler avant, sonnette à gauche..."
+                      placeholderTextColor={TEXT_MUTED}
+                      multiline
+                      numberOfLines={2}
+                    />
+                  </View>
+                </View>
+
+                <View style={s.rowTwo}>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Médecin traitant</Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={gpName} onChangeText={setGpName} placeholder="Nom du médecin" placeholderTextColor={TEXT_MUTED} />
+                    </View>
+                  </View>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Tél. médecin</Text>
+                    <View style={s.inputRow}>
+                      <TextInput style={s.input} value={gpPhone} onChangeText={setGpPhone} placeholder="+41..." placeholderTextColor={TEXT_MUTED} keyboardType="phone-pad" />
+                    </View>
+                  </View>
+                </View>
+              </>
+            ))}
+
+            {/* ====== 3. Établissement de résidence ====== */}
+            {renderAccordion("residence", "business-outline", "Établissement de résidence", (
+              <View style={s.field}>
+                <Text style={s.label}>Établissement (EMS, foyer, etc.)</Text>
+                <View style={s.inputRow}>
+                  <Ionicons name="business-outline" size={16} color={TEXT_MUTED} />
+                  <TextInput
+                    style={s.input}
+                    value={residenceFacility}
+                    onChangeText={setResidenceFacility}
+                    placeholder="Ex: EMS Maison de Vessy..."
+                    placeholderTextColor={TEXT_MUTED}
+                  />
+                </View>
+                <Text style={s.hint}>Indiquer si le client réside en EMS, foyer ou autre.</Text>
+              </View>
+            ))}
+
+            {/* ====== 4. Facturation ====== */}
+            {renderAccordion("billing", "receipt-outline", "Facturation", (
+              <>
+                <View style={s.rowTwo}>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Email facturation</Text>
+                    <View style={s.inputRow}>
+                      <Ionicons name="mail-outline" size={16} color={TEXT_MUTED} />
                       <TextInput
-                        style={styles.textInput}
-                        value={preferentialRate}
-                        onChangeText={setPreferentialRate}
-                        placeholder="Ex: 45.00"
-                        placeholderTextColor={palette.modalText}
-                        keyboardType="decimal-pad"
+                        style={s.input}
+                        value={contactEmail}
+                        onChangeText={setContactEmail}
+                        placeholder="facturation@..."
+                        placeholderTextColor={TEXT_MUTED}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
                       />
                     </View>
-                    <Text style={styles.inputHint}>
-                      Prix d'un trajet simple. Laisser vide pour le tarif standard.
-                    </Text>
                   </View>
-                )}
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Tél. contact</Text>
+                    <View style={s.inputRow}>
+                      <Ionicons name="call-outline" size={16} color={TEXT_MUTED} />
+                      <TextInput
+                        style={s.input}
+                        value={contactPhone}
+                        onChangeText={setContactPhone}
+                        placeholder="+41..."
+                        placeholderTextColor={TEXT_MUTED}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                  </View>
+                </View>
 
-                {/* ✅ Checkbox pour adresse de facturation séparée */}
+                {/* Adresse de facturation différente */}
                 <TouchableOpacity
-                  style={styles.checkboxRow}
-                  onPress={() => setShowBillingInfo(!showBillingInfo)}
+                  style={s.checkboxRow}
+                  onPress={() => setShowBillingAddress(!showBillingAddress)}
                 >
-                  <View style={styles.checkbox}>
-                    {showBillingInfo && (
-                      <Ionicons name="checkmark" size={16} color={palette.modalButton} />
-                    )}
+                  <View style={[s.checkbox, showBillingAddress && s.checkboxActive]}>
+                    {showBillingAddress && <Ionicons name="checkmark" size={14} color="#FFF" />}
                   </View>
-                  <Text style={styles.checkboxLabel}>
-                    <Text style={{ fontWeight: "700" }}>Adresse de facturation différente</Text>
-                    <Text style={{ fontSize: 13, color: palette.modalText }}>
-                      {"\n"}Si différente de l'adresse de domicile
-                    </Text>
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.checkboxLabel}>Adresse de facturation différente</Text>
+                    <Text style={s.checkboxHint}>Par défaut, la facturation utilise le domicile</Text>
+                  </View>
                 </TouchableOpacity>
 
-                {/* ✅ Section adresse de facturation (si checkbox activée) */}
-                {showBillingInfo && (
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Adresse de facturation</Text>
+                {showBillingAddress && (
+                  <View style={s.field}>
+                    <Text style={s.label}>Adresse de facturation</Text>
                     <AddressSelector
-                      label="Adresse de facturation"
+                      label=""
                       value={billingAddress}
                       onChange={(address, suggestion) => {
-                        let cleanedAddress = address;
-                        if (suggestion?.label) {
-                          cleanedAddress = cleanAddressString(suggestion.label);
-                        } else if (address) {
-                          cleanedAddress = cleanAddressString(address);
-                        }
-                        setBillingAddress(cleanedAddress);
+                        setBillingAddress(address);
                         setBillingSuggestion(suggestion);
                       }}
                       icon="receipt-outline"
                     />
-                    <Text style={styles.inputHint}>
-                      💡 Si différente de l'adresse de domicile
-                    </Text>
                   </View>
                 )}
-              </View>
 
-              {/* Adresse de domicile */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  {isInstitution
-                    ? "📍 Adresse de l'institution"
-                    : "🏠 Adresse de domicile"}
+                {!isInstitution && (
+                  <View style={s.field}>
+                    <Text style={s.label}>Tarif préférentiel (CHF)</Text>
+                    <View style={s.inputRow}>
+                      <Ionicons name="cash-outline" size={16} color={TEXT_MUTED} />
+                      <TextInput
+                        style={s.input}
+                        value={preferentialRate}
+                        onChangeText={setPreferentialRate}
+                        placeholder="Ex: 45.00"
+                        placeholderTextColor={TEXT_MUTED}
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
+                    <Text style={s.hint}>Prix d'un trajet simple. Vide = tarif standard.</Text>
+                  </View>
+                )}
+              </>
+            ))}
+
+            {/* ====== 5. Curateur / Tiers payeur ====== */}
+            {!isInstitution && renderAccordion("curator", "briefcase-outline", "Curateur / tiers payeur", (
+              <>
+                <View style={s.field}>
+                  <Text style={s.label}>Nom du curateur</Text>
+                  <View style={s.inputRow}>
+                    <Ionicons name="person-outline" size={16} color={TEXT_MUTED} />
+                    <TextInput
+                      style={s.input}
+                      value={curatorName}
+                      onChangeText={setCuratorName}
+                      placeholder="Ex: Curateur A"
+                      placeholderTextColor={TEXT_MUTED}
+                    />
+                  </View>
+                </View>
+                <View style={s.rowTwo}>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Email curateur</Text>
+                    <View style={s.inputRow}>
+                      <TextInput
+                        style={s.input}
+                        value={curatorEmail}
+                        onChangeText={setCuratorEmail}
+                        placeholder="curateur@..."
+                        placeholderTextColor={TEXT_MUTED}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+                  <View style={[s.field, { flex: 1 }]}>
+                    <Text style={s.label}>Tél. curateur</Text>
+                    <View style={s.inputRow}>
+                      <TextInput
+                        style={s.input}
+                        value={curatorPhone}
+                        onChangeText={setCuratorPhone}
+                        placeholder="+41..."
+                        placeholderTextColor={TEXT_MUTED}
+                        keyboardType="phone-pad"
+                      />
+                    </View>
+                  </View>
+                </View>
+              </>
+            ))}
+
+            {/* ====== Résumé ====== */}
+            <View style={s.summaryCard}>
+              <Text style={s.summaryTitle}>Résumé</Text>
+              <View style={s.summaryRow}>
+                <Text style={s.summaryLabel}>Client</Text>
+                <Text style={[s.summaryValue, summaryName === "Client non renseigné" && s.summaryEmpty]}>
+                  {summaryName}
                 </Text>
-                <AddressSelector
-                  label="Adresse complète *"
-                  value={domicileAddress}
-                  onChange={(address, suggestion) => {
-                    // Nettoyer l'adresse dès la sélection pour éviter les doublons
-                    let cleanedAddress = address;
-                    if (suggestion?.label) {
-                      cleanedAddress = cleanAddressString(suggestion.label);
-                    } else if (address) {
-                      cleanedAddress = cleanAddressString(address);
-                    }
-                    setDomicileAddress(cleanedAddress);
-                    setDomicileSuggestion(suggestion);
-                  }}
-                  icon="location-outline"
-                />
               </View>
-            </ScrollView>
-          </View>
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity
-              style={styles.modalCancel}
-              onPress={onClose}
-              disabled={loading}
-            >
-              <Text style={styles.modalCancelText}>Annuler</Text>
-            </TouchableOpacity>
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity
-              style={[
-                styles.modalSave,
-                loading && styles.modalSaveDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Text style={styles.modalSaveText}>Créer</Text>
-                  <Ionicons name="checkmark" size={16} color="#FFFFFF" />
-                </>
+              <View style={s.summaryRow}>
+                <Text style={s.summaryLabel}>Adresse</Text>
+                <Text style={[s.summaryValue, !domicileAddress && s.summaryEmpty]} numberOfLines={1}>
+                  {domicileAddress || "Adresse non renseignée"}
+                </Text>
+              </View>
+              <View style={s.summaryRow}>
+                <Text style={s.summaryLabel}>Facturation</Text>
+                <Text style={[s.summaryValue, !(showBillingAddress ? billingAddress : domicileAddress) && s.summaryEmpty]} numberOfLines={1}>
+                  {(showBillingAddress && billingAddress ? billingAddress : domicileAddress) || "Adresse non renseignée"}
+                </Text>
+              </View>
+              {curatorName.trim() !== "" && (
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Curateur</Text>
+                  <Text style={s.summaryValue}>{curatorName}</Text>
+                </View>
               )}
-            </TouchableOpacity>
+            </View>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={s.footer}>
+            <Text style={s.footerSummary} numberOfLines={1}>{summaryName}</Text>
+            <View style={s.footerActions}>
+              <TouchableOpacity style={s.footerCancel} onPress={onClose} disabled={loading}>
+                <Text style={s.footerCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.footerSubmit, loading && s.footerSubmitDisabled]}
+                onPress={handleSubmit}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark" size={16} color="#FFF" />
+                    <Text style={s.footerSubmitText}>Créer le client</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -828,204 +645,318 @@ export const ClientCreateModal: React.FC<ClientCreateModalProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
+const sheetShadow = createShadow({
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: -4 },
+  shadowOpacity: 0.12,
+  shadowRadius: 24,
+  elevation: 12,
+});
+
+const s = StyleSheet.create({
+  root: {
     flex: 1,
-    backgroundColor: palette.modalOverlay,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    justifyContent: "flex-end" as const,
   },
-  modalCard: {
-    width: "100%",
-    maxWidth: 500,
-    height: "90%",
-    backgroundColor: palette.modalBackground,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: palette.modalBorder,
-    ...shadowPresets.large, // ✅ Compatible web/native
-    flexDirection: "column",
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  sheet: {
+    backgroundColor: CARD,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: "92%",
     overflow: "hidden",
+    ...sheetShadow,
   },
-  modalHeader: {
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D1D5DB",
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    padding: 24,
-    paddingBottom: 16,
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(15,54,43,0.08)",
+    borderBottomColor: BORDER,
   },
-  modalTitle: {
-    color: palette.modalTitle,
-    fontSize: 20,
+  headerIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 16,
     fontWeight: "700",
+    color: TEXT,
   },
-  modalSubtitle: {
-    color: palette.modalText,
-    fontSize: 13,
-    marginTop: 4,
+  headerSub: {
+    fontSize: 12,
+    color: TEXT_SEC,
+    marginTop: 2,
   },
-  closeButton: {
+  closeBtn: {
     padding: 4,
   },
-  scrollContainer: {
+  scroll: {
     flex: 1,
   },
-  modalScroll: {
-    flex: 1,
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
   },
-  modalContent: {
-    padding: 24,
-  },
-  errorContainer: {
+  errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(239,68,68,0.1)",
+    backgroundColor: "rgba(239,68,68,0.08)",
     padding: 12,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.2)",
+    borderColor: "rgba(239,68,68,0.15)",
   },
   errorText: {
     flex: 1,
-    color: palette.error,
-    fontSize: 14,
-  },
-  section: {
-    marginBottom: 24,
-    gap: 16,
-  },
-  sectionTitle: {
-    color: palette.modalTitle,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sectionDescription: {
-    color: palette.modalText,
+    color: DANGER,
     fontSize: 13,
-    marginTop: -8,
-    marginBottom: 8,
   },
-  inputGroup: {
-    gap: 8,
+
+  // --- Accordion ---
+  accordion: {
+    backgroundColor: CARD,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 10,
+    overflow: "hidden",
   },
-  inputLabel: {
-    color: palette.modalTitle,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  inputHint: {
-    color: palette.modalText,
-    fontSize: 12,
-    marginTop: -4,
-    fontStyle: "italic",
-  },
-  textInputContainer: {
+  accordionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: palette.modalBackground,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: palette.modalBorder,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
     gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
   },
-  textInput: {
+  accordionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0,121,107,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  accordionTitle: {
     flex: 1,
-    color: palette.modalTitle,
-    fontSize: 15,
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT,
+  },
+  accordionBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingTop: 12,
+  },
+
+  // --- Fields ---
+  field: {
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: TEXT,
+    marginBottom: 6,
+  },
+  req: {
+    color: DANGER,
+    fontWeight: "700",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: BG,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    color: TEXT,
+    fontSize: 14,
     padding: 0,
   },
+  hint: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginTop: 4,
+    fontStyle: "italic",
+  },
+  rowTwo: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  // --- Gender buttons ---
+  genderRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  genderBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    backgroundColor: BG,
+  },
+  genderBtnActive: {
+    backgroundColor: BRAND,
+    borderColor: BRAND,
+  },
+  genderText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT,
+  },
+  genderTextActive: {
+    color: "#FFFFFF",
+  },
+
+  // --- Checkbox ---
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     paddingVertical: 8,
+    marginBottom: 8,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: palette.modalBorder,
-    backgroundColor: palette.modalBackground,
+    borderColor: BORDER,
+    backgroundColor: BG,
     alignItems: "center",
     justifyContent: "center",
   },
+  checkboxActive: {
+    backgroundColor: BRAND,
+    borderColor: BRAND,
+  },
   checkboxLabel: {
-    color: palette.modalTitle,
-    fontSize: 15,
-    flex: 1,
-  },
-  // ✅ Styles pour les boutons de civilité
-  genderButtonGroup: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  genderButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: palette.modalBorder,
-    backgroundColor: palette.modalBackground,
-  },
-  genderButtonActive: {
-    backgroundColor: palette.modalButton,
-    borderColor: palette.modalButton,
-  },
-  genderButtonText: {
-    color: palette.modalTitle,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  genderButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  modalActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(15,54,43,0.08)",
-  },
-  modalCancel: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  modalCancelText: {
-    color: palette.modalCancelText,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
+    color: TEXT,
   },
-  modalSave: {
+  checkboxHint: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginTop: 1,
+  },
+
+  // --- Summary card ---
+  summaryCard: {
+    backgroundColor: BG,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 14,
+    marginTop: 4,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: TEXT,
+    marginBottom: 10,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: TEXT_SEC,
+  },
+  summaryValue: {
+    fontSize: 12,
+    color: TEXT,
+    maxWidth: "60%",
+    textAlign: "right",
+  },
+  summaryEmpty: {
+    color: TEXT_MUTED,
+    fontStyle: "italic",
+  },
+
+  // --- Footer ---
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === "ios" ? 30 : 16,
+  },
+  footerSummary: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 8,
+  },
+  footerActions: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  footerCancel: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  footerCancelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: TEXT_SEC,
+  },
+  footerSubmit: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    backgroundColor: palette.modalButton,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 14,
+    backgroundColor: BRAND,
+    paddingVertical: 13,
+    borderRadius: 12,
   },
-  modalSaveDisabled: {
-    backgroundColor: "rgba(10,127,89,0.4)",
+  footerSubmitDisabled: {
+    opacity: 0.5,
   },
-  modalSaveText: {
-    color: palette.modalButtonText,
-    fontSize: 15,
+  footerSubmitText: {
+    fontSize: 14,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
 });
-

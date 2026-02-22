@@ -4,8 +4,11 @@
  * ERR_CONNECTION_REFUSED quand aucun service n’écoute sur le port ingest.
  * Anti-spam : log une seule fois si ingest down, puis désactivation après N échecs.
  */
-import { Platform } from "react-native";
+import { getLogger } from "@/utils/logger";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
+
+const log = getLogger("Telemetry");
 
 const INGEST_DEFAULT_PORT = "7242";
 const INGEST_DEFAULT_ENDPOINT_ID =
@@ -88,7 +91,7 @@ function logOnce(message: string): void {
   if (ingestState.logOnceDone) return;
   ingestState.logOnceDone = true;
   if (__DEV__) {
-    console.warn("[ingest]", message);
+    log.warn(message);
   }
 }
 

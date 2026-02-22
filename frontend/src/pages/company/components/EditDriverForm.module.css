@@ -1,327 +1,763 @@
-/* Fichier: C:\Users\jasiq\atmr\frontend\src\pages\company\components\EditDriverForm.module.css */
+/* EditDriverForm — Dual mode: Read + Edit (side panel) */
 
-/* --- Structure générale du formulaire --- */
-.form {
+/* ============================================================
+   SHARED
+   ============================================================ */
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.closeBtn:hover {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* ============================================================
+   READ MODE
+   ============================================================ */
+.readPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.readHeader {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.readHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.readTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.readMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.statusActive {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.statusInactive {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.contractBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+/* -- Sections -- */
+.readSection {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.readSection:last-of-type {
+  border-bottom: none;
+}
+
+.readSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.readSectionHeader svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* -- Grid for read fields -- */
+.readGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-xl);
-  width: 100%;
-  max-width: 100%;
-  padding: var(--spacing-xl);
-  color: var(--text-secondary);
-  background: transparent;
-  margin: 0;
-  box-sizing: border-box;
-  min-width: 0; /* Permet au contenu de rétrécir si nécessaire */
+  gap: 10px 16px;
 }
 
-/* --- Sections du formulaire --- */
-.section {
-  display: contents; /* Permet aux enfants d'utiliser le grid du parent */
+.readField {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.section > h4 {
+.readFieldFull {
   grid-column: 1 / -1;
-  margin-top: 0;
-  margin-bottom: var(--spacing-md);
-  color: var(--brand-primary);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  border-bottom: 2px solid var(--border-primary);
-  padding-bottom: var(--spacing-sm);
 }
 
-/* --- Séparateur visuel --- */
-.divider {
+.readLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.readValue {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #1e293b);
+  word-break: break-word;
+}
+
+/* -- Read actions -- */
+.readActions {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.editBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
   border: none;
-  border-top: 2px solid var(--border-primary);
-  margin: var(--spacing-md) 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: linear-gradient(180deg, #00796b, #00695c);
+  color: #fff;
 }
 
-/* --- Groupe : Label + Input --- */
+.editBtn:hover {
+  background: linear-gradient(180deg, #00695c, #005a4f);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.25);
+}
+
+.resetPasswordButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  white-space: nowrap;
+}
+
+.resetPasswordButton:hover:not(:disabled) {
+  background: var(--bg-tertiary, #f8fafc);
+  border-color: var(--text-tertiary, #94a3b8);
+}
+
+.resetPasswordButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   EDIT MODE
+   ============================================================ */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.editHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  gap: 12px;
+}
+
+.editTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -- Sections -- */
+.section {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.section:last-of-type {
+  border-bottom: none;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sectionHeader svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* -- Form groups -- */
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.formRow > .formGroup {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .formGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.formGroup:last-child {
+  margin-bottom: 0;
 }
 
 .formGroup label {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  color: var(--brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  letter-spacing: 0.3px;
+  gap: 2px;
 }
 
 .formGroup input[type='text'],
 .formGroup input[type='email'],
+.formGroup input[type='tel'],
+.formGroup input[type='date'],
 .formGroup select {
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 2px solid var(--border-secondary);
-  border-radius: var(--radius-lg);
-  font-size: var(--font-size-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-medium);
-  transition: all var(--transition-base);
+  height: 30px;
+  padding: 0 10px;
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #1e293b);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 
-.formGroup input[type='text']:hover,
-.formGroup input[type='email']:hover,
+.formGroup input:hover,
 .formGroup select:hover {
-  border-color: var(--border-hover);
+  border-color: var(--border-hover, #cbd5e1);
 }
 
-.formGroup input[type='text']:focus,
-.formGroup input[type='email']:focus,
+.formGroup input:focus,
 .formGroup select:focus {
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.1);
-  background: var(--bg-primary);
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
   outline: none;
 }
 
-.formGroup input[type='text']::placeholder,
-.formGroup input[type='email']::placeholder {
-  color: var(--text-placeholder);
-  font-weight: var(--font-weight-normal);
+.formGroup input::placeholder {
+  color: var(--text-tertiary, #94a3b8);
+  font-weight: 400;
 }
 
-.formGroup input[type='text']:disabled,
-.formGroup input[type='email']:disabled,
+.formGroup input:disabled,
 .formGroup select:disabled {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary, #f8fafc);
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
-/* Style pour le select */
+.required {
+  color: #ef4444;
+  margin-left: 1px;
+}
+
 .select {
   cursor: pointer;
 }
 
-.select option {
-  padding: var(--spacing-sm);
-}
-
-.required {
-  color: var(--text-error);
-  margin-left: 4px;
-}
-
-/* --- Groupe pour la Checkbox --- */
+/* -- Checkbox -- */
 .checkboxGroup {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  padding: 10px 14px;
-  background: white;
-  border: 2px solid #e2e8f0;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-primary, #fff);
+  border: 2px solid var(--border-primary, #e2e8f0);
   border-radius: 10px;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .checkboxGroup:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
+  border-color: var(--border-hover, #cbd5e1);
 }
 
 .checkboxGroup:has(input[type='checkbox']:checked) {
   background: #f0fdfa;
-  border-color: var(--brand-primary);
+  border-color: var(--brand-primary, #00796b);
 }
 
 .checkboxGroup input[type='checkbox'] {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
-  accent-color: var(--brand-primary);
+  accent-color: var(--brand-primary, #00796b);
   margin: 0;
   flex-shrink: 0;
 }
 
 .checkboxGroup label {
-  font-size: 0.9rem;
+  font-size: 13px;
   font-weight: 500;
   margin: 0 !important;
   cursor: pointer;
-  line-height: 1.5;
+  color: var(--text-primary, #1e293b);
   user-select: none;
-  color: #334155;
 }
 
-/* --- Informations véhicule sélectionné --- */
-.vehicleInfo {
-  grid-column: 1 / -1;
-  background: var(--bg-secondary);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-primary);
-  margin-top: var(--spacing-sm);
+/* -- Toggle row -- */
+.toggleRow {
+  margin: 0 !important;
+  padding: 8px 0 !important;
+}
+.toggleRow:hover {
+  margin: 0 !important;
+  padding: 8px 0 !important;
 }
 
-.vehicleInfo p {
-  margin: var(--spacing-xs) 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-secondary);
+/* -- Chip dropdown -- */
+.chipDrop {
+  position: relative;
 }
 
-.vehicleInfo p strong {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
+.chipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  width: 100%;
+  padding: 0 10px;
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #4b5563);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
-/* --- Messages de chargement et d'avertissement --- */
+.chipBtn:hover {
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.chipBtnActive {
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+}
+
+.chipText {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipArrow {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+}
+
+.chipArrowOpen {
+  transform: rotate(180deg);
+}
+
+.chipMenu {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+}
+
+.chipOption {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+}
+
+.chipOption:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+}
+
+.chipOptionActive {
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+  background: #f0fdfa;
+}
+
+/* -- Reset password inline banners -- */
+.resetBanner,
+.resetResult {
+  margin: 0;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.resetBanner {
+  background: #fffbeb;
+}
+
+.resetResult {
+  background: #f0fdfa;
+}
+
+.resetBannerIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fef3c7;
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.resetResultIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #d1fae5;
+  color: #059669;
+  flex-shrink: 0;
+}
+
+.resetBannerBody,
+.resetResultBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.resetBannerBody strong,
+.resetResultBody strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+}
+
+.resetBannerBody span,
+.resetResultBody span {
+  font-size: 11px;
+  color: var(--text-tertiary, #64748b);
+}
+
+.resetBannerActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.resetBannerCancel {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-secondary, #475569);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.resetBannerCancel:hover {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.resetBannerConfirm {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: #d97706;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.resetBannerConfirm:hover:not(:disabled) {
+  background: #b45309;
+}
+
+.resetBannerConfirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.resetResultPassword {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.resetResultCode {
+  flex: 1;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #fff;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  letter-spacing: 1px;
+  color: var(--brand-primary, #00796b);
+  user-select: all;
+}
+
+.resetResultCopy {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.resetResultCopy:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+}
+
+.resetResultDismiss {
+  width: 100%;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary, #64748b);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.resetResultDismiss:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-secondary, #475569);
+}
+
+/* -- Loading / Warning -- */
 .loadingText,
 .warningText {
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  text-align: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 11px;
 }
 
 .loadingText {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
+  background: var(--bg-tertiary, #f8fafc);
+  color: var(--text-tertiary, #94a3b8);
   font-style: italic;
 }
 
 .warningText {
-  background: #fff3cd;
-  color: #856404;
-  border: 1px solid #ffc107;
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  line-height: 1.4;
 }
 
-/* --- Conteneur pour les boutons --- */
+/* -- Actions bar -- */
 .formActions {
-  grid-column: 1 / -1;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-lg);
-  border-top: 2px solid var(--border-primary);
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
 }
 
 .buttonGroup {
   display: flex;
-  gap: var(--spacing-md);
-  justify-content: flex-end;
+  gap: 8px;
 }
 
-/* --- Style de base partagé par les deux boutons --- */
 .submitButton,
 .cancelButton {
-  padding: var(--spacing-sm) var(--spacing-xl);
+  flex: 1;
+  height: 36px;
+  padding: 0 14px;
   border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: all 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: 4px;
 }
 
-/* --- Styles spécifiques au bouton de soumission --- */
 .submitButton {
-  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
-  color: white;
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(180deg, #00796b, #00695c);
+  color: #fff;
 }
 
 .submitButton:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-primary-dark) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: linear-gradient(180deg, #00695c, #005a4f);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.25);
 }
 
-/* --- Styles spécifiques au bouton d'annulation --- */
 .cancelButton {
-  background-color: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 2px solid var(--border-primary);
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  border: 1px solid var(--border-primary, #e2e8f0);
 }
 
 .cancelButton:hover:not(:disabled) {
-  background-color: var(--bg-hover);
-  border-color: var(--border-hover);
+  background: var(--bg-tertiary, #f8fafc);
+  border-color: var(--text-tertiary, #94a3b8);
 }
 
-/* --- Bouton de réinitialisation du mot de passe --- */
-.resetPasswordButton {
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border: 2px solid var(--text-warning);
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-xs);
-  background: var(--bg-primary);
-  color: var(--text-warning);
-}
-
-.resetPasswordButton:hover:not(:disabled) {
-  background: #fff3cd;
-  border-color: #ffc107;
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.resetPasswordButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* --- Styles pour les boutons désactivés (partagé) --- */
 .submitButton:disabled,
-.cancelButton:disabled,
-.resetPasswordButton:disabled {
-  opacity: 0.6;
+.cancelButton:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  transform: none;
 }
 
-/* --- S'assurer que AddressAutocomplete prend toute la largeur --- */
+/* -- AddressAutocomplete fix -- */
 .formGroup :global(div[style*="position: relative"]) {
   width: 100% !important;
 }
 
-/* --- Responsive --- */
-@media (max-width: 768px) {
-  .form {
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 420px) {
+  .readGrid {
     grid-template-columns: 1fr;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-lg);
   }
 
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+
+  .readHeader,
+  .readSection,
+  .readActions,
+  .editHeader,
+  .section,
   .formActions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .resetPasswordButton {
-    width: 100%;
-  }
-
-  .buttonGroup {
-    width: 100%;
-  }
-
-  .buttonGroup button {
-    flex: 1;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }
