@@ -12,7 +12,7 @@ import {
 import styles from './Home.module.css';
 import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
+const API_URL = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
 
@@ -73,7 +73,7 @@ export default function Home() {
           dropoff_lat: b.lat,
           dropoff_lon: b.lon,
         });
-        const res = await fetch(`${API_URL}/v1/osrm/route?${params}`);
+        const res = await fetch(`${API_URL}/osrm/route?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
@@ -101,7 +101,7 @@ export default function Home() {
   }, [pickupCoord, dropoffCoord, drawRoute]);
 
   useEffect(() => {
-    fetch(`${API_URL}/v1/public/platform-stats`)
+    fetch(`${API_URL}/public/platform-stats`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setPlatformStats(data); })
       .catch(() => {});

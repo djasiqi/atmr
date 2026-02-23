@@ -51,7 +51,7 @@ const ReservationMapView = ({ reservations }) => {
   const getOSRMRoute = useCallback(async (pickupCoords, dropoffCoords) => {
     try {
       const url =
-        `${process.env.REACT_APP_API_URL || 'http://localhost:3000/api'}/osrm/route?` +
+        `${process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1'}/osrm/route?` +
         `pickup_lat=${pickupCoords.lat}&pickup_lon=${pickupCoords.lng}&` +
         `dropoff_lat=${dropoffCoords.lat}&dropoff_lon=${dropoffCoords.lng}`;
       const response = await fetch(url);
