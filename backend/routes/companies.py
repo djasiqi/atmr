@@ -2461,7 +2461,6 @@ class CompanyDriversLocations(Resource):
         active_bookings_map: dict[int, dict[str, Any]] = {}
         if driver_ids:
             active_statuses = (
-                BookingStatus.ASSIGNED.value,
                 BookingStatus.EN_ROUTE.value,
                 BookingStatus.IN_PROGRESS.value,
             )
