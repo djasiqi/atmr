@@ -343,7 +343,7 @@ export default function Home() {
         <div className={styles.statsInner}>
           {[
             { value: platformStats?.completedBookings, label: 'courses' },
-            { value: platformStats?.activeCompanies, label: 'partenaires' },
+            { value: platformStats?.activeCompanies, label: 'entreprises' },
             { value: platformStats?.activeDrivers, label: 'chauffeurs' },
             { value: platformStats?.citiesServed, label: 'villes' },
           ].map((s, i) => (
