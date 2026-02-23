@@ -8,6 +8,7 @@ import {
     ActivityIndicator,
     Pressable,
     StyleSheet,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -16,19 +17,37 @@ import { shadowPresets } from "@/styles/shadowStyles";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("AssignDriver");
-// ✅ Palette professionnelle cohérente avec le dashboard driver
+
+const BRAND = "#00796B";
+const BRAND_DARK = "#00695C";
+
 const palette = {
-    modalOverlay: "rgba(21,54,43,0.75)",
-    modalBackground: "#FFFFFF",
-    modalBorder: "rgba(15,54,43,0.12)",
-    modalTitle: "#15362B",
-    modalText: "#5F7369",
-    modalButton: "#0A7F59",
-    modalButtonText: "#FFFFFF",
-    modalCancelText: "#5F7369",
-    loadingText: "#91A59D",
-    surfaceBorder: "rgba(15,54,43,0.08)",
-};
+    overlay: "rgba(15,23,42,0.6)",
+    card: "#FFFFFF",
+    border: "rgba(0,121,107,0.10)",
+    borderLight: "rgba(0,121,107,0.06)",
+    text: "#1E293B",
+    secondary: "#64748B",
+    placeholder: "#94A3B8",
+    accent: BRAND,
+    accentDark: BRAND_DARK,
+    accentBg: "rgba(0,121,107,0.06)",
+    accentBorder: "rgba(0,121,107,0.15)",
+    surface: "#F8FAFB",
+    danger: "#dc3545",
+    white: "#FFFFFF",
+} as const;
+
+const containerShadow =
+    Platform.OS === "web"
+        ? { boxShadow: "0 24px 48px rgba(0,0,0,0.18)" }
+        : {
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 24 },
+              shadowOpacity: 0.18,
+              shadowRadius: 48,
+              elevation: 12,
+          };
 
 interface AssignDriverModalProps {
     visible: boolean;
@@ -36,11 +55,31 @@ interface AssignDriverModalProps {
     suggestions: DriverSuggestion[];
     loading: boolean;
     assigning: boolean;
-    allDrivers?: DriverSuggestion[]; // ✅ Tous les chauffeurs disponibles (fallback)
-    loadingAllDrivers?: boolean; // ✅ Chargement de tous les chauffeurs
-    isManualMode?: boolean; // ✅ Mode manuel (pas de suggestions)
+    allDrivers?: DriverSuggestion[];
+    loadingAllDrivers?: boolean;
+    isManualMode?: boolean;
     onClose: () => void;
     onAssign: (driverId: string) => void;
+}
+
+function getInitials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return (parts[0]?.[0] ?? "?").toUpperCase();
+}
+
+function formatScore(score: number): string {
+    if (score >= 0.9) return "Excellent";
+    if (score >= 0.7) return "Très bon";
+    if (score >= 0.5) return "Bon";
+    return "Compatible";
+}
+
+function getScoreColor(score: number): string {
+    if (score >= 0.9) return "#059669";
+    if (score >= 0.7) return BRAND;
+    if (score >= 0.5) return "#D97706";
+    return palette.secondary;
 }
 
 export function AssignDriverModal({
@@ -55,19 +94,23 @@ export function AssignDriverModal({
     onClose,
     onAssign,
 }: AssignDriverModalProps) {
-    // ✅ Vérifier que onAssign est bien défini
-    const handleAssign = React.useCallback((driverId: string) => {
-        log.info("handleAssign called", { driverId, rideId: ride?.id, hasOnAssign: !!onAssign });
-        if (!onAssign) {
-            log.error("onAssign not defined", {});
-            return;
-        }
-        if (assigning) {
-            log.info("assign already in progress, ignored", {});
-            return;
-        }
-        onAssign(driverId);
-    }, [onAssign, ride?.id, assigning]);
+    const handleAssign = React.useCallback(
+        (driverId: string) => {
+            log.info("handleAssign called", {
+                driverId,
+                rideId: ride?.id,
+                hasOnAssign: !!onAssign,
+            });
+            if (!onAssign || assigning) return;
+            onAssign(driverId);
+        },
+        [onAssign, ride?.id, assigning]
+    );
+
+    const driverList =
+        isManualMode || suggestions.length === 0 ? allDrivers : suggestions;
+    const isLoading = loading || loadingAllDrivers;
+    const isEmpty = !isLoading && driverList.length === 0;
 
     return (
         <Modal
@@ -76,100 +119,225 @@ export function AssignDriverModal({
             animationType="fade"
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={styles.modalCard}>
-                    <Text style={styles.modalTitle}>Assigner un chauffeur</Text>
+            <View style={s.overlay}>
+                <View style={s.card}>
+                    {/* Header */}
+                    <View style={s.header}>
+                        <View style={s.headerLeft}>
+                            <View style={s.headerIcon}>
+                                <Ionicons
+                                    name="person-add"
+                                    size={18}
+                                    color={palette.accent}
+                                />
+                            </View>
+                            <Text style={s.title}>Assigner un chauffeur</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={s.closeBtn}
+                            onPress={onClose}
+                            disabled={assigning}
+                            hitSlop={8}
+                        >
+                            <Ionicons
+                                name="close"
+                                size={20}
+                                color={palette.secondary}
+                            />
+                        </TouchableOpacity>
+                    </View>
 
+                    {/* Ride info */}
                     {ride && (
-                        <View style={styles.modalRideInfo}>
-                            <Text style={styles.modalRideClient}>{ride.client.name}</Text>
-                            <Text style={styles.modalRideRoute} numberOfLines={1}>
-                                {ride.route.pickup_address}
-                            </Text>
-                            <Text style={styles.modalRideRoute} numberOfLines={1}>
-                                → {ride.route.dropoff_address}
-                            </Text>
+                        <View style={s.rideCard}>
+                            <View style={s.rideHeader}>
+                                <Ionicons
+                                    name="car-outline"
+                                    size={14}
+                                    color={palette.accent}
+                                />
+                                <Text style={s.rideLabel}>COURSE</Text>
+                            </View>
+                            <Text style={s.rideClient}>{ride.client.name}</Text>
+
+                            {/* Timeline route */}
+                            <View style={s.routeWrap}>
+                                <View style={s.timeline}>
+                                    <View style={s.dotPickup} />
+                                    <View style={s.connector} />
+                                    <View style={s.dotDropoff} />
+                                </View>
+                                <View style={s.routeAddresses}>
+                                    <Text
+                                        style={s.routeText}
+                                        numberOfLines={1}
+                                    >
+                                        {ride.route.pickup_address}
+                                    </Text>
+                                    <Text
+                                        style={[s.routeText, s.routeTextDropoff]}
+                                        numberOfLines={1}
+                                    >
+                                        {ride.route.dropoff_address}
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
                     )}
 
-                    {!loading && !loadingAllDrivers && (suggestions.length > 0 || allDrivers.length > 0) && (
-                        <Text style={styles.modalSectionTitle}>
+                    {/* Section title */}
+                    {!isLoading && driverList.length > 0 && (
+                        <Text style={s.sectionTitle}>
                             {isManualMode || suggestions.length === 0
-                                ? "Sélectionner un chauffeur manuellement"
-                                : "Choisir un chauffeur"}
+                                ? "Sélectionner un chauffeur"
+                                : "Suggestions"}
                         </Text>
                     )}
 
-                    {loading || loadingAllDrivers ? (
-                        <View style={styles.modalLoading}>
-                            <ActivityIndicator color={palette.modalButton} />
-                            <Text style={styles.modalLoadingText}>
-                                {loading ? "Chargement des suggestions..." : "Chargement des chauffeurs..."}
+                    {/* Content */}
+                    {isLoading ? (
+                        <View style={s.loadingWrap}>
+                            <ActivityIndicator color={palette.accent} size="small" />
+                            <Text style={s.loadingText}>
+                                Chargement des chauffeurs...
                             </Text>
                         </View>
-                    ) : suggestions.length === 0 && allDrivers.length === 0 ? (
-                        <View style={styles.modalEmptyContainer}>
-                            <Text style={styles.modalEmpty}>
+                    ) : isEmpty ? (
+                        <View style={s.emptyWrap}>
+                            <View style={s.emptyIcon}>
+                                <Ionicons
+                                    name="people-outline"
+                                    size={28}
+                                    color={palette.placeholder}
+                                />
+                            </View>
+                            <Text style={s.emptyTitle}>Aucun chauffeur disponible</Text>
+                            <Text style={s.emptySubtitle}>
                                 {ride?.driver?.id
-                                    ? "Aucune suggestion disponible. Vous pouvez réassigner un chauffeur manuellement."
-                                    : "Aucun chauffeur disponible pour cette course."}
+                                    ? "Vous pouvez réassigner un chauffeur manuellement depuis la fiche complète."
+                                    : "Aucun chauffeur n'est disponible pour cette course actuellement."}
                             </Text>
                         </View>
                     ) : (
                         <ScrollView
-                            style={styles.modalDriverList}
+                            style={s.driverList}
                             nestedScrollEnabled
                             showsVerticalScrollIndicator={false}
                             keyboardShouldPersistTaps="handled"
                         >
-                            {/* ✅ En mode manuel, ne jamais afficher les suggestions, seulement tous les chauffeurs */}
-                            {((isManualMode || suggestions.length === 0) ? allDrivers : suggestions).map((suggestion: DriverSuggestion) => (
+                            {driverList.map((driver: DriverSuggestion) => (
                                 <Pressable
-                                    key={suggestion.driver_id}
+                                    key={driver.driver_id}
                                     style={({ pressed }) => [
-                                        styles.modalDriverOption,
-                                        pressed && !assigning && styles.modalDriverOptionPressed,
-                                        assigning && styles.modalDriverOptionDisabled,
+                                        s.driverRow,
+                                        pressed && !assigning && s.driverRowPressed,
+                                        assigning && s.driverRowDisabled,
                                     ]}
-                                    onPress={() => handleAssign(suggestion.driver_id)}
+                                    onPress={() => handleAssign(driver.driver_id)}
                                     disabled={assigning}
                                 >
-                                    <View style={styles.modalDriverInfo}>
-                                        <Text style={styles.modalDriverName}>
-                                            {suggestion.driver_name}
+                                    {/* Avatar initials */}
+                                    <View style={s.avatar}>
+                                        <Text style={s.avatarText}>
+                                            {getInitials(driver.driver_name)}
                                         </Text>
-                                        <Text style={styles.modalDriverMeta}>
-                                            Score: {suggestion.score.toFixed(2)}
-                                            {suggestion.preferred_match && " • Préféré"}
-                                            {suggestion.is_emergency && " • Urgence"}
-                                        </Text>
-                                        {suggestion.reason && (
-                                            <Text style={styles.modalDriverReason}>
-                                                {suggestion.reason}
-                                            </Text>
-                                        )}
                                     </View>
-                                    <Ionicons
-                                        name="chevron-forward"
-                                        size={20}
-                                        color={assigning ? palette.modalText : palette.modalButton}
-                                    />
+
+                                    {/* Driver info */}
+                                    <View style={s.driverInfo}>
+                                        <View style={s.driverNameRow}>
+                                            <Text
+                                                style={s.driverName}
+                                                numberOfLines={1}
+                                            >
+                                                {driver.driver_name}
+                                            </Text>
+                                            {driver.preferred_match && (
+                                                <Ionicons
+                                                    name="star"
+                                                    size={12}
+                                                    color="#F59E0B"
+                                                />
+                                            )}
+                                        </View>
+
+                                        {/* Tags */}
+                                        <View style={s.tagRow}>
+                                            <View
+                                                style={[
+                                                    s.tag,
+                                                    {
+                                                        backgroundColor: `${getScoreColor(driver.score)}12`,
+                                                        borderColor: `${getScoreColor(driver.score)}30`,
+                                                    },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        s.tagText,
+                                                        {
+                                                            color: getScoreColor(
+                                                                driver.score
+                                                            ),
+                                                        },
+                                                    ]}
+                                                >
+                                                    {formatScore(driver.score)}
+                                                </Text>
+                                            </View>
+                                            {driver.is_emergency && (
+                                                <View style={s.tagEmergency}>
+                                                    <Ionicons
+                                                        name="flash"
+                                                        size={10}
+                                                        color="#DC2626"
+                                                    />
+                                                    <Text style={s.tagEmergencyText}>
+                                                        Urgence
+                                                    </Text>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        {driver.reason ? (
+                                            <Text
+                                                style={s.driverReason}
+                                                numberOfLines={1}
+                                            >
+                                                {driver.reason}
+                                            </Text>
+                                        ) : null}
+                                    </View>
+
+                                    {/* Assign arrow */}
+                                    <View style={s.assignArrow}>
+                                        <Ionicons
+                                            name="arrow-forward-circle"
+                                            size={22}
+                                            color={
+                                                assigning
+                                                    ? palette.placeholder
+                                                    : palette.accent
+                                            }
+                                        />
+                                    </View>
                                 </Pressable>
                             ))}
                         </ScrollView>
                     )}
 
-                    <View style={styles.modalActions}>
-                        <Pressable
-                            style={styles.modalCancelButton}
+                    {/* Footer */}
+                    <View style={s.footer}>
+                        <TouchableOpacity
+                            style={s.cancelBtn}
                             onPress={onClose}
                             disabled={assigning}
                         >
-                            <Text style={styles.modalCancelText}>Annuler</Text>
-                        </Pressable>
+                            <Text style={s.cancelText}>Annuler</Text>
+                        </TouchableOpacity>
                         {ride && (
-                            <Pressable
-                                style={styles.modalViewDetailsButton}
+                            <TouchableOpacity
+                                style={s.detailsBtn}
                                 onPress={() => {
                                     onClose();
                                     router.push({
@@ -179,19 +347,25 @@ export function AssignDriverModal({
                                 }}
                                 disabled={assigning}
                             >
-                                <Text style={styles.modalViewDetailsText}>
-                                    Voir la fiche complète
-                                </Text>
-                            </Pressable>
+                                <Ionicons
+                                    name="document-text-outline"
+                                    size={15}
+                                    color={palette.white}
+                                />
+                                <Text style={s.detailsText}>Fiche complète</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
 
+                    {/* Assigning overlay */}
                     {assigning && (
-                        <View style={styles.modalAssigningOverlay}>
-                            <ActivityIndicator color="#FFFFFF" size="large" />
-                            <Text style={styles.modalAssigningText}>
-                                Assignation en cours...
-                            </Text>
+                        <View style={s.assigningOverlay}>
+                            <View style={s.assigningCard}>
+                                <ActivityIndicator color={palette.white} size="large" />
+                                <Text style={s.assigningText}>
+                                    Assignation en cours...
+                                </Text>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -200,171 +374,373 @@ export function AssignDriverModal({
     );
 }
 
-const styles = StyleSheet.create({
-    modalOverlay: {
+const s = StyleSheet.create({
+    // ─── Overlay & Card ───
+    overlay: {
         flex: 1,
-        backgroundColor: palette.modalOverlay,
+        backgroundColor: palette.overlay,
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: 20,
     },
-    modalCard: {
+    card: {
         width: "100%",
         maxWidth: 420,
-        backgroundColor: palette.modalBackground,
-        borderRadius: 24,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: palette.modalBorder,
-        maxHeight: "80%",
-        gap: 16,
-        ...shadowPresets.large, // ✅ Compatible web/native
+        backgroundColor: palette.card,
+        borderRadius: 20,
+        maxHeight: "85%",
+        overflow: "hidden",
+        ...containerShadow,
     },
-    modalTitle: {
-        color: palette.modalTitle,
-        fontSize: 20,
-        fontWeight: "700",
-    },
-    modalSubtitle: {
-        color: palette.modalText,
-        fontSize: 14,
-        fontWeight: "400",
-    },
-    modalRideInfo: {
-        backgroundColor: "rgba(10,127,89,0.06)",
-        borderRadius: 18,
-        padding: 18,
-        borderWidth: 1.5,
-        borderColor: "rgba(10,127,89,0.15)",
-        marginBottom: 4,
-    },
-    modalRideClient: {
-        color: palette.modalTitle,
-        fontSize: 16,
-        fontWeight: "700",
-        marginBottom: 8,
-        letterSpacing: 0.2,
-    },
-    modalRideRoute: {
-        color: palette.modalText,
-        fontSize: 13,
-        marginTop: 6,
-        lineHeight: 18,
-    },
-    modalSectionTitle: {
-        color: palette.modalTitle,
-        fontSize: 14,
-        fontWeight: "700",
-        textTransform: "uppercase",
-        letterSpacing: 0.5,
-        marginTop: 8,
-        marginBottom: 12,
-    },
-    modalLoading: {
-        alignItems: "center",
-        paddingVertical: 40,
-        gap: 12,
-    },
-    modalLoadingText: {
-        color: palette.loadingText,
-        fontSize: 14,
-    },
-    modalEmptyContainer: {
-        paddingVertical: 40,
-        paddingHorizontal: 16,
-    },
-    modalEmpty: {
-        color: palette.modalText,
-        fontSize: 14,
-        textAlign: "center",
-        lineHeight: 20,
-    },
-    modalDriverList: {
-        maxHeight: 400,
-        marginBottom: 16,
-        marginTop: 4,
-    },
-    modalDriverOption: {
+
+    // ─── Header ───
+    header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        backgroundColor: "#FFFFFF",
-        borderRadius: 16,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        marginBottom: 10,
-        borderWidth: 1.5,
-        borderColor: palette.surfaceBorder,
-        ...shadowPresets.small, // ✅ Compatible web/native
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: palette.borderLight,
     },
-    modalDriverOptionPressed: {
-        backgroundColor: "rgba(10,127,89,0.08)",
-        borderColor: palette.modalButton,
-    },
-    modalDriverOptionDisabled: {
-        opacity: 0.5,
-    },
-    modalDriverInfo: {
-        flex: 1,
-        marginRight: 12,
-    },
-    modalDriverName: {
-        color: palette.modalTitle,
-        fontSize: 15,
-        fontWeight: "600",
-        marginBottom: 2,
-    },
-    modalDriverMeta: {
-        color: palette.modalText,
-        fontSize: 12,
-        marginBottom: 2,
-    },
-    modalDriverReason: {
-        color: palette.loadingText,
-        fontSize: 11,
-        fontStyle: "italic",
-        marginTop: 2,
-    },
-    modalActions: {
+    headerLeft: {
         flexDirection: "row",
-        justifyContent: "flex-end",
-        gap: 12,
+        alignItems: "center",
+        gap: 10,
+        flex: 1,
     },
-    modalCancelButton: {
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-    },
-    modalCancelText: {
-        color: palette.modalCancelText,
-        fontWeight: "600",
-        fontSize: 15,
-    },
-    modalViewDetailsButton: {
-        backgroundColor: palette.modalButton,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        borderRadius: 14,
-    },
-    modalViewDetailsText: {
-        color: palette.modalButtonText,
-        fontWeight: "700",
-        fontSize: 15,
-    },
-    modalAssigningOverlay: {
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.8)",
-        borderRadius: 24,
+    headerIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: palette.accentBg,
         alignItems: "center",
         justifyContent: "center",
     },
-    modalAssigningText: {
-        color: "#FFFFFF",
-        marginTop: 12,
+    title: {
+        fontSize: 17,
+        fontWeight: "700",
+        color: palette.text,
+        letterSpacing: -0.2,
+    },
+    closeBtn: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: palette.surface,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+
+    // ─── Ride Card ───
+    rideCard: {
+        marginHorizontal: 16,
+        marginTop: 16,
+        backgroundColor: palette.accentBg,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: palette.accentBorder,
+        overflow: "hidden",
+    },
+    rideHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        backgroundColor: "rgba(0,121,107,0.04)",
+        borderBottomWidth: 1,
+        borderBottomColor: palette.accentBorder,
+    },
+    rideLabel: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: palette.accent,
+        letterSpacing: 0.5,
+    },
+    rideClient: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: palette.text,
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        paddingBottom: 6,
+        letterSpacing: -0.1,
+    },
+    routeWrap: {
+        flexDirection: "row",
+        paddingHorizontal: 14,
+        paddingBottom: 12,
+        gap: 10,
+    },
+    timeline: {
+        alignItems: "center",
+        paddingTop: 4,
+        width: 14,
+    },
+    dotPickup: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        borderWidth: 2.5,
+        borderColor: palette.accent,
+        backgroundColor: palette.white,
+    },
+    connector: {
+        width: 2,
+        height: 14,
+        backgroundColor: "rgba(0,121,107,0.18)",
+        marginVertical: 2,
+    },
+    dotDropoff: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        borderWidth: 2.5,
+        borderColor: palette.text,
+        backgroundColor: palette.text,
+    },
+    routeAddresses: {
+        flex: 1,
+        gap: 8,
+    },
+    routeText: {
+        fontSize: 13,
+        fontWeight: "500",
+        color: palette.text,
+        lineHeight: 18,
+    },
+    routeTextDropoff: {
+        color: palette.secondary,
+    },
+
+    // ─── Section Title ───
+    sectionTitle: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: palette.secondary,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: 8,
+    },
+
+    // ─── Loading ───
+    loadingWrap: {
+        alignItems: "center",
+        paddingVertical: 40,
+        gap: 12,
+    },
+    loadingText: {
+        color: palette.placeholder,
+        fontSize: 13,
+        fontWeight: "500",
+    },
+
+    // ─── Empty ───
+    emptyWrap: {
+        alignItems: "center",
+        paddingVertical: 32,
+        paddingHorizontal: 24,
+    },
+    emptyIcon: {
+        width: 52,
+        height: 52,
+        borderRadius: 14,
+        backgroundColor: palette.surface,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 14,
+    },
+    emptyTitle: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: palette.text,
+        textAlign: "center",
+        marginBottom: 6,
+    },
+    emptySubtitle: {
+        fontSize: 13,
+        color: palette.secondary,
+        textAlign: "center",
+        lineHeight: 19,
+        maxWidth: 280,
+    },
+
+    // ─── Driver List ───
+    driverList: {
+        maxHeight: 340,
+        paddingHorizontal: 16,
+    },
+    driverRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: palette.card,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 8,
+        borderWidth: 1,
+        borderColor: palette.border,
+        ...shadowPresets.small,
+    },
+    driverRowPressed: {
+        backgroundColor: palette.accentBg,
+        borderColor: palette.accent,
+    },
+    driverRowDisabled: {
+        opacity: 0.45,
+    },
+
+    // ─── Avatar ───
+    avatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: palette.accentBg,
+        borderWidth: 1,
+        borderColor: palette.accentBorder,
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 12,
+    },
+    avatarText: {
         fontSize: 14,
+        fontWeight: "700",
+        color: palette.accent,
+        letterSpacing: 0.3,
+    },
+
+    // ─── Driver Info ───
+    driverInfo: {
+        flex: 1,
+        marginRight: 8,
+    },
+    driverNameRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 5,
+        marginBottom: 4,
+    },
+    driverName: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: palette.text,
+        letterSpacing: -0.1,
+        flexShrink: 1,
+    },
+    tagRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        flexWrap: "wrap",
+    },
+    tag: {
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+    },
+    tagText: {
+        fontSize: 10,
+        fontWeight: "700",
+        letterSpacing: 0.2,
+    },
+    tagEmergency: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        backgroundColor: "rgba(220,38,38,0.08)",
+        borderWidth: 1,
+        borderColor: "rgba(220,38,38,0.20)",
+    },
+    tagEmergencyText: {
+        fontSize: 10,
+        fontWeight: "700",
+        color: "#DC2626",
+    },
+    driverReason: {
+        fontSize: 11,
+        color: palette.placeholder,
+        marginTop: 3,
+        fontStyle: "italic",
+    },
+    assignArrow: {
+        marginLeft: 4,
+    },
+
+    // ─── Footer ───
+    footer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        borderTopWidth: 1,
+        borderTopColor: palette.borderLight,
+    },
+    cancelBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.card,
+        alignItems: "center",
+    },
+    cancelText: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: palette.secondary,
+    },
+    detailsBtn: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 12,
+        borderRadius: 12,
+        backgroundColor: palette.accent,
+        ...(Platform.OS === "web"
+            ? { boxShadow: "0 4px 8px rgba(0,121,107,0.2)" }
+            : {
+                  shadowColor: BRAND,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 4,
+              }),
+    },
+    detailsText: {
+        fontSize: 14,
+        fontWeight: "700",
+        color: palette.white,
+        letterSpacing: 0.1,
+    },
+
+    // ─── Assigning Overlay ───
+    assigningOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    assigningCard: {
+        alignItems: "center",
+        gap: 14,
+        padding: 24,
+        borderRadius: 16,
+        backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    assigningText: {
+        color: palette.white,
+        fontSize: 14,
+        fontWeight: "600",
     },
 });
-
