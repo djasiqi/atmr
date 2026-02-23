@@ -51,6 +51,7 @@
     "expo-document-picker": "~14.0.8",
     "expo-font": "~14.0.9",
     "expo-haptics": "~15.0.8",
+    "expo-image-manipulator": "~14.0.8",
     "expo-image-picker": "~17.0.10",
     "expo-intent-launcher": "~13.0.8",
     "expo-linear-gradient": "~15.0.8",
@@ -110,7 +111,7 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
-    "react-server-dom-webpack": "19.1.4",
+    "react-server-dom-webpack": "19.1.5",
     "qs": "6.14.1",
     "form-data": "^4.0.1",
     "js-yaml": "^4.1.0",
@@ -122,7 +123,8 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "glob": "^11.1.0",
-    "node-forge": ">=1.3.2"
+    "node-forge": ">=1.3.2",
+    "minimatch": ">=10.2.1"
   },
   "private": true,
   "type": "commonjs",

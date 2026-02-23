@@ -396,7 +396,30 @@ jobs:
           source: "scripts/smoke_tests.sh,scripts/deploy-production.sh"
           target: "/srv/atmr/"
 
-      - name: Deploy Firebase service account to server
+      - name: Decode Firebase service account locally
+        if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
+        run: |
+          set -e
+          echo "${FIREBASE_SERVICE_ACCOUNT_B64}" | base64 -d > firebase-service-account.json
+          if ! python3 -c "import json; json.load(open('firebase-service-account.json'))"; then
+            echo "❌ Firebase service account JSON is invalid after decoding"
+            rm -f firebase-service-account.json
+            exit 1
+          fi
+          echo "✅ Firebase service account decoded ($(wc -c < firebase-service-account.json) bytes)"
+
+      - name: Copy Firebase service account to server
+        if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "firebase-service-account.json"
+          target: "/srv/atmr"
+
+      - name: Set Firebase file permissions
         if: env.FIREBASE_SERVICE_ACCOUNT_B64 != ''
         uses: appleboy/ssh-action@master
         with:
@@ -405,15 +428,8 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
-            set -e
-            echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > /srv/atmr/firebase-service-account.json
-            if ! python3 -c "import json; json.load(open('/srv/atmr/firebase-service-account.json'))" 2>/dev/null; then
-              echo "❌ Firebase service account JSON is invalid"
-              rm -f /srv/atmr/firebase-service-account.json
-              exit 1
-            fi
             chmod 600 /srv/atmr/firebase-service-account.json
-            echo "✅ Firebase service account deployed ($(wc -c < /srv/atmr/firebase-service-account.json) bytes)"
+            echo "✅ Firebase service account permissions set"
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
