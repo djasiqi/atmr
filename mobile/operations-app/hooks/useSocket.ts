@@ -1,7 +1,7 @@
 // hooks/useSocket.ts
 import { useEffect, useRef, useState } from "react";
 import { connectSocket } from "@/services/socket";
-import * as Notifications from "expo-notifications";
+
 import { secureStorage } from "@/services/storage";
 import { useAuth } from "@/hooks/useAuth";
 import { getLogger } from "@/utils/logger";
@@ -108,34 +108,11 @@ export const useSocket = (
           booking_id: data?.id,
           timestamp: new Date().toISOString()
         });
-        try {
-          const bookingId = data?.booking_id ?? data?.id;
-          const pickup = data?.pickup_address ?? data?.pickup_location;
-          const dropoff = data?.dropoff_address ?? data?.dropoff_location;
-          const route =
-            pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff || "";
-
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: "Nouvelle course assignée",
-              body: bookingId
-                ? `Vous êtes assigné à la course #${bookingId}${route ? ` — ${route}` : ""}.`
-                : `Vous avez une nouvelle course assignée${route ? ` — ${route}` : ""}.`,
-              sound: "default",
-            },
-            trigger: null,
-          });
-        } catch (err) {
-          log.warn("notification error", {
-            event: "notification_error",
-            error: err instanceof Error ? err.message : String(err),
-            timestamp: new Date().toISOString()
-          });
-        }
+        // Push notification is already sent by backend — no local notification needed
         onNewBooking?.(data);
       });
 
-      // ✅ FIX: Écouter aussi "booking_updated" pour compatibilité (même handler)
+      // Écouter "booking_updated" pour rafraîchir l'UI
       s.on("booking_updated", async (data: any) => {
         log.info("booking updated", {
           event: "booking_updated",
@@ -143,119 +120,11 @@ export const useSocket = (
           status: data?.status,
           timestamp: new Date().toISOString()
         });
-
-        // P0.5: Ne pas créer de notif locale si le chauffeur est l'acteur (self-notification)
-        // Le driver reçoit booking_updated via company_room (il est dans les 2 rooms),
-        // mais il ne doit pas voir une notif pour une action qu'il vient de faire.
-        const actorRole = data?.actor_role as string | undefined;
-        const actorId = data?.actor_id as number | undefined;
-        const myDriverId = driverIdRef.current;
-        if (
-          actorRole === "driver" &&
-          actorId !== undefined &&
-          myDriverId !== undefined &&
-          actorId === myDriverId
-        ) {
-          if (__DEV__) {
-            log.info("skip local notification (actor=self)", {
-              booking_id: data?.id,
-              actor_id: actorId,
-            });
-          }
-          onNewBooking?.(data);
-          return;
-        }
-
-        try {
-          const bookingId = data?.booking_id ?? data?.id;
-          const status = String(data?.status || "").toLowerCase();
-          const statusLabelMap: Record<string, string> = {
-            assigned: "assignée",
-            en_route: "en route",
-            in_progress: "à bord",
-            completed: "terminée",
-            return_completed: "retour terminé",
-            canceled: "annulée",
-            cancelled: "annulée",
-          };
-          const statusLabel = statusLabelMap[status];
-
-          const changes = data?.changes;
-          const parts: string[] = [];
-          const add = (s?: string) => {
-            if (s) parts.push(s);
-          };
-
-          const fmtHHmm = (v: any): string | null => {
-            if (!v) return null;
-            const s = String(v);
-            if (s.includes("T") && s.length >= 16) {
-              const hhmm = s.replace("Z", "").slice(11, 16);
-              return hhmm.length === 5 ? hhmm : null;
-            }
-            return null;
-          };
-
-          const short = (v: any, maxLen = 32): string | null => {
-            if (v == null) return null;
-            const s = String(v).replace(/\s+/g, " ").trim();
-            if (!s) return null;
-            return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
-          };
-
-          const timeFrom = changes?.scheduled_time?.from;
-          const timeTo = changes?.scheduled_time?.to;
-          const hhmmFrom = fmtHHmm(timeFrom);
-          const hhmmTo = fmtHHmm(timeTo);
-          if (hhmmFrom && hhmmTo && hhmmFrom !== hhmmTo) {
-            add(`Horaire : ${hhmmFrom} → ${hhmmTo}`);
-          }
-
-          const pFrom = short(changes?.pickup_location?.from);
-          const pTo = short(changes?.pickup_location?.to);
-          if (pFrom && pTo && pFrom !== pTo) add(`Départ : ${pFrom} → ${pTo}`);
-          else if (pTo && !pFrom) add(`Départ : ${pTo}`);
-
-          const dFrom = short(changes?.dropoff_location?.from);
-          const dTo = short(changes?.dropoff_location?.to);
-          if (dFrom && dTo && dFrom !== dTo) add(`Destination : ${dFrom} → ${dTo}`);
-          else if (dTo && !dFrom) add(`Destination : ${dTo}`);
-
-          if (changes?.notes) add("Info : mise à jour");
-
-          // ✅ Pro: limiter à 2 changements + "+N autres modifications"
-          const maxItems = 2;
-          const head = parts.slice(0, maxItems);
-          const remaining = parts.length - head.length;
-          const summary =
-            head.join(" • ") +
-            (remaining > 0
-              ? remaining === 1
-                ? " • +1 autre modification"
-                : ` • +${remaining} autres modifications`
-              : "");
-
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: "Course mise à jour",
-              body: bookingId
-                ? `Course #${bookingId} — ${summary || "mise à jour"}${statusLabel ? ` (statut : ${statusLabel})` : ""}.`
-                : `Une course a été ${summary || "mise à jour"}${statusLabel ? ` (statut : ${statusLabel})` : ""}.`,
-              sound: "default",
-            },
-            trigger: null,
-          });
-        } catch (err) {
-          log.warn("notification error", {
-            event: "notification_error",
-            error: err instanceof Error ? err.message : String(err),
-            timestamp: new Date().toISOString()
-          });
-        }
+        // Push notification is already sent by backend — no local notification needed
         onNewBooking?.(data);
       });
 
-      // ✅ Mission retirée (réassignée) → notifier + inviter à rafraîchir
+      // Mission retirée (réassignée) → rafraîchir les courses
       s.on("booking_reassigned", async (data: any) => {
         log.info("booking reassigned", {
           event: "booking_reassigned",
@@ -263,25 +132,8 @@ export const useSocket = (
           new_driver_id: data?.new_driver_id,
           timestamp: new Date().toISOString()
         });
-        try {
-          const bookingId = data?.booking_id ?? data?.id;
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: "Course réassignée",
-              body: bookingId
-                ? `La course #${bookingId} a été réassignée. Vos courses vont être mises à jour.`
-                : "Une course a été réassignée. Vos courses vont être mises à jour.",
-              sound: "default",
-            },
-            trigger: null,
-          });
-        } catch (err) {
-          log.warn("notification error", {
-            event: "notification_error",
-            error: err instanceof Error ? err.message : String(err),
-            timestamp: new Date().toISOString()
-          });
-        }
+        // Push notification is already sent by backend — no local notification needed
+        onNewBooking?.(data);
       });
 
       s.on("team_chat_message", (message: any) => {
