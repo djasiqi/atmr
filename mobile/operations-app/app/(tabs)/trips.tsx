@@ -35,7 +35,13 @@ const BG = "#f4f7fc";
 
 type Tab = "mine" | "team";
 
-function formatHour(iso: string): string {
+function isTimeUndefined(iso: string): boolean {
+  const d = new Date(iso);
+  return d.getHours() === 0 && d.getMinutes() === 0;
+}
+
+function formatHour(iso: string, isReturn?: boolean): string {
+  if (isReturn && isTimeUndefined(iso)) return "Heure à définir";
   return new Date(iso).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
 }
 
@@ -69,7 +75,12 @@ function statusMeta(raw: string): StatusMeta {
   }
 }
 
+function hasUndefinedTime(trip: Booking): boolean {
+  return trip.is_return && isTimeUndefined(trip.scheduled_time);
+}
+
 function categorizeTripByTime(trip: Booking): string {
+  if (hasUndefinedTime(trip)) return "Heure à définir";
   const h = new Date(trip.scheduled_time).getHours();
   if (h < 12) return "Matin";
   if (h < 18) return "Après-midi";
@@ -156,7 +167,13 @@ export default function TripsScreen() {
   const teamTrips = useMemo(() =>
     companyTrips
       .filter((t) => !isCanceledStatus((t.status || "").toUpperCase()))
-      .sort((a, b) => new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()),
+      .sort((a, b) => {
+        const aUndef = hasUndefinedTime(a);
+        const bUndef = hasUndefinedTime(b);
+        if (aUndef && !bUndef) return 1;
+        if (!aUndef && bUndef) return -1;
+        return new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime();
+      }),
     [companyTrips]);
 
   const completedSections = useMemo(() => {
@@ -166,16 +183,27 @@ export default function TripsScreen() {
 
   const mineSections = useMemo(() => {
     const ph = { id: -1, pickup_location: "", dropoff_location: "", scheduled_time: new Date().toISOString(), status: "assigned", client_name: "", client_phone: "", company_id: 0, driver_id: 0, is_return: false, isPlaceholder: true } as Booking & { isPlaceholder: boolean };
-    return [
-      { title: `À faire${assignedTrips.length > 0 ? ` (${assignedTrips.length})` : ""}`, data: assignedTrips.length > 0 ? assignedTrips : [ph] },
-      ...completedSections,
-    ];
+    const scheduled = assignedTrips.filter((t) => !hasUndefinedTime(t));
+    const unscheduled = assignedTrips.filter((t) => hasUndefinedTime(t));
+    const sections: { title: string; data: (Booking & { isPlaceholder?: boolean })[] }[] = [];
+    if (scheduled.length > 0 || unscheduled.length === 0) {
+      sections.push({ title: `À faire${scheduled.length > 0 ? ` (${scheduled.length})` : ""}`, data: scheduled.length > 0 ? scheduled : [ph] });
+    }
+    if (unscheduled.length > 0) {
+      sections.push({ title: `Heure à définir (${unscheduled.length})`, data: unscheduled });
+    }
+    sections.push(...completedSections);
+    return sections;
   }, [assignedTrips, completedSections]);
+
+  const SECTION_ORDER = ["Matin", "Après-midi", "Soirée", "Heure à définir"];
 
   const teamSections = useMemo(() => {
     if (teamTrips.length === 0) return [{ title: "Équipe", data: [{ id: -2, isPlaceholder: true } as any] }];
     const grouped = teamTrips.reduce((acc, t) => { const k = categorizeTripByTime(t); (acc[k] ??= []).push(t); return acc; }, {} as Record<string, Booking[]>);
-    return Object.entries(grouped).map(([t, d]) => ({ title: t, data: d }));
+    return Object.entries(grouped)
+      .sort(([a], [b]) => (SECTION_ORDER.indexOf(a) === -1 ? 99 : SECTION_ORDER.indexOf(a)) - (SECTION_ORDER.indexOf(b) === -1 ? 99 : SECTION_ORDER.indexOf(b)))
+      .map(([t, d]) => ({ title: t, data: d }));
   }, [teamTrips]);
 
   const summary = useMemo(() => ({
@@ -202,17 +230,21 @@ export default function TripsScreen() {
     const driverName = (trip as any).driver_name;
     const isCompleted = isCompletedStatus(trip.status);
 
+    const Wrapper = isMine ? TouchableOpacity : View;
+    const wrapperProps = isMine
+      ? { activeOpacity: 0.65, onPress: () => { setSelectedTripId(trip.id); setModalVisible(true); } }
+      : {};
+
     return (
-      <TouchableOpacity
+      <Wrapper
         style={[c.card, isCompleted && { opacity: 0.6 }]}
-        activeOpacity={0.65}
-        onPress={() => { setSelectedTripId(trip.id); setModalVisible(true); }}
+        {...wrapperProps}
       >
         <View style={[c.bar, { backgroundColor: meta.color }]} />
         <View style={c.body}>
           {/* Row 1 */}
           <View style={c.row1}>
-            <Text style={c.time}>{formatHour(trip.scheduled_time)}</Text>
+            <Text style={c.time}>{formatHour(trip.scheduled_time, trip.is_return)}</Text>
             <Text style={c.client} numberOfLines={1}>{client}</Text>
             <View style={[c.statusPill, { backgroundColor: meta.bg }]}>
               <Text style={[c.statusLabel, { color: meta.color }]}>{meta.label}</Text>
@@ -232,7 +264,7 @@ export default function TripsScreen() {
             </View>
           </View>
 
-          {/* Badges — only show if there are any */}
+          {/* Badges */}
           {((!isMine) || trip.is_return || trip.wheelchair_client_has || trip.wheelchair_need || (trip.distance_meters != null && trip.distance_meters > 0)) && (
             <View style={c.badges}>
               {!isMine && driverName && (
@@ -263,10 +295,12 @@ export default function TripsScreen() {
             </View>
           )}
         </View>
-        <View style={c.chevron}>
-          <Ionicons name="chevron-forward" size={14} color={TXT_MUTED} />
-        </View>
-      </TouchableOpacity>
+        {isMine && (
+          <View style={c.chevron}>
+            <Ionicons name="chevron-forward" size={14} color={TXT_MUTED} />
+          </View>
+        )}
+      </Wrapper>
     );
   }, []);
 

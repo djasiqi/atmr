@@ -6,6 +6,8 @@ const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonM
 const withAndroidGoogleMapsKey = require('./prebuild-mods/withAndroidGoogleMapsKey');
 const withAndroidImmersiveMode = require('./prebuild-mods/withAndroidImmersiveMode');
 const withAndroidR8Enabled = require('./prebuild-mods/withAndroidR8Enabled');
+const withAndroidNotificationColorFix = require('./prebuild-mods/withAndroidNotificationColorFix');
+const withIosFirebaseModularHeaders = require('./prebuild-mods/withIosFirebaseModularHeaders');
 
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
@@ -77,7 +79,7 @@ module.exports = withAndroidR8Enabled(
     googleServicesFile: envOrExistingFile(process.env.GOOGLE_SERVICES_JSON, "./google-services.json"),
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-foreground.png",
-      backgroundColor: "#0D7F72",
+      backgroundColor: "#FFFFFF",
     },
     permissions: [
       "android.permission.POST_NOTIFICATIONS",
@@ -101,6 +103,22 @@ module.exports = withAndroidR8Enabled(
   },
 
   plugins: [
+    [
+      "expo-build-properties",
+      {
+        android: {
+          kotlinVersion: "2.1.20",
+          gradlePluginVersion: "8.13.1",
+          classpath: "com.google.gms:google-services:4.4.2",
+        },
+        ios: {
+          forceStaticLinking: [
+            "RNFBApp",
+            "RNFBMessaging",
+          ],
+        },
+      },
+    ],
     "@react-native-firebase/app",
     "@react-native-firebase/messaging",
     "expo-router",
@@ -115,9 +133,10 @@ module.exports = withAndroidR8Enabled(
       {
         icon: "./assets/icons/notification.png",
         color: "#0A7F59",
-        // sounds: [] // `sounds` est vide, peut être omis si vous utilisez le son par défaut
       },
     ],
+    withAndroidNotificationColorFix,
+    withIosFirebaseModularHeaders,
     [
       "expo-location",
       {
@@ -138,19 +157,6 @@ module.exports = withAndroidR8Enabled(
       }
     ],
     "expo-document-picker",
-    [
-      "expo-build-properties",
-      {
-        android: {
-          kotlinVersion: "2.1.20",
-          gradlePluginVersion: "8.13.1",
-          classpath: "com.google.gms:google-services:4.4.2",
-        },
-        ios: {
-          useFrameworks: "static",
-        },
-      },
-    ],
   ],
 
   experiments: { typedRoutes: true },
