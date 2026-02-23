@@ -24,7 +24,7 @@ const DriverInlineSelect = ({
   const triggerRef = useRef(null);
   const dropdownRef = useRef(null);
   const listRef = useRef(null);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0, openAbove: false });
 
   // V14: auto-open pour mode assignation rapide
   useEffect(() => {
@@ -34,13 +34,21 @@ const DriverInlineSelect = ({
   }, [autoOpen, disabled, assigning]);
 
   // V10: Calculer position fixed via getBoundingClientRect
+  // V15: Flip vers le haut si pas assez d'espace en bas
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
+    const dropdownMaxHeight = 240;
+    const margin = 8;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openAbove = spaceBelow < dropdownMaxHeight && spaceAbove > spaceBelow;
+
     setDropdownPos({
-      top: rect.bottom + 4,
+      top: openAbove ? rect.top - margin : rect.bottom + 4,
       left: rect.left,
       width: Math.max(rect.width, 220),
+      openAbove,
     });
   }, []);
 
@@ -49,6 +57,17 @@ const DriverInlineSelect = ({
       updatePosition();
       setActiveIndex(-1);
     }
+  }, [isOpen, updatePosition]);
+
+  // Recalculer la position au scroll/resize pour garder le dropdown aligne
+  useEffect(() => {
+    if (!isOpen) return;
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [isOpen, updatePosition]);
 
   // Click outside pour fermer
@@ -154,8 +173,14 @@ const DriverInlineSelect = ({
         {isOpen && (
           <div
             ref={dropdownRef}
-            className={styles.dropdown}
-            style={{ top: dropdownPos.top, left: dropdownPos.left, minWidth: dropdownPos.width }}
+            className={`${styles.dropdown} ${dropdownPos.openAbove ? styles.dropdownAbove : ''}`}
+            style={{
+              ...(dropdownPos.openAbove
+                ? { bottom: window.innerHeight - dropdownPos.top, top: 'auto' }
+                : { top: dropdownPos.top }),
+              left: dropdownPos.left,
+              minWidth: dropdownPos.width,
+            }}
             role="listbox"
             aria-label="Choisir un chauffeur"
           >
@@ -215,8 +240,14 @@ const DriverInlineSelect = ({
       {isOpen && (
         <div
           ref={dropdownRef}
-          className={styles.dropdown}
-          style={{ top: dropdownPos.top, left: dropdownPos.left, minWidth: dropdownPos.width }}
+          className={`${styles.dropdown} ${dropdownPos.openAbove ? styles.dropdownAbove : ''}`}
+          style={{
+            ...(dropdownPos.openAbove
+              ? { bottom: window.innerHeight - dropdownPos.top, top: 'auto' }
+              : { top: dropdownPos.top }),
+            left: dropdownPos.left,
+            minWidth: dropdownPos.width,
+          }}
           role="listbox"
           aria-label="Choisir un chauffeur"
         >

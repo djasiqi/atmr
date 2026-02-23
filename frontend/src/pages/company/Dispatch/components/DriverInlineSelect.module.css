@@ -105,6 +105,22 @@
   }
 }
 
+/* Dropdown ouvre vers le haut */
+.dropdownAbove {
+  animation: dropdownFadeInAbove 0.15s ease-out;
+}
+
+@keyframes dropdownFadeInAbove {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .driverOption {
   display: flex;
   justify-content: space-between;
