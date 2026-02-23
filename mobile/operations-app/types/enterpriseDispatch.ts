@@ -280,6 +280,9 @@ export interface AddressSuggestion {
   lat?: number;
   lon?: number;
   place_id?: string;
+  types?: string[];
+  category?: string;
+  name?: string;
 }
 
 export interface ClientOption {

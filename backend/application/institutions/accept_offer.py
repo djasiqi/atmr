@@ -361,7 +361,9 @@ class AcceptOfferUseCase:
                 billed_to_type = billed_to
             # Si facturé à la clinique ou assurance, il faut renseigner billed_to_company_id
             if billed_to_type != "patient":
-                billed_to_company_id = company_id
+                billed_to_company_id = getattr(
+                    institution_client, "default_billed_to_company_id", None
+                )
 
         # Réutiliser le champ hospital_service du Booking pour le point d'accueil
         entry_point = getattr(transport_request, "pickup_entry_point", None) or ""

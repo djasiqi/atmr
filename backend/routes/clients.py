@@ -1,4 +1,7 @@
 import logging
+import re
+import unicodedata
+from difflib import SequenceMatcher
 from datetime import UTC, datetime
 from typing import Any, cast
 from urllib.parse import urlencode
@@ -419,6 +422,23 @@ class ClientBookings(Resource):
 # -------------------------------------------------------------------
 
 
+def _normalize_name_for_match(value: str | None) -> str:
+    """Normalise un nom pour matching tolérant (accents, apostrophes, ponctuation)."""
+    if not value:
+        return ""
+
+    normalized = unicodedata.normalize("NFKD", str(value))
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = (
+        normalized.lower()
+        .replace("’", "'")
+        .replace("`", "'")
+        .replace("´", "'")
+    )
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
 def _serialize_client_stay(stay: ClientStay) -> dict[str, Any]:
     clinic = Company.query.filter_by(id=stay.company_id).first()
     return {
@@ -471,46 +491,135 @@ def _serialize_client_stay_with_clinic_details(
 
     clinic_address = ", ".join(clinic_address_parts) if clinic_address_parts else None
 
+    # Always look up the institution Client to get address / rate fallbacks.
+    # Strategy chain (most specific → broadest):
+    #   1. Billing mapping: default_billed_to_company_id = clinic.id
+    #   2. Linked institution direct match: linked_institution_id = clinic.id
+    #   3. Exact name match: institution_name = clinic.name
+    #   4. Case-insensitive name match: ILIKE
+    #   5. Normalized name match (accents/punctuation-insensitive)
+    fallback_client = None
+    if owner_company_id is not None:
+        fallback_client = Client.query.filter_by(
+            default_billed_to_company_id=clinic.id,
+            is_institution=True,
+            company_id=owner_company_id,
+        ).first()
+    if not fallback_client and owner_company_id is not None:
+        fallback_client = Client.query.filter_by(
+            linked_institution_id=clinic.id,
+            is_institution=True,
+            company_id=owner_company_id,
+        ).first()
+    if not fallback_client and owner_company_id is not None and clinic.name:
+        fallback_client = Client.query.filter_by(
+            is_institution=True,
+            company_id=owner_company_id,
+            institution_name=clinic.name,
+        ).first()
+    if not fallback_client and owner_company_id is not None and clinic.name:
+        fallback_client = Client.query.filter(
+            Client.is_institution.is_(True),
+            Client.company_id == owner_company_id,
+            Client.institution_name.ilike(clinic.name),
+        ).first()
+    if not fallback_client and owner_company_id is not None and clinic.name:
+        clinic_name_clean = clinic.name.strip()
+        if len(clinic_name_clean) >= 4:
+            fallback_client = Client.query.filter(
+                Client.is_institution.is_(True),
+                Client.company_id == owner_company_id,
+                Client.institution_name.ilike(f"%{clinic_name_clean}%"),
+            ).first()
+    if not fallback_client and owner_company_id is not None and clinic.name:
+        # Fallback robuste: ignore accents / apostrophes typographiques / ponctuation.
+        clinic_norm = _normalize_name_for_match(clinic.name)
+        if clinic_norm:
+            clinic_norm_compact = clinic_norm.replace(" ", "")
+            institution_clients = Client.query.filter(
+                Client.is_institution.is_(True),
+                Client.company_id == owner_company_id,
+            ).all()
+            for candidate in institution_clients:
+                cand_name = getattr(candidate, "institution_name", None)
+                cand_norm = _normalize_name_for_match(cand_name)
+                if not cand_norm:
+                    continue
+                cand_norm_compact = cand_norm.replace(" ", "")
+                similarity = SequenceMatcher(
+                    None,
+                    clinic_norm_compact,
+                    cand_norm_compact,
+                ).ratio()
+                if (
+                    cand_norm == clinic_norm
+                    or cand_norm in clinic_norm
+                    or clinic_norm in cand_norm
+                    or similarity >= 0.8
+                ):
+                    fallback_client = candidate
+                    break
+
     fallback_domicile_address = None
     fallback_domicile_zip = None
     fallback_domicile_city = None
+    fallback_lat = None
+    fallback_lon = None
+    institution_preferential_rate = None
+
+    if fallback_client:
+        fallback_domicile_address = getattr(fallback_client, "domicile_address", None)
+        fallback_domicile_zip = getattr(fallback_client, "domicile_zip", None)
+        fallback_domicile_city = getattr(fallback_client, "domicile_city", None)
+        fallback_lat = getattr(fallback_client, "domicile_lat", None)
+        fallback_lon = getattr(fallback_client, "domicile_lon", None)
+        fb_rate = getattr(fallback_client, "preferential_rate", None)
+        if fb_rate is not None:
+            institution_preferential_rate = float(fb_rate)
+
+        # Address fallback: domicile first, then billing_address
+        if not fallback_domicile_address:
+            billing_addr = getattr(fallback_client, "billing_address", None)
+            if billing_addr:
+                fallback_domicile_address = billing_addr
+                fallback_lat = getattr(fallback_client, "billing_lat", None) or fallback_lat
+                fallback_lon = getattr(fallback_client, "billing_lon", None) or fallback_lon
 
     missing_structured = not (
         clinic.domicile_address_line1
         or clinic.domicile_zip
         or clinic.domicile_city
     )
-    if missing_structured:
-        fallback_client = None
-        if owner_company_id is not None:
-            fallback_client = Client.query.filter_by(
-                default_billed_to_company_id=clinic.id,
-                is_institution=True,
-                company_id=owner_company_id,
-            ).first()
-        if not fallback_client and owner_company_id is not None and clinic.name:
-            fallback_client = Client.query.filter_by(
-                is_institution=True,
-                company_id=owner_company_id,
-                institution_name=clinic.name,
-            ).first()
-        if fallback_client:
-            fallback_domicile_address = getattr(
-                fallback_client, "domicile_address", None
-            )
-            fallback_domicile_zip = getattr(fallback_client, "domicile_zip", None)
-            fallback_domicile_city = getattr(fallback_client, "domicile_city", None)
-            fallback_parts = [
-                part
-                for part in [
-                    fallback_domicile_address,
-                    fallback_domicile_zip,
-                    fallback_domicile_city,
-                ]
-                if part
+    if missing_structured and fallback_client:
+        fallback_parts = [
+            part
+            for part in [
+                fallback_domicile_address,
+                fallback_domicile_zip,
+                fallback_domicile_city,
             ]
-            if fallback_parts:
-                clinic_address = ", ".join(fallback_parts)
+            if part
+        ]
+        if fallback_parts:
+            clinic_address = ", ".join(fallback_parts)
+
+    # Effective preferential rate: Company rate > institution Client rate
+    effective_rate = (
+        float(clinic.preferential_rate)
+        if clinic.preferential_rate is not None
+        else institution_preferential_rate
+    )
+
+    # Effective coordinates: Company > fallback Client
+    effective_lat = float(clinic.latitude) if clinic.latitude else fallback_lat
+    effective_lon = float(clinic.longitude) if clinic.longitude else fallback_lon
+    if effective_lat is not None:
+        effective_lat = float(effective_lat)
+    if effective_lon is not None:
+        effective_lon = float(effective_lon)
+    effective_clinic_name = (
+        getattr(fallback_client, "institution_name", None) or clinic.name
+    )
 
     return {
         "id": stay.id,
@@ -523,7 +632,7 @@ def _serialize_client_stay_with_clinic_details(
         "notes": stay.notes,
         "clinic": {
             "id": clinic.id,
-            "name": clinic.name,
+            "name": effective_clinic_name,
             "address": clinic_address,
             "domicile_address_line1": clinic.domicile_address_line1
             or fallback_domicile_address,
@@ -531,13 +640,11 @@ def _serialize_client_stay_with_clinic_details(
             "domicile_zip": clinic.domicile_zip or fallback_domicile_zip,
             "domicile_city": clinic.domicile_city or fallback_domicile_city,
             "domicile_country": clinic.domicile_country,
-            "latitude": float(clinic.latitude) if clinic.latitude else None,
-            "longitude": float(clinic.longitude) if clinic.longitude else None,
+            "latitude": effective_lat,
+            "longitude": effective_lon,
             "contact_email": clinic.contact_email,
             "contact_phone": clinic.contact_phone,
-            "preferential_rate": (
-                float(clinic.preferential_rate) if clinic.preferential_rate is not None else None
-            ),
+            "preferential_rate": effective_rate,
         },
     }
 
@@ -1848,7 +1955,7 @@ class CreateCompanyForInstitutionClient(Resource):
                         "message": "Company déjà associée",
                     }, 200
 
-            # Créer une nouvelle Company à partir des informations du client
+            # Réutiliser une Company existante de la même institution si possible
             from models import User
 
             # Créer un User pour la Company (ou réutiliser celui du client)
@@ -1858,7 +1965,44 @@ class CreateCompanyForInstitutionClient(Resource):
                     "User", client.user_id, logger
                 )
 
-            # Créer la Company
+            # Résolution d'une Company existante (évite les doublons)
+            new_company = None
+            if getattr(client, "linked_institution_id", None):
+                existing_linked_client = (
+                    Client.query.filter(
+                        Client.company_id == current_company.id,
+                        Client.is_institution.is_(True),
+                        Client.id != client.id,
+                        Client.linked_institution_id == client.linked_institution_id,
+                        Client.default_billed_to_company_id.isnot(None),
+                    )
+                    .order_by(Client.id.desc())
+                    .first()
+                )
+                if existing_linked_client and existing_linked_client.default_billed_to_company_id:
+                    new_company = Company.query.filter_by(
+                        id=existing_linked_client.default_billed_to_company_id
+                    ).first()
+
+            if not new_company and client.institution_name:
+                target_name = _normalize_name_for_match(client.institution_name)
+                if target_name:
+                    existing_mappings = ClinicBillingPartyMapping.query.filter_by(
+                        company_id=current_company.id
+                    ).all()
+                    for mapping in existing_mappings:
+                        candidate_company = Company.query.filter_by(
+                            id=mapping.clinic_company_id
+                        ).first()
+                        if not candidate_company:
+                            continue
+                        if (
+                            _normalize_name_for_match(candidate_company.name) == target_name
+                        ):
+                            new_company = candidate_company
+                            break
+
+            # Créer la Company seulement si nécessaire
             domicile_lat = getattr(client, "domicile_lat", None)
             domicile_lon = getattr(client, "domicile_lon", None)
             domicile_address = getattr(client, "domicile_address", None) or ""
@@ -1871,40 +2015,67 @@ class CreateCompanyForInstitutionClient(Resource):
                 else ""
             )
 
-            new_company = Company()
-            new_company.name = client.institution_name or f"Clinique #{client.id}"
-            new_company.user_id = company_user.id
-            new_company.address = full_address
-            new_company.domicile_address_line1 = domicile_address or None
-            new_company.domicile_zip = domicile_zip or None
-            new_company.domicile_city = domicile_city or None
-            new_company.latitude = (
-                float(domicile_lat) if domicile_lat is not None else None
-            )
-            new_company.longitude = (
-                float(domicile_lon) if domicile_lon is not None else None
-            )
-            new_company.contact_email = (
-                client.contact_email or company_user.email or ""
-            )
-            new_company.contact_phone = (
-                client.contact_phone or company_user.phone or ""
-            )
-            new_company.service_area = ""
-            new_company.max_daily_bookings = 50
-            new_company.is_approved = False
-            new_company.preferential_rate = (
-                client.preferential_rate
-                if getattr(client, "preferential_rate", None) is not None
-                else None
-            )
+            if not new_company:
+                new_company = Company()
+                new_company.name = client.institution_name or f"Clinique #{client.id}"
+                new_company.user_id = company_user.id
+                new_company.address = full_address
+                new_company.domicile_address_line1 = domicile_address or None
+                new_company.domicile_zip = domicile_zip or None
+                new_company.domicile_city = domicile_city or None
+                new_company.latitude = (
+                    float(domicile_lat) if domicile_lat is not None else None
+                )
+                new_company.longitude = (
+                    float(domicile_lon) if domicile_lon is not None else None
+                )
+                new_company.contact_email = (
+                    client.contact_email or company_user.email or ""
+                )
+                new_company.contact_phone = (
+                    client.contact_phone or company_user.phone or ""
+                )
+                new_company.service_area = ""
+                new_company.max_daily_bookings = 50
+                new_company.is_approved = False
+                new_company.preferential_rate = (
+                    client.preferential_rate
+                    if getattr(client, "preferential_rate", None) is not None
+                    else None
+                )
 
-            db.session.add(new_company)
-            db.session.flush()
+                db.session.add(new_company)
+                db.session.flush()
+            else:
+                # Mise à jour soft si Company existante.
+                new_company.name = client.institution_name or new_company.name
+                if full_address:
+                    new_company.address = full_address
+                new_company.domicile_address_line1 = (
+                    domicile_address or new_company.domicile_address_line1
+                )
+                new_company.domicile_zip = domicile_zip or new_company.domicile_zip
+                new_company.domicile_city = domicile_city or new_company.domicile_city
+                new_company.latitude = (
+                    float(domicile_lat)
+                    if domicile_lat is not None
+                    else new_company.latitude
+                )
+                new_company.longitude = (
+                    float(domicile_lon)
+                    if domicile_lon is not None
+                    else new_company.longitude
+                )
+                if client.contact_email:
+                    new_company.contact_email = client.contact_email
+                if client.contact_phone:
+                    new_company.contact_phone = client.contact_phone
+                if getattr(client, "preferential_rate", None) is not None:
+                    new_company.preferential_rate = client.preferential_rate
 
             # Associer la Company au client
             client.default_billed_to_company_id = new_company.id
-            # Créer automatiquement un BillingParty et un mapping pour cette clinique
+            # Upsert BillingParty et mapping pour cette clinique
             billing_address = client.billing_address or client.domicile_address or ""
             if client.domicile_zip and client.domicile_city:
                 if billing_address:
@@ -1916,27 +2087,38 @@ class CreateCompanyForInstitutionClient(Resource):
 
             from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping
 
-            billing_party = BillingParty()
-            billing_party.company_id = current_company.id
-            billing_party.type = BillingPartyType.CLINIC
+            billing_ref = f"clinic_company:{new_company.id}"
+            billing_party = BillingParty.query.filter_by(
+                company_id=current_company.id,
+                external_ref=billing_ref,
+            ).first()
+            if not billing_party:
+                billing_party = BillingParty()
+                billing_party.company_id = current_company.id
+                billing_party.type = BillingPartyType.CLINIC
+                billing_party.external_ref = billing_ref
+                db.session.add(billing_party)
             billing_party.display_name = new_company.name
             billing_party.billing_address = (
                 billing_address or "Adresse non renseignée"
             )
             billing_party.contact_email = new_company.contact_email
             billing_party.contact_phone = new_company.contact_phone
-            billing_party.external_ref = f"clinic_company:{new_company.id}"
             billing_party.is_active = True
-            db.session.add(billing_party)
             db.session.flush()
 
-            # Créer le mapping
-            mapping = ClinicBillingPartyMapping()
-            mapping.company_id = current_company.id
-            mapping.clinic_company_id = new_company.id
+            # Upsert mapping
+            mapping = ClinicBillingPartyMapping.query.filter_by(
+                company_id=current_company.id,
+                clinic_company_id=new_company.id,
+            ).first()
+            if not mapping:
+                mapping = ClinicBillingPartyMapping()
+                mapping.company_id = current_company.id
+                mapping.clinic_company_id = new_company.id
+                db.session.add(mapping)
             mapping.billing_party_id = billing_party.id
             mapping.is_active = True
-            db.session.add(mapping)
 
             db.session.commit()
 

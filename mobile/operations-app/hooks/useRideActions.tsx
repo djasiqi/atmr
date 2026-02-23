@@ -16,6 +16,9 @@ import type {
     DriverSuggestion,
 } from "@/types/enterpriseDispatch";
 import { sendIngestEvent } from "@/src/config/telemetry";
+import { getLogger } from "@/utils/logger";
+
+const log = getLogger("RideActions");
 
 // ✅ Helper pour afficher des alertes cross-platform (web + native)
 const showAlert = (title: string, message: string, buttons: Array<{ text: string; style?: string; onPress?: () => void }>) => {

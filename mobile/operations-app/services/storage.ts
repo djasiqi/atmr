@@ -2,11 +2,44 @@
 // Helper pour le stockage sécurisé et non-sécurisé des tokens et données d'authentification
 
 import * as SecureStore from "expo-secure-store";
+import { Platform, AppState, type AppStateStatus } from "react-native";
 import { getLogger } from "@/utils/logger";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 
 const log = getLogger("Storage");
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// iOS Keychain : AFTER_FIRST_UNLOCK garantit l'accès aux tokens
+// même quand l'app revient du background (le défaut WHEN_UNLOCKED peut
+// échouer silencieusement après suspension).
+const IOS_OPTS: SecureStore.SecureStoreOptions | undefined =
+  Platform.OS === "ios"
+    ? { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK }
+    : undefined;
+
+const secureGetRaw = (key: string) => SecureStore.getItemAsync(key, IOS_OPTS);
+const secureSet = (key: string, value: string) =>
+  SecureStore.setItemAsync(key, value, IOS_OPTS);
+const secureDel = (key: string) => SecureStore.deleteItemAsync(key, IOS_OPTS);
+
+/**
+ * Wrapper autour de SecureStore.getItemAsync qui gere l'erreur iOS
+ * "User interaction is not allowed" (Keychain inaccessible en background/locked).
+ * Retourne null au lieu de throw pour eviter les crashes en production.
+ */
+const secureGet = async (key: string): Promise<string | null> => {
+  try {
+    return await secureGetRaw(key);
+  } catch (error: any) {
+    const msg = error?.message ?? String(error);
+    if (msg.includes("User interaction is not allowed") || msg.includes("getValueWithKeyAsync")) {
+      log.warn("keychain_locked", { key, error: msg });
+      return null;
+    }
+    throw error;
+  }
+};
+
 import * as Crypto from "expo-crypto";
 import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 import {
@@ -83,17 +116,19 @@ export const secureStorage = {
    */
   async setRefreshToken(token: string): Promise<void> {
     try {
-      // Double-slot : sauvegarder le token actuel en backup avant d'ecrire le nouveau
-      const currentPrimary = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
-      if (currentPrimary) {
-        try {
-          await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP, currentPrimary);
-        } catch {
-          log.warn("refresh_backup_save_failed (non-blocking)");
-        }
-      }
+      // Sauvegarder le backup et écrire le nouveau token en parallèle
+      // pour réduire le temps de blocage du bridge natif (Android KeyStore)
+      const currentPrimary = cachedRefreshToken ?? await secureGet(SECURE_KEYS.REFRESH_TOKEN);
+      const backupPromise = currentPrimary
+        ? secureSet(SECURE_KEYS.REFRESH_TOKEN_BACKUP, currentPrimary).catch(() => {
+            log.warn("refresh_backup_save_failed (non-blocking)");
+          })
+        : Promise.resolve();
 
-      await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, token);
+      await Promise.all([
+        backupPromise,
+        secureSet(SECURE_KEYS.REFRESH_TOKEN, token),
+      ]);
 
       cachedRefreshToken = token;
       refreshTokenCacheTime = Date.now();
@@ -127,17 +162,16 @@ export const secureStorage = {
       refreshTokenCacheMissCount++;
     }
 
-    let token = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN);
+    let token = await secureGet(SECURE_KEYS.REFRESH_TOKEN);
 
     // Fallback sur le backup si le primary est absent/corrompu
     if (!token) {
-      const backup = await SecureStore.getItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP);
+      const backup = await secureGet(SECURE_KEYS.REFRESH_TOKEN_BACKUP);
       if (backup) {
         log.warn("refresh_fallback_used: primary missing, using backup");
         token = backup;
-        // Restaurer le primary depuis le backup
         try {
-          await SecureStore.setItemAsync(SECURE_KEYS.REFRESH_TOKEN, backup);
+          await secureSet(SECURE_KEYS.REFRESH_TOKEN, backup);
         } catch {
           // best-effort
         }
@@ -179,8 +213,8 @@ export const secureStorage = {
    */
   async removeRefreshToken(): Promise<void> {
     await Promise.all([
-      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
+      secureDel(SECURE_KEYS.REFRESH_TOKEN),
+      secureDel(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
     ]);
 
     cachedRefreshToken = null;
@@ -191,21 +225,15 @@ export const secureStorage = {
    * Stocke le public_id de l'utilisateur (pour auto-login)
    */
   async setUserPublicId(publicId: string): Promise<void> {
-    await SecureStore.setItemAsync(SECURE_KEYS.USER_PUBLIC_ID, publicId);
+    await secureSet(SECURE_KEYS.USER_PUBLIC_ID, publicId);
   },
 
-  /**
-   * Récupère le public_id de l'utilisateur
-   */
   async getUserPublicId(): Promise<string | null> {
-    return await SecureStore.getItemAsync(SECURE_KEYS.USER_PUBLIC_ID);
+    return await secureGet(SECURE_KEYS.USER_PUBLIC_ID);
   },
 
-  /**
-   * Supprime le public_id de l'utilisateur
-   */
   async removeUserPublicId(): Promise<void> {
-    await SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID);
+    await secureDel(SECURE_KEYS.USER_PUBLIC_ID);
   },
 
   /**
@@ -215,17 +243,15 @@ export const secureStorage = {
    */
   async setAccessToken(token: string): Promise<void> {
     try {
-      await SecureStore.setItemAsync(SECURE_KEYS.ACCESS_TOKEN, token);
+      await secureSet(SECURE_KEYS.ACCESS_TOKEN, token);
 
-      // Mettre à jour le cache immédiatement
       cachedAccessToken = token;
       tokenCacheTime = Date.now();
     } catch (error) {
       log.error("access token save failed", { error });
-      // Ne pas mettre à jour le cache si le stockage a échoué
       cachedAccessToken = null;
       tokenCacheTime = 0;
-      throw error; // Propager l'erreur pour que l'app puisse réagir
+      throw error;
     }
   },
 
@@ -250,10 +276,8 @@ export const secureStorage = {
       accessTokenCacheMissCount++;
     }
 
-    // Lire depuis SecureStore
-    const token = await SecureStore.getItemAsync(SECURE_KEYS.ACCESS_TOKEN);
+    const token = await secureGet(SECURE_KEYS.ACCESS_TOKEN);
 
-    // Mettre à jour le cache
     cachedAccessToken = token;
     tokenCacheTime = now;
 
@@ -289,9 +313,8 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeAccessToken(): Promise<void> {
-    await SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN);
+    await secureDel(SECURE_KEYS.ACCESS_TOKEN);
 
-    // Nettoyer le cache
     cachedAccessToken = null;
     tokenCacheTime = 0;
   },
@@ -302,7 +325,7 @@ export const secureStorage = {
    */
   async clearDriverAuthOnly(): Promise<void> {
     await Promise.all([
-      ...DRIVER_AUTH_KEYS.secure.map((k) => SecureStore.deleteItemAsync(k)),
+      ...DRIVER_AUTH_KEYS.secure.map((k) => secureDel(k)),
       AsyncStorage.multiRemove([...DRIVER_AUTH_KEYS.async]),
     ]);
 
@@ -329,7 +352,7 @@ export const secureStorage = {
    */
   async clearEnterpriseAuthOnly(): Promise<void> {
     await Promise.all([
-      ...ENTERPRISE_AUTH_KEYS.secure.map((k) => SecureStore.deleteItemAsync(k)),
+      ...ENTERPRISE_AUTH_KEYS.secure.map((k) => secureDel(k)),
       AsyncStorage.multiRemove([...ENTERPRISE_AUTH_KEYS.async]),
     ]);
 
@@ -349,12 +372,12 @@ export const secureStorage = {
       return;
     }
     await Promise.all([
-      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
-      SecureStore.deleteItemAsync(SECURE_KEYS.ACCESS_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.USER_PUBLIC_ID),
-      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH),
+      secureDel(SECURE_KEYS.REFRESH_TOKEN),
+      secureDel(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
+      secureDel(SECURE_KEYS.ACCESS_TOKEN),
+      secureDel(SECURE_KEYS.USER_PUBLIC_ID),
+      secureDel(SECURE_KEYS.ENTERPRISE_TOKEN),
+      secureDel(SECURE_KEYS.ENTERPRISE_REFRESH),
     ]);
 
     cachedAccessToken = null;
@@ -392,8 +415,8 @@ export const secureStorage = {
       // Stocker l'email et le mot de passe dans SecureStore
       // SecureStore utilise Keychain (iOS) / Keystore (Android) qui sont sécurisés
       await Promise.all([
-        SecureStore.setItemAsync(SECURE_KEYS.SAVED_EMAIL, email),
-        SecureStore.setItemAsync(SECURE_KEYS.SAVED_PASSWORD, password),
+        secureSet(SECURE_KEYS.SAVED_EMAIL, email),
+        secureSet(SECURE_KEYS.SAVED_PASSWORD, password),
       ]);
       log.success("credentials saved for auto-login", {});
     } catch (error) {
@@ -412,8 +435,8 @@ export const secureStorage = {
   }> {
     try {
       const [email, password] = await Promise.all([
-        SecureStore.getItemAsync(SECURE_KEYS.SAVED_EMAIL),
-        SecureStore.getItemAsync(SECURE_KEYS.SAVED_PASSWORD),
+        secureGet(SECURE_KEYS.SAVED_EMAIL),
+        secureGet(SECURE_KEYS.SAVED_PASSWORD),
       ]);
       return { email, password };
     } catch (error) {
@@ -428,8 +451,8 @@ export const secureStorage = {
   async clearSavedCredentials(): Promise<void> {
     try {
       await Promise.all([
-        SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_EMAIL),
-        SecureStore.deleteItemAsync(SECURE_KEYS.SAVED_PASSWORD),
+        secureDel(SECURE_KEYS.SAVED_EMAIL),
+        secureDel(SECURE_KEYS.SAVED_PASSWORD),
       ]);
       log.success("saved credentials cleared", {});
     } catch (error) {
@@ -444,17 +467,15 @@ export const secureStorage = {
    */
   async setEnterpriseToken(token: string): Promise<void> {
     try {
-      await SecureStore.setItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN, token);
+      await secureSet(SECURE_KEYS.ENTERPRISE_TOKEN, token);
 
-      // Mettre à jour le cache immédiatement
       cachedEnterpriseToken = token;
       enterpriseTokenCacheTime = Date.now();
     } catch (error) {
       log.error("enterprise token save failed", { error });
-      // Ne pas mettre à jour le cache si le stockage a échoué
       cachedEnterpriseToken = null;
       enterpriseTokenCacheTime = 0;
-      throw error; // Propager l'erreur pour que l'app puisse réagir
+      throw error;
     }
   },
 
@@ -473,10 +494,8 @@ export const secureStorage = {
       return cachedEnterpriseToken;
     }
 
-    // Lire depuis SecureStore
-    const token = await SecureStore.getItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN);
+    const token = await secureGet(SECURE_KEYS.ENTERPRISE_TOKEN);
 
-    // Mettre à jour le cache
     cachedEnterpriseToken = token;
     enterpriseTokenCacheTime = now;
 
@@ -488,9 +507,8 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeEnterpriseToken(): Promise<void> {
-    await SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN);
+    await secureDel(SECURE_KEYS.ENTERPRISE_TOKEN);
 
-    // Nettoyer le cache
     cachedEnterpriseToken = null;
     enterpriseTokenCacheTime = 0;
   },
@@ -501,9 +519,8 @@ export const secureStorage = {
    */
   async setEnterpriseRefreshToken(token: string): Promise<void> {
     try {
-      await SecureStore.setItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH, token);
+      await secureSet(SECURE_KEYS.ENTERPRISE_REFRESH, token);
 
-      // Mettre à jour le cache immédiatement
       cachedEnterpriseRefreshToken = token;
       enterpriseRefreshTokenCacheTime = Date.now();
       if (isDebugAuthEnabled()) {
@@ -514,7 +531,6 @@ export const secureStorage = {
       }
     } catch (error) {
       log.error("enterprise refresh token save failed", { error });
-      // Ne pas mettre à jour le cache si le stockage a échoué
       cachedEnterpriseRefreshToken = null;
       enterpriseRefreshTokenCacheTime = 0;
       throw error; // Propager l'erreur pour que l'app puisse réagir
@@ -536,12 +552,8 @@ export const secureStorage = {
       return cachedEnterpriseRefreshToken;
     }
 
-    // Lire depuis SecureStore
-    const token = await SecureStore.getItemAsync(
-      SECURE_KEYS.ENTERPRISE_REFRESH
-    );
+    const token = await secureGet(SECURE_KEYS.ENTERPRISE_REFRESH);
 
-    // Mettre à jour le cache
     cachedEnterpriseRefreshToken = token;
     enterpriseRefreshTokenCacheTime = now;
 
@@ -560,9 +572,8 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeEnterpriseRefreshToken(): Promise<void> {
-    await SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH);
+    await secureDel(SECURE_KEYS.ENTERPRISE_REFRESH);
 
-    // Nettoyer le cache
     cachedEnterpriseRefreshToken = null;
     enterpriseRefreshTokenCacheTime = 0;
   },
@@ -573,11 +584,11 @@ export const secureStorage = {
    */
   async clearEnterpriseTokens(): Promise<void> {
     await Promise.all([
-      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_TOKEN),
-      SecureStore.deleteItemAsync(SECURE_KEYS.ENTERPRISE_REFRESH),
+      secureDel(SECURE_KEYS.ENTERPRISE_TOKEN),
+      secureDel(SECURE_KEYS.ENTERPRISE_REFRESH),
     ]);
 
-    // Nettoyer tous les caches en mémoire
+
     cachedEnterpriseToken = null;
     enterpriseTokenCacheTime = 0;
     cachedEnterpriseRefreshToken = null;
@@ -723,4 +734,54 @@ export const asyncStorage = {
     ]);
   },
 };
+
+// ============ Migration iOS Keychain accessibility ============
+// Les items ecrits avant l'ajout de AFTER_FIRST_UNLOCK ont l'accessibilite
+// par defaut WHEN_UNLOCKED → illisibles en background/locked → crash
+// "User interaction is not allowed". Cette migration les re-ecrit une seule fois.
+const KEYCHAIN_MIGRATION_KEY = "@atmr:keychain_migrated_v1";
+
+async function migrateKeychainAccessibility(): Promise<void> {
+  if (Platform.OS !== "ios") return;
+  try {
+    const done = await AsyncStorage.getItem(KEYCHAIN_MIGRATION_KEY);
+    if (done) return;
+
+    const allKeys = Object.values(SECURE_KEYS);
+    for (const key of allKeys) {
+      try {
+        const value = await secureGetRaw(key);
+        if (value) {
+          await secureSet(key, value);
+        }
+      } catch {
+        // L'item est peut-etre deja inaccessible — on skip
+      }
+    }
+
+    await AsyncStorage.setItem(KEYCHAIN_MIGRATION_KEY, "1");
+    log.info("keychain migration done", { keys: allKeys.length });
+  } catch (e) {
+    log.warn("keychain migration failed", { error: e });
+  }
+}
+
+// Lancer la migration quand l'app est active (foreground)
+if (Platform.OS === "ios") {
+  const runMigrationWhenActive = () => {
+    const handleState = (state: AppStateStatus) => {
+      if (state === "active") {
+        migrateKeychainAccessibility();
+        sub.remove();
+      }
+    };
+    const sub = AppState.addEventListener("change", handleState);
+    // Si deja active, lancer immediatement
+    if (AppState.currentState === "active") {
+      migrateKeychainAccessibility();
+      sub.remove();
+    }
+  };
+  runMigrationWhenActive();
+}
 

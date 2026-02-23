@@ -19,19 +19,26 @@ import {
 } from "@/services/partnershipService";
 import { RideSummary } from "@/types/enterpriseDispatch";
 import { getLogger } from "@/utils/logger";
+import { createShadow } from "@/styles/shadowStyles";
 
 const log = getLogger("Transfer");
-// Palette de couleurs cohérente avec l'app
+
+const BRAND = "#00796B";
 const palette = {
-    primary: "#0A7F59",
-    text: "#15362B",
-    textSecondary: "#5F7369",
-    border: "rgba(15,54,43,0.08)",
-    background: "#F5F7F6",
-    danger: "#ef4444",
+    primary: BRAND,
+    primaryLight: "rgba(0,121,107,0.08)",
+    primaryMedium: "rgba(0,121,107,0.15)",
+    text: "#1E293B",
+    textSecondary: "#64748B",
+    textMuted: "#94A3B8",
+    border: "rgba(0,121,107,0.08)",
+    background: "#f4f7fc",
+    card: "#FFFFFF",
+    danger: "#dc3545",
+    dangerLight: "rgba(220,53,69,0.06)",
+    dangerBorder: "rgba(220,53,69,0.15)",
     success: "#10b981",
-    warning: "#f59e0b",
-    disabled: "#91A59D",
+    disabled: "rgba(0,121,107,0.4)",
 };
 
 interface TransferRideModalProps {
@@ -41,10 +48,6 @@ interface TransferRideModalProps {
     onSuccess: () => void;
 }
 
-/**
- * Modal pour transférer une course à une entreprise partenaire
- * Similaire au composant web TransferBookingModal.jsx
- */
 export const TransferRideModal: React.FC<TransferRideModalProps> = ({
     visible,
     onClose,
@@ -58,7 +61,6 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
     const [error, setError] = useState("");
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-    // Charger les partenariats quand le modal s'ouvre
     useEffect(() => {
         if (visible) {
             loadPartnerships();
@@ -68,12 +70,11 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
     }, [visible]);
 
     useEffect(() => {
-        log.info("selected partnership state", { selectedPartnership: selectedPartnership?.partner_company_name || "none" });
+        log.info("selected partnership state", {
+            selectedPartnership: selectedPartnership?.partner_company_name || "none",
+        });
     }, [selectedPartnership]);
 
-    /**
-     * Charge la liste des partenariats disponibles pour le transfert
-     */
     const loadPartnerships = async () => {
         try {
             setLoading(true);
@@ -93,14 +94,13 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
         }
     };
 
-    /**
-     * Propose le transfert de la course au partenaire sélectionné
-     */
     const handleTransfer = async () => {
-        log.info("handleTransfer called", { selectedPartnership: selectedPartnership?.partner_company_name });
+        log.info("handleTransfer called", {
+            selectedPartnership: selectedPartnership?.partner_company_name,
+        });
 
         if (!selectedPartnership) {
-            if (Platform.OS === 'web') {
+            if (Platform.OS === "web") {
                 window.alert("Veuillez sélectionner une entreprise partenaire");
             } else {
                 Alert.alert("Erreur", "Veuillez sélectionner une entreprise partenaire");
@@ -109,7 +109,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
         }
 
         if (!ride) {
-            if (Platform.OS === 'web') {
+            if (Platform.OS === "web") {
                 window.alert("Aucune course sélectionnée");
             } else {
                 Alert.alert("Erreur", "Aucune course sélectionnée");
@@ -117,13 +117,9 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
             return;
         }
 
-        // Afficher le modal de confirmation
         setShowConfirmModal(true);
     };
 
-    /**
-     * Confirme et effectue le transfert
-     */
     const confirmTransfer = async () => {
         if (!selectedPartnership || !ride) return;
 
@@ -134,21 +130,15 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
 
             await proposeTransfer(selectedPartnership.id, ride.id);
 
-            if (Platform.OS === 'web') {
-                window.alert(`Course transférée avec succès à ${selectedPartnership.partner_company_name}`);
+            if (Platform.OS === "web") {
+                window.alert(
+                    `Course transférée avec succès à ${selectedPartnership.partner_company_name}`,
+                );
             } else {
                 Alert.alert(
                     "Succès",
                     `Course transférée avec succès à ${selectedPartnership.partner_company_name}`,
-                    [
-                        {
-                            text: "OK",
-                            onPress: () => {
-                                onSuccess();
-                                onClose();
-                            },
-                        },
-                    ]
+                    [{ text: "OK", onPress: () => { onSuccess(); onClose(); } }],
                 );
                 return;
             }
@@ -161,7 +151,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
                 err?.response?.data?.error || err?.message || "Erreur lors du transfert";
             setError(errorMessage);
 
-            if (Platform.OS === 'web') {
+            if (Platform.OS === "web") {
                 window.alert(errorMessage);
             } else {
                 Alert.alert("Erreur", errorMessage);
@@ -171,26 +161,21 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
         }
     };
 
-    /**
-     * Sélectionne un partenariat
-     */
     const handleSelectPartnership = (partnership: Partnership) => {
-        log.info("partnership selected", { partnerCompanyName: partnership.partner_company_name });
+        log.info("partnership selected", {
+            partnerCompanyName: partnership.partner_company_name,
+        });
         setSelectedPartnership(partnership);
         setError("");
     };
 
-    /**
-     * Rendu d'un item de partenariat
-     */
     const renderPartnershipItem = ({ item }: { item: Partnership }) => {
         const isSelected = selectedPartnership?.id === item.id;
 
-        // Formatage de la date en dehors du JSX pour éviter les problèmes de rendering
-        let partnershipDetails = "Partenariat actif (date inconnue)";
+        let partnershipDetails = "Partenariat actif";
         if (item.created_at) {
             const formattedDate = new Date(item.created_at).toLocaleDateString("fr-FR");
-            partnershipDetails = "Partenariat actif depuis " + formattedDate;
+            partnershipDetails = "Depuis le " + formattedDate;
         }
 
         return (
@@ -201,42 +186,59 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
                 accessible={true}
                 accessibilityRole="button"
             >
-                <View style={[styles.radioContainer, styles.pointerEventsNone]}>
-                    {isSelected ? (
-                        <Ionicons name="radio-button-on" size={24} color={palette.primary} />
-                    ) : (
-                        <Ionicons name="radio-button-off" size={24} color={palette.textSecondary} />
-                    )}
+                <View style={[styles.partnershipRadio, styles.pointerEventsNone]}>
+                    <View
+                        style={[
+                            styles.radioOuter,
+                            isSelected && styles.radioOuterSelected,
+                        ]}
+                    >
+                        {isSelected && <View style={styles.radioInner} />}
+                    </View>
                 </View>
 
-                <View style={[styles.partnershipInfo, styles.pointerEventsNone]}>
-                    <Text style={styles.partnershipName}>{item.partner_company_name}</Text>
-                    <Text style={styles.partnershipDetails}>{partnershipDetails}</Text>
+                <View style={[styles.partnershipBody, styles.pointerEventsNone]}>
+                    <View style={styles.partnershipIconWrap}>
+                        <Ionicons name="business" size={18} color={isSelected ? palette.primary : palette.textSecondary} />
+                    </View>
+                    <View style={styles.partnershipTexts}>
+                        <Text style={[styles.partnershipName, isSelected && styles.partnershipNameSelected]}>
+                            {item.partner_company_name}
+                        </Text>
+                        <Text style={styles.partnershipDetails}>{partnershipDetails}</Text>
+                    </View>
                 </View>
 
                 {isSelected && (
-                    <View style={styles.pointerEventsNone}>
-                        <Ionicons name="checkmark-circle" size={20} color={palette.primary} />
+                    <View style={[styles.partnershipCheck, styles.pointerEventsNone]}>
+                        <Ionicons name="checkmark-circle" size={22} color={palette.primary} />
                     </View>
                 )}
             </TouchableOpacity>
         );
     };
 
-    /**
-     * Contenu vide
-     */
-    const renderEmptyList = () => {
-        return (
-            <View style={styles.emptyContainer}>
-                <Ionicons name="business-outline" size={48} color={palette.textSecondary} />
-                <Text style={styles.emptyText}>Aucun partenariat disponible</Text>
-                <Text style={styles.emptySubText}>
-                    Créez des partenariats avec d'autres entreprises pour pouvoir transférer des courses
-                </Text>
+    const renderEmptyList = () => (
+        <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrap}>
+                <Ionicons name="business-outline" size={32} color={palette.primary} />
             </View>
-        );
-    };
+            <Text style={styles.emptyText}>Aucun partenariat disponible</Text>
+            <Text style={styles.emptySubText}>
+                {"Créez des partenariats avec d'autres entreprises pour pouvoir transférer des courses"}
+            </Text>
+        </View>
+    );
+
+    const formattedPickupTime = ride?.time.pickup_at
+        ? new Date(ride.time.pickup_at).toLocaleString("fr-FR", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+          })
+        : "Horaire non défini";
 
     return (
         <Modal
@@ -248,47 +250,54 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
             <View style={styles.container}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Ionicons name="close" size={28} color={palette.text} />
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close" size={22} color={palette.textSecondary} />
                     </TouchableOpacity>
-                    <Text style={styles.title}>Transférer la course</Text>
-                    <View style={styles.placeholder} />
+                    <View style={styles.headerCenter}>
+                        <View style={styles.headerIconWrap}>
+                            <Ionicons name="swap-horizontal" size={16} color={palette.primary} />
+                        </View>
+                        <Text style={styles.headerTitle}>Transférer la course</Text>
+                    </View>
+                    <View style={styles.headerSpacer} />
                 </View>
 
-                {/* Course Info */}
+                {/* Route card */}
                 {ride && (
-                    <View style={styles.rideInfo}>
-                        <View style={styles.rideInfoRow}>
-                            <View style={styles.rideInfoIcon}>
-                                <Ionicons name="location" size={16} color={palette.primary} />
-                            </View>
-                            <Text style={styles.rideInfoText} numberOfLines={1}>
-                                {ride.route.pickup_address}
-                            </Text>
+                    <View style={styles.routeCard}>
+                        <View style={styles.routeTimeline}>
+                            <View style={styles.routeDotPickup} />
+                            <View style={styles.routeLine} />
+                            <View style={styles.routeDotDropoff} />
                         </View>
-                        <View style={styles.rideInfoRow}>
-                            <View style={styles.rideInfoIcon}>
-                                <Ionicons name="navigate" size={16} color={palette.danger} />
+                        <View style={styles.routeAddresses}>
+                            <View style={styles.routeAddressBlock}>
+                                <Text style={styles.routeLabel}>Prise en charge</Text>
+                                <Text style={styles.routeAddress} numberOfLines={2}>
+                                    {ride.route.pickup_address}
+                                </Text>
                             </View>
-                            <Text style={styles.rideInfoText} numberOfLines={1}>
-                                {ride.route.dropoff_address}
-                            </Text>
+                            <View style={styles.routeAddressBlock}>
+                                <Text style={styles.routeLabel}>Destination</Text>
+                                <Text style={styles.routeAddress} numberOfLines={2}>
+                                    {ride.route.dropoff_address}
+                                </Text>
+                            </View>
                         </View>
-                        <View style={styles.rideInfoRow}>
-                            <View style={styles.rideInfoIcon}>
-                                <Ionicons name="time-outline" size={16} color={palette.textSecondary} />
+                        <View style={styles.routeTimeRow}>
+                            <View style={styles.routeTimeBadge}>
+                                <Ionicons name="time-outline" size={13} color={palette.primary} />
+                                <Text style={styles.routeTimeText}>{formattedPickupTime}</Text>
                             </View>
-                            <Text style={styles.rideInfoText}>
-                                {ride.time.pickup_at ? new Date(ride.time.pickup_at).toLocaleString("fr-FR") : "Horaire non défini"}
-                            </Text>
                         </View>
                     </View>
                 )}
 
-                {/* Instructions */}
-                <View style={styles.instructions}>
-                    <Text style={styles.instructionsText}>
-                        Sélectionnez l'entreprise partenaire à qui transférer cette course :
+                {/* Section title */}
+                <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Entreprise partenaire</Text>
+                    <Text style={styles.sectionSubtitle}>
+                        {"Sélectionnez l'entreprise à qui transférer cette course"}
                     </Text>
                 </View>
 
@@ -301,16 +310,16 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
                 )}
 
                 {/* Error */}
-                {error && !loading && (
+                {!!error && !loading && (
                     <View style={styles.errorContainer}>
-                        <View style={styles.errorIcon}>
-                            <Ionicons name="alert-circle" size={24} color={palette.danger} />
+                        <View style={styles.errorIconWrap}>
+                            <Ionicons name="alert-circle" size={20} color={palette.danger} />
                         </View>
                         <Text style={styles.errorText}>{error}</Text>
                     </View>
                 )}
 
-                {/* Liste des partenariats */}
+                {/* Partnership list */}
                 {!loading && !error && (
                     <FlatList
                         data={partnerships}
@@ -323,10 +332,10 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
                     />
                 )}
 
-                {/* Boutons */}
+                {/* Footer */}
                 <View style={styles.footer}>
                     <TouchableOpacity
-                        style={[styles.button, styles.cancelButton]}
+                        style={styles.cancelButton}
                         onPress={onClose}
                         disabled={loadingTransfer}
                     >
@@ -335,7 +344,6 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
 
                     <TouchableOpacity
                         style={[
-                            styles.button,
                             styles.transferButton,
                             (!selectedPartnership || loadingTransfer) && styles.transferButtonDisabled,
                         ]}
@@ -345,42 +353,51 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
                         {loadingTransfer ? (
                             <ActivityIndicator size="small" color="#fff" />
                         ) : (
-                            <View style={styles.transferButtonContent}>
-                                <View style={styles.transferButtonIcon}>
-                                    <Ionicons name="swap-horizontal" size={20} color="#fff" />
-                                </View>
+                            <>
+                                <Ionicons name="swap-horizontal" size={18} color="#fff" />
                                 <Text style={styles.transferButtonText}>Transférer</Text>
-                            </View>
+                            </>
                         )}
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Modal de confirmation */}
+            {/* Confirmation modal */}
             <Modal
                 visible={showConfirmModal}
                 transparent={true}
                 animationType="fade"
                 onRequestClose={() => setShowConfirmModal(false)}
             >
-                <View style={styles.confirmModalOverlay}>
-                    <View style={styles.confirmModalCard}>
-                        <Text style={styles.confirmModalTitle}>Confirmer le transfert</Text>
-                        <Text style={styles.confirmModalText}>
-                            Transférer cette course à {selectedPartnership?.partner_company_name} ?
+                <View style={styles.confirmOverlay}>
+                    <View style={styles.confirmCard}>
+                        <View style={styles.confirmIconWrap}>
+                            <Ionicons name="swap-horizontal" size={28} color={palette.primary} />
+                        </View>
+                        <Text style={styles.confirmTitle}>Confirmer le transfert</Text>
+                        <Text style={styles.confirmText}>
+                            {"Transférer cette course à "}
+                            <Text style={styles.confirmHighlight}>
+                                {selectedPartnership?.partner_company_name}
+                            </Text>
+                            {" ?"}
                         </Text>
-                        <View style={styles.confirmModalActions}>
+                        <Text style={styles.confirmHint}>
+                            {"Cette action notifiera l'entreprise partenaire."}
+                        </Text>
+                        <View style={styles.confirmActions}>
                             <TouchableOpacity
-                                style={[styles.confirmButton, styles.cancelButton]}
+                                style={styles.confirmCancelBtn}
                                 onPress={() => setShowConfirmModal(false)}
                             >
-                                <Text style={styles.cancelButtonText}>Annuler</Text>
+                                <Text style={styles.confirmCancelText}>Annuler</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.confirmButton, styles.transferButton]}
+                                style={styles.confirmTransferBtn}
                                 onPress={confirmTransfer}
                             >
-                                <Text style={styles.transferButtonText}>Transférer</Text>
+                                <Ionicons name="checkmark" size={18} color="#fff" />
+                                <Text style={styles.confirmTransferText}>Confirmer</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -395,218 +412,482 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: palette.background,
     },
+
+    // ── Header ──
     header: {
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 14,
+        backgroundColor: palette.card,
         borderBottomWidth: 1,
         borderBottomColor: palette.border,
-        backgroundColor: "#fff",
+        ...createShadow({
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 2,
+        }),
     },
     closeButton: {
-        padding: 4,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: "600",
-        color: palette.text,
-    },
-    placeholder: {
         width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: palette.background,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    rideInfo: {
-        backgroundColor: "#fff",
-        padding: 16,
-        marginTop: 8,
-        marginHorizontal: 16,
-        borderRadius: 8,
-    },
-    rideInfoRow: {
+    headerCenter: {
         flexDirection: "row",
         alignItems: "center",
-        marginBottom: 8,
+        gap: 8,
     },
-    rideInfoIcon: {
-        marginRight: 8,
+    headerIconWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: palette.primaryLight,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    rideInfoText: {
-        flex: 1,
-        fontSize: 14,
+    headerTitle: {
+        fontSize: 17,
+        fontWeight: "700",
         color: palette.text,
+        letterSpacing: -0.3,
     },
-    instructions: {
+    headerSpacer: {
+        width: 36,
+    },
+
+    // ── Route card ──
+    routeCard: {
+        backgroundColor: palette.card,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: palette.border,
         padding: 16,
+        ...createShadow({
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 2,
+        }),
     },
-    instructionsText: {
+    routeTimeline: {
+        position: "absolute",
+        left: 24,
+        top: 24,
+        bottom: 56,
+        width: 12,
+        alignItems: "center",
+    },
+    routeDotPickup: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: palette.primary,
+    },
+    routeLine: {
+        flex: 1,
+        width: 2,
+        backgroundColor: palette.border,
+        marginVertical: 2,
+    },
+    routeDotDropoff: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: palette.danger,
+    },
+    routeAddresses: {
+        marginLeft: 28,
+        gap: 16,
+    },
+    routeAddressBlock: {
+        gap: 2,
+    },
+    routeLabel: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: palette.textMuted,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    routeAddress: {
         fontSize: 14,
-        color: palette.textSecondary,
+        fontWeight: "500",
+        color: palette.text,
         lineHeight: 20,
     },
+    routeTimeRow: {
+        marginTop: 14,
+        marginLeft: 28,
+    },
+    routeTimeBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "flex-start",
+        gap: 6,
+        backgroundColor: palette.primaryLight,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    routeTimeText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: palette.primary,
+    },
+
+    // ── Section header ──
+    sectionHeader: {
+        paddingHorizontal: 20,
+        paddingTop: 20,
+        paddingBottom: 8,
+    },
+    sectionTitle: {
+        fontSize: 16,
+        fontWeight: "700",
+        color: palette.text,
+        letterSpacing: -0.2,
+    },
+    sectionSubtitle: {
+        fontSize: 13,
+        color: palette.textSecondary,
+        marginTop: 2,
+        lineHeight: 18,
+    },
+
+    // ── Loading ──
     loadingContainer: {
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+        gap: 12,
     },
     loadingText: {
         fontSize: 14,
         color: palette.textSecondary,
-        marginTop: 12,
     },
+
+    // ── Error ──
     errorContainer: {
         flexDirection: "row",
         alignItems: "center",
-        padding: 16,
         marginHorizontal: 16,
-        backgroundColor: "#fee",
-        borderRadius: 8,
+        marginTop: 8,
+        padding: 14,
+        backgroundColor: palette.dangerLight,
+        borderRadius: 12,
         borderWidth: 1,
-        borderColor: palette.danger,
+        borderColor: palette.dangerBorder,
+        gap: 12,
     },
-    errorIcon: {
-        marginRight: 12,
+    errorIconWrap: {
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: "rgba(220,53,69,0.1)",
+        alignItems: "center",
+        justifyContent: "center",
     },
     errorText: {
         flex: 1,
-        fontSize: 14,
-        color: palette.danger,
+        fontSize: 13,
+        fontWeight: "500",
+        color: palette.text,
+        lineHeight: 18,
     },
+
+    // ── Partnership list ──
     list: {
         flex: 1,
     },
     listContainer: {
         padding: 16,
+        gap: 10,
     },
     partnershipItem: {
         flexDirection: "row",
         alignItems: "center",
-        padding: 16,
-        backgroundColor: "#fff",
-        borderRadius: 8,
+        padding: 14,
+        backgroundColor: palette.card,
+        borderRadius: 14,
         borderWidth: 1,
         borderColor: palette.border,
-        marginBottom: 12,
+        ...createShadow({
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.03,
+            shadowRadius: 4,
+            elevation: 1,
+        }),
     },
     partnershipItemSelected: {
         borderColor: palette.primary,
         borderWidth: 2,
-        backgroundColor: "#f0f8ff",
+        backgroundColor: palette.primaryLight,
+        ...createShadow({
+            shadowColor: BRAND,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            elevation: 3,
+        }),
     },
-    radioContainer: {
+    partnershipRadio: {
         marginRight: 12,
     },
-    partnershipInfo: {
+    radioOuter: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 2,
+        borderColor: palette.textMuted,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    radioOuterSelected: {
+        borderColor: palette.primary,
+    },
+    radioInner: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: palette.primary,
+    },
+    partnershipBody: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    partnershipIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: palette.primaryLight,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    partnershipTexts: {
         flex: 1,
     },
     partnershipName: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "600",
         color: palette.text,
-        marginBottom: 4,
+    },
+    partnershipNameSelected: {
+        color: palette.primary,
+        fontWeight: "700",
     },
     partnershipDetails: {
         fontSize: 12,
         color: palette.textSecondary,
+        marginTop: 2,
     },
+    partnershipCheck: {
+        marginLeft: 8,
+    },
+
+    // ── Empty state ──
     emptyContainer: {
-        flex: 1,
-        justifyContent: "center",
         alignItems: "center",
-        padding: 32,
+        paddingVertical: 40,
+        paddingHorizontal: 32,
+    },
+    emptyIconWrap: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        backgroundColor: palette.primaryLight,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 16,
     },
     emptyText: {
-        fontSize: 16,
-        fontWeight: "600",
+        fontSize: 15,
+        fontWeight: "700",
         color: palette.text,
-        marginTop: 16,
-        marginBottom: 8,
+        marginBottom: 6,
     },
     emptySubText: {
-        fontSize: 14,
+        fontSize: 13,
         color: palette.textSecondary,
         textAlign: "center",
-        lineHeight: 20,
+        lineHeight: 18,
     },
+
+    // ── Footer ──
     footer: {
         flexDirection: "row",
         padding: 16,
+        gap: 10,
+        backgroundColor: palette.card,
         borderTopWidth: 1,
         borderTopColor: palette.border,
-        backgroundColor: "#fff",
+        ...createShadow({
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 2,
+        }),
     },
-    button: {
+    cancelButton: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 14,
+        borderRadius: 12,
+        backgroundColor: palette.background,
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    cancelButtonText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: palette.text,
+    },
+    transferButton: {
         flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: 14,
-        borderRadius: 8,
-        marginHorizontal: 6,
-    },
-    cancelButton: {
-        backgroundColor: "#f5f5f5",
-    },
-    cancelButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
-        color: palette.text,
-    },
-    transferButton: {
+        borderRadius: 12,
         backgroundColor: palette.primary,
+        gap: 8,
+        ...createShadow({
+            shadowColor: BRAND,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 6,
+            elevation: 3,
+        }),
     },
     transferButtonDisabled: {
         backgroundColor: palette.disabled,
+        ...createShadow({
+            shadowColor: "transparent",
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            elevation: 0,
+        }),
     },
     transferButtonText: {
-        fontSize: 16,
-        fontWeight: "600",
+        fontSize: 15,
+        fontWeight: "700",
         color: "#fff",
     },
-    transferButtonContent: {
-        flexDirection: "row",
-        alignItems: "center",
-        marginLeft: 4,
-    },
-    transferButtonIcon: {
-        marginRight: 8,
-    },
-    confirmModalOverlay: {
+
+    // ── Confirm modal ──
+    confirmOverlay: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "rgba(5,22,16,0.55)",
         justifyContent: "center",
         alignItems: "center",
-        padding: 20,
-    },
-    confirmModalCard: {
-        backgroundColor: "#fff",
-        borderRadius: 16,
         padding: 24,
-        width: "100%",
-        maxWidth: 400,
     },
-    confirmModalTitle: {
-        fontSize: 20,
+    confirmCard: {
+        width: "100%",
+        maxWidth: 380,
+        backgroundColor: palette.card,
+        borderRadius: 20,
+        padding: 28,
+        alignItems: "center",
+        ...createShadow({
+            shadowColor: "rgba(10,127,89,0.2)",
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 1,
+            shadowRadius: 28,
+            elevation: 12,
+        }),
+    },
+    confirmIconWrap: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        backgroundColor: palette.primaryLight,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 16,
+    },
+    confirmTitle: {
+        fontSize: 18,
         fontWeight: "700",
         color: palette.text,
-        marginBottom: 12,
+        letterSpacing: -0.3,
+        marginBottom: 8,
     },
-    confirmModalText: {
-        fontSize: 16,
+    confirmText: {
+        fontSize: 15,
         color: palette.textSecondary,
+        textAlign: "center",
+        lineHeight: 22,
+    },
+    confirmHighlight: {
+        fontWeight: "700",
+        color: palette.primary,
+    },
+    confirmHint: {
+        fontSize: 12,
+        color: palette.textMuted,
+        textAlign: "center",
+        marginTop: 4,
         marginBottom: 24,
-        lineHeight: 24,
     },
-    confirmModalActions: {
+    confirmActions: {
         flexDirection: "row",
-        justifyContent: "flex-end",
+        gap: 10,
+        width: "100%",
     },
-    confirmButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        marginLeft: 12,
+    confirmCancelBtn: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 13,
+        borderRadius: 12,
+        backgroundColor: palette.background,
+        borderWidth: 1,
+        borderColor: palette.border,
     },
+    confirmCancelText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: palette.text,
+    },
+    confirmTransferBtn: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        paddingVertical: 13,
+        borderRadius: 12,
+        backgroundColor: palette.primary,
+        gap: 6,
+        ...createShadow({
+            shadowColor: BRAND,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 6,
+            elevation: 3,
+        }),
+    },
+    confirmTransferText: {
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#fff",
+    },
+
     pointerEventsNone: {
         pointerEvents: "none",
     },

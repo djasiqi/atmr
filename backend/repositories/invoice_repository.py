@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol, cast
 
 from sqlalchemy.orm import joinedload
@@ -339,7 +339,23 @@ class InvoiceRepository:
         ).filter(Invoice.company_id == company_id)
 
         if status:
-            query = query.filter_by(status=status)
+            if status == InvoiceStatus.OVERDUE:
+                # "En retard" métier = échéance dépassée + solde > 0
+                # (même si le statut DB n'a pas été basculé en OVERDUE).
+                today = date.today()
+                query = query.filter(
+                    Invoice.balance_due > 0,
+                    Invoice.due_date < today,
+                    Invoice.status.notin_(
+                        [
+                            InvoiceStatus.DRAFT,
+                            InvoiceStatus.PAID,
+                            InvoiceStatus.CANCELLED,
+                        ]
+                    ),
+                )
+            else:
+                query = query.filter_by(status=status)
 
         if client_id:
             query = query.filter(Invoice.client_id == client_id)

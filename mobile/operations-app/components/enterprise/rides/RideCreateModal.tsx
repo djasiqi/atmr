@@ -27,6 +27,11 @@ import { getLogger } from "@/utils/logger";
 
 const log = getLogger("RideCreate");
 
+const MEDICAL_FACILITY_TYPES = new Set([
+    "hospital", "dentist", "health", "physiotherapist", "pharmacy",
+]);
+const DOCTOR_TYPES = new Set(["doctor"]);
+
 const BRAND = "#00796B";
 const TEXT = "#1E293B";
 const TEXT_SEC = "#64748B";
@@ -93,6 +98,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     const [scheduledTime, setScheduledTime] = useState<Date | null>(null);
     const [isReturn, setIsReturn] = useState(false);
     const [returnTime, setReturnTime] = useState<Date | null>(null);
+    const [returnDateManuallySet, setReturnDateManuallySet] = useState(false);
 
     // Recurrence
     const [isRecurring, setIsRecurring] = useState(false);
@@ -132,6 +138,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             setScheduledTime(null);
             setIsReturn(false);
             setReturnTime(null);
+            setReturnDateManuallySet(false);
             setNotes("");
             setPriority("NORMAL");
             setAmount("");
@@ -151,6 +158,20 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
         }
     }, [visible]);
 
+    // Synchroniser la date de retour avec la date de l'aller
+    // sauf si l'utilisateur a manuellement modifie la date de retour
+    useEffect(() => {
+        if (!isReturn || !scheduledTime || returnDateManuallySet) return;
+        const outboundDate = dayjs(scheduledTime).startOf("day");
+        const currentReturnDate = returnTime ? dayjs(returnTime).startOf("day") : null;
+        if (!currentReturnDate || !outboundDate.isSame(currentReturnDate, "day")) {
+            setReturnTime((prev) => {
+                if (!prev) return outboundDate.toDate();
+                return outboundDate.hour(dayjs(prev).hour()).minute(dayjs(prev).minute()).toDate();
+            });
+        }
+    }, [isReturn, scheduledTime, returnDateManuallySet]);
+
     const handleSwapAddresses = useCallback(() => {
         const tmpAddr = pickupAddress;
         const tmpSug = pickupSuggestion;
@@ -159,6 +180,24 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
         setDropoffAddress(tmpAddr);
         setDropoffSuggestion(tmpSug);
     }, [pickupAddress, pickupSuggestion, dropoffAddress, dropoffSuggestion]);
+
+    const handleDropoffChange = useCallback((addr: string, sug?: AddressSuggestion) => {
+        setDropoffAddress(addr);
+        setDropoffSuggestion(sug);
+        if (!sug) return;
+
+        const types = sug.types ?? [];
+        const isMedicalFacility = types.some((t) => MEDICAL_FACILITY_TYPES.has(t)) || sug.category === "hospital";
+        const isDoctorOffice = types.some((t) => DOCTOR_TYPES.has(t));
+
+        if (isMedicalFacility && sug.name) {
+            setMedicalFacility(sug.name);
+            setMedicalExpanded(true);
+        } else if (isDoctorOffice && sug.name) {
+            setDoctorName(sug.name);
+            setMedicalExpanded(true);
+        }
+    }, []);
 
     const applyPreset = useCallback((preset: "now30" | "now1h" | "tomorrow9") => {
         let d: Date;
@@ -308,7 +347,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                         <AddressSelector
                             label=""
                             value={dropoffAddress}
-                            onChange={(addr, sug) => { setDropoffAddress(addr); setDropoffSuggestion(sug); }}
+                            onChange={handleDropoffChange}
                             icon="flag-outline"
                         />
                     </View>
@@ -342,6 +381,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                             onPress={() => {
                                 const next = !isReturn;
                                 setIsReturn(next);
+                                setReturnDateManuallySet(false);
                                 if (next && scheduledTime) {
                                     setReturnTime(dayjs(scheduledTime).startOf("day").toDate());
                                 } else if (!next) {
@@ -368,6 +408,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                     {isReturn && (
                         <View style={s.subsection}>
                             <TimeDatePicker label="Date de retour" value={returnTime} onChange={(d) => {
+                                setReturnDateManuallySet(true);
                                 if (d && returnTime) {
                                     setReturnTime(dayjs(d).hour(dayjs(returnTime).hour()).minute(dayjs(returnTime).minute()).toDate());
                                 } else setReturnTime(d);

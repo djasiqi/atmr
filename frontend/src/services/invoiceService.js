@@ -69,6 +69,15 @@ export const invoiceService = {
     return response.data;
   },
 
+  // Marquer plusieurs factures brouillon comme envoyées en une seule opération
+  async bulkMarkAsSent(companyId, invoiceIds, sendMethod = 'paper') {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/bulk-send`,
+      { invoice_ids: invoiceIds, send_method: sendMethod }
+    );
+    return response.data;
+  },
+
   // Envoyer un rappel par email
   async sendReminderByEmail(companyId, invoiceId, reminderId, options = {}) {
     const payload = {
@@ -496,6 +505,7 @@ export const {
   sendInvoice,
   sendInvoiceByEmail,
   markInvoiceAsSent,
+  bulkMarkAsSent,
   sendReminderByEmail,
   postPayment,
   postReminder,

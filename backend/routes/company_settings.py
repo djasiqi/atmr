@@ -15,6 +15,7 @@ from ext import db, role_required
 from models import (
     BillingParty,
     BillingPartyType,
+    Client,
     ClinicBillingPartyMapping,
     Company,
     CompanyBillingSettings,
@@ -989,11 +990,22 @@ class ClinicBillingMappings(Resource):
         for m in mappings:
             clinic = Company.query.filter_by(id=m.clinic_company_id).first()
             bp = BillingParty.query.filter_by(id=m.billing_party_id).first()
+            clinic_display_name = clinic.name if clinic else None
+            if clinic and company:
+                linked_client = Client.query.filter_by(
+                    company_id=company.id,
+                    is_institution=True,
+                    linked_institution_id=clinic.id,
+                ).first()
+                if linked_client and linked_client.institution_name:
+                    # Préfère le nom institution "source of truth" côté transporteur.
+                    # Utile quand certains vieux enregistrements Company ont un nom encodé (ex: "Ani??res").
+                    clinic_display_name = linked_client.institution_name
             payload.append(
                 {
                     "id": m.id,
                     "clinic_company_id": m.clinic_company_id,
-                    "clinic_company_name": clinic.name if clinic else None,
+                    "clinic_company_name": clinic_display_name,
                     "billing_party_id": m.billing_party_id,
                     "billing_party_name": bp.display_name if bp else None,
                     "is_active": bool(m.is_active),
@@ -1107,11 +1119,20 @@ class ClinicBillingMappingByClinic(Resource):
 
         clinic = Company.query.filter_by(id=mapping.clinic_company_id).first()
         bp = BillingParty.query.filter_by(id=mapping.billing_party_id).first()
+        clinic_display_name = clinic.name if clinic else None
+        if clinic and company:
+            linked_client = Client.query.filter_by(
+                company_id=company.id,
+                is_institution=True,
+                linked_institution_id=clinic.id,
+            ).first()
+            if linked_client and linked_client.institution_name:
+                clinic_display_name = linked_client.institution_name
 
         payload = {
             "id": mapping.id,
             "clinic_company_id": mapping.clinic_company_id,
-            "clinic_company_name": clinic.name if clinic else None,
+            "clinic_company_name": clinic_display_name,
             "billing_party_id": mapping.billing_party_id,
             "billing_party_name": bp.display_name if bp else None,
             "is_active": bool(mapping.is_active),

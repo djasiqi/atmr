@@ -165,11 +165,17 @@ export default function EnterpriseChatScreen() {
         return prev;
       }
       const updated = [...prev, adapted];
-      return updated.sort((a, b) => {
+      updated.sort((a, b) => {
         const timeA = new Date(a.timestamp || 0).getTime();
         const timeB = new Date(b.timestamp || 0).getTime();
         return timeA - timeB;
       });
+      // Plafonner pour éviter la surconsommation mémoire
+      const MAX_MESSAGES = 500;
+      if (updated.length > MAX_MESSAGES) {
+        return updated.slice(updated.length - MAX_MESSAGES);
+      }
+      return updated;
     });
   });
 

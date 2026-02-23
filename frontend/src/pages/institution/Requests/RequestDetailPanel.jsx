@@ -4,7 +4,8 @@
  * Réutilise la même logique que InstitutionRequestDetail mais dans un format panel.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import ConfirmSendModal from './ConfirmSendModal';
 import {
   FaTimes, FaEdit, FaPaperPlane,
   FaTruck, FaRoute, FaFileInvoiceDollar,
@@ -234,15 +235,17 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const canBillingEdit = canEditBilling(institutionRole);
   const institutionSocket = useMemo(() => getInstitutionSocket(), []);
 
-  const handleSend = async () => {
-    if (!window.confirm('Envoyer cette demande aux transporteurs ?')) return;
+  const [showSendModal, setShowSendModal] = useState(false);
+
+  const handleSend = useCallback(async () => {
     try {
       await sendMutation.mutateAsync({ requestId: request.id, options: {} });
+      setShowSendModal(false);
       toast.success('Demande envoyée');
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Erreur lors de l\'envoi');
     }
-  };
+  }, [sendMutation, request?.id]);
 
   const handleCancel = async () => {
     const reason = window.prompt('Raison de l\'annulation (optionnel) :');
@@ -348,7 +351,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
                 </button>
                 <button
                   className={`${s.actionBtn} ${s.btnPrimary}`}
-                  onClick={handleSend}
+                  onClick={() => setShowSendModal(true)}
                   disabled={sendMutation.isPending}
                 >
                   <FaPaperPlane size={11} /> Envoyer
@@ -514,6 +517,14 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
           </div>
         )}
       </div>
+
+      {showSendModal && (
+        <ConfirmSendModal
+          onClose={() => setShowSendModal(false)}
+          onConfirm={handleSend}
+          loading={sendMutation.isPending}
+        />
+      )}
     </div>
   );
 };

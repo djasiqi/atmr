@@ -4,7 +4,7 @@
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLogger } from "@/utils/logger";
-import { enqueueLocation, type QueuedLocation } from "../services/locationQueue";
+import { enqueueLocationBatch, type QueuedLocation } from "../services/locationQueue";
 
 const log = getLogger("LocationTask");
 
@@ -71,11 +71,8 @@ async function flushPositionBatch() {
       driver_id: driverId,
     }));
 
-    // ✅ Stabilisation: en background task, on PERSISTE uniquement.
-    // L'envoi Socket.IO est centralisé dans `syncLocationQueue()` (foreground), sinon rate-limit/storm.
-    for (const loc of queued) {
-      await enqueueLocation(loc);
-    }
+    // Une seule opération AsyncStorage au lieu de N (évite Background ANR)
+    await enqueueLocationBatch(queued);
 
     log.info("positions enqueued", { count: queued.length, driverId });
   } catch (error) {

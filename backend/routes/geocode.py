@@ -56,6 +56,7 @@ ALIASES: List[Dict[str, Any]] = [
             re.compile(r"\bh[ôo]pital\s+cantonal\b", re.I),
         ],
         "label": "HUG - Hôpitaux Universitaires de Genève",
+        "short_name": "HUG",
         "address": "Rue Gabrielle-Perret-Gentil 4, 1205 Genève",
         "lat": 46.19226,
         "lon": 6.14262,
@@ -152,6 +153,8 @@ def normalize_google_places(
                         "lat": None,
                         "lon": None,
                         "place_id": place_id,
+                        "types": result.get("types", []),
+                        "name": main_text or "",
                     }
                 )
                 continue
@@ -267,6 +270,8 @@ def normalize_google_places(
                     "lon": details.get("lon"),
                     "housenumber": housenumber,
                     "place_id": place_id,
+                    "types": details.get("types", []),
+                    "name": place_name,
                 }
             )
         except Exception:

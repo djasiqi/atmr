@@ -128,14 +128,24 @@ export const useEnterpriseSocket = (
       }
     })();
 
-    // Cleanup
     return () => {
       isMountedRef.current = false;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      // Ne pas déconnecter le socket car il peut être utilisé ailleurs
+      // Retirer les handlers pour éviter les fuites mémoire (le socket global reste connecté)
+      if (socketInstance) {
+        socketInstance.off("connect");
+        socketInstance.off("disconnect");
+        socketInstance.off("connect_error");
+        socketInstance.off("reconnect");
+        socketInstance.off("team_chat_message");
+        socketInstance.off("typing_start");
+        socketInstance.off("typing_stop");
+        socketInstance.off("error");
+        socketInstance.off("unauthorized");
+      }
     };
   }, [onTeamMessage]);
 

@@ -1143,6 +1143,27 @@ def _resolve_legal_footer_placeholders(
     )
 
 
+def _get_reminder_footer_message(level: int) -> str:
+    """Retourne le texte de pied de page adapté au niveau de rappel."""
+    if level == 1:
+        return (
+            "Sauf erreur ou croisement de nos courriers, le règlement de cette facture "
+            "ne nous est pas parvenu. Nous vous remercions de bien vouloir procéder à "
+            "son règlement sous 10 jours."
+        )
+    if level == 2:
+        return (
+            "Malgré notre précédent rappel, le règlement de cette facture ne nous est "
+            "pas parvenu. Nous vous prions de bien vouloir régulariser cette situation "
+            "dans les meilleurs délais."
+        )
+    return (
+        "Malgré nos précédents rappels, cette facture reste impayée. À défaut de "
+        "règlement sous 5 jours, nous nous réservons le droit d'entreprendre des "
+        "démarches de recouvrement."
+    )
+
+
 def _load_logo_ratio_safe(  # noqa: PLR0911
     logo_path: Path | None, max_width_pt: float
 ) -> tuple[Any, float, float]:
@@ -1836,15 +1857,12 @@ def _build_totals_table(
     total_label = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
     total_amt = f"CHF {final_total:.2f}" if is_s2 else f"{final_total:.2f}"
 
-    reminder_fee_label = (
-        f"Frais de rappel N°{reminder_level} :"
-        if is_reminder and reminder_level
-        else "Frais de rappel :"
-    )
+    _fee_level_labels = {1: "1er", 2: "2e", 3: "dernier"}
+    fee_suffix = _fee_level_labels.get(reminder_level, f"n°{reminder_level}") if reminder_level else ""
+    reminder_fee_label = "Frais de rappel :"
     reminder_fee_amt = f"CHF {reminder_fee_float:.2f}"
     principal_amt = f"CHF {principal_float:.2f}"
 
-    # ✅ Mode rappel : mini-table structurée (Sous-total facture + Frais + TOTAL)
     if is_reminder:
         principal_label = "Montant facture initiale :"
         if template == "detailed":
@@ -1854,28 +1872,28 @@ def _build_totals_table(
                     ["", "", "", "", reminder_fee_label, reminder_fee_amt],
                     ["", "", "", "", total_label, total_amt],
                 ]
-                col_widths = [2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm]
+                col_widths = [1.6 * cm, 2.1 * cm, 2.8 * cm, 2.8 * cm, 2.7 * cm, 3 * cm]
             else:
                 total_data = [
                     ["", "", "", principal_label, principal_amt],
                     ["", "", "", reminder_fee_label, reminder_fee_amt],
                     ["", "", "", total_label, total_amt],
                 ]
-                col_widths = [2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+                col_widths = [2.2 * cm, 3.7 * cm, 3.7 * cm, 2.7 * cm, 3.2 * cm]
         elif is_third_party:
             total_data = [
                 ["", "", "", principal_label, principal_amt],
                 ["", "", "", reminder_fee_label, reminder_fee_amt],
                 ["", "", "", total_label, total_amt],
             ]
-            col_widths = [2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+            col_widths = [1.8 * cm, 2.8 * cm, 4.3 * cm, 2.1 * cm, 3 * cm]
         else:
             total_data = [
                 ["", "", principal_label, principal_amt],
                 ["", "", reminder_fee_label, reminder_fee_amt],
                 ["", "", total_label, total_amt],
             ]
-            col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+            col_widths = [2.2 * cm, 5.3 * cm, 2.8 * cm, 3.2 * cm]
     elif template == "detailed":
         if is_third_party:
             if vat_is_applicable:
@@ -1886,7 +1904,7 @@ def _build_totals_table(
                 ]
             else:
                 total_data = [["", "", "", "", total_label, total_amt]]
-            col_widths = [2 * cm, 2.5 * cm, 3 * cm, 3 * cm, 2.5 * cm, 2 * cm]
+            col_widths = [1.6 * cm, 2.1 * cm, 2.8 * cm, 2.8 * cm, 2.7 * cm, 3 * cm]
         else:
             if vat_is_applicable:
                 total_data = [
@@ -1896,7 +1914,7 @@ def _build_totals_table(
                 ]
             else:
                 total_data = [["", "", "", total_label, total_amt]]
-            col_widths = [2.5 * cm, 4 * cm, 4 * cm, 2.5 * cm, 2.5 * cm]
+            col_widths = [2.2 * cm, 3.7 * cm, 3.7 * cm, 2.7 * cm, 3.2 * cm]
     elif is_third_party:
         if vat_is_applicable:
             total_data = [
@@ -1906,7 +1924,7 @@ def _build_totals_table(
             ]
         else:
             total_data = [["", "", "", total_label, total_amt]]
-        col_widths = [2 * cm, 3 * cm, 4.5 * cm, 2 * cm, 2.5 * cm]
+        col_widths = [1.8 * cm, 2.8 * cm, 4.3 * cm, 2.1 * cm, 3 * cm]
     else:
         if vat_is_applicable:
             total_data = [
@@ -1916,38 +1934,63 @@ def _build_totals_table(
             ]
         else:
             total_data = [["", "", total_label, total_amt]]
-        col_widths = [2.5 * cm, 6 * cm, 2.5 * cm, 2.5 * cm]
+        col_widths = [2.2 * cm, 5.3 * cm, 2.8 * cm, 3.2 * cm]
 
     total_table = Table(total_data, colWidths=col_widths)
+    # Aligner la table des totaux sur le bord droit du frame pour que
+    # la colonne montant soit exactement sous la colonne des montants du détail.
+    total_table.hAlign = "RIGHT"
+    amount_col_idx = 3
     if template == "detailed":
         if is_third_party or is_s2:
+            amount_col_idx = 5
             style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("ALIGN", (4, 0), (5, -1), "RIGHT"),
+                ("RIGHTPADDING", (4, 0), (4, -1), 14),
+                ("LEFTPADDING", (5, 0), (5, -1), 16),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
             ]
         else:
+            amount_col_idx = 4
             style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                ("RIGHTPADDING", (3, 0), (3, -1), 14),
+                ("LEFTPADDING", (4, 0), (4, -1), 16),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
             ]
     elif is_third_party:
+        amount_col_idx = 4
         style_rules = [
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+            ("RIGHTPADDING", (3, 0), (3, -1), 14),
+            ("LEFTPADDING", (4, 0), (4, -1), 16),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
         ]
     else:
+        amount_col_idx = 3
         style_rules = [
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("ALIGN", (2, 0), (3, -1), "RIGHT"),
+            ("RIGHTPADDING", (2, 0), (2, -1), 14),
+            ("LEFTPADDING", (3, 0), (3, -1), 16),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
         ]
+    # Aligner strictement à droite la dernière ligne (TOTAL À FACTURER)
+    # pour caler le dernier chiffre sur l'axe X de la colonne montant.
+    if is_s2:
+        style_rules.extend(
+            [
+                ("RIGHTPADDING", (amount_col_idx, -1), (amount_col_idx, -1), 0),
+                ("LEFTPADDING", (amount_col_idx, -1), (amount_col_idx, -1), 0),
+            ]
+        )
     # ✅ Style des polices : dernière ligne (total) en gras, autres en normal
     # Si mode rappel, la ligne de frais est aussi en normal, seule la dernière ligne (total) est en gras
     if vat_is_applicable or is_reminder:
@@ -2524,7 +2567,8 @@ class PDFService:
         """
         level = reminder_level
         is_reminder = bool(level)
-        display_reminder_level = f"RAPPEL N°{level}" if level else None
+        _reminder_labels = {1: "RAPPEL DE PAIEMENT · 1er avis", 2: "RAPPEL DE PAIEMENT · 2e avis", 3: "DERNIER RAPPEL DE PAIEMENT"}
+        display_reminder_level = _reminder_labels.get(level, f"RAPPEL N°{level}") if level else None
         reminder_ctx = {
             "is_reminder": is_reminder,
             "display_reminder_level": display_reminder_level,
@@ -2728,13 +2772,13 @@ class PDFService:
         )  # expéditeur garde toute sa largeur
 
         vat_line = f"<br/>{vat_status_text}" if vat_status_text else ""
-        company_info_left = f"""
-        {company_name}<br/>
-        {company_address}<br/>
-        {company_email}<br/>
-        {company_phone}<br/>
-        IDE/UID : {company_uid}{vat_line}
-        """
+        company_info_left = (
+            f"{company_name}<br/>"
+            f"{company_address}<br/>"
+            f"{company_email}<br/>"
+            f"{company_phone}<br/>"
+            f"IDE/UID : {company_uid}{vat_line}"
+        )
         company_para = Paragraph(company_info_left, normal_style)
 
         left_cell_content: list[Any] = []  # Entreprise (expéditeur) — à gauche
@@ -2869,41 +2913,7 @@ class PDFService:
             story.append(company_para)
         story.append(Spacer(1, 20))
 
-        # === BANDEAU RAPPEL (si mode rappel) ===
         display_reminder_level = reminder_ctx.get("display_reminder_level")
-        if display_reminder_level:
-            bandeau = Table(
-                [
-                    [
-                        Paragraph(
-                            f"<b>{display_reminder_level}</b>",
-                            ParagraphStyle(
-                                "Bandeau",
-                                parent=styles["Normal"],
-                                fontSize=14,
-                                fontName=font_name_bold,
-                                alignment=TA_CENTER,
-                                textColor=colors.HexColor("#8B0000"),
-                            ),
-                        )
-                    ]
-                ],
-                colWidths=[17 * cm],
-            )
-            bandeau.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 10),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
-                    ]
-                )
-            )
-            story.append(bandeau)
-            story.append(Spacer(1, 12))
 
         # === INFORMATIONS FACTURE (GAUCHE) ===
         echeance_label = (
@@ -2930,14 +2940,30 @@ class PDFService:
             if 1 <= invoice.period_month <= MONTHS_PER_YEAR
             else f"{invoice.period_month:02d}.{invoice.period_year}"
         )
-        invoice_info_left = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
-        <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
-        <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
-        <b>Période de facturation :</b> {period_label}
-        """
+        invoice_info_left = (
+            f"<b>Numéro de facture :</b> {invoice.invoice_number}<br/>"
+            f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
+            f"<b>{echeance_label}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+            f"<b>Période de facturation :</b> {period_label}"
+        )
+        if reminder_ctx.get("is_reminder"):
+            invoice_info_left += f"<br/><b>Date du rappel :</b> {datetime.now(UTC).strftime('%d.%m.%Y')}"
 
-        story.append(Paragraph(invoice_info_left, normal_style))
+        invoice_info_table = Table(
+            [[Paragraph(invoice_info_left, normal_style)]],
+            colWidths=[17 * cm],
+        )
+        invoice_info_table.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(invoice_info_table)
         story.append(Spacer(1, 20))
 
         # === TABLEAU DES COURSES ===
@@ -3013,8 +3039,55 @@ class PDFService:
             available_width_pt=usable_width_pt,
         )
 
-        # ✅ Utiliser toujours le tableau unifié S2
-        story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
+        # === MENTION RAPPEL (si mode rappel) ===
+        if display_reminder_level:
+            reminder_line = Table(
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "ReminderLine",
+                                parent=styles["Normal"],
+                                fontSize=11,
+                                fontName=font_name_bold,
+                                alignment=TA_LEFT,
+                                textColor=colors.HexColor("#374151"),
+                            ),
+                        )
+                    ]
+                ],
+                colWidths=[17 * cm],
+            )
+            reminder_line.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("LINEBELOW", (0, 0), (0, 0), 0.5, colors.HexColor("#D1D5DB")),
+                    ]
+                )
+            )
+            story.append(reminder_line)
+            story.append(Spacer(1, 16))
+
+        detail_title = Table(
+            [[Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style)]],
+            colWidths=[17 * cm],
+        )
+        detail_title.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(detail_title)
         story.append(Spacer(1, 6))
         story.append(s2_table)
         story.append(Spacer(1, 2))
@@ -3086,14 +3159,10 @@ class PDFService:
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        # Message du pied de page : utiliser legal_footer si disponible,
-        # sinon message dynamique. En mode rappel, texte dédié (soft mais ferme).
+        # Message du pied de page : en mode rappel, texte gradué selon le niveau.
         if display_reminder_level:
-            footer_message = (
-                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
-                "Nous vous remercions de bien vouloir procéder à son règlement dans les plus brefs délais. "
-                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
-            )
+            reminder_level_val = reminder_ctx.get("reminder_level") or 1
+            footer_message = _get_reminder_footer_message(reminder_level_val)
             if iban_value:
                 footer_message = f"{footer_message} Paiement par virement bancaire : IBAN : {iban_value}"
         elif billing_settings and billing_settings.legal_footer:
@@ -3124,8 +3193,6 @@ class PDFService:
 
         # Pied de page légal : dessiné en zone fixe (marge inférieure), pas dans le flux
         mention = None
-        if display_reminder_level:
-            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
         footer_cb = _make_legal_footer_page_callback(
             footer_message, mention, centered_style
         )
@@ -3158,9 +3225,9 @@ class PDFService:
         story.append(Spacer(1, QR_BILL_SPACER_PT))
 
         try:
-            # Générer le QR-Bill suisse officiel avec la vraie bibliothèque
             qr_bill_service = self.qrbill_service
-            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
+            qr_override = reminder_ctx.get("reminder_total_due") if reminder_ctx.get("is_reminder") else None
+            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice, override_amount=qr_override)
 
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
@@ -3336,44 +3403,9 @@ class PDFService:
             story.append(company_para_min)
         story.append(Spacer(1, 10))
 
-        # === Contexte rappel (défini avant Numéro de facture / Facture) ===
+        # === Contexte rappel ===
         display_reminder_level = reminder_ctx.get("display_reminder_level")
         is_reminder = reminder_ctx.get("is_reminder", False)
-
-        # === BANDEAU RAPPEL (si mode rappel) ===
-        if display_reminder_level:
-            bandeau = Table(
-                [
-                    [
-                        Paragraph(
-                            f"<b>{display_reminder_level}</b>",
-                            ParagraphStyle(
-                                "BandeauM",
-                                parent=styles["Normal"],
-                                fontSize=14,
-                                fontName="Helvetica-Bold",
-                                alignment=TA_CENTER,
-                                textColor=colors.HexColor("#8B0000"),
-                            ),
-                        )
-                    ]
-                ],
-                colWidths=[17 * cm],
-            )
-            bandeau.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 10),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
-                    ]
-                )
-            )
-            story.append(bandeau)
-            story.append(Spacer(1, 12))
 
         # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
         echeance_label = "Échéance initiale:" if is_reminder else "Échéance:"
@@ -3382,8 +3414,58 @@ class PDFService:
             f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
             f"{echeance_label} {invoice.due_date.strftime('%d.%m.%Y')}"
         )
-        story.append(Paragraph(invoice_info, normal_style))
+        if is_reminder:
+            invoice_info += f" - Rappel: {datetime.now(UTC).strftime('%d.%m.%Y')}"
+        invoice_info_table_m = Table(
+            [[Paragraph(invoice_info, normal_style)]],
+            colWidths=[17 * cm],
+        )
+        invoice_info_table_m.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(invoice_info_table_m)
         story.append(Spacer(1, 15))
+
+        # === MENTION RAPPEL (si mode rappel) ===
+        if display_reminder_level:
+            reminder_line_m = Table(
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "ReminderLineM",
+                                parent=styles["Normal"],
+                                fontSize=11,
+                                fontName="Helvetica-Bold",
+                                alignment=TA_LEFT,
+                                textColor=colors.HexColor("#374151"),
+                            ),
+                        )
+                    ]
+                ],
+                colWidths=[17 * cm],
+            )
+            reminder_line_m.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("LINEBELOW", (0, 0), (0, 0), 0.5, colors.HexColor("#D1D5DB")),
+                    ]
+                )
+            )
+            story.append(reminder_line_m)
+            story.append(Spacer(1, 16))
 
         # === TABLEAU SIMPLIFIÉ (DATE + MONTANT SEULEMENT) ===
         strategy_value = None
@@ -3505,9 +3587,9 @@ class PDFService:
             reminder_fee_float = float(reminder_ctx["reminder_fee"])
             final_total = float(reminder_ctx["reminder_total_due"])
             level = reminder_ctx.get("reminder_level")
-            reminder_fee_label = (
-                f"Frais de rappel N°{level} :" if level else "Frais de rappel :"
-            )
+            _fee_labels_m = {1: "1er", 2: "2e", 3: "dernier"}
+            fee_sfx = _fee_labels_m.get(level, f"n°{level}") if level else ""
+            reminder_fee_label = "Frais de rappel :"
             total_data = [
                 ["Montant facture initiale :", f"CHF {principal_float:.2f}"],
                 [reminder_fee_label, f"CHF {reminder_fee_float:.2f}"],
@@ -3516,10 +3598,12 @@ class PDFService:
         else:
             total_amount = float(invoice.total_amount)
             total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
-        total_table = Table(total_data, colWidths=[4 * cm, 2.5 * cm])
+        total_table = Table(total_data, colWidths=[5 * cm, 3.2 * cm])
         style_rules = [
             ("ALIGN", (0, 0), (0, -1), "RIGHT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("RIGHTPADDING", (0, 0), (0, -1), 14),
+            ("LEFTPADDING", (1, 0), (1, -1), 16),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
         ]
         if is_reminder:
@@ -3545,18 +3629,15 @@ class PDFService:
         jours_text = "jours" if payment_terms_days > 1 else "jour"
 
         if is_reminder:
-            footer_message = (
-                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
-                "Merci de procéder à son règlement dans les plus brefs délais. "
-                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
-            )
+            reminder_level_val = reminder_ctx.get("reminder_level") or 1
+            footer_message = _get_reminder_footer_message(reminder_level_val)
             iban_value_min = (
                 billing_settings.iban
                 if billing_settings and billing_settings.iban
                 else None
             )
             if iban_value_min:
-                footer_message += f" IBAN: {iban_value_min}"
+                footer_message += f" Paiement par virement bancaire : IBAN : {iban_value_min}"
         elif billing_settings and billing_settings.legal_footer:
             raw_footer = _resolve_legal_footer_placeholders(
                 billing_settings.legal_footer,
@@ -3581,8 +3662,6 @@ class PDFService:
 
         # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
-        if is_reminder:
-            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
         footer_cb_min = _make_legal_footer_page_callback(
             footer_message, mention, centered_style
         )
@@ -3597,7 +3676,8 @@ class PDFService:
 
         try:
             qr_bill_service = self.qrbill_service
-            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
+            qr_override_m = reminder_ctx.get("reminder_total_due") if is_reminder else None
+            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice, override_amount=qr_override_m)
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
@@ -3776,13 +3856,13 @@ class PDFService:
                 vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
         vat_line_d = f"<br/>{vat_status_text}" if vat_status_text else ""
-        company_info_detailed = f"""
-        <b>{company_name}</b><br/>
-        {company_address}<br/>
-        {company_phone}<br/>
-        {company_email}<br/>
-        IDE/UID: {company_uid}{vat_line_d}
-        """
+        company_info_detailed = (
+            f"<b>{company_name}</b><br/>"
+            f"{company_address}<br/>"
+            f"{company_phone}<br/>"
+            f"{company_email}<br/>"
+            f"IDE/UID: {company_uid}{vat_line_d}"
+        )
         company_para = Paragraph(company_info_detailed, normal_style)
 
         left_cell_content_d: list[Any] = []  # Entreprise (expéditeur) — à gauche
@@ -3918,41 +3998,7 @@ class PDFService:
             strategy_value = None
         is_s2 = strategy_value == "s2_clinic_monthly"
 
-        # === BANDEAU RAPPEL (si mode rappel) ===
         display_reminder_level = reminder_ctx.get("display_reminder_level")
-        if display_reminder_level:
-            bandeau = Table(
-                [
-                    [
-                        Paragraph(
-                            f"<b>{display_reminder_level}</b>",
-                            ParagraphStyle(
-                                "BandeauD",
-                                parent=styles["Normal"],
-                                fontSize=14,
-                                fontName=font_name_bold,
-                                alignment=TA_CENTER,
-                                textColor=colors.HexColor("#8B0000"),
-                            ),
-                        )
-                    ]
-                ],
-                colWidths=[17 * cm],
-            )
-            bandeau.setStyle(
-                TableStyle(
-                    [
-                        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFE5E5")),
-                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 10),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-                        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CC0000")),
-                    ]
-                )
-            )
-            story.append(bandeau)
-            story.append(Spacer(1, 12))
 
         # === INFORMATIONS FACTURE DÉTAILLÉES ===
         status_value = (
@@ -3985,14 +4031,30 @@ class PDFService:
             else "Date d'échéance :"
         )
 
-        invoice_info_detailed = f"""
-        <b>Numéro de facture :</b> {invoice.invoice_number}<br/>
-        <b>Date d'émission :</b> {invoice.issued_at.strftime("%d.%m.%Y")}<br/>
-        <b>{echeance_label}</b> {invoice.due_date.strftime("%d.%m.%Y")}<br/>
-        <b>Période de facturation :</b> {period_label_d}<br/>
-        <b>Statut :</b> {status_value}
-        """
-        story.append(Paragraph(invoice_info_detailed, normal_style))
+        invoice_info_detailed = (
+            f"<b>Numéro de facture :</b> {invoice.invoice_number}<br/>"
+            f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
+            f"<b>{echeance_label}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+            f"<b>Période de facturation :</b> {period_label_d}<br/>"
+            f"<b>Statut :</b> {status_value}"
+        )
+        if reminder_ctx.get("is_reminder"):
+            invoice_info_detailed += f"<br/><b>Date du rappel :</b> {datetime.now(UTC).strftime('%d.%m.%Y')}"
+        invoice_info_table_d = Table(
+            [[Paragraph(invoice_info_detailed, normal_style)]],
+            colWidths=[17 * cm],
+        )
+        invoice_info_table_d.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(invoice_info_table_d)
         story.append(Spacer(1, 20))
 
         # === TABLEAU DÉTAILLÉ AVEC NOTES ===
@@ -4042,7 +4104,55 @@ class PDFService:
             available_width_pt=doc.width,
         )
 
-        story.append(Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style))
+        # === MENTION RAPPEL (si mode rappel) ===
+        if display_reminder_level:
+            reminder_line_d = Table(
+                [
+                    [
+                        Paragraph(
+                            f"<b>{display_reminder_level}</b>",
+                            ParagraphStyle(
+                                "ReminderLineD",
+                                parent=styles["Normal"],
+                                fontSize=11,
+                                fontName=font_name_bold,
+                                alignment=TA_LEFT,
+                                textColor=colors.HexColor("#374151"),
+                            ),
+                        )
+                    ]
+                ],
+                colWidths=[17 * cm],
+            )
+            reminder_line_d.setStyle(
+                TableStyle(
+                    [
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                        ("LINEBELOW", (0, 0), (0, 0), 0.5, colors.HexColor("#D1D5DB")),
+                    ]
+                )
+            )
+            story.append(reminder_line_d)
+            story.append(Spacer(1, 16))
+
+        detail_title_d = Table(
+            [[Paragraph("<b>DÉTAIL DES TRANSPORTS</b>", normal_style)]],
+            colWidths=[17 * cm],
+        )
+        detail_title_d.setStyle(
+            TableStyle(
+                [
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                    ("TOPPADDING", (0, 0), (-1, -1), 0),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        story.append(detail_title_d)
         story.append(Spacer(1, 6))
         story.append(s2_table)
         story.append(Spacer(1, 2))
@@ -4110,13 +4220,9 @@ class PDFService:
         elif hasattr(company, "iban") and company.iban:
             iban_value = company.iban
 
-        # ✅ Pied de page : rappel dédié ou legal_footer / modalités standard
         if display_reminder_level:
-            footer_message = (
-                "Sauf erreur de notre part, cette facture est restée impayée à ce jour. "
-                "Nous vous remercions de bien vouloir procéder à son règlement dans les plus brefs délais. "
-                "Des frais de rappel ont été ajoutés conformément à nos conditions générales."
-            )
+            reminder_level_val = reminder_ctx.get("reminder_level") or 1
+            footer_message = _get_reminder_footer_message(reminder_level_val)
             if iban_value:
                 footer_message += (
                     f" Paiement par virement bancaire : IBAN : {iban_value}"
@@ -4153,8 +4259,6 @@ class PDFService:
 
         # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
-        if display_reminder_level:
-            mention = f"Document généré automatiquement – facture initiale n° {invoice.invoice_number} inchangée."
         footer_cb_det = _make_legal_footer_page_callback(
             footer_message, mention, centered_style
         )
@@ -4169,7 +4273,8 @@ class PDFService:
 
         try:
             qr_bill_service = self.qrbill_service
-            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice)
+            qr_override_d = reminder_ctx.get("reminder_total_due") if reminder_ctx.get("is_reminder") else None
+            qr_bill_svg_content = qr_bill_service.generate_qr_bill_svg(invoice, override_amount=qr_override_d)
             if qr_bill_svg_content:
                 drawing = _svg_content_to_drawing(qr_bill_svg_content)
                 if drawing:
@@ -4744,28 +4849,28 @@ class PDFService:
             ["Nouvelle échéance:", invoice.due_date.strftime("%d.%m.%Y")],
         ]
 
-        # ✅ Afficher le montant consolidé (rappel consolidé)
+        _fee_labels_leg = {1: "1er", 2: "2e", 3: "dernier"}
+        fee_sfx_leg = _fee_labels_leg.get(level, f"n°{level}")
+
         if reminder and reminder.total_due > 0:
-            # Mode rappel consolidé : afficher principal + frais = total
             invoice_info.extend(
                 [
-                    ["Montant initial:", f"CHF {reminder.principal_amount:.2f}"],
+                    ["Montant facture initiale :", f"CHF {reminder.principal_amount:.2f}"],
                     [
-                        f"Frais de rappel N°{level}:",
+                        "Frais de rappel :",
                         f"CHF {reminder.reminder_fee_amount:.2f}",
                     ],
-                    ["", ""],  # Ligne vide
-                    ["Total à payer:", f"CHF {reminder.total_due:.2f}"],
+                    ["", ""],
+                    ["Total à payer :", f"CHF {reminder.total_due:.2f}"],
                 ]
             )
         elif invoice.reminder_fee_amount and invoice.reminder_fee_amount > 0:
-            # Mode legacy (rétrocompatibilité) : utiliser les valeurs de la facture
             initial_amount = invoice.total_amount - invoice.reminder_fee_amount
             invoice_info.extend(
                 [
-                    ["Montant facture initiale:", f"CHF {initial_amount:.2f}"],
+                    ["Montant facture initiale :", f"CHF {initial_amount:.2f}"],
                     [
-                        f"Frais de rappel N°{level}:",
+                        "Frais de rappel :",
                         f"CHF {invoice.reminder_fee_amount:.2f}",
                     ],
                     ["Solde total dû:", f"CHF {invoice.balance_due:.2f}"],

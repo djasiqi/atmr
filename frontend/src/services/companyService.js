@@ -1066,44 +1066,44 @@ export const fetchAssignedReservations = async (forDate) => {
               : null;
 
           return {
+            ...b,
             id: b.id,
-            // ✅ P1-4 Phase 2.1: Utiliser client_name au lieu de customer_name
             client_name: clientName,
             client: b.client || { full_name: clientName },
             scheduled_time,
-            pickup_time: scheduled_time, // compat
+            pickup_time: scheduled_time,
             dropoff_time,
             pickup_location: b.pickup_location || b.pickup_address || b.origin || '',
             dropoff_location: b.dropoff_location || b.dropoff_address || b.destination || '',
-            // ✅ P1-4 Phase 2.4: Ajouter coordonnées GPS
             pickup_lat: b.pickup_lat || null,
             pickup_lon: b.pickup_lon || null,
             dropoff_lat: b.dropoff_lat || null,
             dropoff_lon: b.dropoff_lon || null,
-            amount: b.amount || b.price || 0, // ✅ Ajout du montant
+            amount: b.amount || b.price || 0,
             is_return: !!b.is_return,
-            parent_booking_id: b.parent_booking_id || b.outbound_booking_id || null, // ✅ ID de la course aller
-            time_confirmed: b.time_confirmed, // ✅ Ajout de time_confirmed pour les retours
+            parent_booking_id: b.parent_booking_id || b.outbound_booking_id || null,
+            time_confirmed: b.time_confirmed,
             status: b.status || 'scheduled',
             driver_username: b.driver_username || b.driver?.username,
-            driver_id: b.driver_id || a?.driver_id || null, // ✅ Ajout du driver_id
+            driver_id: b.driver_id || a?.driver_id || null,
             driver: b.driver || null,
-            // ✅ P1-4 Phase 2.2: Utiliser company_id et company_name du backend
+            driver_name: b.driver_name
+              || a?.driver?.full_name
+              || (a?.driver?.user
+                ? `${a.driver.user.first_name || ''} ${a.driver.user.last_name || ''}`.trim() || null
+                : null),
             company_id: b.company_id || null,
             company_name: b.company_name || null,
-            // ✅ P1-4 Phase 2.3: Utiliser timestamps ISO (le backend expose maintenant created_at et updated_at en ISO)
             created_at: b.created_at || null,
             updated_at: b.updated_at || null,
-            // ✅ P1-4 Phase 2.3: Utiliser created_at_formatted et updated_at_formatted si disponibles (pour compatibilité)
             created_at_formatted: b.created_at_formatted || null,
             updated_at_formatted: b.updated_at_formatted || null,
-            // accepte ancienne/ nouvelle forme (eta_* vs estimated_*)
             assignment: a
               ? {
                   id: a.id,
                   booking_id: a.booking_id,
                   driver_id: a.driver_id,
-                  driver: a.driver || null, // ⭐ IMPORTANT : Copier le driver de l'assignment
+                  driver: a.driver || null,
                   status: a.status,
                   estimated_pickup_arrival:
                     a.estimated_pickup_arrival || a.eta_pickup_at || a.pickup_eta || null,

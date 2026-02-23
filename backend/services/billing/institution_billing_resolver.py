@@ -103,18 +103,28 @@ def resolve_billing_party_for_institution_booking(
             institution=institution,
         )
         if bp:
+            # Conserver la clinique payeuse résolue en amont (AcceptOffer),
+            # sinon la déduire depuis le client institution ou le mapping BP.
+            clinic_company_id = _resolve_clinic_company_id_for_institution(
+                booking=booking,
+                company_id=company_id,
+                billing_party_id=bp.id,
+            )
             booking.billing_party_id = bp.id
             booking.billed_to_type = "clinic"
-            booking.billed_to_company_id = company_id
+            if clinic_company_id is not None:
+                booking.billed_to_company_id = clinic_company_id
             result["billing_party_id"] = bp.id
             result["billing_party_name"] = bp.display_name
+            result["billed_to_company_id"] = booking.billed_to_company_id
             resolution_source = source
             logger.info(
-                "[BillingResolver] intent=institution → bp_id=%s (%s) source=%s booking=%s",
+                "[BillingResolver] intent=institution → bp_id=%s (%s) source=%s booking=%s clinic_company_id=%s",
                 bp.id,
                 bp.display_name,
                 source,
                 booking.id,
+                booking.billed_to_company_id,
             )
         else:
             resolution_status = STATUS_FAILED_MISSING_ADDRESS
@@ -375,6 +385,43 @@ def _resolve_or_create_institution_bp(
     )
 
     return bp, SOURCE_CREATED_INSTITUTION
+
+
+def _resolve_clinic_company_id_for_institution(
+    *,
+    booking: Booking,
+    company_id: int,
+    billing_party_id: int,
+) -> int | None:
+    """Déduit la clinique payeuse pour un booking institution.
+
+    Priorité:
+    1) Valeur déjà présente sur booking.billed_to_company_id
+    2) Client institution lié (default_billed_to_company_id)
+    3) Mapping explicite (company_id, billing_party_id) -> clinic_company_id
+    """
+    existing = getattr(booking, "billed_to_company_id", None)
+    if existing is not None:
+        return int(existing)
+
+    client = getattr(booking, "client", None)
+    client_default = getattr(client, "default_billed_to_company_id", None)
+    if client_default is not None:
+        return int(client_default)
+
+    mapping = (
+        ClinicBillingPartyMapping.query.filter_by(
+            company_id=company_id,
+            billing_party_id=billing_party_id,
+            is_active=True,
+        )
+        .order_by(ClinicBillingPartyMapping.id.desc())
+        .first()
+    )
+    if mapping and mapping.clinic_company_id is not None:
+        return int(mapping.clinic_company_id)
+
+    return None
 
 
 # ── Résolution Patient ───────────────────────────────────────────────────

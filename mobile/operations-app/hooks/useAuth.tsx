@@ -1015,6 +1015,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.remove();
   }, [driverToken, mode]);
 
+  // ✅ FIX iOS : Foreground resync pour le mode enterprise
+  // iOS suspend les timers JS en arrière-plan → le refresh proactif ne se déclenche pas.
+  // Sans ce handler, le token enterprise (45min) expire et l'utilisateur est déconnecté au retour.
+  useEffect(() => {
+    if (!enterpriseSession?.token || mode !== "enterprise") return;
+
+    const handleEnterpriseAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        pushSessionEvent("ENTERPRISE_APP_FOREGROUND");
+        try {
+          const expiresAt = getTokenExpiration(enterpriseSession.token);
+          const refreshThreshold = 10 * 60 * 1000; // 10 minutes
+          const needsRefresh =
+            !expiresAt ||
+            (expiresAt - Date.now()) <= 0 ||
+            (expiresAt - Date.now()) < refreshThreshold;
+
+          if (needsRefresh) {
+            const refreshToken =
+              enterpriseSession.refreshToken ||
+              (await secureStorage.getEnterpriseRefreshToken());
+            if (refreshToken) {
+              try {
+                const refreshResponse =
+                  await refreshEnterpriseTokenSingleflight(refreshToken);
+                await handleEnterpriseSuccess(refreshResponse);
+                invalidateEnterpriseInterceptorCache();
+                log.success("enterprise foreground resync refreshed token");
+              } catch (_e) {
+                log.warn("enterprise foreground resync refresh failed, interceptor will handle");
+              }
+            }
+          }
+        } catch (e) {
+          log.warn("enterprise foreground resync error", { error: e });
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener("change", handleEnterpriseAppStateChange);
+    return () => subscription.remove();
+  }, [enterpriseSession?.token, mode, handleEnterpriseSuccess]);
+
   // ✅ REFRESH PROACTIF : Rafraîchir le token entreprise 5 minutes avant expiration
   useEffect(() => {
     if (!enterpriseSession?.token || mode !== "enterprise") return;

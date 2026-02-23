@@ -320,10 +320,16 @@ def _issue_tokens(
     if device_id:
         additional_claims["device_id"] = device_id
 
+    access_expires = current_app.config.get(
+        "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=1)
+    )
     access_token = create_access_token(
         identity=str(user.public_id),
         additional_claims=additional_claims,
-        expires_delta=timedelta(minutes=45),
+        expires_delta=access_expires,
+    )
+    refresh_expires = current_app.config.get(
+        "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
     )
     refresh_token = create_refresh_token(
         identity=str(user.public_id),
@@ -331,7 +337,7 @@ def _issue_tokens(
             "aud": MOBILE_AUDIENCE,
             "session_id": session_identifier,
         },
-        expires_delta=timedelta(days=14),
+        expires_delta=refresh_expires,
     )
 
     return {

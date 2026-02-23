@@ -153,8 +153,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   const [showClientModal, setShowClientModal] = useState(false);
   const [activeStay, setActiveStay] = useState(null); // Séjour actif avec infos clinique
   const [billToPatient, setBillToPatient] = useState(false); // Override: facturation patient
-  const [clientHomeAddress, setClientHomeAddress] = useState(''); // Adresse du client (pour override)
-  const [clientHomeGPS, setClientHomeGPS] = useState({ lat: null, lon: null }); // GPS du client
 
   // --- Date/heure de l'aller (séparés pour UX)
   const [scheduledDate, setScheduledDate] = useState('');
@@ -198,7 +196,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   });
 
 
-  const buildClinicAddress = (clinic) => {
+  const buildClinicAddress = useCallback((clinic) => {
     if (!clinic) return '';
     const parts = [];
     const hasStructured =
@@ -227,7 +225,24 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     }
 
     return parts.filter(Boolean).join(', ');
-  };
+  }, []);
+
+  const getClinicPickupAddress = useCallback(
+    (clinic) => {
+      if (!clinic) return '';
+      const structured = buildClinicAddress(clinic);
+      if (structured) return structured;
+
+      const directFallbacks = [
+        clinic.address,
+        clinic.domicile_address,
+        clinic.billing_address,
+        clinic.name,
+      ];
+      return directFallbacks.find((v) => typeof v === 'string' && v.trim())?.trim() || '';
+    },
+    [buildClinicAddress]
+  );
 
   // Calculer la durée estimée en temps réel avec OSRM (routes réelles)
   React.useEffect(() => {
@@ -485,12 +500,19 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       const stayData = stayResponse?.data;
 
       if (stayData && stayData.clinic) {
-        // Client hospitalisé → utiliser l'adresse de la clinique
         setActiveStay(stayData);
         const clinic = stayData.clinic;
+        // Préremplir l'établissement médical avec la clinique d'hospitalisation
+        if (clinic?.name) {
+          setMedicalFacility(clinic.name);
+          setEstablishmentText(clinic.name);
+          setEstablishment(null);
+          setServiceObj(null);
+          setHospitalService('');
+        }
 
-        const clinicAddress = buildClinicAddress(clinic) || clinic.address;
-
+        // Set pickup to clinic address (structured > raw > clinic name as last resort)
+        const clinicAddress = getClinicPickupAddress(clinic);
         if (clinicAddress) {
           setPickupLocation(clinicAddress);
           setPickupCoords({
@@ -499,34 +521,19 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           });
           console.log(`🏥 Client hospitalisé: utilisation adresse clinique ${clinic.name}`);
           console.log(`📍 Adresse clinique: ${clinicAddress}`);
+        } else {
+          console.warn('⚠️ Aucune adresse disponible pour la clinique:', clinic.name);
         }
 
-        // 💰 Appliquer le tarif préférentiel de la clinique
+        // Client hospitalisé: sans override, on privilégie le tarif clinique.
+        // Si le backend ne fournit pas de tarif clinique, on laisse vide (évite d'appliquer un tarif patient par erreur).
         if (clinic.preferential_rate && clinic.preferential_rate > 0) {
           setAmount(clinic.preferential_rate.toString());
-          console.log(`💰 Tarif préférentiel clinique appliqué: ${clinic.preferential_rate} CHF`);
+          console.log(`💰 Tarif clinique appliqué: ${clinic.preferential_rate} CHF`);
         } else {
-          // Pas de tarif préférentiel clinique, utiliser celui du client si disponible
-          const clientPreferentialRate = client?.preferential_rate;
-          if (clientPreferentialRate && clientPreferentialRate > 0) {
-            setAmount(clientPreferentialRate.toString());
-            console.log(`💰 Tarif préférentiel client appliqué: ${clientPreferentialRate} CHF`);
-          } else {
-            setAmount('');
-          }
+          setAmount('');
         }
-        if (billToPatient) {
-          const clientPreferentialRate = client?.preferential_rate;
-          if (clientPreferentialRate && clientPreferentialRate > 0) {
-            setAmount(clientPreferentialRate.toString());
-            console.log(
-              `💰 Tarif patient appliqué (override facturation): ${clientPreferentialRate} CHF`
-            );
-          } else {
-            setAmount('');
-          }
-        }
-        return; // Sortir ici si séjour actif trouvé
+        return;
       }
     } catch (error) {
       console.warn('⚠️ Erreur lors de la récupération du séjour actif:', error);
@@ -577,10 +584,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       homeAddress = client.address;
     }
 
-    // Sauvegarder l'adresse du client pour l'override
-    setClientHomeAddress(homeAddress);
-    setClientHomeGPS(homeGPS);
-
     if (homeAddress) {
       setPickupLocation(homeAddress);
       setPickupCoords(homeGPS); // ✅ Charger les GPS du client
@@ -610,7 +613,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     } else if (!billToPatient && activeStay && activeStay.clinic) {
       // Override désactivé : revenir à l'adresse de la clinique
       const clinic = activeStay.clinic;
-      const clinicAddress = buildClinicAddress(clinic) || clinic.address;
+      const clinicAddress = getClinicPickupAddress(clinic);
       
       if (clinicAddress) {
         setPickupLocation(clinicAddress);
@@ -624,9 +627,11 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       // Réappliquer le tarif préférentiel de la clinique
       if (clinic.preferential_rate && clinic.preferential_rate > 0) {
         setAmount(clinic.preferential_rate.toString());
+      } else {
+        setAmount('');
       }
     }
-  }, [billToPatient, activeStay, clientHomeAddress, clientHomeGPS, selectedClient]);
+  }, [billToPatient, activeStay, selectedClient, getClinicPickupAddress]);
 
   const loadClientOptions = useCallback(async (q) => {
     try {
@@ -1139,7 +1144,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
                       Client hospitalisé à {activeStay.clinic.name}
                     </strong>
                     <small className={styles.activeStayMeta}>
-                      Adresse de départ: {buildClinicAddress(activeStay.clinic) || activeStay.clinic.address || ''}
+                      Adresse de départ: {getClinicPickupAddress(activeStay.clinic)}
                       {activeStay.clinic.preferential_rate && (
                         <span className={styles.activeStayRate}>
                           💰 Tarif préférentiel: {activeStay.clinic.preferential_rate.toFixed(2)} CHF

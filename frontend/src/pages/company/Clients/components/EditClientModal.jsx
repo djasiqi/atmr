@@ -7,13 +7,19 @@ import { normalizePhone, getPhoneValidationError } from '../../../../utils/phone
 import ClientStaysSection from './ClientStaysSection';
 import ClientBillingPartiesSection from './ClientBillingPartiesSection';
 
+const capitalizeFirstName = (str) => {
+  if (!str) return '';
+  return str.replace(/(^|[\s\-'])(\S)/g, (_m, sep, ch) => sep + ch.toUpperCase());
+};
+const upperLastName = (str) => (str ? str.toUpperCase() : '');
+
 const EditClientModal = ({ client, onClose, onSave }) => {
   // CORRECTION: Les données viennent directement de client, pas de client.domicile
   const [formData, setFormData] = useState({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
-    first_name: client.user_first_name ?? client.first_name ?? client.user?.first_name ?? '',
-    last_name: client.user_last_name ?? client.last_name ?? client.user?.last_name ?? '',
+    first_name: capitalizeFirstName(client.user_first_name ?? client.first_name ?? client.user?.first_name ?? ''),
+    last_name: upperLastName(client.user_last_name ?? client.last_name ?? client.user?.last_name ?? ''),
     residence_facility: client.residence_facility || '',
     birth_date: client.user_birth_date || client.user?.birth_date || '',
     gender: (() => {
@@ -68,9 +74,12 @@ const EditClientModal = ({ client, onClose, onSave }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+    if (name === 'first_name') finalValue = capitalizeFirstName(finalValue);
+    if (name === 'last_name') finalValue = upperLastName(finalValue);
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: finalValue,
     }));
   };
 

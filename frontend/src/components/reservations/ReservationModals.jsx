@@ -45,15 +45,8 @@ const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) =>
     setLoading(true);
     try {
       if (typeof onConfirm === 'function') {
-        const [hours, minutes] = selectedTime.split(':');
-        const dateTime = new Date(`${selectedDate}T${hours}:${minutes}`);
-
-        try {
-          await onConfirm({ return_time: dateTime.toISOString().slice(0, 16) });
-        } catch (e) {
-          const isoDatetime = `${selectedDate} ${selectedTime}`;
-          await onConfirm(isoDatetime);
-        }
+        // Envoyer la date/heure locale telle quelle, sans conversion UTC via Date
+        await onConfirm({ return_time: `${selectedDate}T${selectedTime}` });
       }
       onClose();
     } catch (error) {

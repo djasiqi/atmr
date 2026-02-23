@@ -164,10 +164,10 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (driver) {
       setForm({
-        phone: driver.phone,
-        address: (driver as any).address || "",
-        email: (driver as any).email || "",
-        photo: driver.photo,
+        phone: driver.phone ?? "",
+        address: (driver as any).address ?? "",
+        email: (driver as any).email ?? "",
+        photo: driver.photo ?? "",
       });
     }
   }, [driver]);

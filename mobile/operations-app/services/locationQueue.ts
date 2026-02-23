@@ -183,6 +183,34 @@ export async function enqueueLocation(
 }
 
 /**
+ * Ajoute plusieurs positions en une seule opération AsyncStorage.
+ * Utilisé par la tâche background pour éviter N lectures/écritures séquentielles.
+ */
+export async function enqueueLocationBatch(
+  locations: QueuedLocation[]
+): Promise<void> {
+  if (locations.length === 0) return;
+  try {
+    const queue = await getLocationQueue();
+    const now = Date.now();
+    const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+    const merged = [...queue, ...locations].filter(
+      (loc) => now - loc.timestamp < MAX_AGE_MS
+    );
+
+    if (merged.length > MAX_QUEUE_SIZE) {
+      merged.splice(0, merged.length - MAX_QUEUE_SIZE);
+    }
+
+    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(merged));
+    log.info("batch enqueued", { added: locations.length, total: merged.length });
+  } catch (error) {
+    log.error("batch enqueue failed", { error });
+  }
+}
+
+/**
  * Récupère toutes les positions en queue.
  * @returns Liste des positions en queue
  */

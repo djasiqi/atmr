@@ -436,13 +436,13 @@ const persistEnterpriseSession = async (
     try {
       await secureStorage.setEnterpriseRefreshToken(session.refreshToken);
     } catch (error) {
-      // ✅ CORRECTION : Gérer les erreurs de stockage du refresh token
       log.error("enterprise refresh token save failed", { error });
-      // Ne pas throw ici car le token principal est déjà sauvegardé
-      // Le refresh token pourra être récupéré lors du prochain login
     }
   } else {
-    await secureStorage.removeEnterpriseRefreshToken();
+    // Ne PAS supprimer l'ancien refresh token si le nouveau est absent.
+    // Sur iOS, une réponse partielle ou un crash réseau pourrait perdre le refresh token
+    // et rendre la session irrécupérable.
+    log.warn("persist: no refresh_token in payload, keeping existing");
   }
 
   // ✅ Vérifier que le token a bien été sauvegardé

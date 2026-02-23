@@ -181,35 +181,33 @@ export const useEnterpriseDriverTracking = () => {
       });
     };
 
-    // ✅ Essayer d'abord les sockets (temps réel)
     (async () => {
       try {
-        socketInstance = await connectSocket(token, "enterprise");
-        if (!socketInstance || !isActive) {
-          // Si les sockets échouent, utiliser uniquement HTTP
+        const s = await connectSocket(token, "enterprise");
+        if (!isActive) {
+          // Composant démonté pendant le connect — nettoyer immédiatement
+          if (s) s.off("driver_location_update", handleDriverLocation);
+          return;
+        }
+        if (!s) {
           log.warn("sockets unavailable, using http fallback", {});
           fetchLocationsViaHTTP();
-          // Poll HTTP toutes les 10 secondes si pas de sockets
           httpPollIntervalRef.current = setInterval(() => {
-            if (isActive) {
-              fetchLocationsViaHTTP();
-            }
+            if (isActive) fetchLocationsViaHTTP();
           }, 10000);
           return;
         }
 
-        socketRef.current = socketInstance;
+        socketInstance = s;
+        socketRef.current = s;
 
-        socketInstance.off("driver_location_update", handleDriverLocation);
-        socketInstance.on("driver_location_update", handleDriverLocation);
-        socketInstance.emit("join_company");
-        socketInstance.emit("get_driver_locations");
+        s.off("driver_location_update", handleDriverLocation);
+        s.on("driver_location_update", handleDriverLocation);
+        s.emit("join_company");
+        s.emit("get_driver_locations");
 
-        // ✅ Fallback HTTP : poll toutes les 30 secondes même avec sockets (au cas où)
         httpPollIntervalRef.current = setInterval(() => {
-          if (isActive) {
-            fetchLocationsViaHTTP();
-          }
+          if (isActive) fetchLocationsViaHTTP();
         }, 30000);
       } catch (error) {
         log.warn("enterprise socket connection failed", { error });
@@ -226,10 +224,10 @@ export const useEnterpriseDriverTracking = () => {
       if (socketInstance) {
         socketInstance.off("driver_location_update", handleDriverLocation);
       }
-      if (socketRef.current === socketInstance) {
+      if (socketRef.current) {
+        socketRef.current.off("driver_location_update", handleDriverLocation);
         socketRef.current = null;
       }
-      // ✅ Nettoyer l'intervalle HTTP
       if (httpPollIntervalRef.current) {
         clearInterval(httpPollIntervalRef.current);
         httpPollIntervalRef.current = null;

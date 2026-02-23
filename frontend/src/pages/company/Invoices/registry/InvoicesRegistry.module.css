@@ -238,6 +238,161 @@
   background: var(--danger-bg-hover, rgba(220, 38, 38, 0.1));
 }
 
+/* ===== Bulk action bar ===== */
+.bulkBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #f0fdfa 0%, #e0f7fa 100%);
+  border: 1px solid var(--brand-primary, #00796b);
+  border-radius: 10px;
+  animation: bulkSlideIn 0.15s ease;
+  flex-wrap: wrap;
+}
+
+@keyframes bulkSlideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.bulkBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.bulkCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+  white-space: nowrap;
+}
+
+.bulkQuickSelect {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bulkQuickBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  height: 26px;
+  border: 1px solid var(--brand-primary, #00796b);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--brand-primary, #00796b);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.bulkQuickBtn:hover {
+  background: var(--brand-primary, #00796b);
+  color: #fff;
+}
+
+.bulkBarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulkActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 14px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  background: var(--brand-primary, #00796b);
+  color: #fff;
+}
+
+.bulkActionBtn:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.3);
+}
+
+.bulkActionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bulkActionBtnEmail {
+  background: #1976d2;
+}
+
+.bulkActionBtnEmail:hover:not(:disabled) {
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+.bulkCancelBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text-tertiary, #94a3b8);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bulkCancelBtn:hover {
+  background: #fff;
+  color: var(--danger-primary, #dc2626);
+  border-color: var(--danger-primary, #dc2626);
+}
+
+/* ===== Checkbox in table ===== */
+.thCheckbox,
+.tdCheckbox {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  text-align: center;
+  padding-left: 10px !important;
+  padding-right: 4px !important;
+}
+
+.checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand-primary, #00796b);
+  cursor: pointer;
+  margin: 0;
+}
+
+.rowSelected {
+  background: #e0f7fa !important;
+}
+
+.rowSelected td {
+  color: var(--text-primary, #1e293b) !important;
+}
+
 /* Zone D — Table */
 .tableContainer {
   background: var(--bg-primary);
@@ -608,7 +763,7 @@
   }
 
   .table {
-    min-width: 680px;
+    min-width: 720px;
   }
 
   .pagination {
@@ -623,6 +778,17 @@
 
   .paginationControls {
     justify-content: center;
+  }
+
+  .bulkBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .bulkBarRight {
+    justify-content: flex-end;
   }
 }
 

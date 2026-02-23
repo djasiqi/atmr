@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { FiX, FiAlertTriangle, FiClock, FiDollarSign, FiCheckCircle, FiLock } from 'react-icons/fi';
 import styles from './ReminderModal.module.css';
 import { getNextReminderLevel } from '../../../../../services/invoiceService';
 import { fetchBillingSettings } from '../../../../../services/settingsService';
+
+const LEVEL_BADGES = {
+  1: { label: '1er', className: styles.levelBadge1 },
+  2: { label: '2e', className: styles.levelBadge2 },
+  3: { label: 'Dernier', className: styles.levelBadge3 },
+};
 
 const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
   const [level, setLevel] = useState(1);
@@ -11,7 +18,6 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
   const [settingsLoadFailed, setSettingsLoadFailed] = useState(false);
   const [settingsUsingDefaults, setSettingsUsingDefaults] = useState(false);
 
-  // ✅ Charger les settings de rappels au montage du modal
   useEffect(() => {
     if (!open) return;
 
@@ -22,22 +28,12 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
         setSettingsLoadFailed(false);
         setSettingsUsingDefaults(false);
         const data = await fetchBillingSettings();
-        
-        if (cancelled) return; // ✅ Guard: éviter setState après fermeture
+
+        if (cancelled) return;
 
         if (data) {
           setBillingSettings(data);
-          const REMINDER_DEBUG = process.env.REACT_APP_REMINDER_DEBUG === '1';
-          if (REMINDER_DEBUG) {
-            console.log('[REMINDER_DEBUG] Billing settings loaded:', {
-              reminder1_fee: data.reminder1_fee,
-              reminder2_fee: data.reminder2_fee,
-              reminder3_fee: data.reminder3_fee,
-              reminder_schedule_days: data.reminder_schedule_days,
-            });
-          }
         } else {
-          // Pas de données → utiliser defaults
           if (!cancelled) {
             setSettingsUsingDefaults(true);
             setBillingSettings({
@@ -52,7 +48,6 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
         console.error('[ReminderModal] Erreur lors du chargement des settings:', err);
         if (!cancelled) {
           setSettingsLoadFailed(true);
-          // Fallback: utiliser des valeurs par défaut
           setBillingSettings({
             reminder1_fee: 0,
             reminder2_fee: 0,
@@ -66,14 +61,22 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
     loadBillingSettings();
 
     return () => {
-      cancelled = true; // ✅ Cleanup: annuler si modal fermé
+      cancelled = true;
     };
   }, [open]);
 
-  // ✅ Générer dynamiquement les descriptions selon les settings réels
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const getReminderLevels = () => {
     if (!billingSettings) {
-      // Fallback si settings non chargés
       return [
         { value: 1, label: '1er rappel', description: 'Rappel aimable sans frais', fee: 0, delayDays: 10 },
         { value: 2, label: '2e rappel', description: 'Rappel avec frais supplémentaires', fee: 0, delayDays: 5 },
@@ -81,14 +84,12 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
       ];
     }
 
-    // ✅ Sécurisation: convertir en Number pour éviter crash toFixed sur string/Decimal
     const fees = {
       1: Number(billingSettings.reminder1_fee ?? 0),
       2: Number(billingSettings.reminder2_fee ?? 0),
       3: Number(billingSettings.reminder3_fee ?? 0),
     };
 
-    // ✅ Normalisation: gérer clés string ('1') et int (1) pour reminder_schedule_days
     const delaysRaw = billingSettings.reminder_schedule_days ?? {};
     const delays = {
       1: Number(delaysRaw[1] ?? delaysRaw['1'] ?? 10),
@@ -105,7 +106,7 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
           : `Rappel avec frais de ${fees[1].toFixed(2)} CHF`,
         fee: fees[1],
         delayDays: delays[1],
-        delayDescription: `Envoi ${delays[1]} jours après l'échéance`,
+        delayDescription: `${delays[1]} jours après l'échéance`,
       },
       {
         value: 2,
@@ -115,7 +116,7 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
           : `Rappel avec frais de ${fees[2].toFixed(2)} CHF`,
         fee: fees[2],
         delayDays: delays[2],
-        delayDescription: `Envoi ${delays[2]} jours après le 1er rappel`,
+        delayDescription: `${delays[2]} jours après le 1er rappel`,
       },
       {
         value: 3,
@@ -125,7 +126,7 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
           : `Dernier rappel avec frais de ${fees[3].toFixed(2)} CHF`,
         fee: fees[3],
         delayDays: delays[3],
-        delayDescription: `Envoi ${delays[3]} jours après le 2e rappel`,
+        delayDescription: `${delays[3]} jours après le 2e rappel`,
       },
     ];
   };
@@ -138,7 +139,6 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
     try {
       setLoading(true);
       setError(null);
-
       await onReminder(invoice.id, level);
     } catch (err) {
       setError(err.message || 'Erreur lors de la génération du rappel');
@@ -153,131 +153,210 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
     onClose();
   };
 
+  useEffect(() => {
+    if (open && invoice) {
+      const next = getNextReminderLevel(invoice);
+      setLevel(next);
+    }
+  }, [open, invoice]);
+
   if (!open || !invoice) return null;
 
   const nextLevel = getNextReminderLevel(invoice);
-  const availableLevels = reminderLevels.filter((rl) => rl.value >= nextLevel);
+  const selectedLevel = reminderLevels.find((rl) => rl.value === level);
+  const fee = selectedLevel?.fee ?? 0;
+
+  const getClientName = () => {
+    if (!invoice) return '';
+    if (invoice.billed_to_company_id && invoice.billed_to_company) {
+      return invoice.billed_to_company.name || 'Clinique';
+    }
+    if (invoice.client) {
+      return (
+        invoice.client.institution_name ||
+        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+        invoice.client.username ||
+        ''
+      );
+    }
+    return 'Client inconnu';
+  };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content modal-md">
-        <div className="modal-header">
-          <h2 className="modal-title">Générer un rappel</h2>
-          <button className="modal-close" onClick={handleClose}>
-            ✕
+    <div className={styles.overlay} onClick={handleClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className={styles.header}>
+          <div className={styles.headerTitle}>
+            <FiAlertTriangle size={18} className={styles.headerIcon} />
+            <h2>Générer un rappel</h2>
+          </div>
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Fermer">
+            <FiX size={18} />
           </button>
         </div>
 
-        <div className="modal-body">
-          <div className={styles.invoiceInfo}>
-            <h3>Facture {invoice.invoice_number}</h3>
-            <p>
-              Client:{' '}
-              {invoice.client
-                ? invoice.client.institution_name ||
-                  `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
-                  invoice.client.username
-                : 'Client inconnu'}
-            </p>
-            <p>
-              Solde dû: <strong>{invoice.balance_due.toFixed(2)} CHF</strong>
-            </p>
-            <p>
-              Niveau actuel:{' '}
-              {invoice.reminder_level === 0 ? 'Aucun' : `Rappel ${invoice.reminder_level}`}
-            </p>
-            <p>
-              Dernier rappel:{' '}
-              {invoice.last_reminder_at
-                ? new Date(invoice.last_reminder_at).toLocaleDateString('fr-FR')
-                : 'Jamais'}
-            </p>
+        {/* Invoice summary card */}
+        <div className={styles.invoiceCard}>
+          <div className={styles.invoiceCardHeader}>
+            <span className={styles.invoiceNumber}>{invoice.invoice_number}</span>
+            <span className={styles.clientName}>{getClientName()}</span>
           </div>
+          <div className={styles.invoiceDetails}>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Niveau actuel</span>
+              <span className={styles.detailValue}>
+                {invoice.reminder_level === 0 ? 'Aucun rappel' : `Rappel ${invoice.reminder_level}`}
+              </span>
+            </div>
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Dernier rappel</span>
+              <span className={styles.detailValue}>
+                {invoice.last_reminder_at
+                  ? new Date(invoice.last_reminder_at).toLocaleDateString('fr-CH')
+                  : 'Jamais'}
+              </span>
+            </div>
+            <hr className={styles.detailSeparator} />
+            <div className={styles.detailRow}>
+              <span className={styles.detailLabel}>Solde dû</span>
+              <span className={styles.detailValueBold}>{invoice.balance_due.toFixed(2)} CHF</span>
+            </div>
+          </div>
+        </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label required">Niveau du rappel</label>
+        <form onSubmit={handleSubmit}>
+          <div className={styles.body}>
+            {/* Level selector */}
+            <div className={styles.levelSectionLabel}>Niveau du rappel</div>
+
+            {nextLevel > 3 ? (
+              <div className={styles.emptyState}>
+                Tous les niveaux de rappel ont été utilisés pour cette facture.
+              </div>
+            ) : (
               <div className={styles.levelOptions}>
-                {availableLevels.map((reminderLevel) => (
-                  <div key={reminderLevel.value} className={styles.levelOption}>
-                    <input
-                      type="radio"
-                      id={`level-${reminderLevel.value}`}
-                      name="level"
-                      value={reminderLevel.value}
-                      checked={level === reminderLevel.value}
-                      onChange={(e) => setLevel(parseInt(e.target.value))}
-                      className={styles.radio}
-                    />
-                    <label htmlFor={`level-${reminderLevel.value}`} className={styles.levelLabel}>
-                      <div className={styles.levelTitle}>{reminderLevel.label}</div>
-                      <div className={styles.levelDescription}>{reminderLevel.description}</div>
-                      {reminderLevel.delayDescription && (
-                        <div className={styles.delayDescription} style={{ fontSize: '0.75rem', color: '#888', marginTop: '0.25rem' }}>
-                          {reminderLevel.delayDescription}
+                {reminderLevels.map((rl) => {
+                  const badge = LEVEL_BADGES[rl.value];
+                  const isNext = rl.value === nextLevel;
+                  const isDone = rl.value < nextLevel;
+                  const isLocked = rl.value > nextLevel;
+                  const isActive = level === rl.value;
+                  return (
+                    <label
+                      key={rl.value}
+                      className={[
+                        styles.levelCard,
+                        isActive ? styles.levelCardActive : '',
+                        isDone ? styles.levelCardDone : '',
+                        isLocked ? styles.levelCardLocked : '',
+                      ].filter(Boolean).join(' ')}
+                    >
+                      {isNext && (
+                        <input
+                          type="radio"
+                          name="level"
+                          value={rl.value}
+                          checked={isActive}
+                          onChange={() => setLevel(rl.value)}
+                          className={styles.levelRadio}
+                        />
+                      )}
+                      {isDone && (
+                        <div className={styles.levelDoneIcon}>
+                          <FiCheckCircle size={16} />
                         </div>
                       )}
+                      {isLocked && (
+                        <div className={styles.levelLockedIcon}>
+                          <FiLock size={14} />
+                        </div>
+                      )}
+                      <div className={styles.levelContent}>
+                        <div className={styles.levelHeader}>
+                          <span className={styles.levelTitle}>{rl.label}</span>
+                          {badge && (
+                            <span className={`${styles.levelBadge} ${badge.className}`}>
+                              {isDone ? 'Fait' : badge.label}
+                            </span>
+                          )}
+                        </div>
+                        <div className={styles.levelDesc}>
+                          {isDone
+                            ? 'Rappel déjà envoyé'
+                            : isLocked
+                              ? `Disponible après le rappel niveau ${rl.value - 1}`
+                              : rl.description}
+                        </div>
+                        {isNext && rl.delayDescription && (
+                          <div className={styles.levelDelay}>
+                            <FiClock size={11} />
+                            {rl.delayDescription}
+                          </div>
+                        )}
+                      </div>
                     </label>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            </div>
+            )}
 
-            {level > 0 && (() => {
-              const selectedLevel = reminderLevels.find((rl) => rl.value === level);
-              const fee = selectedLevel?.fee ?? 0;
-              const delayDescription = selectedLevel?.delayDescription ?? '';
-
-              return (
-                <div className={styles.feeInfo}>
-                  <h4>Frais associés</h4>
-                  <p>
-                    {fee === 0 ? (
-                      `Aucun frais pour le ${selectedLevel?.label || 'rappel'}`
-                    ) : (
-                      `Frais: ${fee.toFixed(2)} CHF`
-                    )}
+            {/* Fee summary */}
+            {selectedLevel && (
+              <div className={styles.feeSummary}>
+                <div className={styles.feeSummaryIcon}>
+                  <FiDollarSign size={18} />
+                </div>
+                <div className={styles.feeSummaryContent}>
+                  <p className={styles.feeSummaryTitle}>Frais de rappel</p>
+                  <p className={`${styles.feeSummaryAmount} ${fee === 0 ? styles.feeSummaryAmountZero : ''}`}>
+                    {fee === 0 ? 'Aucun frais' : `${fee.toFixed(2)} CHF`}
                   </p>
-                  {delayDescription && (
-                    <p className={styles.delayInfo} style={{ fontSize: '0.875rem', color: '#666', marginTop: '0.5rem' }}>
-                      {delayDescription}
-                    </p>
-                  )}
-                  {settingsLoadFailed && (
-                    <p className={styles.settingsWarning} style={{ fontSize: '0.875rem', color: '#856404', marginTop: '0.5rem', fontStyle: 'italic' }}>
-                      ⚠️ Impossible de charger les paramètres de rappels — valeurs par défaut appliquées
-                    </p>
-                  )}
-                  {settingsUsingDefaults && !settingsLoadFailed && (
-                    <p className={styles.settingsWarning} style={{ fontSize: '0.875rem', color: '#856404', marginTop: '0.5rem', fontStyle: 'italic' }}>
-                      ⚠️ Paramètres de rappel non configurés — valeurs par défaut appliquées
+                  {selectedLevel.delayDescription && (
+                    <p className={styles.feeSummaryDelay}>
+                      {selectedLevel.delayDescription}
                     </p>
                   )}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
-            {error && <div className="alert alert-error mb-md">{error}</div>}
+            {/* Warnings */}
+            {settingsLoadFailed && (
+              <div className={styles.settingsWarning}>
+                <FiAlertTriangle size={14} />
+                Impossible de charger les paramètres de rappels — valeurs par défaut appliquées
+              </div>
+            )}
+            {settingsUsingDefaults && !settingsLoadFailed && (
+              <div className={styles.settingsWarning}>
+                <FiAlertTriangle size={14} />
+                Paramètres de rappel non configurés — valeurs par défaut appliquées
+              </div>
+            )}
 
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleClose}
-                disabled={loading}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={loading || availableLevels.length === 0}
-              >
-                {loading ? 'Génération...' : `Générer le rappel niveau ${level}`}
-              </button>
-            </div>
-          </form>
-        </div>
+            {error && <div className={styles.error}>{error}</div>}
+          </div>
+
+          {/* Footer */}
+          <div className={styles.footer}>
+            <button
+              type="button"
+              className={styles.cancelBtn}
+              onClick={handleClose}
+              disabled={loading}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className={styles.submitBtn}
+              disabled={loading || nextLevel > 3}
+            >
+              {loading ? 'Génération...' : `Générer le rappel niveau ${level}`}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

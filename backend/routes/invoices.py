@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from flask import request
@@ -410,13 +410,27 @@ class InvoicesList(Resource):
             search_query=q if q else None,
         )
 
+        overdue_business_filter = (
+            (Invoice.balance_due > 0)
+            & (Invoice.due_date < date.today())
+            & (
+                Invoice.status.notin_(
+                    [
+                        InvoiceStatus.DRAFT,
+                        InvoiceStatus.PAID,
+                        InvoiceStatus.CANCELLED,
+                    ]
+                )
+            )
+        )
+
         # Stats avec toutes les factures filtrées (sans tri ni pagination)
         stats_query = stats_base_query.with_entities(
             func.sum(Invoice.total_amount).label("total_issued"),
             func.sum(Invoice.amount_paid).label("total_paid"),
             func.sum(Invoice.balance_due).label("total_balance"),
             func.count(Invoice.id)
-            .filter(Invoice.status == InvoiceStatus.OVERDUE)
+            .filter(overdue_business_filter)
             .label("overdue_count"),
         )
         stats_result = stats_query.first()
@@ -465,7 +479,10 @@ class InvoicesList(Resource):
 
         # Appliquer les mêmes filtres que la query originale
         if status_enum:
-            pagination_query = pagination_query.filter_by(status=status_enum)
+            if status_raw == "overdue":
+                pagination_query = pagination_query.filter(overdue_business_filter)
+            else:
+                pagination_query = pagination_query.filter_by(status=status_enum)
         if client_id:
             pagination_query = pagination_query.filter(Invoice.client_id == client_id)
         if year:
@@ -2816,7 +2833,7 @@ class InvoicePayments(Resource):
                             return APIErrorHandler.handle_validation_error(
                                 "La facture partenaire est déjà payée.",
                                 logger_instance=logger,
-                            ), 400
+                            )
 
                         # Calculer le solde dû
                         balance_due = (
@@ -3225,10 +3242,12 @@ class InvoiceReminders(Resource):
                     "reminder_pdf_url": reminder_result.reminder.pdf_url,
                     "invoice_pdf_url": invoice.pdf_url,  # PDF initial intact
                 }, 200
-            return reminder_result.error or APIErrorHandler.handle_validation_error(
+            if reminder_result.error:
+                return reminder_result.error, reminder_result.status_code or 400
+            return APIErrorHandler.handle_validation_error(
                 "Impossible de générer le rappel",
                 logger_instance=logger,
-            ), reminder_result.status_code or 400
+            )
 
         except (OperationalError, DBAPIError, IntegrityError) as e:
             # Erreurs DB attendues : connexion, contraintes, timeout
@@ -3443,7 +3462,7 @@ class RegenerateInvoicePdf(Resource):
                         except ValueError as e:
                             return APIErrorHandler.handle_validation_error(
                                 str(e), logger_instance=logger
-                            ), 400
+                            )
                         except Exception as e:
                             logger.exception(
                                 "Erreur lors de la régénération PDF pour facture partenaire %s",
@@ -3481,7 +3500,7 @@ class RegenerateInvoicePdf(Resource):
                         "et ne peut plus être modifiée."
                     ),
                     logger_instance=logger,
-                ), 400
+                )
 
             # ✅ DDD: Régénérer le PDF via use case (force_regenerate=True pour écraser l'ancien)
             uc = GenerateInvoicePdfUseCase()
@@ -3492,10 +3511,12 @@ class RegenerateInvoicePdf(Resource):
                 invoice.pdf_url = pdf_result.pdf_url
                 db.session.commit()
                 return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
-            return pdf_result.error or APIErrorHandler.handle_validation_error(
+            if pdf_result.error:
+                return pdf_result.error, pdf_result.status_code or 400
+            return APIErrorHandler.handle_validation_error(
                 "Impossible de régénérer le PDF",
                 logger_instance=logger,
-            ), pdf_result.status_code or 400
+            )
 
         except (OperationalError, DBAPIError, IntegrityError) as e:
             # Erreurs DB attendues : connexion, contraintes, timeout
@@ -3697,7 +3718,7 @@ class DuplicateInvoice(Resource):
                             return APIErrorHandler.handle_validation_error(
                                 "La facture partenaire est déjà annulée.",
                                 logger_instance=logger,
-                            ), 400
+                            )
 
                         # Vérifier que la facture n'est pas réellement payée
                         # (vérifier amount_paid > 0, pas seulement le statut)
@@ -3708,7 +3729,7 @@ class DuplicateInvoice(Resource):
                             return APIErrorHandler.handle_validation_error(
                                 "Impossible de dupliquer une facture partenaire déjà payée.",
                                 logger_instance=logger,
-                            ), 400
+                            )
 
                         # Sauvegarder les valeurs nécessaires avant la suppression
                         partnership_id = partner_invoice.partnership_id
@@ -5367,4 +5388,140 @@ class ExportPaymentsCSV(Resource):
             )
         except Exception as e:
             logger.exception("Erreur lors de l'export CSV des paiements")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ────────────────────────────────────────────────
+# Bulk actions
+# ────────────────────────────────────────────────
+
+bulk_send_model = invoices_ns.model(
+    "BulkSendInvoices",
+    {
+        "invoice_ids": fields.List(
+            fields.Integer, required=True, description="IDs des factures à marquer"
+        ),
+        "send_method": fields.String(
+            required=False,
+            default="paper",
+            description="Méthode d'envoi: paper ou email",
+            enum=["paper", "email"],
+        ),
+    },
+)
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/bulk-send")
+class BulkSendInvoices(Resource):
+    """Marquer plusieurs factures brouillon comme envoyées en une seule opération."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @invoices_ns.expect(bulk_send_model)
+    @invoices_ns.response(200, "Factures marquées comme envoyées")
+    @invoices_ns.response(400, "Erreur de validation", validation_error_model)
+    @invoices_ns.response(401, "Non authentifié", permission_error_model)
+    @invoices_ns.response(403, "Non autorisé", permission_error_model)
+    def post(self, company_id):
+        """Marquer un lot de factures brouillon comme envoyées (papier)."""
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = (
+                _get_current_company_via_use_case()
+            )
+            if error_response or not company:
+                return error_response, status_code
+
+            cid_obj = getattr(company, "id", None)
+            try:
+                cid = int(cid_obj) if cid_obj is not None else None
+            except (ValueError, TypeError, OverflowError):
+                cid = None
+            if cid != company_id:
+                return APIErrorHandler.handle_permission_error(
+                    "Non autorisé",
+                    logger_instance=logger,
+                )
+
+            data = request.get_json(force=True) or {}
+            invoice_ids = data.get("invoice_ids", [])
+            send_method = data.get("send_method", "paper")
+
+            if not invoice_ids or not isinstance(invoice_ids, list):
+                return APIErrorHandler.handle_validation_error(
+                    "invoice_ids doit être une liste non vide d'identifiants",
+                    logger_instance=logger,
+                )
+
+            if send_method not in ("paper", "email"):
+                return APIErrorHandler.handle_validation_error(
+                    "send_method doit être 'paper' ou 'email'",
+                    logger_instance=logger,
+                )
+
+            now = datetime.now(UTC)
+            updated = []
+            skipped = []
+
+            invoices = Invoice.query.filter(
+                Invoice.id.in_(invoice_ids),
+                Invoice.company_id == company_id,
+            ).all()
+
+            found_ids = {inv.id for inv in invoices}
+
+            for inv_id in invoice_ids:
+                if inv_id not in found_ids:
+                    skipped.append(
+                        {"id": inv_id, "reason": "Facture introuvable"}
+                    )
+
+            for invoice in invoices:
+                if invoice.status != InvoiceStatus.DRAFT:
+                    skipped.append(
+                        {
+                            "id": invoice.id,
+                            "invoice_number": invoice.invoice_number,
+                            "reason": f"Statut actuel: {invoice.status.value}",
+                        }
+                    )
+                    continue
+
+                invoice.status = InvoiceStatus.SENT
+                invoice.sent_at = now
+                updated.append(
+                    {
+                        "id": invoice.id,
+                        "invoice_number": invoice.invoice_number,
+                    }
+                )
+
+            db.session.commit()
+
+            logger.info(
+                "Bulk send: company_id=%s, updated=%s, skipped=%s",
+                company_id,
+                len(updated),
+                len(skipped),
+            )
+
+            return success_response(
+                data={
+                    "updated": updated,
+                    "skipped": skipped,
+                    "send_method": send_method,
+                    "total_updated": len(updated),
+                    "total_skipped": len(skipped),
+                },
+                message=f"{len(updated)} facture(s) marquée(s) comme envoyée(s)",
+            )
+
+        except (OperationalError, DBAPIError, IntegrityError) as e:
+            logger.error("Erreur DB bulk-send: %s", str(e))
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
+        except Exception as e:
+            logger.exception("Erreur inattendue bulk-send")
+            db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)

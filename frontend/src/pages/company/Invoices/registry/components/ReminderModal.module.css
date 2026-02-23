@@ -1,97 +1,479 @@
-/* Styles spécifiques pour l'encadré d'information facture et les niveaux de rappel */
+/* ReminderModal — SaaS Pro Design (cohérent avec PaymentModal) */
 
-.invoiceInfo {
-  background-color: var(--bg-tertiary);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--spacing-lg);
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.15s ease;
 }
 
-.invoiceInfo h3 {
-  margin: 0 0 var(--spacing-sm) 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-lg);
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.invoiceInfo p {
-  margin: var(--spacing-xs) 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+.modal {
+  background: var(--bg-primary, #fff);
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.invoiceInfo strong {
-  color: var(--error-primary);
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Options de niveau de rappel */
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerTitle h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+}
+
+.headerIcon {
+  color: var(--warning-primary, #d97706);
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--bg-tertiary, #f1f5f9);
+  border-radius: 8px;
+  color: var(--text-tertiary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+
+/* Invoice summary card */
+.invoiceCard {
+  margin: 16px 20px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.invoiceCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-secondary, #f1f5f9);
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.invoiceNumber {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-primary, #00796b);
+}
+
+.clientName {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.invoiceDetails {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detailLabel {
+  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.detailValue {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailValueBold {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--danger-primary, #dc2626);
+  font-variant-numeric: tabular-nums;
+}
+
+.detailSeparator {
+  border: none;
+  border-top: 1px dashed var(--border-primary, #e2e8f0);
+  margin: 4px 0;
+}
+
+/* Form body */
+.body {
+  padding: 0 20px;
+}
+
+/* Level selector — radio cards */
+.levelSectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  margin-bottom: 8px;
+}
+
 .levelOptions {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.levelOption {
+.levelCard {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  border: 2px solid var(--border-primary);
-  border-radius: var(--radius-md);
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
   cursor: pointer;
-  transition: var(--transition-base);
+  transition: all 0.15s;
+  background: var(--bg-primary, #fff);
 }
 
-.levelOption:hover {
-  border-color: var(--brand-primary-light);
-  background: var(--bg-tertiary);
+.levelCard:hover {
+  border-color: var(--brand-primary-light, #4db6ac);
+  background: var(--bg-tertiary, #f8fafc);
 }
 
-.levelOption input[type='radio']:checked ~ .levelLabel {
-  color: var(--brand-primary);
+.levelCardActive {
+  border-color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+  box-shadow: 0 0 0 1px var(--brand-primary, #00796b);
 }
 
-.radio {
+.levelCardDone {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+  border-color: var(--success-border, #bbf7d0);
+  background: var(--success-bg, #f0fdf4);
+}
+
+.levelCardLocked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-style: dashed;
+}
+
+.levelRadio {
   margin-top: 2px;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  accent-color: var(--brand-primary, #00796b);
   cursor: pointer;
-  accent-color: var(--brand-primary);
 }
 
-.levelLabel {
+.levelDoneIcon {
+  margin-top: 1px;
+  color: var(--success-primary, #16a34a);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.levelLockedIcon {
+  margin-top: 1px;
+  color: var(--text-tertiary, #94a3b8);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.levelContent {
   flex: 1;
-  cursor: pointer;
+  min-width: 0;
+}
+
+.levelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .levelTitle {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
 }
 
-.levelDescription {
-  font-size: var(--font-size-sm);
-  color: var(--text-tertiary);
+.levelBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
-/* Info sur les frais */
-.feeInfo {
-  background-color: var(--info-bg);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  border-left: 4px solid var(--info-primary);
-  margin-top: var(--spacing-md);
+.levelBadge1 {
+  background: var(--warning-bg, #fffbeb);
+  color: var(--warning-primary, #d97706);
 }
 
-.feeInfo h4 {
-  margin: 0 0 var(--spacing-xs) 0;
-  color: var(--info-primary);
-  font-size: var(--font-size-base);
+.levelBadge2 {
+  background: var(--danger-bg, #fef2f2);
+  color: #ea580c;
 }
 
-.feeInfo p {
+.levelBadge3 {
+  background: var(--danger-primary, #dc2626);
+  color: #fff;
+}
+
+.levelDesc {
+  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+  line-height: 1.4;
+}
+
+.levelDelay {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+  margin-top: 4px;
+}
+
+.levelDelay svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+/* Fee summary card */
+.feeSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.feeSummaryIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--warning-bg, #fffbeb);
+  color: var(--warning-primary, #d97706);
+  flex-shrink: 0;
+}
+
+.feeSummaryContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.feeSummaryTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  margin: 0 0 2px 0;
+}
+
+.feeSummaryAmount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #1e293b);
+  font-variant-numeric: tabular-nums;
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+}
+
+.feeSummaryAmountZero {
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.feeSummaryDelay {
+  font-size: 11px;
+  color: var(--text-tertiary, #94a3b8);
+  margin: 2px 0 0 0;
+}
+
+/* Settings warning */
+.settingsWarning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--warning-bg, #fffbeb);
+  border: 1px solid var(--warning-border, #fde68a);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--warning-primary, #d97706);
+  margin-bottom: 16px;
+}
+
+.settingsWarning svg {
+  flex-shrink: 0;
+}
+
+/* Error */
+.error {
+  background: var(--danger-bg, #fef2f2);
+  color: var(--danger-primary, #dc2626);
+  border: 1px solid var(--danger-border, #fecaca);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+/* Footer */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn,
+.submitBtn {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  white-space: nowrap;
+}
+
+.cancelBtn {
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+  border: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.cancelBtn:hover {
+  background: var(--bg-hover, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+
+.submitBtn {
+  background: linear-gradient(180deg, var(--warning-primary, #d97706) 0%, #b45309 100%);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.submitBtn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+
+.submitBtn:disabled,
+.cancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 24px 20px;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .modal {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .header {
+    padding: 14px 16px;
+  }
+
+  .headerTitle h2 {
+    font-size: 15px;
+  }
+
+  .invoiceCard {
+    margin: 12px 16px;
+  }
+
+  .body {
+    padding: 0 16px;
+  }
+
+  .footer {
+    padding: 14px 16px;
+    flex-direction: column-reverse;
+  }
+
+  .cancelBtn,
+  .submitBtn {
+    width: 100%;
+  }
 }

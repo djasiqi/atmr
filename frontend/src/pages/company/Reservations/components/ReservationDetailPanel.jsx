@@ -220,7 +220,13 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
     try {
       setSaving(true);
       setSaveError(null);
-      await onSave(reservation.id, form);
+      // Combiner date + heure en ISO local pour le backend (pas de conversion UTC)
+      const payload = { ...form };
+      if (payload.scheduled_date && payload.scheduled_time) {
+        payload.scheduled_time = `${payload.scheduled_date}T${payload.scheduled_time}:00`;
+      }
+      delete payload.scheduled_date;
+      await onSave(reservation.id, payload);
       setEditing(false);
     } catch (err) {
       console.error('Erreur lors de la sauvegarde:', err);

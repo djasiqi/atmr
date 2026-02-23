@@ -112,22 +112,25 @@ export default function ChatScreen() {
     if (!isMountedRef.current) return;
     // Vérifier que le message n'existe pas déjà pour éviter les doublons
     setMessages((prev) => {
-      // Vérifier si le message existe déjà (par ID ou par _localId)
       const exists = prev.some(
         (m) =>
           (m.id && msg.id && m.id === msg.id) ||
           (m._localId && msg._localId && m._localId === msg._localId)
       );
       if (exists) {
-        return prev; // Ne pas ajouter si déjà présent
+        return prev;
       }
-      // Ajouter le nouveau message et trier par timestamp (plus ancien en premier)
       const updated = [...prev, msg];
-      return updated.sort((a, b) => {
+      updated.sort((a, b) => {
         const timeA = new Date(a.timestamp || 0).getTime();
         const timeB = new Date(b.timestamp || 0).getTime();
-        return timeA - timeB; // Tri croissant : plus ancien en premier
+        return timeA - timeB;
       });
+      const MAX_MESSAGES = 500;
+      if (updated.length > MAX_MESSAGES) {
+        return updated.slice(updated.length - MAX_MESSAGES);
+      }
+      return updated;
     });
     // 👉 pas de scroll direct ici : on laisse onContentSizeChange gérer
   });

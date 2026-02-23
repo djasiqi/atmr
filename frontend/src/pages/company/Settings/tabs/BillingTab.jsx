@@ -1,5 +1,6 @@
 // frontend/src/pages/company/Settings/tabs/BillingTab.jsx
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   FiCreditCard,
   FiSliders,
@@ -228,6 +229,7 @@ const SectionCard = ({ icon: Icon, title, hint, expanded, onToggle, children }) 
 );
 
 const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
+  const location = useLocation();
   const [form, setForm] = useState({ ...BILLING_DEFAULTS });
 
   const [loading, setLoading] = useState(true);
@@ -245,12 +247,27 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
     cancellation: false,
     emailConfig: false,
   });
+  const emailConfigSectionRef = useRef(null);
 
   const serverFormRef = useRef(null);
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const targetSection = params.get('section');
+    if (location.hash === '#billing' && targetSection === 'emailConfig') {
+      setExpandedSections((prev) => ({ ...prev, emailConfig: true }));
+      window.setTimeout(() => {
+        emailConfigSectionRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 120);
+    }
+  }, [location.hash, location.search]);
 
   const loadSettings = async () => {
     try {
@@ -864,22 +881,24 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
 
       {/* Configuration Email Transactionnel */}
       {companyId && (
-        <SectionCard
-          icon={FiSend}
-          title="Configuration email transactionnel"
-          hint={getSectionHint('emailConfig')}
-          expanded={expandedSections.emailConfig}
-          onToggle={() => toggleSection('emailConfig')}
-        >
-          {isEditing ? (
-            <EmailConfigSection companyId={companyId} showHeader={false} compact />
-          ) : (
-            <div className={styles.fieldGrid}>
-              <ReadonlyField label="Statut" value={form.smtp_enabled ? 'Configure' : 'Non configure'} />
-              {form.smtp_enabled && <ReadonlyField label="Serveur SMTP" value={form.smtp_server} />}
-            </div>
-          )}
-        </SectionCard>
+        <div id="email-config-section" ref={emailConfigSectionRef}>
+          <SectionCard
+            icon={FiSend}
+            title="Configuration email transactionnel"
+            hint={getSectionHint('emailConfig')}
+            expanded={expandedSections.emailConfig}
+            onToggle={() => toggleSection('emailConfig')}
+          >
+            {isEditing ? (
+              <EmailConfigSection companyId={companyId} showHeader={false} compact />
+            ) : (
+              <div className={styles.fieldGrid}>
+                <ReadonlyField label="Statut" value={form.smtp_enabled ? 'Configure' : 'Non configure'} />
+                {form.smtp_enabled && <ReadonlyField label="Serveur SMTP" value={form.smtp_server} />}
+              </div>
+            )}
+          </SectionCard>
+        </div>
       )}
 
         </div>

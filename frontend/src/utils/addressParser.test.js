@@ -64,6 +64,26 @@ const testCases = [
     }
   },
   {
+    name: "Nom d'autocomplete égal à une rue (ne pas remplir residence_facility)",
+    input: {
+      label: 'Rue de Lausanne 3, 1201, Genève',
+      item: {
+        name: 'Rue de Lausanne 3',
+        street: 'Rue de Lausanne',
+        housenumber: '3',
+        postcode: '1201',
+        city: 'Genève'
+      }
+    },
+    expected: {
+      establishment: '',
+      street: 'Rue de Lausanne',
+      streetNumber: '3',
+      postcode: '1201',
+      city: 'Genève'
+    }
+  },
+  {
     name: 'Résidence avec foyer',
     input: {
       label: 'Foyer Clair Bois, Route de Chancy 59, 1213, Petit-Lancy',

@@ -36,13 +36,15 @@ export const useSocket = (
     isMountedRef.current = true;
 
     const bindHandlers = (s: Socket) => {
-      // Nettoyage pour éviter les doublons
+      // Nettoyage complet pour éviter l'empilement de handlers (fuite mémoire)
       s.off("connect");
       s.off("disconnect");
       s.off("connect_error");
       s.off("reconnect");
+      s.off("pong");
       s.off("new_booking");
-      s.off("booking_updated"); // ✅ FIX: Ajouter le nettoyage pour booking_updated
+      s.off("booking_updated");
+      s.off("booking_reassigned");
       s.off("team_chat_message");
       s.off("error");
       s.off("unauthorized");
@@ -284,6 +286,20 @@ export const useSocket = (
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
+      }
+      // Nettoyer tous les handlers pour éviter les fuites mémoire
+      if (socketInstance) {
+        socketInstance.off("connect");
+        socketInstance.off("disconnect");
+        socketInstance.off("connect_error");
+        socketInstance.off("reconnect");
+        socketInstance.off("pong");
+        socketInstance.off("new_booking");
+        socketInstance.off("booking_updated");
+        socketInstance.off("booking_reassigned");
+        socketInstance.off("team_chat_message");
+        socketInstance.off("error");
+        socketInstance.off("unauthorized");
       }
     };
   }, []);

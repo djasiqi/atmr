@@ -110,9 +110,13 @@ Sentry.init({
   sendDefaultPii: true,
   tracesSampleRate: 1.0,
   profilesSampleRate: 1.0,
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
-  integrations: [Sentry.mobileReplayIntegration()],
+  // Session Replay desactive : ReplayIntegration provoque des Background ANR
+  // sur Android via un ReentrantLock dans AndroidConnectionStatusProvider.updateCache()
+  // appelé de maniere synchrone sur le main thread pendant onStart.
+  // Bug SDK Sentry @sentry/react-native ~7.2.x — reactiver apres upgrade.
+  // replaysSessionSampleRate: 0.1,
+  // replaysOnErrorSampleRate: 1.0,
+  // integrations: [Sentry.mobileReplayIntegration()],
 });
 
 export default function RootLayout() {

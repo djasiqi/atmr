@@ -182,8 +182,10 @@ class MissionStateManagerImpl {
 
   // -- Hydration (self-sufficient for headless) ----------------------------
 
-  async ensureHydrated(): Promise<boolean> {
+  async ensureHydrated(options?: { skipNetwork?: boolean }): Promise<boolean> {
     if (this.hydrated && this.state.activeMission) return true;
+
+    const skipNetwork = options?.skipNetwork ?? false;
 
     // Step 1: dedicated key (with migration from old key)
     try {
@@ -233,32 +235,36 @@ class MissionStateManagerImpl {
       log.warn("hydration step 2 failed", { error: e });
     }
 
-    // Step 3: fetch from API (best-effort, may fail in headless)
-    try {
-      const bookings = await getAssignedTrips();
-      const active = bookings.find((m) => {
-        const s = normalizeBookingStatus(m.status);
-        return s === "ASSIGNED" || s === "EN_ROUTE" || s === "IN_PROGRESS";
-      });
-      if (active) {
-        this.applyHydration({
-          activeMission: active,
-          currentStatus: normalizeBookingStatus(active.status) as MissionBarStatus,
+    // Step 3: fetch from API — skipped in background/headless to avoid ANR
+    if (!skipNetwork) {
+      try {
+        const bookings = await getAssignedTrips();
+        const active = bookings.find((m) => {
+          const s = normalizeBookingStatus(m.status);
+          return s === "ASSIGNED" || s === "EN_ROUTE" || s === "IN_PROGRESS";
         });
-        log.info("hydration from api_fetch", { bookingId: active.id });
-        return true;
+        if (active) {
+          this.applyHydration({
+            activeMission: active,
+            currentStatus: normalizeBookingStatus(active.status) as MissionBarStatus,
+          });
+          log.info("hydration from api_fetch", { bookingId: active.id });
+          return true;
+        }
+      } catch (e) {
+        log.warn("hydration step 3 fetch failed", { error: e });
       }
-    } catch (e) {
-      log.warn("hydration step 3 fetch failed", { error: e });
     }
 
-    log.warn("hydration none all steps failed", {});
+    log.warn("hydration none all steps failed", { skipNetwork });
 
-    // Step 4: fallback — open Quick Actions via deep link
-    try {
-      await safeOpenURL(buildQuickActionLink({}));
-    } catch {
-      // best-effort
+    // Step 4: fallback — open Quick Actions via deep link (only foreground)
+    if (!skipNetwork) {
+      try {
+        await safeOpenURL(buildQuickActionLink({}));
+      } catch {
+        // best-effort
+      }
     }
     return false;
   }

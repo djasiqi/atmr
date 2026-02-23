@@ -3865,6 +3865,8 @@ class MobileSearchAddresses(Resource):
                         "lat": alias["lat"],
                         "lon": alias["lon"],
                         "category": alias.get("category"),
+                        "name": alias.get("short_name") or alias.get("label", ""),
+                        "types": [],
                     }
                 )
 
@@ -3883,6 +3885,8 @@ class MobileSearchAddresses(Resource):
                                     "lat": r.get("lat"),
                                     "lon": r.get("lon"),
                                     "place_id": r.get("place_id"),
+                                    "types": r.get("types", []),
+                                    "name": r.get("name", ""),
                                 }
                             )
                 except GooglePlacesError:

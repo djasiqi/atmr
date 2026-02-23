@@ -11,6 +11,9 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiX,
+  FiSend,
+  FiMail,
+  FiCheck,
 } from 'react-icons/fi';
 import styles from './InvoicesRegistry.module.css';
 import {
@@ -18,6 +21,7 @@ import {
   getInvoice,
   sendInvoiceByEmail,
   markInvoiceAsSent,
+  bulkMarkAsSent,
   sendReminderByEmail,
   postPayment,
   postReminder,
@@ -34,6 +38,16 @@ import NewInvoiceModal from './components/NewInvoiceModal';
 import SendEmailModal from './components/SendEmailModal';
 import ExportPaymentsModal from './components/ExportPaymentsModal';
 import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
+
+const extractApiError = (err, fallback = 'Erreur inconnue') => {
+  const data = err?.response?.data;
+  if (data) {
+    if (typeof data === 'string') return data;
+    if (typeof data.error === 'string') return data.error;
+    if (typeof data.message === 'string') return data.message;
+  }
+  return err?.message || fallback;
+};
 
 const InvoicesRegistry = () => {
   const { company } = useCompanyData();
@@ -83,6 +97,10 @@ const InvoicesRegistry = () => {
     open: false,
   });
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   // Charger les factures
   const loadInvoices = useCallback(async () => {
     if (!company?.id) return;
@@ -98,7 +116,7 @@ const InvoicesRegistry = () => {
       setPagination(response?.pagination || {});
       setStats(response?.stats || {});
     } catch (err) {
-      setError(err.message || 'Erreur lors du chargement des factures');
+      setError(extractApiError(err, 'Erreur lors du chargement des factures'));
     } finally {
       setLoading(false);
     }
@@ -154,6 +172,99 @@ const InvoicesRegistry = () => {
     setFilters((prev) => ({ ...prev, page }));
   };
 
+  const displayedInvoices = useMemo(() => {
+    if (!invoices) return [];
+    if (filters.status === 'cancelled') return invoices;
+    return invoices.filter((inv) => inv.status !== 'cancelled');
+  }, [invoices, filters.status]);
+
+  // Clear selection when invoices change (page change, filter change, etc.)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [invoices]);
+
+  // Selection helpers
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === displayedInvoices.length && displayedInvoices.length > 0) {
+        return new Set();
+      }
+      return new Set(displayedInvoices.map((inv) => inv.id));
+    });
+  }, [displayedInvoices]);
+
+  const selectAllDrafts = useCallback(() => {
+    const draftIds = displayedInvoices
+      .filter((inv) => inv.status === 'draft')
+      .map((inv) => inv.id);
+    setSelectedIds(new Set(draftIds));
+  }, [displayedInvoices]);
+
+  const selectTodaysDrafts = useCallback(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const draftIds = displayedInvoices
+      .filter((inv) => {
+        if (inv.status !== 'draft') return false;
+        const issued = new Date(inv.issued_at || inv.created_at);
+        issued.setHours(0, 0, 0, 0);
+        return issued.getTime() === today.getTime();
+      })
+      .map((inv) => inv.id);
+    setSelectedIds(new Set(draftIds));
+  }, [displayedInvoices]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectedInvoices = useMemo(() => {
+    return displayedInvoices.filter((inv) => selectedIds.has(inv.id));
+  }, [displayedInvoices, selectedIds]);
+
+  const selectedDraftCount = useMemo(() => {
+    return selectedInvoices.filter((inv) => inv.status === 'draft').length;
+  }, [selectedInvoices]);
+
+  // Bulk: mark selected drafts as sent (paper)
+  const handleBulkMarkAsSent = (method = 'paper') => {
+    const draftIds = selectedInvoices
+      .filter((inv) => inv.status === 'draft')
+      .map((inv) => inv.id);
+
+    if (draftIds.length === 0) return;
+
+    const label = method === 'email' ? 'par email' : 'par courrier papier';
+    setConfirmDialog({
+      open: true,
+      title: `Marquer ${draftIds.length} facture(s) comme envoyée(s)`,
+      message: `Marquer ${draftIds.length} brouillon(s) comme envoyé(s) ${label} ?`,
+      variant: 'default',
+      onConfirm: async () => {
+        setConfirmDialog((d) => ({ ...d, open: false }));
+        try {
+          setBulkLoading(true);
+          await bulkMarkAsSent(company.id, draftIds, method);
+          setSelectedIds(new Set());
+          await loadInvoices();
+        } catch (err) {
+          setError(extractApiError(err, "Erreur lors de l'envoi groupé"));
+        } finally {
+          setBulkLoading(false);
+        }
+      },
+    });
+  };
+
   // Marquer comme envoyée (papier) sans email
   const handleMarkAsSent = (invoiceId) => {
     setConfirmDialog({
@@ -167,7 +278,7 @@ const InvoicesRegistry = () => {
           await markInvoiceAsSent(company.id, invoiceId);
           await loadInvoices();
         } catch (err) {
-          setError(err.message || "Erreur lors de l'envoi de la facture");
+          setError(extractApiError(err, "Erreur lors de l'envoi de la facture"));
         }
       },
     });
@@ -235,7 +346,7 @@ const InvoicesRegistry = () => {
       await loadInvoices();
       setPaymentModal({ open: false, invoice: null });
     } catch (err) {
-      setError(err.message || "Erreur lors de l'enregistrement du paiement");
+      setError(extractApiError(err, "Erreur lors de l'enregistrement du paiement"));
     }
   };
 
@@ -245,7 +356,7 @@ const InvoicesRegistry = () => {
       await loadInvoices();
       setReminderModal({ open: false, invoice: null });
     } catch (err) {
-      setError(err.message || 'Erreur lors de la génération du rappel');
+      setError(extractApiError(err, 'Erreur lors de la génération du rappel'));
     }
   };
 
@@ -254,7 +365,7 @@ const InvoicesRegistry = () => {
       await regenerateInvoicePdf(company.id, invoiceId);
       await loadInvoices();
     } catch (err) {
-      setError(err.message || 'Erreur lors de la régénération du PDF');
+      setError(extractApiError(err, 'Erreur lors de la régénération du PDF'));
     }
   };
 
@@ -271,7 +382,7 @@ const InvoicesRegistry = () => {
           await loadInvoices();
           setInvoiceDataRefreshTrigger((t) => t + 1);
         } catch (err) {
-          setError(err.message || "Erreur lors de l'annulation de la facture");
+          setError(extractApiError(err, "Erreur lors de l'annulation de la facture"));
         }
       },
     });
@@ -293,7 +404,7 @@ const InvoicesRegistry = () => {
             setNewInvoiceModal({ open: true, invoiceDraft: draftContext });
           }
         } catch (err) {
-          setError(err.message || 'Erreur lors de la duplication de la facture');
+          setError(extractApiError(err, 'Erreur lors de la duplication de la facture'));
         }
       },
     });
@@ -393,12 +504,6 @@ const InvoicesRegistry = () => {
     per_page: 20,
   }), []);
 
-  const displayedInvoices = useMemo(() => {
-    if (!invoices) return [];
-    if (filters.status === 'cancelled') return invoices;
-    return invoices.filter((inv) => inv.status !== 'cancelled');
-  }, [invoices, filters.status]);
-
   const unknownClientCount = useMemo(() => {
     if (displayedInvoices.length === 0) return 0;
     return displayedInvoices.filter(
@@ -411,6 +516,9 @@ const InvoicesRegistry = () => {
   }, [displayedInvoices]);
 
   const getClientName = (invoice) => {
+    if (invoice.billing_party?.display_name) {
+      return invoice.billing_party.display_name;
+    }
     if (invoice.billed_to_company_id && invoice.billed_to_company) {
       return invoice.billed_to_company.name || 'Clinique';
     }
@@ -574,6 +682,72 @@ const InvoicesRegistry = () => {
         </div>
       )}
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className={styles.bulkBar}>
+          <div className={styles.bulkBarLeft}>
+            <span className={styles.bulkCount}>
+              <FiCheck size={14} />
+              {selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}
+            </span>
+            <div className={styles.bulkQuickSelect}>
+              <button
+                type="button"
+                className={styles.bulkQuickBtn}
+                onClick={selectAllDrafts}
+              >
+                Tous les brouillons
+              </button>
+              <button
+                type="button"
+                className={styles.bulkQuickBtn}
+                onClick={selectTodaysDrafts}
+              >
+                Brouillons du jour
+              </button>
+              <button
+                type="button"
+                className={styles.bulkQuickBtn}
+                onClick={toggleSelectAll}
+              >
+                {selectedIds.size === displayedInvoices.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+              </button>
+            </div>
+          </div>
+          <div className={styles.bulkBarRight}>
+            {selectedDraftCount > 0 && (
+              <>
+                <button
+                  type="button"
+                  className={styles.bulkActionBtn}
+                  onClick={() => handleBulkMarkAsSent('paper')}
+                  disabled={bulkLoading}
+                >
+                  <FiSend size={13} />
+                  Envoyée (papier) ({selectedDraftCount})
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.bulkActionBtn} ${styles.bulkActionBtnEmail}`}
+                  onClick={() => handleBulkMarkAsSent('email')}
+                  disabled={bulkLoading}
+                >
+                  <FiMail size={13} />
+                  Envoyée (email) ({selectedDraftCount})
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className={styles.bulkCancelBtn}
+              onClick={clearSelection}
+            >
+              <FiX size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Zone D — Table */}
       <div className={styles.tableContainer}>
         {loading ? (
@@ -582,6 +756,15 @@ const InvoicesRegistry = () => {
           <table className={styles.table}>
             <thead>
               <tr>
+                <th className={styles.thCheckbox}>
+                  <input
+                    type="checkbox"
+                    className={styles.checkbox}
+                    checked={displayedInvoices.length > 0 && selectedIds.size === displayedInvoices.length}
+                    onChange={toggleSelectAll}
+                    title="Tout sélectionner"
+                  />
+                </th>
                 <th>N&#xB0; facture</th>
                 <th>Client</th>
                 <th>Echeance</th>
@@ -597,7 +780,15 @@ const InvoicesRegistry = () => {
                 const clientName = getClientName(invoice);
                 const daysOverdue = getDaysOverdue(invoice);
                 return (
-                  <tr key={invoice.id} className={getRowClassName(invoice)}>
+                  <tr key={invoice.id} className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}>
+                    <td className={styles.tdCheckbox}>
+                      <input
+                        type="checkbox"
+                        className={styles.checkbox}
+                        checked={selectedIds.has(invoice.id)}
+                        onChange={() => toggleSelect(invoice.id)}
+                      />
+                    </td>
                     <td>
                       <div className={styles.cellInvoiceNum}>
                         <span className={styles.invoiceNumber}>{invoice.invoice_number}</span>

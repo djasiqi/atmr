@@ -401,9 +401,23 @@ class Invoice(db.Model):
             }
             if self.bill_to_client
             else None,
+            "billing_party": {
+                "id": self.billing_party.id,
+                "display_name": self.billing_party.display_name,
+                "contact_email": self.billing_party.contact_email,
+                "type": (
+                    self.billing_party.type.value
+                    if hasattr(self.billing_party.type, "value")
+                    else str(self.billing_party.type)
+                ),
+            }
+            if self.billing_party
+            else None,
             "billed_to_company": {
                 "id": self.billed_to_company.id,
                 "name": self.billed_to_company.name,
+                "billing_email": self.billed_to_company.billing_email,
+                "contact_email": self.billed_to_company.contact_email,
             }
             if self.billed_to_company
             else None,

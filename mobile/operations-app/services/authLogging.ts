@@ -57,6 +57,7 @@ export function getCurrentRefreshCycleId(): string | null {
 
 /** Dedupe anti-spam — key -> lastTs. Inclut role pour socket (driver/enterprise distincts). */
 const DEDUPE_WINDOW_MS = 5000;
+const MAX_DEDUPE_ENTRIES = 200;
 const dedupeMap = new Map<string, number>();
 
 function shouldDedupe(event: string, payload: Record<string, unknown>): boolean {
@@ -70,6 +71,13 @@ function shouldDedupe(event: string, payload: Record<string, unknown>): boolean 
   const last = dedupeMap.get(key);
   if (last != null && now - last < DEDUPE_WINDOW_MS) return true;
   dedupeMap.set(key, now);
+  // Éviction : supprimer les entrées anciennes si la map dépasse le seuil
+  if (dedupeMap.size > MAX_DEDUPE_ENTRIES) {
+    const expiry = now - DEDUPE_WINDOW_MS * 2;
+    for (const [k, ts] of dedupeMap) {
+      if (ts < expiry) dedupeMap.delete(k);
+    }
+  }
   return false;
 }
 

@@ -3,7 +3,8 @@
  * Fiche détaillée d'un transport — design professionnel SaaS B2B
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
+import ConfirmSendModal from './ConfirmSendModal';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   FaArrowLeft, FaEdit, FaPaperPlane, FaTimes,
@@ -240,15 +241,17 @@ const InstitutionRequestDetail = () => {
 
   const goBack = () => navigate(`/dashboard/institution/${public_id}/requests`);
 
-  const handleSend = async () => {
-    if (!window.confirm('Envoyer cette demande aux transporteurs ?')) return;
+  const [showSendModal, setShowSendModal] = useState(false);
+
+  const handleSend = useCallback(async () => {
     try {
       await sendMutation.mutateAsync({ requestId: request.id, options: {} });
+      setShowSendModal(false);
       toast.success('Demande envoyée');
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Erreur lors de l\'envoi');
     }
-  };
+  }, [sendMutation, request?.id]);
 
   const handleCancel = async () => {
     const reason = window.prompt('Raison de l\'annulation (optionnel) :');
@@ -343,7 +346,7 @@ const InstitutionRequestDetail = () => {
               </button>
               <button
                 className={`${s.actionBtn} ${s.btnPrimary}`}
-                onClick={handleSend}
+                onClick={() => setShowSendModal(true)}
                 disabled={sendMutation.isPending}
               >
                 <FaPaperPlane size={12} /> Envoyer
@@ -544,6 +547,14 @@ const InstitutionRequestDetail = () => {
           ))}
         </div>
       </div>
+
+      {showSendModal && (
+        <ConfirmSendModal
+          onClose={() => setShowSendModal(false)}
+          onConfirm={handleSend}
+          loading={sendMutation.isPending}
+        />
+      )}
     </div>
   );
 };

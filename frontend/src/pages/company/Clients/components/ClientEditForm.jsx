@@ -36,6 +36,13 @@ const clean = (val) => {
   return PLACEHOLDER_VALUES.includes(str) ? '' : str;
 };
 
+const capitalizeFirstName = (str) => {
+  if (!str) return '';
+  return str.replace(/(^|[\s\-'])(\S)/g, (_m, sep, ch) => sep + ch.toUpperCase());
+};
+
+const upperLastName = (str) => (str ? str.toUpperCase() : '');
+
 const GENDER_OPTIONS = [
   { value: '', label: 'Sélectionner' },
   { value: 'male', label: 'Monsieur' },
@@ -206,8 +213,8 @@ const ClientEditForm = ({
     is_institution: client.is_institution || false,
     institution_name: client.institution_name || '',
     linked_institution_id: client.linked_institution_id || null,
-    first_name: client.user_first_name || client.first_name || client.user?.first_name || '',
-    last_name: client.user_last_name || client.last_name || client.user?.last_name || '',
+    first_name: capitalizeFirstName(client.user_first_name || client.first_name || client.user?.first_name || ''),
+    last_name: upperLastName(client.user_last_name || client.last_name || client.user?.last_name || ''),
     residence_facility: client.residence_facility || '',
     birth_date: client.user_birth_date || client.user?.birth_date || '',
     gender: (() => {
@@ -272,8 +279,8 @@ const ClientEditForm = ({
     const orig = {
       is_institution: client.is_institution || false,
       institution_name: client.institution_name || '',
-      first_name: client.user_first_name || client.first_name || client.user?.first_name || '',
-      last_name: client.user_last_name || client.last_name || client.user?.last_name || '',
+      first_name: capitalizeFirstName(client.user_first_name || client.first_name || client.user?.first_name || ''),
+      last_name: upperLastName(client.user_last_name || client.last_name || client.user?.last_name || ''),
       residence_facility: client.residence_facility || '',
       birth_date: client.user_birth_date || client.user?.birth_date || '',
       gender: (() => {
@@ -325,11 +332,13 @@ const ClientEditForm = ({
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+    if (name === 'first_name') finalValue = capitalizeFirstName(finalValue);
+    if (name === 'last_name') finalValue = upperLastName(finalValue);
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: finalValue,
     }));
-    // Effacer l'erreur de champ quand l'utilisateur modifie un numéro de téléphone
     if (['phone', 'contact_phone', 'gp_phone'].includes(name) && fieldErrors[name]) {
       setFieldErrors((prev) => ({ ...prev, [name]: null }));
     }

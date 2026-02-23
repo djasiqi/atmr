@@ -31,6 +31,7 @@ export type SessionEvent =
   | "FOREGROUND_RESYNC_START"
   | "FOREGROUND_RESYNC_SUCCESS"
   | "FOREGROUND_RESYNC_FAIL"
+  | "ENTERPRISE_APP_FOREGROUND"
   | "LOGOUT_TRIGGERED"
   | "DEVICE_ID_ERROR" /** R3: device_id non créé (storage), socket continue sans extras, pas de logout */
   | `SOCKET_DISCONNECTED:${string}`

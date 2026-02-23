@@ -147,8 +147,16 @@ def is_token_revoked(token: str, grace_window: bool = False) -> bool:
     token_record = RefreshToken.query.filter_by(token_hash=token_hash).first()
 
     if not token_record:
-        logger.debug("Token non trouvé dans la DB (hash: %s)", token_hash[:8])
-        return True
+        # Fallback gracieux : si le token n'est pas dans la DB (store_refresh_token
+        # a pu echouer silencieusement lors du login/refresh), on ne le traite PAS
+        # comme revoque. La validation JWT (signature + expiration) est suffisante.
+        # Traiter "absent" comme "revoque" provoquait des deconnexions sur iOS
+        # quand le stockage DB echouait de maniere transitoire.
+        logger.warning(
+            "Token non trouvé dans la DB (hash: %s) — fallback: accepted (JWT-only validation)",
+            token_hash[:8],
+        )
+        return False
 
     now = datetime.now(UTC)
 

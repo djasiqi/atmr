@@ -396,8 +396,14 @@ class QRBillService:
             "address_type": address_type,
         }
 
-    def generate_qr_bill_svg(self, invoice):
-        """Génère un QR-Bill SVG pour une facture."""
+    def generate_qr_bill_svg(self, invoice, override_amount=None):
+        """Génère un QR-Bill SVG pour une facture.
+
+        Args:
+            invoice: Facture pour laquelle générer le QR-Bill.
+            override_amount: Montant à utiliser à la place de invoice.total_amount
+                (ex. total rappel incluant les frais).
+        """
         try:
             # Récupérer les paramètres de facturation
             billing_settings = CompanyBillingSettings.query.filter_by(
@@ -474,11 +480,12 @@ class QRBillService:
                 return None
 
             # Créer le QR-Bill avec la vraie bibliothèque qrbill
+            qr_amount = str(override_amount) if override_amount is not None else str(invoice.total_amount)
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,
                 debtor=debtor_data,
-                amount=str(invoice.total_amount),
+                amount=qr_amount,
                 currency="CHF",
                 reference_number=self._get_payment_reference(invoice),
                 additional_information=(

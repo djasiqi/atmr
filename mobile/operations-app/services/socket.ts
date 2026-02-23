@@ -722,8 +722,9 @@ export async function connectSocket(
         // ✅ Heartbeat applicatif actif : envoyer ping toutes les 30s
         lastHeartbeat = Date.now();
         
-        // Écouter les pong du serveur
+        // Écouter les pong du serveur (off d'abord pour éviter l'empilement sur reconnexion)
         if (socket) {
+          socket.off("pong");
           socket.on("pong", (data: any) => {
             lastHeartbeat = Date.now();
             log.info("heartbeat pong", { timestamp: data?.timestamp });

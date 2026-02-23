@@ -29,6 +29,17 @@ function parseAddressToFields(address) {
   };
 }
 
+function normalizeBillingPartyName(value) {
+  if (!value) return '';
+  return String(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’`´']/g, "'")
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 /**
  * Section pour gérer le mapping clinique → billing party
  * Affiche le mapping actuel et permet de le créer/modifier
@@ -128,6 +139,31 @@ const ClinicBillingMappingSection = ({
       setSelectedBillingPartyId('');
     }
   }, [existingMapping]);
+
+  const billingPartyOptions = React.useMemo(() => {
+    const byKey = new Map();
+    const mappedId = Number(existingMapping?.billing_party_id || 0);
+    const entries = Array.isArray(billingParties) ? billingParties : [];
+    for (const bp of entries) {
+      if (!bp?.id) continue;
+      const key = `${bp.type || 'other'}:${normalizeBillingPartyName(bp.display_name)}`;
+      const previous = byKey.get(key);
+      if (!previous) {
+        byKey.set(key, bp);
+        continue;
+      }
+      // Priorité au BillingParty déjà mappé; sinon garder l'id le plus récent.
+      if (previous.id === mappedId) continue;
+      if (bp.id === mappedId || bp.id > previous.id) {
+        byKey.set(key, bp);
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) =>
+      String(a.display_name || '').localeCompare(String(b.display_name || ''), 'fr', {
+        sensitivity: 'base',
+      })
+    );
+  }, [billingParties, existingMapping?.billing_party_id]);
 
   const handleCreateCompany = async () => {
     try {
@@ -677,7 +713,7 @@ const ClinicBillingMappingSection = ({
               onChange={(e) => setSelectedBillingPartyId(e.target.value)}
             >
               <option value="">— Sélectionner un autre destinataire —</option>
-              {billingParties.map((bp) => (
+              {billingPartyOptions.map((bp) => (
                 <option key={bp.id} value={bp.id}>
                   {bp.display_name} ({bp.type})
                 </option>
@@ -730,7 +766,7 @@ const ClinicBillingMappingSection = ({
               onChange={(e) => setSelectedBillingPartyId(e.target.value)}
             >
               <option value="">— Sélectionner un destinataire —</option>
-              {billingParties.map((bp) => (
+              {billingPartyOptions.map((bp) => (
                 <option key={bp.id} value={bp.id}>
                   {bp.display_name} ({bp.type})
                 </option>

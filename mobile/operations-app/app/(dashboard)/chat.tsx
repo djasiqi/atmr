@@ -32,8 +32,12 @@ export default function ChatScreen() {
     const room = `company-${driver.company.id}`;
     socket.emit('joinRoom', { room });
 
+    const MAX_MESSAGES = 500;
     const handleMessage = (msg: ChatMessage) => {
-      setMessages((prevMessages) => [msg, ...prevMessages]);
+      setMessages((prevMessages) => {
+        const updated = [msg, ...prevMessages];
+        return updated.length > MAX_MESSAGES ? updated.slice(0, MAX_MESSAGES) : updated;
+      });
     };
 
     socket.on('chatMessage', handleMessage);

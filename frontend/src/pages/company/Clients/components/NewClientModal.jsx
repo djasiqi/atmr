@@ -7,6 +7,12 @@ import { parseAddressWithEstablishment } from '../../../../utils/addressParser';
 import { fetchBillingParties, fetchClinicBillingMappings } from '../../../../services/settingsService';
 import { searchOfficialInstitutions } from '../../../../services/companyService';
 
+const capitalizeFirstName = (str) => {
+  if (!str) return '';
+  return str.replace(/(^|[\s\-'])(\S)/g, (_m, sep, ch) => sep + ch.toUpperCase());
+};
+const upperLastName = (str) => (str ? str.toUpperCase() : '');
+
 const NewClientModal = ({ onClose, onSave }) => {
   const [formData, setFormData] = useState({
     // client_type et email supprimés - tous les clients sont PRIVATE
@@ -89,9 +95,12 @@ const NewClientModal = ({ onClose, onSave }) => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalValue = type === 'checkbox' ? checked : value;
+    if (name === 'first_name') finalValue = capitalizeFirstName(finalValue);
+    if (name === 'last_name') finalValue = upperLastName(finalValue);
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: finalValue,
     }));
   };
 
