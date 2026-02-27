@@ -515,19 +515,6 @@ const InvoicesRegistry = () => {
     ).length;
   }, [displayedInvoices]);
 
-  const getClientName = (invoice) => {
-    if (invoice.client) {
-      return invoice.client.patient_display_name ||
-        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
-        invoice.client.institution_name ||
-        invoice.client.username;
-    }
-    if (invoice.client_id) {
-      return `Client #${invoice.client_id}`;
-    }
-    return null;
-  };
-
   const getPayerName = (invoice) => {
     if (invoice.billing_party?.display_name) {
       return invoice.billing_party.display_name;
@@ -544,6 +531,23 @@ const InvoicesRegistry = () => {
         invoice.bill_to_client.institution_name ||
         `${invoice.bill_to_client.first_name || ''} ${invoice.bill_to_client.last_name || ''}`.trim()
       );
+    }
+    return null;
+  };
+
+  const getClientName = (invoice) => {
+    // For S2 clinic monthly invoices, the primary label must remain the clinic/payer.
+    if (invoice.billing_strategy === 's2_clinic_monthly') {
+      return getPayerName(invoice) || 'Clinique';
+    }
+    if (invoice.client) {
+      return invoice.client.patient_display_name ||
+        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+        invoice.client.institution_name ||
+        invoice.client.username;
+    }
+    if (invoice.client_id) {
+      return `Client #${invoice.client_id}`;
     }
     return null;
   };
