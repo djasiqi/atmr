@@ -1,6 +1,6 @@
 # routes/booking_messages.py
 # pyright: reportArgumentType=false, reportOperatorIssue=false
-"""Mini-canal de communication booking — messages entre entreprise et institution.
+"""Mini-canal de communication booking.
 
 Endpoints:
 - GET  /api/v1/bookings/<booking_id>/messages  — Historique paginé (before_id)
@@ -17,7 +17,9 @@ from flask_restx import Namespace, Resource
 
 from ext import db
 from models.booking import Booking
+from models.booking_transfer import BookingTransfer
 from models.booking_message import BookingMessage, BookingMessageSender
+from models.enums import TransferStatus
 from models.transport_request import TransportRequest
 from models.user import User
 
@@ -37,10 +39,12 @@ booking_messages_ns = Namespace(
 def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     """Charge le booking, verifie l'acces.
 
-    Retourne (booking, sender_type, sender_label, institution_id, request_id).
+    Retourne
+    (booking, sender_type, sender_label, institution_id, request_id, peer_company_id).
 
-    - abort(404) si booking introuvable OU pas de source_request (pas d'institution)
+    - abort(404) si booking introuvable ou aucun canal disponible
     - abort(403) si l'utilisateur n'appartient ni a la company ni a l'institution
+      (ou au partenaire transferé)
     """
     booking = Booking.query.get_or_404(booking_id)
 
@@ -50,14 +54,28 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
         effective_booking_id = booking.parent_booking_id
         booking = Booking.query.get_or_404(effective_booking_id)
 
-    source_req = TransportRequest.query.filter_by(booking_id=effective_booking_id).first()
-    if not source_req:
-        abort(404, description="Pas de canal de communication pour cette reservation")
-
     verify_jwt_in_request()
     claims = get_jwt()
-    institution_id = source_req.institution_id
-    request_id = source_req.id
+
+    source_req = TransportRequest.query.filter_by(booking_id=effective_booking_id).first()
+    institution_id = source_req.institution_id if source_req else None
+    request_id = source_req.id if source_req else None
+
+    # Canal entreprise <-> entreprise pour reservations transférées
+    transfer = (
+        BookingTransfer.query.filter_by(booking_id=effective_booking_id)
+        .filter(
+            BookingTransfer.status.in_(
+                [
+                    TransferStatus.PENDING,
+                    TransferStatus.ACCEPTED,
+                    TransferStatus.COMPLETED,
+                ]
+            )
+        )
+        .order_by(BookingTransfer.id.desc())
+        .first()
+    )
 
     # Resolve user display name from JWT
     user_id = claims.get("user_id")
@@ -73,14 +91,44 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     user_company_id = claims.get("company_id")
     if user_company_id and int(user_company_id) == booking.company_id:
         label = user_display or (booking.company.name if booking.company else "Entreprise")
-        return booking, BookingMessageSender.COMPANY, label, institution_id, request_id
+        peer_company_id = transfer.executing_company_id if transfer else None
+        return (
+            booking,
+            BookingMessageSender.COMPANY,
+            label,
+            institution_id,
+            request_id,
+            peer_company_id,
+        )
+
+    # Executing company (partenaire) sur booking transféré
+    if transfer and user_company_id and int(user_company_id) == transfer.executing_company_id:
+        label = user_display or "Partenaire"
+        return (
+            booking,
+            BookingMessageSender.COMPANY,
+            label,
+            institution_id,
+            request_id,
+            transfer.owner_company_id,
+        )
 
     # Institution user
     user_institution_id = claims.get("institution_id")
     if user_institution_id and institution_id and int(user_institution_id) == institution_id:
         inst = source_req.institution
         label = user_display or (inst.name if inst else "Institution")
-        return booking, BookingMessageSender.INSTITUTION, label, institution_id, request_id
+        return (
+            booking,
+            BookingMessageSender.INSTITUTION,
+            label,
+            institution_id,
+            request_id,
+            None,
+        )
+
+    if not source_req and not transfer:
+        abort(404, description="Pas de canal de communication pour cette reservation")
 
     abort(403, description="Acces non autorise a cette conversation")
 
@@ -103,7 +151,7 @@ class BookingMessageList(Resource):
     def get(self, booking_id):
         """Retourne les messages du booking (ASC)."""
         try:
-            booking, _sender_type, _label, _inst_id, _req_id = _get_booking_with_auth(booking_id)
+            booking, _sender_type, _label, _inst_id, _req_id, _peer_company_id = _get_booking_with_auth(booking_id)
 
             limit = min(int(flask_request.args.get("limit", 30)), 100)
             before_id = flask_request.args.get("before_id", type=int)
@@ -138,7 +186,7 @@ class BookingMessageList(Resource):
     def post(self, booking_id):
         """Cree un nouveau message."""
         try:
-            booking, sender_type, sender_label, institution_id, request_id = _get_booking_with_auth(
+            booking, sender_type, sender_label, institution_id, request_id, peer_company_id = _get_booking_with_auth(
                 booking_id
             )
 
@@ -179,6 +227,32 @@ class BookingMessageList(Resource):
                 sender_type=sender_type.value if sender_type else None,
                 request_id=request_id,
             )
+            if peer_company_id:
+                # Canal partenaire: diffuser aussi au partenaire transféré
+                from ext import socketio
+                from services.events.institution_events import persist_company_notification
+
+                payload = {
+                    "booking_id": booking.id,
+                    "message": msg.serialize,
+                }
+                socketio.emit("booking_message", payload, to=f"company_{peer_company_id}")
+
+                verify_jwt_in_request()
+                claims = get_jwt()
+                sender_company_id = claims.get("company_id")
+                if sender_company_id and int(sender_company_id) != int(peer_company_id):
+                    content_preview = (msg.content or "")[:80]
+                    persist_company_notification(
+                        company_id=int(peer_company_id),
+                        event_type="booking_message",
+                        title="Nouveau message partenaire",
+                        message=f"{sender_label}: {content_preview}",
+                        metadata={
+                            "booking_id": booking.id,
+                            "sender_label": sender_label,
+                        },
+                    )
 
             return {"message": msg.serialize}, 201
 

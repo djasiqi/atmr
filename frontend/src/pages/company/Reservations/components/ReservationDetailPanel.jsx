@@ -257,6 +257,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
   const billingStatusVal = meta.billing_resolution_status;
   const isFailed = billingStatusVal && billingStatusVal.startsWith('failed');
   const isInstitutionBooking = !!meta.institution_id || !!reservation.institution_timeline;
+  const isTransferredBooking = !!reservation.is_transferred || !!reservation.active_transfer;
   const chatBookingId = reservation.is_return && reservation.parent_booking_id
     ? reservation.parent_booking_id
     : reservation.id;
@@ -520,6 +521,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                   Montant saisi : {formatCurrency(originalAmount)} — Ajuste : {adjustedDelta >= 0 ? '+' : '-'}{formatCurrency(Math.abs(adjustedDelta))}
                 </div>
               )}
+              {reservation.active_transfer && (
+                <div className={s.adjustedNote}>
+                  Course transferee ({reservation.active_transfer.status}) — owner: {reservation.active_transfer.owner_company_name || reservation.active_transfer.owner_company_id} / executant: {reservation.active_transfer.executing_company_name || reservation.active_transfer.executing_company_id}
+                </div>
+              )}
             </div>
 
             {/* Trajet */}
@@ -731,8 +737,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               })()}
             </div>
 
-            {/* Mini-chat institution (thread unifié A/R via parent) */}
-            {isInstitutionBooking && (
+            {/* Mini-chat (institution ou partenariat) */}
+            {(isInstitutionBooking || isTransferredBooking) && (
               <BookingChat
                 bookingId={chatBookingId}
                 socket={companySocket}
