@@ -516,24 +516,34 @@ const InvoicesRegistry = () => {
   }, [displayedInvoices]);
 
   const getClientName = (invoice) => {
+    if (invoice.client) {
+      return invoice.client.patient_display_name ||
+        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+        invoice.client.institution_name ||
+        invoice.client.username;
+    }
+    if (invoice.client_id) {
+      return `Client #${invoice.client_id}`;
+    }
+    return null;
+  };
+
+  const getPayerName = (invoice) => {
     if (invoice.billing_party?.display_name) {
       return invoice.billing_party.display_name;
     }
     if (invoice.billed_to_company_id && invoice.billed_to_company) {
       return invoice.billed_to_company.name || 'Clinique';
     }
-    if (invoice.bill_to_client_id && invoice.bill_to_client_id !== invoice.client_id && invoice.bill_to_client) {
-      return invoice.bill_to_client.institution_name ||
-        `${invoice.bill_to_client.first_name || ''} ${invoice.bill_to_client.last_name || ''}`.trim();
-    }
-    if (invoice.client) {
-      return invoice.client.patient_display_name ||
-        invoice.client.institution_name ||
-        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
-        invoice.client.username;
-    }
-    if (invoice.client_id) {
-      return `Client #${invoice.client_id}`;
+    if (
+      invoice.bill_to_client_id &&
+      invoice.bill_to_client_id !== invoice.client_id &&
+      invoice.bill_to_client
+    ) {
+      return (
+        invoice.bill_to_client.institution_name ||
+        `${invoice.bill_to_client.first_name || ''} ${invoice.bill_to_client.last_name || ''}`.trim()
+      );
     }
     return null;
   };
@@ -778,6 +788,7 @@ const InvoicesRegistry = () => {
             <tbody>
               {displayedInvoices.map((invoice) => {
                 const clientName = getClientName(invoice);
+                const payerName = getPayerName(invoice);
                 const daysOverdue = getDaysOverdue(invoice);
                 return (
                   <tr key={invoice.id} className={`${getRowClassName(invoice)} ${selectedIds.has(invoice.id) ? styles.rowSelected : ''}`}>
@@ -802,6 +813,11 @@ const InvoicesRegistry = () => {
                         <span className={styles.clientName} title={clientName || ''}>
                           {clientName || '\u2014'}
                         </span>
+                        {payerName && payerName !== clientName && (
+                          <span className={styles.clientMeta} title={`Payeur: ${payerName}`}>
+                            Payeur: {payerName}
+                          </span>
+                        )}
                         {!clientName && (
                           <span className={styles.badgeWarning}>Client manquant</span>
                         )}

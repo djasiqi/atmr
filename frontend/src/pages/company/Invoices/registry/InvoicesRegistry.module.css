@@ -514,6 +514,14 @@
   font-size: 13px;
 }
 
+.clientMeta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .badgeWarning {
   display: inline-flex;
   align-items: center;
