@@ -70,7 +70,7 @@
     "expo-version": "^1.0.2",
     "expo-web-browser": "~15.0.10",
     "formik": "^2.4.6",
-    "jest-expo": "~54.0.13",
+    "jest-expo": "~54.0.16",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
