@@ -14,6 +14,11 @@ on:
         type: boolean
         required: false
         default: false
+      no_cache:
+        description: "Build sans cache (pour corriger flask_limiter.storage, etc.)"
+        type: boolean
+        required: false
+        default: false
   # DÉPLOIEMENT AUTOMATIQUE DÉSACTIVÉ - Décommenter pour réactiver
   # push:
   #   branches: [main]
@@ -172,10 +177,9 @@ jobs:
             REQUIREMENTS_HASH=${{ steps.requirements_hash.outputs.requirements_hash }}
           push: true
           tags: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
-          # Réactiver le cache avec le nouveau tag v2 (pas de conflit avec le cache de 'latest')
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          no-cache: false
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
 
       - name: Verify image was pushed
         id: verify_push
