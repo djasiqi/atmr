@@ -2,10 +2,11 @@
 # Configuration Docker Compose optimisée pour la production ATMR
 
 services:
-  # Base de données PostgreSQL
+  # Base de données PostgreSQL (PostGIS requis pour geo_unit.geom)
   postgres:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.5
     container_name: atmr-postgres
+    shm_size: "256mb"
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-atmr} # ✅ Aligné sur valeur réelle (atmr, pas atmr_db)

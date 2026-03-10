@@ -6,6 +6,7 @@ services:
   postgres-demo:
     image: postgis/postgis:16-3.4
     container_name: atmr-demo-postgres
+    pull_policy: always
     shm_size: "256mb"
     environment:
       POSTGRES_DB: atmr_demo

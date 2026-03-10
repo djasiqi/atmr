@@ -49,11 +49,36 @@ docker compose $COMPOSE_OPTS up -d --remove-orphans api-demo celery-worker-demo 
 
 # Migrations
 echo "🔄 Migrations Alembic (démo)..."
-docker compose $COMPOSE_OPTS exec -T api-demo python manage.py db upgrade || {
-  echo "⚠️  Migrations échouées, retry..."
-  sleep 5
-  docker compose $COMPOSE_OPTS exec -T api-demo python manage.py db upgrade || { echo "❌ Migrations échouées"; exit 1; }
+run_migrations() {
+  docker compose $COMPOSE_OPTS exec -T api-demo python manage.py db upgrade
 }
+run_migrations 2>&1 | tee /tmp/atmr_migrate.log
+MIGRATE_EXIT=${PIPESTATUS[0]}
+if [ "$MIGRATE_EXIT" -ne 0 ]; then
+  if grep -q "postgis is not available" /tmp/atmr_migrate.log; then
+    echo "⚠️  PostGIS manquant: volume créé avec une image sans PostGIS. Recréation..."
+    docker compose $COMPOSE_OPTS down
+    docker volume rm atmr_demo_pg_data_demo 2>/dev/null || true
+    echo "🔄 Redémarrage Postgres (image postgis/postgis:16-3.4)..."
+    docker compose $COMPOSE_OPTS up -d postgres-demo redis-demo
+    for i in $(seq 1 60); do
+      if docker compose $COMPOSE_OPTS exec -T postgres-demo pg_isready -U atmr -d atmr_demo > /dev/null 2>&1; then
+        echo "✅ PostgreSQL prêt (volume frais)"
+        break
+      fi
+      [ $i -eq 60 ] && { echo "❌ Timeout PostgreSQL"; exit 1; }
+      sleep 2
+    done
+    docker compose $COMPOSE_OPTS up -d api-demo celery-worker-demo celery-beat-demo
+    sleep 15
+    run_migrations || { echo "❌ Migrations échouées après recréation volume"; exit 1; }
+  else
+    echo "⚠️  Retry migrations..."
+    sleep 5
+    run_migrations || { echo "❌ Migrations échouées"; exit 1; }
+  fi
+fi
+rm -f /tmp/atmr_migrate.log
 
 # Seed démo
 echo "🌱 Seed démo (profile sales)..."

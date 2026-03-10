@@ -2,9 +2,19 @@
 # =============================================================================
 # Script de restauration PostgreSQL pour ATMR
 # Usage: ./scripts/restore_db.sh <backup_file.dump>
+# Variables: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB (ou .env à la racine)
 # =============================================================================
 
 set -e
+
+# Charger .env si présent (évite secrets en dur)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+[ -f "${ROOT_DIR}/.env" ] && set -a && source "${ROOT_DIR}/.env" && set +a
+
+POSTGRES_USER="${POSTGRES_USER:?POSTGRES_USER requis (ex: .env ou export)}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis (ex: .env ou export)}"
+POSTGRES_DB="${POSTGRES_DB:-atmr}"
 
 # Couleurs
 RED='\033[0;31m'
@@ -27,7 +37,7 @@ if [ ! -f "${BACKUP_FILE}" ]; then
     exit 1
 fi
 
-echo -e "${YELLOW}⚠️  ATTENTION: Cette opération va REMPLACER toutes les données de la base atmr${NC}"
+echo -e "${YELLOW}⚠️  ATTENTION: Cette opération va REMPLACER toutes les données de la base ${POSTGRES_DB}${NC}"
 echo -e "${YELLOW}    Fichier: ${BACKUP_FILE}${NC}"
 read -p "Confirmer (y/N)? " -n 1 -r
 echo
@@ -38,7 +48,7 @@ fi
 
 # Vérifier que postgres est accessible
 echo -e "${YELLOW}🔍 [Restore] Vérification de la connexion PostgreSQL...${NC}"
-if ! docker compose exec -T postgres pg_isready -U atmr -d atmr > /dev/null 2>&1; then
+if ! docker compose exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
     echo -e "${RED}❌ [Restore] PostgreSQL n'est pas accessible${NC}"
     exit 1
 fi
@@ -50,7 +60,7 @@ docker cp "${BACKUP_FILE}" "$(docker compose ps -q postgres):/tmp/${BACKUP_NAME}
 
 # Restaurer
 echo -e "${YELLOW}💾 [Restore] Restauration en cours...${NC}"
-docker compose exec -T postgres pg_restore -U atmr -d atmr \
+docker compose exec -T -e "PGPASSWORD=${POSTGRES_PASSWORD}" postgres pg_restore -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
     --clean \
     --if-exists \
     --verbose \
@@ -61,7 +71,7 @@ docker compose exec -T postgres rm -f "/tmp/${BACKUP_NAME}"
 
 # Vérifier
 echo -e "${YELLOW}🔍 [Restore] Vérification...${NC}"
-USER_COUNT=$(echo 'SELECT COUNT(*) FROM "user";' | docker compose exec -T postgres psql -U atmr -d atmr -t | tr -d ' ')
+USER_COUNT=$(echo 'SELECT COUNT(*) FROM "user";' | PGPASSWORD="${POSTGRES_PASSWORD}" docker compose exec -T -e PGPASSWORD postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -t | tr -d ' ')
 echo -e "${GREEN}✅ [Restore] Restauration terminée. ${USER_COUNT} utilisateurs dans la base.${NC}"
 
 echo -e "${YELLOW}⚠️  N'oubliez pas de redémarrer l'API: docker compose restart api${NC}"
