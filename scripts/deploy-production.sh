@@ -183,8 +183,10 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   echo "FLASK_ENV=${FLASK_ENV}"
   echo "FLASK_CONFIG=${FLASK_CONFIG}"
   echo "ENVIRONMENT=${ENVIRONMENT}"
-  echo "GATEWAY_APP_AUTH_URL=http://backend:5000/api/v1/auth/login"
-  echo "GATEWAY_APP_ME_URL=http://backend:5000/api/v1/auth/me"
+  # 127.0.0.1 pour que le bypass Talisman s'applique (remote=127.0.0.1)
+  # backend:5000 provoquait 302→HTTPS puis SSLError car Talisman ne détectait pas l'appel interne
+  echo "GATEWAY_APP_AUTH_URL=http://127.0.0.1:5000/api/v1/auth/login"
+  echo "GATEWAY_APP_ME_URL=http://127.0.0.1:5000/api/v1/auth/me"
 } > .env.production && chmod 600 .env.production
 cp .env.production .env && chmod 600 .env
 
