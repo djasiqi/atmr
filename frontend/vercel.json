@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/demo/:path*",
+      "destination": "https://api.lirie.ch/api/v1/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://api.lirie.ch/api/:path*"
     },
