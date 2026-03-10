@@ -61,6 +61,9 @@ def _delegate(
     requested_with = request.headers.get("X-Requested-With")
     if requested_with:
         headers["X-Requested-With"] = requested_with
+    # Marquer les appels internes pour que le bypass Talisman s'applique (évite 302→HTTPS→SSLError)
+    if "127.0.0.1" in url or "backend:" in url:
+        headers["X-Internal-Gateway-Auth"] = "1"
     return requests.request(
         method=method,
         url=url,
