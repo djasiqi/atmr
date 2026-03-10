@@ -32,14 +32,24 @@ docker compose $COMPOSE_OPTS pull
 echo "🔄 Démarrage Postgres + Redis démo..."
 docker compose $COMPOSE_OPTS up -d --remove-orphans postgres-demo redis-demo
 
-# Attendre PostgreSQL démo
+# Attendre PostgreSQL démo (pg_isready + healthcheck Docker)
 echo "⏳ Attente PostgreSQL démo..."
 for i in $(seq 1 60); do
   if docker compose $COMPOSE_OPTS exec -T postgres-demo pg_isready -U atmr -d atmr_demo > /dev/null 2>&1; then
-    echo "✅ PostgreSQL démo prêt"
+    echo "✅ PostgreSQL démo prêt (pg_isready)"
     break
   fi
   [ $i -eq 60 ] && { echo "❌ Timeout PostgreSQL démo"; docker compose $COMPOSE_OPTS logs postgres-demo | tail -50; exit 1; }
+  sleep 2
+done
+
+echo "⏳ Attente healthcheck Docker postgres-demo..."
+for i in $(seq 1 60); do
+  if docker inspect --format='{{.State.Health.Status}}' atmr-demo-postgres 2>/dev/null | grep -q healthy; then
+    echo "✅ PostgreSQL démo healthy (Docker)"
+    break
+  fi
+  [ $i -eq 60 ] && { echo "❌ Timeout healthcheck postgres-demo"; docker compose $COMPOSE_OPTS logs postgres-demo | tail -50; exit 1; }
   sleep 2
 done
 

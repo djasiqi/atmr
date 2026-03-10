@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://api.lirie.ch/api/:path*"
+    },
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://api.lirie.ch/socket.io/:path*"
+    },
+    {
+      "source": "/socket.io",
+      "destination": "https://api.lirie.ch/socket.io"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://api.lirie.ch/uploads/:path*"
+    }
+  ]
+}
