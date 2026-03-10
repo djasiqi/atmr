@@ -8,13 +8,16 @@ Migration progressive vers Clean Architecture:
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any, Protocol, cast
 
 from application.events.event_bus import publish_event
 from domain.bookings.commands import CreateBookingCommand
 from domain.events.events import BookingCreatedEvent
 from schemas.booking_schemas import BookingCreateSchema
+from services.geo.geo_resolver import resolve_pickup_admin
 from shared.geo_utils import GeoValidator
 from shared.time_utils import parse_local_naive
 
@@ -65,6 +68,24 @@ class BookingWriterPort(Protocol):
         dropoff_lat: float,
         dropoff_lon: float,
         is_round_trip: bool,
+        pickup_admin_token: str | None,
+        pickup_canton_code: str | None,
+        pickup_admin_source: str | None,
+        pickup_admin_confidence: str | None,
+        pickup_admin_label: str | None,
+        pickup_admin_resolved_at: datetime | None,
+        dropoff_admin_token: str | None,
+        dropoff_canton_code: str | None,
+        dropoff_admin_source: str | None,
+        dropoff_admin_confidence: str | None,
+        dropoff_admin_label: str | None,
+        dropoff_admin_resolved_at: datetime | None,
+        pickup_geo_unit_id: int | None,
+        dropoff_geo_unit_id: int | None,
+        pricing_profile_id: int | None,
+        pricing_profile_version_id: int | None,
+        price_amount: float | None,
+        price_breakdown_json: dict[str, Any] | None,
     ) -> BookingLike: ...
 
 
@@ -215,6 +236,20 @@ class CreateBookingUseCase:
         pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss = (
             self._geocode_booking_addresses(validated_data, company_id)
         )
+        pickup_zip = self._extract_pickup_zip(validated_data.get("pickup_location"))
+        pickup_admin = resolve_pickup_admin(
+            lat=pickup_lat,
+            lng=pickup_lon,
+            pickup_zip=pickup_zip,
+            pickup_text=validated_data.get("pickup_location"),
+        )
+        dropoff_zip = self._extract_dropoff_zip(validated_data.get("dropoff_location"))
+        dropoff_admin = resolve_pickup_admin(
+            lat=dropoff_lat,
+            lng=dropoff_lon,
+            pickup_zip=dropoff_zip,
+            pickup_text=validated_data.get("dropoff_location"),
+        )
 
         new_booking = self.booking_writer.create_and_commit(
             user_id=cmd.user_id,
@@ -234,6 +269,24 @@ class CreateBookingUseCase:
             dropoff_lat=dropoff_lat,
             dropoff_lon=dropoff_lon,
             is_round_trip=bool(cmd.data.get("is_round_trip", False)),
+            pickup_admin_token=pickup_admin.get("token"),
+            pickup_canton_code=pickup_admin.get("canton_code"),
+            pickup_admin_source=pickup_admin.get("source"),
+            pickup_admin_confidence=pickup_admin.get("confidence"),
+            pickup_admin_label=pickup_admin.get("label"),
+            pickup_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
+            dropoff_admin_token=dropoff_admin.get("token"),
+            dropoff_canton_code=dropoff_admin.get("canton_code"),
+            dropoff_admin_source=dropoff_admin.get("source"),
+            dropoff_admin_confidence=dropoff_admin.get("confidence"),
+            dropoff_admin_label=dropoff_admin.get("label"),
+            dropoff_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
+            pickup_geo_unit_id=None,
+            dropoff_geo_unit_id=None,
+            pricing_profile_id=None,
+            pricing_profile_version_id=None,
+            price_amount=None,
+            price_breakdown_json=None,
         )
 
         if geocode_miss:
@@ -364,3 +417,17 @@ class CreateBookingUseCase:
             self.trigger_async_geocoding_fn(booking_id, pickup_address, dropoff_address)
             return
         logger.info("ℹ️ Géocodage async non configuré (booking_id=%s).", booking_id)
+
+    @staticmethod
+    def _extract_pickup_zip(pickup_location: str | None) -> str | None:
+        if not pickup_location:
+            return None
+        match = re.search(r"\b(\d{4})\b", pickup_location)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _extract_dropoff_zip(dropoff_location: str | None) -> str | None:
+        if not dropoff_location:
+            return None
+        match = re.search(r"\b(\d{4})\b", dropoff_location)
+        return match.group(1) if match else None

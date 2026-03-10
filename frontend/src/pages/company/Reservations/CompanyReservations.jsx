@@ -554,9 +554,9 @@ const CompanyReservations = () => {
   ];
 
   return (
-    <div className={styles.companyContainer}>
+    <div className={styles.companyContainer} data-tour-id="reservations-page">
       <CompanyHeader />
-      <div className={styles.dashboard}>
+      <div className={styles.dashboard} data-tour-id="reservations-board">
         <CompanySidebar />
         <div className={`${styles.contentArea} ${selectedReservation ? styles.contentAreaWithPanel : ''}`}>
         <main className={styles.content}>

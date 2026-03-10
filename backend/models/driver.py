@@ -154,37 +154,6 @@ class Driver(db.Model):
     def serialize(self):
         # Définir driver_type_raw avant utilisation
         driver_type_raw = getattr(self, "driver_type", None)
-        # #region agent log
-        try:
-            import json
-
-            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                "a", encoding="utf-8"
-            ) as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "driver.py:134",
-                            "message": "Driver.serialize entry",
-                            "data": {
-                                "driver_id": self.id,
-                                "driver_type_type": str(type(driver_type_raw)),
-                                "driver_type_value": str(driver_type_raw),
-                                "has_value_attr": hasattr(driver_type_raw, "value")
-                                if driver_type_raw is not None
-                                else False,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         try:
             user = getattr(self, "user", None)
             last_pos = getattr(self, "last_position_update", None)

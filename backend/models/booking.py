@@ -197,6 +197,40 @@ class Booking(db.Model):
     pickup_lon = Column(Float)
     dropoff_lat = Column(Float)
     dropoff_lon = Column(Float)
+    pickup_geo_unit_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("geo_unit.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    dropoff_geo_unit_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("geo_unit.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    pickup_zip = Column(String(16), nullable=True)
+    dropoff_zip = Column(String(16), nullable=True)
+    pickup_admin_token = Column(String(64), nullable=True, index=True)
+    pickup_canton_code = Column(String(8), nullable=True, index=True)
+    pickup_admin_source = Column(String(24), nullable=True)
+    pickup_admin_confidence = Column(String(24), nullable=True)
+    pickup_admin_label = Column(String(160), nullable=True)
+    pickup_admin_resolved_at = Column(DateTime(timezone=True), nullable=True)
+    dropoff_admin_token = Column(String(64), nullable=True, index=True)
+    dropoff_canton_code = Column(String(8), nullable=True, index=True)
+    dropoff_admin_source = Column(String(24), nullable=True)
+    dropoff_admin_confidence = Column(String(24), nullable=True)
+    dropoff_admin_label = Column(String(160), nullable=True)
+    dropoff_admin_resolved_at = Column(DateTime(timezone=True), nullable=True)
+    pricing_profile_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("pricing_profile.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    pricing_profile_version_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("pricing_profile_version.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    price_amount = Column(Numeric(10, 2), nullable=True)
+    price_breakdown_json = Column(JSONB, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -298,6 +332,12 @@ class Booking(db.Model):
         "User", foreign_keys=[billing_locked_by_user_id]
     )
     billing_party = relationship("BillingParty", foreign_keys=[billing_party_id])
+    pickup_geo_unit = relationship("GeoUnit", foreign_keys=[pickup_geo_unit_id])
+    dropoff_geo_unit = relationship("GeoUnit", foreign_keys=[dropoff_geo_unit_id])
+    pricing_profile = relationship("PricingProfile", foreign_keys=[pricing_profile_id])
+    pricing_profile_version = relationship(
+        "PricingProfileVersion", foreign_keys=[pricing_profile_version_id]
+    )
 
     return_trip = relationship(
         "Booking",
@@ -364,6 +404,12 @@ class Booking(db.Model):
         boarded_dt = _as_dt(self.boarded_at)
         completed_dt = _as_dt(self.completed_at)
         cancelled_dt = cast("datetime | None", _as_dt(self.cancelled_at))
+        pickup_admin_resolved_dt = cast(
+            "datetime | None", _as_dt(getattr(self, "pickup_admin_resolved_at", None))
+        )
+        dropoff_admin_resolved_dt = cast(
+            "datetime | None", _as_dt(getattr(self, "dropoff_admin_resolved_at", None))
+        )
 
         date_local, time_local = (
             split_date_time_local(scheduled_dt) if scheduled_dt else (None, None)
@@ -376,38 +422,6 @@ class Booking(db.Model):
         )
 
         amt = _as_float(self.amount)
-        # #region agent log
-        try:
-            import json
-
-            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                "a", encoding="utf-8"
-            ) as f:
-                status_raw = getattr(self, "status", None)
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                            "location": "booking.py:293",
-                            "message": "Booking.serialize entry",
-                            "data": {
-                                "booking_id": self.id,
-                                "status_type": str(type(status_raw)),
-                                "status_value": str(status_raw),
-                                "has_value_attr": hasattr(status_raw, "value")
-                                if status_raw is not None
-                                else False,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         status_val = self.status
 
         cli = self.client
@@ -424,7 +438,31 @@ class Booking(db.Model):
             "pickup_lon": _as_float(self.pickup_lon),
             "dropoff_lat": _as_float(self.dropoff_lat),
             "dropoff_lon": _as_float(self.dropoff_lon),
+            "pickup_geo_unit_id": self.pickup_geo_unit_id,
+            "dropoff_geo_unit_id": self.dropoff_geo_unit_id,
+            "pickup_zip": self.pickup_zip,
+            "dropoff_zip": self.dropoff_zip,
+            "pickup_admin_token": self.pickup_admin_token,
+            "pickup_canton_code": self.pickup_canton_code,
+            "pickup_admin_source": self.pickup_admin_source,
+            "pickup_admin_confidence": self.pickup_admin_confidence,
+            "pickup_admin_label": self.pickup_admin_label,
+            "pickup_admin_resolved_at": (
+                pickup_admin_resolved_dt.isoformat() if pickup_admin_resolved_dt else None
+            ),
+            "dropoff_admin_token": self.dropoff_admin_token,
+            "dropoff_canton_code": self.dropoff_canton_code,
+            "dropoff_admin_source": self.dropoff_admin_source,
+            "dropoff_admin_confidence": self.dropoff_admin_confidence,
+            "dropoff_admin_label": self.dropoff_admin_label,
+            "dropoff_admin_resolved_at": (
+                dropoff_admin_resolved_dt.isoformat() if dropoff_admin_resolved_dt else None
+            ),
             "amount": round(amt, 2),
+            "price_amount": _as_float(self.price_amount),
+            "price_breakdown_json": self.price_breakdown_json,
+            "pricing_profile_id": self.pricing_profile_id,
+            "pricing_profile_version_id": self.pricing_profile_version_id,
             "scheduled_time": scheduled_dt.isoformat() if scheduled_dt else None,
             "date_formatted": date_local or "Non spécifié",
             "time_formatted": time_local or "Non spécifié",

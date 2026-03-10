@@ -672,41 +672,6 @@ class InvoicesList(Resource):
                 .filter(PartnerInvoice.id.in_(partner_invoice_ids))
                 .all()
             )
-
-        # #region agent log (désactivé par défaut, activable via DEBUG_AGENT_LOGS=1)
-        import os
-
-        if os.getenv("DEBUG_AGENT_LOGS", "0") == "1":
-            import json
-            from pathlib import Path
-
-            try:
-                debug_log_path = os.getenv("DEBUG_AGENT_LOG_PATH", ".cursor/debug.log")
-                with Path(debug_log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "E",
-                                "location": "routes/invoices.py:InvoicesList.get",
-                                "message": "Factures partenaires trouvées",
-                                "data": {
-                                    "company_id": company_id,
-                                    "partner_invoice_ids": partner_invoice_ids,
-                                    "partner_invoices_count": len(
-                                        partner_invoices_items
-                                    ),
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
-
         # Convertir les factures partenaires en format compatible avec Invoice
         # pour l'affichage dans le tableau
         partner_invoices_dict = []
@@ -4902,39 +4867,6 @@ class GeneratePartnerInvoice(Resource):
                 )
 
             service = PartnerInvoiceService()
-
-            # #region agent log
-            import json
-            from pathlib import Path
-
-            try:
-                with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                    "a", encoding="utf-8"
-                ) as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                                "location": "routes/invoices.py:GeneratePartnerInvoice.post",
-                                "message": "Appel generate_monthly_invoice",
-                                "data": {
-                                    "company_id": company.id,
-                                    "partnership_id": int(partnership_id),
-                                    "year": int(period_year),
-                                    "month": int(period_month),
-                                    "executing_company_id": company.id,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
-
             service = PartnerInvoiceService()
             partner_invoice = service.generate_monthly_invoice(
                 partnership_id=int(partnership_id),

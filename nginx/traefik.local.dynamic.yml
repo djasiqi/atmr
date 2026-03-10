@@ -1,0 +1,63 @@
+http:
+  routers:
+    local_frontend:
+      rule: "Host(`lirie.local`)"
+      entryPoints:
+        - web
+      service: frontend_dev
+
+    local_api_gateway:
+      rule: "Host(`lirie.local`) && PathPrefix(`/api/gateway/`)"
+      entryPoints:
+        - web
+      service: api_app
+      middlewares:
+        - strip_api_gateway
+
+    local_api_app:
+      rule: "Host(`lirie.local`) && PathPrefix(`/api/app/`)"
+      entryPoints:
+        - web
+      service: api_app
+      middlewares:
+        - strip_api_app
+
+    local_api_demo:
+      rule: "Host(`lirie.local`) && PathPrefix(`/api/demo/`)"
+      entryPoints:
+        - web
+      service: api_demo
+      middlewares:
+        - strip_api_demo
+
+  middlewares:
+    strip_api_gateway:
+      replacePathRegex:
+        regex: "^/api/gateway/(.*)"
+        replacement: "/api/gateway/\\1"
+
+    strip_api_app:
+      replacePathRegex:
+        regex: "^/api/app/(.*)"
+        replacement: "/api/v1/\\1"
+
+    strip_api_demo:
+      replacePathRegex:
+        regex: "^/api/demo/(.*)"
+        replacement: "/api/v1/\\1"
+
+  services:
+    frontend_dev:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"
+
+    api_app:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:5000"
+
+    api_demo:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:5100"

@@ -409,53 +409,6 @@ class QRBillService:
             billing_settings = CompanyBillingSettings.query.filter_by(
                 company_id=invoice.company_id
             ).first()
-
-            # #region agent log
-            import json
-            import time
-            from pathlib import Path
-
-            log_path = Path("/app/.cursor/debug.log")
-            log_data = {
-                "location": ("qrbill_service.py:generate_qr_bill_svg:check_iban"),
-                "message": "Checking IBAN for QR-Bill generation",
-                "data": {
-                    "invoice_id": invoice.id,
-                    "company_id": invoice.company_id,
-                    "billing_settings_found": billing_settings is not None,
-                    "has_iban_raw": (
-                        hasattr(billing_settings, "_iban_raw")
-                        if billing_settings
-                        else False
-                    ),
-                    "iban_raw_value": (
-                        str(getattr(billing_settings, "_iban_raw", None))
-                        if billing_settings
-                        else None
-                    ),
-                    "iban_decrypted": (
-                        billing_settings.iban if billing_settings else None
-                    ),
-                    "iban_is_none": (
-                        billing_settings.iban is None if billing_settings else True
-                    ),
-                    "iban_is_empty": (
-                        billing_settings.iban == "" if billing_settings else True
-                    ),
-                },
-                "timestamp": int(time.time() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "I",
-            }
-            try:
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(log_data) + "\n")
-            except Exception:
-                pass
-            # #endregion
-
             # Récupérer les informations de la facture
             company = invoice.company
 

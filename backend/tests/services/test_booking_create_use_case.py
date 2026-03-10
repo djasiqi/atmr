@@ -25,9 +25,12 @@ class _FakeCompanyRepo:
 
 
 class _FakeBookingWriter:
+    def __init__(self) -> None:
+        self.last_kwargs: dict[str, Any] = {}
+
     def create_and_commit(self, **kwargs):  # type: ignore[no-untyped-def]
         # Simule un booking persisté (sans DB)
-        _ = kwargs
+        self.last_kwargs = kwargs
         return SimpleNamespace(id=123, company_id=7)
 
 
@@ -46,11 +49,27 @@ def test_create_booking_use_case_publishes_booking_created_event(monkeypatch) ->
         published.append(evt.to_dict())
 
     monkeypatch.setattr(mod, "publish_event", fake_publish_event)
+    monkeypatch.setattr(
+        mod,
+        "resolve_pickup_admin",
+        lambda **_kwargs: {
+            "token": "commune:6630",
+            "canton_code": "GE",
+            "source": "db",
+            "confidence": "authoritative",
+            "label": "Anieres (GE)",
+        },
+    )
+    import services.billing.client_stay_resolver as stay_mod
 
+    monkeypatch.setattr(stay_mod, "find_active_stay_for_client", lambda **_kwargs: None)
+    monkeypatch.setattr(stay_mod, "get_clinic_address_for_stay", lambda _stay: None)
+
+    writer = _FakeBookingWriter()
     uc = CreateBookingUseCase(
         client_repo=_FakeClientRepo(company_id=7),  # type: ignore[arg-type]
         company_lookup=_FakeCompanyRepo(),  # type: ignore[arg-type]
-        booking_writer=_FakeBookingWriter(),  # type: ignore[arg-type]
+        booking_writer=writer,  # type: ignore[arg-type]
         geocoding_service=_FakeGeocoding(),  # type: ignore[arg-type]
         distance_duration_fn=lambda _p, _d: (60, 1000),
         fallback_coords_fn=lambda _company: (46.2044, 6.1432),
@@ -76,6 +95,10 @@ def test_create_booking_use_case_publishes_booking_created_event(monkeypatch) ->
     assert published[0]["event_type"] == "BookingCreatedEvent"
     assert published[0]["booking_id"] == 123
     assert published[0]["company_id"] == 7
+    assert writer.last_kwargs["pickup_admin_source"] in {"db", "geoadmin", "photon", "unknown"}
+    assert writer.last_kwargs["dropoff_admin_source"] in {"db", "geoadmin", "photon", "unknown"}
+    assert "pickup_admin_resolved_at" in writer.last_kwargs
+    assert "dropoff_admin_resolved_at" in writer.last_kwargs
 
 
 def test_create_booking_use_case_invalid_scheduled_time_raises_value_error() -> None:

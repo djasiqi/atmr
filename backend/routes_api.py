@@ -174,6 +174,13 @@ def init_namespaces(app):
     from routes.bookings import bookings_ns
     from routes.clients import clients_ns
     from routes.companies import companies_ns
+    from routes.contact import contact_ns
+    from routes.demo_requests import (
+        admin_demo_accesses_ns,
+        admin_demo_requests_ns,
+        demo_access_ns,
+        demo_requests_ns,
+    )
     from routes.company_mobile_auth import company_mobile_auth_ns
     from routes.company_mobile_dispatch import company_mobile_dispatch_ns
     from routes.company_mobile_partnerships import company_mobile_partnerships_ns
@@ -181,10 +188,12 @@ def init_namespaces(app):
     from routes.dispatch import (
         dispatch_ns as company_dispatch_ns,  # /company_dispatch
     )
+    from routes.gateway_auth import gateway_auth_bp
     from routes.dispatch_health import dispatch_health_ns  # /company_dispatch_health
     from routes.driver import driver_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
+    __import__("routes.geocode_zones")  # enregistre /geocode/zones sur geocode_ns
     from routes.institutions import institutions_ns  # ✅ Portail institutionnel
     from routes.institution_patients import institution_patients_ns  # ✅ Patients institution
     from routes.institution_requests import institution_requests_ns  # ✅ Demandes transport
@@ -205,6 +214,7 @@ def init_namespaces(app):
     from routes.partnerships import partnerships_ns
     from routes.payments import payments_ns
     from routes.planning import planning_ns
+    from routes.pricing import pricing_ns
     from routes.prometheus_metrics import prometheus_metrics_ns
     from routes.secret_rotation_monitoring import secret_rotation_ns
     from routes.security_monitoring import (
@@ -225,6 +235,7 @@ def init_namespaces(app):
 
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
+    app.register_blueprint(gateway_auth_bp)
 
     # ❌ TEMPORAIREMENT DÉSACTIVÉ POUR TEST
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
@@ -315,6 +326,7 @@ def init_namespaces(app):
 
     # Routes planning
     api_v1.add_namespace(planning_ns, path="/planning")
+    api_v1.add_namespace(pricing_ns, path="/pricing")
 
     # Routes OSRM
     api_v1.add_namespace(osrm_ns, path="/osrm")
@@ -343,6 +355,11 @@ def init_namespaces(app):
 
     # Routes publiques (sans auth)
     api_v1.add_namespace(public_stats_ns, path="/public/platform-stats")
+    api_v1.add_namespace(contact_ns, path="/contact")
+    api_v1.add_namespace(demo_requests_ns, path="/demo-requests")
+    api_v1.add_namespace(admin_demo_requests_ns, path="/admin/demo_requests")
+    api_v1.add_namespace(admin_demo_accesses_ns, path="/admin/demo_accesses")
+    api_v1.add_namespace(demo_access_ns, path="/demo_access")
 
     # SMTP configuration
 
@@ -385,6 +402,7 @@ def init_namespaces(app):
         api_legacy.add_namespace(institution_patients_ns, path="/institutions/patients")
         api_legacy.add_namespace(institution_requests_ns, path="/institutions/requests")
         api_legacy.add_namespace(planning_ns, path="/planning")
+        api_legacy.add_namespace(pricing_ns, path="/pricing")
         api_legacy.add_namespace(osrm_ns, path="/osrm")
         api_legacy.add_namespace(ns_osrm_metrics, path="/osrm-metrics")
         api_legacy.add_namespace(osrm_health_ns, path="/osrm")
@@ -401,6 +419,11 @@ def init_namespaces(app):
         api_legacy.add_namespace(prometheus_metrics_ns, path="/prometheus")
         api_legacy.add_namespace(analytics_ns, path="/analytics")
         api_legacy.add_namespace(settings_ns, path="/company-settings")
+        api_legacy.add_namespace(contact_ns, path="/contact")
+        api_legacy.add_namespace(demo_requests_ns, path="/demo-requests")
+        api_legacy.add_namespace(admin_demo_requests_ns, path="/admin/demo_requests")
+        api_legacy.add_namespace(admin_demo_accesses_ns, path="/admin/demo_accesses")
+        api_legacy.add_namespace(demo_access_ns, path="/demo_access")
     else:
         app.logger.info("[api] ℹ️  API legacy désactivée (API_LEGACY_ENABLED=false)")
 

@@ -43,66 +43,7 @@ class BookingTransferService:
         try:
             booking_id = int(booking_id)
             partnership_id = int(partnership_id)
-            # #region agent log
-            try:
-                import json
-                from pathlib import Path
-
-                log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H3",
-                                "location": "transfers.py:44",
-                                "message": "Service: booking_id and partnership_id converted",
-                                "data": {
-                                    "booking_id": booking_id,
-                                    "booking_id_type": type(booking_id).__name__,
-                                    "partnership_id": partnership_id,
-                                    "partnership_id_type": type(
-                                        partnership_id
-                                    ).__name__,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except (ValueError, TypeError) as e:
-            # #region agent log
-            try:
-                import json
-                from pathlib import Path
-
-                log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H3",
-                                "location": "transfers.py:46",
-                                "message": "Service: conversion FAILED",
-                                "data": {
-                                    "booking_id_raw": str(booking_id),
-                                    "partnership_id_raw": str(partnership_id),
-                                    "error": str(e),
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise ValueError(
                 f"booking_id et partnership_id doivent être des entiers valides: {e}"
             ) from e
@@ -124,33 +65,6 @@ class BookingTransferService:
             raise ValueError("Le partenariat n'est pas actif")
 
         # Vérifier que la course n'est pas déjà transférée
-        # #region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "H3",
-                            "location": "transfers.py:68",
-                            "message": "Before filter_by query",
-                            "data": {
-                                "booking_id": booking_id,
-                                "booking_id_type": type(booking_id).__name__,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         existing_transfer = (
             BookingTransfer.query.filter_by(booking_id=booking_id)
             .filter(
@@ -160,30 +74,6 @@ class BookingTransferService:
             )
             .first()
         )
-        # #region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            log_path = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "H3",
-                            "location": "transfers.py:76",
-                            "message": "After filter_by query",
-                            "data": {"has_existing_transfer": bool(existing_transfer)},
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         if existing_transfer:
             raise ValueError("Cette course est déjà en cours de transfert")
 
@@ -238,42 +128,6 @@ class BookingTransferService:
         booking.status = BookingStatus.PENDING
         # Ensuite mettre driver_id à None (maintenant que le statut n'est plus ASSIGNED)
         booking.driver_id = None
-
-        # #region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                "a", encoding="utf-8"
-            ) as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "D",
-                            "location": "booking_transfer_service.py:propose_transfer",
-                            "message": "Transfer proposed, driver revoked",
-                            "data": {
-                                "booking_id": booking_id,
-                                "partnership_id": partnership_id,
-                                "original_driver_id": original_driver_id,
-                                "original_status": original_status.value
-                                if hasattr(original_status, "value")
-                                else str(original_status),
-                                "new_status": booking.status.value,
-                                "new_driver_id": booking.driver_id,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
-
         # Créer le transfert
         # SQLAlchemy 2.0 avec Mapped nécessite d'assigner les attributs après création
         # Déterminer quelle entreprise est propriétaire et quelle est partenaire dans le contexte du transfert
@@ -452,40 +306,6 @@ class BookingTransferService:
                 transfer.booking_id,
                 transfer.id,
             )
-
-        # #region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                "a", encoding="utf-8"
-            ) as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                            "location": "booking_transfer_service.py:accept_transfer",
-                            "message": "Transfer accepted, booking updated",
-                            "data": {
-                                "transfer_id": transfer.id,
-                                "booking_id": transfer.booking_id,
-                                "executing_company_id": transfer.executing_company_id,
-                                "booking_status": transfer.booking.status.value,
-                                "booking_company_id": transfer.booking.company_id,
-                                "booking_executing_company_id": transfer.booking.executing_company_id,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
-
         db.session.commit()
 
         # Notifier les entreprises concernées via Socket.IO

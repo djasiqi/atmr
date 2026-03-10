@@ -70,17 +70,6 @@ class ListCompanyClientsUseCase:
 
     def execute(self, input_data: ListCompanyClientsInput) -> ListCompanyClientsOutput:
         # Validation
-        # #region agent log
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info(
-            "[ListCompanyClientsUseCase] Input: page=%s, per_page=%s, MAX_PER_PAGE=%s",
-            input_data.page,
-            input_data.per_page,
-            self.MAX_PER_PAGE,
-        )
-        # #endregion
         if input_data.page < 1:
             return ListCompanyClientsOutput(
                 success=False,
@@ -89,13 +78,6 @@ class ListCompanyClientsUseCase:
             )
 
         if input_data.per_page < 1 or input_data.per_page > self.MAX_PER_PAGE:
-            # #region agent log
-            logger.error(
-                "[ListCompanyClientsUseCase] Validation failed: per_page=%s > MAX_PER_PAGE=%s",
-                input_data.per_page,
-                self.MAX_PER_PAGE,
-            )
-            # #endregion
             return ListCompanyClientsOutput(
                 success=False,
                 error={

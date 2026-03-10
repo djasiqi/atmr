@@ -1,10 +1,8 @@
 import hashlib
-import json
 import logging
 import os
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import cast
 
 import sentry_sdk
@@ -75,6 +73,7 @@ from security.security_metrics import (
     security_logout_total,
     security_token_refreshes_total,
 )
+from services.demo.access_service import enforce_demo_user_access_validity
 from services.security.authentication import RefreshTokenService
 from services.security.csrf import generate_csrf_token
 from shared.constants import AuthErrorCodes
@@ -339,72 +338,7 @@ class Login(Resource):
     @limiter.limit("5 per minute")
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès."""
-        # #region agent log
-        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
         try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "auth.py:Login.post",
-                            "message": "POST /auth/login entry",
-                            "data": {
-                                "headers": {
-                                    k: v
-                                    for k, v in request.headers
-                                    if k.lower()
-                                    in [
-                                        "authorization",
-                                        "x-device-id",
-                                        "x-requested-with",
-                                        "content-type",
-                                    ]
-                                },
-                                "has_json": request.is_json,
-                                "x_requested_with": request.headers.get(
-                                    "X-Requested-With"
-                                ),
-                                "is_mobile_request": request.headers.get(
-                                    "X-Requested-With"
-                                )
-                                == "Expo",
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
-        try:
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "before request.get_json",
-                                "data": {
-                                    "is_json": request.is_json,
-                                    "content_type": request.content_type,
-                                    "content_length": request.content_length,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             try:
                 data = request.get_json() or {}
             except Exception as json_error:
@@ -422,138 +356,20 @@ class Login(Resource):
                     )
                 # Si ce n'est pas une BadRequest, laisser le gestionnaire global la gérer
                 raise
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "after request.get_json",
-                                "data": {
-                                    "has_email": "email" in data,
-                                    "has_password": "password" in data,
-                                    "data_type": type(data).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "before validate_request",
-                                "data": {
-                                    "data_keys": list(data.keys()) if data else []
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             try:
                 validated_data = validate_request(LoginSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "after validate_request",
-                                "data": {
-                                    "validated_keys": list(validated_data.keys())
-                                    if validated_data
-                                    else []
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
 
             email = validated_data["email"]
             password = validated_data["password"]
 
             # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "before AuthenticateUserUseCase.execute",
-                                "data": {"email": mask_email(email) if email else None},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             uc = AuthenticateUserUseCase()
             input_data = AuthenticateUserInput(email=email, password=password)
             auth_result = uc.execute(input_data)
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "after AuthenticateUserUseCase.execute",
-                                "data": {
-                                    "success": auth_result.success
-                                    if auth_result
-                                    else None,
-                                    "has_user": auth_result.user is not None
-                                    if auth_result
-                                    else None,
-                                    "error": auth_result.error if auth_result else None,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
 
             user = None if not auth_result.success else auth_result.user
 
@@ -608,34 +424,23 @@ class Login(Resource):
                     details={"trace_id": trace_id},
                 )
 
+            is_active, error_message = _check_user_profile_active(user)
+            if not is_active:
+                trace_id = get_trace_id()
+                logger.warning(
+                    "Login rejected (inactive profile) - email: %s, reason: %s, trace_id: %s",
+                    mask_email(email),
+                    error_message,
+                    trace_id,
+                )
+                return {
+                    "error": error_message or "Compte désactivé",
+                    "reason": "account_disabled",
+                    "trace_id": trace_id,
+                }, 403
+
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "before create_access_token",
-                                "data": {
-                                    "user_id": user.id if user else None,
-                                    "user_public_id": user.public_id if user else None,
-                                    "user_role": user.role.value
-                                    if user and user.role
-                                    else None,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             claims = {
                 "role": user.role.value,
                 "company_id": _resolve_company_id(user),
@@ -651,29 +456,6 @@ class Login(Resource):
                 expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
                 fresh=True,  # ✅ Token fresh lors de la connexion initiale
             )
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "after create_access_token",
-                                "data": {
-                                    "has_access_token": bool(access_token),
-                                    "token_length": len(access_token),
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
 
             # Création du refresh token
             # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
@@ -775,32 +557,6 @@ class Login(Resource):
             # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
             response_data["token"] = access_token
             response_data["refresh_token"] = refresh_token
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "response_data before make_response",
-                                "data": {
-                                    "is_mobile_request": is_mobile_request,
-                                    "has_token_in_response": "token" in response_data,
-                                    "has_refresh_token_in_response": "refresh_token"
-                                    in response_data,
-                                    "response_data_keys": list(response_data.keys()),
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
 
             # Créer la réponse avec make_response pour pouvoir définir les cookies
             response = make_response(response_data, 200)
@@ -834,76 +590,10 @@ class Login(Resource):
                     path=current_app.config["COOKIE_PATH"],
                     domain=current_app.config["COOKIE_DOMAIN"],
                 )
-                # #region agent log
-                try:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "location": "auth.py:Login.post",
-                                    "message": "cookies set for web",
-                                    "data": {
-                                        "has_access_token_cookie": bool(access_token),
-                                        "has_refresh_token_cookie": bool(refresh_token),
-                                        "cookie_secure": current_app.config[
-                                            "COOKIE_SECURE"
-                                        ],
-                                        "cookie_httponly": current_app.config[
-                                            "COOKIE_HTTP_ONLY"
-                                        ],
-                                        "cookie_samesite": current_app.config[
-                                            "COOKIE_SAME_SITE"
-                                        ],
-                                        "cookie_path": current_app.config[
-                                            "COOKIE_PATH"
-                                        ],
-                                        "cookie_domain": current_app.config[
-                                            "COOKIE_DOMAIN"
-                                        ],
-                                        "response_headers_set_cookie": "Set-Cookie"
-                                        in dict(response.headers),
-                                    },
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "F",
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
 
             return response
 
         except Exception as e:
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "auth.py:Login.post",
-                                "message": "EXCEPTION caught in login",
-                                "data": {
-                                    "exception_type": type(e).__name__,
-                                    "exception_message": str(e),
-                                    "exception_args": str(e.args)
-                                    if hasattr(e, "args")
-                                    else None,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A,B,C,D,E",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
             # ✅ Priorité 7: Audit logging pour erreur interne login
@@ -1002,6 +692,11 @@ def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
             return False, "Compte désactivé"
         if getattr(user, "account_status", None) == "invited":
             return False, "Compte non encore activé. Vérifiez votre email d'invitation."
+
+    # Comptes demo: validité stricte alignée sur la fenêtre d'accès démo.
+    demo_valid, demo_error = enforce_demo_user_access_validity(user)
+    if not demo_valid:
+        return False, demo_error or "Accès démo expiré."
 
     # Pour les autres rôles (admin, company) ou si pas de profil, on considère comme actif
     return True, None
@@ -1958,6 +1653,12 @@ class UserInfo(Resource):
                 )
 
             user = result.user
+            is_active, error_message = _check_user_profile_active(user)
+            if not is_active:
+                return {
+                    "error": error_message or "Compte désactivé",
+                    "reason": "account_disabled",
+                }, 403
             return {
                 "id": user.id,
                 "public_id": user.public_id,

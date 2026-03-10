@@ -90,6 +90,11 @@ const AdminSidebar = () => {
       to: `/dashboard/admin/${adminId}/invoices`,
     },
     {
+      icon: FaChartLine,
+      label: 'Demandes demo',
+      to: `/dashboard/admin/${adminId}/demo-requests`,
+    },
+    {
       icon: FaCog,
       label: 'Paramètres',
       to: `/dashboard/admin/${adminId}/settings`,

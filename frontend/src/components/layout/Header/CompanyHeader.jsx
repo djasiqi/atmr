@@ -39,9 +39,13 @@ const CompanyHeader = () => {
   const routePublicId =
     params.public_id ||
     (() => {
-      const match = location.pathname.match(/\/dashboard\/company\/([^/]+)/);
-      return match ? match[1] : null;
+      const match = location.pathname.match(/(?:\/demo)?\/dashboard\/company\/([^/]+)/);
+      return match?.[1] || null;
     })();
+  const isDemoEnv =
+    location.pathname.startsWith('/demo/') ||
+    (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
 
   const companyData = useCompanyData() || {};
   const company = companyData.company || null;
@@ -67,7 +71,9 @@ const CompanyHeader = () => {
     setLogoError(false);
   }, [company?.logo_url]);
 
-  const homeHref = routePublicId ? `/dashboard/company/${routePublicId}` : '/dashboard/company';
+  const homeHref = routePublicId
+    ? `${dashboardRoot}/company/${routePublicId}`
+    : `${dashboardRoot}/company`;
 
   const { isCompanyAuthReady } = useCompanyAuthToken();
   const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000, isCompanyAuthReady);
@@ -112,7 +118,7 @@ const CompanyHeader = () => {
           <>
             <div className={styles.headerDivider} />
             <Link
-              to={`/dashboard/company/${routePublicId}/dispatch/monitor`}
+              to={`${dashboardRoot}/company/${routePublicId}/dispatch/monitor`}
               className={`${styles.delayIndicator} ${hasCriticalDelays ? styles.delayIndicatorCritical : ''}`}
               title={`${delayCount} retard(s) détecté(s)`}
             >

@@ -49,14 +49,18 @@ const DispatchHeader = ({
         <div className={styles.titleRow}>
           <div className={styles.titleGroup}>
             <h1 className={styles.dispatchTitle}>Dispatch</h1>
-            <span className={styles.modeBadge}>{MODE_BADGE[dispatchMode] || 'Manuel'}</span>
+            <span className={styles.modeBadge} data-tour-id="dispatch-mode-badge">
+              {MODE_BADGE[dispatchMode] || 'Manuel'}
+            </span>
           </div>
           <div className={styles.headerActions}>
-            <InlineDatePicker
-              value={date}
-              onChange={(v) => setDate(v)}
-              placeholder="Date"
-            />
+            <div data-tour-id="dispatch-date-picker">
+              <InlineDatePicker
+                value={date}
+                onChange={(v) => setDate(v)}
+                placeholder="Date"
+              />
+            </div>
             {isManual && (
               <button
                 onClick={() => {

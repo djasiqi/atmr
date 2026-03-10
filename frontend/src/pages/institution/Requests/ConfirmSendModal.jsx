@@ -4,7 +4,7 @@ import styles from './ConfirmSendModal.module.css';
 
 const ConfirmSendModal = ({ onClose, onConfirm, loading = false }) => (
   <div className={styles.overlay} onClick={onClose}>
-    <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <div className={styles.modal} data-tour-id="institution-request-send-confirm-modal" onClick={(e) => e.stopPropagation()}>
       <div className={styles.header}>
         <div className={styles.iconWrapper}>
           <FaPaperPlane size={16} />
@@ -34,6 +34,7 @@ const ConfirmSendModal = ({ onClose, onConfirm, loading = false }) => (
         <button
           type="button"
           className={styles.confirmBtn}
+          data-tour-id="institution-request-send-confirm-btn"
           onClick={onConfirm}
           disabled={loading}
         >

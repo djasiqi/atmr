@@ -51,6 +51,7 @@ import ReservationModals from '../../../components/reservations/ReservationModal
 import DispatchProgress from './components/DispatchProgress';
 import ReservationDetailPanel from '../../company/Reservations/components/ReservationDetailPanel';
 import ChatWidget from '../../../components/widgets/ChatWidget';
+import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 
 // Import dynamique des styles par mode
 import commonStyles from './modes/Common.module.css';
@@ -148,6 +149,13 @@ const UnifiedDispatchRefactored = () => {
     dispatchRunId: null,
     startTime: null,
     assignmentsCount: null,
+  });
+  const [showDispatchMiniGuide, setShowDispatchMiniGuide] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('demo_dispatch_mini') === '1';
+    } catch {
+      return false;
+    }
   });
 
   // Rôle utilisateur : delays/live réservé COMPANY/ADMIN — lecture company_user uniquement (évite 403 si token DRIVER)
@@ -263,7 +271,7 @@ const UnifiedDispatchRefactored = () => {
   const [optimizerStatus, setOptimizerStatus] = useState(null);
 
   // ✅ Styles dynamiques selon le mode actif (avec fallback si mode pas encore chargé)
-  const styles = getModeStyles(dispatchMode || 'semi_auto');
+  const styles = getModeStyles(dispatchMode || 'manual');
 
   // WebSocket pour temps réel
   const socket = useCompanySocket();
@@ -1163,14 +1171,27 @@ const UnifiedDispatchRefactored = () => {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} data-tour-id="dispatch-page">
       {/* Toast notifications provider */}
       <Toaster position="top-right" richColors />
 
       <CompanyHeader />
       <div className={`${styles.mainContent} ${selectedDispatch ? styles.mainContentWithPanel : ''}`}>
         <CompanySidebar />
-        <div className={styles.content}>
+        <div className={styles.content} data-tour-id="dispatch-board">
+          {showDispatchMiniGuide && (
+            <DemoInteractiveGuide
+              role="dispatch-mini"
+              onFinish={() => {
+                setShowDispatchMiniGuide(false);
+                try {
+                  window.sessionStorage.removeItem('demo_dispatch_mini');
+                } catch {
+                  // ignore
+                }
+              }}
+            />
+          )}
           <DispatchHeader
             date={date}
             setDate={setDate}

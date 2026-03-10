@@ -82,43 +82,6 @@ class PartnerInvoiceService:
         # OU qu'elle est owner mais executing dans les transferts (partenariat créé dans le mauvais sens)
         is_partner = executing_company_id == partnership.partner_company_id
         is_owner_executing = executing_company_id == partnership.owner_company_id
-
-        # #region agent log (désactivé en production)
-        import os
-
-        debug_log_enabled = os.getenv("DEBUG_AGENT_LOGS", "0") == "1"
-        if debug_log_enabled:
-            import json
-            from pathlib import Path
-
-            try:
-                debug_log_path = os.getenv("DEBUG_AGENT_LOG_PATH", ".cursor/debug.log")
-                with Path(debug_log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                                "location": "partner_invoice_service.py:generate_monthly_invoice",
-                                "message": "Vérification entreprise pour génération facture",
-                                "data": {
-                                    "executing_company_id": executing_company_id,
-                                    "partnership_id": partnership_id,
-                                    "partnership_owner_company_id": partnership.owner_company_id,
-                                    "partnership_partner_company_id": partnership.partner_company_id,
-                                    "is_partner": is_partner,
-                                    "is_owner_executing": is_owner_executing,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
-
         # Vérifier si l'entreprise est owner mais executing dans les transferts
         if is_owner_executing:
             transfers_as_executing = BookingTransfer.query.filter(
@@ -126,77 +89,8 @@ class PartnerInvoiceService:
                 BookingTransfer.executing_company_id == executing_company_id,
                 BookingTransfer.status == TransferStatus.COMPLETED,
             ).count()
-
-            # #region agent log (désactivé par défaut, activable via DEBUG_AGENT_LOGS=1)
-            import os
-
-            if os.getenv("DEBUG_AGENT_LOGS", "0") == "1":
-                import json
-                from pathlib import Path
-
-                try:
-                    debug_log_path = os.getenv(
-                        "DEBUG_AGENT_LOG_PATH", ".cursor/debug.log"
-                    )
-                    with Path(debug_log_path).open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "B",
-                                    "location": "partner_invoice_service.py:generate_monthly_invoice",
-                                    "message": "Vérification transferts executing",
-                                    "data": {
-                                        "transfers_as_executing": transfers_as_executing,
-                                        "partnership_id": partnership_id,
-                                        "executing_company_id": executing_company_id,
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-            # #endregion
-
             if transfers_as_executing == 0:
                 is_owner_executing = False
-
-        # #region agent log (désactivé par défaut, activable via DEBUG_AGENT_LOGS=1)
-        import os
-
-        if os.getenv("DEBUG_AGENT_LOGS", "0") == "1":
-            import json
-            from pathlib import Path
-
-            try:
-                debug_log_path = os.getenv("DEBUG_AGENT_LOG_PATH", ".cursor/debug.log")
-                with Path(debug_log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                                "location": "partner_invoice_service.py:generate_monthly_invoice",
-                                "message": "Résultat vérification",
-                                "data": {
-                                    "is_partner": is_partner,
-                                    "is_owner_executing": is_owner_executing,
-                                    "will_raise_error": not is_partner
-                                    and not is_owner_executing,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
-
         if not is_partner and not is_owner_executing:
             raise ValueError(
                 "Seule l'entreprise partenaire (ID: "

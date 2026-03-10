@@ -35,6 +35,9 @@ const STORAGE_KEYS = {
 const getToken = (keys) =>
   localStorage.getItem(keys.token) || (keys.tokenLegacy ? localStorage.getItem(keys.tokenLegacy) : null);
 
+const getCurrentAuthEnv = () =>
+  localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
+
 const getStorageKeys = (allowedRoles) => {
   if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return STORAGE_KEYS.legacy;
   const roles = allowedRoles.map((r) => String(r).toLowerCase());
@@ -43,6 +46,14 @@ const getStorageKeys = (allowedRoles) => {
   // ✅ ÉTAPE 6: Support rôle institution
   if (roles.includes('institution')) return STORAGE_KEYS.institution;
   return STORAGE_KEYS.legacy;
+};
+
+const normalizeRole = (rawRole) => {
+  const role = String(rawRole || '').trim().toLowerCase();
+  if (!role) return '';
+  if (role.startsWith('institution')) return 'institution';
+  if (role.startsWith('company') || role.startsWith('transport_company')) return 'company';
+  return role;
 };
 
 const clearSession = (keys) => {
@@ -59,8 +70,25 @@ const clearSession = (keys) => {
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
   const keys = getStorageKeys(allowedRoles);
-  const token = getToken(keys);
-  const rawUser = localStorage.getItem(keys.user);
+  const env = getCurrentAuthEnv();
+  const isDemoDashboardPath =
+    location.pathname === '/dashboard' ||
+    location.pathname.startsWith('/dashboard/company/') ||
+    location.pathname.startsWith('/dashboard/institution/');
+  if (env === 'demo' && isDemoDashboardPath) {
+    return (
+      <Navigate
+        to={`/demo${location.pathname}${location.search || ''}`}
+        replace
+      />
+    );
+  }
+  const envToken = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
+  const token = getToken(keys) || envToken;
+  const rawUser =
+    localStorage.getItem(keys.user) ||
+    localStorage.getItem(`${env}_user`) ||
+    localStorage.getItem('user');
   const user = rawUser ? JSON.parse(rawUser) : null;
 
   if (!token && !user) {
@@ -76,17 +104,22 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
         clearSession(keys);
         return <Navigate to="/login" replace state={{ from: location }} />;
       }
-      role = String(payload?.role ?? user?.role ?? '').toLowerCase();
+      role = normalizeRole(payload?.role ?? user?.role ?? '');
     } catch {
-      clearSession(keys);
-      return <Navigate to="/login" replace state={{ from: location }} />;
+      // Fallback robuste: si le token scoped est absent/invalide mais le user est présent,
+      // on continue avec le rôle stocké (utile pour certains flux démo).
+      role = normalizeRole(user?.role ?? '');
+      if (!role) {
+        clearSession(keys);
+        return <Navigate to="/login" replace state={{ from: location }} />;
+      }
     }
   } else {
-    role = String(user?.role ?? '').toLowerCase();
+    role = normalizeRole(user?.role ?? '');
   }
 
   if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
-    const allowed = allowedRoles.map((r) => String(r).toLowerCase());
+    const allowed = allowedRoles.map((r) => normalizeRole(r));
     if (!allowed.includes(role)) {
       return <Navigate to="/unauthorized" replace />;
     }

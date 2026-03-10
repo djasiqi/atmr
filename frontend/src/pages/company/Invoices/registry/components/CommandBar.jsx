@@ -293,7 +293,7 @@ const CommandBar = ({ filters, defaultFilters, onFilterChange, companyId, search
   }
 
   return (
-    <div className={styles.commandBar}>
+    <div className={styles.commandBar} data-tour-id="invoice-command-bar">
       {/* Row 1 — Search */}
       <div className={styles.searchRow}>
         <div className={styles.searchWrapper}>

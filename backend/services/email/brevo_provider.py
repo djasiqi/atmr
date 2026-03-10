@@ -440,74 +440,26 @@ class BrevoEmailProvider:
         Returns:
             DomainVerificationResult avec statut et enregistrements DNS
         """
-        # #region agent log
-        logger.info("🔍 [DEBUG] verify_domain: START - domain=%s", domain)
-        # #endregion
-
         try:
-            # #region agent log
-            logger.info(
-                "🔍 [DEBUG] verify_domain: Sending GET request to %s/senders/domains/%s",
-                self.base_url,
-                domain,
-            )
-            # #endregion
-
             # Essayer de récupérer les détails du domaine directement
             response = requests.get(
                 f"{self.base_url}/senders/domains/{domain}",
                 headers=self.headers,
                 timeout=10,
             )
-
-            # #region agent log
-            logger.info(
-                "🔍 [DEBUG] verify_domain: Got response status=%s", response.status_code
-            )
-            # #endregion
-
             if response.status_code == HTTP_OK:
                 # Domaine trouvé
                 data = response.json()
-
-                # #region agent log
-                logger.info("🔍 [DEBUG] verify_domain: Got 200 response from Brevo")
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: Response data keys: %s", data.keys()
-                )
-                # #endregion
-
                 verified = data.get("verified", False) or data.get(
                     "authenticated", False
                 )
 
                 # Extraire les enregistrements DNS
                 dns_records = data.get("dns_records", {})
-
-                # #region agent log
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: dns_records from API: %s", dns_records
-                )
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: dns_records keys: %s",
-                    dns_records.keys() if dns_records else "None",
-                )
-                # #endregion
-
                 # Formater les enregistrements DNS pour affichage
                 dkim1 = dns_records.get("dkim1Record", {})
                 dkim2 = dns_records.get("dkim2Record", {})
                 brevo_code = dns_records.get("brevo_code", {})
-
-                # #region agent log
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: dkim1=%s, dkim2=%s, brevo_code=%s",
-                    dkim1,
-                    dkim2,
-                    brevo_code,
-                )
-                # #endregion
-
                 # Formater pour affichage
                 dkim_instructions = []
                 if dkim1:
@@ -525,15 +477,6 @@ class BrevoEmailProvider:
                     else None
                 )
                 dkim_txt = "\n\n".join(dkim_instructions) if dkim_instructions else None
-
-                # #region agent log
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: Final spf_txt=%s, dkim_txt=%s",
-                    bool(spf_txt),
-                    bool(dkim_txt),
-                )
-                # #endregion
-
                 logger.info(
                     "Domaine %s : verified=%s, SPF=%s, DKIM=%s",
                     domain,
@@ -551,46 +494,20 @@ class BrevoEmailProvider:
 
             if response.status_code == HTTP_NOT_FOUND:
                 # Domaine non trouvé - essayer de l'ajouter automatiquement
-                # #region agent log
-                logger.info(
-                    "🔍 [DEBUG] verify_domain: Got 404, trying to add domain automatically"
-                )
-                # #endregion
-
                 logger.info(
                     "Domaine %s non trouvé, tentative d'ajout automatique", domain
                 )
                 add_result = self._add_domain_to_brevo(domain)
 
                 if add_result:
-                    # #region agent log
-                    logger.info(
-                        "🔍 [DEBUG] verify_domain: Domain added successfully, returning result"
-                    )
-                    # #endregion
                     return add_result
 
                 # Si l'ajout a échoué
-                # #region agent log
-                logger.warning(
-                    "🔍 [DEBUG] verify_domain: Domain addition failed, returning error result"
-                )
-                # #endregion
-
                 return DomainVerificationResult(
                     verified=False,
                     domain=domain,
                     error="Domaine non configuré dans Brevo et ajout automatique échoué",
                 )
-
-            # #region agent log
-            logger.error(
-                "🔍 [DEBUG] verify_domain: Got unexpected status code %s, response: %s",
-                response.status_code,
-                response.text[:200],
-            )
-            # #endregion
-
             return DomainVerificationResult(
                 verified=False,
                 domain=domain,
@@ -598,10 +515,6 @@ class BrevoEmailProvider:
             )
 
         except Exception as e:
-            # #region agent log
-            logger.error("🔍 [DEBUG] verify_domain: Exception occurred: %s", str(e))
-            # #endregion
-
             logger.exception("Erreur vérification domaine %s : %s", domain, e)
             return DomainVerificationResult(verified=False, domain=domain, error=str(e))
 
@@ -690,39 +603,13 @@ class BrevoEmailProvider:
         Returns:
             Dict avec 'spf' et 'dkim' à copier, ou None si erreur
         """
-        # #region agent log
-        logger.info("🔍 [DEBUG] get_domain_dns_records called for domain: %s", domain)
-        # #endregion
-
         result = self.verify_domain(domain)
-
-        # #region agent log
-        logger.info(
-            "🔍 [DEBUG] verify_domain returned - verified=%s, spf_exists=%s, dkim_exists=%s",
-            result.verified,
-            bool(result.spf_record),
-            bool(result.dkim_record),
-        )
-        logger.info("🔍 [DEBUG] SPF value: %s", result.spf_record)
-        logger.info("🔍 [DEBUG] DKIM value: %s", result.dkim_record)
-        # #endregion
-
         if result.spf_record or result.dkim_record:
             dns_dict = {
                 "spf": result.spf_record or "Aucun enregistrement SPF trouvé",
                 "dkim": result.dkim_record or "Aucun enregistrement DKIM trouvé",
             }
-
-            # #region agent log
-            logger.info("🔍 [DEBUG] Returning DNS dict: %s", dns_dict)
-            # #endregion
-
             return dns_dict
-
-        # #region agent log
-        logger.warning("🔍 [DEBUG] Returning None - no DNS records found!")
-        # #endregion
-
         return None
 
     def test_connection(self) -> bool:

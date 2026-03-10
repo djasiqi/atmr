@@ -100,11 +100,15 @@ const OverviewCards = ({
   ];
 
   return (
-    <div className={styles.kpiGrid}>
+    <div className={styles.kpiGrid} data-tour-id="kpi-grid">
       {cards.map((card) => {
         const accentClass = styles[`accent_${card.accent}`] || '';
         return (
-          <div key={card.id} className={`${styles.kpiCard} ${accentClass}`}>
+          <div
+            key={card.id}
+            className={`${styles.kpiCard} ${accentClass}`}
+            data-tour-id={`kpi-${card.id}`}
+          >
             <div className={styles.kpiIconContainer}>
               <card.Icon className={styles.kpiIcon} />
             </div>

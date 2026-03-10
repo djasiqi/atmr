@@ -264,6 +264,21 @@ class Config:
     PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL") or os.getenv(
         "PDF_BASE_URL", "http://127.0.0.1:5000"
     )
+    # --- Gateway auth local unifié (Sprint 3) ---
+    # API app locale (même service)
+    GATEWAY_APP_AUTH_URL = os.getenv(
+        "GATEWAY_APP_AUTH_URL", "http://127.0.0.1:5000/api/v1/auth/login"
+    )
+    GATEWAY_APP_ME_URL = os.getenv(
+        "GATEWAY_APP_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
+    )
+    # API demo locale (via host Docker Desktop)
+    GATEWAY_DEMO_AUTH_URL = os.getenv(
+        "GATEWAY_DEMO_AUTH_URL", "http://host.docker.internal:5100/api/v1/auth/login"
+    )
+    GATEWAY_DEMO_ME_URL = os.getenv(
+        "GATEWAY_DEMO_ME_URL", "http://host.docker.internal:5100/api/v1/auth/me"
+    )
     # Mode envoi email factures/rappels: brevo_api (URL logo) | brevo_smtp (CID MIME multipart/related)
     # SMTP: BREVO_SMTP_PASSWORD obligatoire (pas de fallback API_KEY). Port 587 sortant + DKIM/SPF.
     EMAIL_PROVIDER_MODE: str = (
@@ -710,9 +725,20 @@ class TestingConfig(Config):
             }
 
 
+class DemoConfig(DevelopmentConfig):
+    """Configuration dédiée à la stack de démonstration isolée."""
+
+    DEBUG = False
+    ENVIRONMENT = "demo"
+    RATELIMIT_DEFAULT_LIMITS: ClassVar[list[str]] = [
+        os.getenv("RATELIMIT_DEFAULT_LIMITS", "300 per hour")
+    ]
+
+
 # C'est ce que votre "Application Factory" utilisera
 config = {
     "development": DevelopmentConfig,
+    "demo": DemoConfig,
     "testing": TestingConfig,
     "production": ProductionConfig,
     "default": DevelopmentConfig,

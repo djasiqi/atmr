@@ -2,12 +2,17 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthToken from '../../hooks/useAuthToken';
 
-const DashboardRedirect = () => {
+const DashboardRedirect = ({ forceDemoNamespace = false }) => {
   const user = useAuthToken();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (user) {
+      if (process.env.REACT_APP_DEMO_MODE === 'true') {
+        navigate('/demo/home', { replace: true });
+        return;
+      }
+
       // ⚡ Vérifier que public_id existe avant de naviguer
       if (!user.public_id) {
         console.error('❌ public_id manquant dans le token, redirection vers login');
@@ -15,21 +20,25 @@ const DashboardRedirect = () => {
         return;
       }
 
+      const authEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase();
+      const dashboardRoot =
+        forceDemoNamespace || authEnv === 'demo' ? '/demo/dashboard' : '/dashboard';
+
       // Normaliser le rôle en minuscules pour la comparaison
       const role = (user.role || '').toLowerCase();
 
       if (role === 'driver') {
-        navigate(`/dashboard/driver/${user.public_id}`, { replace: true });
+        navigate(`${dashboardRoot}/driver/${user.public_id}`, { replace: true });
       } else if (role === 'company') {
-        navigate(`/dashboard/company/${user.public_id}`, { replace: true });
+        navigate(`${dashboardRoot}/company/${user.public_id}`, { replace: true });
       } else if (role === 'institution') {
         // ✅ ÉTAPE 6: Redirection portail Institution
-        navigate(`/dashboard/institution/${user.public_id}`, { replace: true });
+        navigate(`${dashboardRoot}/institution/${user.public_id}`, { replace: true });
       } else {
-        navigate(`/dashboard/${role}/${user.public_id}`, { replace: true });
+        navigate(`${dashboardRoot}/${role}/${user.public_id}`, { replace: true });
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate, forceDemoNamespace]);
 
   return <div>Chargement...</div>;
 };

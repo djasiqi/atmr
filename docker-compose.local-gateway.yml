@@ -1,0 +1,13 @@
+services:
+  traefik-local:
+    image: traefik:v2.11
+    container_name: atmr-traefik-local
+    command:
+      - "--configFile=/etc/traefik/traefik.local.yml"
+    ports:
+      - "80:80"
+      - "8088:8080"
+    volumes:
+      - ./nginx/traefik.local.yml:/etc/traefik/traefik.local.yml:ro
+      - ./nginx/traefik.local.dynamic.yml:/etc/traefik/traefik.local.dynamic.yml:ro
+    restart: unless-stopped

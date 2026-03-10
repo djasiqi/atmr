@@ -5,7 +5,16 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import apiClient from '../utils/apiClient';
+import apiClient, { getCurrentAuthEnv } from '../utils/apiClient';
+
+const hasCompanyToken = () =>
+  getCurrentAuthEnv() === 'demo'
+    ? !!localStorage.getItem('demo_access_token')
+    : !!(
+      localStorage.getItem('company_access_token') ||
+      localStorage.getItem('company_authToken') ||
+      localStorage.getItem('app_access_token')
+    );
 
 /**
  * Hook pour récupérer les données du dashboard temps réel dispatch
@@ -26,6 +35,11 @@ export const useRealtimeDashboard = (date = null, refreshInterval = 0) => {
 
   // Fonction de refresh
   const refresh = useCallback(async () => {
+    if (!hasCompanyToken()) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);

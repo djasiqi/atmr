@@ -168,38 +168,6 @@ class DispatchRun(db.Model):
 
     @property
     def serialize(self) -> Dict[str, Any]:
-        # #region agent log
-        try:
-            import json
-
-            with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                "a", encoding="utf-8"
-            ) as f:
-                status_raw = getattr(self, "status", None)
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "D",
-                            "location": "dispatch.py:170",
-                            "message": "DispatchRun.serialize entry",
-                            "data": {
-                                "dispatch_run_id": self.id,
-                                "status_type": str(type(status_raw)),
-                                "status_value": str(status_raw),
-                                "has_value_attr": hasattr(status_raw, "value")
-                                if status_raw is not None
-                                else False,
-                            },
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         status_str = (
             self.status.value if hasattr(self.status, "value") else str(self.status)
         )

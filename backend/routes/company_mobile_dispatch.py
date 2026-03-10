@@ -198,37 +198,6 @@ def _serialize_driver(driver: Driver | None) -> Dict[str, Any] | None:
 
 def _resolve_booking_status(booking: Booking) -> str:
     status_value = getattr(booking.status, "value", str(booking.status or "")).upper()
-
-    # #region agent log - Log EVERY status check
-    try:
-        import json
-        from pathlib import Path
-
-        with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "timestamp": __import__("datetime").datetime.now().isoformat(),
-                    "sessionId": "debug-session",
-                    "runId": "run7",
-                    "hypothesisId": "H7",
-                    "location": "company_mobile_dispatch.py:202",
-                    "message": "resolve_booking_status entry",
-                    "data": {
-                        "booking_id": booking.id,
-                        "raw_status": str(booking.status),
-                        "status_value": status_value,
-                        "status_type": type(booking.status).__name__,
-                        "has_value_attr": hasattr(booking.status, "value"),
-                        "driver_id": booking.driver_id,
-                    },
-                },
-                f,
-            )
-            f.write("\n")
-    except Exception:
-        pass
-    # #endregion
-
     if status_value in {"CANCELED", "CANCELLED"}:
         return "cancelled"
     if status_value == "RETURN_COMPLETED":
@@ -237,32 +206,6 @@ def _resolve_booking_status(booking: Booking) -> str:
         return "completed"
     # ✅ Gérer le status PENDING (course en attente d'acceptation/refus)
     if status_value == "PENDING":
-        # #region agent log
-        try:
-            import json
-            from pathlib import Path
-
-            with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "timestamp": __import__("datetime").datetime.now().isoformat(),
-                        "sessionId": "debug-session",
-                        "runId": "run7",
-                        "hypothesisId": "H7-CONFIRMED",
-                        "location": "company_mobile_dispatch.py:242",
-                        "message": "Booking status PENDING detected",
-                        "data": {
-                            "booking_id": booking.id,
-                            "booking_status": status_value,
-                            "resolved_status": "pending",
-                        },
-                    },
-                    f,
-                )
-                f.write("\n")
-        except Exception:
-            pass
-        # #endregion
         return "pending"
     driver_id_value = getattr(booking, "driver_id", None)
     if isinstance(driver_id_value, int):
@@ -484,39 +427,6 @@ def _build_ride_summary(
             "override_pending": False,
         },
     }
-
-    # #region agent log
-    try:
-        import json
-        from pathlib import Path
-
-        with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "timestamp": __import__("datetime").datetime.now().isoformat(),
-                    "sessionId": "debug-session",
-                    "runId": "run6",
-                    "hypothesisId": "H4",
-                    "location": "company_mobile_dispatch.py:367",
-                    "message": "Ride summary built",
-                    "data": {
-                        "booking_id": booking.id,
-                        "resolved_status": summary.get("status"),
-                        "transfer_status": transfer_info.get("status")
-                        if transfer_info
-                        else None,
-                        "raw_booking_status": getattr(
-                            booking.status, "value", str(booking.status or "")
-                        ),
-                    },
-                },
-                f,
-            )
-            f.write("\n")
-    except Exception:
-        pass
-    # #endregion
-
     return summary
 
 
@@ -1093,76 +1003,9 @@ class MobileDispatchRides(Resource):
     @role_required(UserRole.company)
     @cache_response("api:company_mobile:rides", ttl=3)
     def get(self):
-        # #region agent log
-        import json
-        from pathlib import Path
-
-        log_path = r"c:\Users\jasiq\atmr\.cursor\debug.log"
-        try:
-            with Path(log_path).open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "company_mobile_dispatch.py:641",
-                            "message": "GET /v1/rides entry",
-                            "data": {"args": dict(request.args)},
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         try:
             _, company_id = _get_company_context()
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:643",
-                                "message": "_get_company_context success",
-                                "data": {"company_id": company_id},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as e:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:643",
-                                "message": "_get_company_context error",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise
 
         requested_date = request.args.get("date") or now_local().strftime("%Y-%m-%d")
@@ -1185,54 +1028,7 @@ class MobileDispatchRides(Resource):
         window_end: datetime
         try:
             window_start, window_end = day_local_bounds(requested_date)
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:663",
-                                "message": "day_local_bounds success",
-                                "data": {
-                                    "window_start": window_start.isoformat(),
-                                    "window_end": window_end.isoformat(),
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as exc:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:664",
-                                "message": "day_local_bounds error",
-                                "data": {
-                                    "error": str(exc),
-                                    "error_type": type(exc).__name__,
-                                    "requested_date": requested_date,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             company_mobile_dispatch_ns.abort(
                 400,
                 f"Format de date invalide: {requested_date} (attendu: YYYY-MM-DD)",
@@ -1269,50 +1065,7 @@ class MobileDispatchRides(Resource):
                     BookingTransfer.executing_company
                 ),
             )
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:688",
-                                "message": "find_models_by_company query created",
-                                "data": {"query_type": type(bookings_query).__name__},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as e:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:688",
-                                "message": "find_models_by_company error",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise
 
         if status_filter == "assigned":
@@ -1348,50 +1101,7 @@ class MobileDispatchRides(Resource):
 
         try:
             total = bookings_query.count()
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:721",
-                                "message": "count() success",
-                                "data": {"total": total},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as e:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:721",
-                                "message": "count() error",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise
 
         try:
@@ -1405,89 +1115,8 @@ class MobileDispatchRides(Resource):
                 .limit(page_size)
                 .all()
             )
-            # #region agent log
-            try:
-                import json
-                from pathlib import Path
 
-                log_path_debug = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                with log_path_debug.open("a", encoding="utf-8") as f:
-                    status_distribution = {}
-                    for b in bookings:
-                        status_str = (
-                            str(b.status.value)
-                            if hasattr(b.status, "value")
-                            else str(b.status)
-                        )
-                        status_distribution[status_str] = (
-                            status_distribution.get(status_str, 0) + 1
-                        )
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run2",
-                                "hypothesisId": "H2",
-                                "location": "company_mobile_dispatch.py:1120",
-                                "message": "Bookings fetched - status distribution",
-                                "data": {
-                                    "total_bookings": len(bookings),
-                                    "status_distribution": status_distribution,
-                                    "date": requested_date,
-                                    "status_filter": status_filter,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:732",
-                                "message": "all() success",
-                                "data": {"bookings_count": len(bookings)},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as e:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:732",
-                                "message": "all() error",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "D",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise
 
         try:
@@ -1497,76 +1126,8 @@ class MobileDispatchRides(Resource):
                     item = _build_ride_summary(booking, current_company_id=company_id)
                     items.append(item)
                 except Exception as e:
-                    # #region agent log
-                    try:
-                        with Path(log_path).open("a", encoding="utf-8") as f:
-                            f.write(
-                                json.dumps(
-                                    {
-                                        "location": "company_mobile_dispatch.py:734",
-                                        "message": "_build_ride_summary error",
-                                        "data": {
-                                            "error": str(e),
-                                            "error_type": type(e).__name__,
-                                            "booking_id": getattr(booking, "id", None),
-                                            "index": i,
-                                        },
-                                        "timestamp": datetime.now(UTC).isoformat(),
-                                        "sessionId": "debug-session",
-                                        "runId": "run1",
-                                        "hypothesisId": "E",
-                                    }
-                                )
-                                + "\n"
-                            )
-                    except Exception:
-                        pass
-                    # #endregion
                     raise
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:734",
-                                "message": "_build_ride_summary all success",
-                                "data": {"items_count": len(items)},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "E",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
         except Exception as e:
-            # #region agent log
-            try:
-                with Path(log_path).open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "company_mobile_dispatch.py:734",
-                                "message": "_build_ride_summary loop error",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "E",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             raise
 
         result = {
@@ -1575,36 +1136,6 @@ class MobileDispatchRides(Resource):
             "total": total,
             "items": items,
         }
-
-        # #region agent log - Log FULL response
-        try:
-            import json
-            from pathlib import Path
-
-            # Log only the first item to avoid huge logs
-            first_item_status = items[0].get("status") if items else None
-            with Path(".cursor/debug.log").open("a", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "timestamp": __import__("datetime").datetime.now().isoformat(),
-                        "sessionId": "debug-session",
-                        "runId": "run8",
-                        "hypothesisId": "H8-FINAL",
-                        "location": "company_mobile_dispatch.py:1427",
-                        "message": "Response JSON about to be sent",
-                        "data": {
-                            "total_items": len(items),
-                            "first_item_status": first_item_status,
-                            "first_item_id": items[0].get("id") if items else None,
-                        },
-                    },
-                    f,
-                )
-                f.write("\n")
-        except Exception:
-            pass
-        # #endregion
-
         return result, 200
 
     @jwt_required()
@@ -3549,6 +3080,21 @@ class MobileUpdateRide(Resource):
         if "scheduled_time" in payload:
             try:
                 booking.scheduled_time = parse_local_naive(payload["scheduled_time"])
+                is_return_value = getattr(booking, "is_return", False)
+                is_return_trip = is_return_value if isinstance(is_return_value, bool) else False
+                if is_return_trip:
+                    st = booking.scheduled_time
+                    st_naive = (
+                        st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
+                    )
+                    is_sentinel_midnight = (
+                        st_naive is not None
+                        and st_naive.hour == 0
+                        and st_naive.minute == 0
+                        and st_naive.second == 0
+                    )
+                    # Retour: heure explicite => confirmée, sentinelle 00:00 => à confirmer.
+                    booking.time_confirmed = not is_sentinel_midnight
             except Exception as exc:
                 company_mobile_dispatch_ns.abort(
                     400, f"Format scheduled_time invalide: {exc}"

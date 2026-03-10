@@ -1,17 +1,17 @@
 # backend/ext.py
 # pyright: reportImportCycles = false
 
-import json
 import logging
 import os
-from datetime import UTC, datetime
+import secrets
 from functools import wraps
-from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Literal, cast
 
 import redis
 from flask import (
     abort,
+    current_app,
     jsonify,
     request,
 )
@@ -120,39 +120,6 @@ socketio = SocketIO(
     engineio_logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
     logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
 )
-
-# #region agent log
-try:
-    # Utiliser variable d'environnement ou chemin par défaut (Windows/Docker)
-    debug_log_path = os.getenv(
-        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
-    )
-    log_path = Path(debug_log_path)
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    with log_path.open("a", encoding="utf-8") as f:
-        log_data = {
-            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_socketio_init",
-            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-            "location": "ext.py:socketio_init",
-            "message": "SocketIO initialized with message_queue",
-            "data": {
-                "async_mode": ASYNC_MODE,
-                "message_queue_configured": _socketio_message_queue is not None,
-                "message_queue": _socketio_message_queue.split("@")[-1]
-                if _socketio_message_queue and "@" in _socketio_message_queue
-                else (_socketio_message_queue or "None"),
-                "worker_pid": os.getpid(),
-                "redis_url_available": bool(REDIS_URL and REDIS_URL.strip()),
-            },
-            "sessionId": "debug-session",
-            "runId": "run1",
-            "hypothesisId": "A",
-        }
-        f.write(json.dumps(log_data) + "\n")
-except Exception:
-    pass
-# #endregion
-
 
 # ========================
 # ✅ C2: Redis Storage avec TTL automatiques
@@ -553,6 +520,25 @@ def check_if_token_revoked(_jwt_header, jwt_payload):
         security_invalid_audience_total.labels(reason=reason).inc()
         return True  # Rejeter token avec audience invalide
 
+    # Comptes démo: appliquer la fenêtre de validité 24h en défense en profondeur.
+    user_public_id = str(jwt_payload.get("sub") or "").strip()
+    if user_public_id:
+        try:
+            from models import User
+            from services.demo.access_service import enforce_demo_user_access_validity
+
+            user = User.query.filter_by(public_id=user_public_id).first()
+            if user:
+                demo_valid, _demo_error = enforce_demo_user_access_validity(user)
+                if not demo_valid:
+                    return True
+        except Exception:
+            # Ne pas casser le pipeline JWT sur incident annexe.
+            app_logger.exception(
+                "[JWT Security] Demo validity check failed for public_id=%s",
+                user_public_id,
+            )
+
     # Vérifier si le token est dans la blacklist
     # ✅ SECURITY: Flask-JWT-Extended génère automatiquement un jti
     # pour chaque token
@@ -621,6 +607,103 @@ def validate_jwt_audience(jwt_payload: dict[str, Any]) -> tuple[bool, str]:
 
 
 #  Decorator role_required
+def _ensure_demo_shadow_user(user_public_id: str | None, token_role: str | None):
+    """Auto-heal en stack demo: crée un compte miroir si le public_id manque.
+
+    Ce garde-fou évite les 404 "Utilisateur non trouvé" quand un JWT valide
+    (issu de la stack app) est utilisé sur la stack demo.
+    """
+    if not user_public_id:
+        return None
+    cfg_env = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+    app_env = str(os.getenv("APP_ENV", "")).strip().lower()
+    demo_mode = str(os.getenv("DEMO_MODE", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not (cfg_env == "demo" or app_env == "demo" or demo_mode):
+        return None
+
+    try:
+        from models import Client, Company, DispatchMode, User, UserRole
+        from services.demo.access_service import _seed_transport_demo_workspace
+
+        existing = User.query.filter_by(public_id=user_public_id).first()
+        if existing:
+            return existing
+
+        role_normalized = str(token_role or "company").strip().lower()
+        if role_normalized == UserRole.COMPANY.value.lower():
+            role_enum = UserRole.COMPANY
+        elif role_normalized == UserRole.INSTITUTION.value.lower():
+            role_enum = UserRole.INSTITUTION
+        else:
+            role_enum = UserRole.CLIENT
+
+        suffix = str(user_public_id).replace("-", "")[:12].lower() or secrets.token_hex(6)
+        demo_email = f"demo-shadow-{suffix}@demo.local"
+        demo_username = f"demo_shadow_{suffix}"[:100]
+
+        user = User.query.filter_by(email=demo_email).first()
+        if not user:
+            user = User()
+            user.email = demo_email
+            user.username = demo_username
+            user.first_name = "Demo"
+            user.last_name = "Shadow"
+            user.set_password(secrets.token_urlsafe(24))
+            db.session.add(user)
+
+        user.public_id = str(user_public_id)
+        user.role = role_enum
+        user.account_status = "active"
+        user.force_password_change = False
+        db.session.flush()
+
+        if role_enum == UserRole.COMPANY:
+            company = getattr(user, "company", None)
+            if not company:
+                company = Company()
+                company.user_id = user.id
+                company.name = f"Demo Transport {suffix[:6].upper()}"
+                company.contact_email = demo_email
+                company.contact_phone = "+41 22 000 00 00"
+                company.service_area = "Geneve"
+                company.is_approved = True
+                company.dispatch_enabled = True
+                db.session.add(company)
+                db.session.flush()
+            company.dispatch_mode = DispatchMode.MANUAL
+
+            has_clients = Client.query.filter_by(company_id=company.id).first() is not None
+            if not has_clients:
+                fake_request: Any = SimpleNamespace(
+                    id=user.id,
+                    email=demo_email,
+                    name="Demo Shadow",
+                    organization=company.name,
+                    phone="+41 22 000 00 00",
+                )
+                _seed_transport_demo_workspace(fake_request, company)
+
+        db.session.commit()
+        app_logger.info(
+            "[demo-shadow] auto-provisioned user for public_id=%s role=%s",
+            user_public_id,
+            role_enum.value if hasattr(role_enum, "value") else str(role_enum),
+        )
+        return user
+    except Exception:
+        db.session.rollback()
+        app_logger.exception(
+            "[demo-shadow] auto-provision failed for public_id=%s",
+            user_public_id,
+        )
+        return None
+
+
 def role_required(*roles):
     def decorator(fn):
         @wraps(fn)
@@ -650,6 +733,8 @@ def role_required(*roles):
 
             user = User.query.filter_by(public_id=user_public_id).first()
 
+            if not user:
+                user = _ensure_demo_shadow_user(user_public_id, token_role)
             if not user:
                 app_logger.warning(
                     "Utilisateur non trouvé pour le public_id : %s", user_public_id

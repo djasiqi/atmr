@@ -10,6 +10,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, NavLink, Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import {
   FaSignOutAlt,
   FaChevronDown,
@@ -48,7 +49,9 @@ const PAGE_META = {
 
 /** Resolve current page meta from pathname */
 function resolvePageMeta(pathname, publicId) {
-  const base = `/dashboard/institution/${publicId}`;
+  const isDemoPath = String(pathname || '').startsWith('/demo/');
+  const dashboardRoot = isDemoPath ? '/demo/dashboard' : '/dashboard';
+  const base = `${dashboardRoot}/institution/${publicId}`;
   let relative = pathname.replace(base, '').replace(/^\//, '').replace(/\/$/, '');
 
   // Detail pages: requests/:id → treat as "requests" parent context
@@ -62,6 +65,35 @@ function resolvePageMeta(pathname, publicId) {
   }
 
   return PAGE_META[relative] || PAGE_META[''];
+}
+
+function getCurrentAccessToken() {
+  try {
+    const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
+    return localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken') || null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeTokenClaims() {
+  const token = getCurrentAccessToken();
+  if (!token) return {};
+  try {
+    return jwtDecode(token) || {};
+  } catch {
+    return {};
+  }
+}
+
+function toDemoEmail(rawEmail) {
+  const value = String(rawEmail || '').trim().toLowerCase();
+  if (!value) return '';
+  if (!value.includes('@')) return `demo-${value}@demo.local`;
+  const [localPart, domainPart] = value.split('@', 2);
+  if (!localPart) return `demo-user@${domainPart || 'demo.local'}`;
+  if (localPart.startsWith('demo-')) return `${localPart}@${domainPart || 'demo.local'}`;
+  return `demo-${localPart}@${domainPart || 'demo.local'}`;
 }
 
 const InstitutionLayout = () => {
@@ -81,7 +113,30 @@ const InstitutionLayout = () => {
 
   const institution = institutionData?.institution;
   const user = institutionData?.user;
-  const institutionRole = institutionData?.institution_role;
+  const tokenClaims = decodeTokenClaims();
+  let isDemoEnv = false;
+  try {
+    isDemoEnv = localStorage.getItem('lirie_auth_env') === 'demo';
+  } catch {
+    isDemoEnv = false;
+  }
+
+  const rawInstitutionRole =
+    institutionData?.institution_role ||
+    tokenClaims?.institution_role ||
+    user?.institution_role ||
+    null;
+  const institutionRole = rawInstitutionRole || (isDemoEnv ? 'institution_admin' : null);
+
+  const resolvedEmail = useMemo(() => {
+    const candidate =
+      user?.email ||
+      tokenClaims?.email ||
+      institution?.contact_email ||
+      '';
+    if (!candidate) return '';
+    return isDemoEnv ? toDemoEmail(candidate) : String(candidate).trim();
+  }, [user?.email, tokenClaims?.email, institution?.contact_email, isDemoEnv]);
 
   // Liste des demandes (stabilisée pour les hooks dépendants)
   const allRequests = useMemo(
@@ -109,7 +164,9 @@ const InstitutionLayout = () => {
     () => resolvePageMeta(location.pathname, public_id),
     [location.pathname, public_id]
   );
-  const basePath = `/dashboard/institution/${public_id}`;
+  const isDemoPath = location.pathname.startsWith('/demo/');
+  const dashboardRoot = isDemoPath ? '/demo/dashboard' : '/dashboard';
+  const basePath = `${dashboardRoot}/institution/${public_id}`;
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -138,13 +195,15 @@ const InstitutionLayout = () => {
     const f = user?.first_name?.[0] || '';
     const l = user?.last_name?.[0] || '';
     if (f || l) return `${f}${l}`.toUpperCase();
-    return (user?.email?.[0] || '?').toUpperCase();
+    if (resolvedEmail) return (resolvedEmail[0] || '?').toUpperCase();
+    return '?';
   })();
 
   const displayName = (() => {
     if (user?.first_name && user?.last_name) return `${user.first_name} ${user.last_name}`;
     if (user?.first_name) return user.first_name;
-    return user?.email || '';
+    if (isDemoEnv && resolvedEmail) return 'Compte démonstration';
+    return resolvedEmail || '';
   })();
 
   // Navigation principale
@@ -196,7 +255,7 @@ const InstitutionLayout = () => {
   return (
     <div className={styles.container}>
       {/* ── Sidebar ───────────────────────────────────────── */}
-      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
+      <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`} data-tour-id="institution-sidebar">
         {/* Branding */}
         <div className={styles.sidebarBrand}>
           <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} />
@@ -272,7 +331,7 @@ const InstitutionLayout = () => {
 
           {userMenuOpen && (
             <div className={styles.userDropdown}>
-              <div className={styles.userDropdownEmail}>{user?.email}</div>
+              <div className={styles.userDropdownEmail}>{resolvedEmail || user?.email || ''}</div>
               <div className={styles.userDropdownDivider} />
               <button className={styles.userDropdownItem} onClick={handleLogout}>
                 <FaSignOutAlt />
@@ -355,6 +414,7 @@ const InstitutionLayout = () => {
                 type="button"
                 className={styles.newRequestBtn}
                 onClick={() => setShowNewRequest(true)}
+                data-tour-id="institution-create-request-cta"
               >
                 <HiOutlinePlus className={styles.newRequestIcon} />
                 <span>Nouvelle demande</span>

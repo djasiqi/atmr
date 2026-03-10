@@ -65,32 +65,63 @@ export const fetchRecentUsers = async () => {
 };
 
 /**
- * Récupère la liste de tous les utilisateurs.
+ * Récupère la liste des utilisateurs (avec pagination/filtrage).
  */
-export const fetchUsers = async () => {
+export const fetchUsers = async (params = {}) => {
   try {
-    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
     const token = getAuthToken();
-    console.log('📡 Envoi de la requête GET /admin/users...');
-
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const response = await apiClient.get('/admin/users', { headers });
+    const shouldPaginate = params.paginate !== false;
+    const queryParams = shouldPaginate
+      ? {
+          paginate: 'true',
+          page: params.page || 1,
+          per_page: params.per_page || 50,
+          search: params.search || '',
+          role: params.role || '',
+          sort_by: params.sort_by || 'created_at',
+          sort_order: params.sort_order || 'desc',
+        }
+      : {
+          paginate: false,
+        };
 
-    console.log('📌 Données reçues de /admin/users :', response.data);
+    const response = await apiClient.get('/admin/users', {
+      headers,
+      params: queryParams,
+    });
 
-    // Vérifie si "users" existe bien dans la réponse JSON
-    if (!response.data || !response.data.users) {
-      console.warn('⚠️ Aucune donnée utilisateur reçue !');
-      return [];
-    }
+    const payload = response.data || {};
+    const users = payload.users || [];
+    const resolvedPerPage = Number(payload.per_page ?? params.per_page ?? users.length ?? 50) || 50;
+    const safePerPage = Math.max(1, resolvedPerPage);
+    const resolvedTotal = Number(payload.total ?? users.length ?? 0) || 0;
+    const resolvedPage = Number(payload.page ?? params.page ?? 1) || 1;
+    const resolvedTotalPages =
+      Number(payload.total_pages) ||
+      Math.max(Math.ceil(resolvedTotal / safePerPage), 1);
 
-    return response.data.users;
+    return {
+      users,
+      total: resolvedTotal,
+      page: resolvedPage,
+      per_page: safePerPage,
+      total_pages: resolvedTotalPages,
+      role_counts: payload.role_counts || null,
+    };
   } catch (error) {
     console.error(
       '❌ Erreur récupération des utilisateurs :',
       error.response?.data || error.message
     );
-    return [];
+    return {
+      users: [],
+      total: 0,
+      page: 1,
+      per_page: 50,
+      total_pages: 1,
+      role_counts: null,
+    };
   }
 };
 

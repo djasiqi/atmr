@@ -43,7 +43,7 @@ const AdminOptuna = () => {
       const data = await fetchCompanies();
       setCompanies(data || []);
     } catch (error) {
-      console.error('❌ Erreur chargement entreprises :', error);
+      console.error('Erreur chargement entreprises :', error);
     }
   };
 
@@ -61,7 +61,7 @@ const AdminOptuna = () => {
     e.preventDefault();
     
     if (config.n_trials < 1 || config.n_trials > 500) {
-      alert('⚠️ Le nombre de trials doit être entre 1 et 500');
+      alert('Le nombre de trials doit être entre 1 et 500');
       return;
     }
 
@@ -90,7 +90,7 @@ const AdminOptuna = () => {
       
       setStatus('success');
       setStatusMessage(
-        `✅ Optimisation démarrée avec succès ! ` +
+        `Optimisation demarree avec succes. ` +
         `Consultez https://optuna.lirie.ch pour suivre la progression.`
       );
       
@@ -105,7 +105,7 @@ const AdminOptuna = () => {
       setStatusMessage(
         error.response?.data?.message || 
         error.message || 
-        'Erreur lors du démarrage de l\'optimisation'
+        'Erreur lors du demarrage de l optimisation'
       );
     } finally {
       setLoading(false);
@@ -116,7 +116,7 @@ const AdminOptuna = () => {
     if (e) e.preventDefault();
     
     if (trainingConfig.training_episodes < 100 || trainingConfig.training_episodes > 10000) {
-      alert('⚠️ Le nombre d\'épisodes d\'entraînement doit être entre 100 et 10000');
+      alert('Le nombre d episodes d entrainement doit etre entre 100 et 10000');
       return;
     }
 
@@ -148,8 +148,8 @@ const AdminOptuna = () => {
       
       setTrainingStatus('success');
       setTrainingStatusMessage(
-        `✅ Entraînement démarré avec succès ! ` +
-        `Le modèle sera sauvegardé dans ${trainingConfig.model_output_path} une fois terminé.`
+        `Entrainement demarre avec succes. ` +
+        `Le modele sera sauvegarde dans ${trainingConfig.model_output_path} une fois termine.`
       );
       
       // Réinitialiser après 5 secondes
@@ -163,7 +163,7 @@ const AdminOptuna = () => {
       setTrainingStatusMessage(
         error.response?.data?.message || 
         error.message || 
-        'Erreur lors du démarrage de l\'entraînement'
+        'Erreur lors du demarrage de l entrainement'
       );
     } finally {
       setTrainingLoading(false);
@@ -181,13 +181,13 @@ const AdminOptuna = () => {
               <FaRobot /> Optimisation Optuna
             </h1>
             <p>
-              Configurez et lancez l'optimisation des hyperparamètres DQN pour améliorer les performances
-              du système de dispatch.
+              Configurez et lancez l optimisation des hyperparametres DQN pour ameliorer les performances
+              du systeme de dispatch.
             </p>
           </div>
 
           {status && (
-            <div className={`${styles.alert} ${styles[status]}`}>
+            <div className={`${styles.alert} ${styles[status]}`} role="status" aria-live="polite">
               {status === 'running' && <FaSpinner className={styles.spinner} />}
               {status === 'success' && <FaCheckCircle />}
               {status === 'error' && <FaExclamationTriangle />}
@@ -195,8 +195,14 @@ const AdminOptuna = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            <div className={styles.formGroup}>
+          <section className={styles.surfaceCard}>
+            <div className={styles.sectionHeader}>
+              <h2>Configuration de l optimisation</h2>
+              <p>Selectionnez le perimetre de donnees et les parametres d exploration.</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className={styles.form}>
+              <div className={styles.formGroup}>
               <label htmlFor="company_id">
                 Entreprise (optionnel)
                 <span className={styles.hint}>
@@ -208,6 +214,7 @@ const AdminOptuna = () => {
                 name="company_id"
                 value={config.company_id}
                 onChange={handleInputChange}
+                className={styles.input}
               >
                 <option value="">Toutes les entreprises</option>
                 {companies.map((company) => (
@@ -230,6 +237,7 @@ const AdminOptuna = () => {
                 name="data_period"
                 value={config.data_period}
                 onChange={handleInputChange}
+                className={styles.input}
               >
                 <option value="day">Jour (données du jour actuel)</option>
                 <option value="week">Semaine (7 derniers jours) - Recommandé</option>
@@ -251,6 +259,7 @@ const AdminOptuna = () => {
                   max="365"
                   value={config.custom_days}
                   onChange={handleInputChange}
+                  className={styles.input}
                 />
               </div>
             )}
@@ -271,6 +280,7 @@ const AdminOptuna = () => {
                 value={config.n_trials}
                 onChange={handleInputChange}
                 required
+                className={styles.input}
               />
             </div>
 
@@ -290,6 +300,7 @@ const AdminOptuna = () => {
                 value={config.training_episodes}
                 onChange={handleInputChange}
                 required
+                className={styles.input}
               />
             </div>
 
@@ -309,6 +320,7 @@ const AdminOptuna = () => {
                 value={config.eval_episodes}
                 onChange={handleInputChange}
                 required
+                className={styles.input}
               />
             </div>
 
@@ -329,21 +341,22 @@ const AdminOptuna = () => {
                 )}
               </button>
             </div>
-          </form>
+            </form>
+          </section>
 
           {/* Section Entraînement du modèle */}
-          <div className={styles.section}>
-            <div className={styles.header}>
+          <section className={styles.surfaceCard}>
+            <div className={styles.sectionHeader}>
               <h2>
-                <FaRobot /> Entraînement du modèle avec hyperparamètres optimaux
+                <FaRobot /> Entrainement du modele avec hyperparametres optimaux
               </h2>
               <p>
-                Après l'optimisation Optuna, entraînez un modèle complet avec les meilleurs hyperparamètres trouvés.
+                Lancez ensuite un entrainement complet avec la meilleure configuration retenue.
               </p>
             </div>
 
             {trainingStatus && (
-              <div className={`${styles.alert} ${styles[trainingStatus]}`}>
+              <div className={`${styles.alert} ${styles[trainingStatus]}`} role="status" aria-live="polite">
                 {trainingStatus === 'running' && <FaSpinner className={styles.spinner} />}
                 {trainingStatus === 'success' && <FaCheckCircle />}
                 {trainingStatus === 'error' && <FaExclamationTriangle />}
@@ -369,6 +382,7 @@ const AdminOptuna = () => {
                   value={trainingConfig.config_path}
                   onChange={(e) => setTrainingConfig({...trainingConfig, config_path: e.target.value})}
                   placeholder="data/rl/optimal_config_*.json"
+                  className={styles.input}
                 />
               </div>
 
@@ -386,6 +400,7 @@ const AdminOptuna = () => {
                   value={trainingConfig.study_name}
                   onChange={(e) => setTrainingConfig({...trainingConfig, study_name: e.target.value})}
                   placeholder="dqn_optimization_all_companies"
+                  className={styles.input}
                 />
               </div>
 
@@ -402,25 +417,27 @@ const AdminOptuna = () => {
                   name="model_output_path"
                   value={trainingConfig.model_output_path}
                   onChange={(e) => setTrainingConfig({...trainingConfig, model_output_path: e.target.value})}
+                  className={styles.input}
                 />
               </div>
 
               <div className={styles.formGroup}>
-                <label htmlFor="training_episodes">
-                  Épisodes d'entraînement
+                <label htmlFor="full_training_episodes">
+                  Episodes d entrainement
                   <span className={styles.hint}>
-                    Nombre d'épisodes d'entraînement complet (recommandé: 1000+)
+                    Nombre d episodes d entrainement complet (recommande: 1000+)
                   </span>
                 </label>
                 <input
                   type="number"
-                  id="training_episodes"
+                  id="full_training_episodes"
                   name="training_episodes"
                   min="100"
                   max="10000"
                   value={trainingConfig.training_episodes}
                   onChange={(e) => setTrainingConfig({...trainingConfig, training_episodes: parseInt(e.target.value, 10) || 1000})}
                   required
+                  className={styles.input}
                 />
               </div>
 
@@ -440,6 +457,7 @@ const AdminOptuna = () => {
                   value={trainingConfig.eval_episodes}
                   onChange={(e) => setTrainingConfig({...trainingConfig, eval_episodes: parseInt(e.target.value, 10) || 50})}
                   required
+                  className={styles.input}
                 />
               </div>
 
@@ -455,34 +473,34 @@ const AdminOptuna = () => {
                     </>
                   ) : (
                     <>
-                      <FaPlay /> Lancer l'entraînement
+                      <FaPlay /> Lancer l entrainement
                     </>
                   )}
                 </button>
               </div>
             </form>
-          </div>
+          </section>
 
           <div className={styles.infoBox}>
-            <h3>ℹ️ Informations</h3>
+            <h3>Informations utiles</h3>
             <ul>
               <li>
-                L'optimisation s'exécute en arrière-plan et peut prendre plusieurs heures selon le nombre de trials.
+                L optimisation s execute en arriere-plan et peut prendre plusieurs heures selon le nombre de trials.
               </li>
               <li>
-                Suivez la progression en temps réel sur{' '}
+                Suivez la progression en temps reel sur{' '}
                 <a href="https://optuna.lirie.ch" target="_blank" rel="noopener noreferrer">
                   https://optuna.lirie.ch
                 </a>
               </li>
               <li>
-                Chaque entreprise aura sa propre étude Optuna pour une optimisation personnalisée.
+                Chaque entreprise aura sa propre etude Optuna pour une optimisation personnalisee.
               </li>
               <li>
-                <strong>Recommandation :</strong> Utilisez "Semaine" pour les mises à jour régulières et "Mois" pour l'optimisation initiale.
+                <strong>Recommandation :</strong> utilisez "Semaine" pour les mises a jour regulieres et "Mois" pour l optimisation initiale.
               </li>
               <li>
-                <strong>Après l'optimisation :</strong> Utilisez la section "Entraînement du modèle" pour entraîner un modèle complet avec les meilleurs hyperparamètres trouvés.
+                <strong>Apres l optimisation :</strong> utilisez la section "Entrainement du modele" pour lancer un entrainement complet.
               </li>
             </ul>
           </div>

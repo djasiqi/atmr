@@ -150,6 +150,7 @@ const ReservationActions = ({
       {/* Assigner un chauffeur */}
       {showAssign && (
         <button
+          data-tour-id="assigned-assign-action"
           onClick={() => onAssign?.(reservation)}
           title="Assigner un chauffeur"
           className={styles.actionButton}

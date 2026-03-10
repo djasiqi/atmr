@@ -1,5 +1,5 @@
 // frontend/src/pages/company/Settings/tabs/BillingTab.jsx
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   FiCreditCard,
@@ -16,9 +16,16 @@ import {
 } from 'react-icons/fi';
 import styles from '../CompanySettings.module.css';
 import n from './NotificationsTab.module.css';
-import { fetchBillingSettings, updateBillingSettings } from '../../../../services/settingsService';
+import {
+  fetchBillingSettings,
+  fetchPricingZoneSets,
+  fetchPricingZoneSetsMap,
+  updateBillingSettings,
+} from '../../../../services/settingsService';
+import { isFeatureEnabled } from '../../../../utils/featureFlags';
 import EmailConfigSection from './EmailConfigSection';
 import CancellationPolicyEditor from './components/CancellationPolicyEditor';
+import ZoneSetReadonlyMap from './components/ZoneSetReadonlyMap';
 
 const generateSignaturePreviewHtml = (formData) => {
   const escapeHtml = (text) => {
@@ -137,6 +144,16 @@ const ReadonlyField = ({ label, value, suffix }) => {
   );
 };
 
+const MODEL_LABELS = {
+  flat: 'Prix fixe (canton)',
+  zone: 'Prix par zone',
+  zone_count: 'Prix par zones (base + supplément)',
+  zone_matrix: 'Matrice A -> B',
+  distance: 'Prix au kilomètre',
+  hybrid: 'Modèle hybride',
+  hybrid_stack: 'Modèle hybride',
+};
+
 const BILLING_DEFAULTS = {
   payment_terms_days: 10,
   overdue_fee: 15,
@@ -185,6 +202,19 @@ const BILLING_DEFAULTS = {
   smtp_password: '',
   smtp_password_configured: false,
   cancellation_policy: null,
+  pricing_summary: null,
+  rules_json: null,
+};
+
+const deriveModelFromSummary = (pricingSummary) => {
+  const raw = String(pricingSummary?.model_type || '').trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === 'zone') return 'zone_count';
+  if (raw === 'distance') return 'distance';
+  if (raw === 'hybrid') return 'hybrid_stack';
+  if (raw === 'flat') return 'flat';
+  if (raw === 'zone_count' || raw === 'hybrid_stack') return raw;
+  return null;
 };
 
 const SectionCard = ({ icon: Icon, title, hint, expanded, onToggle, children }) => (
@@ -229,8 +259,26 @@ const SectionCard = ({ icon: Icon, title, hint, expanded, onToggle, children }) 
 );
 
 const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
+  const pricingWizardEnabled = isFeatureEnabled('FF_PRICING_WIZARD_V1', true);
+  const pricingZoneSetsEnabled = isFeatureEnabled('FF_ADMIN_ZONESETS_READONLY', true);
   const location = useLocation();
   const [form, setForm] = useState({ ...BILLING_DEFAULTS });
+  const [pricingRules, setPricingRules] = useState({
+    v: 1,
+    model: 'flat',
+    currency: 'CHF',
+    zone_set_id: '',
+    components: {
+      base: { enabled: true, amount: 40 },
+      zone_count: { enabled: false, unit_price: 5, strategy: 'pickup_dropoff_diff_or_same', included_zones: 2, max_units: 10 },
+      distance: { enabled: false, per_km: 2.2, included_km: 0, rounding: 'ceil_0_1' },
+    },
+    extras: {},
+    caps: { minimum: null, maximum: null },
+  });
+  const [zoneSets, setZoneSets] = useState([]);
+  const [zoneSetDetailsForMap, setZoneSetDetailsForMap] = useState([]);
+  const [loadingZoneSetMap, setLoadingZoneSetMap] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -239,6 +287,7 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   const [showSignaturePreview, setShowSignaturePreview] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     payment: true,
+    pricingConfig: true,
     format: true,
     reminders: false,
     vat: false,
@@ -250,10 +299,7 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   const emailConfigSectionRef = useRef(null);
 
   const serverFormRef = useRef(null);
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  const serverPricingRulesRef = useRef(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -269,64 +315,106 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
     }
   }, [location.hash, location.search]);
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await fetchBillingSettings();
-      if (data) {
+      const [data, zoneSetsResponse] = await Promise.all([
+        fetchBillingSettings(),
+        pricingZoneSetsEnabled ? fetchPricingZoneSets().catch(() => []) : Promise.resolve([]),
+      ]);
+      const payload = (
+        data
+        && typeof data === 'object'
+        && data.data
+        && typeof data.data === 'object'
+      )
+        ? {
+            ...data.data,
+            pricing_summary: data.data.pricing_summary ?? data.pricing_summary ?? null,
+            rules_json: data.data.rules_json ?? data.rules_json ?? null,
+          }
+        : data;
+      if (payload) {
         const D = BILLING_DEFAULTS;
         const loaded = {
-          payment_terms_days: data.payment_terms_days ?? D.payment_terms_days,
-          overdue_fee: data.overdue_fee ?? D.overdue_fee,
-          reminder_schedule_days: data.reminder_schedule_days || D.reminder_schedule_days,
-          reminder1_fee: data.reminder1_fee ?? D.reminder1_fee,
-          reminder2_fee: data.reminder2_fee ?? D.reminder2_fee,
-          reminder3_fee: data.reminder3_fee ?? D.reminder3_fee,
-          material_delivery_price_fixed: data.material_delivery_price_fixed ?? D.material_delivery_price_fixed,
-          auto_reminders_enabled: data.auto_reminders_enabled ?? D.auto_reminders_enabled,
-          email_templates_enabled: data.email_templates_enabled ?? D.email_templates_enabled,
-          email_sender: data.email_sender ?? D.email_sender,
-          invoice_number_format: data.invoice_number_format || D.invoice_number_format,
-          invoice_prefix: data.invoice_prefix || D.invoice_prefix,
-          invoice_message_template: data.invoice_message_template ?? D.invoice_message_template,
-          reminder1_template: data.reminder1_template ?? D.reminder1_template,
-          reminder2_template: data.reminder2_template ?? D.reminder2_template,
-          reminder3_template: data.reminder3_template ?? D.reminder3_template,
-          email_signature_mode: data.email_signature_mode || D.email_signature_mode,
-          email_signature_text: data.email_signature_text ?? D.email_signature_text,
-          signature_name: data.signature_name ?? D.signature_name,
-          signature_title: data.signature_title ?? D.signature_title,
-          signature_company: data.signature_company ?? D.signature_company,
-          signature_phone_main: data.signature_phone_main ?? D.signature_phone_main,
-          signature_phone_mobile: data.signature_phone_mobile ?? D.signature_phone_mobile,
-          signature_email: data.signature_email ?? D.signature_email,
-          signature_website: data.signature_website ?? D.signature_website,
-          signature_address_line: data.signature_address_line ?? D.signature_address_line,
-          signature_zip: data.signature_zip ?? D.signature_zip,
-          signature_city: data.signature_city ?? D.signature_city,
-          email_signature_html_template: data.email_signature_html_template ?? D.email_signature_html_template,
-          legal_footer: data.legal_footer ?? D.legal_footer,
-          pdf_template_variant: data.pdf_template_variant || D.pdf_template_variant,
-          iban: data.iban ?? D.iban,
-          qr_iban: data.qr_iban ?? D.qr_iban,
-          esr_ref_base: data.esr_ref_base ?? D.esr_ref_base,
-          vat_applicable: data.vat_applicable ?? D.vat_applicable,
-          vat_rate: data.vat_rate ?? D.vat_rate,
-          vat_label: data.vat_label ?? D.vat_label,
-          vat_number: data.vat_number ?? D.vat_number,
-          smtp_enabled: data.smtp_enabled ?? D.smtp_enabled,
-          smtp_server: data.smtp_server ?? D.smtp_server,
-          smtp_port: data.smtp_port ?? D.smtp_port,
-          smtp_use_tls: data.smtp_use_tls ?? D.smtp_use_tls,
-          smtp_use_ssl: data.smtp_use_ssl ?? D.smtp_use_ssl,
-          smtp_username: data.smtp_username ?? D.smtp_username,
+          payment_terms_days: payload.payment_terms_days ?? D.payment_terms_days,
+          overdue_fee: payload.overdue_fee ?? D.overdue_fee,
+          reminder_schedule_days: payload.reminder_schedule_days || D.reminder_schedule_days,
+          reminder1_fee: payload.reminder1_fee ?? D.reminder1_fee,
+          reminder2_fee: payload.reminder2_fee ?? D.reminder2_fee,
+          reminder3_fee: payload.reminder3_fee ?? D.reminder3_fee,
+          material_delivery_price_fixed: payload.material_delivery_price_fixed ?? D.material_delivery_price_fixed,
+          auto_reminders_enabled: payload.auto_reminders_enabled ?? D.auto_reminders_enabled,
+          email_templates_enabled: payload.email_templates_enabled ?? D.email_templates_enabled,
+          email_sender: payload.email_sender ?? D.email_sender,
+          invoice_number_format: payload.invoice_number_format || D.invoice_number_format,
+          invoice_prefix: payload.invoice_prefix || D.invoice_prefix,
+          invoice_message_template: payload.invoice_message_template ?? D.invoice_message_template,
+          reminder1_template: payload.reminder1_template ?? D.reminder1_template,
+          reminder2_template: payload.reminder2_template ?? D.reminder2_template,
+          reminder3_template: payload.reminder3_template ?? D.reminder3_template,
+          email_signature_mode: payload.email_signature_mode || D.email_signature_mode,
+          email_signature_text: payload.email_signature_text ?? D.email_signature_text,
+          signature_name: payload.signature_name ?? D.signature_name,
+          signature_title: payload.signature_title ?? D.signature_title,
+          signature_company: payload.signature_company ?? D.signature_company,
+          signature_phone_main: payload.signature_phone_main ?? D.signature_phone_main,
+          signature_phone_mobile: payload.signature_phone_mobile ?? D.signature_phone_mobile,
+          signature_email: payload.signature_email ?? D.signature_email,
+          signature_website: payload.signature_website ?? D.signature_website,
+          signature_address_line: payload.signature_address_line ?? D.signature_address_line,
+          signature_zip: payload.signature_zip ?? D.signature_zip,
+          signature_city: payload.signature_city ?? D.signature_city,
+          email_signature_html_template: payload.email_signature_html_template ?? D.email_signature_html_template,
+          legal_footer: payload.legal_footer ?? D.legal_footer,
+          pdf_template_variant: payload.pdf_template_variant || D.pdf_template_variant,
+          iban: payload.iban ?? D.iban,
+          qr_iban: payload.qr_iban ?? D.qr_iban,
+          esr_ref_base: payload.esr_ref_base ?? D.esr_ref_base,
+          vat_applicable: payload.vat_applicable ?? D.vat_applicable,
+          vat_rate: payload.vat_rate ?? D.vat_rate,
+          vat_label: payload.vat_label ?? D.vat_label,
+          vat_number: payload.vat_number ?? D.vat_number,
+          smtp_enabled: payload.smtp_enabled ?? D.smtp_enabled,
+          smtp_server: payload.smtp_server ?? D.smtp_server,
+          smtp_port: payload.smtp_port ?? D.smtp_port,
+          smtp_use_tls: payload.smtp_use_tls ?? D.smtp_use_tls,
+          smtp_use_ssl: payload.smtp_use_ssl ?? D.smtp_use_ssl,
+          smtp_username: payload.smtp_username ?? D.smtp_username,
           smtp_password: '',
-          smtp_password_configured: data.smtp_password_configured ?? false,
-          cancellation_policy: data.cancellation_policy ?? D.cancellation_policy,
+          smtp_password_configured: payload.smtp_password_configured ?? false,
+          cancellation_policy: payload.cancellation_policy ?? D.cancellation_policy,
+          pricing_summary: payload.pricing_summary ?? D.pricing_summary,
+          rules_json: payload.rules_json ?? D.rules_json,
         };
         setForm(loaded);
         serverFormRef.current = loaded;
+        if (loaded.rules_json && typeof loaded.rules_json === 'object') {
+          setPricingRules((prev) => ({ ...prev, ...loaded.rules_json }));
+          serverPricingRulesRef.current = loaded.rules_json;
+        } else {
+          const fallbackModel = deriveModelFromSummary(loaded.pricing_summary);
+          if (fallbackModel) {
+            setPricingRules((prev) => ({
+              ...prev,
+              model: fallbackModel,
+              components: {
+                ...prev.components,
+                zone_count: {
+                  ...prev.components.zone_count,
+                  enabled: fallbackModel === 'zone_count' || fallbackModel === 'hybrid_stack',
+                },
+                distance: {
+                  ...prev.components.distance,
+                  enabled: fallbackModel === 'distance' || fallbackModel === 'hybrid_stack',
+                },
+              },
+            }));
+          }
+          serverPricingRulesRef.current = null;
+        }
       }
+      setZoneSets(Array.isArray(zoneSetsResponse) ? zoneSetsResponse : []);
     } catch (err) {
       console.error('Erreur lors du chargement des paramètres:', err);
       setError('Erreur lors du chargement des paramètres');
@@ -334,7 +422,71 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
       setLoading(false);
       setIsHydrated(true);
     }
-  };
+  }, [pricingZoneSetsEnabled]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const selectedZoneSet = useMemo(
+    () => zoneSets.find((item) => String(item?.key || '') === String(pricingRules?.zone_set_id || '')) || null,
+    [zoneSets, pricingRules?.zone_set_id]
+  );
+  const requiresZoneSet = pricingRules.model === 'zone_count' || pricingRules.model === 'hybrid_stack';
+  const activeZoneScope = String(selectedZoneSet?.scope || '').trim().toUpperCase();
+
+  useEffect(() => {
+    if (!pricingZoneSetsEnabled || !requiresZoneSet || zoneSets.length === 0) {
+      setZoneSetDetailsForMap([]);
+      setLoadingZoneSetMap(false);
+      return;
+    }
+    const scope = String(selectedZoneSet?.scope || 'GE').trim().toUpperCase();
+    const keys = zoneSets
+      .filter((item) => String(item?.scope || '').trim().toUpperCase() === scope)
+      .map((item) => String(item?.key || '').trim())
+      .filter(Boolean);
+    if (keys.length === 0) {
+      setZoneSetDetailsForMap([]);
+      setLoadingZoneSetMap(false);
+      return;
+    }
+    let cancelled = false;
+    const loadScopeZoneSets = async () => {
+      try {
+        setLoadingZoneSetMap(true);
+        const details = await fetchPricingZoneSetsMap({
+          scope,
+          active: true,
+          includeGeometry: true,
+          geometryLevel: 'simplified',
+          limit: Math.max(keys.length, 50),
+        });
+        if (cancelled) return;
+        setZoneSetDetailsForMap(Array.isArray(details) ? details : []);
+      } catch (_err) {
+        if (!cancelled) setZoneSetDetailsForMap([]);
+      } finally {
+        if (!cancelled) setLoadingZoneSetMap(false);
+      }
+    };
+    loadScopeZoneSets();
+    return () => {
+      cancelled = true;
+    };
+  }, [pricingZoneSetsEnabled, requiresZoneSet, selectedZoneSet?.scope, zoneSets]);
+
+  useEffect(() => {
+    if (!pricingZoneSetsEnabled || !requiresZoneSet) return;
+    if (pricingRules.zone_set_id) return;
+    if (zoneSets.length === 0) return;
+    const preferred =
+      zoneSets.find((item) => String(item?.scope || '').toUpperCase() === 'GE')
+      || zoneSets[0];
+    const nextKey = String(preferred?.key || '').trim();
+    if (!nextKey) return;
+    setPricingRules((prev) => ({ ...prev, zone_set_id: nextKey }));
+  }, [pricingZoneSetsEnabled, requiresZoneSet, pricingRules.zone_set_id, zoneSets]);
 
   const normalizeIban = (iban) => {
     if (!iban) return null;
@@ -379,17 +531,85 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
   }, []);
 
   const saveBilling = useCallback(async () => {
+    const model = String(pricingRules?.model || '').trim();
+    if (!model) {
+      throw new Error('Mode tarifaire manquant.');
+    }
+    if ((model === 'zone_count' || model === 'hybrid_stack') && pricingZoneSetsEnabled && !pricingRules?.zone_set_id) {
+      throw new Error('Le zone set est obligatoire pour ce modèle.');
+    }
+    if (Number(pricingRules?.components?.base?.amount ?? 0) < 0) {
+      throw new Error('La base ne peut pas être négative.');
+    }
+    if (Number(pricingRules?.components?.zone_count?.unit_price ?? 0) < 0) {
+      throw new Error('Le prix par zone ne peut pas être négatif.');
+    }
+    if (Number(pricingRules?.components?.zone_count?.included_zones ?? 1) < 1) {
+      throw new Error('Le seuil de zones incluses doit être au minimum de 1.');
+    }
+    if (Number(pricingRules?.components?.distance?.per_km ?? 0) < 0) {
+      throw new Error('Le prix au km ne peut pas être négatif.');
+    }
+    const minimum = pricingRules?.caps?.minimum;
+    if (minimum != null && Number(minimum) < 0) {
+      throw new Error('Le minimum ne peut pas être négatif.');
+    }
     const cleanedData = buildCleanedData(form);
-    await updateBillingSettings(cleanedData);
+    await updateBillingSettings({
+      ...cleanedData,
+      rules_json: pricingRules,
+    });
     await loadSettings();
-  }, [form, buildCleanedData]);
+  }, [form, buildCleanedData, pricingRules, pricingZoneSetsEnabled, loadSettings]);
 
   const resetBilling = useCallback(() => {
     if (serverFormRef.current) {
       setForm(serverFormRef.current);
     }
+    if (serverPricingRulesRef.current) {
+      setPricingRules(serverPricingRulesRef.current);
+    }
     setMessage('');
     setError('');
+  }, []);
+
+  const updatePricingRule = useCallback((path, value) => {
+    setPricingRules((prev) => {
+      const next = {
+        ...prev,
+        components: {
+          ...prev.components,
+          base: { ...prev.components.base },
+          zone_count: { ...prev.components.zone_count },
+          distance: { ...prev.components.distance },
+        },
+        caps: { ...prev.caps },
+      };
+      if (path === 'model') {
+        next.model = value;
+        next.components.zone_count.enabled = value === 'zone_count' || value === 'hybrid_stack';
+        next.components.distance.enabled = value === 'distance' || value === 'hybrid_stack';
+        if (value === 'distance') {
+          next.components.base.enabled = false;
+          next.components.base.amount = 0;
+        } else {
+          next.components.base.enabled = true;
+        }
+      } else if (path === 'zone_set_id') {
+        next.zone_set_id = value;
+      } else if (path === 'base.amount') {
+        next.components.base.amount = Number(value || 0);
+      } else if (path === 'zone_count.unit_price') {
+        next.components.zone_count.unit_price = Number(value || 0);
+      } else if (path === 'zone_count.included_zones') {
+        next.components.zone_count.included_zones = Math.max(1, Number(value || 1));
+      } else if (path === 'distance.per_km') {
+        next.components.distance.per_km = Number(value || 0);
+      } else if (path === 'caps.minimum') {
+        next.caps.minimum = value === '' ? null : Number(value);
+      }
+      return next;
+    });
   }, []);
 
   useImperativeHandle(ref, () => ({
@@ -448,7 +668,25 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
 
   const getSectionHint = (key) => {
     switch (key) {
-      case 'payment': return `${form.payment_terms_days} jours / ${form.overdue_fee} CHF`;
+      case 'payment': {
+        return `${form.payment_terms_days} jours / ${form.overdue_fee} CHF`;
+      }
+      case 'pricingConfig': {
+        const model = pricingRules?.model || 'flat';
+        if (model === 'zone_count') {
+          return 'Prix de départ + majoration selon les zones traversées (zonage appliqué automatiquement)';
+        }
+        if (model === 'distance') {
+          return 'Prix au kilomètre (minimum optionnel)';
+        }
+        if (model === 'flat') {
+          return 'Prix fixe par canton';
+        }
+        if (model === 'hybrid_stack') {
+          return 'Modèle hybride: base + zones + kilomètre';
+        }
+        return MODEL_LABELS[model] || model;
+      }
       case 'reminders': return form.auto_reminders_enabled ? 'Envoi automatique actif' : 'Envoi manuel';
       case 'templates': return form.email_templates_enabled ? 'Personnalises' : 'Par defaut';
       case 'format': return generatePreview();
@@ -518,6 +756,149 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
                 <ReadonlyField label="Delai de paiement" value={form.payment_terms_days} suffix="jours" />
                 <ReadonlyField label="Frais de retard" value={form.overdue_fee} suffix="CHF" />
                 <ReadonlyField label="Prix livraison fixe" value={form.material_delivery_price_fixed} suffix="CHF" />
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard
+            icon={FiFileText}
+            title="Configuration tarifaire"
+            hint={getSectionHint('pricingConfig')}
+            expanded={expandedSections.pricingConfig}
+            onToggle={() => toggleSection('pricingConfig')}
+          >
+            {isEditing ? (
+              <>
+                {!pricingWizardEnabled && (
+                  <small className={styles.hint}>
+                    Configuration wizard désactivée par flag (`FF_PRICING_WIZARD_V1`).
+                  </small>
+                )}
+                <div className={styles.formGroup}>
+                  <label htmlFor="pricing_model">Modèle</label>
+                  <select
+                    id="pricing_model"
+                    value={pricingRules.model}
+                    onChange={(event) => updatePricingRule('model', event.target.value)}
+                    disabled={!pricingWizardEnabled}
+                  >
+                    <option value="flat">Prix fixe (canton)</option>
+                    <option value="zone_count">Prix par zones (base + supplément)</option>
+                    <option value="distance">Prix au kilomètre</option>
+                    {pricingRules.model === 'hybrid_stack' && (
+                      <option value="hybrid_stack">Modèle hybride</option>
+                    )}
+                  </select>
+                </div>
+                {(pricingRules.model === 'flat' || pricingRules.model === 'zone_count' || pricingRules.model === 'hybrid_stack') && (
+                  <div className={styles.formGroup}>
+                    <label htmlFor="pricing_base_amount">
+                      {pricingRules.model === 'flat' ? 'Prix fixe canton' : 'Prix de départ'}
+                    </label>
+                    <div className={styles.inputWithUnit}>
+                      <input id="pricing_base_amount" type="number" min="0" step="0.01" value={pricingRules.components?.base?.amount ?? 0} onChange={(event) => updatePricingRule('base.amount', event.target.value)} disabled={!pricingWizardEnabled} />
+                      <span className={styles.unit}>CHF</span>
+                    </div>
+                  </div>
+                )}
+                {requiresZoneSet && (
+                  <>
+                    {!pricingZoneSetsEnabled && (
+                      <small className={styles.hint}>
+                        Sélection `zone_set` désactivée par flag (`FF_ADMIN_ZONESETS_READONLY`).
+                      </small>
+                    )}
+                    {requiresZoneSet && (
+                      <div className={styles.formGroup}>
+                        <label htmlFor="pricing_zone_unit">Supplément par zone traversée</label>
+                        <div className={styles.inputWithUnit}>
+                          <input id="pricing_zone_unit" type="number" min="0" step="0.01" value={pricingRules.components?.zone_count?.unit_price ?? 0} onChange={(event) => updatePricingRule('zone_count.unit_price', event.target.value)} disabled={!pricingWizardEnabled} />
+                          <span className={styles.unit}>CHF</span>
+                        </div>
+                        <div className={styles.inputWithUnit} style={{ marginTop: 8 }}>
+                          <input
+                            id="pricing_zone_included"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={pricingRules.components?.zone_count?.included_zones ?? 2}
+                            onChange={(event) => updatePricingRule('zone_count.included_zones', event.target.value)}
+                            disabled={!pricingWizardEnabled}
+                          />
+                          <span className={styles.unit}>zones incluses</span>
+                        </div>
+                        <small className={styles.hint}>
+                          Calcul: prix final = prix de départ + (zones traversées - zones incluses) × supplément.
+                        </small>
+                      </div>
+                    )}
+                  </>
+                )}
+                {requiresZoneSet && pricingRules.zone_set_id && (
+                  <div className={styles.formGroup}>
+                    <label>Carte des zones (visualisation uniquement)</label>
+                    <div style={{ width: '100%', minHeight: 260 }}>
+                      <ZoneSetReadonlyMap
+                        zoneSetDetail={null}
+                        zoneSetDetails={zoneSetDetailsForMap}
+                        loading={loadingZoneSetMap}
+                        active={Boolean(expandedSections.pricingConfig)}
+                      />
+                    </div>
+                    <small className={styles.hint}>
+                      Cette carte affiche toutes les zones configurées par l’admin pour le canton actif.
+                    </small>
+                  </div>
+                )}
+                {(pricingRules.model === 'distance' || pricingRules.model === 'hybrid_stack') && (
+                  <div className={styles.formGroup}>
+                    <label htmlFor="pricing_per_km">Prix au kilomètre</label>
+                    <div className={styles.inputWithUnit}>
+                      <input id="pricing_per_km" type="number" min="0" step="0.01" value={pricingRules.components?.distance?.per_km ?? 0} onChange={(event) => updatePricingRule('distance.per_km', event.target.value)} disabled={!pricingWizardEnabled} />
+                      <span className={styles.unit}>CHF/km</span>
+                    </div>
+                  </div>
+                )}
+                {pricingRules.model === 'distance' && (
+                  <div className={styles.formGroup}>
+                    <label htmlFor="pricing_minimum">Montant minimum</label>
+                    <div className={styles.inputWithUnit}>
+                      <input id="pricing_minimum" type="number" min="0" step="0.01" value={pricingRules.caps?.minimum ?? ''} onChange={(event) => updatePricingRule('caps.minimum', event.target.value)} disabled={!pricingWizardEnabled} />
+                      <span className={styles.unit}>CHF</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className={styles.fieldGrid}>
+                <ReadonlyField label="Modèle" value={MODEL_LABELS[pricingRules.model] || pricingRules.model} />
+                <ReadonlyField
+                  label="Zonage"
+                  value={
+                    requiresZoneSet
+                      ? (
+                        activeZoneScope
+                          ? `Zonage plateforme automatique (${activeZoneScope})`
+                          : 'Zonage plateforme automatique'
+                      )
+                      : '—'
+                  }
+                />
+                {(pricingRules.model === 'flat' || pricingRules.model === 'zone_count' || pricingRules.model === 'hybrid_stack') && (
+                  <ReadonlyField label="Prix de base" value={pricingRules.components?.base?.amount} suffix="CHF" />
+                )}
+                {(pricingRules.model === 'zone_count' || pricingRules.model === 'hybrid_stack') && (
+                  <ReadonlyField label="Supplément par zone" value={pricingRules.components?.zone_count?.unit_price} suffix="CHF" />
+                )}
+                {(pricingRules.model === 'zone_count' || pricingRules.model === 'hybrid_stack') && (
+                  <ReadonlyField label="Zones incluses avant majoration" value={pricingRules.components?.zone_count?.included_zones || 1} />
+                )}
+                {(pricingRules.model === 'distance' || pricingRules.model === 'hybrid_stack') && (
+                  <ReadonlyField label="Prix au kilomètre" value={pricingRules.components?.distance?.per_km} suffix="CHF/km" />
+                )}
+                {pricingRules.model === 'distance' && (
+                  <ReadonlyField label="Montant minimum" value={pricingRules.caps?.minimum} suffix="CHF" />
+                )}
               </div>
             )}
           </SectionCard>

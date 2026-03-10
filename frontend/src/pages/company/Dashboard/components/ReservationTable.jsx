@@ -102,12 +102,13 @@ const ReservationTable = ({
             </tr>
           </thead>
           <tbody>
-            {displayedReservations.map((r) => {
+            {displayedReservations.map((r, index) => {
               const { status, hasActions, canManageReservation, delayMinutes, delayRowClass } = renderRow(r);
 
               return (
                 <tr
                   key={r.id}
+                  data-tour-id={status === 'pending' && index === 0 ? 'pending-row-overview' : undefined}
                   onClick={() => onRowClick?.(r)}
                   className={`${styles.tableRow} ${delayRowClass ? styles[delayRowClass] : ''}`}
                 >
@@ -201,7 +202,12 @@ const ReservationTable = ({
                       <>
                         {status === 'pending' && (
                           <>
-                            <button onClick={() => onAccept?.(r.id)} title={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"} className={`${styles.actionButton} ${styles.acceptButton}`}>
+                            <button
+                              data-tour-id="pending-accept-action"
+                              onClick={() => onAccept?.(r.id)}
+                              title={r.is_transferred ? "Accepter (prendre en charge)" : "Accepter"}
+                              className={`${styles.actionButton} ${styles.acceptButton}`}
+                            >
                               <FiCheckCircle size={16} />
                             </button>
                             <button onClick={() => onReject?.(r.id)} title="Rejeter" className={`${styles.actionButton} ${styles.rejectButton}`}>

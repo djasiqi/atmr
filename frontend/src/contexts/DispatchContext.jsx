@@ -21,7 +21,7 @@ const initialState = {
   dispatches: [],
   delays: [],
   summary: null,
-  dispatchMode: 'semi_auto',
+  dispatchMode: 'manual',
   loading: false,
   error: null,
   optimizerStatus: null,

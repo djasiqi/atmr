@@ -109,6 +109,7 @@ export default function CompanySettings() {
   const billingRef = useRef(null);
   const partnershipsRef = useRef(null);
   const vehiclesRef = useRef(null);
+  const operationsRef = useRef(null);
   const pendingSaveBillingRef = useRef(false);
 
   useEffect(() => {
@@ -244,6 +245,7 @@ export default function CompanySettings() {
       });
     }
     billingRef.current?.reset();
+    operationsRef.current?.reset();
     setIsEditing(false);
     setError('');
     setMessage('');
@@ -315,6 +317,16 @@ export default function CompanySettings() {
         }
       }
 
+      // Sauvegarder OperationsTab si le ref existe (onglet monte)
+      let operationsError = null;
+      if (operationsRef.current?.save) {
+        try {
+          await operationsRef.current.save();
+        } catch (operationsErr) {
+          operationsError = operationsErr;
+        }
+      }
+
       await reloadCompany?.();
       setForm((prev) => ({
         ...prev,
@@ -322,7 +334,7 @@ export default function CompanySettings() {
         uid_ide: updated?.uid_ide ?? prev.uid_ide,
       }));
 
-      if (billingError || partnershipsError || vehiclesError) {
+      if (billingError || partnershipsError || vehiclesError || operationsError) {
         const parts = [];
         if (billingError) {
           parts.push(`facturation : ${billingError?.response?.data?.error || billingError?.message || ''}`);
@@ -332,6 +344,9 @@ export default function CompanySettings() {
         }
         if (vehiclesError) {
           parts.push(`véhicules : ${vehiclesError?.response?.data?.error || vehiclesError?.message || ''}`);
+        }
+        if (operationsError) {
+          parts.push(`opérations : ${operationsError?.response?.data?.error || operationsError?.message || ''}`);
         }
         setError(`Infos entreprise enregistrees, mais erreur ${parts.join(' / ')}`);
       } else {
@@ -642,7 +657,7 @@ export default function CompanySettings() {
                 />
               )}
 
-              {activeTab === 'operations' && <OperationsTab isEditing={isEditing} />}
+              {activeTab === 'operations' && <OperationsTab ref={operationsRef} isEditing={isEditing} />}
               {activeTab === 'partnerships' && <PartnershipsTab ref={partnershipsRef} isEditing={isEditing} />}
               {activeTab === 'vehicles' && <VehiclesTab ref={vehiclesRef} isEditing={isEditing} />}
               {activeTab === 'billing' && <BillingTab ref={billingRef} companyId={company?.id} isEditing={isEditing} />}

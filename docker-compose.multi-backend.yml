@@ -1,0 +1,54 @@
+# Option A (base partagée) : app + demo pointent vers la même base
+# Usage: docker compose -f docker-compose.yml -f docker-compose.multi-backend.yml up -d
+# Les deux backends (5000 et 5100) utilisent la base atmr pour DemoAccess.
+# Le provisioning admin et le consume magic link lisent/écrivent la même source de vérité.
+
+services:
+  api-demo:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: runtime
+    command: >
+      gunicorn wsgi:app
+      --bind 0.0.0.0:5000
+      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
+      --workers 1
+      --timeout 120
+      --access-logfile -
+      --error-logfile -
+      --log-level info
+      --no-sendfile
+    env_file:
+      - backend/.env
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - COOKIE_SECURE=false
+      - COOKIE_SAME_SITE=Lax
+      - COOKIE_HTTP_ONLY=true
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_SSLMODE=disable
+      - PGSSLMODE=disable
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-false}
+      - API_LEGACY_ENABLED=false
+      - API_DOCS=off
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    ports:
+      - "5100:5000"
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default

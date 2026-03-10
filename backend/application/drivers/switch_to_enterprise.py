@@ -87,49 +87,6 @@ class SwitchToEnterpriseUseCase:
 
     def execute(self, cmd: SwitchToEnterpriseCommand) -> SwitchToEnterpriseResult:
         driver = cmd.driver
-        # #region agent log
-        import json
-        from datetime import UTC, datetime
-        from pathlib import Path
-
-        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "switch_to_enterprise.py:execute",
-                            "message": "driver type check",
-                            "data": {
-                                "driver_id": driver.id,
-                                "driver_type": str(driver.driver_type),
-                                "driver_type_value": driver.driver_type.value
-                                if hasattr(driver.driver_type, "value")
-                                else str(driver.driver_type),
-                                "expected_emergency": str(
-                                    self._driver_type_emergency
-                                ),
-                                "expected_emergency_value": (
-                                    self._driver_type_emergency.value
-                                    if hasattr(self._driver_type_emergency, "value")
-                                    else str(self._driver_type_emergency)
-                                ),
-                                "is_equal": driver.driver_type
-                                == self._driver_type_emergency,
-                                "type_comparison": type(driver.driver_type)
-                                is type(self._driver_type_emergency),
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         # Comparaison robuste : comparer les valeurs plutôt que les objets
         # enum pour gérer les cas où driver_type pourrait être une chaîne
         # ou un enum différent
@@ -145,31 +102,6 @@ class SwitchToEnterpriseUseCase:
         )
 
         if driver_type_value != expected_value:
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "switch_to_enterprise.py:execute",
-                                "message": "driver type mismatch - returning 403",
-                                "data": {
-                                    "driver_type": str(driver.driver_type),
-                                    "driver_type_value": driver_type_value,
-                                    "expected": str(self._driver_type_emergency),
-                                    "expected_value": expected_value,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return SwitchToEnterpriseResult(
                 response={
                     "error": (

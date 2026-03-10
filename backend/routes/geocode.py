@@ -1,14 +1,23 @@
 # backend/routes/geocode.py
+# ruff: noqa: I001
+# pyright: reportUnusedFunction=false
 from __future__ import annotations
 
+import json
 import os
 import re
+import time
+import unicodedata
 from typing import Any, Dict, List, Tuple, cast
+from urllib.parse import quote, unquote
 
 import requests
 from flask import current_app, request
-from flask_restx import Namespace, Resource
+from flask_restx import Resource
 
+from ext import redis_client
+from models.enums import GeoUnitType
+from models.geo_unit import GeoUnit
 from services.geolocation.google_places import (
     GooglePlacesError,
     autocomplete_address,
@@ -16,14 +25,13 @@ from services.geolocation.google_places import (
     get_place_details,
 )
 from shared.error_handlers import APIErrorHandler
+from shared.retry import retry_http_request
+from routes.geocode_ns import geocode_ns
 
 # ✅ Constantes pour les codes HTTP
 HTTP_FORBIDDEN = 403
 HTTP_TOO_MANY_REQUESTS = 429
-
-geocode_ns = Namespace(
-    "geocode", description="Autocomplete & géocodage avec Google Places API"
-)
+HTTP_INTERNAL_SERVER_ERROR = 500
 
 # Configuration
 # Fallback si Google API indisponible
@@ -37,6 +45,20 @@ USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in (
 # Constantes pour éviter les valeurs magiques
 MIN_COORDINATES_COUNT = 2
 MIN_QUERY_LENGTH = 2
+MIN_RING_POINTS = 4
+RING_SIMPLIFY_MIN_POINTS = 20
+ZONE_DEFAULT_LIMIT = 20
+ZONE_MAX_LIMIT = 50
+ZONE_QUERY_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_QUERY", "7200"))
+ZONE_QUERY_CACHE_VERSION = "2"
+ZONE_REVERSE_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_REVERSE", "172800"))
+ZONE_GEOMETRY_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_GEOMETRY", "604800"))
+GEOADMIN_ENABLED = os.getenv("GEOADMIN_ENABLED", "true").lower() in ("true", "1", "yes")
+GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip("/")
+GEOADMIN_CB_FAIL_THRESHOLD = int(os.getenv("GEOADMIN_CB_FAIL_THRESHOLD", "10"))
+GEOADMIN_CB_WINDOW_SECONDS = int(os.getenv("GEOADMIN_CB_WINDOW_SECONDS", "60"))
+GEOADMIN_CB_OPEN_SECONDS = int(os.getenv("GEOADMIN_CB_OPEN_SECONDS", "120"))
+GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS = int(os.getenv("GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS", "10"))
 
 # Biais géographique Genève (approx)
 GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)  # (lat, lon)
@@ -65,6 +87,86 @@ ALIASES: List[Dict[str, Any]] = [
     # Ajoute d'autres alias ici (La Tour, Butini, etc.)
 ]
 
+ZONE_TYPE_MAP: dict[str, GeoUnitType] = {
+    "commune": GeoUnitType.COMMUNE,
+    "canton": GeoUnitType.CANTON,
+    "district": GeoUnitType.DISTRICT,
+}
+
+ZONE_TOKEN_TYPE_SET = {"commune", "canton", "district"}
+ZONE_TOKEN_PATTERN = re.compile(r"^(commune|canton|district):([A-Za-z0-9_-]+)$")
+SWISS_CANTON_CODES = {
+    "AG",
+    "AI",
+    "AR",
+    "BE",
+    "BL",
+    "BS",
+    "FR",
+    "GE",
+    "GL",
+    "GR",
+    "JU",
+    "LU",
+    "NE",
+    "NW",
+    "OW",
+    "SG",
+    "SH",
+    "SO",
+    "SZ",
+    "TG",
+    "TI",
+    "UR",
+    "VD",
+    "VS",
+    "ZG",
+    "ZH",
+}
+SWISS_CANTON_NAME_TO_CODE = {
+    "aargau": "AG",
+    "appenzell innerrhoden": "AI",
+    "appenzell ausserrhoden": "AR",
+    "bern": "BE",
+    "berne": "BE",
+    "basel landschaft": "BL",
+    "basel stadt": "BS",
+    "fribourg": "FR",
+    "geneve": "GE",
+    "genf": "GE",
+    "glarus": "GL",
+    "graubuenden": "GR",
+    "grisons": "GR",
+    "jura": "JU",
+    "lucerne": "LU",
+    "luzern": "LU",
+    "neuchatel": "NE",
+    "nidwald": "NW",
+    "obwald": "OW",
+    "st gallen": "SG",
+    "st-gallen": "SG",
+    "schaffhausen": "SH",
+    "soleure": "SO",
+    "solothurn": "SO",
+    "schwyz": "SZ",
+    "thurgau": "TG",
+    "tessin": "TI",
+    "ticino": "TI",
+    "uri": "UR",
+    "vaud": "VD",
+    "valais": "VS",
+    "wallis": "VS",
+    "zug": "ZG",
+    "zurich": "ZH",
+    "zuerich": "ZH",
+}
+
+_geoadmin_breaker_state: dict[str, Any] = {
+    "open_until": 0.0,
+    "failures": [],
+    "half_open_probe_at": 0.0,
+}
+
 
 def match_alias(q: str) -> Dict[str, Any] | None:
     q_norm = (q or "").strip()
@@ -80,6 +182,350 @@ def looks_like_hospital(q: str) -> bool:
     return any(
         w in t for w in ("hug", "hopital", "hôpital", "hospital", "clinique", "urgenc")
     )
+
+
+def _parse_zone_types(raw_types: str | None) -> list[GeoUnitType]:
+    values = [v.strip().lower() for v in (raw_types or "commune,canton").split(",")]
+    out = [ZONE_TYPE_MAP[v] for v in values if v in ZONE_TYPE_MAP]
+    return out or [GeoUnitType.COMMUNE, GeoUnitType.CANTON]
+
+
+def _parse_zone_ids(raw_ids: str | None) -> list[int]:
+    if not raw_ids:
+        return []
+    ids: list[int] = []
+    for part in raw_ids.split(","):
+        text = part.strip()
+        if not text:
+            continue
+        try:
+            ids.append(int(text))
+        except ValueError:
+            continue
+    # Dédup en conservant l'ordre
+    seen: set[int] = set()
+    dedup: list[int] = []
+    for item in ids:
+        if item in seen:
+            continue
+        seen.add(item)
+        dedup.append(item)
+    return dedup
+
+
+def _zone_is_breaker_open() -> bool:
+    now = time.time()
+    open_until = float(_geoadmin_breaker_state.get("open_until", 0.0) or 0.0)
+    if now < open_until:
+        # Half-open simplifié: laisser une requête test toutes les N secondes.
+        probe_at = float(_geoadmin_breaker_state.get("half_open_probe_at", 0.0) or 0.0)
+        if now >= probe_at:
+            _geoadmin_breaker_state["half_open_probe_at"] = now + GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS
+            return False
+        return True
+    return False
+
+
+def _zone_breaker_record_success() -> None:
+    _geoadmin_breaker_state["failures"] = []
+    _geoadmin_breaker_state["open_until"] = 0.0
+    _geoadmin_breaker_state["half_open_probe_at"] = 0.0
+
+
+def _zone_breaker_record_failure() -> None:
+    now = time.time()
+    failures = cast(list[float], _geoadmin_breaker_state.get("failures") or [])
+    failures = [ts for ts in failures if now - ts <= GEOADMIN_CB_WINDOW_SECONDS]
+    failures.append(now)
+    _geoadmin_breaker_state["failures"] = failures
+    if len(failures) >= GEOADMIN_CB_FAIL_THRESHOLD:
+        _geoadmin_breaker_state["open_until"] = now + GEOADMIN_CB_OPEN_SECONDS
+        _geoadmin_breaker_state["half_open_probe_at"] = now + GEOADMIN_CB_OPEN_SECONDS
+
+
+def _zone_cache_get(cache_key: str) -> list[Dict[str, Any]] | None:
+    if not redis_client:
+        return None
+    try:
+        raw = redis_client.get(cache_key)
+        if not raw:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+        if isinstance(parsed, list):
+            return cast(list[Dict[str, Any]], parsed)
+        return None
+    except Exception:
+        return None
+
+
+def _zone_cache_set(cache_key: str, items: list[Dict[str, Any]], ttl_seconds: int) -> None:
+    if not redis_client:
+        return
+    try:
+        redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(items, ensure_ascii=False))
+    except Exception:
+        return
+
+
+def _zone_cache_get_dict(cache_key: str) -> Dict[str, Any] | None:
+    if not redis_client:
+        return None
+    try:
+        raw = redis_client.get(cache_key)
+        if not raw:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+        if isinstance(parsed, dict):
+            return cast(Dict[str, Any], parsed)
+        return None
+    except Exception:
+        return None
+
+
+def _zone_cache_set_dict(cache_key: str, payload: Dict[str, Any], ttl_seconds: int) -> None:
+    if not redis_client:
+        return
+    try:
+        redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        return
+
+
+def _simplify_ring(ring: list[list[float]], step: int = 6) -> list[list[float]]:
+    if len(ring) <= RING_SIMPLIFY_MIN_POINTS:
+        return ring
+    sampled = ring[::step]
+    if ring[-1] != sampled[-1]:
+        sampled.append(ring[-1])
+    if sampled[0] != sampled[-1]:
+        sampled.append(sampled[0])
+    return sampled
+
+
+def _simplify_geojson_geometry(geometry: Dict[str, Any], step: int = 6) -> Dict[str, Any]:
+    gtype = str(geometry.get("type") or "")
+    coords = geometry.get("coordinates")
+    if gtype == "Polygon" and isinstance(coords, list):
+        return {
+            "type": "Polygon",
+            "coordinates": [
+                _simplify_ring(ring, step=step)
+                for ring in coords
+                if isinstance(ring, list) and len(ring) >= MIN_RING_POINTS
+            ],
+        }
+    if gtype == "MultiPolygon" and isinstance(coords, list):
+        return {
+            "type": "MultiPolygon",
+            "coordinates": [
+                [
+                    _simplify_ring(ring, step=step)
+                    for ring in polygon
+                    if isinstance(ring, list) and len(ring) >= MIN_RING_POINTS
+                ]
+                for polygon in coords
+                if isinstance(polygon, list)
+            ],
+        }
+    return geometry
+
+
+def _fetch_commune_geometry_geojson(
+    commune_code: str,
+    *,
+    geometry_level: str = "simplified",
+) -> Dict[str, Any] | None:
+    code = str(commune_code or "").strip()
+    if not code.isdigit():
+        return None
+    level = str(geometry_level or "simplified").strip().lower()
+    if level not in {"full", "simplified"}:
+        level = "simplified"
+
+    cache_key = f"zones:geometry:v2:{level}:{code}"
+    cached = _zone_cache_get_dict(cache_key)
+    if cached:
+        return cached
+
+    endpoint = (
+        f"{GEOADMIN_BASE_URL}/rest/services/api/MapServer/"
+        f"ch.swisstopo.swissboundaries3d-gemeinde-flaeche.fill/{code}"
+    )
+    params = {"geometryFormat": "geojson", "sr": 4326}
+
+    def _call():
+        response = requests.get(endpoint, params=params, timeout=8)
+        if (
+            response.status_code >= HTTP_INTERNAL_SERVER_ERROR
+            or response.status_code == HTTP_TOO_MANY_REQUESTS
+        ):
+            raise requests.HTTPError(
+                f"geoadmin geometry transient {response.status_code}", response=response
+            )
+        response.raise_for_status()
+        return response.json()
+
+    result: Dict[str, Any] | None = None
+    try:
+        payload = retry_http_request(_call, max_retries=2, base_delay_ms=250)
+        feature = payload.get("feature") if isinstance(payload, dict) else None
+        if not isinstance(feature, dict):
+            return None
+        feature_dict = cast(Dict[str, Any], feature)
+        geometry = feature_dict.get("geometry")
+        if not isinstance(geometry, dict):
+            return None
+        props_raw = feature_dict.get("properties")
+        feature_props = cast(Dict[str, Any], props_raw) if isinstance(props_raw, dict) else {}
+        geometry_payload = (
+            _simplify_geojson_geometry(geometry, step=8)
+            if level == "simplified"
+            else geometry
+        )
+        result = {
+            "type": "Feature",
+            "geometry": geometry_payload,
+            "properties": {
+                "gde_nr": code,
+                "label": feature_props.get("label"),
+                "kanton": feature_props.get("kanton"),
+            },
+        }
+        _zone_cache_set_dict(cache_key, result, ZONE_GEOMETRY_CACHE_TTL_SECONDS)
+    except Exception:
+        result = None
+    return result
+
+
+def _resolve_canton_code(unit: GeoUnit) -> str | None:
+    current: GeoUnit | None = unit
+    while current:
+        if current.type == GeoUnitType.CANTON:
+            return current.code
+        current = current.parent
+    return None
+
+
+def _serialize_zone_item(unit: GeoUnit) -> Dict[str, Any]:
+    token = f"{unit.type.value}:{unit.code}"
+    commune_id = int(unit.code) if unit.type == GeoUnitType.COMMUNE and str(unit.code).isdigit() else None
+    return {
+        "id": commune_id,
+        "type": unit.type.value,
+        "code": unit.code,
+        "name": unit.name,
+        "canton_code": _resolve_canton_code(unit),
+        "lat": float(unit.centroid_lat) if unit.centroid_lat is not None else None,
+        "lon": float(unit.centroid_lng) if unit.centroid_lng is not None else None,
+        "token": token,
+        "source": "db",
+        "confidence": "authoritative",
+    }
+
+
+def _normalize_zone_search_text(value: str) -> str:
+    return (
+        unicodedata.normalize("NFD", value or "")
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .strip()
+        .lower()
+    )
+
+
+def _build_named_zone_token(zone_type: str, name: str) -> str:
+    prefix_map = {
+        "commune": "commune_name",
+        "canton": "canton_name",
+        "district": "district_name",
+    }
+    prefix = prefix_map.get(zone_type, "commune_name")
+    return f"{prefix}:{quote(name.strip(), safe='')}"
+
+
+def _decode_named_zone_token(token: str) -> tuple[str, str] | None:
+    if token.startswith("commune_name:"):
+        return "commune", unquote(token.split(":", 1)[1]).strip()
+    if token.startswith("canton_name:"):
+        return "canton", unquote(token.split(":", 1)[1]).strip()
+    if token.startswith("district_name:"):
+        return "district", unquote(token.split(":", 1)[1]).strip()
+    return None
+
+
+def _extract_canton_code_from_text(value: str | None) -> str | None:
+    text = _strip_tags(str(value or ""))
+    if not text:
+        return None
+    paren_match = re.search(r"\(([A-Za-z]{2})\)", text)
+    if paren_match:
+        code = paren_match.group(1).upper()
+        if code in SWISS_CANTON_CODES:
+            return code
+    for token in re.findall(r"\b([A-Za-z]{2})\b", text):
+        code = token.upper()
+        if code in SWISS_CANTON_CODES:
+            return code
+    normalized = _normalize_zone_search_text(text)
+    return SWISS_CANTON_NAME_TO_CODE.get(normalized)
+
+
+def _fallback_geocode_zones(q: str, limit: int) -> list[Dict[str, Any]]:
+    try:
+        ph = photon_query(
+            q,
+            lat=GENEVA_CENTER[0],
+            lon=GENEVA_CENTER[1],
+            limit=max(limit, 12),
+            hospital_hint=False,
+        )
+    except Exception:
+        return []
+
+    features = cast("List[Dict[str, Any]]", (ph or {}).get("features") or [])
+    items: list[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    q_norm = _normalize_zone_search_text(q)
+
+    for feature in features:
+        props = cast("Dict[str, Any]", feature.get("properties") or {})
+        city = (props.get("city") or props.get("locality") or "").strip()
+        state = (props.get("state") or "").strip()
+        name = (props.get("name") or "").strip()
+        osm_value = (props.get("osm_value") or "").strip().lower()
+
+        city_candidate = city or (name if osm_value in {"city", "town", "village", "municipality"} else "")
+        candidates: list[tuple[str, str, str | None]] = []
+        if city_candidate:
+            candidates.append(("commune", city_candidate, None))
+        if state:
+            candidates.append(("canton", state, _extract_canton_code_from_text(state)))
+
+        for zone_type, zone_name, canton_code in candidates:
+            zone_name_norm = _normalize_zone_search_text(zone_name)
+            if not zone_name_norm:
+                continue
+            if q_norm not in zone_name_norm:
+                continue
+            key = (zone_type, zone_name_norm)
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(
+                {
+                    "id": None,
+                    "type": zone_type,
+                    "code": None,
+                    "name": zone_name,
+                    "canton_code": canton_code,
+                    "token": _build_named_zone_token(zone_type, zone_name),
+                    "source": "photon",
+                    "confidence": "fallback",
+                }
+            )
+            if len(items) >= limit:
+                return items
+    return items
 
 
 def photon_query(
@@ -103,6 +549,162 @@ def photon_query(
     r = requests.get(f"{PHOTON}/api", params=params, headers=headers, timeout=6)
     r.raise_for_status()
     return cast("Dict[str, Any]", r.json())
+
+
+def _strip_tags(value: str) -> str:
+    return re.sub(r"<[^>]+>", "", value or "").strip()
+
+
+def _extract_zone_type_from_geoadmin(attrs: Dict[str, Any]) -> str | None:
+    origin = str(attrs.get("origin") or attrs.get("layerBodId") or "").lower()
+    detail = str(attrs.get("detail") or "").lower()
+    zone_type: str | None = None
+    if origin.startswith("gg25"):
+        zone_type = "commune"
+    elif origin.startswith("kantone"):
+        zone_type = "canton"
+    elif origin.startswith("district") or "district" in origin or "district" in detail:
+        zone_type = "district"
+    elif (
+        "kanton" in origin
+        or "canton" in origin
+        or "kanton" in detail
+        or "canton" in detail
+    ):
+        zone_type = "canton"
+    elif (
+        "municipality" in origin
+        or "commune" in origin
+        or "city" in origin
+        or "ville" in detail
+        or "commune" in detail
+    ):
+        zone_type = "commune"
+    return zone_type
+
+
+def _extract_zone_code(zone_type: str, attrs: Dict[str, Any], item: Dict[str, Any]) -> str | None:
+    if zone_type == "canton":
+        candidates = [
+            attrs.get("abbreviation"),
+            attrs.get("kanton"),
+            attrs.get("canton"),
+            attrs.get("cantonCode"),
+        ]
+        for candidate in candidates:
+            code = _extract_canton_code_from_text(str(candidate or ""))
+            if code:
+                return code
+        return None
+
+    candidates = [
+        attrs.get("gemeindenummer"),
+        attrs.get("municipalitynumber"),
+        attrs.get("bfsnr"),
+        attrs.get("id"),
+        attrs.get("featureId"),
+    ]
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if not text:
+            continue
+        digits = re.search(r"(\d{1,6})", text)
+        if digits:
+            return digits.group(1)
+    # fallback: parfois le code est dans le champ "detail" ou "label"
+    for candidate in [attrs.get("detail"), item.get("label")]:
+        text = _strip_tags(str(candidate or ""))
+        digits = re.search(r"\b(\d{1,6})\b", text)
+        if digits:
+            return digits.group(1)
+    return None
+
+
+def _search_geoadmin_zones(
+    q: str, *, lang: str, types: list[GeoUnitType], limit: int
+) -> tuple[list[Dict[str, Any]], bool, bool]:
+    if not GEOADMIN_ENABLED:
+        return [], False, False
+    if _zone_is_breaker_open():
+        return [], True, True
+
+    requested_types = {t.value for t in types}
+    params = {
+        "searchText": q,
+        "type": "locations",
+        "limit": max(1, min(limit, 50)),
+        "sr": 4326,
+        "lang": lang or "fr",
+    }
+    endpoint = f"{GEOADMIN_BASE_URL}/rest/services/api/SearchServer"
+
+    def _call():
+        response = requests.get(endpoint, params=params, timeout=6)
+        if (
+            response.status_code >= HTTP_INTERNAL_SERVER_ERROR
+            or response.status_code == HTTP_TOO_MANY_REQUESTS
+        ):
+            raise requests.HTTPError(
+                f"geo.admin transient error {response.status_code}", response=response
+            )
+        response.raise_for_status()
+        return response.json()
+
+    try:
+        data = retry_http_request(_call, max_retries=2, base_delay_ms=250)
+        _zone_breaker_record_success()
+    except Exception:
+        _zone_breaker_record_failure()
+        return [], True, _zone_is_breaker_open()
+
+    results = cast(list[Dict[str, Any]], (data or {}).get("results") or [])
+    items: list[Dict[str, Any]] = []
+    seen_tokens: set[str] = set()
+
+    for row in results:
+        attrs = cast(Dict[str, Any], row.get("attrs") or {})
+        zone_type = _extract_zone_type_from_geoadmin(attrs)
+        if not zone_type or zone_type not in requested_types:
+            continue
+
+        name = _strip_tags(
+            str(attrs.get("label") or attrs.get("name") or attrs.get("detail") or row.get("label") or "")
+        )
+        if not name:
+            continue
+        code = _extract_zone_code(zone_type, attrs, row)
+        token = f"{zone_type}:{code}" if code else _build_named_zone_token(zone_type, name)
+        if token in seen_tokens:
+            continue
+        seen_tokens.add(token)
+        if zone_type == "canton":
+            canton_code = code if code in SWISS_CANTON_CODES else _extract_canton_code_from_text(
+                attrs.get("label") or attrs.get("detail") or row.get("label")
+            )
+        else:
+            canton_code = (
+                _extract_zone_code("canton", attrs, row)
+                or _extract_canton_code_from_text(
+                    attrs.get("label") or attrs.get("detail") or row.get("label")
+                )
+            )
+
+        commune_id = int(code) if zone_type == "commune" and code and str(code).isdigit() else None
+        items.append(
+            {
+                "id": commune_id,
+                "type": zone_type,
+                "code": code,
+                "name": name,
+                "canton_code": canton_code,
+                "token": token,
+                "source": "geoadmin",
+                "confidence": "authoritative",
+            }
+        )
+        if len(items) >= limit:
+            break
+    return items, False, False
 
 
 def normalize_google_places(

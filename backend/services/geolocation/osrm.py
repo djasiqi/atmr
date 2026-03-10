@@ -1147,6 +1147,10 @@ def route_info(
     key = _canonical_key_route(
         origin, destination, waypoints, coord_precision=coord_precision, profile=profile
     )
+    key = (
+        f"{key}:ov={overview}:geo={geometries}:st={int(bool(steps))}:"
+        f"an={int(bool(annotations))}"
+    )
     cache_key = f"osrm:route:{key}"
 
     # Cache

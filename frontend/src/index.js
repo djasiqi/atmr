@@ -36,7 +36,7 @@ if (SENTRY_DSN && ENVIRONMENT !== 'development') {
   });
   console.log('✅ Sentry initialisé en mode', ENVIRONMENT);
 } else {
-  console.log('ℹ️ Sentry désactivé en développement');
+  // Silence en dev: pas de log Sentry non pertinent.
 }
 // Note: Sentry est désactivé en développement pour éviter les erreurs de connexion
 
@@ -176,6 +176,7 @@ window.addEventListener('unhandledrejection', (event) => {
 const SentryErrorBoundary = Sentry.ErrorBoundary;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
+const isDev = ENVIRONMENT === 'development';
 root.render(
   <React.StrictMode>
     <SentryErrorBoundary
@@ -209,7 +210,7 @@ root.render(
       )}
     >
       <App />
-      <SpeedInsights />
+      {!isDev && <SpeedInsights />}
     </SentryErrorBoundary>
   </React.StrictMode>
 );

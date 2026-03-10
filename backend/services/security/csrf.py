@@ -13,7 +13,6 @@ import os
 import secrets
 import time
 from contextlib import suppress
-from pathlib import Path
 from typing import Any
 
 from flask import request
@@ -309,6 +308,23 @@ def setup_csrf_protection(app: Any) -> None:
         "/api/v1/auth/login-test",
         "/api/auth/login-test",
         "/api/v1/csrf-token",
+        "/api/gateway/auth/login",
+        "/api/v1/contact/requests",
+        "/api/contact/requests",
+        "/api/app/contact/requests",
+        "/api/demo/contact/requests",
+        "/api/v1/demo-requests",
+        "/api/demo-requests",
+        "/api/app/demo-requests",
+        "/api/demo/demo-requests",
+        "/api/v1/demo_access/consume-magic-link",
+        "/api/demo_access/consume-magic-link",
+        "/api/app/demo_access/consume-magic-link",
+        "/api/demo/demo_access/consume-magic-link",
+        "/api/v1/demo_access/analytics",
+        "/api/demo_access/analytics",
+        "/api/app/demo_access/analytics",
+        "/api/demo/demo_access/analytics",
         "/api/v1/app/version-check",
         "/api/v1/company_mobile/auth/login",
     }
@@ -316,35 +332,6 @@ def setup_csrf_protection(app: Any) -> None:
     @app.before_request
     def validate_csrf_for_mutating_requests():  # pyright: ignore[reportUnusedFunction]
         """Middleware pour valider CSRF sur les requêtes mutantes."""
-        # #region agent log
-        if request.path.startswith("/api/v1/company_mobile/auth"):
-            log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-            try:
-                import json
-                from datetime import UTC, datetime
-
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "csrf_protection.py:275",
-                                "message": "CSRF middleware entry",
-                                "data": {
-                                    "path": request.path,
-                                    "method": request.method,
-                                    "is_exempt": request.path in csrf_exempt_paths,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
         should_check = True
 
         # ✅ Tests: désactiver CSRF si l'app est en mode TESTING ou si CSRF est désactivé
@@ -371,6 +358,7 @@ def setup_csrf_protection(app: Any) -> None:
 
         csrf_exempt_prefixes = (
             "/api/v1/auth/",
+            "/api/gateway/auth/",
             "/api/v1/webhooks/",
             "/api/v1/company_mobile/",
             "/api/v1/driver/",
@@ -378,6 +366,14 @@ def setup_csrf_protection(app: Any) -> None:
             "/api/v1/company_dispatch/",
             "/api/v1/dispatch/",
             "/api/dispatch/",
+            "/api/v1/demo-requests",
+            "/api/demo-requests",
+            "/api/app/demo-requests",
+            "/api/demo/demo-requests",
+            "/api/v1/demo_access/",
+            "/api/demo_access/",
+            "/api/app/demo_access/",
+            "/api/demo/demo_access/",
         )
         if request.path.startswith(csrf_exempt_prefixes):
             should_check = False

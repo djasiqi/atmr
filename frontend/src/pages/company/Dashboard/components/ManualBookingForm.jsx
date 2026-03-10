@@ -1,6 +1,6 @@
 // frontend/src/pages/company/Dashboard/components/ManualBookingForm.jsx (fixed)
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import AsyncCreatableSelect from 'react-select/async-creatable';
 import NewClientModal from '../../Clients/components/NewClientModal';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +16,7 @@ import Input from './ui/Input';
 import Label from './ui/Label';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 import apiClient from '../../../../utils/apiClient';
+import { fetchBillingSettings, simulatePricing } from '../../../../services/settingsService';
 
 // ⬇️ Assure-toi que ces chemins correspondent à ta structure réelle
 import EstablishmentSelect from '../../../../components/common/EstablishmentSelect';
@@ -125,7 +126,61 @@ const combineDateAndTime = (dateStr, timeStr) => {
   return result;
 };
 
-export default function ManualBookingForm({ onSuccess, onClose }) {
+const SIM_CACHE_TTL_MS = 60 * 1000;
+const SIM_DEBOUNCE_MS = 180;
+const COORD_PRECISION = 5;
+
+const roundCoord = (value) => {
+  if (value == null || Number.isNaN(Number(value))) return null;
+  return Number(value).toFixed(COORD_PRECISION);
+};
+
+const isValidCoordPair = (coords) =>
+  coords &&
+  coords.lat != null &&
+  coords.lon != null &&
+  Number.isFinite(Number(coords.lat)) &&
+  Number.isFinite(Number(coords.lon));
+
+const isValidPreferentialAmount = (value) => {
+  if (value == null) return false;
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0;
+};
+
+const toIsoWithTimezone = (isoLocalString) => {
+  if (!isoLocalString) return undefined;
+  const parsed = new Date(isoLocalString);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString();
+};
+
+const pickupAtBucket = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.length >= 16 && raw.includes('T')) {
+    return raw.slice(0, 16);
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(
+    parsed.getHours()
+  )}:${pad(parsed.getMinutes())}`;
+};
+
+const routePointsSignature = (routePoints) => {
+  if (!Array.isArray(routePoints) || routePoints.length < 2) return '';
+  const first = routePoints[0] || {};
+  const last = routePoints[routePoints.length - 1] || {};
+  const fLat = roundCoord(first.lat);
+  const fLon = roundCoord(first.lng ?? first.lon);
+  const lLat = roundCoord(last.lat);
+  const lLon = roundCoord(last.lng ?? last.lon);
+  return `${routePoints.length}:${fLat || ''}:${fLon || ''}:${lLat || ''}:${lLon || ''}`;
+};
+
+export default function ManualBookingForm({ onSuccess, onClose, onSubmitStart }) {
   const queryClient = useQueryClient();
 
   // Swap pickup ↔ dropoff
@@ -147,6 +202,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   const [pickupCoords, setPickupCoords] = useState({ lat: null, lon: null });
   const [dropoffCoords, setDropoffCoords] = useState({ lat: null, lon: null });
   const [estimatedDuration, setEstimatedDuration] = useState(null); // Durée estimée en minutes
+  const [routePointsForPricing, setRoutePointsForPricing] = useState([]);
 
   // --- Client
   const [selectedClient, setSelectedClient] = useState(null);
@@ -171,6 +227,47 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       setReturnDate(scheduledDate);
     }
   }, [isRoundTrip, scheduledDate, returnDate]);
+
+  useEffect(() => {
+    if (!scheduledDate || !scheduledHour) return;
+
+    const dateMatch = String(scheduledDate).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const timeMatch = String(scheduledHour).match(/^(\d{2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) return;
+
+    const [, y, m, d] = dateMatch;
+    const [, hh, mm] = timeMatch;
+    const selected = new Date(
+      Number(y),
+      Number(m) - 1,
+      Number(d),
+      Number(hh),
+      Number(mm),
+      0,
+      0
+    );
+    if (Number.isNaN(selected.getTime())) return;
+
+    const now = new Date();
+    const isToday =
+      Number(y) === now.getFullYear() &&
+      Number(m) === now.getMonth() + 1 &&
+      Number(d) === now.getDate();
+    if (!isToday) return;
+
+    if (selected.getTime() >= now.getTime()) return;
+
+    const corrected = new Date(now.getTime() + 5 * 60 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const correctedDate = `${corrected.getFullYear()}-${pad(corrected.getMonth() + 1)}-${pad(
+      corrected.getDate()
+    )}`;
+    const correctedHour = `${pad(corrected.getHours())}:${pad(corrected.getMinutes())}`;
+
+    // Si l'heure saisie est dans le passe pour aujourd'hui, repositionner automatiquement a maintenant + 5 min.
+    if (scheduledDate !== correctedDate) setScheduledDate(correctedDate);
+    if (scheduledHour !== correctedHour) setScheduledHour(correctedHour);
+  }, [scheduledDate, scheduledHour]);
 
   // --- Livraison matériel
   const [isMaterialDelivery, setIsMaterialDelivery] = useState(false);
@@ -248,6 +345,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
   React.useEffect(() => {
     const calculateDuration = async () => {
       if (pickupCoords.lat && pickupCoords.lon && dropoffCoords.lat && dropoffCoords.lon) {
+        setRoutePointsForPricing([]);
         try {
           // ✅ Appel à l'API OSRM pour obtenir la durée réelle du trajet
           const response = await apiClient.get('/osrm/route', {
@@ -266,9 +364,20 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             const _distanceKm = (response.data.distance / 1000).toFixed(1);
 
             setEstimatedDuration(durationMinutes);
+            const routePoints = Array.isArray(response.data.route)
+              ? response.data.route
+                  .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+                  .map((pair) => ({
+                    lat: Number(pair[0]),
+                    lng: Number(pair[1]),
+                  }))
+                  .filter((pt) => Number.isFinite(pt.lat) && Number.isFinite(pt.lng))
+              : [];
+            setRoutePointsForPricing(routePoints);
           } else {
             console.warn('⚠️ Pas de durée retournée par OSRM');
             setEstimatedDuration(null);
+            setRoutePointsForPricing([]);
           }
         } catch (error) {
           // ⚡ Timeout OSRM est normal (fail-fast) → utiliser fallback silencieusement
@@ -299,6 +408,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             const durationMinutes = Math.round((distanceKm / 30) * 60);
 
             setEstimatedDuration(durationMinutes);
+            setRoutePointsForPricing([]);
             if (!isTimeout) {
               // Seulement afficher le warning pour les vraies erreurs (pas les timeouts)
               console.debug(`📍 Durée estimée (Haversine) : ${durationMinutes} min`);
@@ -306,10 +416,12 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           } catch (fallbackError) {
             console.error('❌ Erreur fallback Haversine:', fallbackError);
             setEstimatedDuration(null);
+            setRoutePointsForPricing([]);
           }
         }
       } else {
         setEstimatedDuration(null);
+        setRoutePointsForPricing([]);
       }
     };
 
@@ -410,8 +522,32 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     [establishment]
   );
 
-  // === State pour le montant (tarif préférentiel) ===
+  // === State montant + pricing auto ===
   const [amount, setAmount] = useState('');
+  const [amountSource, setAmountSource] = useState(null); // preferential | simulated | manual
+  const [amountLocked, setAmountLocked] = useState(false);
+  const [lastPricingUpdateAt, setLastPricingUpdateAt] = useState(null);
+  const [pricingWarning, setPricingWarning] = useState('');
+  const [isSimulatingPricing, setIsSimulatingPricing] = useState(false);
+  const [activePricingProfileId, setActivePricingProfileId] = useState(null);
+  const [activePricingProfileVersionId, setActivePricingProfileVersionId] = useState(null);
+
+  const suppressManualAmountRef = useRef(false);
+  const simulateRequestSeqRef = useRef(0);
+  const simulateKeyRef = useRef('');
+  const simulateAbortRef = useRef(null);
+  const simulateDebounceRef = useRef(null);
+  const simCacheRef = useRef(new Map());
+
+  const applySystemAmount = useCallback((value, source) => {
+    suppressManualAmountRef.current = true;
+    setAmount(value != null ? String(value) : '');
+    setAmountSource(source || null);
+    setLastPricingUpdateAt(new Date());
+    queueMicrotask(() => {
+      suppressManualAmountRef.current = false;
+    });
+  }, []);
 
   // === Gestion des jours de la semaine pour récurrence ===
   // ⚠️ IDs correspondent à Python weekday() : 0=Lundi, 1=Mardi, etc.
@@ -479,12 +615,207 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     loadDefaultClients();
   }, []);
 
+  const pricingTriggerKey = useMemo(() => {
+    if (!isValidCoordPair(pickupCoords) || !isValidCoordPair(dropoffCoords)) {
+      return '';
+    }
+    const pickupLat = roundCoord(pickupCoords.lat);
+    const pickupLon = roundCoord(pickupCoords.lon);
+    const dropoffLat = roundCoord(dropoffCoords.lat);
+    const dropoffLon = roundCoord(dropoffCoords.lon);
+    if (!pickupLat || !pickupLon || !dropoffLat || !dropoffLon) {
+      return '';
+    }
+    return [
+      pickupLat,
+      pickupLon,
+      dropoffLat,
+      dropoffLon,
+      String(Boolean(isRoundTrip)),
+      String(activePricingProfileVersionId || ''),
+      pickupAtBucket(scheduledTime),
+      routePointsSignature(routePointsForPricing),
+    ].join('|');
+  }, [
+    pickupCoords,
+    dropoffCoords,
+    isRoundTrip,
+    activePricingProfileVersionId,
+    scheduledTime,
+    routePointsForPricing,
+  ]);
+
+  const getPreferentialAmount = useCallback(
+    ({ client, stay, patientBillingOverride }) => {
+      const clinicRate = stay?.clinic?.preferential_rate;
+      if (!patientBillingOverride && isValidPreferentialAmount(clinicRate)) {
+        return { amount: Number(clinicRate).toFixed(2), source: 'preferential' };
+      }
+      const clientRate = client?.preferential_rate;
+      if (isValidPreferentialAmount(clientRate)) {
+        return { amount: Number(clientRate).toFixed(2), source: 'preferential' };
+      }
+      return null;
+    },
+    []
+  );
+
+  const runPricingSimulation = useCallback(async () => {
+    if (!pricingTriggerKey || amountLocked || amountSource === 'preferential') {
+      return;
+    }
+    if (!activePricingProfileVersionId) {
+      setPricingWarning('Profil tarifaire actif introuvable. Saisissez un montant ou contactez le support.');
+      return;
+    }
+
+    const cached = simCacheRef.current.get(pricingTriggerKey);
+    if (cached && Date.now() - cached.cachedAt <= SIM_CACHE_TTL_MS) {
+      if (!amountLocked && amountSource !== 'preferential' && simulateKeyRef.current === pricingTriggerKey) {
+        applySystemAmount(Number(cached.amount).toFixed(2), 'simulated');
+        setPricingWarning(cached.warning || '');
+      }
+      return;
+    }
+
+    setIsSimulatingPricing(true);
+    setPricingWarning('');
+    simulateRequestSeqRef.current += 1;
+    const requestSeq = simulateRequestSeqRef.current;
+    simulateKeyRef.current = pricingTriggerKey;
+    if (simulateAbortRef.current) {
+      simulateAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    simulateAbortRef.current = abortController;
+
+    const payload = {
+      pricing_profile_version_id: activePricingProfileVersionId,
+      booking: {
+        pickup_at: toIsoWithTimezone(ensureIsoDatetimeWithSeconds(scheduledTime)) || new Date().toISOString(),
+        is_round_trip: Boolean(isRoundTrip),
+        pickup_lat: Number(pickupCoords.lat),
+        pickup_lng: Number(pickupCoords.lon),
+        dropoff_lat: Number(dropoffCoords.lat),
+        dropoff_lng: Number(dropoffCoords.lon),
+        route_points: Array.isArray(routePointsForPricing) && routePointsForPricing.length > 1
+          ? routePointsForPricing
+          : undefined,
+      },
+    };
+
+    try {
+      const response = await simulatePricing(payload, { signal: abortController.signal });
+      const warningList = Array.isArray(response?.warnings)
+        ? response.warnings
+        : Array.isArray(response?.breakdown?.warnings)
+          ? response.breakdown.warnings
+          : [];
+      const blockingReasons = Array.isArray(response?.blocking_reasons)
+        ? response.blocking_reasons
+        : [];
+      const confidence = String(response?.confidence || '').toLowerCase();
+      const hasDistanceUnavailable = warningList.includes('distance_unavailable');
+      const hasZoneUnresolved = warningList.includes('zone_unresolved');
+      const modelUsed = String(response?.breakdown?.model_used || '').toLowerCase();
+      const isDistanceDependentModel = modelUsed === 'distance' || modelUsed === 'hybrid_stack';
+      const responseAmount = Number(response?.amount);
+
+      if (
+        requestSeq !== simulateRequestSeqRef.current ||
+        pricingTriggerKey !== simulateKeyRef.current ||
+        amountLocked ||
+        amountSource === 'preferential'
+      ) {
+        return;
+      }
+
+      if ((confidence === 'blocked' || blockingReasons.length > 0) && !Number.isFinite(responseAmount)) {
+        if (blockingReasons.includes('zone_unresolved')) {
+          setPricingWarning('Calcul indisponible: zonage introuvable pour ce trajet. Saisissez un montant ou réessayez.');
+          return;
+        }
+        if (blockingReasons.includes('zone_unresolved_timeout')) {
+          setPricingWarning('Calcul indisponible: délai de calcul zonage dépassé. Réessayez dans quelques secondes.');
+          return;
+        }
+        if (blockingReasons.includes('distance_unavailable')) {
+          setPricingWarning('Calcul indisponible (OSRM). Saisissez un montant ou réessayez.');
+          return;
+        }
+        setPricingWarning('Calcul précis temporairement indisponible. Réessayez.');
+        return;
+      }
+
+      if (hasDistanceUnavailable && isDistanceDependentModel) {
+        setPricingWarning('Calcul indisponible (OSRM). Saisissez un montant ou réessayez.');
+        return;
+      }
+
+      if (hasZoneUnresolved && !Number.isFinite(responseAmount)) {
+        setPricingWarning('Calcul indisponible: zonage introuvable pour ce trajet. Saisissez un montant ou réessayez.');
+        return;
+      }
+
+      if (Number.isFinite(responseAmount) && responseAmount > 0) {
+        applySystemAmount(responseAmount.toFixed(2), 'simulated');
+        if (warningList.includes('zone_unresolved_fallback')) {
+          setPricingWarning('Zonage partiellement résolu: calcul appliqué avec fallback conservateur.');
+        } else {
+            setPricingWarning('');
+        }
+        simCacheRef.current.set(pricingTriggerKey, {
+          amount: responseAmount,
+          warning: warningList.includes('zone_unresolved_fallback')
+            ? 'Zonage partiellement résolu: calcul appliqué avec fallback conservateur.'
+            : '',
+          cachedAt: Date.now(),
+        });
+      }
+    } catch (error) {
+      if (error?.name !== 'CanceledError' && error?.name !== 'AbortError') {
+        const apiWarnings = Array.isArray(error?.response?.data?.warnings)
+          ? error.response.data.warnings
+          : [];
+        const blockingReasons = Array.isArray(error?.response?.data?.blocking_reasons)
+          ? error.response.data.blocking_reasons
+          : [];
+        const isDistanceBlocking = apiWarnings.includes('distance_unavailable')
+          || blockingReasons.includes('distance_unavailable');
+        if (isDistanceBlocking) {
+          setPricingWarning('Calcul indisponible (OSRM). Saisissez un montant ou réessayez.');
+        } else {
+          setPricingWarning('Calcul temporairement indisponible. Saisissez un montant ou réessayez.');
+        }
+      }
+    } finally {
+      if (requestSeq === simulateRequestSeqRef.current) {
+        setIsSimulatingPricing(false);
+      }
+    }
+  }, [
+    pricingTriggerKey,
+    amountLocked,
+    amountSource,
+    activePricingProfileVersionId,
+    isRoundTrip,
+    pickupCoords,
+    dropoffCoords,
+    routePointsForPricing,
+    scheduledTime,
+    applySystemAmount,
+  ]);
+
   // === Clients ===
   const handleSelectClient = async (clientObj) => {
     console.log('👤 Client sélectionné:', clientObj);
     setSelectedClient(clientObj);
     setActiveStay(null); // Réinitialiser le séjour actif
     setBillToPatient(false); // Réinitialiser l'override
+    setAmountLocked(false);
+    setAmountSource(null);
+    setAmount('');
+    setPricingWarning('');
 
     const client = clientObj?.raw;
     const clientId = client?.id || clientObj?.value?.id;
@@ -525,14 +856,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           console.warn('⚠️ Aucune adresse disponible pour la clinique:', clinic.name);
         }
 
-        // Client hospitalisé: sans override, on privilégie le tarif clinique.
-        // Si le backend ne fournit pas de tarif clinique, on laisse vide (évite d'appliquer un tarif patient par erreur).
-        if (clinic.preferential_rate && clinic.preferential_rate > 0) {
-          setAmount(clinic.preferential_rate.toString());
-          console.log(`💰 Tarif clinique appliqué: ${clinic.preferential_rate} CHF`);
-        } else {
-          setAmount('');
-        }
         return;
       }
     } catch (error) {
@@ -590,48 +913,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       console.log(`📍 Adresse du client: ${homeAddress}`);
     }
 
-    // 💰 Appliquer automatiquement le tarif préférentiel du client si disponible
-    const preferentialRate = client?.preferential_rate;
-    if (preferentialRate && preferentialRate > 0) {
-      setAmount(preferentialRate.toString());
-      console.log(`💰 Tarif préférentiel client appliqué: ${preferentialRate} CHF`);
-    } else {
-      setAmount(''); // Pas de tarif préférentiel, laisser vide
-    }
   };
-
-  // Gérer l'override "Facturation patient" : facturation uniquement (pas d'impact sur l'adresse de départ)
-  useEffect(() => {
-    if (billToPatient && activeStay) {
-      const client = selectedClient?.raw;
-      const clientPreferentialRate = client?.preferential_rate;
-      if (clientPreferentialRate && clientPreferentialRate > 0) {
-        setAmount(clientPreferentialRate.toString());
-      } else {
-        setAmount('');
-      }
-    } else if (!billToPatient && activeStay && activeStay.clinic) {
-      // Override désactivé : revenir à l'adresse de la clinique
-      const clinic = activeStay.clinic;
-      const clinicAddress = getClinicPickupAddress(clinic);
-      
-      if (clinicAddress) {
-        setPickupLocation(clinicAddress);
-        setPickupCoords({
-          lat: clinic.latitude || null,
-          lon: clinic.longitude || null,
-        });
-        console.log('🔄 Retour adresse clinique (override désactivé)');
-      }
-      
-      // Réappliquer le tarif préférentiel de la clinique
-      if (clinic.preferential_rate && clinic.preferential_rate > 0) {
-        setAmount(clinic.preferential_rate.toString());
-      } else {
-        setAmount('');
-      }
-    }
-  }, [billToPatient, activeStay, selectedClient, getClinicPickupAddress]);
 
   const loadClientOptions = useCallback(async (q) => {
     try {
@@ -677,6 +959,100 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       return [];
     }
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadBillingContext = async () => {
+      try {
+        const response = await fetchBillingSettings();
+        const payload = response?.data || response || {};
+        if (!mounted) return;
+        setActivePricingProfileId(payload.active_pricing_profile_id || null);
+        setActivePricingProfileVersionId(payload.active_pricing_profile_version_id || null);
+        if (!payload.active_pricing_profile_version_id) {
+          setPricingWarning('Profil tarifaire actif introuvable. Le montant restera manuel.');
+        }
+      } catch (error) {
+        console.warn('[ManualBookingForm] Impossible de charger la version pricing active', error);
+      }
+    };
+    loadBillingContext();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeStay?.clinic || billToPatient) {
+      return;
+    }
+    const clinic = activeStay.clinic;
+    const clinicAddress = getClinicPickupAddress(clinic);
+    if (!clinicAddress) {
+      return;
+    }
+    setPickupLocation(clinicAddress);
+    setPickupCoords({
+      lat: clinic.latitude || null,
+      lon: clinic.longitude || null,
+    });
+  }, [activeStay, billToPatient, getClinicPickupAddress]);
+
+  useEffect(() => {
+    const preferential = getPreferentialAmount({
+      client: selectedClient?.raw || null,
+      stay: activeStay,
+      patientBillingOverride: billToPatient,
+    });
+    if (preferential) {
+      if (!amountLocked) {
+        applySystemAmount(preferential.amount, preferential.source);
+        setPricingWarning('');
+      }
+      return;
+    }
+    if (!amountLocked && amountSource === 'preferential') {
+      applySystemAmount('', null);
+    }
+  }, [
+    selectedClient,
+    activeStay,
+    billToPatient,
+    amountLocked,
+    amountSource,
+    getPreferentialAmount,
+    applySystemAmount,
+  ]);
+
+  useEffect(() => {
+    if (simulateDebounceRef.current) {
+      clearTimeout(simulateDebounceRef.current);
+      simulateDebounceRef.current = null;
+    }
+    if (!pricingTriggerKey || amountLocked || amountSource === 'preferential') {
+      return;
+    }
+    simulateDebounceRef.current = setTimeout(() => {
+      runPricingSimulation();
+    }, SIM_DEBOUNCE_MS);
+    return () => {
+      if (simulateDebounceRef.current) {
+        clearTimeout(simulateDebounceRef.current);
+      }
+    };
+  }, [pricingTriggerKey, amountLocked, amountSource, runPricingSimulation]);
+
+  useEffect(
+    () => () => {
+      if (simulateAbortRef.current) {
+        simulateAbortRef.current.abort();
+      }
+      if (simulateDebounceRef.current) {
+        clearTimeout(simulateDebounceRef.current);
+      }
+    },
+    []
+  );
 
   // === Notes médicales → extraction
   function handleNotesMedicalBlur(e) {
@@ -806,10 +1182,6 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       setShowClientModal(false);
       toast.success('Client créé !');
 
-      // Appliquer le tarif préférentiel et l'adresse si disponibles
-      if (newClient.preferential_rate) {
-        setAmount(newClient.preferential_rate.toString());
-      }
       if (newClient.billing_address || newClient.domicile?.address) {
         const homeAddress =
           newClient.billing_address ||
@@ -968,6 +1340,10 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       scheduled_time: ensureIsoDatetimeWithSeconds(scheduledTime),
       is_round_trip: !!isRoundTrip,
       amount: isMaterialDelivery ? undefined : (amount ? parseFloat(amount) : 0),
+      amount_source: isMaterialDelivery ? undefined : (amountSource || 'manual'),
+      amount_locked: isMaterialDelivery ? undefined : Boolean(amountLocked),
+      pricing_profile_id: activePricingProfileId || undefined,
+      pricing_profile_version_id: activePricingProfileVersionId || undefined,
       ...(isMaterialDelivery && {
         mission_type: 'material_delivery',
         delivery_description: (deliveryDescription || '').trim() || null,
@@ -1073,11 +1449,17 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
     console.log('💳 [Facturation] activeStay:', activeStay);
     console.log('💳 [Facturation] bill_to_patient dans payload:', payload.bill_to_patient);
 
+    // Fermer la modale immédiatement apres validation locale pour eviter la latence percue.
+    onSubmitStart?.(payload);
     bookingMutation.mutate(payload);
   };
 
   return (
-    <div className={styles.formWrapper} data-testid="manual-booking-form-wrapper">
+    <div
+      className={styles.formWrapper}
+      data-testid="manual-booking-form-wrapper"
+      data-tour-id="manual-booking-form"
+    >
       <div className={styles.modalHeader}>
         <h2 className={styles.modalTitle}>Créer une réservation</h2>
         <p className={styles.modalSubtitle}>
@@ -1087,14 +1469,14 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
       <form onSubmit={handleSubmit} className={styles.form}>
         <div className={styles.formScrollBody}>
           {/* COLONNE GAUCHE */}
-          <div className={styles.columnLeft}>
+          <div className={styles.columnLeft} data-tour-id="booking-left-panel">
           {/* Client */}
-          <div className={styles.formGroup}>
+          <div className={styles.formGroup} data-tour-id="booking-client">
             <Label htmlFor="client-select">Client *</Label>
             <AsyncCreatableSelect
               inputId="client-select"
               cacheOptions
-              defaultOptions={defaultClientOptions}
+              defaultOptions={defaultClientOptions.length > 0 ? defaultClientOptions : true}
               loadOptions={loadClientOptions}
               onChange={handleSelectClient}
               onCreateOption={(input) => {
@@ -1104,10 +1486,14 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
               value={selectedClient}
               placeholder="Rechercher un client…"
               formatCreateLabel={(i) => `➕ Créer "${i}"`}
-              formatOptionLabel={(option) => {
+              formatOptionLabel={(option, { context }) => {
                 if (option.__isNew__) return option.label;
                 const c = option.raw || option;
                 const label = option.label || '';
+                if (context === 'value') {
+                  // Affichage dans le champ sélectionné: nom uniquement (sans téléphone/meta).
+                  return <span className={styles.clientOptionLabel}>{label}</span>;
+                }
                 const phone = c?.phone || c?.contact_phone || '';
                 const metaParts = [];
                 if (c?.is_institution) metaParts.push('🏥 Institution');
@@ -1125,7 +1511,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
               noOptionsMessage={({ inputValue }) =>
                 inputValue
                   ? `Aucun client trouvé pour "${inputValue}"`
-                  : 'Tapez pour rechercher un client'
+                  : 'Aucun client chargé. Ouvrez la liste ou tapez pour rechercher.'
               }
               loadingMessage={() => '🔍 Recherche en cours...'}
               menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
@@ -1174,7 +1560,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           </div>
 
           {/* Lieu de prise en charge + Swap + Destination — P0: id/htmlFor a11y */}
-          <div className={styles.formGroup}>
+          <div className={styles.formGroup} data-tour-id="booking-addresses">
             <div className={styles.addressesRow}>
               <div className={styles.addressesFields}>
                 <Label htmlFor="pickup_location">Lieu de prise en charge *</Label>
@@ -1450,7 +1836,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           </div>
 
           {/* Date & heure aller */}
-          <div className={styles.formGroup}>
+          <div className={styles.formGroup} data-tour-id="booking-datetime">
             <Label>Date &amp; heure de départ *</Label>
             <div className={styles.dateTimeRow}>
               <InlineDatePicker
@@ -1463,15 +1849,37 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
                 onChange={(v) => setScheduledHour(v)}
                 placeholder="Heure"
               />
-              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('now30')}>+30 min</button>
-              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('now1h')}>+1h</button>
-              <button type="button" className={styles.datePresetBtn} onClick={() => applyDateTimePreset('tomorrow9')}>Demain 9h</button>
+              <div className={styles.datePresetGroup} data-tour-id="booking-time-presets">
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  data-tour-id="booking-plus30"
+                  onClick={() => applyDateTimePreset('now30')}
+                >
+                  +30 min
+                </button>
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  onClick={() => applyDateTimePreset('now1h')}
+                >
+                  +1h
+                </button>
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  onClick={() => applyDateTimePreset('tomorrow9')}
+                >
+                  Demain 9h
+                </button>
+              </div>
             </div>
 
             <div className={styles.chipsRow}>
               <button
                 type="button"
                 className={`${styles.chip} ${isRoundTrip ? styles.isActive : ''}`}
+                data-tour-id="booking-roundtrip-toggle"
                 onClick={() => setIsRoundTrip(!isRoundTrip)}
                 aria-pressed={isRoundTrip}
               >
@@ -1520,7 +1928,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             )}
 
             {isRoundTrip && (
-              <div className={styles.returnTimeGroup}>
+              <div className={styles.returnTimeGroup} data-tour-id="booking-return-config">
                 <Label>Date &amp; heure de retour</Label>
                 <div className={styles.dateTimeRow}>
                   <InlineDatePicker
@@ -1651,13 +2059,19 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
           </div>
 
           {/* Montant (masqué pour livraison : prix fixe entreprise) */}
-          <div className={styles.formGroup}>
+          <div className={styles.formGroup} data-tour-id="booking-amount">
             <div className={styles.amountLabel}>
               <Label htmlFor="amount">
-                Montant {isMaterialDelivery ? '(ignoré pour livraison)' : '(optionnel)'}
+                Montant {isMaterialDelivery ? '(ignoré pour livraison)' : '*'}
               </Label>
-              {amount && parseFloat(amount) > 0 && (
+              {amountSource === 'preferential' && (
                 <span className={styles.preferentialBadge}>💰 Tarif préférentiel</span>
+              )}
+              {amountSource === 'simulated' && (
+                <span className={styles.preferentialBadge}>⚙️ Calculé automatiquement</span>
+              )}
+              {amountSource === 'manual' && (
+                <span className={styles.preferentialBadge}>✍️ Modifié manuellement</span>
               )}
             </div>
             <Input
@@ -1666,13 +2080,53 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
               name="amount"
               step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                const nextValue = e.target.value;
+                setAmount(nextValue);
+                if (!suppressManualAmountRef.current) {
+                  setAmountSource('manual');
+                  setAmountLocked(true);
+                  setPricingWarning('');
+                }
+              }}
               placeholder="Ex: 45.00"
               disabled={isMaterialDelivery}
             />
             {isMaterialDelivery && (
               <span className={styles.amountHint}>
                 Montant géré automatiquement pour les livraisons matériel.
+              </span>
+            )}
+            {!isMaterialDelivery && amountLocked && (
+              <span className={styles.amountHint}>
+                Montant verrouillé manuellement.
+                <button
+                  type="button"
+                  className={styles.datePresetBtn}
+                  style={{ marginLeft: 8 }}
+                  onClick={() => {
+                    setAmountLocked(false);
+                    setAmountSource(null);
+                    runPricingSimulation();
+                  }}
+                >
+                  Recalculer
+                </button>
+              </span>
+            )}
+            {!isMaterialDelivery && isSimulatingPricing && (
+              <span className={styles.amountHint}>
+                {amountSource === 'simulated' && amount
+                  ? 'Mise à jour du montant exact en cours…'
+                  : 'Calcul du montant en cours…'}
+              </span>
+            )}
+            {!isMaterialDelivery && pricingWarning && (
+              <span className={styles.amountHint}>{pricingWarning}</span>
+            )}
+            {!isMaterialDelivery && lastPricingUpdateAt && (
+              <span className={styles.amountHint}>
+                Dernière mise à jour: {lastPricingUpdateAt.toLocaleTimeString('fr-CH')}
               </span>
             )}
             {estimatedDuration && (
@@ -1685,7 +2139,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
 
         {/* COLONNE DROITE - Informations médicales (section secondaire) */}
         <div className={styles.columnRight}>
-          <div className={styles.medicalSection}>
+          <div className={styles.medicalSection} data-tour-id="booking-medical-section">
             <h3 className={styles.medicalSectionTitle}>🏥 Informations médicales</h3>
 
             {/* Établissement médical */}
@@ -1834,6 +2288,7 @@ export default function ManualBookingForm({ onSuccess, onClose }) {
             <div className={styles.footerRight}>
               <button
                 type="submit"
+                data-tour-id="booking-submit"
                 className={styles.submitButton}
                 disabled={
                   bookingMutation.isLoading ||

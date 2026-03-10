@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Protocol, cast
 
 from ext import db
@@ -33,6 +34,24 @@ class BookingWriterPort(Protocol):
         dropoff_lat: float,
         dropoff_lon: float,
         is_round_trip: bool,
+        pickup_admin_token: str | None,
+        pickup_canton_code: str | None,
+        pickup_admin_source: str | None,
+        pickup_admin_confidence: str | None,
+        pickup_admin_label: str | None,
+        pickup_admin_resolved_at: datetime | None,
+        dropoff_admin_token: str | None,
+        dropoff_canton_code: str | None,
+        dropoff_admin_source: str | None,
+        dropoff_admin_confidence: str | None,
+        dropoff_admin_label: str | None,
+        dropoff_admin_resolved_at: datetime | None,
+        pickup_geo_unit_id: int | None,
+        dropoff_geo_unit_id: int | None,
+        pricing_profile_id: int | None,
+        pricing_profile_version_id: int | None,
+        price_amount: float | None,
+        price_breakdown_json: dict[str, Any] | None,
     ) -> Booking:
         """Crée et commit le booking (et son retour si round-trip)."""
         ...
@@ -61,6 +80,24 @@ class SqlAlchemyBookingWriter:
         dropoff_lat: float,
         dropoff_lon: float,
         is_round_trip: bool,
+        pickup_admin_token: str | None,
+        pickup_canton_code: str | None,
+        pickup_admin_source: str | None,
+        pickup_admin_confidence: str | None,
+        pickup_admin_label: str | None,
+        pickup_admin_resolved_at: datetime | None,
+        dropoff_admin_token: str | None,
+        dropoff_canton_code: str | None,
+        dropoff_admin_source: str | None,
+        dropoff_admin_confidence: str | None,
+        dropoff_admin_label: str | None,
+        dropoff_admin_resolved_at: datetime | None,
+        pickup_geo_unit_id: int | None,
+        dropoff_geo_unit_id: int | None,
+        pricing_profile_id: int | None,
+        pricing_profile_version_id: int | None,
+        price_amount: float | None,
+        price_breakdown_json: dict[str, Any] | None,
     ) -> Booking:
         new_booking = cast("Any", Booking)(
             customer_name=customer_name,
@@ -81,6 +118,24 @@ class SqlAlchemyBookingWriter:
             pickup_lon=pickup_lon,
             dropoff_lat=dropoff_lat,
             dropoff_lon=dropoff_lon,
+            pickup_admin_token=pickup_admin_token,
+            pickup_canton_code=pickup_canton_code,
+            pickup_admin_source=pickup_admin_source,
+            pickup_admin_confidence=pickup_admin_confidence,
+            pickup_admin_label=pickup_admin_label,
+            pickup_admin_resolved_at=pickup_admin_resolved_at,
+            dropoff_admin_token=dropoff_admin_token,
+            dropoff_canton_code=dropoff_canton_code,
+            dropoff_admin_source=dropoff_admin_source,
+            dropoff_admin_confidence=dropoff_admin_confidence,
+            dropoff_admin_label=dropoff_admin_label,
+            dropoff_admin_resolved_at=dropoff_admin_resolved_at,
+            pickup_geo_unit_id=pickup_geo_unit_id,
+            dropoff_geo_unit_id=dropoff_geo_unit_id,
+            pricing_profile_id=pricing_profile_id,
+            pricing_profile_version_id=pricing_profile_version_id,
+            price_amount=price_amount,
+            price_breakdown_json=price_breakdown_json,
         )
 
         try:

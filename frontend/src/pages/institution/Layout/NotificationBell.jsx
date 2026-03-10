@@ -71,6 +71,8 @@ function timeAgo(dateString) {
 const NotificationBell = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
+  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
@@ -104,13 +106,13 @@ const NotificationBell = () => {
   const getNotificationLink = useCallback(
     (notif) => {
       const meta = notif.metadata || {};
-      const base = `/dashboard/institution/${public_id}`;
+      const base = `${dashboardRoot}/institution/${public_id}`;
       if (meta.request_id) {
         return `${base}/requests/${meta.request_id}`;
       }
       return `${base}/requests`;
     },
-    [public_id]
+    [public_id, dashboardRoot]
   );
 
   const handleNotificationClick = useCallback(

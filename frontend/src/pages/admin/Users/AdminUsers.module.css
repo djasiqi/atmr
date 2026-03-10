@@ -276,3 +276,381 @@ td:nth-child(4) {
     font-size: var(--font-xs);
   }
 }
+
+/* Design refresh */
+.adminContainer {
+  background: #f8fafc;
+  font-family: Inter, -apple-system, Segoe UI, sans-serif;
+}
+
+.content {
+  padding: 24px;
+  margin: 24px;
+  margin-top: 96px;
+  margin-left: calc(var(--sidebar-w, 72px) + 24px);
+  max-width: calc(100% - var(--sidebar-w, 72px) - 48px);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.pageHeader h1 {
+  margin: 0;
+  text-align: left;
+  color: #1e293b;
+  font-size: 1.75rem;
+}
+
+.subtext {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.metricsGrid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metricCard span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.metricCard strong {
+  color: #1e293b;
+  font-size: 1.1rem;
+}
+
+.toolbar {
+  margin-top: 18px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.searchInput {
+  max-width: none;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  margin: 0;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.searchInput:focus {
+  border-color: #00796b;
+  box-shadow: 0 0 0 3px rgba(0, 121, 107, 0.15);
+}
+
+.filters {
+  margin-top: 12px;
+  margin-bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.roleFilter {
+  min-height: 40px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.roleFilter:hover {
+  border-color: #cbd5e1;
+}
+
+.tableContainer {
+  margin-top: 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.userTable {
+  border-radius: 0;
+}
+
+.userTable th,
+.userTable td {
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+  font-size: 0.88rem;
+}
+
+.userTable th {
+  background: #f8fafc;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.75rem;
+}
+
+.userTable tr:hover {
+  background: #f8fafc;
+}
+
+.userNameCell {
+  font-weight: 600;
+}
+
+.emailCell {
+  color: #64748b;
+}
+
+.roleSelect,
+.userTable select {
+  min-height: 36px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 0.84rem;
+  color: #1e293b;
+}
+
+.dateCell {
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.actionsCell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.resetButton,
+.deleteButton {
+  min-height: 34px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0 10px;
+}
+
+.resetButton {
+  background: linear-gradient(135deg, #00796b, #00695c);
+  color: #ffffff;
+}
+
+.resetButton:hover {
+  filter: brightness(0.98);
+}
+
+.deleteButton {
+  background: #fff5f5;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.deleteButton:hover {
+  background: #fee2e2;
+}
+
+.placeholderRow {
+  text-align: center;
+  color: #64748b;
+  padding: 20px 12px;
+}
+
+.modal {
+  background: rgba(15, 23, 42, 0.4);
+}
+
+.modalContent {
+  max-width: 460px;
+  text-align: left;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+}
+
+.modalContent h3 {
+  margin: 0 0 12px;
+  color: #1e293b;
+}
+
+.modalField {
+  margin-bottom: 12px;
+}
+
+.modalField label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.modalInput {
+  width: 100%;
+  min-height: 40px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 10px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.modalPrimaryButton,
+.modalGhostButton {
+  width: auto;
+  min-height: 36px;
+  margin-top: 0;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.modalPrimaryButton {
+  border: none;
+  background: linear-gradient(135deg, #00796b, #00695c);
+  color: #ffffff;
+}
+
+.modalGhostButton {
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #1e293b;
+}
+
+.ghostFilterButton {
+  min-height: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: transparent;
+  color: #1e293b;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.ghostFilterButton:hover {
+  border-color: #cbd5e1;
+}
+
+.paginationBar {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.paginationInfo {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.perPageLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.perPageSelect {
+  min-height: 34px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 8px;
+  color: #1e293b;
+  background: #ffffff;
+}
+
+.paginationButton {
+  min-height: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.paginationButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pageIndicator {
+  color: #1e293b;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+@media (max-width: 1120px) {
+  .metricsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .content {
+    margin: 12px;
+    margin-top: 88px;
+    margin-left: calc(var(--sidebar-w, 72px) + 12px);
+    max-width: calc(100% - var(--sidebar-w, 72px) - 24px);
+    padding: 16px;
+  }
+
+  .metricsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .actionsCell {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .paginationBar,
+  .paginationControls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

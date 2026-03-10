@@ -2073,7 +2073,7 @@ const NewInvoiceModal = ({
 
   return (
     <div className="modal-overlay">
-      <div className={`modal-content modal-xl ${styles.modalInvoice}`}>
+      <div className={`modal-content modal-xl ${styles.modalInvoice}`} data-tour-id="invoice-new-modal">
         <div className="modal-header">
           <h2 className="modal-title">Nouvelle facture</h2>
           <button className="modal-close" onClick={handleClose}>
@@ -2096,7 +2096,10 @@ const NewInvoiceModal = ({
 
           {successMessage && <div className={styles.success}>{successMessage}</div>}
 
-          <div className={`${styles.formGroup} ${styles.stickyBillingType}`}>
+          <div
+            className={`${styles.formGroup} ${styles.stickyBillingType}`}
+            data-tour-id="invoice-modal-billing-type"
+          >
             <label className={styles.label}>Type de facturation</label>
             <div className={styles.radioGroup}>
               <label className={styles.radioLabel}>
@@ -2137,7 +2140,7 @@ const NewInvoiceModal = ({
             <>
               {/* Header direct : client + période (style s2Header) */}
               <div className={styles.s2Header}>
-                <div className={styles.s2HeaderRow}>
+                <div className={styles.s2HeaderRow} data-tour-id="invoice-modal-client">
                   <span className={styles.s2HeaderLabel}>👤 Client</span>
                   <div className={styles.s2HeaderClinique} style={{ flex: 1, maxWidth: '100%' }}>
                     <input
@@ -2179,7 +2182,7 @@ const NewInvoiceModal = ({
                     )}
                   </div>
                 </div>
-                <div className={styles.s2HeaderRow}>
+                <div className={styles.s2HeaderRow} data-tour-id="invoice-modal-period">
                   <div className={styles.s2HeaderMeta}>
                     <span className={styles.s2HeaderLabel}>Période à facturer</span>
                     {formData.client_id && directSummary && directSummary.count > 0 && (
@@ -3573,6 +3576,7 @@ const NewInvoiceModal = ({
                   <button
                     type="submit"
                     className="btn btn-primary"
+                    data-tour-id="invoice-modal-submit"
                     disabled={
                       loading ||
                       (billingType === 'direct'

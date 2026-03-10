@@ -179,12 +179,12 @@ export default function CompanyPlanning() {
   };
 
   return (
-    <div className={styles.pageContainer}>
+    <div className={styles.pageContainer} data-tour-id="planning-page">
       <CompanyHeader />
       <div className={styles.layoutWrapper}>
         <CompanySidebar />
         <div className={styles.mainContent}>
-          <div className={styles.container}>
+          <div className={styles.container} data-tour-id="planning-board">
             <div className={styles.toolbar}>
               <div className={styles.left}>
                 <div className={styles.tabs}>

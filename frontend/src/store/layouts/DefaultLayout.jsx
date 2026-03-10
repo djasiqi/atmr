@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import Header from '../../components/layout/Header/Header';
 import Footer from '../../components/layout/Footer/Footer';
 
-const DefaultLayout = ({ children }) => {
+const DefaultLayout = ({ children, compactMain = false }) => {
   return (
     <div style={styles.container}>
       <Toaster
@@ -20,7 +20,7 @@ const DefaultLayout = ({ children }) => {
         }}
       />
       <Header />
-      <main style={styles.main}>{children}</main>
+      <main style={compactMain ? styles.mainCompact : styles.main}>{children}</main>
       <Footer />
     </div>
   );
@@ -34,6 +34,10 @@ const styles = {
   },
   main: {
     flex: '1',
+    backgroundColor: '#ffffff',
+  },
+  mainCompact: {
+    flex: '0 0 auto',
   },
 };
 

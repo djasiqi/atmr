@@ -472,18 +472,22 @@ export const fetchClientReservations = async (
 
 export const searchClients = async (query) => {
   try {
+    const normalizedQuery = String(query || '').trim();
+    if (!normalizedQuery) {
+      return await fetchCompanyClients();
+    }
     const { data } = await apiClient.get(
-      `/companies/me/clients?search=${encodeURIComponent(query)}`
+      `/companies/me/clients?search=${encodeURIComponent(normalizedQuery)}`
     );
     // ✅ Le backend retourne un format paginé : {"data": [...], "pagination": {...}, "links": {...}}
     // Extraire le tableau clients depuis data.data
     if (data && data.data && Array.isArray(data.data)) {
-      console.log(`✅ ${data.data.length} client(s) trouvé(s) pour "${query}"`);
+      console.log(`✅ ${data.data.length} client(s) trouvé(s) pour "${normalizedQuery}"`);
       return data.data;
     }
     // Fallback : format ancien {"clients": [...]}
     if (data && Array.isArray(data.clients)) {
-      console.log(`✅ ${data.clients.length} client(s) trouvé(s) pour "${query}"`);
+      console.log(`✅ ${data.clients.length} client(s) trouvé(s) pour "${normalizedQuery}"`);
       return data.clients;
     }
     // Fallback : si c'est déjà un tableau

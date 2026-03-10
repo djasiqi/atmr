@@ -52,6 +52,10 @@ from flask_migrate import stamp as _stamp  # noqa: E402
 from flask_migrate import upgrade as _upgrade  # noqa: E402
 
 from app import create_app  # noqa: E402
+from services.demo.seed_service import (  # noqa: E402
+    PROFILES,
+    reset_and_seed_demo_dataset,
+)
 
 # Crée une instance de l'application pour le contexte
 config_name = os.getenv("FLASK_ENV") or "development"
@@ -107,6 +111,33 @@ def stamp(revision):
     with app.app_context():
         _stamp(revision=revision)
     click.echo(f"Base de données tamponnée avec la révision : {revision}.")
+
+
+@cli.group(name="seed")
+def seedcli():
+    """Commandes de seed de données."""
+
+
+@seedcli.command(name="demo")
+@click.option("--reset/--no-reset", default=False, show_default=True)
+@click.option(
+    "--profile",
+    "profile_name",
+    default="sales",
+    type=click.Choice(sorted(PROFILES.keys())),
+    show_default=True,
+)
+def seed_demo(reset: bool, profile_name: str):
+    """Seed dataset démo déterministe (tiny|sales)."""
+    with app.app_context():
+        summary = reset_and_seed_demo_dataset(
+            profile_name=profile_name,
+            reset=reset,
+        )
+    click.echo(
+        f"✅ Seed demo terminé (profile={profile_name}, reset={reset}) "
+        f"- {summary}"
+    )
 
 
 if __name__ == "__main__":

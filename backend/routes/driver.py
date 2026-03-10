@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import logging
 import traceback
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, cast
 from typing import cast as tcast
 
@@ -225,56 +223,6 @@ class DriverProfile(Resource):
     @role_required(UserRole.driver)
     def get(self):
         """Récupère le profil du chauffeur."""
-        # #region agent log
-        try:
-            import json
-            from datetime import UTC, datetime
-            from pathlib import Path
-
-            from flask import (
-                current_app,
-                request,
-            )
-
-            log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "driver.py:DriverProfile.get",
-                            "message": "GET /driver/me/profile entry",
-                            "data": {
-                                "has_access_token_cookie": bool(
-                                    request.cookies.get(
-                                        current_app.config.get(
-                                            "COOKIE_ACCESS_TOKEN_NAME", "access_token"
-                                        )
-                                    )
-                                ),
-                                "has_refresh_token_cookie": bool(
-                                    request.cookies.get(
-                                        current_app.config.get(
-                                            "COOKIE_REFRESH_TOKEN_NAME",
-                                            "refresh_token",
-                                        )
-                                    )
-                                ),
-                                "has_authorization_header": bool(
-                                    request.headers.get("Authorization")
-                                ),
-                                "cookie_names": list(request.cookies.keys()),
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "G",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         result = None
         status_code = 200
         try:
@@ -2277,104 +2225,11 @@ class SwitchToEnterprise(Resource):
     @role_required(UserRole.driver)
     def post(self):
         """Génère un token entreprise à partir d'un token chauffeur."""
-        # #region agent log
-        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-        try:
-            user_public_id = get_jwt_identity()
-            from repositories.user_repository import UserRepository
-
-            user_repo = UserRepository()
-            user = user_repo.find_by_public_id(user_public_id)
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "driver.py:SwitchToEnterprise.post",
-                            "message": "POST /switch-to-enterprise entry",
-                            "data": {
-                                "headers": {
-                                    k: v
-                                    for k, v in request.headers
-                                    if k.lower()
-                                    in [
-                                        "authorization",
-                                        "x-device-id",
-                                        "x-requested-with",
-                                        "content-type",
-                                    ]
-                                },
-                                "has_authorization": "Authorization" in request.headers,
-                                "user_public_id": user_public_id,
-                                "user_role": user.role.value
-                                if user and user.role
-                                else None,
-                                "user_id": user.id if user else None,
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception as e:
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "driver.py:SwitchToEnterprise.post",
-                                "message": "POST /switch-to-enterprise entry ERROR",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
         result = None
         status_code = 200
         try:
             # 1. Récupérer le driver depuis le token
             driver, error_response, status_code = get_driver_from_token()
-            # #region agent log
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "driver.py:SwitchToEnterprise.post",
-                                "message": "get_driver_from_token result",
-                                "data": {
-                                    "has_driver": driver is not None,
-                                    "has_error": error_response is not None,
-                                    "status_code": status_code,
-                                    "driver_id": driver.id if driver else None,
-                                    "driver_type": str(driver.driver_type)
-                                    if driver
-                                    else None,
-                                    "company_id": driver.company_id if driver else None,
-                                },
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "B",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             if error_response:
                 result = error_response
             else:
@@ -2414,36 +2269,6 @@ class SwitchToEnterprise(Resource):
                     "JWT_REFRESH_TOKEN_EXPIRES", timedelta(days=90)
                 )
 
-                # #region agent log
-                try:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "location": "driver.py:SwitchToEnterprise.post",
-                                    "message": "before use case execute",
-                                    "data": {
-                                        "driver_id": driver.id,
-                                        "driver_type": str(driver.driver_type),
-                                        "driver_type_value": driver.driver_type.value
-                                        if hasattr(driver.driver_type, "value")
-                                        else str(driver.driver_type),
-                                        "expected_emergency": str(DriverType.EMERGENCY),
-                                        "is_emergency": driver.driver_type
-                                        == DriverType.EMERGENCY,
-                                        "company_id": driver.company_id,
-                                    },
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "C",
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
                 uc = SwitchToEnterpriseUseCase(
                     find_company_fn=CompanyRepository().find_model_by_id,  # type: ignore[reportArgumentType]
                     find_company_user_fn=find_company_user_for_driver,  # type: ignore[reportArgumentType]
@@ -2462,31 +2287,6 @@ class SwitchToEnterprise(Resource):
                         device_name=request.headers.get("X-Device-Name"),
                     )
                 )
-                # #region agent log
-                try:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "location": "driver.py:SwitchToEnterprise.post",
-                                    "message": "use case execute result",
-                                    "data": {
-                                        "status_code": uc_res.status_code,
-                                        "has_error": "error" in uc_res.response,
-                                        "error_message": uc_res.response.get("error"),
-                                        "has_token": "token" in uc_res.response,
-                                    },
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "D",
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
                 result = uc_res.response
                 status_code = uc_res.status_code
 

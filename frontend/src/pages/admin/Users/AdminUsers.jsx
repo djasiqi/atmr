@@ -1,11 +1,10 @@
-// C:\Users\jasiq\atmr\frontend\src\pages\Users\AdminUsers.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import apiClient from '../../../utils/apiClient';
 import {
   fetchUsers,
   deleteUser,
   resetUserPassword,
-  updateUserRole, // ✅ Utilisation de la version du service
+  updateUserRole,
   fetchCompanies,
   fetchInstitutions,
 } from '../../../services/adminService';
@@ -13,150 +12,191 @@ import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminUsers.module.css';
 
+const ROLE_LABELS = {
+  admin: 'Admin',
+  client: 'Client',
+  driver: 'Chauffeur',
+  company: 'Entreprise',
+  institution: 'Institution',
+};
+
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(50);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [globalStats, setGlobalStats] = useState({
+    admin: 0,
+    company: 0,
+    institution: 0,
+    driver: 0,
+    client: 0,
+  });
   const [loading, setLoading] = useState(true);
+
   const [companyOptions, setCompanyOptions] = useState([]);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [pendingDriverUserId, setPendingDriverUserId] = useState(null);
-  // ✅ États pour les institutions
+
   const [institutionOptions, setInstitutionOptions] = useState([]);
   const [showInstitutionDropdown, setShowInstitutionDropdown] = useState(false);
   const [pendingInstitutionUserId, setPendingInstitutionUserId] = useState(null);
   const [selectedInstitutionId, setSelectedInstitutionId] = useState(null);
   const [selectedInstitutionRole, setSelectedInstitutionRole] = useState('institution_admin');
-  const norm = (v) => String(v ?? '').toLowerCase();
-
-  useEffect(() => {
-    const loadUsers = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchUsers();
-        console.log('📌 Utilisateurs chargés dans AdminUsers :', data);
-        setUsers(data || []);
-      } catch (error) {
-        console.error('❌ Erreur chargement utilisateurs :', error);
-      } finally {
-        setLoading(false);
-        console.log('🔄 Chargement terminé'); // Vérification
-      }
-    };
-
-    loadUsers();
-  }, []);
 
   useEffect(() => {
     const loadCompanies = async () => {
-      console.log('📡 Tentative de chargement des entreprises...');
       try {
         const companies = await fetchCompanies();
-        console.log('✅ Entreprises chargées :', companies);
-        // on ajoute un flag selected utilisable par le modal
         setCompanyOptions((companies || []).map((c) => ({ ...c, selected: false })));
       } catch (error) {
-        console.error('⚠️ Erreur chargement entreprises :', error);
+        console.error('Erreur chargement entreprises :', error);
       }
     };
     loadCompanies();
   }, []);
 
-  // ✅ Chargement des institutions au démarrage
   useEffect(() => {
     const loadInstitutions = async () => {
-      console.log('📡 Tentative de chargement des institutions...');
       try {
         const institutions = await fetchInstitutions();
-        console.log('✅ Institutions chargées :', institutions);
         setInstitutionOptions(institutions || []);
       } catch (error) {
-        console.error('⚠️ Erreur chargement institutions :', error);
+        console.error('Erreur chargement institutions :', error);
       }
     };
     loadInstitutions();
   }, []);
 
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchUsers({
+        page,
+        per_page: perPage,
+        search: debouncedSearch,
+        role: roleFilter,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      });
+      setUsers(data.users || []);
+      setTotalUsers(data.total || 0);
+      setTotalPages(data.total_pages || 1);
+      if (data.role_counts) {
+        setGlobalStats({
+          admin: Number(data.role_counts.admin || 0),
+          company: Number(data.role_counts.company || 0),
+          institution: Number(data.role_counts.institution || 0),
+          driver: Number(data.role_counts.driver || 0),
+          client: Number(data.role_counts.client || 0),
+        });
+      } else {
+        setGlobalStats({
+          admin: 0,
+          company: 0,
+          institution: 0,
+          driver: 0,
+          client: 0,
+        });
+      }
+
+      if ((data.total_pages || 1) < page) {
+        setPage(1);
+      }
+    } catch (error) {
+      console.error('Erreur chargement utilisateurs :', error);
+      setUsers([]);
+      setTotalUsers(0);
+      setTotalPages(1);
+      setGlobalStats({
+        admin: 0,
+        company: 0,
+        institution: 0,
+        driver: 0,
+        client: 0,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch, page, perPage, roleFilter, sortBy, sortOrder]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
   const updateUserRoleHandler = async (userId, newRole) => {
     if (!userId || !newRole) {
-      alert("⚠️ Erreur : L'utilisateur ou le rôle est invalide.");
+      alert("Erreur : l utilisateur ou le role est invalide.");
       return;
     }
 
-    // Vérifier si on assigne le rôle "driver"
     if (newRole.toLowerCase() === 'driver') {
-      // Si c'est un chauffeur, on affiche la liste des entreprises dans un modal
       if (!companyOptions.length) {
-        alert('❌ Aucune entreprise disponible !');
+        alert('Aucune entreprise disponible.');
         return;
       }
 
       setPendingDriverUserId(userId);
       setShowCompanyDropdown(true);
     } else if (newRole.toLowerCase() === 'institution') {
-      // ✅ Si c'est une institution, créer automatiquement l'institution avec le nom de l'utilisateur
-      // Le backend va créer l'institution automatiquement si aucune institution_id n'est fournie
       try {
-        await updateUserRole(userId, { 
+        await updateUserRole(userId, {
           role: 'institution',
-          institution_role: 'institution_admin'  // Admin par défaut
+          institution_role: 'institution_admin',
         });
-        alert(`✅ Rôle Institution attribué avec succès ! L'institution a été créée automatiquement.`);
-        loadUsers();
+        alert('Role institution attribue avec succes.');
+        await loadUsers();
       } catch (error) {
-        console.error('❌ Erreur attribution rôle institution :', error);
-        alert('⚠️ Impossible d\'attribuer le rôle institution.');
+        console.error('Erreur attribution role institution :', error);
+        alert('Impossible d attribuer le role institution.');
       }
       return;
-    } else {
-      // Pour les autres rôles, mise à jour directe
-      try {
-        await updateUserRole(userId, { role: newRole });
-        alert(`✅ Rôle mis à jour avec succès : ${newRole}`);
-        loadUsers();
-      } catch (error) {
-        console.error('❌ Erreur mise à jour rôle :', error);
-        alert('⚠️ Impossible de mettre à jour le rôle.');
-      }
     }
-  };
 
-  const loadUsers = async () => {
-    setLoading(true);
     try {
-      const data = await fetchUsers();
-      console.log('📌 Utilisateurs chargés dans AdminUsers :', data);
-      setUsers(data || []);
+      await updateUserRole(userId, { role: newRole });
+      alert(`Role mis a jour avec succes : ${newRole}`);
+      await loadUsers();
     } catch (error) {
-      console.error('❌ Erreur chargement utilisateurs :', error);
-    } finally {
-      setLoading(false);
+      console.error('Erreur mise a jour role :', error);
+      alert('Impossible de mettre a jour le role.');
     }
   };
 
   const handleDelete = async (userId) => {
-    if (!window.confirm('❌ Confirmer la suppression de cet utilisateur ?')) {
+    if (!window.confirm('Confirmer la suppression de cet utilisateur ?')) {
       return;
     }
     try {
       await deleteUser(userId);
-      loadUsers();
-      alert('✅ Utilisateur supprimé avec succès !');
+      await loadUsers();
+      alert('Utilisateur supprime avec succes.');
     } catch (error) {
-      console.error('❌ Erreur suppression utilisateur :', error);
-      alert("⚠️ Impossible de supprimer l'utilisateur.");
+      console.error('Erreur suppression utilisateur :', error);
+      alert("Impossible de supprimer l utilisateur.");
     }
   };
 
   const handleResetPassword = async (userId) => {
     if (!userId) {
-      console.error('❌ Erreur : userId est undefined !');
-      alert('⚠️ Impossible de réinitialiser le mot de passe : ID utilisateur introuvable.');
+      console.error('Erreur : userId est undefined.');
+      alert('Impossible de reinitialiser le mot de passe : ID utilisateur introuvable.');
       return;
     }
-
-    console.log(`🔄 Tentative de réinitialisation pour l'ID utilisateur : ${userId}`);
 
     const confirmation = window.confirm(
       'Voulez-vous vraiment réinitialiser le mot de passe de cet utilisateur ?'
@@ -168,142 +208,185 @@ const AdminUsers = () => {
       const response = await resetUserPassword(userId);
 
       if (response?.new_password) {
-        alert(`✅ Mot de passe réinitialisé avec succès : ${response.new_password}`);
-        console.log('✅ Nouveau mot de passe généré :', response.new_password);
+        alert(`Mot de passe reinitialise : ${response.new_password}`);
       } else {
-        console.warn('⚠️ La réponse API ne contient pas de mot de passe.');
-        alert('⚠️ Échec de la réinitialisation : aucun mot de passe généré.');
+        console.warn('La reponse API ne contient pas de mot de passe.');
+        alert('Echec de la reinitialisation : aucun mot de passe genere.');
       }
     } catch (error) {
       console.error(
-        '❌ Erreur lors de la réinitialisation du mot de passe :',
+        'Erreur lors de la reinitialisation du mot de passe :',
         error.response?.data || error.message
       );
-      alert('❌ Une erreur est survenue lors de la réinitialisation.');
+      alert('Une erreur est survenue lors de la reinitialisation.');
     }
   };
 
-  const filteredUsers = users
-    .filter((user) => {
-      const matchesSearch =
-        norm(user.username).includes(norm(search)) ||
-        norm(user.email).includes(norm(search));
-      const matchesRole = roleFilter ? norm(user.role) === norm(roleFilter) : true;
-      return matchesSearch && matchesRole;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'created_at') {
-        return new Date(b.created_at) - new Date(a.created_at);
-      } else if (sortBy === 'username') {
-        return norm(a.username).localeCompare(norm(b.username));
-      } else if (sortBy === 'role') {
-        return norm(a.role).localeCompare(norm(b.role));
-      }
-      return 0;
-    });
+  const startRow = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
+  const endRow = Math.min(page * perPage, totalUsers);
+
+  const resetFilters = () => {
+    setSearch('');
+    setRoleFilter('');
+    setSortBy('created_at');
+    setSortOrder('desc');
+    setPage(1);
+  };
 
   return (
     <div className={styles.adminContainer}>
-      {/* ✅ Intégration du HeaderDashboard */}
       <HeaderDashboard />
-
       <div className={styles.dashboard}>
-        {/* ✅ Intégration de la Sidebar */}
         <AdminSidebar />
-
         <main className={styles.content}>
-          <h1>👥 Gestion des utilisateurs</h1>
+          <header className={styles.pageHeader}>
+            <h1>Gestion des utilisateurs</h1>
+            <p className={styles.subtext}>
+              Recherche, tri, attribution des roles et actions de maintenance des comptes.
+            </p>
+          </header>
 
-          {/* 🔎 Barre de recherche */}
-          <input
-            type="text"
-            placeholder="Rechercher par nom ou email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={styles.searchInput}
-          />
+          <section className={styles.metricsGrid} aria-label="Synthese utilisateurs">
+            <article className={styles.metricCard}>
+              <span>Total</span>
+              <strong>{totalUsers}</strong>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Admins</span>
+              <strong>{globalStats.admin}</strong>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Entreprises</span>
+              <strong>{globalStats.company}</strong>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Institutions</span>
+              <strong>{globalStats.institution}</strong>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Chauffeurs</span>
+              <strong>{globalStats.driver}</strong>
+            </article>
+            <article className={styles.metricCard}>
+              <span>Clients</span>
+              <strong>{globalStats.client}</strong>
+            </article>
+          </section>
 
-          {/* 🎭 Filtrer par rôle */}
-          <div className={styles.filters}>
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className={styles.roleFilter}
-            >
-              <option value="">🎭 Tous les rôles</option>
-              <option value="admin">🛠️ Admin</option>
-              <option value="client">👤 Client</option>
-              <option value="driver">🚖 Chauffeur</option>
-              <option value="company">🏢 Entreprise</option>
-              <option value="institution">🏥 Institution</option>
-            </select>
+          <section className={styles.toolbar}>
+            <input
+              type="text"
+              placeholder="Rechercher par nom ou email"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={styles.searchInput}
+            />
 
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className={styles.roleFilter}
-            >
-              <option value="created_at">📅 Trier par Date d'inscription</option>
-              <option value="username">🔠 Trier par Nom</option>
-              <option value="role">🎭 Trier par Rôle</option>
-            </select>
-          </div>
+            <div className={styles.filters}>
+              <select
+                value={roleFilter}
+                onChange={(e) => {
+                  setRoleFilter(e.target.value);
+                  setPage(1);
+                }}
+                className={styles.roleFilter}
+              >
+                <option value="">Tous les roles</option>
+                <option value="admin">Admin</option>
+                <option value="client">Client</option>
+                <option value="driver">Chauffeur</option>
+                <option value="company">Entreprise</option>
+                <option value="institution">Institution</option>
+              </select>
 
-          {/* 📋 Liste des utilisateurs */}
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
+                className={styles.roleFilter}
+              >
+                <option value="created_at">Tri : date inscription</option>
+                <option value="username">Tri : nom</option>
+                <option value="role">Tri : role</option>
+                <option value="email">Tri : email</option>
+              </select>
+
+              <select
+                value={sortOrder}
+                onChange={(e) => {
+                  setSortOrder(e.target.value);
+                  setPage(1);
+                }}
+                className={styles.roleFilter}
+              >
+                <option value="desc">Ordre : decroissant</option>
+                <option value="asc">Ordre : croissant</option>
+              </select>
+
+              <button type="button" className={styles.ghostFilterButton} onClick={resetFilters}>
+                Reinitialiser filtres
+              </button>
+            </div>
+          </section>
+
           <div className={styles.tableContainer}>
             <table className={styles.userTable}>
               <thead>
                 <tr>
-                  <th>👤 Nom</th>
-                  <th>📧 Email</th>
-                  <th>🎭 Rôle</th>
-                  <th>📅 Date d'inscription</th>
-                  <th>⚙️ Actions</th>
+                  <th>Nom</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Date d inscription</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="5">⏳ Chargement...</td>
+                    <td colSpan="5" className={styles.placeholderRow}>
+                      Chargement des utilisateurs...
+                    </td>
                   </tr>
-                ) : filteredUsers.length > 0 ? (
-                  filteredUsers.map((user) => {
-                    console.log("👤 Affichage de l'utilisateur :", user);
-                    const userRole = norm(user.role); // <-- normalisation pour le select
+                ) : users.length > 0 ? (
+                  users.map((user) => {
+                    const userRole = String(user.role || '').toLowerCase();
                     return (
                       <tr key={user.id}>
-                        <td>{user.username}</td>
-                        <td>{user.email}</td>
+                        <td className={styles.userNameCell}>{user.username || '-'}</td>
+                        <td className={styles.emailCell}>{user.email || '-'}</td>
                         <td>
                           <select
+                            className={styles.roleSelect}
                             value={userRole}
                             onChange={(e) => updateUserRoleHandler(user.id, e.target.value)}
                           >
-                            <option value="client">👤 Client</option>
-                            <option value="company">🏢 Entreprise</option>
-                            <option value="driver">🚖 Chauffeur</option>
-                            <option value="institution">🏥 Institution</option>
-                            <option value="admin">🛠️ Admin</option>
+                            {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
                           </select>
                         </td>
 
-                        <td>
+                        <td className={styles.dateCell}>
                           {user.created_at
                             ? new Date(user.created_at).toLocaleString('fr-CH')
-                            : '📅 Inconnu'}{' '}
+                            : 'Inconnu'}
                         </td>
-                        <td>
+                        <td className={styles.actionsCell}>
                           <button
                             onClick={() => handleResetPassword(user.id)}
                             className={styles.resetButton}
                           >
-                            🔑 Réinitialiser
+                            Reinitialiser
                           </button>
                           <button
                             onClick={() => handleDelete(user.id)}
                             className={styles.deleteButton}
                           >
-                            ❌ Supprimer
+                            Supprimer
                           </button>
                         </td>
                       </tr>
@@ -311,11 +394,55 @@ const AdminUsers = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="5">Aucun utilisateur trouvé</td>
+                    <td colSpan="5" className={styles.placeholderRow}>
+                      Aucun utilisateur trouve
+                    </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className={styles.paginationBar}>
+            <p className={styles.paginationInfo}>
+              Affichage {startRow}-{endRow} sur {totalUsers}
+            </p>
+            <div className={styles.paginationControls}>
+              <label className={styles.perPageLabel}>
+                Lignes
+                <select
+                  value={perPage}
+                  onChange={(e) => {
+                    setPerPage(parseInt(e.target.value, 10));
+                    setPage(1);
+                  }}
+                  className={styles.perPageSelect}
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                className={styles.paginationButton}
+                disabled={page <= 1 || loading}
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              >
+                Precedent
+              </button>
+              <span className={styles.pageIndicator}>
+                Page {page} / {Math.max(totalPages, 1)}
+              </span>
+              <button
+                type="button"
+                className={styles.paginationButton}
+                disabled={page >= totalPages || loading}
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              >
+                Suivant
+              </button>
+            </div>
           </div>
         </main>
       </div>
@@ -324,6 +451,7 @@ const AdminUsers = () => {
           <div className={styles.modalContent}>
             <h3>Assigner une entreprise au chauffeur</h3>
             <select
+              className={styles.modalInput}
               onChange={(e) =>
                 setCompanyOptions((prev) =>
                   prev.map((c) => ({
@@ -341,8 +469,8 @@ const AdminUsers = () => {
               ))}
             </select>
             <button
+              className={styles.modalPrimaryButton}
               onClick={async () => {
-                // Récupérer la valeur sélectionnée
                 const selectedCompany = companyOptions.find((c) => c.selected);
                 if (!selectedCompany) {
                   alert('Veuillez sélectionner une entreprise.');
@@ -356,26 +484,26 @@ const AdminUsers = () => {
                   const response = await apiClient.put(
                     `/admin/users/${pendingDriverUserId}/role`,
                     updateData
-                    // ✅ apiClient gère automatiquement l'authentification (token dans localStorage ou cookies httpOnly)
                   );
                   if (response.status === 200) {
-                    alert(`✅ Rôle mis à jour avec succès : driver`);
-                    loadUsers();
+                    alert('Role mis a jour avec succes : driver');
+                    await loadUsers();
                     setShowCompanyDropdown(false);
                     setPendingDriverUserId(null);
                   }
                 } catch (error) {
                   console.error(
-                    '❌ Erreur lors de la mise à jour du rôle :',
+                    'Erreur lors de la mise a jour du role :',
                     error.response?.data || error.message
                   );
-                  alert('⚠️ Impossible de mettre à jour le rôle.');
+                  alert('Impossible de mettre a jour le role.');
                 }
               }}
             >
               Valider
             </button>
             <button
+              className={styles.modalGhostButton}
               onClick={() => {
                 setShowCompanyDropdown(false);
                 setPendingDriverUserId(null);
@@ -387,17 +515,16 @@ const AdminUsers = () => {
         </div>
       )}
 
-      {/* ✅ Modal pour sélection d'institution */}
       {showInstitutionDropdown && (
         <div className={styles.modal}>
           <div className={styles.modalContent}>
-            <h3>🏥 Assigner une institution</h3>
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Institution :</label>
+            <h3>Assigner une institution</h3>
+            <div className={styles.modalField}>
+              <label>Institution</label>
               <select
+                className={styles.modalInput}
                 value={selectedInstitutionId || ''}
                 onChange={(e) => setSelectedInstitutionId(parseInt(e.target.value, 10) || null)}
-                style={{ width: '100%', padding: '8px' }}
               >
                 <option value="">Sélectionnez une institution</option>
                 {institutionOptions.map((inst) => (
@@ -407,21 +534,22 @@ const AdminUsers = () => {
                 ))}
               </select>
             </div>
-            <div style={{ marginBottom: '15px' }}>
-              <label style={{ display: 'block', marginBottom: '5px' }}>Rôle dans l'institution :</label>
+            <div className={styles.modalField}>
+              <label>Role dans l institution</label>
               <select
+                className={styles.modalInput}
                 value={selectedInstitutionRole}
                 onChange={(e) => setSelectedInstitutionRole(e.target.value)}
-                style={{ width: '100%', padding: '8px' }}
               >
-                <option value="institution_admin">🛠️ Admin institution</option>
-                <option value="institution_requester">📝 Demandeur</option>
-                <option value="institution_reader">👁️ Lecteur</option>
-                <option value="institution_billing">💰 Facturation</option>
+                <option value="institution_admin">Admin institution</option>
+                <option value="institution_requester">Demandeur</option>
+                <option value="institution_reader">Lecteur</option>
+                <option value="institution_billing">Facturation</option>
               </select>
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div className={styles.modalActions}>
               <button
+                className={styles.modalPrimaryButton}
                 onClick={async () => {
                   if (!selectedInstitutionId) {
                     alert('Veuillez sélectionner une institution.');
@@ -438,8 +566,8 @@ const AdminUsers = () => {
                       updateData
                     );
                     if (response.status === 200) {
-                      alert(`✅ Rôle mis à jour avec succès : institution`);
-                      loadUsers();
+                      alert('Role mis a jour avec succes : institution');
+                      await loadUsers();
                       setShowInstitutionDropdown(false);
                       setPendingInstitutionUserId(null);
                       setSelectedInstitutionId(null);
@@ -447,16 +575,17 @@ const AdminUsers = () => {
                     }
                   } catch (error) {
                     console.error(
-                      '❌ Erreur lors de la mise à jour du rôle :',
+                      'Erreur lors de la mise a jour du role :',
                       error.response?.data || error.message
                     );
-                    alert('⚠️ Impossible de mettre à jour le rôle.');
+                    alert('Impossible de mettre a jour le role.');
                   }
                 }}
               >
                 Valider
               </button>
               <button
+                className={styles.modalGhostButton}
                 onClick={() => {
                   setShowInstitutionDropdown(false);
                   setPendingInstitutionUserId(null);

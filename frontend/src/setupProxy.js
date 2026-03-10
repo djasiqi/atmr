@@ -31,10 +31,32 @@ const getBackendUrl = () => {
 
 const BACKEND_URL = getBackendUrl();
 
+// Par défaut, /api/demo pointe vers le MÊME backend que /api/app (5000).
+// Ainsi, provision admin et consume magic link utilisent la même base.
+// Pour multi-backend (docker-compose.multi-backend.yml), définir REACT_APP_DEMO_API_BASE_URL=http://127.0.0.1:5100
+const getDemoBackendUrl = () => {
+  const demoApiBaseUrl = process.env.REACT_APP_DEMO_API_BASE_URL || process.env.REACT_APP_DEMO_API_URL;
+  if (demoApiBaseUrl) {
+    try {
+      const url = new URL(demoApiBaseUrl);
+      const host = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname;
+      const port = url.port || '5100';
+      return `${url.protocol}//${host}:${port}`;
+    } catch (e) {
+      console.error('Invalid REACT_APP_DEMO_API_BASE_URL:', demoApiBaseUrl, e);
+    }
+  }
+  // Fallback: même backend que /api/app pour éviter "Token invalide" (provision sur 5000, consume sur 5100 = DB différente)
+  return getBackendUrl();
+};
+
+const DEMO_BACKEND_URL = getDemoBackendUrl();
+
 module.exports = function (app) {
   console.log('🔧 setupProxy.js chargé - Configuration du proxy...');
   console.log('⚠️ [DEBUG] setupProxy.js EXÉCUTÉ - app:', app ? 'OK' : 'NULL');
   console.log(`📡 Backend URL: ${BACKEND_URL}`);
+  console.log(`📡 Demo Backend URL: ${DEMO_BACKEND_URL}`);
 
   // 🔌 Proxy Socket.IO avec support WebSocket
   // ✅ IMPORTANT: Ce middleware doit être AVANT les autres pour capturer les requêtes Socket.IO
@@ -198,6 +220,37 @@ module.exports = function (app) {
   
   app.use('/socket.io', socketIoProxy);
 
+  // ✅ Sprint 3 local: routes unifiées disponibles aussi depuis localhost:3000
+  app.use(
+    '/api/gateway',
+    createProxyMiddleware({
+      target: `${BACKEND_URL}/api/gateway`,
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'warn',
+    })
+  );
+
+  app.use(
+    '/api/app',
+    createProxyMiddleware({
+      target: `${BACKEND_URL}/api/v1`,
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'warn',
+    })
+  );
+
+  app.use(
+    '/api/demo',
+    createProxyMiddleware({
+      target: `${DEMO_BACKEND_URL}/api/v1`,
+      changeOrigin: true,
+      secure: false,
+      logLevel: 'warn',
+    })
+  );
+
   // 📁 Proxy Uploads (images, PDFs, etc.)
   console.log('✅ Configuring /uploads proxy...');
   app.use(
@@ -315,5 +368,6 @@ module.exports = function (app) {
 
   console.log('✅ Tous les proxies configurés !');
   console.log(`📡 Backend cible: ${BACKEND_URL} (si 504: vérifier "docker compose ps" et "curl ${BACKEND_URL}/health")`);
-  console.log('📋 Routes: /socket.io, /uploads, /api');
+  console.log(`📡 Demo backend cible: ${DEMO_BACKEND_URL}`);
+  console.log('📋 Routes: /socket.io, /uploads, /api, /api/gateway, /api/app, /api/demo');
 };

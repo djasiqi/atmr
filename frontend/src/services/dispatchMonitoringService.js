@@ -5,7 +5,7 @@
  */
 
 import axios from 'axios';
-import apiClient from '../utils/apiClient';
+import apiClient, { getCurrentAuthEnv } from '../utils/apiClient';
 
 /**
  * Log Axios "riche" pour diagnostic (status, url, responseData).
@@ -57,8 +57,11 @@ const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
 const hasCompanyAccessToken = () =>
   !!(
     typeof localStorage !== 'undefined' &&
-    (localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
-      localStorage.getItem('company_authToken'))
+    (getCurrentAuthEnv() === 'demo'
+      ? localStorage.getItem('demo_access_token')
+      : (localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
+        localStorage.getItem('company_authToken') ||
+        localStorage.getItem('app_access_token')))
   );
 
 let _warnedNoToken = false;

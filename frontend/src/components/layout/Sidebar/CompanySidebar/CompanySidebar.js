@@ -48,8 +48,8 @@ const CompanySidebar = () => {
   const public_id =
     params.public_id ||
     (() => {
-      const match = location.pathname.match(/\/dashboard\/company\/([^/]+)/);
-      return match ? match[1] : null;
+      const match = location.pathname.match(/(?:\/demo)?\/dashboard\/company\/([^/]+)/);
+      return match?.[1] || null;
     })();
 
   const companyData = useCompanyData() || {};
@@ -124,7 +124,11 @@ const CompanySidebar = () => {
 
   if (!public_id) return null;
 
-  const basePath = `/dashboard/company/${public_id}`;
+  const isDemoEnv =
+    location.pathname.startsWith('/demo/') ||
+    (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
+  const basePath = `${dashboardRoot}/company/${public_id}`;
 
   // ── Navigation items ──
   const mainNav = [
@@ -184,6 +188,13 @@ const CompanySidebar = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              data-tour-id={
+                item.label === 'Dispatch'
+                  ? 'sidebar-dispatch-link'
+                  : item.label === 'Facturation'
+                    ? 'sidebar-facturation-link'
+                    : undefined
+              }
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navActive : ''}`
               }

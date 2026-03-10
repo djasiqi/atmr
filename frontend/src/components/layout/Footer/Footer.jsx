@@ -66,6 +66,8 @@ const Footer = () => {
           <div className={styles.legal}>
             <Link to="/privacy">Confidentialité</Link>
             <span className={styles.legalDot} />
+            <Link to="/contact">Contact</Link>
+            <span className={styles.legalDot} />
             <button type="button" onClick={cs}>Conditions</button>
             <span className={styles.legalDot} />
             <button type="button" onClick={cs}>Mentions légales</button>

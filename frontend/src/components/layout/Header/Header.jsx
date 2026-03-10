@@ -63,6 +63,11 @@ const Header = () => {
               Aide
             </Link>
           </li>
+          <li>
+            <Link to="/contact" className={styles.navLink}>
+              Contact
+            </Link>
+          </li>
         </ul>
       </nav>
 

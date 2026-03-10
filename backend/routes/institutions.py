@@ -11,6 +11,8 @@ Ce module fournit les endpoints API pour les institutions:
 import logging
 import secrets
 import uuid
+from datetime import UTC, datetime
+from typing import Any, Mapping, TypedDict
 
 import sentry_sdk
 from flask import g, request
@@ -21,7 +23,7 @@ from application.institutions.institution_settings_service import (
     get_or_create_settings,
 )
 from ext import db, limiter, role_required
-from models import UserRole
+from models import DemoAccess, UserRole
 from models.enums import InstitutionRole
 from models.institution_api_key import (
     VALID_SCOPES,
@@ -82,6 +84,32 @@ institution_me_model = institutions_ns.model(
 )
 
 
+def _resolve_me_identity_for_response(
+    user: User, jwt_claims: Mapping[str, Any]
+) -> tuple[str | None, str]:
+    institution_role_raw = jwt_claims.get("institution_role")
+    if institution_role_raw is None:
+        institution_role_raw = getattr(user, "institution_role", None)
+    institution_role = (
+        str(institution_role_raw) if institution_role_raw is not None else None
+    )
+
+    email = str(user.email or "")
+    if email.startswith("demo-"):
+        access = (
+            DemoAccess.query.filter(
+                DemoAccess.demo_user_id == user.id,
+                DemoAccess.status == "active",
+            )
+            .order_by(DemoAccess.created_at.desc())
+            .first()
+        )
+        request_email = getattr(getattr(access, "demo_request", None), "email", None)
+        if request_email:
+            email = request_email
+    return institution_role, email
+
+
 @institutions_ns.route("/me")
 class InstitutionMe(Resource):
     """Endpoint pour récupérer les informations de l'institution courante."""
@@ -108,7 +136,9 @@ class InstitutionMe(Resource):
 
             # Récupérer le rôle institution depuis le JWT
             jwt_claims = get_jwt()
-            institution_role = jwt_claims.get("institution_role")
+            institution_role, display_email = _resolve_me_identity_for_response(
+                user, jwt_claims
+            )
 
             # Audit log
             try:
@@ -145,7 +175,7 @@ class InstitutionMe(Resource):
                     "id": user.id,
                     "public_id": user.public_id,
                     "username": user.username,
-                    "email": user.email,
+                    "email": display_email,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                     "phone": user.phone,
@@ -231,7 +261,9 @@ class InstitutionMe(Resource):
             if not new_values:
                 # Aucun changement réel
                 jwt_claims = get_jwt()
-                institution_role = jwt_claims.get("institution_role")
+                institution_role, display_email = _resolve_me_identity_for_response(
+                    user, jwt_claims
+                )
                 return {
                     "id": institution.id,
                     "public_id": institution.public_id,
@@ -246,7 +278,7 @@ class InstitutionMe(Resource):
                         "id": user.id,
                         "public_id": user.public_id,
                         "username": user.username,
-                        "email": user.email,
+                        "email": display_email,
                         "first_name": user.first_name,
                         "last_name": user.last_name,
                         "phone": user.phone,
@@ -303,7 +335,9 @@ class InstitutionMe(Resource):
             )
 
             jwt_claims = get_jwt()
-            institution_role = jwt_claims.get("institution_role")
+            institution_role, display_email = _resolve_me_identity_for_response(
+                user, jwt_claims
+            )
 
             return {
                 "id": institution.id,
@@ -319,7 +353,7 @@ class InstitutionMe(Resource):
                     "id": user.id,
                     "public_id": user.public_id,
                     "username": user.username,
-                    "email": user.email,
+                    "email": display_email,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                     "phone": user.phone,
@@ -1537,20 +1571,29 @@ class InstitutionMyProfile(Resource):
             if errors:
                 return {"error": "Données invalides", "details": errors}, 400
 
-            validated = schema.load(data) or {}
+            validated_raw = schema.load(data) or {}
+            validated: dict[str, Any] = (
+                validated_raw if isinstance(validated_raw, dict) else {}
+            )
 
             if not validated:
                 return {"error": "Aucun champ à mettre à jour"}, 400
 
             updated_fields = []
-            if "first_name" in validated and validated["first_name"] is not None:
-                user.first_name = validated["first_name"]
+            first_name = validated.get("first_name")
+            if first_name is not None:
+                user.first_name = str(first_name)
                 updated_fields.append("first_name")
-            if "last_name" in validated and validated["last_name"] is not None:
-                user.last_name = validated["last_name"]
+            last_name = validated.get("last_name")
+            if last_name is not None:
+                user.last_name = str(last_name)
                 updated_fields.append("last_name")
             if "phone" in validated:
-                user.phone = validated["phone"]
+                user.phone = (
+                    str(validated.get("phone"))
+                    if validated.get("phone") is not None
+                    else None
+                )
                 updated_fields.append("phone")
 
             db.session.commit()
@@ -1594,12 +1637,27 @@ class InstitutionMyProfile(Resource):
 
 # ─── Demandes de droits (permission requests) ───────────────────────────────
 
+
+class PermissionRequestRecord(TypedDict):
+    id: int
+    user_id: int
+    user_email: str
+    user_name: str
+    current_role: str
+    requested_role: str
+    message: str
+    status: str
+    created_at: str
+    resolved_at: str | None
+    resolved_by: int | None
+
+
 # Table en mémoire pour les demandes de droits (simple dict en attendant un modèle DB)
 # En production, utiliser un modèle SQLAlchemy dédié.
-_permission_requests_store: dict[int, list] = {}
+_permission_requests_store: dict[int, list[PermissionRequestRecord]] = {}
 
 
-def _get_permission_requests(institution_id: int) -> list:
+def _get_permission_requests(institution_id: int) -> list[PermissionRequestRecord]:
     """Retourne la liste des demandes de droits pour une institution."""
     return _permission_requests_store.get(institution_id, [])
 
@@ -1612,14 +1670,12 @@ def _add_permission_request(
     current_role: str,
     requested_role: str,
     message: str,
-) -> dict:
+) -> PermissionRequestRecord:
     """Ajoute une demande de droits."""
-    from datetime import datetime, UTC
-
     if institution_id not in _permission_requests_store:
         _permission_requests_store[institution_id] = []
 
-    pr = {
+    pr: PermissionRequestRecord = {
         "id": len(_permission_requests_store[institution_id]) + 1,
         "user_id": user_id,
         "user_email": user_email,
@@ -1649,7 +1705,7 @@ class PermissionRequests(Resource):
     @institutions_ns.response(409, "Demande déjà en cours")
     @jwt_required()
     @role_required(UserRole.INSTITUTION)
-    def post(self):
+    def post(self):  # noqa: PLR0911
         """Envoie une demande de droits à l'admin de l'institution.
 
         Accessible à tous les rôles institution (sauf admin qui a déjà tous les droits).
@@ -1657,7 +1713,7 @@ class PermissionRequests(Resource):
         try:
             institution, user = AuthorizationService.require_institution()
             jwt_claims = get_jwt()
-            current_role = jwt_claims.get("institution_role", "")
+            current_role = str(jwt_claims.get("institution_role", "") or "")
 
             # L'admin n'a pas besoin de demander des droits
             if current_role == InstitutionRole.ADMIN.value:
@@ -1671,9 +1727,16 @@ class PermissionRequests(Resource):
             if errors:
                 return {"error": "Données invalides", "details": errors}, 400
 
-            validated = schema.load(data)
-            requested_role = validated["requested_role"]
-            message = validated["message"]
+            validated_raw = schema.load(data) or {}
+            if not isinstance(validated_raw, dict):
+                return {"error": "Données invalides"}, 400
+
+            requested_role = str(validated_raw.get("requested_role") or "")
+            message = str(validated_raw.get("message") or "")
+            if not requested_role:
+                return {"error": "Données invalides", "details": {"requested_role": ["Champ requis"]}}, 400
+            if not message:
+                return {"error": "Données invalides", "details": {"message": ["Champ requis"]}}, 400
 
             # Vérifier qu'il n'y a pas déjà une demande pending
             existing = _get_permission_requests(institution.id)
@@ -1683,15 +1746,17 @@ class PermissionRequests(Resource):
             )
             if has_pending:
                 return {
-                    "error": "Vous avez déjà une demande en attente. "
-                    "Veuillez attendre la réponse de l'administrateur."
+                    "error": (
+                        "Vous avez déjà une demande en attente. "
+                        "Veuillez attendre la réponse de l'administrateur."
+                    )
                 }, 409
 
             user_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
             pr = _add_permission_request(
                 institution_id=institution.id,
                 user_id=user.id,
-                user_email=user.email,
+                user_email=str(user.email or ""),
                 user_name=user_name or user.username,
                 current_role=current_role,
                 requested_role=requested_role,
@@ -1748,12 +1813,10 @@ class PermissionRequests(Resource):
             if current_role == InstitutionRole.ADMIN.value:
                 # Admin voit tout
                 return {"requests": all_requests}, 200
-            else:
-                # Autres: seulement les siennes
-                my_requests = [
-                    pr for pr in all_requests if pr["user_id"] == user.id
-                ]
-                return {"requests": my_requests}, 200
+
+            # Autres: seulement les siennes
+            my_requests = [pr for pr in all_requests if pr["user_id"] == user.id]
+            return {"requests": my_requests}, 200
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
@@ -1800,8 +1863,6 @@ class PermissionRequestResolve(Resource):
 
             if pr["status"] != "pending":
                 return {"error": "Cette demande a déjà été traitée"}, 400
-
-            from datetime import datetime, UTC
 
             pr["status"] = "approved" if action == "approve" else "denied"
             pr["resolved_at"] = datetime.now(UTC).isoformat()

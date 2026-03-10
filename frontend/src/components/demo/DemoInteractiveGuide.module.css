@@ -1,0 +1,267 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.05);
+  z-index: 2147483645;
+  pointer-events: none;
+}
+
+/* Étapes où l'utilisateur doit interagir (select patient, autocomplete destination, date/heure) :
+   z-index plus bas pour que les menus déroulants (react-select, AddressAutocomplete) à 10000 passent au-dessus */
+.overlayAllowInteractions {
+  z-index: 9998;
+}
+
+.spotlightAllowInteractions {
+  z-index: 9998;
+}
+
+.tooltipAllowInteractions {
+  z-index: 9999;
+}
+
+.overlayWelcome {
+  background: rgba(15, 23, 42, 0.52);
+  pointer-events: auto;
+}
+
+.spotlight {
+  position: fixed;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow:
+    0 0 0 9999px rgba(15, 23, 42, 0.26),
+    0 0 0 1px rgba(0, 121, 107, 0.24),
+    0 6px 16px rgba(15, 23, 42, 0.12);
+  z-index: 2147483645;
+  pointer-events: none;
+  will-change: top, left, width, height;
+  transition:
+    top 120ms ease-out,
+    left 120ms ease-out,
+    width 120ms ease-out,
+    height 120ms ease-out;
+}
+
+.tooltip {
+  position: fixed;
+  width: min(360px, calc(100vw - 24px));
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2);
+  z-index: 2147483646;
+  padding: 12px;
+  will-change: top, left;
+  transform: translateZ(0);
+  transition: top 80ms linear, left 80ms linear;
+  pointer-events: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.closeBtn {
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tooltip h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.tooltip p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.hint {
+  margin-top: 8px !important;
+  font-size: 0.83rem !important;
+  color: #0369a1 !important;
+}
+
+.actionLabel {
+  margin-top: 8px !important;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0f766e !important;
+  font-size: 0.83rem !important;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.primary,
+.secondary {
+  border-radius: 10px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary {
+  background: #00796b;
+  color: #fff;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.secondary {
+  background: #fff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+.freeModeBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.38);
+  z-index: 2147483646;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.freeModeToast {
+  width: min(520px, calc(100vw - 24px));
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+  z-index: 2147483647;
+  padding: 14px;
+}
+
+.freeModeToast h4 {
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.freeModeToast p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
+.freeModeActions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+:global([data-demo-guide-active='true']) {
+  position: relative;
+  z-index: 2147483644 !important;
+  outline: 1.5px solid rgba(0, 121, 107, 0.36);
+  box-shadow:
+    0 0 0 3px rgba(0, 121, 107, 0.1),
+    0 6px 14px rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  animation: guidePulse 2200ms ease-in-out infinite;
+}
+
+:global([data-demo-guide-active='true'])::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #0f766e;
+  border: 1px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 121, 107, 0.14);
+}
+
+:global(button[data-tour-id='create-booking'][data-demo-guide-active='true']) {
+  border-radius: 12px !important;
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(0, 121, 107, 0.14),
+    0 8px 16px rgba(15, 23, 42, 0.1);
+  animation:
+    guideButtonFocusPulse 2200ms ease-in-out infinite,
+    guideButtonMotion 1800ms ease-in-out infinite;
+}
+
+/* Le point d'annotation est utile sur les cartes/champs,
+   mais visuellement trop chargé pour un petit bouton CTA. */
+:global(button[data-tour-id='create-booking'][data-demo-guide-active='true'])::after {
+  display: none;
+}
+
+@keyframes guidePulse {
+  0% {
+    box-shadow:
+      0 0 0 3px rgba(0, 121, 107, 0.1),
+      0 6px 14px rgba(15, 23, 42, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px rgba(0, 121, 107, 0.08),
+      0 6px 14px rgba(15, 23, 42, 0.11);
+  }
+  100% {
+    box-shadow:
+      0 0 0 3px rgba(0, 121, 107, 0.1),
+      0 6px 14px rgba(15, 23, 42, 0.1);
+  }
+}
+
+@keyframes guideButtonFocusPulse {
+  0% {
+    box-shadow:
+      0 0 0 2px rgba(0, 121, 107, 0.12),
+      0 8px 18px rgba(15, 23, 42, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(0, 121, 107, 0.16),
+      0 9px 19px rgba(15, 23, 42, 0.12);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(0, 121, 107, 0.12),
+      0 8px 18px rgba(15, 23, 42, 0.1);
+  }
+}
+
+@keyframes guideButtonMotion {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-0.5px) scale(1.005);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+

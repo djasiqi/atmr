@@ -1,0 +1,222 @@
+services:
+  postgres-demo:
+    image: postgis/postgis:16-3.4-alpine
+    environment:
+      POSTGRES_DB: atmr_demo
+      POSTGRES_USER: atmr
+      POSTGRES_PASSWORD: atmr
+      TZ: Europe/Zurich
+    volumes:
+      - pg_data_demo:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atmr -d atmr_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - network_demo
+
+  redis-demo:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_demo:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - network_demo
+
+  api-demo:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: runtime
+    command: >
+      gunicorn wsgi:app
+      --bind 0.0.0.0:5000
+      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
+      --workers ${GUNICORN_WORKERS:-1}
+      --timeout 120
+      --access-logfile -
+      --error-logfile -
+      --log-level info
+      --no-sendfile
+    env_file:
+      - backend/.env
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - COOKIE_SECURE=false
+      - COOKIE_SAME_SITE=Lax
+      - COOKIE_HTTP_ONLY=true
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - STORAGE_BUCKET=${DEMO_STORAGE_BUCKET:-lirie-demo-storage}
+      - STORAGE_PREFIX=${DEMO_STORAGE_PREFIX:-demo/}
+      - POSTGRES_SSLMODE=disable
+      - PGSSLMODE=disable
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-false}
+      - API_LEGACY_ENABLED=false
+      - API_DOCS=off
+      - PDF_BASE_URL=https://demo.lirie.ch
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5100,http://127.0.0.1:5100
+      - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5100,http://127.0.0.1:5100
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    ports:
+      - "5100:5000"
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+  celery-worker-demo:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: runtime
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "-Q",
+        "default,notifications,realtime,dlq",
+      ]
+    user: "999:999"
+    env_file:
+      - backend/.env
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - COOKIE_SECURE=false
+      - COOKIE_SAME_SITE=Lax
+      - COOKIE_HTTP_ONLY=true
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - STORAGE_BUCKET=${DEMO_STORAGE_BUCKET:-lirie-demo-storage}
+      - STORAGE_PREFIX=${DEMO_STORAGE_PREFIX:-demo/}
+      - POSTGRES_SSLMODE=disable
+      - PGSSLMODE=disable
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+      api-demo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys;cmds=[p.read_bytes().decode('latin1','ignore') for p in pathlib.Path('/proc').glob('[0-9]*/cmdline')];sys.exit(0 if any('celery' in c and 'worker' in c for c in cmds) else 1)\"",
+        ]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+  celery-beat-demo:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+      target: runtime
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "beat",
+        "-l",
+        "info",
+        "-S",
+        "celery.beat.PersistentScheduler",
+        "-s",
+        "/tmp/celerybeat-schedule-demo",
+      ]
+    user: "999:999"
+    env_file:
+      - backend/.env
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - COOKIE_SECURE=false
+      - COOKIE_SAME_SITE=Lax
+      - COOKIE_HTTP_ONLY=true
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - STORAGE_BUCKET=${DEMO_STORAGE_BUCKET:-lirie-demo-storage}
+      - STORAGE_PREFIX=${DEMO_STORAGE_PREFIX:-demo/}
+      - POSTGRES_SSLMODE=disable
+      - PGSSLMODE=disable
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+      api-demo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import pathlib,sys;cmds=[p.read_bytes().decode('latin1','ignore') for p in pathlib.Path('/proc').glob('[0-9]*/cmdline')];sys.exit(0 if any('celery' in c and 'beat' in c for c in cmds) else 1)\"",
+        ]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+volumes:
+  pg_data_demo:
+  redis_data_demo:
+
+networks:
+  network_demo:

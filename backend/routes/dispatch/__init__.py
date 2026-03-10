@@ -33,6 +33,7 @@ from routes.dispatch import (  # noqa: E402
     dispatch_rl,  # type: ignore[reportUnusedImport]
     dispatch_run,  # type: ignore[reportUnusedImport]
     dispatch_runs,  # type: ignore[reportUnusedImport]
+    dispatch_scoring,  # type: ignore[reportUnusedImport]
     dispatch_settings,  # type: ignore[reportUnusedImport]
 )
 

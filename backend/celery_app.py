@@ -12,6 +12,11 @@ from celery import Celery
 if TYPE_CHECKING:
     from flask import Flask
 
+from services.demo.environment_guard import (
+    build_demo_environment_snapshot,
+    enforce_demo_environment_or_raise,
+)
+
 logger = logging.getLogger(__name__)
 
 # Default configuration
@@ -71,6 +76,9 @@ else:
 CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
 DISPATCH_AUTORUN_INTERVAL_SEC = int(os.getenv("DISPATCH_AUTORUN_INTERVAL_SEC", "300"))
 
+# Guard fail-fast pour worker/beat demo (pas de fallback vers prod)
+enforce_demo_environment_or_raise(build_demo_environment_snapshot())
+
 # Create Celery instance
 # ✅ Forcer explicitement le transport Redis pour éviter confusion avec AMQP
 celery: Celery = Celery(
@@ -96,6 +104,7 @@ celery: Celery = Celery(
         "tasks.request_offer_tasks",  # ✅ ÉTAPE 4: Expiration/escalade offres institution
         "tasks.patient_sync_tasks",  # ✅ Curatelle: sync patient cross-plateforme
         "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
+        "tasks.demo_access_tasks",  # ✅ Demo 24h: expiration automatique des acces demo
     ],
 )
 
@@ -363,6 +372,33 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 6 * 3600,  # Expire après 6h
             "jitter": 1800,  # ✅ 2.6: Jitter jusqu'à 30 minutes
+        },
+    },
+    # ✅ Demo 24h: expiration auto des acces toutes les 5 minutes
+    "expire-demo-accesses": {
+        "task": "tasks.demo_access_tasks.expire_demo_accesses",
+        "schedule": 300.0,
+        "options": {
+            "expires": 600,
+            "jitter": 30,
+        },
+    },
+    # ✅ Demo: contrôle fréquent du socle partagé (toutes les heures)
+    "ensure-demo-reference-dataset": {
+        "task": "tasks.demo_access_tasks.ensure_demo_reference_dataset",
+        "schedule": 3600.0,
+        "options": {
+            "expires": 1800,
+            "jitter": 180,
+        },
+    },
+    # ✅ Demo: reset automatique quotidien du dataset vivant
+    "reset-demo-reference-dataset-daily": {
+        "task": "tasks.demo_access_tasks.reset_demo_reference_dataset",
+        "schedule": 24 * 3600,
+        "options": {
+            "expires": 6 * 3600,
+            "jitter": 1800,
         },
     },
 }

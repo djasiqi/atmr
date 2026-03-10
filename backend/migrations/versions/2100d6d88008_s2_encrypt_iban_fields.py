@@ -165,8 +165,8 @@ def upgrade():
             f"dans la table company_billing_settings"
         )
 
-        # Commit les changements
-        connection.commit()
+        # Ne jamais commit explicitement dans une migration Alembic:
+        # la transaction est gérée par Alembic, sinon le suivi de version peut diverger.
 
     except Exception as e:
         print(f"⚠️ Erreur lors du chiffrement des IBAN: {e}")

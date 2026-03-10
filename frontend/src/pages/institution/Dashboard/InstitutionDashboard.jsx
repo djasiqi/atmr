@@ -13,7 +13,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   FaClipboardList,
   FaArrowRight,
@@ -30,6 +30,7 @@ import {
   useInstitutionMe,
   useInstitutionRequests,
 } from '../../../hooks/useInstitutionData';
+import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 import s from './InstitutionDashboard.module.css';
 
 // ─── Status config ──────────────────────────────────────────
@@ -111,6 +112,32 @@ const isToday = (dateStr) => {
 const InstitutionDashboard = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const fallbackDemoMission = isDemoEnv
+    ? (
+        localStorage.getItem('demo_recommended_journey') ||
+        localStorage.getItem('demo_demo_recommended_journey') ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase()
+    : '';
+  const isInstitutionDemoCompleted = (() => {
+    try {
+      return window.sessionStorage.getItem('demo_institution_journey_completed') === '1';
+    } catch {
+      return false;
+    }
+  })();
+  const demoMission = useMemo(() => {
+    if (isInstitutionDemoCompleted) return null;
+    const mission = new URLSearchParams(location.search).get('demo_mission');
+    if (mission) return mission;
+    if (fallbackDemoMission === 'institution') return 'institution';
+    return null;
+  }, [location.search, fallbackDemoMission, isInstitutionDemoCompleted]);
 
   const { data: institutionData } = useInstitutionMe();
   const { data: requestsData, isLoading: loadingRequests } = useInstitutionRequests({
@@ -197,8 +224,15 @@ const InstitutionDashboard = () => {
 
   return (
     <div className={s.dashboard}>
+      {demoMission === 'institution' && (
+        <DemoInteractiveGuide
+          role="institution"
+          onFinish={() => {}}
+          userFirstName={user?.first_name}
+        />
+      )}
       {/* ── Header contextuel (pas de bouton, déjà dans le layout) ── */}
-      <div className={s.dashHeader}>
+      <div className={s.dashHeader} data-tour-id="institution-dashboard">
         <h2 className={s.dashTitle}>
           {greeting}{userName ? ` ${userName}` : ''}
         </h2>
@@ -214,7 +248,7 @@ const InstitutionDashboard = () => {
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────── */}
-      <div className={s.kpiGrid}>
+      <div className={s.kpiGrid} data-tour-id="institution-kpi-grid">
         <Link
           to={`/dashboard/institution/${public_id}/requests`}
           className={`${s.kpiCard} ${s.kpiTotal}`}
@@ -238,7 +272,7 @@ const InstitutionDashboard = () => {
           </div>
         </div>
 
-        <div className={`${s.kpiCard} ${s.kpiPending}`}>
+        <div className={`${s.kpiCard} ${s.kpiPending}`} data-tour-id="institution-kpi-pending">
           <div className={s.kpiIconWrap}>
             <FaHourglassHalf />
           </div>
@@ -267,7 +301,7 @@ const InstitutionDashboard = () => {
       {/* ── Transports du jour + Demandes récentes ────────── */}
       <div className={s.cardsGrid}>
         {/* Transports du jour */}
-        <div className={s.card}>
+        <div className={s.card} data-tour-id="institution-create-request">
           <div className={s.cardHeader}>
             <div className={s.cardHeaderLeft}>
               <FaCalendarDay className={s.cardHeaderIcon} />
@@ -332,7 +366,7 @@ const InstitutionDashboard = () => {
         </div>
 
         {/* Demandes récentes */}
-        <div className={s.card}>
+        <div className={s.card} data-tour-id="institution-history">
           <div className={s.cardHeader}>
             <div className={s.cardHeaderLeft}>
               <FaFileAlt className={s.cardHeaderIcon} />

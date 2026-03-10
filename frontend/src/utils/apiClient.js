@@ -7,14 +7,147 @@ let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_AP
 
 let socketTarget = process.env.REACT_APP_SOCKET_URL || '/socket.io';
 
+const AUTH_ENV_STORAGE_KEY = 'lirie_auth_env';
+const APP_ENV_KEY = 'app';
+const DEMO_ENV_KEY = 'demo';
+const LOCAL_UNIFIED_HOST_REGEX = /^(localhost|127\.0\.0\.1)$/i;
+const PROD_UNIFIED_HOST_REGEX = /(^|\.)lirie\.ch$/i;
+const API_BASES = {
+  gateway: '/api/gateway',
+  app: '/api/app',
+  demo: '/api/demo',
+};
+
+const _isCompanyRoutePath = (url = '') => {
+  const targetUrl = String(url || '');
+  return (
+    targetUrl.startsWith('/companies/') ||
+    targetUrl.startsWith('/company_dispatch') ||
+    targetUrl.startsWith('/company-settings')
+  );
+};
+
+const parseOptionalBoolean = (value) => {
+  if (value == null) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return null;
+};
+
+const isLocalhostDev3000 = () => {
+  try {
+    return (
+      typeof window !== 'undefined' &&
+      window.location &&
+      /^(localhost|127\.0\.0\.1):3000$/i.test(window.location.host)
+    );
+  } catch (_) {
+    return false;
+  }
+};
+
+const isGatewayAuthRoute = (url = '') => {
+  const targetUrl = String(url || '');
+  return (
+    targetUrl.startsWith('/auth/login') ||
+    targetUrl.startsWith('/auth/context') ||
+    targetUrl.startsWith('/auth/csrf-token')
+  );
+};
+
+const isUnifiedGatewayHost = () => {
+  try {
+    const forcedUnifiedMode = parseOptionalBoolean(process.env.REACT_APP_UNIFIED_LOGIN_MODE);
+    if (forcedUnifiedMode !== null) {
+      return forcedUnifiedMode;
+    }
+
+    const hostname = window?.location?.hostname || '';
+    const port = window?.location?.port || '';
+    const isLocalUnifiedDevHost =
+      LOCAL_UNIFIED_HOST_REGEX.test(hostname) && port === '3000';
+    const isProdUnifiedHost = PROD_UNIFIED_HOST_REGEX.test(hostname);
+
+    return Boolean(
+      typeof window !== 'undefined' &&
+      window.location &&
+      (isLocalUnifiedDevHost || isProdUnifiedHost)
+    );
+  } catch (_) {
+    return false;
+  }
+};
+
+export const getCurrentAuthEnv = () => {
+  try {
+    const value = localStorage.getItem(AUTH_ENV_STORAGE_KEY);
+    return value === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
+  } catch (_) {
+    return APP_ENV_KEY;
+  }
+};
+
+export const setCurrentAuthEnv = (env) => {
+  const next = env === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
+  try {
+    localStorage.setItem(AUTH_ENV_STORAGE_KEY, next);
+  } catch (_) {
+    // no-op
+  }
+  return next;
+};
+
+const getStorageTokenByEnv = (env) =>
+  env === DEMO_ENV_KEY ? localStorage.getItem('demo_access_token') : localStorage.getItem('app_access_token');
+
+const getStorageRefreshByEnv = (env) =>
+  env === DEMO_ENV_KEY ? localStorage.getItem('demo_refresh_token') : localStorage.getItem('app_refresh_token');
+
+const getStoredRoleFromEnv = (env) => {
+  try {
+    const raw = localStorage.getItem(`${env}_user`) || localStorage.getItem('user');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    return String(parsed?.role || '')
+      .trim()
+      .toLowerCase();
+  } catch (_) {
+    return '';
+  }
+};
+
+const getScopedCompanyAccessToken = (env) => {
+  if (env === DEMO_ENV_KEY) {
+    // En demo, utiliser strictement le token demo pour éviter les mélanges app<->demo.
+    return getStorageTokenByEnv(DEMO_ENV_KEY);
+  }
+  return (
+    localStorage.getItem('company_access_token') ||
+    localStorage.getItem('company_authToken') ||
+    getStorageTokenByEnv(APP_ENV_KEY)
+  );
+};
+
+const resolveApiBase = (url) => {
+  if (!isUnifiedGatewayHost()) {
+    return baseApiRest;
+  }
+
+  if (isGatewayAuthRoute(url)) {
+    return API_BASES.gateway;
+  }
+
+  const env = getCurrentAuthEnv();
+  return env === DEMO_ENV_KEY ? API_BASES.demo : API_BASES.app;
+};
+
 // En dev (CRA sur localhost:3000), on force le proxy '/api' pour éviter le CORS
 try {
-  if (
-    typeof window !== 'undefined' &&
-    window.location &&
-    /localhost:3000$/i.test(window.location.host)
-  ) {
+  if (isLocalhostDev3000()) {
     // En dev, utiliser explicitement /api/v1 pour s'aligner avec le backend versionné
+    // Même si une variable d'env API existe, on force le proxy local pour que le mode
+    // unifié (gateway/app/demo) passe par setupProxy et évite les blocages CSRF cross-origin.
     baseApiRest = '/api/v1';
     socketTarget = '/socket.io';
   }
@@ -43,7 +176,7 @@ export const apiSocket = axios.create({
 let csrfToken = null;
 let csrfTokenExpiry = null;
 
-const getCsrfToken = async () => {
+const getCsrfToken = async (baseURLForCsrf = baseApiRest) => {
   // Vérifier si le token est encore valide
   if (csrfToken && csrfTokenExpiry && Date.now() < csrfTokenExpiry) {
     return csrfToken;
@@ -51,7 +184,7 @@ const getCsrfToken = async () => {
 
   try {
     // Récupérer un nouveau token CSRF en utilisant axios directement pour éviter les dépendances circulaires
-    const response = await axios.get(`${baseApiRest}/auth/csrf-token`, {
+    const response = await axios.get(`${baseURLForCsrf}/auth/csrf-token`, {
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
@@ -73,21 +206,80 @@ const addAuthHeader = async (cfg = {}) => {
     cfg.headers = {};
   }
 
+  const isRelativeAppPath =
+    typeof cfg.url === 'string' &&
+    !cfg.url.startsWith('/api/') &&
+    !cfg.url.startsWith('http');
+  const hasDefaultApiBase =
+    !cfg.baseURL ||
+    cfg.baseURL === baseApiRest ||
+    cfg.baseURL === process.env.REACT_APP_API_BASE_URL ||
+    cfg.baseURL === process.env.REACT_APP_API_URL;
+
+  if (
+    isUnifiedGatewayHost() &&
+    !cfg.skipEnvRouting &&
+    isRelativeAppPath &&
+    hasDefaultApiBase
+  ) {
+    cfg.baseURL = resolveApiBase(cfg.url);
+  }
+
   if (cfg.baseURL && cfg.baseURL.endsWith('/')) {
     cfg.baseURL = cfg.baseURL.slice(0, -1);
   }
 
-  // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
-  // Les tokens sont stockés dans des cookies httpOnly définis par le backend
-  // Les cookies sont envoyés automatiquement avec withCredentials: true
-  // On ne doit PAS envoyer le header Authorization car le backend lit automatiquement les cookies
-  // Exception: uniquement pour /auth/refresh-token qui peut nécessiter le refresh_token dans le header
-  // mais pour le web, le backend lit le refresh_token depuis les cookies automatiquement
+  if (isUnifiedGatewayHost() && !cfg.headers.Authorization) {
+    const explicitEnv =
+      cfg._targetEnv === DEMO_ENV_KEY || cfg._targetEnv === APP_ENV_KEY
+        ? cfg._targetEnv
+        : null;
+    const env =
+      explicitEnv ||
+      (cfg.baseURL === API_BASES.demo
+        ? DEMO_ENV_KEY
+        : cfg.baseURL === API_BASES.app
+          ? APP_ENV_KEY
+          : getCurrentAuthEnv());
+    cfg._targetEnv = env;
+    const role = getStoredRoleFromEnv(env);
+    const envToken = getStorageTokenByEnv(env);
+    const legacyCrossEnvToken =
+      env === APP_ENV_KEY ? localStorage.getItem('authToken') : null;
+    const companyScopedToken =
+      role === 'company' || role === 'admin' ? getScopedCompanyAccessToken(env) : null;
+    // Pour baseURL === /api/demo : jamais authToken/refreshToken (legacy app)
+    const token =
+      env === DEMO_ENV_KEY
+        ? envToken || companyScopedToken
+        : envToken || companyScopedToken || legacyCrossEnvToken;
+    if (token) {
+      cfg.headers.Authorization = `Bearer ${token}`;
+    }
+  }
 
   // ✅ Ajouter le token CSRF pour les requêtes mutantes (POST, PUT, DELETE, PATCH)
   const method = cfg.method?.toUpperCase() || (cfg.url ? 'GET' : 'GET');
+  if (cfg.skipCsrf) {
+    return cfg;
+  }
+
+  // Le login/context gateway est un endpoint d'entrée public: ne pas précharger un CSRF app/demo.
+  if (
+    isUnifiedGatewayHost() &&
+    cfg.baseURL === API_BASES.gateway &&
+    isGatewayAuthRoute(cfg.url)
+  ) {
+    return cfg;
+  }
+
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-    const csrf = await getCsrfToken();
+    const csrfBase = isUnifiedGatewayHost()
+      ? cfg._targetEnv === DEMO_ENV_KEY
+        ? API_BASES.demo
+        : API_BASES.app
+      : baseApiRest;
+    const csrf = await getCsrfToken(csrfBase);
     if (csrf) {
       cfg.headers['X-CSRF-Token'] = csrf;
     }
@@ -111,9 +303,23 @@ apiRest.interceptors.request.use((config) => {
       delete config.headers.common.Authorization;
       delete config.headers.common.authorization;
     }
-    const companyToken =
-      localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
-      localStorage.getItem('company_authToken'); // fallback migration snake_case
+    const env = getCurrentAuthEnv();
+    let companyToken = getScopedCompanyAccessToken(env);
+
+    if (!companyToken) {
+      const role = getStoredRoleFromEnv(env);
+      const envToken = getStorageTokenByEnv(env);
+      if ((role === 'company' || role === 'admin') && envToken) {
+        companyToken = envToken;
+        try {
+          if (env === APP_ENV_KEY) {
+            localStorage.setItem(COMPANY_ACCESS_TOKEN_KEY, envToken);
+          }
+        } catch (_) {
+          // no-op
+        }
+      }
+    }
     if (companyToken) {
       config.headers.Authorization = `Bearer ${companyToken}`;
       return config;
@@ -147,6 +353,15 @@ const processQueue = (error, token = null) => {
 };
 
 export const cleanLocalSession = () => {
+  localStorage.removeItem(AUTH_ENV_STORAGE_KEY);
+  localStorage.removeItem('app_user');
+  localStorage.removeItem('app_public_id');
+  localStorage.removeItem('app_access_token');
+  localStorage.removeItem('app_refresh_token');
+  localStorage.removeItem('demo_user');
+  localStorage.removeItem('demo_public_id');
+  localStorage.removeItem('demo_access_token');
+  localStorage.removeItem('demo_refresh_token');
   // Legacy
   localStorage.removeItem('user');
   localStorage.removeItem('public_id');
@@ -179,8 +394,9 @@ export const cleanLocalSession = () => {
 
 export const logoutUser = async (options = { redirect: true }) => {
   try {
+    const isUnified = isUnifiedGatewayHost();
     await apiClient.delete('/shadow-mode/session', {
-      baseURL: '/api',
+      baseURL: isUnified ? API_BASES.app : '/api',
       skipAuthRedirect: true,
     });
   } catch (error) {
@@ -213,6 +429,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const status = error?.response?.status;
     const cfg = error?.config || {};
+    // Aucun fallback cross-env : requêtes demo ne retentent jamais sur /api/app
 
     // Message sympa pour 429 (limiter)
     if (status === 429) {
@@ -242,10 +459,6 @@ apiClient.interceptors.response.use(
         });
       }
       
-      // ✅ P1-1: Pour le web, le refresh_token est dans les cookies httpOnly
-      // Le backend lit automatiquement le refresh_token depuis les cookies
-      // Pas besoin de récupérer depuis localStorage
-      
       // Si déjà en train de refresh une requête /auth/refresh-token, éviter boucle
       if (cfg.url?.includes('/auth/refresh-token')) {
         logoutUser();
@@ -271,22 +484,48 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        // ✅ P1-1: Le refresh_token est dans les cookies httpOnly
-        // Le backend lit automatiquement le refresh_token depuis les cookies
-        // Pas besoin d'envoyer dans le header Authorization
-        await apiClient.post(
+        const targetEnv = cfg._targetEnv || getCurrentAuthEnv();
+        const refreshToken =
+          targetEnv === DEMO_ENV_KEY
+            ? getStorageRefreshByEnv(DEMO_ENV_KEY)
+            : getStorageRefreshByEnv(targetEnv) || localStorage.getItem('refreshToken');
+        const refreshBase = isUnifiedGatewayHost()
+          ? targetEnv === DEMO_ENV_KEY
+            ? API_BASES.demo
+            : API_BASES.app
+          : undefined;
+
+        const refreshResponse = await apiClient.post(
           '/auth/refresh-token',
-          {},
+          refreshToken ? { refresh_token: refreshToken } : {},
           {
             skipAuthRedirect: true, // Éviter boucle
+            _targetEnv: targetEnv,
+            ...(refreshBase ? { baseURL: refreshBase } : {}),
           }
         );
 
-        // ✅ P1-1: Les nouveaux tokens sont dans les cookies httpOnly
-        // Pas besoin de les stocker dans localStorage
-        // Le backend a déjà mis à jour les cookies
+        const refreshed = refreshResponse?.data || {};
+        const nextAccessToken = refreshed.access_token || refreshed.token;
+        const nextRefreshToken = refreshed.refresh_token;
+        if (nextAccessToken) {
+          if (targetEnv === DEMO_ENV_KEY) {
+            localStorage.setItem('demo_access_token', nextAccessToken);
+          } else {
+            localStorage.setItem('app_access_token', nextAccessToken);
+          }
+          localStorage.setItem('authToken', nextAccessToken);
+        }
+        if (nextRefreshToken) {
+          if (targetEnv === DEMO_ENV_KEY) {
+            localStorage.setItem('demo_refresh_token', nextRefreshToken);
+          } else {
+            localStorage.setItem('app_refresh_token', nextRefreshToken);
+          }
+          localStorage.setItem('refreshToken', nextRefreshToken);
+        }
 
-        // Process queued requests (pas besoin de token, les cookies sont automatiques)
+        // Process queued requests après rafraîchissement réussi
         processQueue(null, null);
 
         // ✅ P1-1: Retry requête originale
@@ -327,7 +566,13 @@ apiClient.interceptors.response.use(
             message: 'Cette action nécessite une reconnexion récente. Veuillez vous reconnecter pour continuer.',
           });
         }
-        logoutUser();
+        // Ne pas faire de logout global si l'erreur est cross-env (requête demo avec session app ou inversement)
+        const requestEnv = cfg.baseURL === API_BASES.demo ? DEMO_ENV_KEY : cfg.baseURL === API_BASES.app ? APP_ENV_KEY : null;
+        const currentEnv = getCurrentAuthEnv();
+        const isCrossEnvError = requestEnv && requestEnv !== currentEnv;
+        if (!isCrossEnvError) {
+          logoutUser();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

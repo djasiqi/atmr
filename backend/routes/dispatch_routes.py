@@ -3069,30 +3069,6 @@ class OptimizerStatusResource(Resource):
         company_id = _current_company_id()
 
         try:
-            # #region agent log
-            try:
-                import json
-
-                with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                    "a", encoding="utf-8"
-                ) as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                                "location": "dispatch_routes.py:2886",
-                                "message": "OptimizerStatusResource.get entry",
-                                "data": {"company_id": company_id},
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             optimizer = get_optimizer_for_company(company_id)
 
             if optimizer is None:
@@ -3103,62 +3079,9 @@ class OptimizerStatusResource(Resource):
                 }, 200
 
             status = optimizer.get_status()
-            # #region agent log
-            try:
-                import json
-
-                with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                    "a", encoding="utf-8"
-                ) as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                                "location": "dispatch_routes.py:2895",
-                                "message": "OptimizerStatusResource.get before return",
-                                "data": {"status_type": str(type(status))},
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return status, 200
 
         except Exception as e:
-            # #region agent log
-            try:
-                import json
-                import traceback
-
-                with Path(r"c:\Users\jasiq\atmr\.cursor\debug.log").open(
-                    "a", encoding="utf-8"
-                ) as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                                "location": "dispatch_routes.py:2898",
-                                "message": "OptimizerStatusResource.get exception",
-                                "data": {
-                                    "error": str(e),
-                                    "error_type": str(type(e).__name__),
-                                    "traceback": traceback.format_exc(),
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             return APIErrorHandler.handle_exception(e, logger)
 
 

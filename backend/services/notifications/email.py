@@ -19,7 +19,7 @@ EMAIL_PROVIDER = os.getenv("EMAIL_PROVIDER", "smtp")  # smtp, brevo, sendgrid
 # Configuration SMTP
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER")
+SMTP_USER = os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "notifications@atmr.app")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "ATMR Notifications")
@@ -35,6 +35,9 @@ def send_email_notification(
     notification_type: str = "unknown",
     *,
     html: bool = False,
+    reply_to: str | None = None,
+    from_email: str | None = None,
+    from_name: str | None = None,
 ) -> Dict[str, Any]:
     """Envoie un email via SMTP ou Brevo.
 
@@ -55,9 +58,27 @@ def send_email_notification(
         return {"ok": False, "error": "Email notifications disabled"}
 
     if EMAIL_PROVIDER == "brevo":
-        return _send_via_brevo(email, subject, body, notification_type, html=html)
+        return _send_via_brevo(
+            email,
+            subject,
+            body,
+            notification_type,
+            html=html,
+            reply_to=reply_to,
+            from_email=from_email,
+            from_name=from_name,
+        )
 
-    return _send_via_smtp(email, subject, body, notification_type, html=html)
+    return _send_via_smtp(
+        email,
+        subject,
+        body,
+        notification_type,
+        html=html,
+        reply_to=reply_to,
+        from_email=from_email,
+        from_name=from_name,
+    )
 
 
 def _send_via_smtp(
@@ -67,6 +88,9 @@ def _send_via_smtp(
     notification_type: str,
     *,
     html: bool = False,
+    reply_to: str | None = None,
+    from_email: str | None = None,
+    from_name: str | None = None,
 ) -> Dict[str, Any]:
     """Envoie un email via SMTP.
 
@@ -99,12 +123,16 @@ def _send_via_smtp(
             email.split("@")[0][:3] + "***",  # Masquer pour privacy
             notification_type,
         )
+        sender_email = (from_email or SMTP_FROM_EMAIL).strip()
+        sender_name = (from_name or SMTP_FROM_NAME).strip()
 
         # Créer le message
         msg = MIMEMultipart("alternative")
-        msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
+        msg["From"] = f"{sender_name} <{sender_email}>"
         msg["To"] = email
         msg["Subject"] = subject
+        if reply_to:
+            msg["Reply-To"] = reply_to
 
         # Ajouter le corps (texte ou HTML)
         if html:
@@ -134,6 +162,9 @@ def _send_via_brevo(
     notification_type: str,
     *,
     html: bool = False,
+    reply_to: str | None = None,
+    from_email: str | None = None,
+    from_name: str | None = None,
 ) -> Dict[str, Any]:
     """Envoie un email via Brevo API.
 
@@ -163,12 +194,14 @@ def _send_via_brevo(
         # Préparer le payload Brevo
         payload = {
             "sender": {
-                "name": SMTP_FROM_NAME,
-                "email": SMTP_FROM_EMAIL,
+                "name": (from_name or SMTP_FROM_NAME).strip(),
+                "email": (from_email or SMTP_FROM_EMAIL).strip(),
             },
             "to": [{"email": email}],
             "subject": subject,
         }
+        if reply_to:
+            payload["replyTo"] = {"email": reply_to}
 
         if html:
             payload["htmlContent"] = body

@@ -22,7 +22,17 @@ import {
   markAllCompanyNotificationsRead,
 } from '../../../services/companyService';
 import useCompanySocket from '../../../hooks/useCompanySocket';
+import { getCurrentAuthEnv } from '../../../utils/apiClient';
 import styles from './CompanyNotificationBell.module.css';
+
+const hasCompanyToken = () =>
+  getCurrentAuthEnv() === 'demo'
+    ? !!localStorage.getItem('demo_access_token')
+    : !!(
+      localStorage.getItem('company_access_token') ||
+      localStorage.getItem('company_authToken') ||
+      localStorage.getItem('app_access_token')
+    );
 
 const EVENT_ICONS = {
   booking_message: FaCommentDots,
@@ -53,6 +63,8 @@ function timeAgo(dateString) {
 const CompanyNotificationBell = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
+  const isDemoEnv = (getCurrentAuthEnv() || '').toLowerCase() === 'demo';
+  const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
   const socket = useCompanySocket();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -64,6 +76,11 @@ const CompanyNotificationBell = () => {
   const bellRef = useRef(null);
 
   const loadNotifications = useCallback(async () => {
+    if (!hasCompanyToken()) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
     try {
       setIsLoading(true);
       const data = await fetchCompanyNotifications({ limit: 30 });
@@ -134,7 +151,7 @@ const CompanyNotificationBell = () => {
       }
 
       const meta = notif.metadata || {};
-      const base = `/dashboard/company/${public_id}`;
+      const base = `${dashboardRoot}/company/${public_id}`;
       let link = base;
       if (notif.event_type === 'new_request') {
         link = base;
@@ -145,7 +162,7 @@ const CompanyNotificationBell = () => {
       setIsOpen(false);
       navigate(link);
     },
-    [public_id, navigate]
+    [public_id, navigate, dashboardRoot]
   );
 
   const handleMarkAllRead = useCallback(async () => {

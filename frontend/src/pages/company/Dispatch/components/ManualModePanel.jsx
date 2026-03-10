@@ -198,8 +198,15 @@ const ManualModePanel = ({
 
   return (
     <>
+      <div className={styles.demoSummary} data-tour-id="dispatch-demo-summary">
+        <strong>Aujourd'hui :</strong>{' '}
+        {sortedDispatches.length} transport{sortedDispatches.length > 1 ? 's' : ''} planifie
+        {sortedDispatches.length > 1 ? 's' : ''} · {kpis.unassigned} a assigner · {kpis.inProgress}{' '}
+        en cours · {drivers.length} chauffeur{drivers.length > 1 ? 's' : ''} disponible
+        {drivers.length > 1 ? 's' : ''}
+      </div>
       {/* Zone B: Command Bar */}
-      <div className={styles.commandBar}>
+      <div className={styles.commandBar} data-tour-id="dispatch-command-bar">
         <div className={styles.searchWrap}>
           <FiSearch size={14} className={styles.searchIcon} />
           <input
@@ -208,6 +215,7 @@ const ManualModePanel = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className={styles.searchInput}
+            data-tour-id="dispatch-search-input"
           />
           {searchQuery && (
             <button className={styles.clearBtn} onClick={() => setSearchQuery('')} type="button">
@@ -237,7 +245,7 @@ const ManualModePanel = ({
           {sortOrder === 'asc' ? <FiArrowUp size={14} /> : <FiArrowDown size={14} />}
         </button>
 
-        <div className={styles.segmented}>
+        <div className={styles.segmented} data-tour-id="dispatch-filters">
           <button
             type="button"
             className={`${styles.segBtn} ${activeFilter === 'all' ? styles.segBtnActive : ''}`}
@@ -302,7 +310,7 @@ const ManualModePanel = ({
       </div>
 
       {/* Zone C: KPIs inline */}
-      <div className={styles.kpisRow}>
+      <div className={styles.kpisRow} data-tour-id="dispatch-kpis-row">
         <span className={`${styles.kpiItem} ${kpis.unassigned > 0 ? styles.kpiWarning : ''}`}>
           A assigner : <strong>{kpis.unassigned}</strong>
         </span>

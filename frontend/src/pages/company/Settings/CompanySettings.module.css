@@ -852,6 +852,27 @@
   margin: 2px 0 0;
 }
 
+.pricingZonesFieldsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.pricingZonesMapToolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.pricingZonesMapContainer {
+  height: clamp(340px, 58vh, 680px);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
 .fieldGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1287,6 +1308,14 @@
     font-size: 0.65rem;
     padding: 4px var(--spacing-sm);
   }
+
+  .pricingZonesFieldsRow {
+    grid-template-columns: 1fr;
+  }
+
+  .pricingZonesMapContainer {
+    height: min(72vh, 560px);
+  }
 }
 
 /* Petit mobile */
@@ -1364,6 +1393,10 @@
   /* Reminder */
   .reminderTitle {
     font-size: var(--font-sm);
+  }
+
+  .pricingZonesMapContainer {
+    height: min(68vh, 500px);
   }
 }
 

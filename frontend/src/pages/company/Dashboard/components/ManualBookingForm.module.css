@@ -412,6 +412,13 @@
   gap: 6px;
 }
 
+.datePresetGroup {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .datePresetBtn {
   padding: 4px 10px;
   border: 1px solid var(--border-primary, #e5e7eb);

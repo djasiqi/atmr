@@ -34,6 +34,7 @@ const InvoiceRowActions = ({
   onCancel,
   onViewPdf,
   onDuplicate,
+  isGuideAnchor = false,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, direction: 'below' });
@@ -274,7 +275,10 @@ const InvoiceRowActions = ({
 
   // Toujours afficher le menu déroulant pour toutes les factures
   return (
-    <div className={styles.actionMenu}>
+    <div
+      className={styles.actionMenu}
+      data-tour-id={isGuideAnchor ? 'invoice-row-actions' : undefined}
+    >
       <button
         ref={buttonRef}
         className={`${styles.actionBtn} ${styles.actionBtnSecondary}`}

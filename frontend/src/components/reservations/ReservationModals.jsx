@@ -9,6 +9,53 @@ import InlineDatePicker from '../ui/InlineDatePicker';
 import InlineTimePicker from '../ui/InlineTimePicker';
 import styles from './ReservationModals.module.css';
 
+const DEMO_FIRST_NAMES = [
+  'Lucas',
+  'Nicolas',
+  'Karim',
+  'Yann',
+  'Alexandre',
+  'Sami',
+  'Mehdi',
+  'Romain',
+];
+
+const DEMO_LAST_NAMES = [
+  'Perrin',
+  'Morel',
+  'Dubois',
+  'Favre',
+  'Bianchi',
+  'Rey',
+  'Lombard',
+  'Muller',
+];
+
+const hashString = (value) => {
+  let hash = 0;
+  const str = String(value || '');
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+};
+
+const resolveDriverDisplayName = (driver, index) => {
+  const fullName = String(driver?.full_name || '').trim();
+  if (fullName) return fullName;
+
+  const username = String(driver?.username || '').trim();
+  if (/^demo_driver_/i.test(username)) {
+    const seed = hashString(`${username}:${driver?.id ?? index}`);
+    const first = DEMO_FIRST_NAMES[seed % DEMO_FIRST_NAMES.length];
+    const last = DEMO_LAST_NAMES[Math.floor(seed / 7) % DEMO_LAST_NAMES.length];
+    return `${first} ${last}`;
+  }
+
+  if (username) return username;
+  return `Chauffeur ${index + 1}`;
+};
+
 const ScheduleReturnTimeModal = ({ isOpen, onClose, reservation, onConfirm }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
@@ -167,7 +214,7 @@ const AssignDriverModal = ({ isOpen, onClose, reservation, drivers = [], onAssig
 
   return (
     <Modal onClose={onClose} size="compact">
-      <div className={styles.modalWrapper}>
+      <div className={styles.modalWrapper} data-tour-id="assign-driver-modal">
         <h3>Assigner un chauffeur</h3>
 
         {reservation && (
@@ -187,12 +234,17 @@ const AssignDriverModal = ({ isOpen, onClose, reservation, drivers = [], onAssig
           {drivers.length === 0 ? (
             <p className={styles.noDrivers}>Aucun chauffeur disponible</p>
           ) : (
-            drivers.map((driver) => (
+            drivers.map((driver, index) => (
               <div key={driver.id} className={styles.driverItem}>
-                <div className={styles.driverInfo}>
-                  <span className={styles.driverName}>{driver.username || driver.full_name}</span>
+                <div className={styles.driverInfo} data-tour-id="assign-driver-option">
+                  <span className={styles.driverName}>{resolveDriverDisplayName(driver, index)}</span>
                 </div>
-                <Button variant="primary" size="sm" onClick={() => handleAssign(driver.id)}>
+                <Button
+                  data-tour-id="assign-driver-confirm"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => handleAssign(driver.id)}
+                >
                   Assigner
                 </Button>
               </div>

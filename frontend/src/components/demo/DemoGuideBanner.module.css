@@ -1,0 +1,54 @@
+.banner {
+  border: 1px solid rgba(0, 121, 107, 0.24);
+  background: linear-gradient(180deg, rgba(0, 121, 107, 0.08) 0%, rgba(0, 121, 107, 0.04) 100%);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0 0 8px;
+  color: #0f3f3a;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.meta {
+  margin: 0 0 10px;
+  color: #2f5c57;
+  font-size: 0.86rem;
+}
+
+.missions {
+  margin: 0;
+  padding-left: 18px;
+  color: #1f4944;
+  font-size: 0.86rem;
+  display: grid;
+  gap: 4px;
+}
+
+.footer {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hint {
+  color: #2f5c57;
+  font-size: 0.8rem;
+}
+
+.cta {
+  border: 1px solid rgba(0, 121, 107, 0.32);
+  background: #fff;
+  color: #00695c;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+

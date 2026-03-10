@@ -334,28 +334,6 @@ def _emit_notifications_after_commit(
     company_id: int,
 ) -> None:
     """Émet les notifications Socket.IO APRÈS commit réussi de la transaction.
-    # #region agent log
-    import json
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "G",
-                    "location": "apply.py:475",
-                    "message": "_emit_notifications_after_commit entry",
-                    "data": {
-                        "len_applied_pairs": len(applied_pairs),
-                        "applied_pairs": applied_pairs,
-                        "company_id": company_id,
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
 
     Cette fonction est appelée uniquement après un commit réussi pour éviter
     d'émettre des notifications si la transaction est rollback.
@@ -367,46 +345,7 @@ def _emit_notifications_after_commit(
         applied_pairs: Liste de tuples (booking_id, driver_id) des assignations appliquées
         company_id: ID de l'entreprise
     """
-    # #region agent log
-    import json
-
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A",
-                    "location": "apply.py:342",
-                    "message": "_emit_notifications_after_commit entry",
-                    "data": {
-                        "len_applied_pairs": len(applied_pairs),
-                        "company_id": company_id,
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
     if not applied_pairs:
-        # #region agent log
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "apply.py:358",
-                        "message": "applied_pairs empty, returning",
-                        "data": {},
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
         return
 
     import time
@@ -415,23 +354,6 @@ def _emit_notifications_after_commit(
 
     try:
         notif_booking_ids = [b_id for b_id, _ in applied_pairs]
-        # #region agent log
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "apply.py:365",
-                        "message": "before scoped_session_context",
-                        "data": {"notif_booking_ids": notif_booking_ids},
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
 
         # ✅ Utiliser scoped_session_context directement (déjà dans ce fichier, ligne 79)
         # Pas d'import nécessaire, fonction déjà définie dans le module
@@ -442,44 +364,9 @@ def _emit_notifications_after_commit(
                 .filter(Booking.id.in_(notif_booking_ids))
                 .all()
             }
-            # #region agent log
-            with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "apply.py:375",
-                            "message": "notif_bookings loaded",
-                            "data": {"len_notif_bookings": len(notif_bookings)},
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            # #endregion
 
             # ✅ Event bus déjà utilisé dans le code actuel (lignes 979-980)
             # publish_event et DriverNewBookingEvent sont importés au niveau module
-
-            # #region agent log
-            with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "apply.py:380",
-                            "message": "imported publish_event",
-                            "data": {"publish_event_type": str(type(publish_event))},
-                            "timestamp": int(__import__("time").time() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-            # #endregion
 
             for b_id, d_id in applied_pairs:
                 try:
@@ -503,27 +390,6 @@ def _emit_notifications_after_commit(
                         continue
 
                     # Publier événement
-                    # #region agent log
-                    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-                        f.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "A",
-                                    "location": "apply.py:401",
-                                    "message": "before publish_event",
-                                    "data": {
-                                        "booking_id": b_id,
-                                        "driver_id": d_id,
-                                        "company_id": company_id,
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                    # #endregion
                     # ✅ Utiliser publish_event directement (importé au niveau module)
                     # Le test patch "services.unified_dispatch.apply.publish_event"
                     # donc cette référence sera mockée
@@ -534,23 +400,6 @@ def _emit_notifications_after_commit(
                             company_id=company_id,
                         )
                     )
-                    # #region agent log
-                    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-                        f.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "A",
-                                    "location": "apply.py:410",
-                                    "message": "after publish_event",
-                                    "data": {"booking_id": b_id},
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                    # #endregion
                 except (ValueError, TypeError, AttributeError, KeyError) as e:
                     logger.warning(
                         (
@@ -645,50 +494,8 @@ def _apply_assignments_inner(
 
     # 1) Déduplication par booking_id
     chosen_by_booking: Dict[int, _Assignment] = {}
-    # #region agent log
-    import json
-
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                    "location": "apply.py:760",
-                    "message": "processing assignments",
-                    "data": {
-                        "len_assignments": len(assignments),
-                        "company_id": company_id,
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
     for a in assignments:
         b_id = int(_aget(a, "booking_id"))
-        # #region agent log
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "C",
-                        "location": "apply.py:775",
-                        "message": "processing assignment",
-                        "data": {
-                            "booking_id": b_id,
-                            "driver_id": int(_aget(a, "driver_id")),
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
         if b_id not in chosen_by_booking:
             chosen_by_booking[b_id] = a
         else:
@@ -702,26 +509,6 @@ def _apply_assignments_inner(
                 chosen_by_booking[b_id] = a
 
     booking_ids = list(chosen_by_booking.keys())
-    # #region agent log
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                    "location": "apply.py:800",
-                    "message": "chosen_by_booking created",
-                    "data": {
-                        "len_chosen_by_booking": len(chosen_by_booking),
-                        "booking_ids": booking_ids,
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
     # Utiliser le helper _aget pour supporter objets ET dicts
     driver_ids = sorted(
         {
@@ -747,30 +534,6 @@ def _apply_assignments_inner(
     if booking_ids:
         booking_dtos = booking_repo.find_by_ids(booking_ids)
         valid_booking_ids = [dto.id for dto in booking_dtos if dto]
-        # #region agent log
-        import json
-
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "D",
-                        "location": "apply.py:800",
-                        "message": "booking validation",
-                        "data": {
-                            "booking_ids": booking_ids,
-                            "len_booking_dtos": len(booking_dtos),
-                            "valid_booking_ids": valid_booking_ids,
-                            "company_id": company_id,
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
 
     # Valider que les drivers existent (la vérification company_id se fait dans la requête SQLAlchemy)
     valid_driver_ids = []
@@ -819,31 +582,6 @@ def _apply_assignments_inner(
 
     booking_map: Dict[int, Booking] = {b.id: b for b in bookings}
     driver_map: Dict[int, Driver] = {d.id: d for d in drivers}
-    # #region agent log
-    import json
-
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                    "location": "apply.py:848",
-                    "message": "booking_map and driver_map created",
-                    "data": {
-                        "len_bookings": len(bookings),
-                        "len_drivers": len(drivers),
-                        "booking_map_keys": list(booking_map.keys()),
-                        "driver_map_keys": list(driver_map.keys()),
-                        "chosen_by_booking_keys": list(chosen_by_booking.keys()),
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
 
     # 3) Prépare updates
     applied_ids: List[int] = []
@@ -1118,29 +856,6 @@ def _apply_assignments_inner(
         updates.append(payload)
         applied_ids.append(b_id)
         applied_pairs.append((b_id, d_id))
-        # #region agent log
-        import json
-
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "C",
-                        "location": "apply.py:1073",
-                        "message": "adding to applied_pairs",
-                        "data": {
-                            "booking_id": b_id,
-                            "driver_id": d_id,
-                            "len_applied_pairs": len(applied_pairs),
-                        },
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
         driver_load[d_id] += 1
 
     # 4) Write back Bookings + upsert Assignments
@@ -1418,50 +1133,8 @@ def _apply_assignments_inner(
             )
 
     # Optionnel : retourner les paires (booking_id, driver_id) si demandé
-    # #region agent log
-    import json
-
-    with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-        f.write(
-            json.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A",
-                    "location": "apply.py:1353",
-                    "message": "before return_pairs check",
-                    "data": {
-                        "return_pairs": return_pairs,
-                        "len_applied_pairs": len(applied_pairs),
-                        "applied_pairs": applied_pairs,
-                        "len_applied_ids": len(applied_ids),
-                        "len_skipped": len(skipped),
-                    },
-                    "timestamp": int(__import__("time").time() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
     if return_pairs:
         result["applied_pairs"] = applied_pairs
-        # #region agent log
-        with open("c:\\Users\\jasiq\\atmr\\.cursor\\debug.log", "a") as f:  # noqa: PTH123
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "apply.py:1354",
-                        "message": "applied_pairs added to result",
-                        "data": {"len_applied_pairs": len(applied_pairs)},
-                        "timestamp": int(__import__("time").time() * 1000),
-                    }
-                )
-                + "\n"
-            )
-        # #endregion
 
     logger.info(
         "[Apply] company=%s applied=%d skipped=%d conflicts=%d (reasons=%s)",

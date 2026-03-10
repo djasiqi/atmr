@@ -164,6 +164,9 @@ Ces secrets sont **optionnels** mais recommandés pour une configuration complè
 | `GOOGLE_MAPS_API_KEY` | Clé API Google Maps              | `AIzaSyXXXXXXXXXXXXXXXXXXXXXX`  |
 | `SENTRY_DSN`          | DSN Sentry (monitoring erreurs)  | `https://xxx@sentry.io/xxxxxxx` |
 | `PDF_BASE_URL`        | URL publique pour génération PDF | `https://www.lirie.ch`          |
+| `DEMO_MAGIC_LINK_BASE_URL` | URL de base pour les liens magic link demo (emails) | `https://www.lirie.ch/demo-access/consume` ou `https://demo.lirie.ch/demo-access/consume` |
+
+**Note Demo** : Si la demo prod est sur un domaine différent (ex. `demo.lirie.ch`), définir `DEMO_MAGIC_LINK_BASE_URL` explicitement. Sinon le fallback utilise `https://www.lirie.ch/demo-access/consume` ou `http://localhost:3000` selon l'environnement.
 
 ---
 
@@ -238,6 +241,7 @@ Cochez les secrets que vous avez configurés :
 - [ ] `GOOGLE_MAPS_API_KEY`
 - [ ] `SENTRY_DSN`
 - [ ] `PDF_BASE_URL`
+- [ ] `DEMO_MAGIC_LINK_BASE_URL` (recommandé si demo sur domaine dédié)
 
 ---
 

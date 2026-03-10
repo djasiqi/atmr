@@ -16,7 +16,7 @@ from flask_restx import (
     Resource,
     fields,
 )
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 
 from ext import db, limiter, redis_client, role_required
 from models import Booking, BookingStatus, User, UserRole
@@ -38,6 +38,16 @@ logger = logging.getLogger(__name__)
 
 MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
+
+
+def _is_synthetic_demo_email_expr(column):
+    lowered = func.lower(func.coalesce(column, ""))
+    return or_(
+        lowered.like("%@demo.local"),
+        lowered.like("%@demo.lirie.ch"),
+        lowered.like("demo-%@%"),
+        lowered.like("%@internal.atmr.local"),
+    )
 
 # Initialisation des repositories et services
 user_repo = UserRepository()
@@ -216,11 +226,107 @@ class AllUsers(Resource):
     # ✅ S2: Rate limiting pour liste utilisateurs (endpoint admin)
     @limiter.limit("100 per hour")
     def get(self):
-        """Récupère la liste complète des utilisateurs."""
+        """Récupère les utilisateurs (option pagination/filtrage)."""
         try:
             logger.info("📢 Appel de l'endpoint AllUsers")
-            users = user_repo.find_all()
-            return {"users": [cast("Any", u).serialize for u in users]}, 200
+
+            paginate_raw = request.args.get("paginate")
+            has_page_args = ("page" in request.args) or ("per_page" in request.args)
+            has_sort_args = ("sort_by" in request.args) or ("sort_order" in request.args)
+            paginate = (
+                str(paginate_raw).strip().lower() in {"1", "true", "yes"}
+                if paginate_raw is not None
+                else False
+            )
+            page = max(request.args.get("page", 1, type=int) or 1, 1)
+            per_page = max(request.args.get("per_page", 50, type=int) or 50, 1)
+            per_page = min(per_page, 200)
+            search = (request.args.get("search", "") or "").strip().lower()
+            role = (request.args.get("role", "") or "").strip().lower()
+            sort_by = (request.args.get("sort_by", "created_at") or "created_at").strip()
+            sort_order = (
+                request.args.get("sort_order", "desc") or "desc"
+            ).strip().lower()
+
+            # Compatibilité: sans pagination explicite, sans page/per_page et sans
+            # filtres explicites, conserver l'ancien comportement (retour complet).
+            # Sinon, forcer la pagination serveur.
+            has_filters = bool(search or role or has_sort_args or has_page_args)
+            if not paginate and has_filters:
+                paginate = True
+            include_synthetic = (
+                str(request.args.get("include_synthetic", "false")).strip().lower()
+                in {"1", "true", "yes"}
+            )
+
+            query = User.query
+            if not include_synthetic:
+                query = query.filter(~_is_synthetic_demo_email_expr(User.email))
+
+            if not paginate and not has_filters:
+                users = query.order_by(User.created_at.desc(), User.id.desc()).all()
+                return {"users": [cast("Any", u).serialize for u in users]}, 200
+
+            if search:
+                pattern = f"%{search}%"
+                query = query.filter(
+                    or_(
+                        func.lower(func.coalesce(User.username, "")).like(pattern),
+                        func.lower(func.coalesce(User.email, "")).like(pattern),
+                    )
+                )
+
+            if role:
+                query = query.filter(
+                    func.lower(func.coalesce(func.cast(User.role, db.String), "")) == role
+                )
+
+            role_counts_rows = (
+                query.with_entities(
+                    func.lower(func.coalesce(func.cast(User.role, db.String), "")).label(
+                        "role_key"
+                    ),
+                    func.count(User.id),
+                )
+                .group_by("role_key")
+                .all()
+            )
+            role_counts = {
+                "admin": 0,
+                "company": 0,
+                "institution": 0,
+                "driver": 0,
+                "client": 0,
+            }
+            for role_key, count in role_counts_rows:
+                if role_key in role_counts:
+                    role_counts[role_key] = int(count or 0)
+
+            sort_columns = {
+                "created_at": User.created_at,
+                "username": User.username,
+                "role": User.role,
+                "email": User.email,
+            }
+            sort_column = sort_columns.get(sort_by, User.created_at)
+            if sort_order == "asc":
+                query = query.order_by(sort_column.asc(), User.id.asc())
+            else:
+                query = query.order_by(sort_column.desc(), User.id.desc())
+
+            total = query.count()
+            total_pages = max((total + per_page - 1) // per_page, 1)
+            offset = (page - 1) * per_page
+            users = query.offset(offset).limit(per_page).all()
+
+            return {
+                "users": [cast("Any", u).serialize for u in users],
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": total_pages,
+                "role_counts": role_counts,
+            }, 200
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_all_users: {e!s}")

@@ -181,34 +181,6 @@ class PartnershipsForTransfer(Resource):
                 return error_response or APIErrorHandler.handle_not_found(
                     "Company", None, logger
                 ), status_code or 404
-
-            # #region agent log
-            try:
-                log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-                with log_path.open("a", encoding="utf-8") as f:
-                    import json
-
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "partnerships.py:PartnershipsForTransfer.get",
-                                "message": "Starting query",
-                                "data": {
-                                    "company_id": company.id,
-                                    "company_name": company.name,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "A",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
-
             # Récupérer tous les partenariats où l'entreprise est propriétaire (pour debug)
             all_owner_partnerships = (
                 db.session.query(Partnership)
@@ -256,63 +228,6 @@ class PartnershipsForTransfer(Resource):
                     p.owner_company_id,
                     p.partner_company_id,
                 )
-
-            # #region agent log
-            try:
-                # Essayer plusieurs chemins possibles
-                possible_paths = [
-                    Path(r"c:\Users\jasiq\atmr\.cursor\debug.log"),
-                    Path(".cursor/debug.log"),
-                    Path("../.cursor/debug.log"),
-                    Path.cwd() / ".cursor" / "debug.log",
-                ]
-                log_path = None
-                for p in possible_paths:
-                    try:
-                        p.parent.mkdir(parents=True, exist_ok=True)
-                        log_path = p
-                        break
-                    except Exception:
-                        continue
-
-                if log_path:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        import json
-
-                        f.write(
-                            json.dumps(
-                                {
-                                    "location": "partnerships.py:PartnershipsForTransfer.get",
-                                    "message": "All owner partnerships found",
-                                    "data": {
-                                        "count": len(all_owner_partnerships),
-                                        "partnerships": [
-                                            {
-                                                "id": p.id,
-                                                "status": (
-                                                    p.status.value
-                                                    if hasattr(p.status, "value")
-                                                    else str(p.status)
-                                                ),
-                                                "is_active": p.is_active,
-                                                "owner_company_id": p.owner_company_id,
-                                                "partner_company_id": p.partner_company_id,
-                                            }
-                                            for p in all_owner_partnerships
-                                        ],
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "B",
-                                }
-                            )
-                            + "\n"
-                        )
-            except Exception:
-                pass
-            # #endregion
-
             # Récupérer les partenariats où l'entreprise est propriétaire OU partenaire
             # et où le partenariat est actif
             # Note: Une entreprise peut transférer des courses si elle est propriétaire OU partenaire
@@ -341,61 +256,6 @@ class PartnershipsForTransfer(Resource):
                 ),
                 len(partnerships),
             )
-
-            # #region agent log
-            try:
-                # Essayer plusieurs chemins possibles
-                possible_paths = [
-                    Path(r"c:\Users\jasiq\atmr\.cursor\debug.log"),
-                    Path(".cursor/debug.log"),
-                    Path("../.cursor/debug.log"),
-                    Path.cwd() / ".cursor" / "debug.log",
-                ]
-                log_path = None
-                for p in possible_paths:
-                    try:
-                        p.parent.mkdir(parents=True, exist_ok=True)
-                        log_path = p
-                        break
-                    except Exception:
-                        continue
-
-                if log_path:
-                    with log_path.open("a", encoding="utf-8") as f:
-                        import json
-
-                        f.write(
-                            json.dumps(
-                                {
-                                    "location": "partnerships.py:PartnershipsForTransfer.get",
-                                    "message": "Filtered partnerships",
-                                    "data": {
-                                        "count": len(partnerships),
-                                        "partnerships": [
-                                            {
-                                                "id": p.id,
-                                                "status": (
-                                                    p.status.value
-                                                    if hasattr(p.status, "value")
-                                                    else str(p.status)
-                                                ),
-                                                "is_active": p.is_active,
-                                            }
-                                            for p in partnerships
-                                        ],
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "C",
-                                }
-                            )
-                            + "\n"
-                        )
-            except Exception:
-                pass
-            # #endregion
-
             # Sérialiser les partenariats
             result = []
             for p in partnerships:
@@ -535,97 +395,13 @@ class PartnershipTransfers(Resource):
             data = request.get_json(silent=True) or {}
             booking_id_raw = data.get("booking_id")
             transfer_model_str = data.get("transfer_model")
-
-            # #region agent log
-            try:
-                import json
-
-                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H1",
-                                "location": "partnerships.py:407",
-                                "message": "Received data",
-                                "data": {
-                                    "booking_id_raw": str(booking_id_raw),
-                                    "booking_id_type": type(booking_id_raw).__name__,
-                                    "partnership_id": partnership_id,
-                                    "partnership_id_type": type(
-                                        partnership_id
-                                    ).__name__,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
-
             # ✅ Valider et convertir booking_id en entier pour éviter l'erreur SQL "integer = character varying"
             if not booking_id_raw:
                 raise ValueError("booking_id is required")
 
             try:
                 booking_id = int(booking_id_raw)
-                # #region agent log
-                try:
-                    import json
-
-                    log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "H2",
-                                    "location": "partnerships.py:415",
-                                    "message": "booking_id converted successfully",
-                                    "data": {
-                                        "booking_id": booking_id,
-                                        "booking_id_type": type(booking_id).__name__,
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
             except (ValueError, TypeError) as e:
-                # #region agent log
-                try:
-                    import json
-
-                    log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                    with log_path.open("a", encoding="utf-8") as f:
-                        f.write(
-                            json.dumps(
-                                {
-                                    "sessionId": "debug-session",
-                                    "runId": "run1",
-                                    "hypothesisId": "H2",
-                                    "location": "partnerships.py:416",
-                                    "message": "booking_id conversion FAILED",
-                                    "data": {
-                                        "booking_id_raw": str(booking_id_raw),
-                                        "error": str(e),
-                                    },
-                                    "timestamp": int(__import__("time").time() * 1000),
-                                }
-                            )
-                            + "\n"
-                        )
-                except Exception:
-                    pass
-                # #endregion
                 logger.warning(
                     "[PartnershipTransfers] Invalid booking_id: %s (type: %s)",
                     booking_id_raw,
@@ -661,70 +437,9 @@ class PartnershipTransfers(Resource):
             error_response, status_code = _validate_transfer_request(
                 company, booking_id
             )
-            # #region agent log
-            try:
-                import json
-
-                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H4",
-                                "location": "partnerships.py:449",
-                                "message": "After validation",
-                                "data": {
-                                    "has_error": bool(error_response),
-                                    "error_response": str(error_response)
-                                    if error_response
-                                    else None,
-                                    "status_code": status_code,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
             if error_response:
                 # Lever une ValueError pour traitement uniforme dans le bloc except
                 raise ValueError(error_response.get("error", "Validation failed"))
-
-            # #region agent log
-            try:
-                import json
-
-                log_path = Path(__file__).parent.parent / ".cursor" / "debug.log"
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H3",
-                                "location": "partnerships.py:457",
-                                "message": "Before propose_transfer call",
-                                "data": {
-                                    "booking_id": booking_id,
-                                    "booking_id_type": type(booking_id).__name__,
-                                    "partnership_id": partnership_id,
-                                    "partnership_id_type": type(
-                                        partnership_id
-                                    ).__name__,
-                                },
-                                "timestamp": int(__import__("time").time() * 1000),
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-            # #endregion
-
             # Utiliser le service pour créer le transfert
             transfer = BookingTransferService.propose_transfer(
                 booking_id=booking_id,

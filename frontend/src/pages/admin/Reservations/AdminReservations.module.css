@@ -37,7 +37,9 @@
 
 /* S'assurer que toutes les sections prennent 100% de la largeur */
 .header,
-.tableWrapper {
+.tableWrapper,
+.metricsRow,
+.feedbackCard {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -53,51 +55,184 @@
 
 .header h1 {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: 1.85rem;
+  color: #1f2937;
+  letter-spacing: -0.02em;
 }
 
 .header p {
   margin: 0.25rem 0 0;
-  color: #5f6c7b;
+  color: #64748b;
+}
+
+.metricsRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.metricCard {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #e5edf8;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  box-shadow: 0 8px 20px rgba(31, 41, 55, 0.04);
+}
+
+.metricCard span {
+  display: block;
+  font-size: 0.78rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.metricCard strong {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 1.25rem;
+  color: #111827;
+}
+
+.feedbackCard {
+  border: 1px solid #e5edf8;
+  border-radius: 12px;
+  background: #fff;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
 .error {
   color: #b00020;
-  margin-bottom: 1rem;
+  margin: 0;
 }
 
 .tableWrapper {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 12px 24px rgba(31, 41, 55, 0.06);
-  overflow: hidden;
+  border: 1px solid #e5edf8;
+  box-shadow: 0 16px 30px rgba(31, 41, 55, 0.06);
+  overflow: auto;
+  max-height: calc(100vh - 280px);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 980px;
 }
 
 .table thead {
-  background: #f0f3f9;
+  background: #f1f6fd;
   text-align: left;
 }
 
 .table th,
 .table td {
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid #e4e8f1;
-  font-size: 0.95rem;
+  padding: 0.82rem 1rem;
+  border-bottom: 1px solid #e8eef8;
+  font-size: 0.92rem;
+  vertical-align: top;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #526079;
+  font-weight: 700;
+}
+
+.table tbody tr:nth-child(even) {
+  background: #fbfdff;
 }
 
 .table tbody tr:hover {
-  background: rgba(98, 123, 255, 0.08);
+  background: rgba(72, 103, 255, 0.08);
 }
 
 .empty {
   text-align: center;
   color: #7a8796;
   padding: 2rem 0;
+}
+
+.idBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  background: #eef4ff;
+  border: 1px solid #d8e4ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.locationCell {
+  max-width: 270px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #334155;
+}
+
+.amountCell {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.26rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.statusAccepted {
+  background: #e9f9ee;
+  border-color: #b7e6c4;
+  color: #0f7a39;
+}
+
+.statusAssigned {
+  background: #edf6ff;
+  border-color: #c5dffd;
+  color: #115eb3;
+}
+
+.statusCompleted {
+  background: #eef9f2;
+  border-color: #c9edd7;
+  color: #11653a;
+}
+
+.statusPending {
+  background: #fff7e8;
+  border-color: #f6ddad;
+  color: #9a6700;
+}
+
+.statusCancelled,
+.statusRejected {
+  background: #fff0f0;
+  border-color: #f7c8c8;
+  color: #b42318;
+}
+
+.statusDefault {
+  background: #f1f5f9;
+  border-color: #dbe4ee;
+  color: #475569;
 }
 
 /* Responsive */
@@ -111,7 +246,15 @@
     padding: var(--spacing-md);
   }
 
+  .metricsRow {
+    grid-template-columns: 1fr;
+  }
+
   .header h1 {
     text-align: left;
+  }
+
+  .tableWrapper {
+    max-height: none;
   }
 }

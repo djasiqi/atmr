@@ -406,6 +406,20 @@
 
 /* ================== Zone B: Command Bar (identique à ReservationFilters) ================== */
 
+.demoSummary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 121, 107, 0.2);
+  border-radius: 10px;
+  background: rgba(0, 121, 107, 0.06);
+  color: var(--text-primary);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
 .commandBar {
   display: flex;
   align-items: center;

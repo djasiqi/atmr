@@ -1,5 +1,6 @@
 # pyright: reportArgumentType=false
 import logging
+import re
 from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -58,6 +59,7 @@ from shared.upload_validation import (
 
 # Constantes pour les valeurs magiques
 HOURS_PER_DAY = 24
+WEEKEND_START_INDEX = 5
 MINUTES_PER_HOUR = 60
 HOURS_OFFSET = -24
 SCHEDULED_HOUR_THRESHOLD = 9
@@ -405,6 +407,10 @@ manual_booking_model = companies_ns.model(
         "return_time": fields.String(description="ISO 8601"),
         "return_date": fields.String(description="Date du retour (YYYY-MM-DD)"),
         "amount": fields.Float,
+        "amount_source": fields.String(description="preferential | simulated | manual"),
+        "amount_locked": fields.Boolean(description="Montant verrouillé côté UI"),
+        "pricing_profile_id": fields.Integer(description="ID profil pricing actif"),
+        "pricing_profile_version_id": fields.Integer(description="ID version pricing active"),
         "medical_facility": fields.String,
         "doctor_name": fields.String,
         "hospital_service": fields.String,
@@ -2430,6 +2436,8 @@ class CompanyDriversLocations(Resource):
                 Exception("Entreprise introuvable (ID invalide)."),
                 logger,
             )
+        company_contact_email = str(getattr(company, "contact_email", "") or "").lower()
+        is_demo_company = company_contact_email.endswith("@demo.local")
         drivers = Driver.query.filter_by(company_id=cid).all()
         if not drivers:
             return {"locations": []}, 200
@@ -2504,6 +2512,7 @@ class CompanyDriversLocations(Resource):
         locations = []
         for i, driver in enumerate(drivers):
             lat, lon, ts = None, None, None
+            used_db_fallback = False
             h = redis_results[i] if i < len(redis_results) else None
             if h:
                 loc_data = {}
@@ -2525,6 +2534,7 @@ class CompanyDriversLocations(Resource):
                 lat = float(driver.latitude)
                 lon = float(driver.longitude)
                 ts = None
+                used_db_fallback = True
 
             if lat is None or lon is None:
                 continue
@@ -2540,6 +2550,15 @@ class CompanyDriversLocations(Resource):
                     is_stale = delta > STALE_THRESHOLD_SEC
                 except Exception:
                     pass
+            elif used_db_fallback:
+                driver_email = str(
+                    getattr(getattr(driver, "user", None), "email", "") or ""
+                ).lower()
+                # En démo, les coordonnées DB servent de GPS de référence: on les traite
+                # comme fraîches pour garantir la visualisation des chauffeurs sur la carte.
+                if is_demo_company or driver_email.endswith("@demo.local"):
+                    last_seen_seconds = 0
+                    is_stale = False
 
             # status: available | busy | offline (backend = source de vérité)
             is_active = _as_bool(getattr(driver, "is_active", True))
@@ -3873,25 +3892,111 @@ class CreateManualReservation(Resource):
                     "📦 Livraison matériel: prix fixe %s CHF",
                     amount_to_use,
                 )
+                amount_source_used = "material_delivery_fixed"
+                pricing_profile_id = None
+                pricing_profile_version_id = None
+                price_amount = None
+                price_breakdown_json = None
             else:
-                # Transport patient : logique existante
+                from models import PricingProfile
+                from services.geo.geo_resolver import resolve_pickup_admin
+                from services.pricing.pricing_engine import compute_price
+
+                amount_source_requested = str(validated_data.get("amount_source") or "").strip().lower()
                 provided_amount = validated_data.get("amount")
                 has_provided_amount = (
                     provided_amount is not None
                     and float(provided_amount) > PREFERENTIAL_RATE_ZERO
                 )
-                amount_to_use = float(provided_amount or 0)
-                if (
-                    not has_provided_amount
-                    and client.preferential_rate
-                    and client.preferential_rate > PREFERENTIAL_RATE_ZERO
-                ):
-                    amount_to_use = float(client.preferential_rate)
-                    logger.info(
-                        "💰 Tarif préférentiel appliqué pour %s: %s CHF",
-                        display_name,
-                        amount_to_use,
+                amount_to_use = float(provided_amount or 0.0)
+                pricing_profile_id = None
+                pricing_profile_version_id = None
+                price_amount = None
+                price_breakdown_json = None
+
+                clinic_preferential = None
+                if active_stay and not bill_to_patient_override:
+                    clinic_info = get_clinic_address_for_stay(active_stay)
+                    clinic_preferential = clinic_info.get("preferential_rate") if clinic_info else None
+                client_preferential = client.preferential_rate
+
+                if clinic_preferential and float(clinic_preferential) > PREFERENTIAL_RATE_ZERO:
+                    amount_to_use = float(clinic_preferential)
+                    amount_source_used = "preferential"
+                    price_breakdown_json = {
+                        "overridden_by_preferential": True,
+                        "preferential_source": "clinic",
+                        "preferential_amount": f"{amount_to_use:.2f}",
+                    }
+                    logger.info("💰 Tarif préférentiel clinique appliqué: %.2f CHF", amount_to_use)
+                elif client_preferential and float(client_preferential) > PREFERENTIAL_RATE_ZERO:
+                    amount_to_use = float(client_preferential)
+                    amount_source_used = "preferential"
+                    price_breakdown_json = {
+                        "overridden_by_preferential": True,
+                        "preferential_source": "client",
+                        "preferential_amount": f"{amount_to_use:.2f}",
+                    }
+                    logger.info("💰 Tarif préférentiel client appliqué: %.2f CHF", amount_to_use)
+                elif amount_source_requested == "manual" and has_provided_amount:
+                    amount_source_used = "manual"
+                else:
+                    profile = (
+                        PricingProfile.query.filter_by(company_id=cid, is_active=True)
+                        .order_by(PricingProfile.created_at.desc())
+                        .first()
                     )
+                    version = None
+                    if profile:
+                        pricing_profile_id = profile.id
+                        version = profile.current_version
+                        if not version and profile.versions:
+                            version = sorted(profile.versions, key=lambda item: int(item.version), reverse=True)[0]
+                    if version:
+                        pricing_profile_version_id = version.id
+                        scheduled_ref = scheduled or datetime.now()
+                        pickup_zip_match = re.search(r"\b(\d{4})\b", validated_data.get("pickup_location") or "")
+                        dropoff_zip_match = re.search(r"\b(\d{4})\b", validated_data.get("dropoff_location") or "")
+                        pickup_admin = resolve_pickup_admin(
+                            lat=final_pickup_coords[0] if final_pickup_coords else None,
+                            lng=final_pickup_coords[1] if final_pickup_coords else None,
+                            pickup_zip=pickup_zip_match.group(1) if pickup_zip_match else None,
+                            pickup_text=validated_data.get("pickup_location"),
+                        )
+                        dropoff_admin = resolve_pickup_admin(
+                            lat=final_dropoff_coords[0] if final_dropoff_coords else None,
+                            lng=final_dropoff_coords[1] if final_dropoff_coords else None,
+                            pickup_zip=dropoff_zip_match.group(1) if dropoff_zip_match else None,
+                            pickup_text=validated_data.get("dropoff_location"),
+                        )
+                        now_ref = datetime.now(scheduled_ref.tzinfo) if scheduled_ref.tzinfo else datetime.now()
+                        minutes_until = max(0, int((scheduled_ref - now_ref).total_seconds() // 60))
+                        context = {
+                            "is_weekend": scheduled_ref.weekday() >= WEEKEND_START_INDEX,
+                            "is_round_trip": bool(is_rt),
+                            "pickup_local_time": scheduled_ref.strftime("%H:%M"),
+                            "minutes_until_pickup": minutes_until,
+                            "distance_km": max(float(dist_m or 0) / 1000.0, 0.0),
+                            "pickup_admin_token": pickup_admin.get("token"),
+                            "dropoff_admin_token": dropoff_admin.get("token"),
+                            "pickup_lat": final_pickup_coords[0] if final_pickup_coords else None,
+                            "pickup_lng": final_pickup_coords[1] if final_pickup_coords else None,
+                            "dropoff_lat": final_dropoff_coords[0] if final_dropoff_coords else None,
+                            "dropoff_lng": final_dropoff_coords[1] if final_dropoff_coords else None,
+                            "zones_count": 1 if pickup_admin.get("token") == dropoff_admin.get("token") else 2,
+                            "requires_waiting": bool(validated_data.get("requires_waiting")),
+                        }
+                        try:
+                            computed_amount, computed_breakdown = compute_price(validated_data, version, context)
+                            amount_to_use = float(computed_amount)
+                            price_amount = amount_to_use
+                            price_breakdown_json = dict(computed_breakdown or {})
+                            amount_source_used = "simulated"
+                        except Exception:
+                            logger.exception("Pricing compute failed during manual booking create")
+                            amount_source_used = "manual" if has_provided_amount else "fallback_zero"
+                    else:
+                        amount_source_used = "manual" if has_provided_amount else "fallback_zero"
 
             # Listes pour stocker toutes les réservations créées
             created_outbounds = []
@@ -3951,6 +4056,12 @@ class CreateManualReservation(Resource):
                 outbound.is_return = False
                 outbound.duration_seconds = dur_s
                 outbound.distance_meters = dist_m
+                outbound.pricing_profile_id = pricing_profile_id
+                outbound.pricing_profile_version_id = pricing_profile_version_id
+                outbound.price_amount = price_amount if price_amount is not None else amount_to_use
+                outbound_breakdown = dict(price_breakdown_json or {})
+                outbound_breakdown["amount_source"] = amount_source_used
+                outbound.price_breakdown_json = outbound_breakdown
 
                 # 📍 Coordonnées GPS (depuis frontend OU géocodées par Nominatim)
                 outbound.pickup_lat = (
@@ -4049,6 +4160,14 @@ class CreateManualReservation(Resource):
                     return_booking.is_round_trip = False
                     return_booking.duration_seconds = dur_s
                     return_booking.distance_meters = dist_m
+                    return_booking.pricing_profile_id = pricing_profile_id
+                    return_booking.pricing_profile_version_id = pricing_profile_version_id
+                    return_booking.price_amount = (
+                        price_amount if price_amount is not None else amount_to_use
+                    )
+                    return_breakdown = dict(price_breakdown_json or {})
+                    return_breakdown["amount_source"] = amount_source_used
+                    return_booking.price_breakdown_json = return_breakdown
 
                     # 📍 Coordonnées GPS inversées pour le retour
                     return_booking.pickup_lat = outbound.dropoff_lat
@@ -5553,9 +5672,23 @@ class SingleReservation(Resource):
                         payment_count,
                         reservation_id,
                     )
-                # Vérifier si le booking a un retour et le supprimer aussi si nécessaire
-                if hasattr(booking, "return_trip") and booking.return_trip:
-                    return_booking = booking.return_trip
+                # Règle métier: cascade uniquement ALLER -> RETOUR.
+                # Un retour peut être supprimé/annulé indépendamment sans toucher l'aller.
+                return_booking = None
+                if not bool(getattr(booking, "is_return", False)):
+                    # Rechercher explicitement la course retour liée à cet aller.
+                    # On évite d'utiliser la relation ORM ambiguë dans certains cas.
+                    from models.booking import Booking as BookingModel
+
+                    return_booking = (
+                        BookingModel.query.filter_by(
+                            parent_booking_id=reservation_id,
+                            is_return=True,
+                        )
+                        .order_by(BookingModel.id.desc())
+                        .first()
+                    )
+                if return_booking:
                     # Supprimer aussi les assignments du retour
                     # ✅ FIX: Supprimer directement avec synchronize_session=False
                     # pour éviter les validations lors de la suppression

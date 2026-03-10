@@ -1,0 +1,252 @@
+.page {
+  min-height: 100%;
+}
+
+.hero {
+  background: linear-gradient(180deg, #f0faf7 0%, #ffffff 100%);
+  padding: 56px 0 44px;
+}
+
+.heroInner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.hero h1 {
+  margin: 14px 0 10px;
+  font-size: clamp(1.7rem, 3.5vw, 2.5rem);
+}
+
+.hero p {
+  margin: 0;
+  color: var(--text-tertiary);
+  max-width: 720px;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 24px 78px;
+}
+
+.stepHeader {
+  margin: 10px 0 12px;
+}
+
+.stepHeader span {
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.progress {
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--brand-primary);
+  transition: width var(--transition-base);
+}
+
+.formCard {
+  border: 1px solid var(--border-primary);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+
+.formCard h2 {
+  margin: 0 0 8px;
+}
+
+.stepIntro {
+  margin: 0 0 16px;
+  color: var(--text-tertiary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field span {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: var(--focus-ring);
+}
+
+.field small,
+.radioGroup small,
+.checkbox + small {
+  color: #b91c1c;
+}
+
+.radioGroup {
+  margin: 10px 0 14px;
+}
+
+.radioGroup p {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.radioGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.radioInline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radioItem {
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 9px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+}
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.checkbox span {
+  color: var(--text-tertiary);
+  line-height: 1.55;
+}
+
+.checkbox a {
+  color: var(--brand-primary);
+}
+
+.hiddenHoneypot {
+  position: absolute;
+  left: -99999px;
+  opacity: 0;
+}
+
+.actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.actions button {
+  border: 1.5px solid var(--brand-primary);
+  border-radius: 14px;
+  background: var(--brand-primary);
+  color: #fff;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.actions .secondary {
+  background: transparent;
+  border-color: var(--border-primary);
+  color: var(--text-secondary);
+}
+
+.successCard {
+  margin-top: 14px;
+  border: 1px solid rgba(0, 121, 107, 0.25);
+  border-radius: 16px;
+  background: rgba(0, 121, 107, 0.06);
+  padding: 16px;
+}
+
+.successCard h3 {
+  margin: 0 0 8px;
+}
+
+.successCard p {
+  margin: 0 0 8px;
+}
+
+.nextTitle {
+  font-weight: 700;
+}
+
+.successCard ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.error {
+  margin-top: 14px;
+  border: 1px solid rgba(185, 28, 28, 0.3);
+  border-radius: 12px;
+  background: rgba(185, 28, 28, 0.08);
+  padding: 12px;
+}
+
+.error a {
+  color: #991b1b;
+}
+
+@media (max-width: 860px) {
+  .grid,
+  .radioGrid {
+    grid-template-columns: 1fr;
+  }
+}

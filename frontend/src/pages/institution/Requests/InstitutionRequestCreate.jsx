@@ -628,7 +628,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
   };
 
   return (
-    <div className={`${styles.formWrapper} ${isModal ? styles.formWrapperModal : ''}`}>
+    <div className={`${styles.formWrapper} ${isModal ? styles.formWrapperModal : ''}`} data-tour-id="institution-request-create">
       <div className={styles.pageHeader}>
         <div className={styles.pageHeaderLeft}>
           {!isModal && (
@@ -650,12 +650,12 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         <div className={styles.form}>
 
         {/* ═══ COLONNE GAUCHE — Essentiel ═══ */}
-        <div className={styles.columnLeft}>
+        <div className={styles.columnLeft} data-tour-id="institution-request-form-left">
 
           {/* Patient selector + Mission type on same row */}
           <div className={styles.missionPatientRow}>
             {/* Patient selector (first = takes remaining space) */}
-              <div>
+              <div data-tour-id="institution-request-patient">
               <AsyncCreatableSelect
                 inputId="patient-select"
                 cacheOptions
@@ -741,7 +741,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           </div>
 
           {/* Addresses with visual route */}
-          <div className={styles.formGroup}>
+          <div className={styles.formGroup} data-tour-id="institution-request-destination">
             <div className={styles.routeBlock}>
               {/* Row 1: label Départ */}
               <label htmlFor="pickup_location" className={styles.routeLabel}>Départ</label>
@@ -859,7 +859,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
               </div>
             </div>
 
-            <div className={styles.whenRow}>
+            <div className={styles.whenRow} data-tour-id="institution-request-datetime">
               <InlineDatePicker
                 value={formData.scheduled_time ? formData.scheduled_time.split('T')[0] : ''}
                 onChange={(dateVal) => {
@@ -966,7 +966,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
         </div>
 
         {/* ═══ COLONNE DROITE — Détails & contexte ═══ */}
-        <div className={styles.columnRight}>
+        <div className={styles.columnRight} data-tour-id="institution-request-form-tooltip">
           <div className={styles.detailsPanel}>
 
             {/* ═══ SECTION 1 — Infos départ ═══ */}
@@ -1171,7 +1171,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 <input type="checkbox" id="send_after_create" checked={sendAfterCreate} onChange={(e) => setSendAfterCreate(e.target.checked)} />
                 <span>Envoyer aux transporteurs</span>
               </label>
-              <button type="submit" className={styles.btnPrimary} disabled={createMutation.isPending || sendMutation.isPending}>
+              <button type="submit" className={styles.btnPrimary} disabled={createMutation.isPending || sendMutation.isPending} data-tour-id="institution-request-submit">
                 {sendAfterCreate ? <><FaPaperPlane /> Envoyer</> : <><FaSave /> Enregistrer</>}
               </button>
             </div>

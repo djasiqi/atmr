@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-// react-router-dom not needed — master-detail stays in-page
+import { useLocation } from 'react-router-dom';
 import { FaSearch, FaFilter } from 'react-icons/fa';
 import { toast } from 'sonner';
 import {
@@ -16,6 +16,7 @@ import {
   useUpdateBookingBilling,
 } from '../../../hooks/useInstitutionData';
 import { canEditBilling } from '../../../utils/institutionPermissions';
+import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 import RequestDetailPanel from './RequestDetailPanel';
 import s from './InstitutionRequests.module.css';
 
@@ -47,6 +48,9 @@ const STATUS_FILTER_LABELS = {
   CONVERTED: 'Confirmée',
   CANCELLED: 'Annulée',
 };
+
+const INSTITUTION_RESUME_STEP_KEY = 'demo_institution_resume_step';
+const DEMO_INSTITUTION_COMPLETED_KEY = 'demo_institution_journey_completed';
 
 // ─── Helpers ───────────────────────────────────────────────
 const shortAddr = (addr) => {
@@ -88,6 +92,7 @@ const resolveStatus = (req) => {
 
 // ─── Component ─────────────────────────────────────────────
 const InstitutionRequests = () => {
+  const location = useLocation();
   const [filters, setFilters] = useState({
     status: '', date_from: '', date_to: '', query: '', page: 1, per_page: 20,
   });
@@ -168,12 +173,55 @@ const InstitutionRequests = () => {
   }, [updateRequestBilling, updateBookingBilling]);
 
   const panelOpen = selectedId !== null;
+  const fallbackDemoMission = useMemo(() => {
+    const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+    if (!isDemoEnv) return null;
+    return (
+      localStorage.getItem('demo_recommended_journey') ||
+      localStorage.getItem('demo_demo_recommended_journey') ||
+      ''
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+  }, []);
+  const demoMission = useMemo(() => {
+    try {
+      if (window.sessionStorage.getItem(DEMO_INSTITUTION_COMPLETED_KEY) === '1') return null;
+    } catch {
+      // ignore
+    }
+    const mission = new URLSearchParams(location.search).get('demo_mission');
+    if (mission) return mission.toString().trim().toLowerCase();
+    if (fallbackDemoMission === 'institution') return 'institution';
+    return null;
+  }, [location.search, fallbackDemoMission]);
+  const initialGuideStepId = useMemo(() => {
+    try {
+      return window.sessionStorage.getItem(INSTITUTION_RESUME_STEP_KEY);
+    } catch {
+      return null;
+    }
+  }, []);
 
   return (
     <div className={`${s.masterDetail} ${panelOpen ? s.masterDetailOpen : ''}`}>
+      {demoMission === 'institution' && initialGuideStepId && (
+        <DemoInteractiveGuide
+          role="institution"
+          initialStepId={initialGuideStepId}
+          onFinish={() => {
+            try {
+              window.sessionStorage.removeItem(INSTITUTION_RESUME_STEP_KEY);
+            } catch {
+              // ignore
+            }
+          }}
+        />
+      )}
 
       {/* ═══ LEFT: Request list ═══ */}
-      <div className={s.listColumn}>
+      <div className={s.listColumn} data-tour-id="institution-history">
         {/* Toolbar */}
         <div className={s.toolbar}>
           <div className={s.searchBox}>
@@ -267,6 +315,7 @@ const InstitutionRequests = () => {
                     <div
                       key={req.id}
                       className={`${s.requestCard} ${isSelected ? s.requestCardSelected : ''}`}
+                      data-tour-id={req.status === 'DRAFT' ? 'institution-request-draft-card' : undefined}
                       onClick={() => handleSelectRequest(req)}
                     >
                       <div className={`${s.cardIndicator} ${s[st.indicator]}`} />
@@ -342,7 +391,7 @@ const InstitutionRequests = () => {
 
       {/* ═══ RIGHT: Detail panel ═══ */}
       {panelOpen && (
-        <div className={s.detailColumn}>
+        <div className={s.detailColumn} data-tour-id="institution-request-detail-panel">
           <RequestDetailPanel
             requestId={selectedId}
             onClose={handleClosePanel}

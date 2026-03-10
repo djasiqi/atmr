@@ -1,0 +1,402 @@
+.adminContainer {
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.dashboard {
+  display: flex;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  margin: 24px;
+  margin-top: 96px;
+  margin-left: calc(var(--sidebar-w, 72px) + 24px);
+  max-width: calc(100% - var(--sidebar-w, 72px) - 48px);
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.pageHeader h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  color: #1e293b;
+}
+
+.subtext {
+  margin-top: 8px;
+  margin-bottom: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.info {
+  margin-top: 16px;
+  color: #64748b;
+}
+
+.error {
+  margin-top: 16px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.metricsGrid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metricCard {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.metricCard span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.metricCard strong {
+  color: #1e293b;
+  font-size: 1.2rem;
+}
+
+.tableWrap {
+  margin-top: 18px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.emptyState {
+  padding: 28px 20px;
+}
+
+.emptyState h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #1e293b;
+}
+
+.emptyState p {
+  margin: 0;
+  color: #64748b;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table thead {
+  background: #f8fafc;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  padding: 12px 14px;
+  vertical-align: top;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.idCell {
+  font-weight: 700;
+}
+
+.requesterName {
+  font-weight: 600;
+}
+
+.requesterEmail {
+  color: #64748b;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 2px solid #e2e8f0;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.toneneutral {
+  color: #475569;
+  background: #f8fafc;
+}
+
+.toneinfo {
+  color: #0a88ef;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.tonesuccess {
+  color: #00796b;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.tonewarning {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.tonedanger {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primaryButton,
+.ghostButton,
+.dangerButton {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms ease-in;
+}
+
+.primaryButton {
+  border: none;
+  color: #ffffff;
+  background: linear-gradient(135deg, #00796b, #00695c);
+}
+
+.primaryButton:hover:not(:disabled) {
+  filter: brightness(0.98);
+}
+
+.ghostButton {
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #1e293b;
+}
+
+.ghostButton:hover:not(:disabled) {
+  border-color: #cbd5e1;
+}
+
+.dangerButton {
+  border: 1px solid #fecaca;
+  background: #fff5f5;
+  color: #991b1b;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.primaryButton:disabled,
+.ghostButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  z-index: 1200;
+}
+
+.modalCard {
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 40px rgba(2, 6, 23, 0.2);
+}
+
+.modalHeader {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.modalHeader h2 {
+  margin: 0 0 4px 0;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.modalHeader p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.closeButton {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  min-height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.modalSection {
+  padding: 14px 18px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.modalSection h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.formGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.formGrid input,
+.formGrid select,
+.formGrid textarea {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.checklist {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.checklist li {
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.okItem {
+  color: #047857;
+}
+
+.warnItem {
+  color: #9a3412;
+}
+
+.previewBox {
+  margin-top: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.previewBox h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.previewBox p {
+  margin: 4px 0;
+  font-size: 0.84rem;
+  color: #334155;
+}
+
+.modalFooter {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 1120px) {
+  .metricsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .content {
+    margin: 12px;
+    margin-top: 88px;
+    margin-left: calc(var(--sidebar-w, 72px) + 12px);
+    max-width: calc(100% - var(--sidebar-w, 72px) - 24px);
+    padding: 16px;
+  }
+
+  .metricsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

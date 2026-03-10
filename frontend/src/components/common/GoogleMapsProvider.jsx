@@ -53,11 +53,11 @@ function GoogleMapsLoader({ children }) {
       return;
     }
 
-    // Charger le script (sans loading=async pour compatibilité @react-google-maps/api)
+    // Charger le script avec loading=async (recommandation Google)
     const libs = LIBRARIES.join(',');
     script = document.createElement('script');
     script.id = GOOGLE_MAPS_SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}&loading=async`;
     script.async = true;
     script.defer = true;
 

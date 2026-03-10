@@ -23,6 +23,7 @@ const ENABLE_CLUSTERING = process.env.REACT_APP_ENABLE_DRIVER_CLUSTERING === 'tr
 const MAP_DEBUG =
   typeof window !== 'undefined' &&
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
+const AVAILABLE_LIGHT_GREEN = '#4ade80';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
 
@@ -35,7 +36,7 @@ const createStyledTooltip = (driver, opts = {}) => {
   const status = statusOverride ?? getDriverStatus(driver);
 
   const statusConf = {
-    available: { label: 'Disponible', dot: '#22c55e', bg: '#dcfce7', color: '#15803d' },
+    available: { label: 'Disponible', dot: AVAILABLE_LIGHT_GREEN, bg: '#dcfce7', color: '#15803d' },
     busy:      { label: 'En course',  dot: '#00796B', bg: '#e0f2f1', color: '#00695C' },
     offline:   { label: 'Hors-ligne', dot: '#91A3A0', bg: '#f1f5f9', color: '#64748b' },
     emergency: { label: 'Urgence',    dot: '#ef4444', bg: '#fee2e2', color: '#dc2626' },
@@ -124,7 +125,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     const map = mapRef.current;
     if (!map || !window.google) return;
 
-    const color = isStale ? '#9e9e9e' : (STATUS_COLORS[status] ?? STATUS_COLORS.available);
+    const markerColors = { ...STATUS_COLORS, available: AVAILABLE_LIGHT_GREEN };
+    const color = isStale ? '#9e9e9e' : (markerColors[status] ?? markerColors.available);
     const opacity = isStale ? 0.7 : 1;
 
     if (markersRef.current[id]) {
@@ -643,7 +645,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
             </div>
             <div style={{ display: 'flex', gap: 8, fontSize: 9, color: '#64748B', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: AVAILABLE_LIGHT_GREEN, flexShrink: 0 }} />
                 <span>Dispo</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

@@ -11,6 +11,7 @@ import GoogleMapsProvider from './components/common/GoogleMapsProvider';
 import Home from './pages/Home/Home';
 import SignUp from './pages/Auth/Signup';
 import Login from './pages/Auth/Login';
+import AppNamespaceRedirect from './pages/Auth/AppNamespaceRedirect';
 import DashboardRedirect from './pages/Auth/DashboardRedirect';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import ResetPassword from './pages/Auth/ResetPassword';
@@ -24,6 +25,7 @@ const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
 const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
+const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
 const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
 const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
@@ -50,6 +52,16 @@ const RLMetricsDashboard = lazy(
 const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/AnalyticsDashboard'));
 const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
 const PrivacyPolicy = lazy(() => import('./pages/Legal/PrivacyPolicy'));
+const Contact = lazy(() => import('./pages/Legal/Contact'));
+const DemoRequest = lazy(() => import('./pages/Legal/DemoRequest'));
+const ContactSupport = lazy(() => import('./pages/Legal/ContactSupport'));
+const ContactInstitution = lazy(() => import('./pages/Legal/ContactInstitution'));
+const ContactTransport = lazy(() => import('./pages/Legal/ContactTransport'));
+const ContactDemo = lazy(() => import('./pages/Legal/ContactDemo'));
+const ContactBilling = lazy(() => import('./pages/Legal/ContactBilling'));
+const ContactFamily = lazy(() => import('./pages/Legal/ContactFamily'));
+const DemoHome = lazy(() => import('./pages/demo/DemoHome'));
+const DemoAccessConsume = lazy(() => import('./pages/demo/DemoAccessConsume'));
 
 // ✅ ÉTAPE 6: Pages Institution (lazy loading)
 const AcceptInvite = lazy(() => import('./pages/Auth/AcceptInvite'));
@@ -135,7 +147,12 @@ const App = () => {
   return (
     <GoogleMapsProvider>
     <QueryClientProvider client={queryClient}>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         {/* ✅ PERF: Suspense pour gérer le lazy loading des routes */}
         <Suspense
           fallback={
@@ -178,12 +195,39 @@ const App = () => {
                 </DefaultLayout>
               }
             />
+            <Route path="/app/*" element={<AppNamespaceRedirect />} />
             <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
                   <DashboardRedirect />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardRedirect forceDemoNamespace />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/home"
+              element={
+                <ProtectedRoute>
+                  <DefaultLayout>
+                    <DemoHome />
+                  </DefaultLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo-access/consume"
+              element={
+                <DefaultLayout>
+                  <DemoAccessConsume />
+                </DefaultLayout>
               }
             />
             <Route
@@ -211,6 +255,70 @@ const App = () => {
               element={
                 <DefaultLayout>
                   <PrivacyPolicy />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact"
+              element={
+                <DefaultLayout>
+                  <Contact />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/support"
+              element={
+                <DefaultLayout>
+                  <ContactSupport />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/institution"
+              element={
+                <DefaultLayout>
+                  <ContactInstitution />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/transport"
+              element={
+                <DefaultLayout>
+                  <ContactTransport />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/demo"
+              element={
+                <DefaultLayout>
+                  <ContactDemo />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/billing"
+              element={
+                <DefaultLayout>
+                  <ContactBilling />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/contact/family"
+              element={
+                <DefaultLayout>
+                  <ContactFamily />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/demo-request"
+              element={
+                <DefaultLayout>
+                  <DemoRequest />
                 </DefaultLayout>
               }
             />
@@ -284,6 +392,14 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminSettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/admin/:public_id/demo-requests"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminDemoRequests />
                 </ProtectedRoute>
               }
             />
@@ -461,10 +577,129 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/demo/dashboard/company/:public_id"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/reservations"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyReservations />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/drivers"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyDriver />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/planning"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyPlanning />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/driver/planning"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyDriverPlanning />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/invoices"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyInvoices />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/invoices/clients"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <ClientInvoices />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/clients"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanyClients />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/settings"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <CompanySettings />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/dispatch"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <UnifiedDispatch />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/dispatch/rl-metrics"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <RLMetricsDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/analytics"
+              element={
+                <ProtectedRoute>
+                  <AnalyticsDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/demo/dashboard/company/:public_id/dispatch/monitor"
+              element={
+                <ProtectedRoute allowedRoles={['company']}>
+                  <UnifiedDispatch />
+                </ProtectedRoute>
+              }
+            />
 
             {/* ✅ ÉTAPE 6: Routes Institution (layout commun avec sidebar) */}
             <Route
               path="/dashboard/institution/:public_id"
+              element={
+                <ProtectedRoute allowedRoles={['institution']}>
+                  <InstitutionLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<InstitutionDashboard />} />
+              <Route path="requests" element={<InstitutionRequests />} />
+              <Route path="requests/new" element={<InstitutionRequestCreate />} />
+              <Route path="requests/:requestId" element={<InstitutionRequestDetail />} />
+              <Route path="patients" element={<InstitutionPatients />} />
+              <Route path="settings" element={<InstitutionSettings />} />
+            </Route>
+            <Route
+              path="/demo/dashboard/institution/:public_id"
               element={
                 <ProtectedRoute allowedRoles={['institution']}>
                   <InstitutionLayout />

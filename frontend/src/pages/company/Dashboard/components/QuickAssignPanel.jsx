@@ -55,7 +55,12 @@ const QuickAssignPanel = ({
   return (
     <>
       <div className={styles.backdrop} onClick={onClose} />
-      <aside className={styles.panel} role="dialog" aria-label="Assignation rapide">
+      <aside
+        className={styles.panel}
+        role="dialog"
+        aria-label="Assignation rapide"
+        data-tour-id="quick-assign-panel"
+      >
         <header className={styles.panelHeader}>
           <h3 className={styles.panelTitle}>Assignation rapide</h3>
           <button className={styles.closeBtn} onClick={onClose} title="Fermer">
@@ -121,7 +126,7 @@ const QuickAssignPanel = ({
             )}
           </section>
 
-          <section className={styles.driverSection}>
+          <section className={styles.driverSection} data-tour-id="quick-assign-driver-section">
             <h4 className={styles.driverSectionTitle}>
               Chauffeurs disponibles ({sortedDrivers.filter((d) => d.is_available).length})
             </h4>
@@ -136,6 +141,7 @@ const QuickAssignPanel = ({
                 return (
                   <button
                     key={d.id}
+                    data-tour-id="quick-assign-driver-option"
                     className={`${styles.driverCard} ${isSelected ? styles.driverCardSelected : ''} ${!d.is_available ? styles.driverCardBusy : ''}`}
                     onClick={() => setSelectedDriverId(d.id)}
                     type="button"
@@ -158,6 +164,7 @@ const QuickAssignPanel = ({
 
         <footer className={styles.panelFooter}>
           <button
+            data-tour-id="quick-assign-confirm"
             className={styles.confirmBtn}
             disabled={!selectedDriverId || assigning}
             onClick={handleConfirm}

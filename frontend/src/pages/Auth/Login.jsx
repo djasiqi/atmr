@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import apiClient, { cleanLocalSession } from '../../utils/apiClient';
+import apiClient, { cleanLocalSession, setCurrentAuthEnv } from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 import { queryClient } from '../../App';
 import styles from './Login.module.css';
@@ -95,12 +95,14 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/auth/login', formData);
-      const { token, user, refresh_token } = response.data;
+      const response = await apiClient.post('/auth/login', formData, { skipCsrf: true });
+      const { token, user, refresh_token, target_env, redirect_to } = response.data;
 
       if (!user || !user.role || !user.public_id) {
         throw new Error('Aucune information utilisateur reçue.');
       }
+
+      const authEnv = setCurrentAuthEnv(target_env);
 
       if (rememberMe) {
         localStorage.setItem(REMEMBER_KEY, JSON.stringify({
@@ -123,6 +125,10 @@ const Login = () => {
       }
 
       const userPayload = JSON.stringify({ ...user, role: roleSegment });
+      localStorage.setItem(`${authEnv}_user`, userPayload);
+      localStorage.setItem(`${authEnv}_public_id`, user.public_id);
+      if (token) localStorage.setItem(`${authEnv}_access_token`, token);
+      if (refresh_token) localStorage.setItem(`${authEnv}_refresh_token`, refresh_token);
 
       if (roleSegment === 'company' || roleSegment === 'admin') {
         localStorage.removeItem('driver_access_token');
@@ -167,16 +173,27 @@ const Login = () => {
       if (user.force_password_change) {
         navigate(`/force-reset-password/${user.public_id}`, { replace: true });
       } else {
-        navigate(`/dashboard/${roleSegment}/${user.public_id}`, { replace: true });
+        navigate(redirect_to || `/dashboard/${roleSegment}/${user.public_id}`, { replace: true });
       }
     } catch (error) {
-      console.error('Erreur lors de la connexion :', error);
-      const msg =
-        error.response?.data?.error ??
-        error.response?.data?.message ??
-        error.response?.data?.detail ??
-        (typeof error.response?.data === 'string' ? error.response.data : null) ??
-        error.message;
+      const responseData = error?.response?.data;
+      const status = error?.response?.status;
+      console.error('Erreur lors de la connexion :', {
+        status,
+        url: error?.config?.url,
+        baseURL: error?.config?.baseURL,
+        data: responseData,
+        code: error?.code,
+      });
+
+      const backendMessage =
+        responseData?.message ??
+        responseData?.detail ??
+        responseData?.error ??
+        (typeof responseData === 'string' ? responseData : null);
+      const reason = responseData?.reason ? ` (${responseData.reason})` : '';
+      const targetEnv = responseData?.target_env ? ` [env=${responseData.target_env}]` : '';
+      const msg = `${backendMessage ?? error.message}${reason}${targetEnv}`;
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);

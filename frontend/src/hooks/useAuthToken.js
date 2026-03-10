@@ -3,11 +3,13 @@ import { jwtDecode } from 'jwt-decode';
 
 const useAuthToken = () => {
   const [user, setUser] = useState(null);
+  const getAuthEnv = () => (localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app');
 
   // Fonction de lecture du localStorage → état user
   const readAuth = useCallback(() => {
-    const token = localStorage.getItem('authToken');
-    const rawUser = localStorage.getItem('user');
+    const env = getAuthEnv();
+    const token = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
+    const rawUser = localStorage.getItem(`${env}_user`) || localStorage.getItem('user');
     const storedUser = rawUser ? JSON.parse(rawUser) : null;
 
     // Si on a un token dans localStorage (mode mobile), le décoder
@@ -66,7 +68,14 @@ const useAuthToken = () => {
 
     // Écouter les changements localStorage venant d'un autre onglet
     const handleStorageChange = (e) => {
-      if (e.key === 'authToken' || e.key === 'user' || e.key === null) {
+      if (
+        e.key === 'authToken' ||
+        e.key === 'user' ||
+        e.key === 'lirie_auth_env' ||
+        e.key?.endsWith('_access_token') ||
+        e.key?.endsWith('_user') ||
+        e.key === null
+      ) {
         readAuth();
       }
     };
@@ -90,7 +99,8 @@ export default useAuthToken;
 
 // ✅ Fonction d'accès directe au token brut
 export function getAccessToken() {
-  const token = localStorage.getItem('authToken');
+  const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
+  const token = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
   if (!token) return null;
   try {
     const decoded = jwtDecode(token);
@@ -115,7 +125,8 @@ export function getAccessToken() {
 }
 
 export function getRefreshToken() {
-  const token = localStorage.getItem('refreshToken');
+  const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
+  const token = localStorage.getItem(`${env}_refresh_token`) || localStorage.getItem('refreshToken');
   if (!token) return null;
   try {
     const decoded = jwtDecode(token);

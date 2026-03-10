@@ -158,16 +158,6 @@ class EmailDomainSetup(Resource):
 
         verification_result = provider.verify_domain(domain)
         dns_records = provider.get_domain_dns_records(domain)
-
-        # #region agent log
-        logger.info(
-            "🔍 [DEBUG] After getting DNS records - domain=%s, dns_records=%s, type=%s",
-            domain,
-            dns_records,
-            type(dns_records),
-        )
-        # #endregion
-
         # 5. Sauvegarder la configuration
         billing_settings.smtp_username = (
             from_email  # Champ existant (sera renommé plus tard)
@@ -200,14 +190,6 @@ class EmailDomainSetup(Resource):
             "dns_records": dns_records if dns_records else {},
             "message": message,
         }
-
-        # #region agent log
-        logger.info(
-            "🔍 [DEBUG] Returning response - dns_records in response: %s",
-            response_data.get("dns_records"),
-        )
-        # #endregion
-
         return response_data, 200
 
 

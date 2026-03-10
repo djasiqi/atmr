@@ -3,10 +3,15 @@ import { BrowserRouter } from 'react-router-dom';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 import Login from './Login';
-import apiClient from '../../utils/apiClient';
+import apiClient, { setCurrentAuthEnv } from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 
-jest.mock('../../utils/apiClient');
+jest.mock('../../utils/apiClient', () => ({
+  __esModule: true,
+  default: { post: jest.fn() },
+  cleanLocalSession: jest.fn(),
+  setCurrentAuthEnv: jest.fn((env) => env || 'app'),
+}));
 jest.mock('jwt-decode');
 
 const mockNavigate = jest.fn();
@@ -43,8 +48,8 @@ describe('Login Page', () => {
     renderLogin();
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/mot de passe/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /connexion/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/entrez votre mot de passe/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /se connecter/i })).toBeInTheDocument();
   });
 
   it('submits login with valid credentials', async () => {
@@ -60,6 +65,8 @@ describe('Login Page', () => {
       data: {
         token: mockToken,
         user: mockUser,
+        target_env: 'app',
+        redirect_to: '/app/dashboard/company/user-123',
       },
     });
 
@@ -73,11 +80,11 @@ describe('Login Page', () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'test@test.com' },
     });
-    fireEvent.change(screen.getByLabelText(/mot de passe/i), {
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
       target: { value: 'password123' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
 
     await waitFor(() => {
       expect(apiClient.post).toHaveBeenCalledWith('/auth/login', {
@@ -85,6 +92,7 @@ describe('Login Page', () => {
         password: 'password123',
       });
     });
+    expect(setCurrentAuthEnv).toHaveBeenCalledWith('app');
   });
 
   it('shows error message on invalid credentials', async () => {
@@ -97,11 +105,11 @@ describe('Login Page', () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'wrong@test.com' },
     });
-    fireEvent.change(screen.getByLabelText(/mot de passe/i), {
+    fireEvent.change(screen.getByPlaceholderText(/entrez votre mot de passe/i), {
       target: { value: 'wrongpass' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /connexion/i }));
+    fireEvent.click(screen.getByRole('button', { name: /se connecter/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();

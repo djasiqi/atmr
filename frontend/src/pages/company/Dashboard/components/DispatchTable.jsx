@@ -111,6 +111,10 @@ const DispatchTable = ({
   const effectiveAutoOpenId = autoOpenId ?? localAutoOpenId;
 
   const data = dispatches || reservations || [];
+  const firstUnassignedIndex = data.findIndex((r) => !r.driver_id && !r.driver);
+  const fallbackDriverAnchorIndex = firstUnassignedIndex >= 0 ? firstUnassignedIndex : 0;
+  const firstStatusAnchorIndex = data.length > 0 ? 0 : -1;
+  const firstRowClickableIndex = data.length > 0 ? 0 : -1;
 
   // Construire delayMap interne si pas fourni en prop (compatibilite)
   const delayMap = externalDelayMap || (() => {
@@ -151,7 +155,7 @@ const DispatchTable = ({
   };
 
   return (
-    <div className={styles.tableContainer}>
+    <div className={styles.tableContainer} data-tour-id="dispatch-table">
       <table className={styles.table}>
         <thead>
           <tr>
@@ -164,7 +168,7 @@ const DispatchTable = ({
           </tr>
         </thead>
         <tbody>
-          {data.map((r) => {
+          {data.map((r, index) => {
             const status = r.status?.toLowerCase() || 'unknown';
             const key = getDispatchKey(r);
             const priority = getRowPriority(r, delayMap);
@@ -185,6 +189,7 @@ const DispatchTable = ({
                 key={key}
                 onClick={(e) => handleRowClick(r, e)}
                 className={`${styles.tableRow} ${ROW_PRIORITY_CLASS[priority] || ''} ${onRowClick ? styles.rowClickable : ''}`}
+                data-tour-id={index === firstRowClickableIndex ? 'dispatch-row-clickable' : undefined}
               >
                 {/* Colonne Client */}
                 <td className={styles.clientCell}>
@@ -240,6 +245,7 @@ const DispatchTable = ({
                 <td
                   className={styles.driverCellInline}
                   onClick={(e) => e.stopPropagation()}
+                  data-tour-id={index === fallbackDriverAnchorIndex ? 'dispatch-driver-anchor' : undefined}
                 >
                   {needsTimeConfirmation ? (
                     <span className={styles.timeRequiredHint} title="Definir l'heure de retour avant d'assigner">
@@ -263,7 +269,10 @@ const DispatchTable = ({
 
                 {/* Colonne Statut FR V7 */}
                 <td>
-                  <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
+                  <span
+                    className={`${styles.statusBadge} ${styles[status] || ''}`}
+                    data-tour-id={index === firstStatusAnchorIndex ? 'dispatch-status-anchor' : undefined}
+                  >
                     {getCompositeStatus(r)}
                   </span>
                   {r.is_transferred && r.active_transfer && (() => {

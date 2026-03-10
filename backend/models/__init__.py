@@ -33,6 +33,8 @@ from .clinic_billing_party_mapping import ClinicBillingPartyMapping
 from .company import Company
 from .transport_voucher import TransportVoucher, TransportVoucherFile
 from .delay_event import DelayEvent
+from .demo_access import DemoAccess
+from .demo_request import DemoRequest
 from .device_token import DeviceToken
 from .dispatch import (
     Assignment,
@@ -62,11 +64,13 @@ from .enums import (
     BillingPartyType,
     BillingSource,
     ClientType,
+    DispatchOfferStatus,
     DispatchMode,
     DispatchStatus,
     DriverState,
     DriverType,
     GenderEnum,
+    GeoUnitType,
     InstitutionRole,
     InvoiceBillingStrategy,
     InvoiceLineType,
@@ -78,10 +82,12 @@ from .enums import (
     PartnershipStatus,
     PaymentMethod,
     PaymentStatus,
+    PricingModelType,
     RealtimeEntityType,
     RealtimeEventType,
     RequestStatus,
     SenderRole,
+    ServiceCoverageMode,
     ShiftStatus,
     ShiftType,
     TransportVoucherStatus,
@@ -93,6 +99,7 @@ from .enums import (
 from .billing_profile import CompanyBillingProfile
 from .billing_audit_log import BillingAuditLog
 from .billing_party import BillingParty, ClientBillingParty
+from .contact_request import ContactRequest
 from .curator_team import CuratorTeam, CuratorTeamMember
 from .institution import Institution
 from .institution_api_key import (
@@ -116,6 +123,16 @@ from .patient_identity import (
 from .institution_settings import InstitutionSettings
 from .institution_transport_preference import InstitutionTransportPreference  # ✅ ÉTAPE 4
 from .request_offer import RequestOffer  # ✅ ÉTAPE 4
+from .geo_unit import GeoUnit
+from .service_area_pricing import (
+    DispatchOffer,
+    PlatformZone,
+    PlatformZoneMembership,
+    PlatformZoneSet,
+    PricingProfile,
+    PricingProfileVersion,
+    ServiceArea,
+)
 from .transport_request import TransportRequest
 from .eta_accuracy_log import EtaAccuracyLog
 from .invoice import (
@@ -170,6 +187,7 @@ __all__ = [
     "ClinicBillingPartyMapping",
     "ClientType",
     "Company",
+    "ContactRequest",
     "CuratorTeam",
     "CuratorTeamMember",
     "CompanyBillingSettings",
@@ -178,8 +196,12 @@ __all__ = [
     "CompanyPlanningSettings",
     "DailyStats",
     "DelayEvent",  # ✅ 3.5.1: Historique événements retards
+    "DemoAccess",
+    "DemoRequest",
     "DeviceToken",  # ✅ Support multi-device pour push notifications
     "DispatchMetrics",
+    "DispatchOffer",
+    "DispatchOfferStatus",
     "DispatchMode",
     "DispatchRun",
     "DispatchStatus",
@@ -197,6 +219,8 @@ __all__ = [
     "EtaAccuracyLog",
     "FavoritePlace",
     "GenderEnum",
+    "GeoUnit",
+    "GeoUnitType",
     "Institution",  # ✅ Portail institutionnel
     "InstitutionApiKey",  # ✅ API Keys DPI
     "InstitutionNotification",  # ✅ Notifications in-app
@@ -237,6 +261,12 @@ __all__ = [
     "Payment",
     "PaymentMethod",
     "PaymentStatus",
+    "PricingModelType",
+    "PlatformZone",
+    "PlatformZoneMembership",
+    "PlatformZoneSet",
+    "PricingProfile",
+    "PricingProfileVersion",
     "ProfilingMetrics",
     "RLFeedback",
     "RLSuggestion",
@@ -249,6 +279,8 @@ __all__ = [
     "RequestStatus",  # ✅ Statut demande transport
     "SecretRotation",
     "SenderRole",
+    "ServiceArea",
+    "ServiceCoverageMode",
     "ShiftStatus",
     "ShiftType",
     "TaskFailure",

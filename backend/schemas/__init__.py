@@ -67,6 +67,8 @@ from schemas.company_schemas import (
     ManualBookingCreateSchema,
     VehicleUpdateSchema,
 )
+from schemas.contact_schemas import CONTACT_SUBJECTS, ContactRequestSchema
+from schemas.demo_request_schemas import DemoRequestSchema
 
 # ============================================================
 # Dispatch Schemas
@@ -177,6 +179,9 @@ __all__ = [  # noqa: RUF022
     "ClientCreateSchema",
     "ClientUpdateSchema",
     "CompanyUpdateSchema",
+    "CONTACT_SUBJECTS",
+    "ContactRequestSchema",
+    "DemoRequestSchema",
     "DispatchProblemSchema",
     "DispatchResultSchema",
     "DispatchRunRequestSchema",

@@ -81,84 +81,8 @@ class AuthenticateUserUseCase:
             )
 
         from repositories.user_repository import UserRepository
-
-        # #region agent log
-        log_path = Path(r"c:\Users\jasiq\atmr\.cursor\debug.log")
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": (
-                                "authenticate_user.py:AuthenticateUserUseCase.execute"
-                            ),
-                            "message": "before UserRepository.find_model_by_email",
-                            "data": {
-                                "email": (
-                                    input_data.email[:10] + "***"
-                                    if input_data.email
-                                    else None
-                                ),
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         user_repo = UserRepository()
         user = user_repo.find_model_by_email(input_data.email)
-        # #region agent log
-        try:
-            with log_path.open("a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "location": (
-                                "authenticate_user.py:AuthenticateUserUseCase.execute"
-                            ),
-                            "message": "after UserRepository.find_model_by_email",
-                            "data": {
-                                "user_found": user is not None,
-                                "user_id": user.id if user else None,
-                            },
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception as log_err:
-            # Log l'erreur de logging elle-même
-            try:
-                with log_path.open("a", encoding="utf-8") as f:
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": (
-                                    "authenticate_user.py:AuthenticateUserUseCase.execute"
-                                ),
-                                "message": "ERROR logging after find_model_by_email",
-                                "data": {"log_error": str(log_err)},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "C",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
-
         if not user or not user.check_password(input_data.password):
             return AuthenticateUserOutput(
                 success=False,

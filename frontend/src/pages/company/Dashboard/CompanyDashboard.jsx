@@ -1,6 +1,6 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
 import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { FiZap, FiPlus, FiBarChart2 } from 'react-icons/fi';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
@@ -47,6 +47,7 @@ import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { Toaster, toast } from 'sonner';
+import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
 
 function makeToday() {
   const d = new Date();
@@ -55,6 +56,27 @@ function makeToday() {
 }
 
 const CompanyDashboard = () => {
+  const location = useLocation();
+  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const fallbackDemoMission = isDemoEnv
+    ? (
+        localStorage.getItem('demo_recommended_journey') ||
+        localStorage.getItem('demo_demo_recommended_journey') ||
+        ''
+      )
+        .toString()
+        .trim()
+        .toLowerCase()
+    : '';
+  const demoMission = useMemo(
+    () => {
+      const mission = new URLSearchParams(location.search).get('demo_mission');
+      if (mission) return mission;
+      if (fallbackDemoMission === 'transport') return 'transporteur';
+      return null;
+    },
+    [location.search, fallbackDemoMission]
+  );
   const [dispatchDay, setDispatchDay] = useState(makeToday());
 
   const {
@@ -752,10 +774,14 @@ const CompanyDashboard = () => {
       <div className={styles.dashboard}>
         <CompanySidebar />
         <main className={styles.content}>
+          {demoMission === 'transporteur' && <DemoInteractiveGuide role="transporteur" />}
+
           {/* ============ 1. HEADER CONTEXTUALISÉ ============ */}
           <header className={styles.dashboardHeader}>
             <div className={styles.headerLeft}>
-              <h1 className={styles.headerTitle}>Tableau de bord Exploitation</h1>
+              <h1 className={styles.headerTitle} data-tour-id="dashboard-transports">
+                Tableau de bord Exploitation
+              </h1>
               <div className={styles.headerMeta}>
                 <InlineDatePicker
                   value={dispatchDay}
@@ -771,7 +797,7 @@ const CompanyDashboard = () => {
             <div className={styles.headerActions}>
               {company?.public_id && (
                 <Link
-                  to={`/dashboard/company/${company.public_id}/dispatch`}
+                  to={`${isDemoEnv ? '/demo/dashboard' : '/dashboard'}/company/${company.public_id}/dispatch`}
                   className={styles.headerBtnSecondary}
                 >
                   <FiZap size={16} />
@@ -781,6 +807,7 @@ const CompanyDashboard = () => {
               <button
                 onClick={() => setShowBookingModal(true)}
                 className={styles.headerBtnPrimary}
+                data-tour-id="create-booking"
               >
                 <FiPlus size={16} />
                 Nouvelle réservation
@@ -817,7 +844,7 @@ const CompanyDashboard = () => {
 
           <div className={isManualMode ? styles.singleColumnLayout : styles.twoColumnLayout}>
             <div className={isManualMode ? styles.fullColumn : styles.leftColumn}>
-              <section className={styles.mapSection}>
+              <section className={styles.mapSection} data-tour-id="dispatch-assign">
                 <DriverLiveMap
                   date={dispatchDay}
                   drivers={driver || []}
@@ -843,7 +870,7 @@ const CompanyDashboard = () => {
           </div>
 
           {/* ============ 4. RÉSERVATIONS — PLEINE LARGEUR ============ */}
-          <section className={`${styles.reservationsFullSection} ${urgenceMode ? styles.urgenceSection : ''}`}>
+          <section className={`${styles.reservationsFullSection} ${urgenceMode ? styles.urgenceSection : ''}`} data-tour-id="dispatch-followup">
             <ReservationFilterBar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -888,6 +915,7 @@ const CompanyDashboard = () => {
               <div className={styles.tabsHeader} data-active-tab={reservationTab}>
                 <button
                   className={`${styles.tab} ${reservationTab === 'pending' ? styles.tabActive : ''}`}
+                  data-tour-id="tab-pending"
                   onClick={() => setReservationTab('pending')}
                 >
                   En attente
@@ -895,6 +923,7 @@ const CompanyDashboard = () => {
                 </button>
                 <button
                   className={`${styles.tab} ${reservationTab === 'institution' ? styles.tabActive : ''}`}
+                  data-tour-id="tab-institutions"
                   onClick={() => setReservationTab('institution')}
                 >
                   Institutions
@@ -902,6 +931,7 @@ const CompanyDashboard = () => {
                 </button>
                 <button
                   className={`${styles.tab} ${reservationTab === 'assigned' ? styles.tabActive : ''}`}
+                  data-tour-id="tab-assigned"
                   onClick={() => setReservationTab('assigned')}
                 >
                   Assignation chauffeur
@@ -974,7 +1004,7 @@ const CompanyDashboard = () => {
           </section>
 
           {/* ============ 5. PERFORMANCE & FLOTTE (collapsible) ============ */}
-          <section className={styles.performanceSection}>
+          <section className={styles.performanceSection} data-tour-id="generate-invoice">
             <div
               className={styles.performanceHeader}
               onClick={() => setShowPerformance(!showPerformance)}
@@ -1033,9 +1063,9 @@ const CompanyDashboard = () => {
         {showBookingModal && (
           <Modal onClose={() => setShowBookingModal(false)} size="xl" className="modal-booking">
             <ManualBookingForm
+              onSubmitStart={() => setShowBookingModal(false)}
               onSuccess={(booking) => {
                 handleManualBookingSuccess(booking);
-                setShowBookingModal(false);
               }}
               onClose={() => setShowBookingModal(false)}
             />

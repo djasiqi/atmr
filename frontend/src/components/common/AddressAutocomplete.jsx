@@ -178,7 +178,7 @@ export default function AddressAutocomplete({
       return [];
     }
 
-    // 1) Proxy backend — mélange alias/favoris + Photon si ton backend le fait
+    // 1) Proxy backend
     try {
       // ✅ URL relative au baseURL (pas de / initial) pour que prod atteigne /api/v1/geocode/autocomplete
       const url = `geocode/autocomplete?q=${encodeURIComponent(q)}&lat=${encodeURIComponent(
@@ -268,23 +268,10 @@ export default function AddressAutocomplete({
 
         const queryStr = String(queryToUse || '');
         const next = await fetchSuggestions(queryStr, ctl.signal);
-        let enriched = Array.isArray(next) ? next : [];
-
-        // Filet de sécu : si l'utilisateur tape "hug" et qu'aucun alias n'est présent,
-        // on injecte l'adresse HUG en tête (évite de dépendre à 100% du backend).
-        const qn = (queryToUse || '').toString().trim().toLowerCase();
-        const hasAlias = enriched.some((it) => it.source === 'alias');
-        const looksHUG = /\bhug\b|h[ôo]pit(?:al|aux).+gen[eè]ve|\bh[ôo]pital\s+cantonal\b/.test(qn);
-        if (looksHUG && !hasAlias) {
-          enriched.unshift({
-            source: 'alias',
-            label: 'Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
-            address: 'Rue Gabrielle-Perret-Gentil 4, 1205 Genève',
-            lat: 46.19226,
-            lon: 6.14262,
-            category: 'hospital',
-          });
-        }
+        // Exclure favoris/alias de la saisie automatique
+        let enriched = (Array.isArray(next) ? next : []).filter(
+          (it) => it?.source !== 'favorite' && it?.source !== 'alias'
+        );
 
         // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
         startTransition(() => {
@@ -338,22 +325,15 @@ export default function AddressAutocomplete({
     }
   }
 
-  // Groupes : alias/favoris en tête, puis Google Places, puis autres (Photon)
-  const favorites = useMemo(
-    () => items.filter((i) => i.source === 'favorite' || i.source === 'alias'),
-    [items]
-  );
+  // Groupes : Google Places en tête, puis autres résultats
   const googlePlaces = useMemo(() => items.filter((i) => i.source === 'google_places'), [items]);
   const others = useMemo(
-    () =>
-      items.filter(
-        (i) => i.source !== 'favorite' && i.source !== 'alias' && i.source !== 'google_places'
-      ),
+    () => items.filter((i) => i.source !== 'google_places'),
     [items]
   );
   const visibleItems = useMemo(
-    () => [...favorites, ...googlePlaces, ...others],
-    [favorites, googlePlaces, others]
+    () => [...googlePlaces, ...others],
+    [googlePlaces, others]
   );
 
   async function chooseItem(it) {
@@ -456,7 +436,7 @@ export default function AddressAutocomplete({
         onSelect?.(it);
       }
     } else {
-      // Sinon, passer l'item tel quel (Photon, alias, ou Google avec coordonnées déjà présentes)
+      // Sinon, passer l'item tel quel (Photon, ou Google avec coordonnées déjà présentes)
       onSelect?.(it);
     }
   }
@@ -628,42 +608,11 @@ export default function AddressAutocomplete({
 
           {!loading && visibleItems.length > 0 && (
             <>
-              {favorites.length > 0 && (
-                <>
-                  <div className={acStyles.sectionHeader}>Favoris & alias</div>
-                  {favorites.map((it, idx) => {
-                    const globalIndex = idx;
-                    const active = globalIndex === highlight;
-                    const line =
-                      [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||
-                      it.label;
-                    const key =
-                      it.lat != null && it.lon != null
-                        ? `${it.lat},${it.lon}-${idx}`
-                        : `${it.label || it.address || 'addr'}-fav-${idx}`;
-                    return (
-                      <div
-                        id={`${name || 'address'}-ac-option-${globalIndex}`}
-                        key={key}
-                        role="option"
-                        aria-selected={active}
-                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
-                        onMouseEnter={() => setHighlight(globalIndex)}
-                        className={`${acStyles.optionItem} ${active ? acStyles.optionItemActive : ''}`}
-                      >
-                        <div className={acStyles.optionLabel}>{it.label || it.address}</div>
-                        {line && <div className={acStyles.optionSecondary}>{line}</div>}
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-
               {googlePlaces.length > 0 && (
                 <>
                   <div className={acStyles.sectionHeaderGoogle}>Suggestions</div>
                   {googlePlaces.map((it, idx) => {
-                    const globalIndex = favorites.length + idx;
+                    const globalIndex = idx;
                     const active = globalIndex === highlight;
                     return (
                       <div
@@ -687,7 +636,7 @@ export default function AddressAutocomplete({
                 <>
                   <div className={acStyles.sectionHeader}>Autres résultats</div>
                   {others.map((it, idx) => {
-                    const globalIndex = favorites.length + googlePlaces.length + idx;
+                    const globalIndex = googlePlaces.length + idx;
                     const active = globalIndex === highlight;
                     const line =
                       [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||

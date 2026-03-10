@@ -38,7 +38,15 @@ const MyProfileTab = () => {
   const createPermRequestMutation = useCreatePermissionRequest();
 
   const user = meData?.user;
-  const institutionRole = meData?.institution_role;
+  const isDemoEnv = (() => {
+    try {
+      return localStorage.getItem('lirie_auth_env') === 'demo';
+    } catch {
+      return false;
+    }
+  })();
+  const institutionRole =
+    meData?.institution_role || (isDemoEnv ? 'institution_admin' : undefined);
   const canRequestPerms = !isAdmin(institutionRole);
 
   const [form, setForm] = useState({

@@ -613,6 +613,7 @@ const InvoicesRegistry = () => {
             <button
               className={styles.newInvoiceBtn}
               onClick={() => setNewInvoiceModal({ open: true, invoiceDraft: null })}
+              data-tour-id="invoice-new-button"
             >
               <FiPlus size={14} />
               Nouvelle facture
@@ -631,7 +632,7 @@ const InvoicesRegistry = () => {
       />
 
       {/* Zone C — KPIs + Alertes */}
-      <div className={styles.stats}>
+      <div className={styles.stats} data-tour-id="invoice-stats">
         <div className={styles.statCard}>
           <FiFileText size={20} className={styles.statIcon} />
           <div className={styles.statContent}>
@@ -767,7 +768,7 @@ const InvoicesRegistry = () => {
         {loading ? (
           <div className={styles.loading}>Chargement...</div>
         ) : (
-          <table className={styles.table}>
+          <table className={styles.table} data-tour-id="invoice-table">
             <thead>
               <tr>
                 <th className={styles.thCheckbox}>
@@ -790,7 +791,7 @@ const InvoicesRegistry = () => {
               </tr>
             </thead>
             <tbody>
-              {displayedInvoices.map((invoice) => {
+              {displayedInvoices.map((invoice, index) => {
                 const clientName = getClientName(invoice);
                 const payerName = getPayerName(invoice);
                 const daysOverdue = getDaysOverdue(invoice);
@@ -853,6 +854,7 @@ const InvoicesRegistry = () => {
                     <td>
                       <InvoiceRowActions
                         invoice={invoice}
+                        isGuideAnchor={index === 0}
                         onSend={() => handleMarkAsSent(invoice.id)}
                         onSendEmail={() => handleOpenSendEmail(invoice)}
                         onPayment={() => setPaymentModal({ open: true, invoice })}

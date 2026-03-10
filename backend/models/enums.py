@@ -509,3 +509,48 @@ class OfferMode(str, PyEnum):
     @classmethod
     def choices(cls):
         return [e.value for e in cls]
+
+
+class GeoUnitType(str, PyEnum):
+    COUNTRY = "country"
+    CANTON = "canton"
+    DISTRICT = "district"
+    COMMUNE = "commune"
+    ZIPCODE = "zipcode"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class ServiceCoverageMode(str, PyEnum):
+    A_STRICT = "A_STRICT"
+    B_PICKUP_ONLY = "B_PICKUP_ONLY"
+    C_INTRA_ONLY = "C_INTRA_ONLY"
+    D_NATIONAL = "D_NATIONAL"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class PricingModelType(str, PyEnum):
+    FLAT = "flat"
+    ZONE = "zone"
+    DISTANCE = "distance"
+    HYBRID = "hybrid"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
+class DispatchOfferStatus(str, PyEnum):
+    PROPOSED = "PROPOSED"
+    ACCEPTED = "ACCEPTED"
+    DECLINED = "DECLINED"
+    EXPIRED = "EXPIRED"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]

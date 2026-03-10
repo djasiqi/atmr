@@ -268,7 +268,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
     ? Number(reservation?.amount ?? 0) - Number(originalAmount) : null;
 
   return (
-    <div className={s.panel}>
+    <div className={s.panel} data-tour-id="ReservationDetailPanel_panel">
       {/* Header */}
       <div className={s.panelHeader}>
         <div className={s.panelTitleRow}>

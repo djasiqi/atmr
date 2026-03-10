@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4-alpine
     environment:
       POSTGRES_DB: atmr
       POSTGRES_USER: atmr
@@ -80,7 +80,7 @@ services:
       - PYTHONPATH=/app
       - GUNICORN_WORKERS=2
       - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
-      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-AIzaSyBjQWCgiGpLJsrp_jmSDC1reBeqgerA7uE}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-eventlet}
       - SIO_DISABLE_UPGRADES=false
@@ -105,7 +105,10 @@ services:
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
-      - BREVO_API_KEY=${BREVO_API_KEY}
+      - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-true}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-brevo}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-noreply@lirie.ch}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-LIRIE}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=2
       - MKL_NUM_THREADS=2
@@ -198,7 +201,6 @@ services:
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
-      - BREVO_API_KEY=${BREVO_API_KEY}
       # Firebase Cloud Messaging (FCM) — pour push notifications Celery worker
       - FIREBASE_SERVICE_ACCOUNT_PATH=/app/firebase-service-account.json
       - FIREBASE_SERVICE_ACCOUNT_JSON=${FIREBASE_SERVICE_ACCOUNT_JSON}
@@ -279,7 +281,6 @@ services:
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
-      - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
@@ -342,7 +343,6 @@ services:
       - APP_ENCRYPTION_KEY_B64=${APP_ENCRYPTION_KEY_B64}
       - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY}
       # Configuration Brevo pour envoi d'emails transactionnels
-      - BREVO_API_KEY=${BREVO_API_KEY}
       # Optimisations PyTorch (même que production)
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
@@ -528,3 +528,7 @@ volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+
+networks:
+  default:
+    name: network_prod

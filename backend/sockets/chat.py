@@ -278,33 +278,6 @@ def _extract_token(auth) -> str | None:
     try:
         all_cookies = list(request.cookies.keys()) if request.cookies else []
         cookie_token = request.cookies.get(cookie_name)
-        # #region agent log
-        try:
-            log_data_cookie_check = {
-                "location": "chat.py:_extract_token",
-                "message": "Cookie check",
-                "data": {
-                    "cookie_name": cookie_name,
-                    "has_cookie": bool(cookie_token),
-                    "all_cookies": all_cookies,
-                    "has_cookies": bool(request.cookies),
-                },
-                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "post-fix",
-                "hypothesisId": "G",
-            }
-            req = urllib.request.Request(
-                "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                data=json.dumps(log_data_cookie_check).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=0.1)
-        except Exception as log_err:
-            # Ne pas faire échouer l'extraction du token si le log échoue
-            logger.debug("Failed to send debug log: %s", log_err)
-        # #endregion
         if cookie_token:
             token = cookie_token.strip()
             logger.info(
@@ -421,55 +394,9 @@ def _extract_token(auth) -> str | None:
 
 def init_chat_socket(socketio: SocketIO):
     logger.info("🔧 [INIT] Initialisation des handlers Socket.IO chat")
-    # #region agent log - DÉSACTIVÉ EN PRODUCTION
-    if os.getenv("FLASK_ENV") == "development":
-        try:
-            debug_log_path = Path(".cursor/debug.log")
-            debug_log_path.parent.mkdir(parents=True, exist_ok=True)
-            with debug_log_path.open("a") as f:
-                # json est déjà importé en haut du fichier
-                f.write(
-                    json.dumps(
-                        {
-                            "location": "chat.py:init_chat_socket",
-                            "message": "init_chat_socket CALLED",
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "H3",
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass  # Ignore les erreurs de log en dev
-    # #endregion
 
     @socketio.on("connect", namespace="/")
     def handle_connect(auth: dict[str, Any] | None) -> bool:
-        # #region agent log - DÉSACTIVÉ EN PRODUCTION
-        if os.getenv("FLASK_ENV") == "development":
-            try:
-                debug_log_path = Path(".cursor/debug.log")
-                with debug_log_path.open("a") as f:
-                    # json est déjà importé en haut du fichier
-                    f.write(
-                        json.dumps(
-                            {
-                                "location": "chat.py:handle_connect:ENTRY",
-                                "message": "CONNECT HANDLER INVOKED",
-                                "data": {"auth": str(auth)[:200] if auth else None},
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "sessionId": "debug-session",
-                                "runId": "run1",
-                                "hypothesisId": "H3",
-                            }
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass  # Ignore les erreurs de log en dev
-        # #endregion
         # ✅ Try-except global pour capturer TOUTES les exceptions, y compris celles du rate limiting
         try:
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
@@ -489,37 +416,6 @@ def init_chat_socket(socketio: SocketIO):
             print(
                 f"🔌 [SOCKET.IO] handle_connect appelé - IP: {client_ip}, Origin: {origin}"
             )
-            # #region agent log - DÉSACTIVÉ EN PRODUCTION
-            if os.getenv("FLASK_ENV") == "development":
-                try:
-                    sid = getattr(request, "sid", None) or request.environ.get(
-                        "socketio.sid", "unknown"
-                    )
-                    debug_log_path = os.getenv(
-                        "DEBUG_LOG_PATH", r"c:\Users\jasiq\atmr\.cursor\debug.log"
-                    )
-                    log_path = Path(debug_log_path)
-                    log_path.parent.mkdir(parents=True, exist_ok=True)
-                    with log_path.open("a", encoding="utf-8") as f:
-                        log_data = {
-                            "id": f"log_{int(datetime.now(UTC).timestamp() * 1000)}_connect",
-                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                            "location": "chat.py:handle_connect",
-                            "message": "Socket.IO connect event",
-                            "data": {
-                                "sid": str(sid),
-                                "worker_pid": os.getpid(),
-                                "client_ip": client_ip,
-                                "origin": origin or "none",
-                            },
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                        }
-                        f.write(json.dumps(log_data) + "\n")
-                except Exception:
-                    pass
-            # #endregion
             logger.info(
                 "socket_connect_attempt",
                 extra={
@@ -538,31 +434,6 @@ def init_chat_socket(socketio: SocketIO):
                 client_ip=client_ip,
             )
             if not allowed:
-                # #region agent log
-                log_data_rate_limit = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Rate limit exceeded",
-                    "data": {
-                        "reason": "rate_limit_exceeded",
-                        "ip": client_ip,
-                        "retry_after": retry_after or 0,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "E",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_rate_limit).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
                 logger.warning(
                     "socket_rate_limit_exceeded",
                     extra={
@@ -632,44 +503,6 @@ def init_chat_socket(socketio: SocketIO):
             print(
                 f"🔌 [SOCKET.IO] Token extrait: {bool(token)}, Cookies: {bool(request.cookies)}, Auth payload: {isinstance(auth, dict)}"
             )
-            # #region agent log
-            log_data = {
-                "location": "chat.py:handle_connect",
-                "message": "Token extraction result",
-                "data": {
-                    "has_token": bool(token),
-                    "token_length": len(token) if token else 0,
-                    "has_cookies": bool(request.cookies),
-                    "cookie_keys": all_cookies,
-                    "has_auth_payload": isinstance(auth, dict),
-                    "auth_keys": list(auth.keys()) if isinstance(auth, dict) else [],
-                    "auth_token_key": "token" in auth
-                    if isinstance(auth, dict)
-                    else False,
-                    "auth_accessToken_key": "accessToken" in auth
-                    if isinstance(auth, dict)
-                    else False,
-                    "has_authz_header": bool(
-                        request.headers.get("Authorization")
-                        or request.headers.get("AUTHORIZATION")
-                    ),
-                },
-                "timestamp": int(now.timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "A",
-            }
-            try:
-                req = urllib.request.Request(
-                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                    data=json.dumps(log_data).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                urllib.request.urlopen(req, timeout=0.1)
-            except Exception:
-                pass
-            # #endregion
             if not token:
                 # ✅ Log explicite pour diagnostic (toujours affiché)
                 print("❌ [SOCKET.IO] Token manquant - Connexion refusée")
@@ -682,32 +515,6 @@ def init_chat_socket(socketio: SocketIO):
                 print(
                     f"   - Authorization header: {bool(request.headers.get('Authorization') or request.headers.get('AUTHORIZATION'))}"
                 )
-                # #region agent log
-                log_data_error = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Token missing - connection refused",
-                    "data": {
-                        "reason": "token_missing",
-                        "has_cookies": bool(request.cookies),
-                        "cookie_keys": all_cookies,
-                        "ip": client_ip,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_error).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
                 logger.warning(
                     "socket_connect_refused",
                     extra={
@@ -798,32 +605,6 @@ def init_chat_socket(socketio: SocketIO):
                 if decoded is None:
                     raise last_decode_error or Exception("Token decode error")
 
-                # #region agent log
-                log_data_decoded = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Token decoded successfully",
-                    "data": {
-                        "has_decoded": bool(decoded),
-                        "has_sub": "sub" in decoded if decoded else False,
-                        "public_id": decoded.get("sub") if decoded else None,
-                        "role": decoded.get("role") if decoded else None,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "D",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_decoded).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
             except jwt_exceptions.ExpiredSignatureError:
                 # ✅ Réduire le bruit dans les logs : tracker les erreurs token_expired par IP
                 # Logger seulement si c'est la première erreur ou si ça fait plus de 60s depuis le dernier log
@@ -865,32 +646,6 @@ def init_chat_socket(socketio: SocketIO):
                     for ip in ips_to_remove:
                         _TOKEN_EXPIRED_TRACKING.pop(ip, None)
 
-                # #region agent log (uniquement si should_log)
-                if should_log:
-                    log_data_expired = {
-                        "location": "chat.py:handle_connect",
-                        "message": "Token expired",
-                        "data": {
-                            "reason": "token_expired",
-                            "ip": client_ip,
-                            "error_count": error_count + 1,
-                        },
-                        "timestamp": int(now.timestamp() * 1000),
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                    }
-                    try:
-                        req = urllib.request.Request(
-                            "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                            data=json.dumps(log_data_expired).encode("utf-8"),
-                            headers={"Content-Type": "application/json"},
-                            method="POST",
-                        )
-                        urllib.request.urlopen(req, timeout=0.1)
-                    except Exception:
-                        pass
-                # #endregion
 
                 # ✅ Logger seulement si should_log (réduire bruit)
                 if should_log:
@@ -939,32 +694,6 @@ def init_chat_socket(socketio: SocketIO):
                         print(
                             f"🔌 [SOCKET.IO] Token decode error: {type(e).__name__}: {e}"
                         )
-                # #region agent log
-                log_data_decode_error = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Token decode error",
-                    "data": {
-                        "reason": "token_decode_error",
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "ip": client_ip,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "B",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_decode_error).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
                 logger.warning(
                     "socket_connect_error",
                     extra={
@@ -1008,31 +737,6 @@ def init_chat_socket(socketio: SocketIO):
 
             user = User.query.filter_by(public_id=public_id).first()
             if not user:
-                # #region agent log
-                log_data_user_not_found = {
-                    "location": "chat.py:handle_connect",
-                    "message": "User not found",
-                    "data": {
-                        "reason": "user_not_found",
-                        "user_public_id": public_id,
-                        "ip": client_ip,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "C",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_user_not_found).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
                 logger.info(
                     "socket_connect_refused",
                     extra={
@@ -1226,32 +930,6 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
             else:
-                # #region agent log
-                log_data_role_not_authorized = {
-                    "location": "chat.py:handle_connect",
-                    "message": "Role not authorized",
-                    "data": {
-                        "reason": "role_not_authorized",
-                        "user_id": user.id,
-                        "role": user.role.value,
-                        "ip": client_ip,
-                    },
-                    "timestamp": int(now.timestamp() * 1000),
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "D",
-                }
-                try:
-                    req = urllib.request.Request(
-                        "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                        data=json.dumps(log_data_role_not_authorized).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    urllib.request.urlopen(req, timeout=0.1)
-                except Exception:
-                    pass
-                # #endregion
                 logger.warning(
                     "socket_connect_refused",
                     extra={
@@ -1284,33 +962,6 @@ def init_chat_socket(socketio: SocketIO):
                 trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
                     "Trace-Id"
                 )
-
-            # #region agent log
-            log_data_exception = {
-                "location": "chat.py:handle_connect",
-                "message": "Exception in handle_connect",
-                "data": {
-                    "reason": "exception",
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "ip": client_ip,
-                },
-                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                "sessionId": "debug-session",
-                "runId": "run1",
-                "hypothesisId": "F",
-            }
-            try:
-                req = urllib.request.Request(
-                    "http://127.0.0.1:7242/ingest/5d8025f1-2a4d-4796-97fe-faa80ad8db74",
-                    data=json.dumps(log_data_exception).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST",
-                )
-                urllib.request.urlopen(req, timeout=0.1)
-            except Exception:
-                pass
-            # #endregion
 
             # ✅ Logs conditionnels (désactiver en production)
             try:
