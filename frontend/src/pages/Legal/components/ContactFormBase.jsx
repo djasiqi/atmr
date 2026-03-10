@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { startTransition, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { submitContactRequest } from '../../../services/contactService';
 import { submitDemoRequest } from '../../../services/demoRequestService';
@@ -50,10 +50,11 @@ const ContactFormBase = ({ category, config }) => {
 
   const onChange = (event) => {
     const { name, type, checked, value } = event.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+    const newVal = type === 'checkbox' ? checked : value;
+    // startTransition évite de bloquer le thread principal (INP > 200ms)
+    startTransition(() => {
+      setForm((prev) => ({ ...prev, [name]: newVal }));
+    });
   };
 
   const validate = () => {
