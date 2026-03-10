@@ -62,8 +62,13 @@ jobs:
             echo "SOCKETIO_CORS_ORIGINS=https://www.lirie.ch"
             echo "CORS_ORIGINS=https://www.lirie.ch"
             echo "EMAIL_NOTIFICATIONS_ENABLED=${{ secrets.EMAIL_NOTIFICATIONS_ENABLED }}"
+            echo "# Storage démo (en brut, requis par environment_guard)"
             echo "STORAGE_BUCKET=lirie-demo-storage"
             echo "STORAGE_PREFIX=demo/"
+            echo "S3_BUCKET=lirie-demo-storage"
+            echo "S3_PREFIX=demo/"
+            echo "DEMO_STORAGE_BUCKET=lirie-demo-storage"
+            echo "DEMO_STORAGE_PREFIX=demo/"
           } > .env.demo
           echo "✅ .env.demo créé ($(wc -l < .env.demo) lignes)"
 
