@@ -84,7 +84,13 @@ class ScheduleCompanyReservationUseCase:
             )
 
         booking.scheduled_time = sched_local
-        booking.time_confirmed = True
+        # Règle métier: 00:00 signifie "heure à confirmer".
+        is_sentinel_midnight = (
+            sched_local.hour == 0
+            and sched_local.minute == 0
+            and sched_local.second == 0
+        )
+        booking.time_confirmed = not is_sentinel_midnight
 
         if st == "pending":
             set_status(booking, "status", "ACCEPTED")

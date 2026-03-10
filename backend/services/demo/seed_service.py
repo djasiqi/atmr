@@ -471,28 +471,33 @@ def reset_and_seed_demo_dataset(
         bookings_created += 1
 
         institution = institutions[idx % len(institutions)]
-        request = TransportRequest()
-        request.institution_id = institution.id
-        request.created_by_user_id = (
-            institution.users[0].id if institution.users else None
+        ext_ref = f"DEMO-REQ-{idx + 1:04d}"
+        request = TransportRequest.find_by_external_reference(
+            institution.id, ext_ref
         )
-        request.external_reference = f"DEMO-REQ-{idx + 1:04d}"
-        request.scheduled_time = scheduled_time
-        request.pickup_location = booking.pickup_location
-        request.dropoff_location = booking.dropoff_location
-        if status == BookingStatus.COMPLETED:
-            request.status = RequestStatus.CONVERTED.value
-            request.converted_at = datetime.now(UTC)
-        elif status == BookingStatus.PENDING:
-            request.status = RequestStatus.SENT.value
-            request.sent_at = datetime.now(UTC)
-        else:
-            request.status = RequestStatus.ACCEPTED.value
-            request.accepted_at = datetime.now(UTC)
-        request.accepted_by_company_id = company.id
-        request.is_round_trip = idx % 5 == 0
-        db.session.add(request)
-        requests_created += 1
+        if not request:
+            request = TransportRequest()
+            request.institution_id = institution.id
+            request.created_by_user_id = (
+                institution.users[0].id if institution.users else None
+            )
+            request.external_reference = ext_ref
+            request.scheduled_time = scheduled_time
+            request.pickup_location = booking.pickup_location
+            request.dropoff_location = booking.dropoff_location
+            if status == BookingStatus.COMPLETED:
+                request.status = RequestStatus.CONVERTED.value
+                request.converted_at = datetime.now(UTC)
+            elif status == BookingStatus.PENDING:
+                request.status = RequestStatus.SENT.value
+                request.sent_at = datetime.now(UTC)
+            else:
+                request.status = RequestStatus.ACCEPTED.value
+                request.accepted_at = datetime.now(UTC)
+            request.accepted_by_company_id = company.id
+            request.is_round_trip = idx % 5 == 0
+            db.session.add(request)
+            requests_created += 1
 
     db.session.flush()
 

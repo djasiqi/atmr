@@ -197,6 +197,8 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   # 127.0.0.1 peut échouer (Connection refused) dans certains environnements
   echo "GATEWAY_APP_AUTH_URL=http://backend:5000/api/v1/auth/login"
   echo "GATEWAY_APP_ME_URL=http://backend:5000/api/v1/auth/me"
+  echo "GATEWAY_DEMO_AUTH_URL=http://backend:5000/api/v1/auth/login"
+  echo "GATEWAY_DEMO_ME_URL=http://backend:5000/api/v1/auth/me"
 } > .env.production && chmod 600 .env.production
 cp .env.production .env && chmod 600 .env
 

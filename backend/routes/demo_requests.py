@@ -16,6 +16,7 @@ from flask_restx import Namespace, Resource, fields
 from marshmallow import ValidationError
 
 from ext import db, limiter, role_required
+from middleware.trace_id import get_trace_id
 from models import DemoAccess, DemoRequest, User, UserRole
 from models.enums import InstitutionRole
 from schemas.demo_request_schemas import DemoRequestSchema
@@ -159,6 +160,7 @@ def _response_from_demo_access_error(error: DemoAccessError):
         "ok": False,
         "code": error.code,
         "message": error.message,
+        "trace_id": get_trace_id(),
     }, error.status_code
 
 
@@ -295,6 +297,7 @@ class AdminProvisionDemoAccess(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @admin_demo_requests_ns.expect(admin_provision_request_model, validate=False)
+    @limiter.limit("60 per hour")  # Verrouillage: éviter abus provision admin
     def post(self, demo_request_id: int):
         actor_id = get_jwt_identity()
         payload = request.get_json(silent=True) or {}
@@ -313,14 +316,16 @@ class AdminProvisionDemoAccess(Resource):
         except Exception as exc:
             db.session.rollback()
             logger.exception(
-                "provision_demo_access_failed demo_request_id=%s error=%s",
+                "provision_demo_access_failed demo_request_id=%s error=%s trace_id=%s",
                 demo_request_id,
                 exc,
+                get_trace_id(),
             )
             return {
                 "ok": False,
                 "code": "internal_error",
                 "message": "Provisionnement demo impossible.",
+                "trace_id": get_trace_id(),
             }, 500
 
         response = {
@@ -336,6 +341,7 @@ class AdminProvisionDemoAccess(Resource):
             "email_sent": result.email_sent,
             "reused_existing_access": result.reused_existing_access,
             "provision_summary": result.provision_summary,
+            "trace_id": get_trace_id(),
         }
         if not result.email_sent:
             response["code"] = "access_provisioned_email_failed"
@@ -479,6 +485,7 @@ class AdminRevokeDemoAccess(Resource):
 @demo_access_ns.route("/consume-magic-link")
 class ConsumeDemoMagicLink(Resource):
     @demo_access_ns.expect(magic_link_consume_model)
+    @limiter.limit("30 per minute")  # Protection brute-force sur token invalide
     def post(self):
         payload = request.get_json(silent=True) or {}
         token = payload.get("token")
@@ -493,6 +500,7 @@ class ConsumeDemoMagicLink(Resource):
                 "ok": False,
                 "code": "internal_error",
                 "message": "Consommation du lien magique impossible.",
+                "trace_id": get_trace_id(),
             }, 500
         access = db.session.get(DemoAccess, result.get("demo_access_id"))
         demo_user = access.demo_user if access else None
@@ -501,6 +509,7 @@ class ConsumeDemoMagicLink(Resource):
                 "ok": False,
                 "code": "internal_error",
                 "message": "Compte demo introuvable.",
+                "trace_id": get_trace_id(),
             }, 500
 
         role = (
@@ -550,6 +559,7 @@ class ConsumeDemoMagicLink(Resource):
             ),
             "token": access_token,
             "refresh_token": refresh_token,
+            "trace_id": get_trace_id(),
             "user": {
                 "id": demo_user.id,
                 "public_id": demo_user.public_id,
@@ -590,6 +600,7 @@ class ConsumeDemoMagicLink(Resource):
 class SetDemoPassword(Resource):
     @jwt_required()
     @demo_access_ns.expect(demo_set_password_model)
+    @limiter.limit("10 per minute")  # Protection changement mot de passe répété
     def post(self):
         payload = request.get_json(silent=True) or {}
         new_password = str(payload.get("new_password") or "").strip()

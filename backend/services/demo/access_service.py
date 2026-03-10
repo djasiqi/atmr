@@ -48,6 +48,16 @@ from services.demo.utils import get_demo_default_password
 
 logger = logging.getLogger(__name__)
 
+
+def _get_trace_id() -> str:
+    """Récupère le trace_id pour corrélation (safe hors contexte requête)."""
+    try:
+        from middleware.trace_id import get_trace_id
+        return get_trace_id()
+    except Exception:
+        return "-"
+
+
 DEMO_ACCESS_DURATION_HOURS = 24
 
 
@@ -600,22 +610,27 @@ def _seed_transport_demo_workspace(
 
     for idx in range(2):
         client = clients[idx]
-        amount = Decimal("180.00") + Decimal(idx * 35)
-        invoice = Invoice()
-        invoice.company_id = company.id
-        invoice.client_id = client.id
-        invoice.period_month = now.month
-        invoice.period_year = now.year
-        invoice.invoice_number = f"DEMO-{company.id}-{now.strftime('%Y%m')}-{idx + 1:03d}"
-        invoice.currency = "CHF"
-        invoice.subtotal_amount = amount
-        invoice.total_amount = amount
-        invoice.amount_paid = Decimal("0.00")
-        invoice.balance_due = amount
-        invoice.issued_at = now - timedelta(days=idx + 1)
-        invoice.due_date = now + timedelta(days=30 - idx)
-        invoice.status = InvoiceStatus.SENT if idx == 0 else InvoiceStatus.DRAFT
-        db.session.add(invoice)
+        invoice_number = f"DEMO-{company.id}-{now.strftime('%Y%m')}-{idx + 1:03d}"
+        invoice = Invoice.query.filter_by(
+            company_id=company.id, invoice_number=invoice_number
+        ).first()
+        if not invoice:
+            invoice = Invoice()
+            invoice.company_id = company.id
+            invoice.client_id = client.id
+            invoice.period_month = now.month
+            invoice.period_year = now.year
+            invoice.invoice_number = invoice_number
+            amount = Decimal("180.00") + Decimal(idx * 35)
+            invoice.currency = "CHF"
+            invoice.subtotal_amount = amount
+            invoice.total_amount = amount
+            invoice.amount_paid = Decimal("0.00")
+            invoice.balance_due = amount
+            invoice.issued_at = now - timedelta(days=idx + 1)
+            invoice.due_date = now + timedelta(days=30 - idx)
+            invoice.status = InvoiceStatus.SENT if idx == 0 else InvoiceStatus.DRAFT
+            db.session.add(invoice)
 
 
 def _seed_institution_demo_workspace(
@@ -636,9 +651,16 @@ def _seed_institution_demo_workspace(
     for idx, (first_name, last_name) in enumerate(
         DEMO_INSTITUTION_PATIENT_IDENTITIES[:identity_count]
     ):
-        patient = InstitutionPatient()
+        external_reference = f"INST-DEMO-{institution.id}-{idx + 1:03d}"
+        patient = InstitutionPatient.query.filter_by(
+            institution_id=institution.id,
+            external_reference=external_reference,
+        ).first()
+        if not patient:
+            patient = InstitutionPatient()
+            patient.external_reference = external_reference
+
         patient.institution_id = institution.id
-        patient.external_reference = f"INST-DEMO-{institution.id}-{idx + 1:03d}"
         patient.first_name = first_name
         patient.last_name = last_name
         patient.address = DEMO_PICKUP_ADDRESSES[idx % len(DEMO_PICKUP_ADDRESSES)][0]
@@ -665,25 +687,63 @@ def _seed_institution_demo_workspace(
     # Reutiliser une entreprise demo existante pour les demandes converties.
     # CRITIQUE: Ne jamais utiliser une entreprise réelle - uniquement une entreprise démo
     # (contact_email @demo.lirie.ch, @demo.local, ou demo-*).
-    _demo_email_filter = or_(
+    _company_contact_demo_filter = or_(
         func.lower(func.coalesce(Company.contact_email, "")).like("%@demo.lirie.ch"),
         func.lower(func.coalesce(Company.contact_email, "")).like("%@demo.local"),
         func.lower(func.coalesce(Company.contact_email, "")).like("demo-%@%"),
     )
+    _owner_user_demo_filter = or_(
+        func.lower(func.coalesce(User.email, "")).like("%@demo.lirie.ch"),
+        func.lower(func.coalesce(User.email, "")).like("%@demo.local"),
+        func.lower(func.coalesce(User.email, "")).like("demo-%@%"),
+    )
     demo_company = (
-        Company.query.filter(_demo_email_filter).order_by(Company.id.asc()).first()
+        Company.query.outerjoin(User, Company.user_id == User.id)
+        .filter(or_(_company_contact_demo_filter, _owner_user_demo_filter))
+        .order_by(Company.id.desc())
+        .first()
     )
     if not demo_company:
-        # Fallback: vérifier via user.email (company_is_demo) pour companies sans contact_email démo
-        for c in Company.query.options(db.joinedload(Company.user)).limit(200):
+        # Filet de sécurité: vérifier via helper métier.
+        for c in Company.query.options(db.joinedload(Company.user)).yield_per(200):
             if company_is_demo(c):
                 demo_company = c
                 break
     if not demo_company:
-        raise RuntimeError(
-            "Aucune entreprise démo trouvée pour le seed institution. "
-            + "ensure_demo_reference_dataset doit créer les companies démo avant _seed_institution_demo_workspace."
-        )
+        # Dernier recours: créer une entreprise démo dédiée pour l'institution.
+        # Cela évite un 500 si le dataset partagé n'a pas encore été initialisé.
+        owner_email = f"demo-inst-company-{institution.id}@demo.local"
+        owner = User.query.filter_by(email=owner_email).first()
+        if not owner:
+            owner = User()
+            owner.email = owner_email
+            owner.username = (
+                f"demo_inst_company_{institution.id}_{secrets.token_hex(3)}"[:100]
+            )
+            owner.role = UserRole.COMPANY
+            owner.first_name = "Compte"
+            owner.last_name = "Demo Institution"
+            owner.account_status = "active"
+            owner.set_password(get_demo_default_password())
+            db.session.add(owner)
+            db.session.flush()
+
+        demo_company = Company.query.filter_by(user_id=owner.id).first()
+        if not demo_company:
+            demo_company = Company()
+            demo_company.user_id = owner.id
+            demo_company.name = (
+                str(demo_request.organization_name or "").strip()
+                or f"Demo Transport Institution {institution.id}"
+            )[:100]
+            demo_company.contact_email = owner_email
+            demo_company.contact_phone = "+41 22 000 00 00"
+            demo_company.service_area = "Geneve"
+            demo_company.is_approved = True
+            demo_company.dispatch_enabled = True
+            demo_company.dispatch_mode = DispatchMode.MANUAL
+            db.session.add(demo_company)
+            db.session.flush()
     demo_driver = None
     demo_client = None
     if demo_company:
@@ -758,6 +818,10 @@ def _seed_institution_demo_workspace(
     ]
 
     for idx, payload in enumerate(requests_payload):
+        ext_ref = f"INST-{local_part.upper()}-{idx + 1:03d}"
+        if TransportRequest.find_by_external_reference(institution.id, ext_ref):
+            continue  # Idempotence: ne pas réinsérer une external_reference existante
+
         patient = patients[idx % len(patients)]
         pickup = DEMO_PICKUP_ADDRESSES[payload["pickup_idx"] % len(DEMO_PICKUP_ADDRESSES)]
         scheduled = (now + timedelta(hours=payload["hours_offset"])).replace(second=0, microsecond=0)
@@ -783,7 +847,7 @@ def _seed_institution_demo_workspace(
         request_obj = TransportRequest()
         request_obj.institution_id = institution.id
         request_obj.created_by_user_id = demo_user.id
-        request_obj.external_reference = f"INST-{local_part.upper()}-{idx + 1:03d}"
+        request_obj.external_reference = ext_ref
         request_obj.patient_id = patient.id
         request_obj.mission_type = "patient_transport"
         request_obj.scheduled_time = scheduled
@@ -852,6 +916,7 @@ def _ensure_demo_workspace_seeded(
                 "institution_id": institution_id,
                 "user_id": user_id,
                 "journey_role": role,
+                "trace_id": _get_trace_id(),
             },
         )
         raise DemoAccessError(
@@ -1328,6 +1393,7 @@ def provision_demo_access(
             "guide_variant": profile.get("guide_variant"),
             "seed_context": profile.get("seed_context") or {},
             "provisioning_mode": provisioning_mode,
+            "trace_id": _get_trace_id(),
         },
     )
     summary = _build_provision_summary(demo_user, demo_request, profile)
@@ -1406,6 +1472,9 @@ def revoke_demo_access(*, access_id: int, actor_id: int | None = None) -> DemoAc
     return access
 
 
+MAGIC_TOKEN_MAX_LENGTH = 256  # Limite anti-DoS (token_urlsafe(32) ~43 chars)
+
+
 def consume_magic_link(token: str) -> dict[str, Any]:
     # Invariant d'architecture:
     # - le magic link represente un demo_access (source de verite demo)
@@ -1413,6 +1482,8 @@ def consume_magic_link(token: str) -> dict[str, Any]:
     # - la redirection finale doit rester en namespace /demo/*
     token = (token or "").strip()
     if not token:
+        raise DemoAccessError("invalid_token", "Token invalide.", status_code=400)
+    if len(token) > MAGIC_TOKEN_MAX_LENGTH:
         raise DemoAccessError("invalid_token", "Token invalide.", status_code=400)
 
     token_hash = _hash_magic_token(token)
@@ -1462,6 +1533,7 @@ def consume_magic_link(token: str) -> dict[str, Any]:
                 "demo_access_id": access.id,
                 "actor_type": "public_user",
                 "actor_id": None,
+                "trace_id": _get_trace_id(),
             },
         )
 

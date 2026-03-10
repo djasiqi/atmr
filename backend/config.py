@@ -272,12 +272,12 @@ class Config:
     GATEWAY_APP_ME_URL = os.getenv(
         "GATEWAY_APP_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
     )
-    # API demo locale (via host Docker Desktop)
+    # API demo locale (par défaut même backend unifié en prod)
     GATEWAY_DEMO_AUTH_URL = os.getenv(
-        "GATEWAY_DEMO_AUTH_URL", "http://host.docker.internal:5100/api/v1/auth/login"
+        "GATEWAY_DEMO_AUTH_URL", "http://127.0.0.1:5000/api/v1/auth/login"
     )
     GATEWAY_DEMO_ME_URL = os.getenv(
-        "GATEWAY_DEMO_ME_URL", "http://host.docker.internal:5100/api/v1/auth/me"
+        "GATEWAY_DEMO_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
     )
     # Mode envoi email factures/rappels: brevo_api (URL logo) | brevo_smtp (CID MIME multipart/related)
     # SMTP: BREVO_SMTP_PASSWORD obligatoire (pas de fallback API_KEY). Port 587 sortant + DKIM/SPF.
@@ -378,6 +378,22 @@ def validate_production_security(app) -> None:
                 "❌ SECURITÉ: COOKIE_SAME_SITE doit être 'Strict' "
                 + f"ou 'Lax' en production, actuellement: {samesite}"
             )
+
+        # ✅ Verrouillage démo: avertir si GATEWAY_* utilisent des fallbacks fragiles en prod
+        import logging
+
+        _logger = logging.getLogger(__name__)
+        for key in ("GATEWAY_APP_AUTH_URL", "GATEWAY_DEMO_AUTH_URL"):
+            url = app.config.get(key) or os.getenv(key, "")
+            if url and (
+                "127.0.0.1" in url or "localhost" in url or "host.docker.internal" in url
+            ):
+                _logger.warning(
+                    "[config] %s=%s : en prod Docker, utiliser http://backend:5000/... "
+                    + "(définir explicitement dans .env.production)",
+                    key,
+                    url,
+                )
 
 
 class DevelopmentConfig(Config):

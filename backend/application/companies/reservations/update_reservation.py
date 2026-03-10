@@ -86,7 +86,7 @@ class UpdateCompanyReservationUseCase:
 
         if "scheduled_time" in validated_data:
             try:
-                booking.scheduled_time = parse_local_naive(
+                scheduled_local = parse_local_naive(
                     validated_data["scheduled_time"]
                 )
             except Exception as e:
@@ -95,7 +95,17 @@ class UpdateCompanyReservationUseCase:
                     error={"error": f"Format de date invalide: {e}"},
                     status_code=400,
                 )
+            booking.scheduled_time = scheduled_local
             updated_fields.append("scheduled_time")
+            # Règle métier: 00:00 => heure à confirmer, sinon heure confirmée.
+            if hasattr(booking, "time_confirmed"):
+                is_sentinel_midnight = (
+                    scheduled_local.hour == 0
+                    and scheduled_local.minute == 0
+                    and scheduled_local.second == 0
+                )
+                booking.time_confirmed = not is_sentinel_midnight
+                updated_fields.append("time_confirmed")
 
         if "medical_facility" in validated_data:
             booking.medical_facility = validated_data["medical_facility"]

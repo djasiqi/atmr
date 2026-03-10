@@ -7,6 +7,7 @@ import requests
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, or_
 
+from ext import limiter
 from models import DemoAccess, DemoRequest
 
 gateway_auth_bp = Blueprint("gateway_auth", __name__, url_prefix="/api/gateway")
@@ -24,13 +25,13 @@ def _target_urls() -> dict[str, str]:
         "GATEWAY_APP_AUTH_URL", "http://127.0.0.1:5000/api/v1/auth/login"
     )
     demo_url = current_app.config.get(
-        "GATEWAY_DEMO_AUTH_URL", "http://host.docker.internal:5100/api/v1/auth/login"
+        "GATEWAY_DEMO_AUTH_URL", "http://127.0.0.1:5000/api/v1/auth/login"
     )
     app_me_url = current_app.config.get(
         "GATEWAY_APP_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
     )
     demo_me_url = current_app.config.get(
-        "GATEWAY_DEMO_ME_URL", "http://host.docker.internal:5100/api/v1/auth/me"
+        "GATEWAY_DEMO_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
     )
     return {
         "app_login": app_url,
@@ -123,6 +124,7 @@ def _mask_email(email: str) -> str:
 
 
 @gateway_auth_bp.post("/auth/login")
+@limiter.limit("20 per minute")  # Verrouillage: anti brute-force login
 def gateway_login():
     data = request.get_json(silent=True) or {}
     email = str(data.get("email", "")).strip()

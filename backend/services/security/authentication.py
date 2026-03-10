@@ -38,12 +38,41 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import redis
 from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def _fix_wrongtype_and_retry(
+    redis_client: redis.Redis,
+    key: str,
+    op: Callable[[], T],
+    *,
+    expected_type: str = "zset",
+) -> T:
+    """Exécute op(); en cas de WRONGTYPE Redis, supprime la clé et réessaie.
+
+    Corrige la dette technique où user_refresh_tokens:* peut avoir un type
+    incorrect (ex. STRING au lieu de ZSET) suite à migrations ou bugs passés.
+    """
+    try:
+        return op()
+    except redis.ResponseError as e:
+        if "WRONGTYPE" not in str(e).upper():
+            raise
+        logger.warning(
+            "Redis WRONGTYPE sur clé %s (attendu %s): suppression et retry. err=%s",
+            key,
+            expected_type,
+            e,
+        )
+        redis_client.delete(key)
+        return op()
 
 
 class AccessTokenService:
@@ -219,7 +248,13 @@ class RefreshTokenService:
         )
         if stored_user_id:
             user_tokens_key = f"user_refresh_tokens:{stored_user_id}"
-            self.redis_client.zrem(user_tokens_key, token_hash)
+
+            def _zrem() -> Any:
+                self.redis_client.zrem(user_tokens_key, token_hash)
+
+            _fix_wrongtype_and_retry(
+                self.redis_client, user_tokens_key, _zrem
+            )
             self.redis_client.delete(f"{self.active_tokens_prefix}{token_hash}")
 
         logger.info("Token révoqué: %s...", token_hash[:8])
@@ -257,7 +292,11 @@ class RefreshTokenService:
 
         # ZSET ordonné par timestamp (score) pour éviction FIFO déterministe
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
+
+        def _zadd() -> Any:
+            self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
+
+        _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zadd)
         self.redis_client.expire(user_tokens_key, ttl)
 
         logger.info("Token stocké: user_id=%s, hash=%s...", user_id, token_hash[:8])
@@ -269,7 +308,13 @@ class RefreshTokenService:
             user_id: ID de l'utilisateur
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        token_hashes = self.redis_client.zrange(user_tokens_key, 0, -1)
+
+        def _zrange() -> Any:
+            return self.redis_client.zrange(user_tokens_key, 0, -1)
+
+        token_hashes = _fix_wrongtype_and_retry(
+            self.redis_client, user_tokens_key, _zrange
+        )
 
         # Obtenir l'expiration du token depuis la config
         try:
@@ -315,7 +360,13 @@ class RefreshTokenService:
             Nombre de tokens actifs
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        return self.redis_client.zcard(user_tokens_key)
+
+        def _zcard() -> Any:
+            return self.redis_client.zcard(user_tokens_key)
+
+        return _fix_wrongtype_and_retry(
+            self.redis_client, user_tokens_key, _zcard
+        )
 
     def touch_token_score(self, user_id: int, token: str) -> None:
         """Met a jour le score ZSET d'un token avec le timestamp actuel.
@@ -327,8 +378,17 @@ class RefreshTokenService:
 
         token_hash = self._hash_token(token)
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        if self.redis_client.zscore(user_tokens_key, token_hash) is not None:
+
+        def _zscore() -> Any:
+            return self.redis_client.zscore(user_tokens_key, token_hash)
+
+        def _zadd() -> Any:
             self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
+
+        if _fix_wrongtype_and_retry(
+            self.redis_client, user_tokens_key, _zscore
+        ) is not None:
+            _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zadd)
 
     def limit_active_tokens(self, user_id: int, max_tokens: int = 5) -> None:
         """Limite le nombre de tokens actifs par utilisateur.
@@ -341,12 +401,24 @@ class RefreshTokenService:
             max_tokens: Nombre maximum de tokens actifs (defaut: 5)
         """
         user_tokens_key = f"user_refresh_tokens:{user_id}"
-        count = self.redis_client.zcard(user_tokens_key)
+
+        def _zcard() -> Any:
+            return self.redis_client.zcard(user_tokens_key)
+
+        count = _fix_wrongtype_and_retry(
+            self.redis_client, user_tokens_key, _zcard
+        )
 
         if count > max_tokens:
             excess = count - max_tokens
-            tokens_to_revoke = self.redis_client.zrange(
-                user_tokens_key, 0, excess - 1
+
+            def _zrange() -> Any:
+                return self.redis_client.zrange(
+                    user_tokens_key, 0, excess - 1
+                )
+
+            tokens_to_revoke = _fix_wrongtype_and_retry(
+                self.redis_client, user_tokens_key, _zrange
             )
 
             try:

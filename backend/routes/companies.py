@@ -4378,10 +4378,16 @@ class TriggerReturnBooking(Resource):
             )
 
         return_time = uc_result.decision.return_time
+        return_time_confirmed = not (
+            return_time.hour == 0
+            and return_time.minute == 0
+            and return_time.second == 0
+        )
 
         # 3) Créer / mettre à jour le retour (toujours ACCEPTED ici)
         if uc_result.decision.action == "modify_current":
             booking.scheduled_time = return_time
+            booking.time_confirmed = return_time_confirmed
             booking.status = BookingStatus.ACCEPTED
             return_booking = booking
             action = "modifié"
@@ -4391,6 +4397,7 @@ class TriggerReturnBooking(Resource):
         ):
             booking.is_round_trip = True
             existing.scheduled_time = return_time
+            existing.time_confirmed = return_time_confirmed
             existing.status = BookingStatus.ACCEPTED
             return_booking = existing
             action = "modifié"
@@ -4401,6 +4408,7 @@ class TriggerReturnBooking(Resource):
             return_booking.pickup_location = booking.dropoff_location
             return_booking.dropoff_location = booking.pickup_location
             return_booking.scheduled_time = return_time
+            return_booking.time_confirmed = return_time_confirmed
             return_booking.amount = booking.amount  # Même tarif que l'aller
             return_booking.status = (
                 BookingStatus.ACCEPTED
