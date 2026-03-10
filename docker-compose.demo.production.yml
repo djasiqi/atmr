@@ -16,8 +16,9 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U atmr -d atmr_demo"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     networks:
       - network_demo
     restart: unless-stopped
@@ -31,8 +32,9 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
-      retries: 10
+      timeout: 5s
+      retries: 15
+      start_period: 10s
     networks:
       - network_demo
     restart: unless-stopped
