@@ -88,7 +88,7 @@ class DemoContactSchema(BaseContactSchema):
         if not data.get("timing"):
             errors["timing"] = ["Timing requis."]
         if not data.get("preferred_slot"):
-            errors["preferred_slot"] = ["Creneau souhaite requis."]
+            errors["preferred_slot"] = ["Créneau souhaité requis."]
         if errors:
             raise ValidationError(errors)
 

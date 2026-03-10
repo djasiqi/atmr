@@ -166,12 +166,29 @@ class SendTransportRequestUseCase:
 
             if preferences:
                 # Mode séquentiel: envoyer uniquement à la première préférence
-                mode = OfferMode.SEQUENTIAL.value
-                offers_created = self._create_sequential_offer(
-                    transport_request=transport_request,
-                    preference=preferences[0],
-                    expires_at=expires_at,
+                # Si institution démo: ignorer les préférences vers entreprises réelles
+                from services.demo.soft_delete_guard import (
+                    company_is_demo,
+                    institution_is_demo,
                 )
+
+                mode = OfferMode.SEQUENTIAL.value
+                pref = preferences[0]
+                if institution_is_demo(transport_request.institution):
+                    demo_prefs = [
+                        p
+                        for p in preferences
+                        if company_is_demo(Company.query.get(p.company_id))
+                    ]
+                    pref = demo_prefs[0] if demo_prefs else None
+                if pref:
+                    offers_created = self._create_sequential_offer(
+                        transport_request=transport_request,
+                        preference=pref,
+                        expires_at=expires_at,
+                    )
+                else:
+                    offers_created = 0
             else:
                 # Mode broadcast: envoyer à toutes les entreprises éligibles
                 mode = OfferMode.BROADCAST.value
@@ -300,8 +317,10 @@ class SendTransportRequestUseCase:
         excluded_company_ids: list[int],
     ) -> int:
         """Crée des offres broadcast pour toutes les entreprises éligibles."""
-        # Récupérer les entreprises éligibles
-        eligible_companies = self._get_eligible_companies(excluded_company_ids)
+        # Récupérer les entreprises éligibles (démo: uniquement entreprises démo)
+        eligible_companies = self._get_eligible_companies(
+            excluded_company_ids, transport_request=transport_request
+        )
 
         if not eligible_companies:
             logger.warning(
@@ -334,11 +353,22 @@ class SendTransportRequestUseCase:
 
         return offers_created
 
-    def _get_eligible_companies(self, excluded_ids: list[int]) -> list[Company]:
+    def _get_eligible_companies(
+        self,
+        excluded_ids: list[int],
+        transport_request: TransportRequest | None = None,
+    ) -> list[Company]:
         """Récupère les entreprises éligibles pour recevoir des offres.
 
         V1 simple: Toutes les entreprises approuvées et avec dispatch activé.
+        Si la demande vient d'une institution démo, seules les entreprises démo
+        sont éligibles (évite que des transporteurs réels voient des demandes démo).
         """
+        from services.demo.soft_delete_guard import (
+            company_is_demo,
+            institution_is_demo,
+        )
+
         query = Company.query.filter(
             Company.is_approved == True,  # noqa: E712
             Company.dispatch_enabled == True,  # noqa: E712
@@ -347,12 +377,19 @@ class SendTransportRequestUseCase:
         if excluded_ids:
             query = query.filter(Company.id.notin_(excluded_ids))
 
-        return query.all()
+        companies = query.all()
+        if transport_request and institution_is_demo(transport_request.institution):
+            companies = [c for c in companies if company_is_demo(c)]
+        return companies
 
     @staticmethod
     def _notify_target_companies(transport_request: TransportRequest) -> None:
         """Notifie chaque entreprise ayant reçu une offre PENDING."""
         try:
+            from services.demo.soft_delete_guard import (
+                company_is_demo,
+                institution_is_demo,
+            )
             from services.events.institution_events import (
                 persist_company_notification,
             )
@@ -363,6 +400,7 @@ class SendTransportRequestUseCase:
             ).all()
 
             institution = transport_request.institution
+            inst_is_demo = institution_is_demo(institution)
             inst_name = institution.name if institution else "Institution"
             patient = transport_request.patient
             patient_name = (
@@ -380,6 +418,9 @@ class SendTransportRequestUseCase:
 
             for offer in pending_offers:
                 try:
+                    company = Company.query.get(offer.company_id)
+                    if inst_is_demo and not company_is_demo(company):
+                        continue
                     persist_company_notification(
                         company_id=offer.company_id,
                         event_type="new_request",

@@ -37,9 +37,18 @@ def _notify_company_new_offer(
 ) -> None:
     """Notifie une entreprise d'une nouvelle offre de transport."""
     try:
+        from models import Company
+        from services.demo.soft_delete_guard import (
+            company_is_demo,
+            institution_is_demo,
+        )
         from services.events.institution_events import persist_company_notification
 
         institution = transport_request.institution
+        if institution_is_demo(institution):
+            company = Company.query.get(company_id)
+            if not company_is_demo(company):
+                return
         inst_name = institution.name if institution else "Institution"
         patient = transport_request.patient
         patient_name = (
@@ -216,17 +225,36 @@ def _escalate_sequential_request(
     now: datetime,
 ) -> None:
     """Escalade une request séquentielle vers la préférence suivante ou fallback."""
+    from models import Company
+
+    from services.demo.soft_delete_guard import (
+        company_is_demo,
+        institution_is_demo,
+    )
+
     # Calculer le timeout (depuis InstitutionSettings)
     timeout_minutes = calculate_timeout(
         transport_request.institution_id,
         transport_request.scheduled_time,
     )
 
-    # Trouver la préférence suivante
+    # Trouver la préférence suivante (institution démo: ignorer les entreprises réelles)
     next_pref = InstitutionTransportPreference.get_next_preference_after(
         transport_request.institution_id,
         current_order,
     )
+    if next_pref and institution_is_demo(transport_request.institution):
+        search_order = current_order
+        while next_pref:
+            company = Company.query.get(next_pref.company_id)
+            if company_is_demo(company):
+                break
+            next_pref = InstitutionTransportPreference.get_next_preference_after(
+                transport_request.institution_id,
+                next_pref.order,
+            )
+        else:
+            next_pref = None
 
     if next_pref:
         # Créer l'offre suivante
@@ -287,6 +315,11 @@ def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     """Crée des offres broadcast de fallback après épuisement des préférences."""
     from models import Company
 
+    from services.demo.soft_delete_guard import (
+        company_is_demo,
+        institution_is_demo,
+    )
+
     # Récupérer les IDs des entreprises déjà contactées
     existing_offers = RequestOffer.query.filter_by(
         transport_request_id=transport_request.id,
@@ -302,6 +335,8 @@ def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
         query = query.filter(Company.id.notin_(list(contacted_company_ids)))
 
     eligible = query.all()
+    if institution_is_demo(transport_request.institution):
+        eligible = [c for c in eligible if company_is_demo(c)]
 
     if not eligible:
         # Aucune entreprise disponible -> request EXPIRED

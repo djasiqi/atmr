@@ -124,6 +124,7 @@
     "webpack-bundle-analyzer": "^5.1.1"
   },
   "overrides": {
+    "underscore": ">=1.13.8",
     "qs": "6.14.1",
     "nth-check": "^2.1.1",
     "postcss": "^8.4.49",
@@ -138,6 +139,8 @@
   },
   "_comment": {
     "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies (react-scripts, etc.) to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6",
-    "minimatch-override": "Override minimatch to ^10.2.1 to fix ReDoS CVE (exceljs, react-scripts, source-map-explorer pull 10.x)."
+    "minimatch-override": "Override minimatch to ^10.2.1 to fix ReDoS CVE (exceljs, react-scripts, source-map-explorer pull 10.x).",
+    "underscore-override": "Override underscore to >=1.13.8 to fix GHSA-114 (unlimited recursion DoS in _.flatten/_.isEqual). Transitive via react-scripts.",
+    "jsonpath-risk": "jsonpath 1.1.1 (via react-scripts) has CVE-2026-1615 (arbitrary code injection). No patch available. jsonpath-plus is not API-compatible. Risk mitigated: react-scripts uses it for internal config only, not user input. Consider migrating to Vite long-term."
   }
 }

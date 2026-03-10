@@ -47,12 +47,16 @@ def send_demo_notification(payload: dict[str, Any]) -> dict[str, Any]:
         f"({payload.get('priority', 'standard').upper()})"
     )
     body = build_demo_email_body(payload)
+    requester_email = str(payload.get("email") or "").strip() or None
     return send_email_notification(
         destination,
         subject,
         body,
         notification_type="demo_request",
         html=False,
+        reply_to=requester_email,
+        from_email=os.getenv("DEMO_EMAIL_NOREPLY", os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch")),
+        from_name=os.getenv("DEMO_EMAIL_NOREPLY_NAME", "LIRIE"),
     )
 
 
@@ -61,13 +65,13 @@ def send_demo_acknowledgement(payload: dict[str, Any]) -> dict[str, Any]:
     if not client_email:
         return {"ok": False, "error": "missing_email"}
 
-    subject = "Nous avons bien recu votre demande de demonstration"
+    subject = "Nous avons bien reçu votre demande de démonstration"
     body = _build_email_shell(
-        title="Demande de demonstration recue",
+        title="Demande de démonstration reçue",
         intro="Bonjour,",
         lines=[
-            "Merci pour votre demande de demonstration LIRIE.",
-            "Notre equipe reviendra vers vous sous 24h ouvrees.",
+            "Merci pour votre demande de démonstration LIRIE.",
+            "Notre équipe reviendra vers vous sous 24h ouvrées.",
         ],
     )
     return send_email_notification(

@@ -180,12 +180,20 @@ const isDev = ENVIRONMENT === 'development';
 root.render(
   <React.StrictMode>
     <SentryErrorBoundary
-      fallback={({ error, resetError }) => (
+      fallback={({ error, resetError }) => {
+        const isChunkError =
+          error?.name === 'ChunkLoadError' ||
+          /Loading chunk .+ failed/i.test(error?.message || '');
+        return (
         <div style={{ padding: '2rem', textAlign: 'center' }}>
           <h1>⚠️ Une erreur est survenue</h1>
-          <p style={{ color: '#666' }}>L'équipe technique a été notifiée.</p>
+          <p style={{ color: '#666' }}>
+            {isChunkError
+              ? "Une nouvelle version de l'application est disponible. Veuillez recharger la page."
+              : "L'équipe technique a été notifiée."}
+          </p>
           <button
-            onClick={resetError}
+            onClick={() => (isChunkError ? window.location.reload() : resetError())}
             style={{
               marginTop: '1rem',
               padding: '0.5rem 1rem',
@@ -196,7 +204,7 @@ root.render(
               cursor: 'pointer',
             }}
           >
-            Réessayer
+            {isChunkError ? 'Recharger la page' : 'Réessayer'}
           </button>
           {process.env.NODE_ENV === 'development' && (
             <details style={{ marginTop: '1rem', textAlign: 'left' }}>
@@ -207,7 +215,8 @@ root.render(
             </details>
           )}
         </div>
-      )}
+        );
+      }}
     >
       <App />
       {!isDev && <SpeedInsights />}

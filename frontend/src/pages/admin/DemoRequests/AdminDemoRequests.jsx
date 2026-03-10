@@ -135,21 +135,33 @@ const AdminDemoRequests = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [provisionForm, setProvisionForm] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError('');
+  const load = async (showLoading = true) => {
+    if (showLoading) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const data = await fetchAdminDemoRequests();
       setItems(data);
     } catch (err) {
-      setError("Impossible de charger les demandes de demonstration.");
+      if (showLoading) {
+        setError("Impossible de charger les demandes de demonstration.");
+      }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     load();
+  }, []);
+
+  // Rafraîchissement automatique toutes les 60s pour afficher les nouvelles demandes
+  useEffect(() => {
+    const interval = setInterval(() => load(false), 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   const runAction = async (key, action) => {
@@ -281,10 +293,21 @@ const AdminDemoRequests = () => {
         <AdminSidebar />
         <main className={styles.content}>
           <header className={styles.pageHeader}>
-            <h1>Demandes de demonstration</h1>
-            <p className={styles.subtext}>
-              Gestion des acces demo 24h : provision, renvoi et revocation.
-            </p>
+            <div>
+              <h1>Demandes de demonstration</h1>
+              <p className={styles.subtext}>
+                Gestion des acces demo 24h : provision, renvoi et revocation.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => load()}
+              disabled={loading}
+              className={styles.refreshButton}
+              title="Rafraîchir la liste"
+            >
+              {loading ? 'Chargement...' : 'Rafraîchir'}
+            </button>
           </header>
 
           {!loading && !error && (

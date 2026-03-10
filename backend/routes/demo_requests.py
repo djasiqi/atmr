@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from typing import Any
@@ -47,6 +48,7 @@ admin_demo_accesses_ns = Namespace(
     "admin_demo_accesses", description="Actions admin sur acces de demo"
 )
 demo_access_ns = Namespace("demo_access", description="Acces demo public")
+logger = logging.getLogger(__name__)
 MIN_FORM_SUBMIT_MS = 1200
 DEMO_PASSWORD_MIN_LENGTH = 8
 
@@ -259,6 +261,13 @@ class DemoRequests(Resource):
             email_result = send_demo_notification(
                 {**clean, "score": score, "priority": priority, "trace_id": trace_id}
             )
+            if not email_result.get("ok"):
+                logger.warning(
+                    "demo_admin_notification_failed trace_id=%s destination=%s error=%s",
+                    trace_id,
+                    destination,
+                    email_result.get("error", "unknown"),
+                )
             if not bool(data.get("acknowledgement_already_sent")):
                 send_demo_acknowledgement({**clean, "trace_id": trace_id})
             demo_request.email_delivery_status = "sent" if email_result.get("ok") else "failed"
@@ -301,8 +310,13 @@ class AdminProvisionDemoAccess(Resource):
         except DemoAccessError as error:
             db.session.rollback()
             return _response_from_demo_access_error(error)
-        except Exception:
+        except Exception as exc:
             db.session.rollback()
+            logger.exception(
+                "provision_demo_access_failed demo_request_id=%s error=%s",
+                demo_request_id,
+                exc,
+            )
             return {
                 "ok": False,
                 "code": "internal_error",

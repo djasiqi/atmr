@@ -222,7 +222,7 @@ const ContactFormBase = ({ category, config }) => {
           aria-invalid={Boolean(errors.privacy_consent)}
         />
         <span>
-          {config.consentText} <Link to="/privacy">Politique de confidentialite</Link>.
+          {config.consentText} <Link to="/privacy">Politique de confidentialité</Link>.
         </span>
       </label>
       {errors.privacy_consent && <small className={styles.full}>{errors.privacy_consent}</small>}

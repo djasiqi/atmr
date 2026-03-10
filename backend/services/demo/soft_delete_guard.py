@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from models import Booking, Client, Company, Driver, Invoice, User, Vehicle
+from models import Booking, Client, Company, Driver, Institution, Invoice, User, Vehicle
 from models.enums import BookingStatus, InvoiceStatus
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,20 @@ def _company_is_demo(company: Company | None) -> bool:
         return True
     owner = getattr(company, "user", None)
     return _is_demo_email(getattr(owner, "email", None))
+
+
+def _institution_is_demo(institution: Institution | None) -> bool:
+    """Vérifie si une institution est une institution démo (seed ou accès démo)."""
+    if not institution:
+        return False
+    if _is_demo_email(getattr(institution, "contact_email", None)):
+        return True
+    users = getattr(institution, "users", None)
+    if users:
+        for u in users:
+            if _is_demo_email(getattr(u, "email", None)):
+                return True
+    return False
 
 
 def _user_is_demo(user: User | None) -> bool:
@@ -124,3 +138,13 @@ def register_demo_soft_delete_guard() -> None:
             )
 
     _LISTENER_REGISTERED = True
+
+
+def institution_is_demo(institution: Institution | None) -> bool:
+    """Public: vérifie si une institution est démo (pour filtrer les notifications)."""
+    return _institution_is_demo(institution)
+
+
+def company_is_demo(company: Company | None) -> bool:
+    """Public: vérifie si une entreprise est démo (pour filtrer les notifications)."""
+    return _company_is_demo(company)

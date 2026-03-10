@@ -11,7 +11,7 @@ const ORG_TYPE_LABELS = {
   transport_company: 'Entreprise de transport',
   ems: 'EMS',
   clinic: 'Clinique',
-  hospital: 'Hopital',
+  hospital: 'Hôpital',
   curatorship: 'Curatelle / Mandataire',
   other: 'Autre',
 };
@@ -60,7 +60,7 @@ const DemoRequest = () => {
   const [data, setData] = useState(INITIAL_DATA);
   const [errors, setErrors] = useState({});
 
-  const stepLabel = useMemo(() => `Etape ${step} / 3`, [step]);
+  const stepLabel = useMemo(() => `Étape ${step} / 3`, [step]);
 
   const updateField = (event) => {
     const { name, value, type, checked } = event.target;
@@ -86,12 +86,12 @@ const DemoRequest = () => {
       if (!data.timing) nextErrors.timing = 'Le timing du projet est requis.';
       if (!data.integrationRequired) nextErrors.integrationRequired = "Le besoin d'integration est requis.";
       if (data.integrationRequired === 'yes' && !data.integrationSystem.trim()) {
-        nextErrors.integrationSystem = 'Le systeme principal est requis.';
+        nextErrors.integrationSystem = 'Le système principal est requis.';
       }
     }
     if (step === 3) {
-      if (!data.preferredSlot) nextErrors.preferredSlot = 'Le creneau souhaite est requis.';
-      if (!data.preferredPeriod) nextErrors.preferredPeriod = 'La plage horaire preferee est requise.';
+      if (!data.preferredSlot) nextErrors.preferredSlot = 'Le créneau souhaité est requis.';
+      if (!data.preferredPeriod) nextErrors.preferredPeriod = 'La plage horaire préférée est requise.';
       if (!data.privacyConsent) nextErrors.privacyConsent = 'Le consentement est obligatoire.';
     }
     return nextErrors;
@@ -165,9 +165,9 @@ const DemoRequest = () => {
     <article className={styles.page}>
       <section className={styles.hero}>
         <div className={styles.heroInner}>
-          <span className={styles.badge}>Demonstration</span>
-          <h1>Demande de demonstration</h1>
-          <p>Quelques informations pour preparer un echange utile, structure et adapte a votre contexte.</p>
+          <span className={styles.badge}>Démonstration</span>
+          <h1>Demande de démonstration</h1>
+          <p>Quelques informations pour préparer un échange utile, structuré et adapté à votre contexte.</p>
         </div>
       </section>
 
@@ -184,11 +184,11 @@ const DemoRequest = () => {
             <>
               <h2>Identification</h2>
               <p className={styles.stepIntro}>
-                Ces informations nous permettent d&apos;adapter la demonstration a votre organisation.
+                Ces informations nous permettent d&apos;adapter la démonstration à votre organisation.
               </p>
               <div className={styles.grid}>
                 <label className={styles.field}>
-                  <span>Nom et prenom *</span>
+                  <span>Nom et prénom *</span>
                   <input name="name" value={data.name} onChange={updateField} />
                   {errors.name && <small>{errors.name}</small>}
                 </label>
@@ -198,7 +198,7 @@ const DemoRequest = () => {
                   {errors.email && <small>{errors.email}</small>}
                 </label>
                 <label className={styles.field}>
-                  <span>Telephone</span>
+                  <span>Téléphone</span>
                   <input name="phone" value={data.phone} onChange={updateField} />
                 </label>
                 <label className={styles.field}>
@@ -230,12 +230,12 @@ const DemoRequest = () => {
 
           {step === 2 && (
             <>
-              <h2>Votre contexte operationnel</h2>
+              <h2>Votre contexte opérationnel</h2>
               <div className={styles.grid}>
                 <label className={styles.field}>
                   <span>Cas d&apos;usage principal *</span>
                   <select name="useCase" value={data.useCase} onChange={updateField}>
-                    <option value="">Selectionner</option>
+                    <option value="">Sélectionner</option>
                     {DEMO_USE_CASES.map((value) => (
                       <option key={value} value={value}>
                         {USE_CASE_LABELS[value]}
@@ -247,7 +247,7 @@ const DemoRequest = () => {
                 <label className={styles.field}>
                   <span>Volumes indicatifs</span>
                   <select name="volumeRange" value={data.volumeRange} onChange={updateField}>
-                    <option value="">Selectionner</option>
+                    <option value="">Sélectionner</option>
                     <option value="1_5">1-5 utilisateurs</option>
                     <option value="5_20">5-20 utilisateurs</option>
                     <option value="20_100">20-100 utilisateurs</option>
@@ -262,7 +262,7 @@ const DemoRequest = () => {
                   {[
                     { value: 'yes', label: 'Oui' },
                     { value: 'no', label: 'Non' },
-                    { value: 'evaluate', label: 'A evaluer' },
+                    { value: 'evaluate', label: 'À évaluer' },
                   ].map((item) => (
                     <label key={item.value} className={styles.radioItem}>
                       <input
@@ -281,7 +281,7 @@ const DemoRequest = () => {
 
               {data.integrationRequired === 'yes' && (
                 <label className={styles.field}>
-                  <span>Avec quel systeme principal ? *</span>
+                  <span>Avec quel système principal ? *</span>
                   <input name="integrationSystem" value={data.integrationSystem} onChange={updateField} />
                   {errors.integrationSystem && <small>{errors.integrationSystem}</small>}
                 </label>
@@ -291,7 +291,7 @@ const DemoRequest = () => {
                 <p>Timing du projet *</p>
                 <div className={styles.radioInline}>
                   {[
-                    { value: 'immediate', label: 'Immediat' },
+                    { value: 'immediate', label: 'Immédiat' },
                     { value: 'one_three_months', label: '1-3 mois' },
                     { value: 'three_plus_months', label: '> 3 mois' },
                     { value: 'exploration', label: 'Exploration uniquement' },
@@ -309,12 +309,12 @@ const DemoRequest = () => {
 
           {step === 3 && (
             <>
-              <h2>Organisation de la demonstration</h2>
+              <h2>Organisation de la démonstration</h2>
               <div className={styles.grid}>
                 <label className={styles.field}>
-                  <span>Creneau souhaite *</span>
+                  <span>Créneau souhaité *</span>
                   <select name="preferredSlot" value={data.preferredSlot} onChange={updateField}>
-                    <option value="">Selectionner</option>
+                    <option value="">Sélectionner</option>
                     <option value="this_week">Cette semaine</option>
                     <option value="next_week">La semaine prochaine</option>
                     <option value="to_define">A convenir</option>
@@ -322,11 +322,11 @@ const DemoRequest = () => {
                   {errors.preferredSlot && <small>{errors.preferredSlot}</small>}
                 </label>
                 <label className={styles.field}>
-                  <span>Plage horaire preferee *</span>
+                  <span>Plage horaire préférée *</span>
                   <select name="preferredPeriod" value={data.preferredPeriod} onChange={updateField}>
-                    <option value="">Selectionner</option>
+                    <option value="">Sélectionner</option>
                     <option value="morning">Matin</option>
-                    <option value="afternoon">Apres-midi</option>
+                    <option value="afternoon">Après-midi</option>
                     <option value="flexible">Flexible</option>
                   </select>
                   {errors.preferredPeriod && <small>{errors.preferredPeriod}</small>}
@@ -346,8 +346,8 @@ const DemoRequest = () => {
               <label className={styles.checkbox}>
                 <input type="checkbox" name="privacyConsent" checked={data.privacyConsent} onChange={updateField} />
                 <span>
-                  J&apos;accepte que LIRIE traite mes donnees afin d&apos;organiser la demonstration, conformement a la{' '}
-                  <Link to="/privacy">politique de confidentialite</Link>.
+                  J&apos;accepte que LIRIE traite mes données afin d&apos;organiser la démonstration, conformément à la{' '}
+                  <Link to="/privacy">politique de confidentialité</Link>.
                 </span>
               </label>
               {errors.privacyConsent && <small>{errors.privacyConsent}</small>}
@@ -377,20 +377,20 @@ const DemoRequest = () => {
         {submitState === 'success' && (
           <section className={styles.successCard}>
             <h3>Merci.</h3>
-            <p>Un membre de l&apos;equipe LIRIE vous contacte sous 24h ouvrees pour organiser la demonstration.</p>
+            <p>Un membre de l&apos;équipe LIRIE vous contacte sous 24h ouvrées pour organiser la démonstration.</p>
             <p className={styles.nextTitle}>Que se passe-t-il ensuite ?</p>
             <ol>
               <li>Analyse de votre contexte</li>
-              <li>Preparation personnalisee</li>
-              <li>Demonstration adaptee</li>
-              <li>Proposition de deploiement</li>
+              <li>Préparation personnalisée</li>
+              <li>Démonstration adaptée</li>
+              <li>Proposition de déploiement</li>
             </ol>
           </section>
         )}
 
         {submitState === 'error' && (
           <p className={styles.error}>
-            Une erreur est survenue. Merci de reessayer ou d&apos;ecrire a <a href="mailto:info@lirie.ch">info@lirie.ch</a>.
+            Une erreur est survenue. Merci de réessayer ou d&apos;écrire à <a href="mailto:info@lirie.ch">info@lirie.ch</a>.
           </p>
         )}
       </section>
