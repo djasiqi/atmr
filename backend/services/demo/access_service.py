@@ -394,6 +394,7 @@ def _apply_demo_profile(
             if org_address:
                 company.address = org_address
             db.session.add(company)
+            db.session.flush()
         else:
             company.name = (org_name or company.name or f"Demo Transport {demo_request.id}")[:100]
             company.contact_email = demo_contact_email
@@ -770,8 +771,6 @@ def _ensure_demo_workspace_seeded(
     user_id = getattr(demo_user, "id", None)
     seed_context = (provision_profile or {}).get("seed_context") or {}
     visible_demo_notes = (provision_profile or {}).get("visible_demo_notes")
-    # Local/dev safety: if schema is behind (missing enum/type migrations),
-    # seeding must not block demo access provisioning.
     try:
         with db.session.begin_nested():
             if role == "company" and company:
@@ -787,11 +786,11 @@ def _ensure_demo_workspace_seeded(
                     visible_demo_notes=visible_demo_notes,
                 )
             db.session.flush()
-    except Exception:
+    except Exception as exc:
         logger.exception(
-            "[demo_access] journey seed skipped due to schema/runtime issue",
+            "[demo_access] échec initialisation données démo (bookings, clients, etc.)",
             extra={
-                "event_type": "demo_seed_skipped",
+                "event_type": "demo_seed_failed",
                 "demo_request_id": demo_request_id,
                 "company_id": company_id,
                 "institution_id": institution_id,
@@ -799,6 +798,11 @@ def _ensure_demo_workspace_seeded(
                 "journey_role": role,
             },
         )
+        raise DemoAccessError(
+            "demo_seed_failed",
+            "Impossible d'initialiser les données de démonstration. Veuillez réessayer ou contacter l'équipe.",
+            status_code=500,
+        ) from exc
 
 
 def _disable_demo_user(user_id: int | None) -> None:
@@ -1033,9 +1037,39 @@ def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
         )
 
     profile = _normalize_provision_profile(demo_request, None)
+    org_type = str(profile.get("organization_type") or "").strip().lower()
+    journey = _resolve_demo_journey(org_type)
+
+    if journey == "generic":
+        logger.error(
+            "[demo_access] organization_type invalide ou vide - impossible d'initialiser le workspace",
+            extra={
+                "event_type": "demo_organization_type_invalid",
+                "demo_request_id": demo_request.id,
+                "demo_access_id": access.id,
+                "organization_type": org_type or "(vide)",
+            },
+        )
+        raise DemoAccessError(
+            "invalid_organization_type",
+            "Le type d'organisation de la demande est invalide ou manquant. Veuillez contacter l'équipe pour un nouveau lien.",
+            status_code=400,
+        )
+
+    logger.info(
+        "[demo_access] session start - initialisation du workspace",
+        extra={
+            "event_type": "demo_session_start",
+            "demo_request_id": demo_request.id,
+            "demo_access_id": access.id,
+            "organization_type": org_type,
+            "journey": journey,
+        },
+    )
+
     demo_user = _create_or_reuse_demo_user(demo_request, profile)
     _apply_demo_profile(demo_request, demo_user, profile)
-    _ensure_demo_workspace_seeded(demo_request, demo_user)
+    _ensure_demo_workspace_seeded(demo_request, demo_user, profile)
     demo_user.account_status = "active"
     demo_user.force_password_change = True
     db.session.flush()
@@ -1113,6 +1147,24 @@ def provision_demo_access(
 
     demo_request = _assert_request_exists(demo_request_id)
     profile = _normalize_provision_profile(demo_request, provision_profile)
+    org_type = str(profile.get("organization_type") or "").strip().lower()
+    journey = _resolve_demo_journey(org_type)
+
+    if journey == "generic":
+        logger.error(
+            "[demo_access] provision refusé: organization_type invalide ou vide",
+            extra={
+                "event_type": "demo_provision_organization_type_invalid",
+                "demo_request_id": demo_request_id,
+                "organization_type": org_type or "(vide)",
+            },
+        )
+        raise DemoAccessError(
+            "invalid_organization_type",
+            "Le type d'organisation de la demande est invalide ou manquant. Veuillez corriger la demande avant de provisionner.",
+            status_code=400,
+        )
+
     active_access = _get_active_access_for_request(demo_request_id)
     if active_access and (not active_access.demo_expires_at or active_access.demo_expires_at > _utc_now()):
         logger.info(
@@ -1165,7 +1217,7 @@ def provision_demo_access(
     access.demo_expires_at = now + timedelta(hours=DEMO_ACCESS_DURATION_HOURS)
     access.provisioned_at = now
     access.demo_user_id = demo_user.id
-    access.demo_company_id = None
+    access.demo_company_id = getattr(getattr(demo_user, "company", None), "id", None)
     access.provision_source = provision_source
     access.provisioning_mode = provisioning_mode
     db.session.add(access)
