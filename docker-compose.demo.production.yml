@@ -146,8 +146,6 @@ services:
         condition: service_healthy
       redis-demo:
         condition: service_healthy
-      api-demo:
-        condition: service_healthy
     networks:
       - network_demo
     restart: unless-stopped
@@ -189,8 +187,6 @@ services:
       postgres-demo:
         condition: service_healthy
       redis-demo:
-        condition: service_healthy
-      api-demo:
         condition: service_healthy
     networks:
       - network_demo
