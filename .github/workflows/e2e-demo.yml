@@ -25,6 +25,8 @@ jobs:
     name: Demo Commercial E2E (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      DEMO_DEFAULT_PASSWORD: ${{ secrets.DEMO_DEFAULT_PASSWORD }}
 
     steps:
       - name: Checkout code
@@ -39,7 +41,7 @@ jobs:
 
       - name: Préparer backend/.env minimal pour stack demo
         run: |
-          cat > backend/.env <<'EOF'
+          cat > backend/.env <<EOF
           SECRET_KEY=ci-demo-secret-key
           JWT_SECRET_KEY=ci-demo-jwt-secret-key
           COOKIE_SECURE=true
@@ -50,6 +52,7 @@ jobs:
           APP_ENCRYPTION_KEY_B64=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY
           POSTGRES_SSLMODE=disable
           API_LEGACY_ENABLED=false
+          DEMO_DEFAULT_PASSWORD=${DEMO_DEFAULT_PASSWORD}
           EOF
 
       - name: Install frontend dependencies
@@ -91,6 +94,7 @@ jobs:
         working-directory: frontend
         env:
           CI: "true"
+          DEMO_PASSWORD: ${{ secrets.DEMO_DEFAULT_PASSWORD }}
         run: npm run e2e:demo
 
       - name: Dump logs stack demo (si échec)

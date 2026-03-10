@@ -31,6 +31,7 @@ from models import (
     Vehicle,
 )
 from services.demo.seed_spec import PROFILES, build_relative_transport_slots
+from services.demo.utils import get_demo_default_password
 
 DEMO_EMAIL_DOMAIN = "demo.lirie.ch"
 logger = logging.getLogger(__name__)
@@ -198,7 +199,7 @@ def _upsert_user(
     user.institution_id = institution_id
     user.institution_role = institution_role
     user.account_status = "active"
-    user.set_password("DemoLirie!24h")
+    user.set_password(get_demo_default_password())
     db.session.add(user)
     db.session.flush()
     return user

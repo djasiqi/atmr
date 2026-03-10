@@ -36,6 +36,7 @@ from models.enums import (
 )
 from security.refresh_token_service import revoke_all_user_tokens
 from services.demo.dispatcher import send_demo_access_ready_email
+from services.demo.utils import get_demo_default_password
 from services.demo.seed_service import (
     ensure_demo_reference_dataset,
     reset_and_seed_demo_dataset,
@@ -44,6 +45,8 @@ from services.demo.seed_service import (
 logger = logging.getLogger(__name__)
 
 DEMO_ACCESS_DURATION_HOURS = 24
+
+
 MAGIC_LINK_TTL_MINUTES = 30
 SESSION_RESET_DEBOUNCE_SECONDS = 20
 MIN_DEMO_CLIENTS = 8
@@ -476,7 +479,7 @@ def _seed_transport_demo_workspace(
         driver_user.first_name = driver_first_name
         driver_user.last_name = driver_last_name
         driver_user.account_status = "active"
-        driver_user.set_password("DemoLirie!24h")
+        driver_user.set_password(get_demo_default_password())
         db.session.add(driver_user)
         db.session.flush()
 
@@ -512,7 +515,7 @@ def _seed_transport_demo_workspace(
         patient_user.first_name = patient_first_name
         patient_user.last_name = patient_last_name
         patient_user.account_status = "active"
-        patient_user.set_password("DemoLirie!24h")
+        patient_user.set_password(get_demo_default_password())
         db.session.add(patient_user)
         db.session.flush()
 

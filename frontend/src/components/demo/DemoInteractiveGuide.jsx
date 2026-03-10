@@ -1618,6 +1618,7 @@ const DemoInteractiveGuide = ({ role = 'transporteur', onFinish, userFirstName, 
     <>
       <div
         className={`${styles.overlay} ${isWelcomeStep ? styles.overlayWelcome : ''} ${allowInteractions ? styles.overlayAllowInteractions : ''}`}
+        data-tour-id={`demo-guide-${role}`}
       />
       {spotlightStyle && (
         <div

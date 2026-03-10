@@ -1,6 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
-const DEMO_PASSWORD = 'DemoLirie!24h';
+const DEMO_PASSWORD =
+  process.env.DEMO_PASSWORD || process.env.DEMO_DEFAULT_PASSWORD;
+if (!DEMO_PASSWORD) {
+  throw new Error(
+    'DEMO_PASSWORD ou DEMO_DEFAULT_PASSWORD doit être défini pour les tests e2e demo. ' +
+      'Ex: DEMO_PASSWORD=xxx npx playwright test e2e/demo-commercial.spec.js'
+  );
+}
 const COMPANY_EMAIL = 'company1@demo.lirie.ch';
 const INSTITUTION_EMAIL = 'institution.user1@demo.lirie.ch';
 
