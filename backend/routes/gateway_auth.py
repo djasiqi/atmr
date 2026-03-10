@@ -147,7 +147,7 @@ def gateway_login():
     except requests.RequestException as exc:
         current_app.logger.warning(
             "[gateway_auth] upstream unavailable target_env=%s url=%s error=%s",
-            target_env,
+            initial_target_env,
             login_url,
             str(exc),
         )

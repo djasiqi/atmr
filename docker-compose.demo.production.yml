@@ -73,10 +73,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/health >/dev/null || exit 1"]
-      interval: 20s
-      timeout: 8s
-      retries: 5
-      start_period: 40s
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 90s
     networks:
       - network_demo
       - traefik-network

@@ -53,9 +53,28 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-# Démarrer API, Celery (Postgres/Redis déjà healthy)
-echo "🔄 Démarrage API + Celery démo..."
-docker compose $COMPOSE_OPTS up -d --remove-orphans api-demo celery-worker-demo celery-beat-demo
+# Démarrer API seule d'abord (évite blocage si healthcheck lent)
+echo "🔄 Démarrage API démo..."
+docker compose $COMPOSE_OPTS up -d --remove-orphans api-demo
+
+# Diagnostic: afficher les premiers logs pour détecter crash au démarrage
+echo "📋 Logs API démo (démarrage)..."
+sleep 5
+docker compose $COMPOSE_OPTS logs api-demo --tail 50 2>/dev/null || true
+
+echo "⏳ Attente healthcheck API démo..."
+for i in $(seq 1 90); do
+  if docker inspect --format='{{.State.Health.Status}}' atmr-demo-api 2>/dev/null | grep -q healthy; then
+    echo "✅ API démo healthy"
+    break
+  fi
+  [ $i -eq 90 ] && { echo "❌ Timeout healthcheck API démo"; docker compose $COMPOSE_OPTS logs api-demo | tail -80; exit 1; }
+  sleep 2
+done
+
+# Démarrer Celery (API déjà healthy)
+echo "🔄 Démarrage Celery démo..."
+docker compose $COMPOSE_OPTS up -d --remove-orphans celery-worker-demo celery-beat-demo
 
 # Migrations
 echo "🔄 Migrations Alembic (démo)..."
