@@ -1,13 +1,13 @@
 # Déploiement de l'instance démo en production (www.lirie.ch/demo)
 # Stack isolée : Postgres/Redis dédiés, ne touche pas à la prod
-# Secrets depuis GitHub (existants), config/demo.env pour les 3 variables non-secret
+# IMPORTANT: Exécuter "Build & Deploy" avec no_cache AVANT ce workflow (image v5)
 name: Deploy Demo
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag de l'image (ex: v5, latest). Vide = DOCKER_TAG du secret"
+        description: "Tag de l'image (ex: v5). Vide = v5 (aligné Build & Deploy)"
         required: false
         default: ""
 
@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
-      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
+      # Aligné sur Build & Deploy (v5) - exécuter Build & Deploy avec no_cache AVANT Deploy Demo
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v5' }}
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -29,6 +30,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Reminder
+        run: |
+          echo "⚠️  Si erreur flask_limiter.storage: exécuter d'abord Build & Deploy avec no_cache"
+          echo "   Image utilisée: ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}"
 
       - name: Validate required secrets
         run: |
@@ -40,7 +46,6 @@ jobs:
           [ -z "${{ secrets.DEMO_DEFAULT_PASSWORD }}" ] && MISSING+=("DEMO_DEFAULT_PASSWORD")
           [ -z "${{ secrets.GOOGLE_MAPS_API_KEY }}" ] && MISSING+=("GOOGLE_MAPS_API_KEY")
           [ -z "${{ secrets.DOCKER_IMAGE }}" ] && MISSING+=("DOCKER_IMAGE")
-          [ -z "${{ secrets.DOCKER_TAG }}" ] && MISSING+=("DOCKER_TAG")
           [ -z "${{ secrets.SSH_HOST }}" ] && MISSING+=("SSH_HOST")
           [ -z "${{ secrets.SSH_KEY }}" ] && MISSING+=("SSH_KEY")
           if [ ${#MISSING[@]} -ne 0 ]; then
