@@ -35,7 +35,7 @@ describe('demoRequestService', () => {
     const result = await submitDemoRequest(payload, { publicRequest: true });
 
     expect(apiClient.post).toHaveBeenCalledWith('/demo-requests', payload, {
-      baseURL: '/api/app',
+      baseURL: '/api/v1',
       _targetEnv: 'app',
       skipCsrf: true,
       skipAuthRedirect: true,

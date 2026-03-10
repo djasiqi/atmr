@@ -12,9 +12,10 @@ const APP_ENV_KEY = 'app';
 const DEMO_ENV_KEY = 'demo';
 const LOCAL_UNIFIED_HOST_REGEX = /^(localhost|127\.0\.0\.1)$/i;
 const PROD_UNIFIED_HOST_REGEX = /(^|\.)lirie\.ch$/i;
+// Dev: /api/app (setupProxy rewrite). Prod: /api/v1 (api/app inexistant)
 const API_BASES = {
   gateway: '/api/gateway',
-  app: '/api/app',
+  app: process.env.NODE_ENV === 'development' ? '/api/app' : '/api/v1',
   demo: '/api/demo',
 };
 

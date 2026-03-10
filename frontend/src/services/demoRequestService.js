@@ -21,10 +21,10 @@ export const DEMO_USE_CASES = [
 ];
 
 export const submitDemoRequest = async (payload, options = {}) => {
-  // /api/v1 car /api/app n'existe pas en prod (strip uniquement en local traefik)
+  // Dev: /api/app (setupProxy). Prod: /api/v1 (api/app inexistant)
   const requestOptions = options.publicRequest
     ? {
-        baseURL: '/api/v1',
+        baseURL: process.env.NODE_ENV === 'development' ? '/api/app' : '/api/v1',
         _targetEnv: 'app',
         skipCsrf: true,
         skipAuthRedirect: true,

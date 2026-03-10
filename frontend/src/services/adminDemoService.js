@@ -1,7 +1,8 @@
 import apiClient from '../utils/apiClient';
 
+// Dev: /api/app (setupProxy). Prod: /api/v1 (api/app inexistant)
 const APP_ADMIN_REQUEST_CONFIG = {
-  baseURL: '/api/app',
+  baseURL: process.env.NODE_ENV === 'development' ? '/api/app' : '/api/v1',
   _targetEnv: 'app',
   skipAuthRedirect: true,
   skipEnvRouting: true,
