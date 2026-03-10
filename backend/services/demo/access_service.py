@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -36,11 +37,11 @@ from models.enums import (
 )
 from security.refresh_token_service import revoke_all_user_tokens
 from services.demo.dispatcher import send_demo_access_ready_email
-from services.demo.utils import get_demo_default_password
 from services.demo.seed_service import (
     ensure_demo_reference_dataset,
     reset_and_seed_demo_dataset,
 )
+from services.demo.utils import get_demo_default_password
 
 logger = logging.getLogger(__name__)
 
@@ -996,25 +997,32 @@ def _apply_expiration(access: DemoAccess, *, source: str = "scheduler") -> DemoA
 
 def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
     """Reset complet du dataset partagé au début d'une session démo."""
-    try:
-        reset_and_seed_demo_dataset(profile_name="sales", reset=True)
-    except Exception as exc:
-        if _is_non_demo_seed_guard_error(exc):
-            logger.warning(
-                "[demo_access] full demo reset skipped: non-demo database guard active",
-                extra={
-                    "event_type": "demo_reset_skipped_non_demo_guard",
-                    "demo_access_id": access.id,
-                    "demo_request_id": access.demo_request_id,
-                },
-            )
-        else:
-            logger.exception("[demo_access] full demo reset failed on session start")
-            raise DemoAccessError(
-                "demo_reset_failed",
-                "Reinitialisation de l'environnement demo impossible.",
-                status_code=500,
-            ) from exc
+    allow_non_demo = os.getenv("ALLOW_NON_DEMO_SEED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not allow_non_demo:
+        try:
+            reset_and_seed_demo_dataset(profile_name="sales", reset=True)
+        except Exception as exc:
+            if _is_non_demo_seed_guard_error(exc):
+                logger.warning(
+                    "[demo_access] full demo reset skipped: non-demo database guard active",
+                    extra={
+                        "event_type": "demo_reset_skipped_non_demo_guard",
+                        "demo_access_id": access.id,
+                        "demo_request_id": access.demo_request_id,
+                    },
+                )
+            else:
+                logger.exception("[demo_access] full demo reset failed on session start")
+                raise DemoAccessError(
+                    "demo_reset_failed",
+                    "Reinitialisation de l'environnement demo impossible.",
+                    status_code=500,
+                ) from exc
 
     demo_request = db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
     if not demo_request:
