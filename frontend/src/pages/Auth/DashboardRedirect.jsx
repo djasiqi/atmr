@@ -8,11 +8,6 @@ const DashboardRedirect = ({ forceDemoNamespace = false }) => {
 
   useEffect(() => {
     if (user) {
-      if (process.env.REACT_APP_DEMO_MODE === 'true') {
-        navigate('/demo/home', { replace: true });
-        return;
-      }
-
       // ⚡ Vérifier que public_id existe avant de naviguer
       if (!user.public_id) {
         console.error('❌ public_id manquant dans le token, redirection vers login');
@@ -20,12 +15,22 @@ const DashboardRedirect = ({ forceDemoNamespace = false }) => {
         return;
       }
 
+      const role = (user.role || '').toLowerCase();
+
+      // Admin: toujours vers le dashboard admin (pas de namespace demo)
+      if (role === 'admin') {
+        navigate(`/dashboard/admin/${user.public_id}`, { replace: true });
+        return;
+      }
+
+      if (process.env.REACT_APP_DEMO_MODE === 'true') {
+        navigate('/demo/home', { replace: true });
+        return;
+      }
+
       const authEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase();
       const dashboardRoot =
         forceDemoNamespace || authEnv === 'demo' ? '/demo/dashboard' : '/dashboard';
-
-      // Normaliser le rôle en minuscules pour la comparaison
-      const role = (user.role || '').toLowerCase();
 
       if (role === 'driver') {
         navigate(`${dashboardRoot}/driver/${user.public_id}`, { replace: true });

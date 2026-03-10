@@ -96,12 +96,16 @@ def _resolve_target_env(email: str) -> str:
 
 
 def _build_redirect(target_env: str, user: dict[str, Any] | None) -> str:
-    if target_env == "demo":
-        return "/demo/home"
     role = str((user or {}).get("role", "")).lower()
     public_id = (user or {}).get("public_id")
     if role and public_id:
+        if role == "admin":
+            return f"/app/dashboard/admin/{public_id}"
+        if target_env == "demo":
+            return "/demo/home"
         return f"/app/dashboard/{role}/{public_id}"
+    if target_env == "demo":
+        return "/demo/home"
     return "/login"
 
 
