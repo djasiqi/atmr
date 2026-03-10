@@ -1,0 +1,208 @@
+# Stack démo pour production (www.lirie.ch/demo)
+# Isolée de la prod : Postgres/Redis dédiés, réseau séparé
+# Utilise l'image Docker Hub (pas de build local)
+
+services:
+  postgres-demo:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: atmr-demo-postgres
+    environment:
+      POSTGRES_DB: atmr_demo
+      POSTGRES_USER: atmr
+      POSTGRES_PASSWORD: atmr
+      TZ: Europe/Zurich
+    volumes:
+      - pg_data_demo:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atmr -d atmr_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+  redis-demo:
+    image: redis:7-alpine
+    container_name: atmr-demo-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data_demo:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+  api-demo:
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    container_name: atmr-demo-api
+    env_file:
+      - .env.demo
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - COOKIE_SECURE=true
+      - COOKIE_SAME_SITE=Lax
+      - COOKIE_HTTP_ONLY=true
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - API_LEGACY_ENABLED=false
+      - API_DOCS=off
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    volumes:
+      - backend_logs_demo:/app/logs
+      - backend_data_demo:/app/data
+      - backend_uploads_demo:/app/uploads
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+    networks:
+      - network_demo
+      - traefik-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend-demo.rule=Host(`www.lirie.ch`) && PathPrefix(`/demo`)"
+      - "traefik.http.routers.backend-demo.entrypoints=web"
+      - "traefik.http.routers.backend-demo.middlewares=backend-demo-redirect"
+      - "traefik.http.routers.backend-demo-secure.rule=Host(`www.lirie.ch`) && PathPrefix(`/demo`)"
+      - "traefik.http.routers.backend-demo-secure.entrypoints=websecure"
+      - "traefik.http.routers.backend-demo-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.middlewares.strip-demo-prefix.stripprefix.prefixes=/demo"
+      - "traefik.http.middlewares.backend-demo-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.backend-demo-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.backend-demo-secure.middlewares=strip-demo-prefix-secure,backend-demo-headers"
+      - "traefik.http.middlewares.strip-demo-prefix-secure.stripprefix.prefixes=/demo"
+      - "traefik.http.services.backend-demo.loadbalancer.server.port=5000"
+      - "traefik.http.services.backend-demo.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.backend-demo.loadbalancer.sticky.cookie.name=ATMR_DEMO_SOCKET"
+      - "traefik.http.middlewares.backend-demo-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.backend-demo-secure-ws.rule=Host(`www.lirie.ch`) && PathPrefix(`/demo`) && PathPrefix(`/socket.io`)"
+      - "traefik.http.routers.backend-demo-secure-ws.entrypoints=websecure"
+      - "traefik.http.routers.backend-demo-secure-ws.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.backend-demo-secure-ws.service=backend-demo"
+      - "traefik.http.routers.backend-demo-secure-ws.middlewares=strip-demo-ws,backend-demo-headers"
+      - "traefik.http.middlewares.strip-demo-ws.stripprefix.prefixes=/demo"
+      - "traefik.http.services.backend-demo.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.backend-demo.loadbalancer.healthcheck.interval=30s"
+      - "traefik.http.services.backend-demo.loadbalancer.healthcheck.timeout=10s"
+
+  celery-worker-demo:
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    container_name: atmr-demo-celery-worker
+    user: "999:999"
+    env_file:
+      - .env.demo
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "-Q",
+        "default,notifications,realtime,dlq",
+      ]
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    volumes:
+      - backend_logs_demo:/app/logs
+      - backend_data_demo:/app/data
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+      api-demo:
+        condition: service_healthy
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+  celery-beat-demo:
+    image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
+    container_name: atmr-demo-celery-beat
+    user: "999:999"
+    env_file:
+      - .env.demo
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app:celery",
+        "beat",
+        "-l",
+        "info",
+        "-S",
+        "celery.beat.PersistentScheduler",
+        "-s",
+        "/app/celerybeat/celerybeat-schedule-demo",
+      ]
+    environment:
+      - APP_ENV=demo
+      - DEMO_MODE=true
+      - FLASK_CONFIG=demo
+      - FLASK_ENV=demo
+      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres-demo:5432/atmr_demo?sslmode=disable
+      - REDIS_URL=redis://redis-demo:6379/0
+      - CELERY_BROKER_URL=redis://redis-demo:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-demo:6379/0
+      - PYTHONPATH=/app
+      - TZ=Europe/Zurich
+    volumes:
+      - backend_logs_demo:/app/logs
+      - celery_beat_data_demo:/app/celerybeat
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+      redis-demo:
+        condition: service_healthy
+      api-demo:
+        condition: service_healthy
+    networks:
+      - network_demo
+    restart: unless-stopped
+
+volumes:
+  pg_data_demo:
+  redis_data_demo:
+  backend_logs_demo:
+  backend_data_demo:
+  backend_uploads_demo:
+  celery_beat_data_demo:
+
+networks:
+  network_demo:
+    driver: bridge
+  traefik-network:
+    external: true
+    name: traefik_proxy

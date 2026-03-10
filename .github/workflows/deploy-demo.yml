@@ -1,0 +1,92 @@
+# Déploiement de l'instance démo en production (www.lirie.ch/demo)
+# Stack isolée : Postgres/Redis dédiés, ne touche pas à la prod
+# Secrets depuis GitHub (existants), config/demo.env pour les 3 variables non-secret
+name: Deploy Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de l'image (ex: v5, latest). Vide = DOCKER_TAG du secret"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-demo:
+    name: Deploy Demo (www.lirie.ch/demo)
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
+      DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || secrets.DOCKER_TAG }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          MISSING=()
+          [ -z "${{ secrets.SECRET_KEY }}" ] && MISSING+=("SECRET_KEY")
+          [ -z "${{ secrets.JWT_SECRET_KEY }}" ] && MISSING+=("JWT_SECRET_KEY")
+          [ -z "${{ secrets.APP_ENCRYPTION_KEY_B64 }}" ] && MISSING+=("APP_ENCRYPTION_KEY_B64")
+          [ -z "${{ secrets.MASTER_ENCRYPTION_KEY }}" ] && MISSING+=("MASTER_ENCRYPTION_KEY")
+          [ -z "${{ secrets.DEMO_DEFAULT_PASSWORD }}" ] && MISSING+=("DEMO_DEFAULT_PASSWORD")
+          [ -z "${{ secrets.GOOGLE_MAPS_API_KEY }}" ] && MISSING+=("GOOGLE_MAPS_API_KEY")
+          [ -z "${{ secrets.DOCKER_IMAGE }}" ] && MISSING+=("DOCKER_IMAGE")
+          [ -z "${{ secrets.DOCKER_TAG }}" ] && MISSING+=("DOCKER_TAG")
+          [ -z "${{ secrets.SSH_HOST }}" ] && MISSING+=("SSH_HOST")
+          [ -z "${{ secrets.SSH_KEY }}" ] && MISSING+=("SSH_KEY")
+          if [ ${#MISSING[@]} -ne 0 ]; then
+            echo "❌ Secrets manquants: ${MISSING[*]}"
+            exit 1
+          fi
+          echo "✅ Secrets OK"
+
+      - name: Build .env.demo from secrets + config/demo.env
+        run: |
+          {
+            echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
+            echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}"
+            echo "APP_ENCRYPTION_KEY_B64=${{ secrets.APP_ENCRYPTION_KEY_B64 }}"
+            echo "MASTER_ENCRYPTION_KEY=${{ secrets.MASTER_ENCRYPTION_KEY }}"
+            echo "DEMO_DEFAULT_PASSWORD=${{ secrets.DEMO_DEFAULT_PASSWORD }}"
+            echo "GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}"
+            echo "PDF_BASE_URL=https://www.lirie.ch"
+            echo "SOCKETIO_CORS_ORIGINS=https://www.lirie.ch"
+            echo "CORS_ORIGINS=https://www.lirie.ch"
+            echo "EMAIL_NOTIFICATIONS_ENABLED=${{ secrets.EMAIL_NOTIFICATIONS_ENABLED }}"
+            echo "STORAGE_BUCKET=lirie-demo-storage"
+            echo "STORAGE_PREFIX=demo/"
+          } > .env.demo
+          echo "✅ .env.demo créé ($(wc -l < .env.demo) lignes)"
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "docker-compose.demo.production.yml,scripts/deploy-demo.sh,.env.demo"
+          target: "/srv/atmr"
+
+      - name: Deploy demo via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            chmod 600 /srv/atmr/.env.demo
+            chmod +x /srv/atmr/scripts/deploy-demo.sh
+            /srv/atmr/scripts/deploy-demo.sh \
+              "${{ env.DOCKER_IMAGE }}" \
+              "${{ env.DOCKER_TAG }}"
