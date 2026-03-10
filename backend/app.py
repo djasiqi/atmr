@@ -1083,6 +1083,18 @@ def create_app(config_name: str | None = None):
                 ), 200
         return None
 
+    # ✅ FIX: Requêtes internes gateway_auth (127.0.0.1/backend) vers auth/login
+    # Talisman redirige HTTP→HTTPS, le gateway suit et échoue (SSL sur port 5000).
+    # On simule HTTPS pour que Talisman ne redirige pas.
+    @app.before_request
+    def _bypass_talisman_for_gateway_internal_auth():  # pyright: ignore[reportUnusedFunction]
+        """Évite la redirection HTTPS pour les appels internes du gateway vers auth."""
+        if request.path in ("/api/v1/auth/login", "/api/v1/auth/me"):
+            remote = (request.remote_addr or "").strip()
+            host = (request.host or "").lower()
+            if remote in ("127.0.0.1", "::1", "localhost") or "backend" in host:
+                request.environ["wsgi.url_scheme"] = "https"
+
     # ✅ FIX RC1: Intercepter /api/v1/prometheus/metrics avant Talisman
     @app.before_request
     def _bypass_talisman_for_prometheus_metrics():  # pyright: ignore

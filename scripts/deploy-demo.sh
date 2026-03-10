@@ -33,24 +33,52 @@ echo "🔄 Démarrage Postgres + Redis démo..."
 docker compose $COMPOSE_OPTS up -d --remove-orphans postgres-demo redis-demo
 
 # Attendre PostgreSQL démo (pg_isready + healthcheck Docker)
-echo "⏳ Attente PostgreSQL démo..."
-for i in $(seq 1 60); do
-  if docker compose $COMPOSE_OPTS exec -T postgres-demo pg_isready -U atmr -d atmr_demo > /dev/null 2>&1; then
-    echo "✅ PostgreSQL démo prêt (pg_isready)"
-    break
-  fi
-  [ $i -eq 60 ] && { echo "❌ Timeout PostgreSQL démo"; docker compose $COMPOSE_OPTS logs postgres-demo | tail -50; exit 1; }
-  sleep 2
-done
+# Récupération auto si volume corrompu (pg_filenode.map manquant)
+_postgres_retry=0
+while true; do
+  echo "⏳ Attente PostgreSQL démo (pg_isready)..."
+  _pg_ok=false
+  for i in $(seq 1 60); do
+    if docker compose $COMPOSE_OPTS exec -T postgres-demo pg_isready -U atmr -d atmr_demo > /dev/null 2>&1; then
+      echo "✅ PostgreSQL démo prêt (pg_isready)"
+      _pg_ok=true
+      break
+    fi
+    [ $i -eq 60 ] && break
+    sleep 2
+  done
 
-echo "⏳ Attente healthcheck Docker postgres-demo..."
-for i in $(seq 1 60); do
-  if docker inspect --format='{{.State.Health.Status}}' atmr-demo-postgres 2>/dev/null | grep -q healthy; then
-    echo "✅ PostgreSQL démo healthy (Docker)"
-    break
+  if [ "$_pg_ok" = true ]; then
+    echo "⏳ Attente healthcheck Docker postgres-demo (start_period 90s, max ~3min)..."
+    for i in $(seq 1 90); do
+      if docker inspect --format='{{.State.Health.Status}}' atmr-demo-postgres 2>/dev/null | grep -q healthy; then
+        echo "✅ PostgreSQL démo healthy (Docker)"
+        break 2
+      fi
+      [ $i -eq 90 ] && break
+      sleep 2
+    done
   fi
-  [ $i -eq 60 ] && { echo "❌ Timeout healthcheck postgres-demo"; docker compose $COMPOSE_OPTS logs postgres-demo | tail -50; exit 1; }
-  sleep 2
+
+  # Timeout: vérifier si volume corrompu (pg_filenode.map)
+  _logs=$(docker compose $COMPOSE_OPTS logs postgres-demo 2>/dev/null | tail -100)
+  echo "$_logs" | tail -80
+  if echo "$_logs" | grep -q "pg_filenode.map"; then
+    _postgres_retry=$((_postgres_retry + 1))
+    if [ $_postgres_retry -gt 1 ]; then
+      echo "❌ Volume Postgres démo toujours corrompu après recréation"
+      exit 1
+    fi
+    echo "⚠️  Volume Postgres démo corrompu (pg_filenode.map). Recréation..."
+    docker compose $COMPOSE_OPTS down 2>/dev/null || true
+    docker volume rm atmr_demo_pg_data_demo 2>/dev/null || true
+    echo "🔄 Redémarrage Postgres avec volume frais..."
+    docker compose $COMPOSE_OPTS up -d postgres-demo redis-demo
+    sleep 5
+  else
+    echo "❌ Timeout healthcheck postgres-demo (voir logs ci-dessus)"
+    exit 1
+  fi
 done
 
 # Démarrer API seule d'abord (évite blocage si healthcheck lent)
