@@ -107,7 +107,7 @@ docker compose $COMPOSE_OPTS up -d --remove-orphans celery-worker-demo celery-be
 # Migrations
 echo "🔄 Migrations Alembic (démo)..."
 run_migrations() {
-  docker compose $COMPOSE_OPTS exec -T api-demo python manage.py db upgrade
+  docker compose $COMPOSE_OPTS exec -T -e DISABLE_EVENTLET=1 api-demo python manage.py db upgrade
 }
 run_migrations 2>&1 | tee /tmp/atmr_migrate.log
 MIGRATE_EXIT=${PIPESTATUS[0]}
