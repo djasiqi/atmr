@@ -9,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import func, or_
+
 from ext import db
 from models import (
     Booking,
@@ -41,6 +43,7 @@ from services.demo.seed_service import (
     ensure_demo_reference_dataset,
     reset_and_seed_demo_dataset,
 )
+from services.demo.soft_delete_guard import company_is_demo
 from services.demo.utils import get_demo_default_password
 
 logger = logging.getLogger(__name__)
@@ -660,7 +663,27 @@ def _seed_institution_demo_workspace(
         patients.append(patient)
 
     # Reutiliser une entreprise demo existante pour les demandes converties.
-    demo_company = Company.query.order_by(Company.id.asc()).first()
+    # CRITIQUE: Ne jamais utiliser une entreprise réelle - uniquement une entreprise démo
+    # (contact_email @demo.lirie.ch, @demo.local, ou demo-*).
+    _demo_email_filter = or_(
+        func.lower(func.coalesce(Company.contact_email, "")).like("%@demo.lirie.ch"),
+        func.lower(func.coalesce(Company.contact_email, "")).like("%@demo.local"),
+        func.lower(func.coalesce(Company.contact_email, "")).like("demo-%@%"),
+    )
+    demo_company = (
+        Company.query.filter(_demo_email_filter).order_by(Company.id.asc()).first()
+    )
+    if not demo_company:
+        # Fallback: vérifier via user.email (company_is_demo) pour companies sans contact_email démo
+        for c in Company.query.options(db.joinedload(Company.user)).limit(200):
+            if company_is_demo(c):
+                demo_company = c
+                break
+    if not demo_company:
+        raise RuntimeError(
+            "Aucune entreprise démo trouvée pour le seed institution. "
+            + "ensure_demo_reference_dataset doit créer les companies démo avant _seed_institution_demo_workspace."
+        )
     demo_driver = None
     demo_client = None
     if demo_company:
@@ -744,7 +767,7 @@ def _seed_institution_demo_workspace(
             booking = Booking()
             booking.user_id = demo_user.id
             booking.client_id = demo_client.id
-            booking.company_id = demo_company.id if demo_company else None
+            booking.company_id = demo_company.id
             booking.driver_id = demo_driver.id if demo_driver else None
             booking.customer_name = f"{patient.first_name} {patient.last_name}"
             booking.pickup_location = pickup[0]
@@ -1060,6 +1083,26 @@ def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
                     "Reinitialisation de l'environnement demo impossible.",
                     status_code=500,
                 ) from exc
+    else:
+        # ALLOW_NON_DEMO_SEED: garantir le socle démo (companies, drivers, etc.)
+        # sans reset destructif. Sans cela, _seed_institution_demo_workspace ne trouve
+        # aucune entreprise démo et lève RuntimeError.
+        try:
+            ensure_demo_reference_dataset(profile_name="sales")
+        except Exception as exc:
+            logger.exception(
+                "[demo_access] ensure_demo_reference_dataset failed (ALLOW_NON_DEMO_SEED)",
+                extra={
+                    "event_type": "demo_reference_dataset_failed",
+                    "demo_access_id": access.id,
+                    "demo_request_id": access.demo_request_id,
+                },
+            )
+            raise DemoAccessError(
+                "demo_reference_dataset_failed",
+                "Impossible d'initialiser les données de démonstration. Veuillez réessayer ou contacter l'équipe.",
+                status_code=500,
+            ) from exc
 
     demo_request = db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
     if not demo_request:

@@ -206,8 +206,8 @@ def send_demo_access_ready_email(
         body,
         notification_type="demo_access_ready",
         html=True,
-        from_email=os.getenv("DEMO_EMAIL_FROM", "demo@lirie.ch"),
-        from_name=os.getenv("DEMO_EMAIL_FROM_NAME", "LIRIE Demo"),
+        from_email=os.getenv("DEMO_EMAIL_FROM") or os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch"),
+        from_name=os.getenv("DEMO_EMAIL_FROM_NAME") or os.getenv("SMTP_FROM_NAME", "LIRIE"),
         reply_to=get_demo_destination_email(),
     )
 
