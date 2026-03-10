@@ -63,16 +63,17 @@ jobs:
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
-      - name: Démarrer la stack demo
+      - name: Démarrer Postgres + Redis demo
         run: |
           docker compose -p atmr_demo_ci -f docker-compose.demo.yml up -d --build \
-            postgres-demo redis-demo api-demo celery-worker-demo celery-beat-demo
+            postgres-demo redis-demo
           docker compose -p atmr_demo_ci -f docker-compose.demo.yml ps
 
-      - name: Attendre la santé des services demo
+      - name: Attendre Postgres + Redis, puis démarrer API + Celery
         run: |
-          docker compose -p atmr_demo_ci -f docker-compose.demo.yml up -d --wait \
-            postgres-demo redis-demo api-demo celery-worker-demo celery-beat-demo
+          docker compose -p atmr_demo_ci -f docker-compose.demo.yml up -d --wait postgres-demo redis-demo
+          docker compose -p atmr_demo_ci -f docker-compose.demo.yml up -d --build api-demo celery-worker-demo celery-beat-demo
+          docker compose -p atmr_demo_ci -f docker-compose.demo.yml up -d --wait api-demo celery-worker-demo celery-beat-demo
           docker compose -p atmr_demo_ci -f docker-compose.demo.yml ps
 
       - name: Migrations demo

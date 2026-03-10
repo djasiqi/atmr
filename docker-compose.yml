@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgis/postgis:16-3.4-alpine
     environment:
-      POSTGRES_DB: atmr
-      POSTGRES_USER: atmr
-      POSTGRES_PASSWORD: atmr
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr}
       TZ: Europe/Zurich
     ports: ["5432:5432"] # pratique en dev
     volumes:
@@ -17,7 +17,7 @@ services:
       - -c
       - config_file=/etc/postgresql/postgresql.conf
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U atmr -d atmr"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -79,7 +79,7 @@ services:
     environment:
       - PYTHONPATH=/app
       - GUNICORN_WORKERS=2
-      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-eventlet}
@@ -183,7 +183,7 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -265,7 +265,7 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -333,7 +333,7 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://atmr:atmr@postgres:5432/atmr
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}

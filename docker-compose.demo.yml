@@ -1,6 +1,7 @@
 services:
   postgres-demo:
     image: postgis/postgis:16-3.4-alpine
+    shm_size: "256mb"
     environment:
       POSTGRES_DB: atmr_demo
       POSTGRES_USER: atmr

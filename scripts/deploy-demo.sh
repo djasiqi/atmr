@@ -28,9 +28,9 @@ echo "🚀 Déploiement démo (www.lirie.ch/demo)..."
 echo "🔄 Pull image ${DOCKER_IMAGE}:${DOCKER_TAG}..."
 docker compose $COMPOSE_OPTS pull
 
-# Démarrer les services (sans toucher à la prod)
-echo "🔄 Démarrage de la stack démo..."
-docker compose $COMPOSE_OPTS up -d --remove-orphans
+# Démarrer Postgres et Redis d'abord (évite race "No such container")
+echo "🔄 Démarrage Postgres + Redis démo..."
+docker compose $COMPOSE_OPTS up -d --remove-orphans postgres-demo redis-demo
 
 # Attendre PostgreSQL démo
 echo "⏳ Attente PostgreSQL démo..."
@@ -42,6 +42,10 @@ for i in $(seq 1 60); do
   [ $i -eq 60 ] && { echo "❌ Timeout PostgreSQL démo"; docker compose $COMPOSE_OPTS logs postgres-demo | tail -50; exit 1; }
   sleep 2
 done
+
+# Démarrer API, Celery (Postgres/Redis déjà healthy)
+echo "🔄 Démarrage API + Celery démo..."
+docker compose $COMPOSE_OPTS up -d --remove-orphans api-demo celery-worker-demo celery-beat-demo
 
 # Migrations
 echo "🔄 Migrations Alembic (démo)..."
