@@ -11,6 +11,9 @@ from models import DemoAccess, DemoRequest
 
 gateway_auth_bp = Blueprint("gateway_auth", __name__, url_prefix="/api/gateway")
 
+HTTP_OK = 200
+_MIN_EMAIL_LOCAL_LEN = 2
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
@@ -62,8 +65,10 @@ def _delegate(
     if requested_with:
         headers["X-Requested-With"] = requested_with
     # Marquer les appels internes pour que le bypass Talisman s'applique (évite 302→HTTPS→SSLError)
+    # Talisman vérifie X-Forwarded-Proto=='https' pour ne pas rediriger
     if "127.0.0.1" in url or "backend:" in url:
         headers["X-Internal-Gateway-Auth"] = "1"
+        headers["X-Forwarded-Proto"] = "https"
     return requests.request(
         method=method,
         url=url,
@@ -105,10 +110,11 @@ def _mask_email(email: str) -> str:
     if "@" not in normalized:
         return "***"
     local, domain = normalized.split("@", 1)
-    if len(local) <= 2:
-        local_masked = f"{local[:1]}***"
-    else:
-        local_masked = f"{local[:2]}***"
+    local_masked = (
+        f"{local[:1]}***"
+        if len(local) <= _MIN_EMAIL_LOCAL_LEN
+        else f"{local[:_MIN_EMAIL_LOCAL_LEN]}***"
+    )
     return f"{local_masked}@{domain}"
 
 
@@ -145,26 +151,37 @@ def gateway_login():
         request.headers.get("Origin"),
     )
 
-    try:
-        upstream = _delegate(method="POST", url=login_url, payload=data)
-    except requests.RequestException as exc:
-        current_app.logger.warning(
-            "[gateway_auth] upstream unavailable target_env=%s url=%s error=%s",
-            initial_target_env,
-            login_url,
-            str(exc),
-        )
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "error": "upstream_unavailable",
-                    "message": "Service d'authentification indisponible.",
-                    "target_env": initial_target_env,
-                }
-            ),
-            503,
-        )
+    # Fallback: si backend:5000 échoue (ex: réseau Docker), tenter 127.0.0.1:5000
+    _fallback_url = (
+        "http://127.0.0.1:5000/api/v1/auth/login"
+        if "backend:" in login_url
+        else "http://backend:5000/api/v1/auth/login"
+    )
+    upstream = None
+    for attempt_url in (login_url, _fallback_url):
+        try:
+            upstream = _delegate(method="POST", url=attempt_url, payload=data)
+            break
+        except requests.RequestException as exc:
+            current_app.logger.warning(
+                "[gateway_auth] upstream unavailable target_env=%s url=%s error=%s",
+                initial_target_env,
+                attempt_url,
+                str(exc),
+            )
+            if attempt_url == _fallback_url:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": "upstream_unavailable",
+                            "message": "Service d'authentification indisponible.",
+                            "target_env": initial_target_env,
+                        }
+                    ),
+                    503,
+                )
+    assert upstream is not None  # Garantie: on sort du loop uniquement après succès
 
     final_target_env = initial_target_env
 
@@ -178,7 +195,7 @@ def gateway_login():
         app_login_url = urls["app_login"]
         try:
             app_upstream = _delegate(method="POST", url=app_login_url, payload=data)
-            if app_upstream.status_code == 200:
+            if app_upstream.status_code == HTTP_OK:
                 upstream = app_upstream
                 final_target_env = "app"
                 current_app.logger.info(
@@ -193,9 +210,9 @@ def gateway_login():
     if "application/json" in upstream.headers.get("Content-Type", ""):
         upstream_json = upstream.json() if upstream.content else {}
 
-    if upstream.status_code != 200:
-        error_body = (
-            upstream_json
+    if upstream.status_code != HTTP_OK:
+        error_body: dict[str, Any] = (
+            dict(upstream_json)
             if isinstance(upstream_json, dict) and upstream_json
             else {
                 "error": "auth_failed",
@@ -222,7 +239,7 @@ def gateway_login():
         final_target_env, user if isinstance(user, dict) else None
     )
     response = jsonify(body)
-    response.status_code = 200
+    response.status_code = HTTP_OK
     for cookie in _extract_set_cookies(upstream):
         response.headers.add("Set-Cookie", cookie)
     return response
@@ -242,28 +259,38 @@ def gateway_context():
                     "redirect_to": None,
                 }
             ),
-            200,
+            HTTP_OK,
         )
 
     urls = _target_urls()
     me_url = urls["demo_me"] if target_env == "demo" else urls["app_me"]
-    try:
-        upstream = _delegate(method="GET", url=me_url, payload=None)
-    except requests.RequestException:
-        return (
-            jsonify(
-                {
-                    "ok": True,
-                    "authenticated": False,
-                    "target_env": target_env,
-                    "user": None,
-                    "redirect_to": None,
-                }
-            ),
-            200,
-        )
+    _fallback_me = (
+        "http://127.0.0.1:5000/api/v1/auth/me"
+        if "backend:" in me_url
+        else "http://backend:5000/api/v1/auth/me"
+    )
+    upstream = None
+    for attempt_url in (me_url, _fallback_me):
+        try:
+            upstream = _delegate(method="GET", url=attempt_url, payload=None)
+            break
+        except requests.RequestException:
+            if attempt_url == _fallback_me:
+                return (
+                    jsonify(
+                        {
+                            "ok": True,
+                            "authenticated": False,
+                            "target_env": target_env,
+                            "user": None,
+                            "redirect_to": None,
+                        }
+                    ),
+                    HTTP_OK,
+                )
+    assert upstream is not None
 
-    if upstream.status_code != 200:
+    if upstream.status_code != HTTP_OK:
         return (
             jsonify(
                 {
@@ -274,7 +301,7 @@ def gateway_context():
                     "redirect_to": None,
                 }
             ),
-            200,
+            HTTP_OK,
         )
 
     upstream_json = upstream.json() if upstream.content else {}
@@ -289,5 +316,5 @@ def gateway_context():
                 "redirect_to": _build_redirect(target_env, user),
             }
         ),
-        200,
+        HTTP_OK,
     )
