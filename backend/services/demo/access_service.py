@@ -662,8 +662,40 @@ def _seed_institution_demo_workspace(
     # Reutiliser une entreprise demo existante pour les demandes converties.
     demo_company = Company.query.order_by(Company.id.asc()).first()
     demo_driver = None
+    demo_client = None
     if demo_company:
         demo_driver = Driver.query.filter_by(company_id=demo_company.id).first()
+        # client_id est NOT NULL en base : créer ou réutiliser un Client pour les bookings institution
+        demo_client_email = f"demo-inst-{institution.id}@demo.local"
+        demo_client_user = User.query.filter_by(email=demo_client_email).first()
+        if not demo_client_user:
+            demo_client_user = User()
+            demo_client_user.email = demo_client_email
+            demo_client_user.username = f"demo_inst_client_{institution.id}_{secrets.token_hex(4)}"[:100]
+            demo_client_user.role = UserRole.CLIENT
+            demo_client_user.first_name = "Patient"
+            demo_client_user.last_name = "Demo Institution"
+            demo_client_user.account_status = "active"
+            demo_client_user.set_password(get_demo_default_password())
+            db.session.add(demo_client_user)
+            db.session.flush()
+        demo_client = Client.query.filter_by(
+            user_id=demo_client_user.id, company_id=demo_company.id
+        ).first()
+        if not demo_client:
+            demo_client = Client()
+            demo_client.user_id = demo_client_user.id
+            demo_client.company_id = demo_company.id
+            demo_client.client_type = ClientType.PRIVATE
+            demo_client.contact_email = demo_client_user.email
+            demo_client.domicile_address = DEMO_PICKUP_ADDRESSES[0][0]
+            demo_client.domicile_city = "Geneve"
+            demo_client.domicile_zip = DEMO_PICKUP_ADDRESSES[0][2]
+            demo_client.domicile_lat = Decimal(DEMO_PICKUP_ADDRESSES[0][3])
+            demo_client.domicile_lon = Decimal(DEMO_PICKUP_ADDRESSES[0][4])
+            demo_client.default_billed_to_type = "patient"
+            db.session.add(demo_client)
+            db.session.flush()
 
     requests_payload = [
         {
@@ -708,9 +740,10 @@ def _seed_institution_demo_workspace(
         scheduled = (now + timedelta(hours=payload["hours_offset"])).replace(second=0, microsecond=0)
 
         booking = None
-        if payload["booking_status"] is not None:
+        if payload["booking_status"] is not None and demo_client is not None:
             booking = Booking()
             booking.user_id = demo_user.id
+            booking.client_id = demo_client.id
             booking.company_id = demo_company.id if demo_company else None
             booking.driver_id = demo_driver.id if demo_driver else None
             booking.customer_name = f"{patient.first_name} {patient.last_name}"
