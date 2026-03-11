@@ -9,14 +9,10 @@ et appelées par le framework.
 """
 
 # ruff: noqa: I001
-import json
 import logging
-import os
 import traceback
-import urllib.request
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, cast
 from typing import cast as tcast
 
@@ -262,6 +258,7 @@ def _extract_token(auth) -> str | None:
             token_result = token
 
     # 2) ✅ Cookie access_token (PRIORITÉ 2 - Migration localStorage → cookies httpOnly)
+    # Important: ne pas écraser un token déjà extrait depuis Authorization.
     try:
         cookie_name = current_app.config.get("COOKIE_ACCESS_TOKEN_NAME", "access_token")
     except RuntimeError:
@@ -277,29 +274,31 @@ def _extract_token(auth) -> str | None:
 
     try:
         all_cookies = list(request.cookies.keys()) if request.cookies else []
-        cookie_token = request.cookies.get(cookie_name)
-        if cookie_token:
-            token = cookie_token.strip()
-            logger.info(
-                "socket_token_extracted",
-                extra={
-                    "event": "token_extracted",
-                    "source": "cookie",
-                    "has_token": bool(token),
-                    "cookie_name": cookie_name,
-                },
-            )
-            token_result = token
-        # ✅ Log pour debug : vérifier si les cookies sont présents
-        logger.debug(
-            "socket_token_cookie_not_found",
-            extra={
-                "event": "cookie_not_found",
-                "cookie_name": cookie_name,
-                "all_cookies": all_cookies,
-                "has_cookies": bool(request.cookies),
-            },
-        )
+        if not token_result:
+            cookie_token = request.cookies.get(cookie_name)
+            if cookie_token:
+                token = cookie_token.strip()
+                logger.info(
+                    "socket_token_extracted",
+                    extra={
+                        "event": "token_extracted",
+                        "source": "cookie",
+                        "has_token": bool(token),
+                        "cookie_name": cookie_name,
+                    },
+                )
+                token_result = token
+            else:
+                # ✅ Log pour debug : vérifier si les cookies sont présents
+                logger.debug(
+                    "socket_token_cookie_not_found",
+                    extra={
+                        "event": "cookie_not_found",
+                        "cookie_name": cookie_name,
+                        "all_cookies": all_cookies,
+                        "has_cookies": bool(request.cookies),
+                    },
+                )
     except Exception as e:
         # ✅ Gérer toutes les exceptions pour éviter "server error"
         logger.error(

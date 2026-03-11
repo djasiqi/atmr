@@ -13,6 +13,7 @@ import logging
 import sentry_sdk
 from flask_jwt_extended import get_jwt, verify_jwt_in_request
 from flask_restx import Namespace, Resource, fields
+from werkzeug.exceptions import HTTPException
 
 from ext import db
 from models.institution_notification import InstitutionNotification
@@ -129,6 +130,8 @@ class NotificationList(Resource):
             }
 
         except Exception as e:
+            if isinstance(e, HTTPException):
+                raise
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionNotifications] GET error: %s", e)
             return {"error": f"Erreur serveur: {e!s}"}, 500
@@ -162,6 +165,8 @@ class NotificationRead(Resource):
 
         except Exception as e:
             db.session.rollback()
+            if isinstance(e, HTTPException):
+                raise
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionNotifications] PUT read error: %s", e)
             return {"error": f"Erreur serveur: {e!s}"}, 500
@@ -188,8 +193,7 @@ class NotificationReadAll(Resource):
             db.session.commit()
 
             logger.info(
-                "[InstitutionNotifications] Marked %d notifications as read "
-                "for institution %s",
+                "[InstitutionNotifications] Marked %d notifications as read for institution %s",
                 updated,
                 institution_id,
             )
@@ -198,6 +202,8 @@ class NotificationReadAll(Resource):
 
         except Exception as e:
             db.session.rollback()
+            if isinstance(e, HTTPException):
+                raise
             sentry_sdk.capture_exception(e)
             logger.error("[InstitutionNotifications] PUT read-all error: %s", e)
             return {"error": f"Erreur serveur: {e!s}"}, 500

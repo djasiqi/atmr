@@ -115,6 +115,35 @@ csrf_token_response_model = auth_ns.model(
 
 # Constante pour la longueur du hash de version du mot de passe
 PASSWORD_HASH_VERSION_LENGTH = 16
+_MOBILE_UA_MARKERS = (
+    "okhttp",
+    "cfnetwork",
+    "darwin",
+    "iphone",
+    "ipad",
+    "android",
+    "mobile",
+    "lirioprations",
+    "lirioperations",
+)
+
+
+def _is_mobile_request() -> bool:
+    """Détecte une requête mobile (app native iOS/Android)."""
+    if request.headers.get("X-Requested-With") == "Expo":
+        return True
+    user_agent = (request.headers.get("User-Agent") or "").lower()
+    return any(marker in user_agent for marker in _MOBILE_UA_MARKERS)
+
+
+def _resolve_access_token_expires(is_mobile_request: bool) -> timedelta:
+    """Résout la durée d'expiration de l'access token selon le client."""
+    if is_mobile_request:
+        return current_app.config.get(
+            "JWT_MOBILE_ACCESS_TOKEN_EXPIRES",
+            current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+        )
+    return current_app.config["JWT_ACCESS_TOKEN_EXPIRES"]
 
 # Modèle Swagger pour la connexion (login)
 login_model = auth_ns.model(
@@ -439,6 +468,8 @@ class Login(Resource):
                     "trace_id": trace_id,
                 }, 403
 
+            is_mobile_request = _is_mobile_request()
+
             # Création du token avec le rôle dans additional_claims
             # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
             claims = {
@@ -453,7 +484,7 @@ class Login(Resource):
                 identity=str(user.public_id),
                 # ⚠️ ID numérique attendu par dispatch_routes
                 additional_claims=claims,
-                expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+                expires_delta=_resolve_access_token_expires(is_mobile_request),
                 fresh=True,  # ✅ Token fresh lors de la connexion initiale
             )
 
@@ -553,7 +584,6 @@ class Login(Resource):
             # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
             # Toujours retourner les tokens dans le JSON pour les applications mobiles
             # Le header X-Requested-With: Expo est optionnel mais recommandé pour identifier les requêtes mobiles
-            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
             # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
             response_data["token"] = access_token
             response_data["refresh_token"] = refresh_token
@@ -980,7 +1010,7 @@ class RefreshToken(Resource):
             # ✅ Migration localStorage → cookies httpOnly
             # 1. Récupérer le refresh_token depuis cookie (priorité), body ou header
             refresh_token = None
-            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
+            is_mobile_request = _is_mobile_request()
             refresh_token_from_cookie = False
 
             # Priorité 1 : Cookie (pour web)
@@ -993,7 +1023,11 @@ class RefreshToken(Resource):
             # Priorité 2 : Body JSON (pour mobile ou fallback)
             if not refresh_token:
                 data = request.get_json(silent=True) or {}
-                refresh_token = data.get("refresh_token")
+                refresh_token = (
+                    data.get("refresh_token")
+                    or data.get("refreshToken")
+                    or data.get("token")
+                )
 
             # Priorité 3 : Header Authorization (rétrocompatibilité)
             if not refresh_token:
@@ -1111,7 +1145,7 @@ class RefreshToken(Resource):
             new_access_token = create_access_token(
                 identity=str(user.public_id),
                 additional_claims=claims,
-                expires_delta=current_app.config["JWT_ACCESS_TOKEN_EXPIRES"],
+                expires_delta=_resolve_access_token_expires(is_mobile_request),
             )
 
             # 7. ✅ ROTATION AUTOMATIQUE : Générer toujours un nouveau refresh_token
@@ -1139,7 +1173,6 @@ class RefreshToken(Resource):
             # Cela evite les pertes de session si le mobile crash avant de sauvegarder le nouveau.
             try:
                 mark_token_rotated(refresh_token, new_refresh_token)
-                token_service.revoke_token(refresh_token)
 
                 try:
                     from security.security_metrics import tokens_rotation_total
@@ -1430,7 +1463,7 @@ class Logout(Resource):
             # ✅ Migration localStorage → cookies httpOnly
             # Récupérer le refresh token depuis cookie (priorité), body ou header
             refresh_token = None
-            is_mobile_request = request.headers.get("X-Requested-With") == "Expo"
+            is_mobile_request = _is_mobile_request()
 
             # Priorité 1 : Cookie (pour web)
             if not is_mobile_request:
@@ -1441,7 +1474,11 @@ class Logout(Resource):
             # Priorité 2 : Body JSON (pour mobile ou fallback)
             if not refresh_token:
                 data = request.get_json(silent=True) or {}
-                refresh_token = data.get("refresh_token")
+                refresh_token = (
+                    data.get("refresh_token")
+                    or data.get("refreshToken")
+                    or data.get("token")
+                )
 
             # Priorité 3 : Header Authorization (rétrocompatibilité)
             if not refresh_token:

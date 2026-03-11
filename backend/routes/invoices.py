@@ -4399,6 +4399,131 @@ class SingleReservation(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+@invoices_ns.route(
+    "/companies/<int:company_id>/partners/<int:partnership_id>/transfers"
+)
+class PartnerTransfersForInvoice(Resource):
+    """Liste des transferts facturables pour un partenariat et une période."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int, partnership_id: int):  # noqa: ARG002
+        """Récupère les transferts validés non facturés pour un partenariat + période."""
+        try:
+            from routes.companies import _get_current_company_via_use_case
+
+            company, error_response, status_code = _get_current_company_via_use_case()
+            if error_response or not company:
+                return error_response, status_code
+
+            year = request.args.get("year", type=int)
+            month = request.args.get("month", type=int)
+            if not year or not month:
+                return APIErrorHandler.handle_validation_error(
+                    "year et month sont requis",
+                    logger_instance=logger,
+                )
+
+            from models.booking_transfer import BookingTransfer
+            from models.enums import TransferStatus
+            from models.partnership import Partnership
+
+            partnership = Partnership.query.get(partnership_id)
+            if not partnership:
+                return APIErrorHandler.handle_validation_error(
+                    f"Partenariat {partnership_id} introuvable",
+                    logger_instance=logger,
+                )
+
+            is_partner = company.id == partnership.partner_company_id
+            is_owner_executing = company.id == partnership.owner_company_id
+            if is_owner_executing:
+                transfers_as_executing = BookingTransfer.query.filter(
+                    BookingTransfer.partnership_id == partnership_id,
+                    BookingTransfer.executing_company_id == company.id,
+                    BookingTransfer.status == TransferStatus.COMPLETED,
+                ).count()
+                if transfers_as_executing == 0:
+                    is_owner_executing = False
+
+            if not is_partner and not is_owner_executing:
+                return APIErrorHandler.handle_validation_error(
+                    "Seule l'entreprise partenaire peut consulter ces transferts",
+                    logger_instance=logger,
+                )
+
+            from models.partner_invoice import (
+                PartnerInvoice,
+                PartnerInvoiceStatus,
+                partner_invoice_transfers,
+            )
+
+            DECEMBER = 12
+            start_date = datetime(year, month, 1, tzinfo=UTC)
+            if month == DECEMBER:
+                end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
+            else:
+                end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+
+            transfers = (
+                db.session.query(BookingTransfer)
+                .options(
+                    joinedload(BookingTransfer.booking)
+                    .joinedload(Booking.client)
+                    .joinedload(Client.user)
+                )
+                .filter(
+                    BookingTransfer.partnership_id == partnership_id,
+                    BookingTransfer.status == TransferStatus.COMPLETED,
+                    BookingTransfer.is_validated == True,  # noqa: E712
+                    BookingTransfer.executing_company_id == company.id,
+                    BookingTransfer.validated_at >= start_date,
+                    BookingTransfer.validated_at < end_date,
+                )
+                .filter(
+                    ~BookingTransfer.id.in_(
+                        select(partner_invoice_transfers.c.booking_transfer_id)
+                        .select_from(partner_invoice_transfers.join(PartnerInvoice))
+                        .where(
+                            PartnerInvoice.status != PartnerInvoiceStatus.CANCELLED
+                        )
+                    )
+                )
+                .order_by(BookingTransfer.validated_at.asc())
+                .all()
+            )
+
+            result = []
+            for t in transfers:
+                b = t.booking
+                result.append(
+                    {
+                        "id": t.id,
+                        "booking_id": t.booking_id,
+                        "partner_cost": float(t.partner_cost or 0),
+                        "currency": t.currency,
+                        "validated_at": (
+                            t.validated_at.isoformat() if t.validated_at else None
+                        ),
+                        "date": (
+                            b.scheduled_time.strftime("%Y-%m-%d")
+                            if b and b.scheduled_time
+                            else None
+                        ),
+                        "pickup_location": b.pickup_location if b else None,
+                        "dropoff_location": b.dropoff_location if b else None,
+                        "client_name": (
+                            b.customer_full_name if b and hasattr(b, "customer_full_name") else "—"
+                        ),
+                    }
+                )
+
+            return success_response(data={"transfers": result})
+        except Exception as e:
+            logger.exception("Erreur lors de la récupération des transferts partenaire")
+            return APIErrorHandler.handle_exception(e, logger)
+
+
 @invoices_ns.route("/companies/<int:company_id>/partners/billable")
 class BillablePartners(Resource):
     @jwt_required()
@@ -4824,6 +4949,8 @@ class GeneratePartnerInvoice(Resource):
             partnership_id = data.get("partnership_id")
             period_year = data.get("period_year")
             period_month = data.get("period_month")
+            transfer_ids = data.get("transfer_ids")  # optionnel: liste d'IDs
+            overrides = data.get("overrides")  # optionnel: {transfer_id: {amount, note}}
 
             # Validation des paramètres requis
             if not partnership_id or not period_year or not period_month:
@@ -4831,6 +4958,18 @@ class GeneratePartnerInvoice(Resource):
                     "partnership_id, period_year et period_month sont requis",
                     logger_instance=logger,
                 )
+
+            # Normaliser transfer_ids et overrides
+            if transfer_ids is not None and not isinstance(transfer_ids, list):
+                transfer_ids = None
+            if transfer_ids:
+                transfer_ids = [int(x) for x in transfer_ids if x is not None]
+            if overrides is not None and isinstance(overrides, dict):
+                overrides = {
+                    int(k): v for k, v in overrides.items() if isinstance(v, dict)
+                }
+            else:
+                overrides = None
 
             # Vérifier que l'entreprise est bien partenaire du partenariat
             from models.booking_transfer import BookingTransfer
@@ -4867,12 +5006,13 @@ class GeneratePartnerInvoice(Resource):
                 )
 
             service = PartnerInvoiceService()
-            service = PartnerInvoiceService()
             partner_invoice = service.generate_monthly_invoice(
                 partnership_id=int(partnership_id),
                 year=int(period_year),
                 month=int(period_month),
-                executing_company_id=company.id,  # ✅ Passer l'ID de l'entreprise exécutante
+                executing_company_id=company.id,
+                transfer_ids=transfer_ids,
+                overrides=overrides,
             )
 
             return success_response(

@@ -583,6 +583,7 @@ class DriverUpcomingBookings(Resource):
             booking_repo=BookingRepository(),
             day_local_bounds_fn=day_local_bounds,
             now_local_fn=now_local,
+            today_fn=lambda: now_local().date(),
         )
         bookings = uc.execute(driver_id=driver.id).bookings
 
@@ -794,17 +795,21 @@ class DriverBookingsSince(Resource):
             )
         else:
             # Pas de filtre since : utiliser le use case existant (comportement par défaut)
+            # today_fn=now_local().date pour cohérence Europe/Zurich (éviter décalage si serveur en UTC)
             uc = GetDriverUpcomingBookingsUseCase(
                 booking_repo=BookingRepository(),
                 day_local_bounds_fn=day_local_bounds,
                 now_local_fn=now_local,
+                today_fn=lambda: now_local().date(),
             )
             bookings = uc.execute(driver_id=driver.id).bookings
 
-            logger.warning(
-                "📱 [Driver Bookings Since] Driver %s (ID: %s) - No 'since' param, returning all upcoming bookings (%s)",
+            today_local = now_local().date()
+            logger.info(
+                "📱 [Driver Bookings Since] Driver %s (ID: %s) - No 'since' param, today_local=%s, returning %s upcoming bookings",
                 driver.id,
                 driver.id,
+                today_local.isoformat(),
                 len(bookings),
             )
             # 🔍 LOG DÉTAILLÉ : Afficher chaque booking trouvé
@@ -818,6 +823,93 @@ class DriverBookingsSince(Resource):
                 )
 
         return [b.serialize for b in bookings], 200
+
+
+@driver_ns.route("/me/mobile/snapshot")
+class DriverMobileSnapshot(Resource):
+    """Plan 2G/3G Phase 8 : Snapshot minimal pour sync mobile (profile, bookings, counters)."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def get(self):
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        from application.drivers import GetDriverProfileInput, GetDriverProfileUseCase
+        from application.drivers.get_driver_upcoming_bookings import (
+            GetDriverUpcomingBookingsUseCase,
+        )
+        from repositories.booking_repository import BookingRepository
+        from shared.time_utils import day_local_bounds, now_local
+
+        now_ts = datetime.now(UTC)
+        sync_version = 1
+        last_sync_token = str(int(now_ts.timestamp() * 1000))
+
+        uc_profile = GetDriverProfileUseCase()
+        profile_res = uc_profile.execute(GetDriverProfileInput(driver=driver))
+        profile_minimal = (
+            profile_res.response.get("profile", profile_res.response)
+            if profile_res.success and profile_res.response
+            else {"id": driver.id, "user_id": driver.user_id}
+        )
+
+        uc_bookings = GetDriverUpcomingBookingsUseCase(
+            booking_repo=BookingRepository(),
+            day_local_bounds_fn=day_local_bounds,
+            now_local_fn=now_local,
+            today_fn=lambda: now_local().date(),
+        )
+        bookings = uc_bookings.execute(driver_id=driver.id).bookings
+        today_bookings = [b.serialize for b in bookings]
+
+        active_booking = None
+        for b in bookings:
+            if b.status in (
+                BookingStatus.EN_ROUTE,
+                BookingStatus.IN_PROGRESS,
+            ):
+                active_booking = b.serialize
+                break
+
+        counters = {
+            "today_count": len(today_bookings),
+            "active_count": sum(
+                1
+                for b in bookings
+                if b.status
+                in (
+                    BookingStatus.ASSIGNED,
+                    BookingStatus.ACCEPTED,
+                    BookingStatus.EN_ROUTE,
+                    BookingStatus.IN_PROGRESS,
+                )
+            ),
+        }
+
+        capability_flags = {
+            "can_accept": True,
+            "can_update_status": True,
+        }
+
+        try:
+            from services.monitoring.prometheus import track_driver_mobile_snapshot
+            track_driver_mobile_snapshot("success")
+        except Exception:
+            pass
+
+        return {
+            "profile_minimal": profile_minimal,
+            "active_booking": active_booking,
+            "today_bookings": today_bookings,
+            "counters": counters,
+            "server_time": now_ts.isoformat(),
+            "sync_version": sync_version,
+            "last_sync_token": last_sync_token,
+            "capability_flags": capability_flags,
+        }, 200
 
 
 @driver_ns.route("/me/bookings/next-preview")
@@ -900,8 +992,6 @@ class DriverBookingsETA(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        from datetime import date
-
         from application.drivers.get_driver_bookings_eta import (
             GetDriverBookingsETAUseCase,
         )
@@ -909,7 +999,8 @@ class DriverBookingsETA(Resource):
         from shared.time_utils import day_local_bounds, now_local
 
         # Récupérer les courses d'aujourd'hui (non terminées)
-        today_start, today_end = day_local_bounds(date.today().strftime("%Y-%m-%d"))
+        # Utiliser now_local().date() pour cohérence Europe/Zurich (éviter décalage si serveur en UTC)
+        today_start, today_end = day_local_bounds(now_local().date().strftime("%Y-%m-%d"))
 
         from repositories.booking_repository import BookingRepository
 
@@ -1440,7 +1531,12 @@ class UpdateBookingStatus(Resource):
     def put(self, booking_id: int):
         from security.idempotency import idempotent
 
-        @idempotent(get_context_key=lambda: f"{get_jwt_identity()}:{booking_id}")
+        def _get_context_key():
+            body = request.get_json(silent=True) or {}
+            status = (body.get("status") or "").upper()
+            return f"{get_jwt_identity()}:{booking_id}:{status}"
+
+        @idempotent(get_context_key=_get_context_key)
         def _inner():
             return self._do_put(booking_id)
 
@@ -1853,12 +1949,14 @@ class DriverCompanyBookingsToday(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        from datetime import date as date_type, datetime as dt_type, time as time_type  # noqa: I001
+        from datetime import datetime as dt_type, time as time_type  # noqa: I001
 
         from models.booking import Booking as BookingModel
+        from shared.time_utils import now_local
 
-        today_start = dt_type.combine(date_type.today(), time_type.min)
-        today_end = dt_type.combine(date_type.today(), time_type.max)
+        today_local = now_local().date()
+        today_start = dt_type.combine(today_local, time_type.min)
+        today_end = dt_type.combine(today_local, time_type.max)
 
         bookings = (
             BookingModel.query

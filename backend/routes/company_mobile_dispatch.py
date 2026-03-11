@@ -1005,7 +1005,7 @@ class MobileDispatchRides(Resource):
     def get(self):
         try:
             _, company_id = _get_company_context()
-        except Exception as e:
+        except Exception:
             raise
 
         requested_date = request.args.get("date") or now_local().strftime("%Y-%m-%d")
@@ -1065,7 +1065,7 @@ class MobileDispatchRides(Resource):
                     BookingTransfer.executing_company
                 ),
             )
-        except Exception as e:
+        except Exception:
             raise
 
         if status_filter == "assigned":
@@ -1101,7 +1101,7 @@ class MobileDispatchRides(Resource):
 
         try:
             total = bookings_query.count()
-        except Exception as e:
+        except Exception:
             raise
 
         try:
@@ -1116,18 +1116,18 @@ class MobileDispatchRides(Resource):
                 .all()
             )
 
-        except Exception as e:
+        except Exception:
             raise
 
         try:
             items = []
-            for i, booking in enumerate(bookings):
+            for booking in bookings:
                 try:
                     item = _build_ride_summary(booking, current_company_id=company_id)
                     items.append(item)
-                except Exception as e:
+                except Exception:
                     raise
-        except Exception as e:
+        except Exception:
             raise
 
         result = {
@@ -1144,14 +1144,14 @@ class MobileDispatchRides(Resource):
         """Créer une nouvelle course depuis l'interface mobile."""
         try:
             _, company_id = _get_company_context()
-        except Exception as e:
+        except Exception as exc:
             logger.exception(
                 "[MobileDispatchRides POST] Erreur lors de la récupération du contexte entreprise"
             )
             company_mobile_dispatch_ns.abort(
                 500, "Impossible de récupérer le contexte entreprise."
             )
-            raise AssertionError("Should have aborted") from e
+            raise AssertionError("Should have aborted") from exc
 
         payload = request.get_json(silent=True) or {}
 
@@ -1168,9 +1168,9 @@ class MobileDispatchRides(Resource):
             company_mobile_dispatch_ns.abort(400, "scheduled_time est requis.")
             raise AssertionError("scheduled_time should not be None after abort")
 
-        # ✅ Client ou customer_name requis
+        # ✅ Client ou customer_name requis (client_name = alias mobile)
         client_id = payload.get("client_id")
-        customer_name = payload.get("customer_name")
+        customer_name = payload.get("customer_name") or payload.get("client_name")
         if not client_id and not customer_name:
             company_mobile_dispatch_ns.abort(
                 400, "client_id ou customer_name est requis."
@@ -2734,299 +2734,170 @@ class MobileCreateRide(Resource):
     @role_required(UserRole.company)
     @limiter.limit("100 per hour")
     def post(self):
-        """Crée une nouvelle course pour l'entreprise."""
+        """Crée une nouvelle course pour l'entreprise.
+
+        Utilise le use-case canonique CreateManualBookingUseCase (même source de vérité que le web).
+        Le payload mobile est transformé via l'adaptateur vers le contrat canonique.
+        """
         company, company_id = _get_company_context()
         payload = request.get_json(silent=True) or {}
 
-        # Validation des champs requis : client_id OU customer_name
+        # client_id requis (plus de création sans client - alignement web)
         client_id_raw = payload.get("client_id")
-        customer_name = payload.get("customer_name", "").strip()
-
-        client = None
-        client_id = None
-        user = None
-
-        if client_id_raw:
-            # Si client_id est fourni, l'utiliser
-            try:
-                client_id = int(client_id_raw)
-            except (TypeError, ValueError) as exc:
-                company_mobile_dispatch_ns.abort(400, "client_id doit être un entier")
-                raise AssertionError("Invalid client_id") from exc
-
-            # Vérifier que le client appartient à l'entreprise
-            from repositories.client_repository import ClientRepository
-
-            client_repo = ClientRepository()
-            client = client_repo.find_model_by_id_and_company(
-                client_id=client_id, company_id=company_id
-            )
-            if not client:
-                company_mobile_dispatch_ns.abort(404, "Client introuvable")
-                raise AssertionError("Client not found") from None
-
-            user = client.user
-            if not user:
-                company_mobile_dispatch_ns.abort(
-                    404, "Utilisateur associé au client introuvable"
-                )
-                raise AssertionError("User not found") from None
-        elif not customer_name:
-            # Si ni client_id ni customer_name n'est fourni
-            company_mobile_dispatch_ns.abort(400, "client_id ou customer_name requis")
-            raise AssertionError("client_id or customer_name required") from None
-        else:
-            # Si seulement customer_name est fourni, créer un client temporaire
-            import uuid
-
-            # Créer un utilisateur temporaire
-            temp_user = User()
-            temp_user.public_id = str(uuid.uuid4())
-            temp_user.username = (
-                f"temp_{customer_name.lower().replace(' ', '_')}_{uuid.uuid4().hex[:8]}"
-            )
-            temp_user.email = f"temp_{uuid.uuid4().hex[:8]}@temp.local"
-            temp_user.first_name = (
-                customer_name.split()[0] if customer_name.split() else customer_name
-            )
-            temp_user.last_name = (
-                " ".join(customer_name.split()[1:])
-                if len(customer_name.split()) > 1
-                else ""
-            )
-            temp_user.role = UserRole.client
-            temp_user.set_password(str(uuid.uuid4()))  # Mot de passe aléatoire
-
-            db.session.add(temp_user)
-            db.session.flush()  # Pour obtenir l'ID
-
-            # Créer un client temporaire
-            temp_client = Client()
-            temp_client.user_id = temp_user.id
-            temp_client.company_id = company_id
-            temp_client.client_type = ClientType.PRIVATE
-            temp_client.is_active = True
-
-            db.session.add(temp_client)
-            db.session.flush()  # Pour obtenir l'ID
-
-            client = temp_client
-            client_id = temp_client.id
-            user = temp_user
-
-        # Validation des adresses
-        pickup_address = payload.get("pickup_address", "").strip()
-        dropoff_address = payload.get("dropoff_address", "").strip()
-        if not pickup_address or not dropoff_address:
+        if not client_id_raw:
             company_mobile_dispatch_ns.abort(
-                400, "pickup_address et dropoff_address requis"
+                400,
+                "client_id requis. Veuillez sélectionner un client existant.",
             )
-            raise AssertionError("Addresses required") from None
-
-        # Validation de la date/heure
-        scheduled_time_str = payload.get("scheduled_time")
-        if not scheduled_time_str:
-            company_mobile_dispatch_ns.abort(400, "scheduled_time requis")
-            raise AssertionError("scheduled_time required") from None
+            raise AssertionError("client_id required") from None
 
         try:
-            scheduled_time = parse_local_naive(scheduled_time_str)
-        except Exception as exc:
-            company_mobile_dispatch_ns.abort(
-                400, f"Format scheduled_time invalide: {exc}"
-            )
-            raise AssertionError("Invalid scheduled_time") from exc
+            client_id = int(client_id_raw)
+        except (TypeError, ValueError) as exc:
+            company_mobile_dispatch_ns.abort(400, "client_id doit être un entier")
+            raise AssertionError("Invalid client_id") from exc
 
-        # Coordonnées GPS
-        pickup_lat = payload.get("pickup_lat")
-        pickup_lon = payload.get("pickup_lon")
-        dropoff_lat = payload.get("dropoff_lat")
-        dropoff_lon = payload.get("dropoff_lon")
+        from repositories.client_repository import ClientRepository
 
-        # Géocodage si coordonnées manquantes
-        if not pickup_lat or not pickup_lon:
-            try:
-                from services.geolocation.maps import geocode_address
-
-                pickup_coords = geocode_address(pickup_address)
-                if pickup_coords:
-                    pickup_lat = pickup_coords.get("lat")
-                    pickup_lon = pickup_coords.get("lon")
-            except Exception as e:
-                logger.warning("[MobileCreateRide] Géocodage pickup échoué: %s", e)
-
-        if not dropoff_lat or not dropoff_lon:
-            try:
-                from services.geolocation.maps import geocode_address
-
-                dropoff_coords = geocode_address(dropoff_address)
-                if dropoff_coords:
-                    dropoff_lat = dropoff_coords.get("lat")
-                    dropoff_lon = dropoff_coords.get("lon")
-            except Exception as e:
-                logger.warning("[MobileCreateRide] Géocodage dropoff échoué: %s", e)
-
-        # Calcul distance/durée avec OSRM (best-effort)
-        dur_s = None
-        dist_m = None
-        if pickup_lat and pickup_lon and dropoff_lat and dropoff_lon:
-            try:
-                from config import Config
-                from services.geolocation.osrm import _route
-
-                osrm_url = getattr(Config, "UD_OSRM_URL", "http://osrm:5000")
-                route_data = _route(
-                    base_url=osrm_url,
-                    profile="driving",
-                    origin=(float(pickup_lat), float(pickup_lon)),
-                    destination=(float(dropoff_lat), float(dropoff_lon)),
-                    timeout=2,
-                    overview="false",
-                    geometries="geojson",
-                    steps=False,
-                    annotations=False,
-                )
-                if route_data.get("code") == "Ok" and route_data.get("routes"):
-                    r0 = route_data["routes"][0]
-                    dur_s = int(r0.get("duration", 0))
-                    dist_m = int(r0.get("distance", 0))
-            except Exception as e:
-                logger.warning("[MobileCreateRide] OSRM échoué: %s", e)
-
-        # Nom du client
-        if client and user:
-            full_name = (
-                f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}"
-            ).strip()
-            if not full_name:
-                full_name = getattr(user, "username", "") or "Client"
-        else:
-            # Utiliser customer_name fourni
-            full_name = customer_name or "Client"
-
-        # Créer la réservation
-        new_booking = Booking()
-        new_booking.customer_name = full_name
-        new_booking.client_id = client_id if client_id else None
-        new_booking.company_id = company_id
-        new_booking.scheduled_time = scheduled_time
-        new_booking.pickup_location = pickup_address
-        new_booking.dropoff_location = dropoff_address
-        new_booking.pickup_lat = float(pickup_lat) if pickup_lat else None
-        new_booking.pickup_lon = float(pickup_lon) if pickup_lon else None
-        new_booking.dropoff_lat = float(dropoff_lat) if dropoff_lat else None
-        new_booking.dropoff_lon = float(dropoff_lon) if dropoff_lon else None
-        new_booking.status = BookingStatus.ACCEPTED
-        new_booking.booking_type = "manual"
-        new_booking.user_id = getattr(company, "user_id", None)
-        new_booking.duration_seconds = dur_s
-        new_booking.distance_meters = dist_m
-        new_booking.amount = float(payload.get("amount", 0))
-        new_booking.is_urgent = payload.get("priority") == "HIGH"
-        new_booking.notes_medical = payload.get("notes", "").strip() or None
-        new_booking.wheelchair_client_has = bool(
-            payload.get("wheelchair_client_has", False)
+        client_repo = ClientRepository()
+        client = client_repo.find_model_by_id_and_company(
+            client_id=client_id, company_id=company_id
         )
-        new_booking.wheelchair_need = bool(payload.get("wheelchair_need", False))
-        new_booking.is_return = False  # C'est la course aller
-        new_booking.is_round_trip = bool(payload.get("is_return", False))
+        if not client:
+            company_mobile_dispatch_ns.abort(404, "Client introuvable")
+            raise AssertionError("Client not found") from None
 
-        # Gestion de la course retour si demandée
-        is_return_trip = bool(payload.get("is_return", False))
-        return_time_str = payload.get("return_time")
-        return_booking = None
-
-        if is_return_trip:
-            # Parser la date/heure de retour
-            return_time = None
-            return_time_confirmed = True
-            if return_time_str:
-                try:
-                    return_time = parse_local_naive(return_time_str)
-                    return_time_confirmed = True
-                except Exception as e:
-                    logger.warning(
-                        "[MobileCreateRide] Erreur parsing return_time: %s", e
-                    )
-                    # Si l'heure n'est pas valide, créer quand même avec date à minuit
-                    try:
-                        # Essayer d'extraire juste la date
-                        date_part = return_time_str.split("T")[0]
-                        return_time = parse_local_naive(f"{date_part}T00:00:00")
-                        return_time_confirmed = False
-                    except Exception:
-                        pass
-
-            # Créer la course retour
-            return_booking = Booking()
-            return_booking.parent_booking_id = None  # Sera mis à jour après commit
-            return_booking.customer_name = full_name
-            return_booking.client_id = client_id if client_id else None
-            return_booking.company_id = company_id
-            return_booking.scheduled_time = return_time
-            return_booking.pickup_location = dropoff_address  # Inversé
-            return_booking.dropoff_location = pickup_address  # Inversé
-            return_booking.pickup_lat = float(dropoff_lat) if dropoff_lat else None
-            return_booking.pickup_lon = float(dropoff_lon) if dropoff_lon else None
-            return_booking.dropoff_lat = float(pickup_lat) if pickup_lat else None
-            return_booking.dropoff_lon = float(pickup_lon) if pickup_lon else None
-            return_booking.status = BookingStatus.ACCEPTED
-            return_booking.booking_type = "manual"
-            return_booking.user_id = getattr(company, "user_id", None)
-            return_booking.is_return = True
-            return_booking.is_round_trip = False
-            return_booking.duration_seconds = dur_s
-            return_booking.distance_meters = dist_m
-            return_booking.amount = float(payload.get("amount", 0))
-            return_booking.is_urgent = payload.get("priority") == "HIGH"
-            return_booking.notes_medical = payload.get("notes", "").strip() or None
-            return_booking.wheelchair_client_has = bool(
-                payload.get("wheelchair_client_has", False)
+        user = client.user
+        if not user:
+            company_mobile_dispatch_ns.abort(
+                404, "Utilisateur associé au client introuvable"
             )
-            return_booking.wheelchair_need = bool(payload.get("wheelchair_need", False))
-            return_booking.time_confirmed = return_time_confirmed
+            raise AssertionError("User not found") from None
+
+        # Transform payload mobile → canonique (même schéma que le web)
+        from services.adapters.mobile_booking_adapter import (
+            map_mobile_ride_payload_to_manual_booking_payload,
+        )
+
+        canonical_payload = map_mobile_ride_payload_to_manual_booking_payload(payload)
+
+        # Validation via le même schéma que le web (aucune tolérance supplémentaire)
+        from marshmallow import ValidationError
+
+        from schemas.company_schemas import ManualBookingCreateSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
 
         try:
-            db.session.add(new_booking)
-            db.session.flush()  # Pour obtenir l'ID de la course aller
+            validated_data = validate_request(
+                ManualBookingCreateSchema(), canonical_payload, strict=False
+            )
+        except ValidationError as e:
+            return handle_validation_error(e)
 
-            # Lier la course retour à la course aller
-            if return_booking:
-                return_booking.parent_booking_id = new_booking.id
-                db.session.add(return_booking)
+        # Création via use-case canonique
+        from application.companies.reservations.create_manual_booking import (
+            CreateManualBookingError,
+            CreateManualBookingUseCase,
+        )
 
+        try:
+            uc = CreateManualBookingUseCase()
+            result = uc.execute(
+                company_id=company_id,
+                validated_data=validated_data,
+                client=client,
+                user=user,
+            )
+        except CreateManualBookingError as e:
+            if e.error_code and e.details:
+                from routes.api_error_utils import create_error_response
+
+                return create_error_response(
+                    e.message,
+                    e.status_code,
+                    error_code=e.error_code,
+                    details=e.details,
+                )
+            company_mobile_dispatch_ns.abort(e.status_code, e.message)
+            raise AssertionError("CreateManualBookingError") from e
+
+        created_outbounds = result.created_outbounds
+        created_returns = result.created_returns
+
+        # Post-création : assign_driver_id et priority (hors contrat canonique)
+        assign_driver_id = payload.get("assign_driver_id")
+        priority = payload.get("priority")
+        first_outbound = created_outbounds[0] if created_outbounds else None
+
+        if priority == "HIGH":
+            for b in created_outbounds + created_returns:
+                b.is_urgent = True
             db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            logger.exception("[MobileCreateRide] Échec création: %s", exc)
-            company_mobile_dispatch_ns.abort(500, "Impossible de créer la course")
-            raise AssertionError("Create failed") from exc
 
-        # Journaliser l'action
+        if first_outbound and assign_driver_id:
+            try:
+                driver_id_int = int(assign_driver_id)
+                from application.companies.assign_driver_to_reservation import (
+                    AssignDriverToReservationUseCase,
+                )
+                from infrastructure.persistence.dispatch.assignment_writer import (
+                    SqlAlchemyAssignmentWriter,
+                )
+                from repositories.assignment_repository import AssignmentRepository
+                from repositories.dispatch_run_repository import DispatchRunRepository
+                from repositories.driver_repository import DriverRepository
+
+                driver_repo = DriverRepository()
+                driver = driver_repo.find_by_id(driver_id_int)
+                if driver:
+                    writer = SqlAlchemyAssignmentWriter(
+                        dispatch_run_repo=DispatchRunRepository(),
+                        assignment_repo=AssignmentRepository(),
+                    )
+                    assign_uc = AssignDriverToReservationUseCase(
+                        assignment_writer=writer
+                    )
+                    uc_result = assign_uc.execute(
+                        booking=first_outbound,
+                        driver=driver,
+                        company_id=company_id,
+                    )
+                    if uc_result.ok:
+                        db.session.commit()
+            except Exception as assign_exc:
+                logger.warning(
+                    "[MobileCreateRide] Post-création assign_driver_id échoué: %s",
+                    assign_exc,
+                )
+
+        # Journaliser
         tools = AgentTools(company_id)
         _log_mobile_action(
             tools,
             "mobile_create_ride",
             payload={
-                "booking_id": new_booking.id,
+                "booking_id": first_outbound.id if first_outbound else None,
                 "client_id": client_id,
-                "is_return": is_return_trip,
-                "return_booking_id": return_booking.id if return_booking else None,
-                "source": "mobile_enterprise",
+                "is_return": bool(created_returns),
+                "return_booking_id": (
+                    created_returns[0].id if created_returns else None
+                ),
+                "source": "mobile_enterprise_unified",
             },
-            reasoning=f"Création course mobile {new_booking.id}"
-            + (f" + retour {return_booking.id}" if return_booking else ""),
+            reasoning=f"Création course mobile via use-case {first_outbound.id if first_outbound else 'N/A'}",
         )
 
-        # Retourner le détail de la course créée
-        summary = _build_ride_summary(new_booking, current_company_id=company_id)
-        result = {"summary": summary}
-        if return_booking:
+        # Réponse au format attendu par le mobile
+        summary = _build_ride_summary(
+            first_outbound, current_company_id=company_id
+        )
+        result_dict = {"summary": summary}
+        if created_returns:
             return_summary = _build_ride_summary(
-                return_booking, current_company_id=company_id
+                created_returns[0], current_company_id=company_id
             )
-            result["return_summary"] = return_summary
-        return result, 201
+            result_dict["return_summary"] = return_summary
+        return result_dict, 201
 
 
 @company_mobile_dispatch_ns.route("/v1/rides/<string:ride_id>")

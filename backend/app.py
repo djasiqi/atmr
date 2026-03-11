@@ -639,6 +639,9 @@ def create_app(config_name: str | None = None):
         ):
             allow_ws_upgrades = False
 
+        ping_timeout_seconds = int(os.getenv("SOCKETIO_PING_TIMEOUT_SECONDS", "120"))
+        ping_interval_seconds = int(os.getenv("SOCKETIO_PING_INTERVAL_SECONDS", "25"))
+
         # NB: pas de 'upgrade_timeout' (paramètre inexistant)
         # ni 'cookie=True' (type incompatible)
         # ✅ FIX Socket.IO multi-workers: Passer message_queue explicitement
@@ -652,8 +655,8 @@ def create_app(config_name: str | None = None):
             path="/socket.io",
             logger=sio_logger,
             engineio_logger=sio_engineio_logger,
-            ping_timeout=60,
-            ping_interval=25,
+            ping_timeout=ping_timeout_seconds,
+            ping_interval=ping_interval_seconds,
             max_http_buffer_size=10_000_000,  # int
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,

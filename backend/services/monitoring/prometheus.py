@@ -11,7 +11,7 @@ Centralise toutes les métriques Prometheus du système :
 import logging
 
 try:
-    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+    from prometheus_client import (
         REGISTRY,
         Counter,
         Gauge,
@@ -321,6 +321,27 @@ else:
     RESYNC_DURATION_SECONDS = None
     RESYNC_DATA_VOLUME = None
     RESYNC_INTERVAL_SECONDS = None
+
+
+# ==================== Driver Mobile 2G/3G KPI (Phase 9) ====================
+
+if PROMETHEUS_AVAILABLE and Counter and Histogram:
+    DRIVER_MOBILE_SNAPSHOT_REQUESTS = _get_or_create_metric(
+        Counter,
+        "driver_mobile_snapshot_requests_total",
+        "Total requêtes snapshot mobile chauffeur",
+        ["outcome"],  # outcome: "success", "error"
+    )
+
+    DRIVER_BOOKING_STATUS_UPDATES = _get_or_create_metric(
+        Counter,
+        "driver_booking_status_updates_total",
+        "Total mises à jour statut mission (idempotency)",
+        ["idempotency_status"],  # idempotency_status: "new", "replay", "conflict"
+    )
+else:
+    DRIVER_MOBILE_SNAPSHOT_REQUESTS = None
+    DRIVER_BOOKING_STATUS_UPDATES = None
 
 
 # ==================== Helper Functions ====================
@@ -650,6 +671,26 @@ def update_push_notification_success_rate(event_type: str, rate: float) -> None:
 
 
 # ==================== Resync Helper Functions ====================
+
+
+def track_driver_mobile_snapshot(outcome: str = "success") -> None:
+    """Plan 2G/3G Phase 9 : KPI snapshot mobile."""
+    if not PROMETHEUS_AVAILABLE or not DRIVER_MOBILE_SNAPSHOT_REQUESTS:
+        return
+    try:
+        DRIVER_MOBILE_SNAPSHOT_REQUESTS.labels(outcome=outcome).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking snapshot: %s", e)
+
+
+def track_driver_booking_status_update(idempotency_status: str) -> None:
+    """Plan 2G/3G Phase 9 : KPI mises à jour statut (new, replay, conflict)."""
+    if not PROMETHEUS_AVAILABLE or not DRIVER_BOOKING_STATUS_UPDATES:
+        return
+    try:
+        DRIVER_BOOKING_STATUS_UPDATES.labels(idempotency_status=idempotency_status).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] Error tracking status update: %s", e)
 
 
 def track_resync(

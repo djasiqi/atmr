@@ -12,7 +12,6 @@ from datetime import (
     datetime,
     timedelta,
 )
-from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -21,27 +20,27 @@ from typing import (
     cast,
 )
 
-import jwt  # pyright: ignore[reportMissingImports]
-import sentry_sdk  # pyright: ignore[reportMissingImports]
+import jwt
+import sentry_sdk
 from flask import current_app, request
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
     get_jwt,
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_restx import (
     Namespace,
     Resource,
     fields,
 )
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     ValidationError,
     validate,
 )
-from marshmallow import fields as ma_fields  # pyright: ignore[reportMissingImports]
+from marshmallow import fields as ma_fields
 
 from ext import limiter, redis_client
 from models import Company, User, UserRole
@@ -76,6 +75,11 @@ ALLOWED_OIDC_PROVIDERS = set(
     if os.getenv("ALLOWED_OIDC_PROVIDERS")
     else []
 )
+OIDC_JWKS_URL = os.getenv("OIDC_JWKS_URL", "").strip()
+try:
+    OIDC_JWKS_BY_ISSUER = json.loads(os.getenv("OIDC_JWKS_BY_ISSUER", "{}") or "{}")
+except (TypeError, ValueError):
+    OIDC_JWKS_BY_ISSUER = {}
 
 
 company_mobile_auth_ns = Namespace(
@@ -168,9 +172,29 @@ def _get_company_security(company: Company | None) -> Dict[str, Any]:
 
 
 def _company_requires_mfa(company: Company | None) -> bool:
+    if _is_reviewer_company(company):
+        logger.info(
+            "[AUTH][Enterprise] MFA bypass activé pour company reviewer (company_id=%s)",
+            getattr(company, "id", None),
+        )
+        return False
     security = _get_company_security(company)
     policy = security.get("mobile_mfa") or {}
     return bool(policy.get("required", False))
+
+
+def _is_reviewer_company(company: Company | None) -> bool:
+    if not company:
+        return False
+    reviewer_company_id = os.getenv("REVIEWER_COMPANY_ID", "").strip()
+    reviewer_company_name = os.getenv("REVIEWER_COMPANY_NAME", "").strip().lower()
+
+    if reviewer_company_id and str(getattr(company, "id", "")) == reviewer_company_id:
+        return True
+    return bool(
+        reviewer_company_name
+        and str(getattr(company, "name", "")).strip().lower() == reviewer_company_name
+    )
 
 
 def _get_totp_secret(company: Company | None) -> str | None:
@@ -321,7 +345,8 @@ def _issue_tokens(
         additional_claims["device_id"] = device_id
 
     access_expires = current_app.config.get(
-        "JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=1)
+        "JWT_MOBILE_ACCESS_TOKEN_EXPIRES",
+        current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES", timedelta(hours=1)),
     )
     access_token = create_access_token(
         identity=str(user.public_id),
@@ -441,13 +466,17 @@ def _handle_oidc_login(
     if not id_token:
         raise ValueError("Token OIDC manquant.")
 
-    # Décoder sans vérification pour extraire les claims
-    # ⚠️ SECURITE: En production, il faudrait vérifier la signature
-    # avec les clés publiques du provider (JWKS)
+    # Étape 1: lecture non vérifiée minimale pour récupérer issuer/provider
     try:
-        decoded = jwt.decode(
-            id_token, options={"verify_signature": False, "verify_aud": False}
+        unverified_claims = jwt.decode(
+            id_token,
+            options={
+                "verify_signature": False,
+                "verify_aud": False,
+                "verify_exp": False,
+            },
         )
+        unverified_header = jwt.get_unverified_header(id_token)
     except jwt.PyJWTError as exc:
         logger.warning(
             "[AUTH][Enterprise] Echec décodage token OIDC: %s",
@@ -455,8 +484,39 @@ def _handle_oidc_login(
         )
         raise ValueError("ID token invalide.") from exc
 
+    issuer = unverified_claims.get("iss")
+    jwks_url = ""
+    if isinstance(OIDC_JWKS_BY_ISSUER, dict) and issuer in OIDC_JWKS_BY_ISSUER:
+        jwks_url = str(OIDC_JWKS_BY_ISSUER.get(issuer) or "").strip()
+    if not jwks_url:
+        jwks_url = OIDC_JWKS_URL
+    if not jwks_url:
+        logger.error("[AUTH][Enterprise] OIDC_JWKS_URL/OIDC_JWKS_BY_ISSUER non configuré")
+        raise ValueError("Configuration OIDC incomplète (JWKS manquant).")
+
+    alg = str(unverified_header.get("alg") or "")
+    if alg not in {"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}:
+        logger.warning("[AUTH][Enterprise] Algorithme OIDC non autorisé: %s", alg)
+        raise ValueError("ID token invalide (algorithme non autorisé).")
+
+    # Étape 2: validation cryptographique via JWKS
+    try:
+        jwk_client = jwt.PyJWKClient(jwks_url)
+        signing_key = jwk_client.get_signing_key_from_jwt(id_token)
+        decoded = jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=[alg],
+            options={"verify_aud": False},
+        )
+    except jwt.PyJWTError as exc:
+        logger.warning(
+            "[AUTH][Enterprise] Signature OIDC invalide: %s",
+            _sanitize_log_data(str(exc)),
+        )
+        raise ValueError("ID token invalide (signature).") from exc
+
     # Vérifier l'issuer (provider)
-    issuer = decoded.get("iss")
     if provider and ALLOWED_OIDC_PROVIDERS:
         if provider not in ALLOWED_OIDC_PROVIDERS:
             logger.warning(
@@ -692,8 +752,13 @@ class EnterpriseMobileRefresh(Resource):
     @limiter.limit("20/minute")
     def post(self):
         payload = request.get_json() or {}
+        normalized_payload = dict(payload)
+        if not normalized_payload.get("refresh_token"):
+            normalized_payload["refresh_token"] = (
+                payload.get("refreshToken") or payload.get("token")
+            )
         try:
-            data = EnterpriseRefreshSchema().load(payload)
+            data = EnterpriseRefreshSchema().load(normalized_payload)
         except ValidationError as exc:
             return APIErrorHandler.handle_exception(exc, logger)
 
@@ -943,10 +1008,8 @@ class SwitchToDriver(Resource):
     def post(self):
         """Génère un token driver pour permettre le switch automatique."""
         logger.info("[SwitchToDriver] Endpoint appelé")
-        from datetime import datetime, timedelta
-
         from flask import current_app
-        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+        from flask_jwt_extended import (
             create_access_token,
             create_refresh_token,
         )
@@ -1142,7 +1205,7 @@ class EnterpriseMobileSession(Resource):
             # ✅ DDD: Utilise use-case au lieu de service directement
             try:
                 user = get_current_user_via_use_case()
-            except Exception as e:
+            except Exception:
                 raise
             if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
                 return APIErrorHandler.handle_permission_error(
@@ -1176,12 +1239,11 @@ class EnterpriseMobileSession(Resource):
                     if user.role == UserRole.ADMIN
                     else "Entreprise introuvable."
                 )
-                result = APIErrorHandler.handle_not_found(
+                return APIErrorHandler.handle_not_found(
                     "User",
                     None,
                     logger,
                 )
-                return result
 
             # Succès : construire la réponse
             response_data = {
@@ -1219,11 +1281,10 @@ class EnterpriseMobileSession(Resource):
                 else "Token avec audience invalide pour /auth/session"
             )
             logger.warning(log_msg)
-            result = APIErrorHandler.handle_permission_error(
+            return APIErrorHandler.handle_permission_error(
                 error_msg,
                 logger_instance=logger,
             )
-            return result
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception(
@@ -1231,5 +1292,4 @@ class EnterpriseMobileSession(Resource):
                 type(e).__name__,
                 str(e),
             )
-            result = APIErrorHandler.handle_exception(e, logger)
-            return result
+            return APIErrorHandler.handle_exception(e, logger)

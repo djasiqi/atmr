@@ -184,6 +184,18 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
         seconds=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_SECONDS", str(60 * 60)))
     )
+    # Mobile natif (iOS/Android): fenêtre plus longue pour réduire les
+    # déconnexions perçues lors des reprises réseau/app en arrière-plan.
+    JWT_MOBILE_ACCESS_TOKEN_EXPIRES = timedelta(
+        seconds=int(
+            os.getenv(
+                "JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS",
+                str(24 * 60 * 60),
+            )
+        )
+    )
+    # Tolérance d'horloge pour limiter les faux "token expired" (drift client/serveur).
+    JWT_DECODE_LEEWAY = int(os.getenv("JWT_DECODE_LEEWAY_SECONDS", "120"))
     # ✅ PHASE 4 : Augmentation de la durée du refresh token de 30 à 90 jours
     # Améliore l'expérience utilisateur en réduisant les déconnexions
     # ⚠️ SÉCURITÉ : Les refresh tokens sont stockés dans Redis avec rotation et révocation
@@ -389,8 +401,7 @@ def validate_production_security(app) -> None:
                 "127.0.0.1" in url or "localhost" in url or "host.docker.internal" in url
             ):
                 _logger.warning(
-                    "[config] %s=%s : en prod Docker, utiliser http://backend:5000/... "
-                    + "(définir explicitement dans .env.production)",
+                    "[config] %s=%s : en prod Docker, utiliser http://backend:5000/... (définir explicitement dans .env.production)",
                     key,
                     url,
                 )

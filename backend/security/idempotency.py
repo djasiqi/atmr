@@ -55,7 +55,10 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
             try:
                 cached = redis_client.get(redis_key)
                 if cached:
-                    data = json.loads(cached)
+                    raw: str | bytes = (
+                        cached.decode("utf-8") if isinstance(cached, bytes) else str(cached)
+                    )
+                    data = json.loads(raw)
                     cached_requested = data.get("requested_status")
                     current_body = request.get_json(silent=True) or {}
                     current_requested = (current_body.get("status") or "").upper()
@@ -73,8 +76,22 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
                             400,
                         )
                         conflict_resp.headers["X-Idempotency-Status"] = "conflict"
+                        try:
+                            from services.monitoring.prometheus import (
+                                track_driver_booking_status_update,
+                            )
+                            track_driver_booking_status_update("conflict")
+                        except Exception:
+                            pass
                         return conflict_resp
                     logger.info("idempotency_replay key=%s status=%s", redis_key, cached_requested or "?")
+                    try:
+                        from services.monitoring.prometheus import (
+                            track_driver_booking_status_update,
+                        )
+                        track_driver_booking_status_update("replay")
+                    except Exception:
+                        pass
                     resp = make_response(
                         jsonify(data["body"]), data["status_code"]
                     )
@@ -118,6 +135,13 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
                 logger.warning("[Idempotency] Redis write failed: %s", e)
 
             resp_obj.headers["X-Idempotency-Status"] = "new"
+            try:
+                from services.monitoring.prometheus import (
+                    track_driver_booking_status_update,
+                )
+                track_driver_booking_status_update("new")
+            except Exception:
+                pass
             return resp_obj
 
         return wrapper

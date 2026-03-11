@@ -58,7 +58,13 @@ class PartnerInvoiceService:
         self.pdf_service = pdf_service or PDFService()
 
     def generate_monthly_invoice(
-        self, partnership_id: int, year: int, month: int, executing_company_id: int
+        self,
+        partnership_id: int,
+        year: int,
+        month: int,
+        executing_company_id: int,
+        transfer_ids: list[int] | None = None,
+        overrides: dict[int, dict] | None = None,
     ) -> PartnerInvoice:
         """Génère une facture mensuelle consolidée pour un partenariat.
 
@@ -67,6 +73,8 @@ class PartnerInvoiceService:
             year: Année de la période
             month: Mois de la période (1-12)
             executing_company_id: ID de l'entreprise exécutante qui génère la facture
+            transfer_ids: IDs des transferts à inclure (optionnel, sinon tous)
+            overrides: {transfer_id: {amount: float, note?: str}} pour modifier les montants
 
         Returns:
             PartnerInvoice créée
@@ -118,12 +126,12 @@ class PartnerInvoiceService:
         else:
             end_date = datetime(year, month + 1, 1, tzinfo=UTC)
 
-        transfers = (
+        all_eligible = (
             BookingTransfer.query.filter_by(
                 partnership_id=partnership_id,
                 status=TransferStatus.COMPLETED,
                 is_validated=True,
-                executing_company_id=executing_company_id,  # ✅ Filtrer par entreprise exécutante
+                executing_company_id=executing_company_id,
             )
             .filter(
                 BookingTransfer.validated_at >= start_date,
@@ -139,17 +147,36 @@ class PartnerInvoiceService:
             .all()
         )
 
+        if transfer_ids:
+            eligible_ids = {t.id for t in all_eligible}
+            invalid = set(transfer_ids) - eligible_ids
+            if invalid:
+                raise ValueError(
+                    f"Transferts invalides ou déjà facturés: {sorted(invalid)}"
+                )
+            transfers = [t for t in all_eligible if t.id in transfer_ids]
+        else:
+            transfers = all_eligible
+
         if not transfers:
             raise ValueError(
                 f"Aucun transfert validé non facturé trouvé pour la période {year}-{month:02d}"
             )
 
-        # Calculer les totaux
+        # Calculer les totaux (avec overrides optionnels)
+        overrides_map = overrides or {}
         subtotal = Decimal("0")
         for transfer in transfers:
-            if transfer.partner_cost:
-                # Arrondir chaque montant de transfert à 5 centimes
-                rounded_cost = round_to_5_cents(Decimal(str(transfer.partner_cost)))
+            ov = overrides_map.get(transfer.id, {})
+            amount = ov.get("amount")
+            if amount is not None:
+                base = Decimal(str(amount))
+            elif transfer.partner_cost:
+                base = Decimal(str(transfer.partner_cost))
+            else:
+                base = Decimal("0")
+            if base > 0:
+                rounded_cost = round_to_5_cents(base)
                 subtotal += rounded_cost
 
         # Arrondir le subtotal total à 5 centimes

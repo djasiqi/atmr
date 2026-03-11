@@ -43,7 +43,13 @@ def _init_firebase() -> bool:
     cred_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
 
     try:
-        if cred_path and os.path.isfile(cred_path):
+        if cred_path:
+            if not os.path.isfile(cred_path):
+                app_logger.error(
+                    "[fcm] Firebase init failed: FIREBASE_SERVICE_ACCOUNT_PATH file not found — %s",
+                    cred_path,
+                )
+                return False
             cred = credentials.Certificate(cred_path)
         elif cred_json:
             cred = credentials.Certificate(json.loads(cred_json))
@@ -58,8 +64,18 @@ def _init_firebase() -> bool:
         _firebase_initialized = True
         app_logger.info("[fcm] Firebase Admin SDK initialized")
         return True
-    except Exception:
-        app_logger.exception("[fcm] Firebase init failed")
+    except json.JSONDecodeError as e:
+        app_logger.exception(
+            "[fcm] Firebase init failed: FIREBASE_SERVICE_ACCOUNT_JSON invalid JSON — %s",
+            str(e),
+        )
+        return False
+    except Exception as e:
+        app_logger.exception(
+            "[fcm] Firebase init failed: %s — %s",
+            type(e).__name__,
+            str(e),
+        )
         return False
 
 
