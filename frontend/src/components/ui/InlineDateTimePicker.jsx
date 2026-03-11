@@ -390,7 +390,13 @@ export default function InlineDateTimePicker({ value, onChange, placeholder: _pl
           placeholder={MASK}
           maxLength={16}
         />
-        <button type="button" className={dtp.calBtn} onClick={() => setOpen(!open)} tabIndex={-1}>
+        <button
+          type="button"
+          className={dtp.calBtn}
+          onClick={() => setOpen(!open)}
+          tabIndex={-1}
+          aria-label={open ? 'Fermer le sélecteur de date et heure' : 'Ouvrir le sélecteur de date et heure'}
+        >
           <FiCalendar size={13} />
         </button>
       </div>
@@ -402,9 +408,13 @@ export default function InlineDateTimePicker({ value, onChange, placeholder: _pl
           style={{ top: pos.top, left: pos.left }}
         >
           <div className={dp.header}>
-            <button type="button" className={dp.navBtn} onClick={prevMonth}><FiChevronLeft size={14} /></button>
+            <button type="button" className={dp.navBtn} onClick={prevMonth} aria-label="Mois précédent">
+              <FiChevronLeft size={14} />
+            </button>
             <span className={dp.headerTitle}>{MONTHS[viewMonth]} {viewYear}</span>
-            <button type="button" className={dp.navBtn} onClick={nextMonth}><FiChevronRight size={14} /></button>
+            <button type="button" className={dp.navBtn} onClick={nextMonth} aria-label="Mois suivant">
+              <FiChevronRight size={14} />
+            </button>
           </div>
 
           <div className={dp.weekRow}>

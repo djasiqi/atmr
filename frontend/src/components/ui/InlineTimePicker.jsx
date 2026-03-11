@@ -126,7 +126,13 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
           placeholder="__:__"
           maxLength={5}
         />
-        <button type="button" className={tp.iconBtn} onClick={() => setOpen(!open)} tabIndex={-1}>
+        <button
+          type="button"
+          className={tp.iconBtn}
+          onClick={() => setOpen(!open)}
+          tabIndex={-1}
+          aria-label={open ? 'Fermer le sélecteur d’heure' : 'Ouvrir le sélecteur d’heure'}
+        >
           <FiClock size={14} />
         </button>
       </div>
@@ -138,11 +144,11 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
             Heure
           </div>
           <div className={tp.selectRow}>
-            <select className={tp.select} value={hours} onChange={onHoursChange}>
+            <select className={tp.select} value={hours} onChange={onHoursChange} aria-label="Heures">
               {Array.from({ length: 24 }, (_, i) => <option key={i} value={pad(i)}>{pad(i)}</option>)}
             </select>
             <span className={tp.sep}>:</span>
-            <select className={tp.select} value={minutes} onChange={onMinutesChange}>
+            <select className={tp.select} value={minutes} onChange={onMinutesChange} aria-label="Minutes">
               {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => <option key={m} value={pad(m)}>{pad(m)}</option>)}
             </select>
           </div>

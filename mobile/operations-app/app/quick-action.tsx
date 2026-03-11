@@ -18,10 +18,15 @@ import {
   showMissionNotification,
   dismissMissionNotification,
 } from "@/services/missionBarAndroid";
+import {
+  buildBgTrackingInputs,
+  refreshBackgroundTrackingNotification,
+} from "@/services/locationTracker";
 import { openNavigation, safeCall } from "@/services/deepLinks";
 import { getAssignedTrips, type Booking } from "@/services/api";
 import { normalizeBookingStatus } from "@/utils/bookingStatus";
 import { getCallablePhone } from "@/utils/phone";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 const MISSIONS_CACHE_KEY = "missions_cache_v2";
 const ACTIVE_STATE_KEY = "active_mission_state";
@@ -147,7 +152,15 @@ export default function QuickActionScreen() {
           await MissionStateManager.stopMission();
           await dismissMissionNotification();
         } else {
-          await showMissionNotification(MissionStateManager.getState());
+          const inputs = await buildBgTrackingInputs({
+            isAuthenticated: true,
+            role: "driver",
+            hasActiveMission: MissionStateManager.isActive(),
+          });
+          const refreshed = await refreshBackgroundTrackingNotification(inputs);
+          if (!refreshed) {
+            await showMissionNotification(MissionStateManager.getState());
+          }
         }
       }
       setState(MissionStateManager.getState());
@@ -249,10 +262,7 @@ export default function QuickActionScreen() {
           <Text style={styles.nextLabel}>
             Prochaine{" "}
             {state.nextBookingPreview.pickup_at
-              ? new Date(state.nextBookingPreview.pickup_at).toLocaleTimeString(
-                  "fr-CH",
-                  { hour: "2-digit", minute: "2-digit" }
-                )
+              ? formatTimeLocal(state.nextBookingPreview.pickup_at)
               : ""}{" "}
             ·{" "}
             {state.nextBookingPreview.can_show_identity

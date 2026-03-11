@@ -26,7 +26,8 @@ import {
   handleInitialNotification,
   setFCMNavigationHandler,
 } from "@/services/firebaseMessaging";
-import { Platform, View, Text, Image, Animated, ActivityIndicator, StyleSheet, LogBox } from "react-native";
+import { AppState, AppStateStatus, Platform, View, Text, Image, Animated, ActivityIndicator, StyleSheet, LogBox, InteractionManager } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 // ✅ Supprimer les avertissements GPS bruyants en mode dev
 // Ces messages sont des retries normaux quand le backend est lent (non bloquants).
@@ -47,9 +48,15 @@ import { registerPushToken, initializeCSRFToken } from "@/services/api"; // si l
 import {
   startAdaptiveLocationTracking,
   stopAdaptiveLocationTracking,
+  reconcileBackgroundTrackingState,
+  ensureBackgroundTrackingStopped,
+  buildBgTrackingInputs,
+  requestBackgroundPermissionIfNeeded,
 } from "@/services/locationTracker";
+import { MissionStateManager } from "@/services/missionState";
 import { validateDeepLink } from "@/services/deepLinkHandler";
 import { initNetworkStateCache } from "@/services/networkState";
+import { getSyncEngine } from "@/services/syncEngine";
 import { initLogContext } from "@/services/logContext";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { PushFailureBanner } from "@/components/common/PushFailureBanner";
@@ -60,6 +67,10 @@ import { checkBatteryOptimization } from "@/services/batteryOptimization";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("App");
+
+/** Délai avant stop sync engine à l'unmount — évite stop immédiat lors de remount StrictMode. */
+let pendingSyncEngineStopTimer: ReturnType<typeof setTimeout> | null = null;
+const SYNC_ENGINE_STOP_DELAY_MS = 400;
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -95,15 +106,7 @@ if (Platform.OS !== "web") {
   }
 }
 
-// ✅ Mission Bar: enregistrer le handler Notifee headless (actions notif app tuée)
-if (Platform.OS !== "web") {
-  try {
-    const { registerNotifeeBackgroundHandler } = require("@/services/missionBarBackground");
-    registerNotifeeBackgroundHandler();
-  } catch (error) {
-    log.info("mission bar background handler not available", { error });
-  }
-}
+// Notifee onBackgroundEvent est enregistré dans index.js (avant expo-router/entry).
 
 Sentry.init({
   dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",
@@ -121,11 +124,13 @@ Sentry.init({
 
 export default function RootLayout() {
   return (
-    <VersionProvider>
-      <AuthProvider>
-        <RootNav />
-      </AuthProvider>
-    </VersionProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <VersionProvider>
+        <AuthProvider>
+          <RootNav />
+        </AuthProvider>
+      </VersionProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -164,20 +169,41 @@ function RootNav() {
           : null;
     setNotificationAppMode(mode);
     if (__DEV__ && mode) {
-      log.info("notification app mode set", { mode });
+      log.debug("notification app mode set", { mode });
     }
   }, [isDriverAuthenticated, isEnterpriseAuthenticated]);
 
   const segments = useSegments();
   const router = useRouter();
   const registeringRef = useRef(false);
+  const pushInitForDriverRef = useRef<number | null>(null);
+  const syncEngineStartedRef = useRef(false);
+  const adaptiveTrackingStartedRef = useRef(false);
+  const syncEngineStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adaptiveTrackingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ✅ Phase 2 - Gestionnaire des actions de notifications
   useNotificationActions();
 
   // ✅ Deep link handler: parse atmr:// URLs and navigate to appropriate routes
+  const isRuntimeInternalLink = React.useCallback((url: string) => {
+    if (!url) return true;
+    return (
+      url.startsWith("exp://") ||
+      url.startsWith("exp+") ||
+      url.includes("expo-development-client") ||
+      url.includes("/--/") // internal Expo Router runtime path
+    );
+  }, []);
+
   const handleDeepLink = React.useCallback((url: string) => {
     try {
+      if (isRuntimeInternalLink(url)) {
+        if (__DEV__) {
+          log.debug("internal runtime deep link ignored", { url });
+        }
+        return;
+      }
       log.info("handling deep link", { url });
 
       // ✅ Valider le deep link (sécurité: anti-injection, anti-open-redirect)
@@ -232,7 +258,7 @@ function RootNav() {
     } catch (error) {
       log.error("error handling deep link", { error });
     }
-  }, [isDriverAuthenticated, loading, router]);
+  }, [isDriverAuthenticated, loading, router, isRuntimeInternalLink]);
 
   // Si une mise à jour est REQUIRED, afficher l'écran bloquant
   // (avant même l'authentification)
@@ -307,8 +333,12 @@ function RootNav() {
 
   // 🔔 Config + enregistrement push (quand prêt)
   useEffect(() => {
-    if (loading || !isDriverAuthenticated || !driver) return;
+    if (loading || versionLoading || !isDriverAuthenticated || !driver) return;
     const currentUserId = driver.id;
+    if (pushInitForDriverRef.current === currentUserId) {
+      return;
+    }
+    pushInitForDriverRef.current = currentUserId;
 
     // ✅ Initialiser le token CSRF au démarrage (pour les requêtes POST/PUT/DELETE/PATCH)
     initializeCSRFToken();
@@ -424,7 +454,14 @@ function RootNav() {
     return () => {
       cancelled = true;
     };
-  }, [driver, isDriverAuthenticated, loading]);
+  }, [driver, isDriverAuthenticated, loading, versionLoading]);
+
+  useEffect(() => {
+    if (loading || versionLoading) return;
+    if (!isDriverAuthenticated) {
+      pushInitForDriverRef.current = null;
+    }
+  }, [loading, versionLoading, isDriverAuthenticated]);
 
   // FCM: register foreground handler, deep link handlers, token refresh
   useEffect(() => {
@@ -470,6 +507,9 @@ function RootNav() {
   useEffect(() => {
     if (loading || !isDriverAuthenticated || !driver) return;
     if (Platform.OS !== "android") return;
+    if (String(Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod") === "prod") {
+      return;
+    }
     (async () => {
       try {
         const { needsExemption } = await checkBatteryOptimization();
@@ -495,6 +535,9 @@ function RootNav() {
     // Handle initial deep link when app opens from notification
     Linking.getInitialURL().then((url) => {
       if (url) {
+        if (isRuntimeInternalLink(url)) {
+          return;
+        }
         log.info("initial deep link detected", { url });
         // Wait for auth to complete before handling
         setTimeout(() => {
@@ -507,6 +550,9 @@ function RootNav() {
 
     // Listen for deep links when app is already running
     const subscription = Linking.addEventListener("url", (event) => {
+      if (isRuntimeInternalLink(event.url)) {
+        return;
+      }
       log.info("deep link received while app running", { url: event.url });
       if (isDriverAuthenticated && !loading) {
         handleDeepLink(event.url);
@@ -516,59 +562,198 @@ function RootNav() {
     return () => {
       subscription.remove();
     };
-  }, [isDriverAuthenticated, loading, handleDeepLink]);
+  }, [isDriverAuthenticated, loading, handleDeepLink, isRuntimeInternalLink]);
+
+  // ✅ Plan 2G/3G : syncEngine démarre/arrête avec le driver
+  useEffect(() => {
+    if (loading || versionLoading) return;
+    if (!isDriverAuthenticated || !driver) {
+      // Anti-flap: pendant l'hydratation auth, éviter stop/start immédiat.
+      if (syncEngineStopTimerRef.current) {
+        clearTimeout(syncEngineStopTimerRef.current);
+      }
+      syncEngineStopTimerRef.current = setTimeout(() => {
+        if (syncEngineStartedRef.current) {
+          getSyncEngine().stop();
+          syncEngineStartedRef.current = false;
+        }
+      }, 1500);
+      return;
+    }
+    // Remount rapide (StrictMode) : annuler le stop différé du cleanup
+    if (pendingSyncEngineStopTimer) {
+      clearTimeout(pendingSyncEngineStopTimer);
+      pendingSyncEngineStopTimer = null;
+    }
+    if (syncEngineStopTimerRef.current) {
+      clearTimeout(syncEngineStopTimerRef.current);
+      syncEngineStopTimerRef.current = null;
+    }
+    if (!syncEngineStartedRef.current) {
+      getSyncEngine().start();
+      syncEngineStartedRef.current = true;
+    }
+  }, [driver?.id, isDriverAuthenticated, loading, versionLoading]);
 
   // ✅ 4. Fréquence GPS Adaptative Mobile : Démarrer tracking adaptatif pour les drivers
   useEffect(() => {
-    if (loading || !isDriverAuthenticated || !driver) {
-      // Arrêter le tracking si le driver se déconnecte
-      if (!isDriverAuthenticated) {
-        stopAdaptiveLocationTracking();
+    if (loading || versionLoading) return;
+    if (!isDriverAuthenticated || !driver) {
+      if (adaptiveTrackingStopTimerRef.current) {
+        clearTimeout(adaptiveTrackingStopTimerRef.current);
       }
+      // Anti-flap auth pour éviter "tracking already active" au boot.
+      adaptiveTrackingStopTimerRef.current = setTimeout(() => {
+        if (adaptiveTrackingStartedRef.current) {
+          stopAdaptiveLocationTracking();
+          adaptiveTrackingStartedRef.current = false;
+        }
+      }, 1500);
+      return;
+    }
+    if (adaptiveTrackingStopTimerRef.current) {
+      clearTimeout(adaptiveTrackingStopTimerRef.current);
+      adaptiveTrackingStopTimerRef.current = null;
+    }
+    if (adaptiveTrackingStartedRef.current) {
       return;
     }
 
     // Démarrer le tracking adaptatif pour le driver authentifié
-    let cancelled = false;
+    adaptiveTrackingStartedRef.current = true;
 
     (async () => {
       try {
         log.info("starting adaptive gps tracking");
         await startAdaptiveLocationTracking();
-        if (!cancelled) {
-          log.success("adaptive gps tracking started");
-        }
+        log.success("adaptive gps tracking started");
       } catch (e: any) {
+        adaptiveTrackingStartedRef.current = false;
         log.warn("adaptive gps tracking start error", {
           message: e?.message || String(e),
         });
       }
     })();
+  }, [driver?.id, isDriverAuthenticated, loading, versionLoading]);
 
+  // ✅ Background GPS : réconciliation (mission-active only). Jamais de start au boot.
+  // Règle B : réconciliation non-démarrante si pas de mission active.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (mode !== "driver") return;
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state !== "active") return;
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(async () => {
+          const inputs = await buildBgTrackingInputs({
+            isAuthenticated: !!isDriverAuthenticated,
+            role: "driver",
+            hasActiveMission: MissionStateManager.isActive(),
+          });
+          await reconcileBackgroundTrackingState("app_resume", inputs);
+        }, 150);
+      });
+    });
+    return () => sub.remove();
+  }, [mode, isDriverAuthenticated]);
+
+  // ✅ Réconciliation au logout : stop immédiat (contrat d'arrêt).
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (isDriverAuthenticated) return;
+    void ensureBackgroundTrackingStopped("logout");
+  }, [isDriverAuthenticated]);
+
+  // ✅ Background GPS : mission_started / mission_stopped → réconciliation
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (mode !== "driver") return;
+    const unsub = MissionStateManager.subscribe((event) => {
+      if (event !== "mission_started" && event !== "mission_stopped") return;
+      (async () => {
+        if (event === "mission_started") {
+          await requestBackgroundPermissionIfNeeded();
+        }
+        const inputs = await buildBgTrackingInputs({
+          isAuthenticated: !!isDriverAuthenticated,
+          role: "driver",
+          hasActiveMission: MissionStateManager.isActive(),
+        });
+        await reconcileBackgroundTrackingState(event, inputs);
+      })();
+    });
+    return unsub;
+  }, [mode, isDriverAuthenticated]);
+
+  // ✅ Réconciliation au login driver : corriger désalignement état métier vs natif.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (!isDriverAuthenticated || !driver || mode !== "driver") return;
+    (async () => {
+      const inputs = await buildBgTrackingInputs({
+        isAuthenticated: true,
+        role: "driver",
+        hasActiveMission: MissionStateManager.isActive(),
+      });
+      await reconcileBackgroundTrackingState("session_change", inputs);
+    })();
+  }, [driver?.id, isDriverAuthenticated, mode]);
+
+  // Cleanup global à l'unmount du layout
+  useEffect(() => {
     return () => {
-      cancelled = true;
-      // Arrêter le tracking lors du démontage ou déconnexion
-      stopAdaptiveLocationTracking();
+      if (pendingSyncEngineStopTimer) {
+        clearTimeout(pendingSyncEngineStopTimer);
+        pendingSyncEngineStopTimer = null;
+      }
+      if (syncEngineStartedRef.current) {
+        // Délai pour remount StrictMode : si RootNav remonte vite, on évite le stop.
+        pendingSyncEngineStopTimer = setTimeout(() => {
+          pendingSyncEngineStopTimer = null;
+          if (syncEngineStartedRef.current) {
+            getSyncEngine().stop();
+            syncEngineStartedRef.current = false;
+          }
+        }, SYNC_ENGINE_STOP_DELAY_MS);
+      }
+      if (syncEngineStopTimerRef.current) {
+        clearTimeout(syncEngineStopTimerRef.current);
+        syncEngineStopTimerRef.current = null;
+      }
+      if (adaptiveTrackingStartedRef.current) {
+        stopAdaptiveLocationTracking();
+        adaptiveTrackingStartedRef.current = false;
+      }
+      if (adaptiveTrackingStopTimerRef.current) {
+        clearTimeout(adaptiveTrackingStopTimerRef.current);
+        adaptiveTrackingStopTimerRef.current = null;
+      }
     };
-  }, [driver, isDriverAuthenticated, loading]);
+  }, []);
 
-  // ✅ UX : Afficher un écran de chargement pendant l'auto-login
-  log.info("root nav loading state", {
+  // ✅ UX : journaliser uniquement les transitions d'état, pas chaque render.
+  useEffect(() => {
+    log.debug("root nav loading state", {
+      loading,
+      versionLoading,
+      isAuthenticated,
+      isDriverAuthenticated,
+      isEnterpriseAuthenticated,
+      mode,
+      timestamp: new Date().toISOString(),
+    });
+  }, [
     loading,
     versionLoading,
     isAuthenticated,
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
     mode,
-    timestamp: new Date().toISOString(),
-  });
+  ]);
 
   if (loading || versionLoading) {
-    log.info("root nav showing loading screen");
     return <BrandedLoadingScreen />;
   }
-
-  log.success("root nav ready (slot rendered)");
 
   return (
     <>
@@ -629,6 +814,9 @@ function BrandedLoadingScreen() {
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: "center",

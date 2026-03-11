@@ -11,9 +11,10 @@ import {
   View,
   ActivityIndicator,
   AppState,
+  InteractionManager,
 } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import * as Crypto from "expo-crypto";
 
 import { router } from "expo-router";
@@ -25,8 +26,7 @@ import "dayjs/locale/fr";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
-import { getAuthNotReadyDisplayMessage, isAuthNotReadyError } from "@/services/authGuards";
-import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
+import { getAuthNotReadyDisplayMessage } from "@/services/authGuards";
 import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { isCompletedStatus } from "@/utils/bookingStatus";
 import { isPickupSentinel } from "@/utils/urgentTime";
@@ -61,6 +61,7 @@ import {
 import { TransferCard } from "@/components/enterprise/transfers/TransferCard";
 import { TransferRideModal } from "@/components/enterprise/transfers/TransferRideModal";
 import { getLogger } from "@/utils/logger";
+import { getEnterpriseAuthRecoveryMessage } from "@/services/enterpriseAuth";
 
 const log = getLogger("EntDash");
 
@@ -114,9 +115,7 @@ export default function EnterpriseDashboardScreen() {
   const { enterpriseSession, refreshEnterprise, enterpriseLoading } = useAuth();
   const { selectedDate } = useEnterpriseContext();
   const tabBarHeight = useBottomTabBarHeight();
-
-  // Activer les notifications push pour l'entreprise
-  useEnterpriseNotifications();
+  const isFocused = useIsFocused();
 
   const dispatchMode =
     (enterpriseSession?.company.dispatchMode as
@@ -133,6 +132,7 @@ export default function EnterpriseDashboardScreen() {
   const [allRides, setAllRides] = useState<RideSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
 
   // ✅ 3.4.2: État pour dashboard temps réel
@@ -243,9 +243,9 @@ export default function EnterpriseDashboardScreen() {
       // ✅ Charger les transferts entrants en arrière-plan
       loadIncomingTransfers();
     } catch (error: any) {
-      // ✅ Invariant C: refresh_token absent → forcer login (pas "connexion en cours" infini)
-      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-        router.replace("/(enterprise-auth)/login" as any);
+      const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+      if (authRecovery) {
+        setAuthRecoveryMessage(authRecovery);
         return;
       }
       const message =
@@ -266,15 +266,11 @@ export default function EnterpriseDashboardScreen() {
   // Référence pour le polling automatique
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
-
-  useEffect(() => {
-    if (!enterpriseSession) return;
-    throttledLoadData();
-  }, [enterpriseSession, throttledLoadData, currentDate]);
+  const lastFocusReloadAtRef = useRef(0);
 
   // Polling automatique : récupérer les données toutes les 30 secondes quand l'app est active
   useEffect(() => {
-    if (!enterpriseSession) {
+    if (!enterpriseSession || !isFocused) {
       // Nettoyer le polling si pas de session
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -308,21 +304,27 @@ export default function EnterpriseDashboardScreen() {
 
     // Écouter les changements d'état de l'application
     const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === "active"
-      ) {
-        log.info("app foreground, reloading data");
-        throttledLoadData();
-        startPolling();
-      } else if (nextAppState.match(/inactive|background/)) {
-        log.info("app background, stopping polling");
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      }
+      const wasBackground = appStateRef.current.match(/inactive|background/);
       appStateRef.current = nextAppState;
+      if (wasBackground && nextAppState === "active") {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(() => {
+            log.info("app foreground, reloading data");
+            throttledLoadData();
+            startPolling();
+          }, 150);
+        });
+      } else if (nextAppState.match(/inactive|background/)) {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(() => {
+            log.info("app background, stopping polling");
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }, 0);
+        });
+      }
     });
 
     // Cleanup
@@ -333,12 +335,17 @@ export default function EnterpriseDashboardScreen() {
       }
       subscription.remove();
     };
-  }, [enterpriseSession, throttledLoadData, currentDate]);
+  }, [enterpriseSession, throttledLoadData, currentDate, isFocused]);
 
   // Recharger les données quand l'écran revient au focus
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
+        const now = Date.now();
+        if (now - lastFocusReloadAtRef.current < 8000) {
+          return;
+        }
+        lastFocusReloadAtRef.current = now;
         log.info("screen focused, reloading data");
         throttledLoadData();
       }
@@ -1299,6 +1306,14 @@ export default function EnterpriseDashboardScreen() {
       {!isManual && criticalOpportunitiesSection}
 
       {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+      {authRecoveryMessage && (
+        <View style={styles.authRecoveryBanner}>
+          <Text style={styles.error}>{authRecoveryMessage}</Text>
+          <TouchableOpacity onPress={() => router.replace("/(enterprise-auth)/login" as any)}>
+            <Text style={styles.authRecoveryLink}>Se reconnecter</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ✅ Modal d'assignation partagé */}
       <AssignDriverModal
@@ -1743,6 +1758,20 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     marginTop: 10,
     fontSize: 13,
+  },
+  authRecoveryBanner: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.2)",
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  authRecoveryLink: {
+    color: "#EF4444",
+    fontWeight: "700",
+    marginTop: 4,
+    textDecorationLine: "underline",
   },
   manualListSection: {
     marginTop: 4,

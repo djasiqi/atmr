@@ -19,9 +19,14 @@ import {
 import { Loader } from "@/components/ui/Loader";
 import { MissionStateManager, type MissionBarStatus } from "@/services/missionState";
 import { dismissMissionNotification, showMissionNotification } from "@/services/missionBarAndroid";
+import {
+  buildBgTrackingInputs,
+  refreshBackgroundTrackingNotification,
+} from "@/services/locationTracker";
 import { openNavigation } from "@/services/deepLinks";
 import { createShadow } from "@/styles/shadowStyles";
 import { getLogger } from "@/utils/logger";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 const log = getLogger("TripDetail");
 
@@ -43,7 +48,7 @@ function fmtDate(iso: string): string {
   });
 }
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeLocal(iso);
 }
 function fmtDuration(sec: number): string {
   const m = Math.ceil(sec / 60);
@@ -117,7 +122,15 @@ export default function TripDetailsScreen() {
           return;
         }
         if (Platform.OS !== "web") {
-          await showMissionNotification(MissionStateManager.getState());
+          const inputs = await buildBgTrackingInputs({
+            isAuthenticated: true,
+            role: "driver",
+            hasActiveMission: MissionStateManager.isActive(),
+          });
+          const refreshed = await refreshBackgroundTrackingNotification(inputs);
+          if (!refreshed) {
+            await showMissionNotification(MissionStateManager.getState());
+          }
         }
         if (targetStatus === "COMPLETED") {
           await MissionStateManager.stopMission();

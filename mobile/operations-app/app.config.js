@@ -1,5 +1,5 @@
 // app.config.js
-require('dotenv-flow').config();
+require("dotenv-flow").config({ silent: true });
 const fs = require("fs");
 const pkg = require('./package.json');
 const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonMod');
@@ -12,6 +12,28 @@ const withIosFirebaseModularHeaders = require('./prebuild-mods/withIosFirebaseMo
 const APP_VARIANT = process.env.APP_VARIANT || "prod";
 const isDevVariant = APP_VARIANT === "dev";
 const runtimeBase = pkg.version || "1.0.0";
+const isProdVariant = APP_VARIANT === "prod";
+const isCiBuild = process.env.CI === "true" || process.env.EAS_BUILD === "true";
+const shouldEnforceProdEnv = isProdVariant && isCiBuild;
+
+function assertProdHttpsEnv(name) {
+  const value = process.env[name];
+  if (!shouldEnforceProdEnv) return value;
+  if (!value || typeof value !== "string") {
+    throw new Error(`[app.config] Missing required ${name} for APP_VARIANT=prod`);
+  }
+  const normalized = value.trim();
+  if (!normalized.startsWith("https://")) {
+    throw new Error(`[app.config] ${name} must be HTTPS in production`);
+  }
+  if (normalized.includes("localhost") || normalized.includes("127.0.0.1")) {
+    throw new Error(`[app.config] ${name} must not target localhost in production`);
+  }
+  return normalized;
+}
+
+const requiredProdApiUrl = assertProdHttpsEnv("EXPO_PUBLIC_API_URL");
+const requiredProdSocketUrl = assertProdHttpsEnv("EXPO_PUBLIC_SOCKET_URL");
 
 function envOrExistingFile(envValue, relativePath) {
   // En local, `eas build` exécute `expo config` avant d'injecter les secrets EAS.
@@ -58,10 +80,10 @@ module.exports = withAndroidR8Enabled(
     // EAS injecte les variables `type=file` comme chemin vers un fichier sur le builder.
     // Fallback local: fichier à la racine du projet.
     googleServicesFile: envOrExistingFile(process.env.GOOGLE_SERVICES_PLIST, "./GoogleService-Info.plist"),
-    // ✅ Background modes pour notifications silencieuses + background fetch
+    // ✅ Background modes : fetch, remote-notification, location (tracking chauffeur mission-active)
     // (nécessite un rebuild natif iOS)
     infoPlist: {
-      UIBackgroundModes: ["fetch", "remote-notification"],
+      UIBackgroundModes: ["fetch", "remote-notification", "location"],
       LSApplicationQueriesSchemes: ["tel", "comgooglemaps"],
     },
     config: {
@@ -83,11 +105,9 @@ module.exports = withAndroidR8Enabled(
     },
     permissions: [
       "android.permission.POST_NOTIFICATIONS",
-      "android.permission.ACCESS_BACKGROUND_LOCATION",
       "android.permission.FOREGROUND_SERVICE",
       "android.permission.FOREGROUND_SERVICE_LOCATION",
       "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
-      "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
     ],
     config: {
       googleMaps: {
@@ -141,6 +161,7 @@ module.exports = withAndroidR8Enabled(
       "expo-location",
       {
         // ✅ AMÉLIORATION : Configuration moderne pour la géolocalisation en arrière-plan
+        isAndroidBackgroundLocationEnabled: true,
         foregroundService: {
           notificationTitle: "Liri Opérations est active",
           notificationBody:
@@ -164,12 +185,16 @@ module.exports = withAndroidR8Enabled(
   extra: {
     APP_VARIANT: APP_VARIANT, // Passer APP_VARIANT pour détection runtime
     productionApiUrl: "https://api.lirie.ch",
-    publicApiUrl: process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000",
+    publicApiUrl: isProdVariant
+      ? requiredProdApiUrl
+      : process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000",
     backendPort: 5000,
     // ✅ Socket.IO URL depuis variable d'environnement dédiée
     // Dev: http://localhost:5000 ou http://10.0.2.2:5000 (Android emulator)
     // Prod: https://api.lirie.ch (REQUIS)
-    socketUrl: process.env.EXPO_PUBLIC_SOCKET_URL || (isDevVariant ? "http://localhost:5000" : undefined),
+    socketUrl: isProdVariant
+      ? requiredProdSocketUrl
+      : process.env.EXPO_PUBLIC_SOCKET_URL || (isDevVariant ? "http://localhost:5000" : undefined),
     router: {},
     eas: { projectId: "3be107c7-29d2-4987-91a0-8d7c31604891" },
   },

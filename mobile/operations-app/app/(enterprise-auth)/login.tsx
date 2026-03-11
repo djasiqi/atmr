@@ -3,12 +3,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
@@ -56,6 +56,13 @@ export default function EnterpriseLoginScreen() {
         password,
       });
       if (result.mfaRequired) {
+        const isReviewerAccount = /review|reviewer/i.test(email);
+        if (isReviewerAccount) {
+          Alert.alert(
+            "Configuration reviewer attendue",
+            "Ce compte reviewer ne devrait pas demander MFA. Vérifiez la configuration de la review company (mobile_mfa.required=false). Vous pouvez continuer vers MFA pour QA si nécessaire."
+          );
+        }
         router.replace({
           pathname: "/(enterprise-auth)/mfa",
           params: { challengeId: result.challenge.challengeId },

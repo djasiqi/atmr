@@ -12,15 +12,16 @@ import {
   TouchableOpacity,
   View,
   AppState,
+  InteractionManager,
 } from "react-native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
 import { useAuth } from "@/hooks/useAuth";
-import { getAuthNotReadyDisplayMessage, isAuthNotReadyError } from "@/services/authGuards";
+import { getAuthNotReadyDisplayMessage } from "@/services/authGuards";
 import { useEnterpriseContext } from "@/context/EnterpriseContext";
 import { useThrottledCallback } from "@/hooks/useDebouncedCallback";
 import { createShadow } from "@/styles/shadowStyles";
@@ -42,6 +43,7 @@ import { useRideActions } from "@/hooks/useRideActions";
 import { router } from "expo-router";
 import { secureStorage } from "@/services/storage";
 import { getLogger } from "@/utils/logger";
+import { getEnterpriseAuthRecoveryMessage } from "@/services/enterpriseAuth";
 
 const log = getLogger("Rides");
 
@@ -75,10 +77,12 @@ export default function EnterpriseRidesScreen() {
   const { enterpriseSession, refreshEnterprise } = useAuth();
   const { selectedDate } = useEnterpriseContext();
   const tabBarHeight = useBottomTabBarHeight();
+  const isFocused = useIsFocused();
 
   const [rides, setRides] = useState<RideSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -151,9 +155,9 @@ export default function EnterpriseRidesScreen() {
       log.info("rides loaded", { count: response.items.length });
       setRides(response.items);
     } catch (error: any) {
-      // ✅ Invariant C: refresh_token absent → forcer login (pas "connexion en cours" infini)
-      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-        router.replace("/(enterprise-auth)/login" as any);
+      const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+      if (authRecovery) {
+        setAuthRecoveryMessage(authRecovery);
         return;
       }
       const message =
@@ -174,15 +178,11 @@ export default function EnterpriseRidesScreen() {
   // Référence pour le polling automatique
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
-
-  // Charger les courses au montage et quand la date change
-  useEffect(() => {
-    throttledLoadRides();
-  }, [throttledLoadRides]);
+  const lastFocusReloadAtRef = useRef(0);
 
   // Polling automatique : récupérer les courses toutes les 30 secondes quand l'app est active
   useEffect(() => {
-    if (!enterpriseSession) {
+    if (!enterpriseSession || !isFocused) {
       // Nettoyer le polling si pas de session
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -215,41 +215,42 @@ export default function EnterpriseRidesScreen() {
     }
 
     // Écouter les changements d'état de l'application
-    const subscription = AppState.addEventListener("change", async (nextAppState) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === "active"
-      ) {
-        // ✅ CORRECTION #3 : Vérifier la validité du token au retour foreground
-        // Évite les erreurs 401 dues à un token expiré pendant que l'app était en background
-        log.info("app foreground, checking token");
-        try {
-          // ✅ CORRECTION : Utiliser SecureStore au lieu d'AsyncStorage
-          const token = await secureStorage.getEnterpriseToken();
-          if (token) {
-            const expiresAt = getTokenExpiration(token);
-            const now = Date.now();
-            // Si le token expire dans moins de 5 minutes, le rafraîchir
-            if (expiresAt && expiresAt - now < 5 * 60 * 1000) {
-              log.info("token near expiry, refreshing");
-              await refreshEnterprise();
-            }
-          }
-        } catch (error) {
-          log.warn("token check failed", { error });
-        }
-
-        log.info("app foreground, reloading rides");
-        throttledLoadRides();
-        startPolling();
-      } else if (nextAppState.match(/inactive|background/)) {
-        log.info("app background, stopping polling");
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      }
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      const wasBackground = appStateRef.current.match(/inactive|background/);
       appStateRef.current = nextAppState;
+      if (wasBackground && nextAppState === "active") {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(async () => {
+            log.info("app foreground, checking token");
+            try {
+              const token = await secureStorage.getEnterpriseToken();
+              if (token) {
+                const expiresAt = getTokenExpiration(token);
+                const now = Date.now();
+                if (expiresAt && expiresAt - now < 5 * 60 * 1000) {
+                  log.info("token near expiry, refreshing");
+                  await refreshEnterprise();
+                }
+              }
+            } catch (error) {
+              log.warn("token check failed", { error });
+            }
+            log.info("app foreground, reloading rides");
+            throttledLoadRides();
+            startPolling();
+          }, 150);
+        });
+      } else if (nextAppState.match(/inactive|background/)) {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(() => {
+            log.info("app background, stopping polling");
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+          }, 0);
+        });
+      }
     });
 
     // Cleanup
@@ -260,12 +261,17 @@ export default function EnterpriseRidesScreen() {
       }
       subscription.remove();
     };
-  }, [enterpriseSession, throttledLoadRides]);
+  }, [enterpriseSession, throttledLoadRides, isFocused]);
 
   // Recharger les courses quand l'écran revient au focus
   useFocusEffect(
     useCallback(() => {
       if (enterpriseSession) {
+        const now = Date.now();
+        if (now - lastFocusReloadAtRef.current < 8000) {
+          return;
+        }
+        lastFocusReloadAtRef.current = now;
         log.info("screen focused, reloading rides");
         throttledLoadRides();
       }
@@ -300,8 +306,9 @@ export default function EnterpriseRidesScreen() {
           `La course a été planifiée pour ${urgentTime.format("HH:mm")} (dans 15 minutes).`
         );
       } catch (error: any) {
-        if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-          router.replace("/(enterprise-auth)/login" as any);
+        const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+        if (authRecovery) {
+          setAuthRecoveryMessage(authRecovery);
           return;
         }
         if (error?.response?.status === 409) {
@@ -339,8 +346,9 @@ export default function EnterpriseRidesScreen() {
       await scheduleRide(scheduleModal.rideId, { pickup_at: localISO });
       await loadRides();
     } catch (error: any) {
-      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-        router.replace("/(enterprise-auth)/login" as any);
+      const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+      if (authRecovery) {
+        setAuthRecoveryMessage(authRecovery);
         return;
       }
       const message =
@@ -414,8 +422,9 @@ export default function EnterpriseRidesScreen() {
       await refreshData();
       setCancelModal({ ride: null, shouldBill: false });
     } catch (error: any) {
-      if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-        router.replace("/(enterprise-auth)/login" as any);
+      const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+      if (authRecovery) {
+        setAuthRecoveryMessage(authRecovery);
         return;
       }
       const message =
@@ -621,6 +630,17 @@ export default function EnterpriseRidesScreen() {
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         )}
+        {authRecoveryMessage && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="refresh-circle" size={16} color={DANGER} />
+            <Text style={styles.errorText}>{authRecoveryMessage}</Text>
+            <TouchableOpacity
+              onPress={() => router.replace("/(enterprise-auth)/login" as any)}
+            >
+              <Text style={styles.retryLink}>Se reconnecter</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Modal d'édition */}
@@ -765,8 +785,9 @@ export default function EnterpriseRidesScreen() {
                     setScheduleModal({ rideId: null, scheduledTime: null, label: undefined });
                   })
                   .catch((error: any) => {
-                    if (isAuthNotReadyError(error) && ["missing_refresh_token", "auth_ready_timeout"].includes((error as any).reason)) {
-                      router.replace("/(enterprise-auth)/login" as any);
+                    const authRecovery = getEnterpriseAuthRecoveryMessage(error);
+                    if (authRecovery) {
+                      setAuthRecoveryMessage(authRecovery);
                       return;
                     }
                     const message =
@@ -989,6 +1010,12 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     marginLeft: 8,
+  },
+  retryLink: {
+    color: DANGER,
+    fontWeight: "700",
+    marginLeft: 8,
+    textDecorationLine: "underline",
   },
 
   /* ── Bottom sheet (cancel) ── */

@@ -57,6 +57,7 @@ let lastAt: number = 0;
 /**
  * Enregistre un événement de session et notifie les listeners.
  * Persiste en mémoire (sync) + AsyncStorage (RN) ou localStorage (web) en fire-and-forget.
+ * AsyncStorage différé au prochain tick pour éviter de bloquer pendant les transitions AppState.
  */
 export function pushSessionEvent(event: SessionEvent): void {
   const at = Date.now();
@@ -70,9 +71,18 @@ export function pushSessionEvent(event: SessionEvent): void {
   } catch (_e) {
     // ignore (SSR / storage indisponible)
   }
-  AsyncStorage.setItem(SESSION_JOURNAL_KEYS.LAST_EVENT, event).catch(() => {});
-  AsyncStorage.setItem(SESSION_JOURNAL_KEYS.LAST_AT, String(at)).catch(() => {});
-  listeners.forEach((cb) => cb(event, at));
+  // Différer AsyncStorage pour ne jamais bloquer le main thread pendant les transitions
+  setTimeout(() => {
+    AsyncStorage.setItem(SESSION_JOURNAL_KEYS.LAST_EVENT, event).catch(() => {});
+    AsyncStorage.setItem(SESSION_JOURNAL_KEYS.LAST_AT, String(at)).catch(() => {});
+  }, 0);
+  listeners.forEach((cb) => {
+    try {
+      cb(event, at);
+    } catch (_e) {
+      // Ne pas propager les erreurs des listeners (évite ANR)
+    }
+  });
 }
 
 /**

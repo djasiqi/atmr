@@ -486,10 +486,8 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   }, []);
 
   const handleCancel = async () => {
-    const reason = window.prompt('Raison de l\'annulation (optionnel) :');
-    if (reason === null) return;
     try {
-      await cancelMutation.mutateAsync({ requestId: request.id, reason });
+      await cancelMutation.mutateAsync({ requestId: request.id, reason: '' });
       toast.success('Demande annulée');
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Erreur lors de l\'annulation');

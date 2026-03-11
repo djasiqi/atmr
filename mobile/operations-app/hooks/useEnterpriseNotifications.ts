@@ -15,6 +15,9 @@ import { getErrorMessage, logError } from "@/utils/errorHandler";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("EntNotif");
+let registerPushPromise: Promise<void> | null = null;
+let lastRegisteredCompanyId: number | null = null;
+let lastRegisteredToken: string | null = null;
 
 // 🔔 Configuration du comportement des notifications en mode foreground
 const foregroundBehavior: NotificationBehavior = {
@@ -71,6 +74,12 @@ export const useEnterpriseNotifications = () => {
           return;
         }
 
+        // Eviter les enregistrements redondants lors des remounts rapides.
+        if (lastRegisteredCompanyId === companyId && lastRegisteredToken === token) {
+          log.debug("push registration skipped (already registered in runtime)", { companyId });
+          return;
+        }
+
         // Sauvegarder company_id dans AsyncStorage
         try {
           await AsyncStorage.setItem("company_id", String(companyId));
@@ -85,6 +94,8 @@ export const useEnterpriseNotifications = () => {
 
         if (lastSentToken === token) {
           log.info("push token unchanged, no new registration", {});
+          lastRegisteredCompanyId = companyId;
+          lastRegisteredToken = token;
         } else {
           log.info("new token detected, registering on server", { companyId });
 
@@ -114,6 +125,8 @@ export const useEnterpriseNotifications = () => {
 
           await AsyncStorage.setItem(storageKey, token);
           log.success("token saved on server and locally", {});
+          lastRegisteredCompanyId = companyId;
+          lastRegisteredToken = token;
         }
       } catch (error: unknown) {
         const errorMessage = getErrorMessage(error);
@@ -126,7 +139,11 @@ export const useEnterpriseNotifications = () => {
       }
     };
 
-    setupAndRegister();
+    if (!registerPushPromise) {
+      registerPushPromise = setupAndRegister().finally(() => {
+        registerPushPromise = null;
+      });
+    }
   }, [enterpriseSession, loading]);
 
   // Écouter les événements Socket.IO et envoyer des notifications

@@ -16,6 +16,7 @@ import { getTripDetails, Booking } from "@/services/api";
 import { Loader } from "@/components/ui/Loader";
 import { styles as s, palette } from "@/styles/tripDetailsStyles";
 import { openNavigation } from "@/services/deepLinks";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 type Props = {
   visible: boolean;
@@ -37,10 +38,7 @@ function formatDate(iso: string): string {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("fr-CH", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatTimeLocal(iso);
 }
 
 function formatDuration(seconds: number): string {

@@ -250,7 +250,7 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
               </p>
             </div>
           </div>
-          <button className={s.mClose} onClick={onClose} type="button">
+          <button className={s.mClose} onClick={onClose} type="button" aria-label="Fermer">
             <FaTimes />
           </button>
         </div>
@@ -277,12 +277,12 @@ export default function PatientFormModal({ onClose, onSaved, editingPatient = nu
                     <ChipDropdown value={formData.gender} options={GENDER_OPTIONS} onChange={(v) => handleChange('gender', v)} />
                   </div>
                   <div className={s.field}>
-                    <label>Prénom <span className={s.req}>*</span></label>
-                    <input type="text" value={formData.first_name} onChange={(e) => handleChange('first_name', capitalizeFirstName(e.target.value))} required />
+                    <label htmlFor="patient-first-name">Prénom <span className={s.req}>*</span></label>
+                    <input id="patient-first-name" type="text" value={formData.first_name} onChange={(e) => handleChange('first_name', capitalizeFirstName(e.target.value))} required />
                   </div>
                   <div className={s.field}>
-                    <label>Nom <span className={s.req}>*</span></label>
-                    <input type="text" value={formData.last_name} onChange={(e) => handleChange('last_name', e.target.value.toUpperCase())} required style={{ textTransform: 'uppercase' }} />
+                    <label htmlFor="patient-last-name">Nom <span className={s.req}>*</span></label>
+                    <input id="patient-last-name" type="text" value={formData.last_name} onChange={(e) => handleChange('last_name', e.target.value.toUpperCase())} required style={{ textTransform: 'uppercase' }} />
                   </div>
                 </div>
                 <div className={s.row}>

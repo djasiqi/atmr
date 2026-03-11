@@ -11,6 +11,7 @@
 import { getLogger } from "@/utils/logger";
 import { getLogContextSnapshot } from "./logContext";
 import { getNetworkStateSnapshot } from "./networkState";
+import { getSessionDiagHeaderValue } from "./sessionJournal";
 
 const log = getLogger("AuthLog");
 
@@ -106,10 +107,12 @@ export function logAuthEvent(
 
     const ctx = getLogContextSnapshot();
     const network = getNetworkStateSnapshot();
+    const sessionDiag = getSessionDiagHeaderValue();
     const base: Record<string, unknown> = {
       event,
       ts: Date.now(),
       session_id: getSessionId(),
+      ...(sessionDiag ? { session_diag_id: sessionDiag } : {}),
       ...(currentRefreshCycleId && ["AUTH_REFRESH_START", "AUTH_REFRESH_SUCCESS", "AUTH_REFRESH_FAIL", "AUTH_401_HANDLING"].includes(event)
         ? { refresh_cycle_id: currentRefreshCycleId }
         : {}),

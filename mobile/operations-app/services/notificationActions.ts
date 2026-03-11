@@ -4,6 +4,8 @@ import { Platform } from "react-native";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("NotifActions");
+let notificationActionsConfigured = false;
+let notificationActionsSetupPromise: Promise<void> | null = null;
 
 /**
  * Catégories de notifications avec actions
@@ -42,11 +44,21 @@ export enum NotificationActionId {
  * À appeler au démarrage de l'app (après setupNotificationChannels)
  */
 export async function setupNotificationActions(): Promise<void> {
-  try {
-    log.info("configuring notification actions");
+  if (notificationActionsConfigured) {
+    log.debug("notification actions already configured");
+    return;
+  }
+  if (notificationActionsSetupPromise) {
+    await notificationActionsSetupPromise;
+    return;
+  }
 
-    // ✅ Catégorie : Mission disponible
-    await Notifications.setNotificationCategoryAsync(
+  notificationActionsSetupPromise = (async () => {
+    try {
+      log.info("configuring notification actions");
+
+      // ✅ Catégorie : Mission disponible
+      await Notifications.setNotificationCategoryAsync(
       NotificationCategory.MISSION_AVAILABLE,
       [
         {
@@ -183,10 +195,16 @@ export async function setupNotificationActions(): Promise<void> {
 
     log.success("category mission_active created");
 
-    log.success("all notification action categories configured");
-  } catch (error) {
-    log.error("notification actions configuration failed", { error });
-  }
+      log.success("all notification action categories configured");
+      notificationActionsConfigured = true;
+    } catch (error) {
+      log.error("notification actions configuration failed", { error });
+    } finally {
+      notificationActionsSetupPromise = null;
+    }
+  })();
+
+  await notificationActionsSetupPromise;
 }
 
 /**

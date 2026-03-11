@@ -122,7 +122,7 @@
 
 .copyright {
   font-size: var(--font-xs);
-  color: var(--text-disabled);
+  color: var(--text-secondary);
 }
 
 .legal {
@@ -135,7 +135,7 @@
 .legal button {
   all: unset;
   font-size: var(--font-xs);
-  color: var(--text-disabled);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: color var(--transition-fast);
 }
@@ -156,7 +156,7 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--text-disabled);
+  background: var(--text-secondary);
   flex-shrink: 0;
 }
 

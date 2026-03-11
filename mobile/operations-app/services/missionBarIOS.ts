@@ -1,6 +1,7 @@
 import notifee, { IOSNotificationCategoryAction } from "@notifee/react-native";
 import { Platform } from "react-native";
 import type { MissionState } from "./missionState";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 import { MissionStateManager } from "./missionState";
 
 const NOTIFICATION_ID = "mission-bar-ios";
@@ -74,10 +75,7 @@ function formatNextBooking(state: MissionState): string {
   const preview = state.nextBookingPreview;
   if (!preview) return "";
   const time = preview.pickup_at
-    ? new Date(preview.pickup_at).toLocaleTimeString("fr-CH", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatTimeLocal(preview.pickup_at)
     : "";
   const name = preview.can_show_identity ? preview.client_display : "Course suivante";
   return `Prochaine ${time} · ${name} · ${preview.pickup_short}`;

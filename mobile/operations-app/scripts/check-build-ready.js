@@ -72,7 +72,11 @@ function checkEasConfig() {
     return;
   }
 
-  const eas = JSON.parse(fs.readFileSync(easPath, 'utf8'));
+  const easRaw = fs.readFileSync(easPath, 'utf8');
+  const easJson = easRaw
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/,\s*([}\]])/g, "$1");
+  const eas = JSON.parse(easJson);
   
   if (!eas.build || !eas.build.production) {
     errors.push('❌ Profil de production non trouvé dans eas.json');
@@ -134,6 +138,43 @@ function checkEnvExample() {
   }
 }
 
+function isHttpsUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkProductionReleaseEnv() {
+  const required = ["APP_VARIANT", "EXPO_PUBLIC_API_URL", "EXPO_PUBLIC_SOCKET_URL"];
+  required.forEach((name) => {
+    const value = process.env[name];
+    if (!value) {
+      errors.push(`❌ Variable d'environnement manquante: ${name}`);
+      return;
+    }
+    checks.push(`✅ Variable ${name} fournie`);
+  });
+
+  if (process.env.APP_VARIANT && process.env.APP_VARIANT !== "prod") {
+    errors.push("❌ APP_VARIANT doit être 'prod' pour une build de production");
+  }
+
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
+  if (apiUrl && !isHttpsUrl(apiUrl)) {
+    errors.push("❌ EXPO_PUBLIC_API_URL doit être une URL HTTPS non-localhost");
+  }
+  if (socketUrl && !isHttpsUrl(socketUrl)) {
+    errors.push("❌ EXPO_PUBLIC_SOCKET_URL doit être une URL HTTPS non-localhost");
+  }
+}
+
 // Exécution des vérifications
 log('\n🔍 Vérification de la préparation au build de production EAS\n', 'blue');
 
@@ -141,6 +182,7 @@ checkPackageJson();
 checkEasConfig();
 checkAppConfig();
 checkEnvExample();
+checkProductionReleaseEnv();
 
 // Vérifications de fichiers
 checkFile('eas.json', 'Fichier eas.json', true);

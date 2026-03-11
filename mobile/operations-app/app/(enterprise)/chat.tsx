@@ -30,7 +30,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useEnterpriseSocket } from "@/hooks/useEnterpriseSocket";
-import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 import {
   getDispatchMessages,
@@ -68,6 +67,12 @@ const SCROLL_TOLERANCE = 40;
 const INPUT_ESTIMATED_HEIGHT = 64;
 const CHAT_FETCH_LIMIT = 20;
 
+function ensurePdfFilename(name?: string | null): string {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return `document_${Date.now()}.pdf`;
+  return /\.pdf$/i.test(trimmed) ? trimmed : `${trimmed}.pdf`;
+}
+
 // Adapter DispatchMessage vers Message pour compatibilité avec MessageBubble
 const adaptDispatchMessageToMessage = (msg: DispatchMessage | any): Message => ({
   id: msg.id,
@@ -95,9 +100,6 @@ type ListItem =
 
 export default function EnterpriseChatScreen() {
   const { enterpriseSession } = useAuth();
-
-  // Activer les notifications push pour l'entreprise
-  useEnterpriseNotifications();
 
   // Gérer les messages non lus
   const { markAsRead, countUnreadInMessages } = useUnreadMessages();
@@ -275,10 +277,11 @@ export default function EnterpriseChatScreen() {
       setIsUploading(true);
       try {
         const formData = new FormData();
+        const safePdfName = ensurePdfFilename(filename);
         formData.append("file", {
           uri: pdfUri,
           type: "application/pdf",
-          name: filename,
+          name: safePdfName,
         } as any);
 
         const uploadRes = await enterpriseStandardApi.post("/messages/upload", formData, {
@@ -366,9 +369,10 @@ export default function EnterpriseChatScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        const safeName = ensurePdfFilename(result.assets[0].name);
         await handleSendPdf(
           result.assets[0].uri,
-          result.assets[0].name || "document.pdf"
+          safeName
         );
       }
     } catch (error) {

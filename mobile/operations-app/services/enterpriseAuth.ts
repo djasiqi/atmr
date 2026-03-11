@@ -30,9 +30,9 @@ const debugLog = (data: Record<string, unknown>) => {
 
 const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
-const PROD_API_URL: string =
-  ENV_API_URL || (expoExtra.publicApiUrl as string) || expoExtra.productionApiUrl || "";
+const PROD_API_URL: string = ENV_API_URL || "";
 const DEV_API_URL = (expoExtra.devApiUrl as string) || (expoExtra.publicApiUrl as string);
+const APP_VARIANT = String(expoExtra.APP_VARIANT || process.env.APP_VARIANT || "prod");
 
 const getDevHost = (): string => {
   // Sur le web, toujours utiliser localhost (le navigateur tourne sur la même machine)
@@ -61,6 +61,9 @@ const API_PREFIX = "/api/v1/company_mobile";
 // Détecter le mode développement de manière plus fiable
 // En web bundled, __DEV__ peut être false même en développement local
 const isDevelopment = () => {
+  if (APP_VARIANT === "prod") {
+    return false;
+  }
   // Vérifier __DEV__ d'abord
   if (__DEV__) {
     return true;
@@ -87,6 +90,20 @@ const isDevelopment = () => {
   }
   
   return false;
+};
+
+const validateProdApiUrl = (value: unknown): string => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("EXPO_PUBLIC_API_URL is required in production");
+  }
+  const normalized = value.trim().replace(/\/$/, "");
+  if (!normalized.startsWith("https://")) {
+    throw new Error("EXPO_PUBLIC_API_URL must be HTTPS in production");
+  }
+  if (normalized.includes("localhost") || normalized.includes("127.0.0.1")) {
+    throw new Error("EXPO_PUBLIC_API_URL must not point to localhost in production");
+  }
+  return normalized;
 };
 
 // En développement, forcer l'utilisation de getDevHost() pour éviter de pointer vers la production
@@ -117,7 +134,7 @@ const getBaseURL = () => {
   }
   
   // En production, utiliser PROD_API_URL
-  return `${(PROD_API_URL || "").replace(/\/$/, "")}${API_PREFIX}`;
+  return `${validateProdApiUrl(PROD_API_URL)}${API_PREFIX}`;
 };
 
 const baseURL = getBaseURL();
@@ -687,6 +704,16 @@ const refreshAccessToken = async (): Promise<string | null | undefined> => {
 enterpriseApi.interceptors.request.use(
   async (config) => {
     try {
+      const rawUrl = String(config.url || "").toLowerCase();
+      const isExplicitPublicAuthRoute =
+        rawUrl.includes("/auth/login") ||
+        rawUrl.includes("/auth/refresh") ||
+        rawUrl.includes("/auth/mfa");
+
+      // Verrou: ne jamais tenter de refresh/token sur endpoints publics enterprise
+      if (isExplicitPublicAuthRoute) {
+        return config;
+      }
       // #region agent log
       const isLoginRequest = config.url?.includes("/auth/login");
       const isPublic = isPublicEndpoint(config.url, "enterprise");
@@ -883,6 +910,14 @@ enterpriseApi.interceptors.response.use(
   async (error: AxiosError) => {
     const { response, config } = error;
     const originalConfig = config as AxiosConfig | undefined;
+    const rawUrl = String(originalConfig?.url || "").toLowerCase();
+    const isExplicitPublicAuthRoute =
+      rawUrl.includes("/auth/login") ||
+      rawUrl.includes("/auth/refresh") ||
+      rawUrl.includes("/auth/mfa");
+    if (isExplicitPublicAuthRoute) {
+      return Promise.reject(error);
+    }
 
     // ✅ CORRECTION (audit 34-38):
     // - 403 peut être un "forbidden" fonctionnel (rôle/droits) et ne doit pas déclencher un refresh.
@@ -1129,3 +1164,18 @@ export const fetchEnterpriseSession = async (
   );
   return response.data;
 };
+
+export function getEnterpriseAuthRecoveryMessage(error: unknown): string | null {
+  const reason = (error as any)?.reason;
+  const status = (error as any)?.response?.status;
+  if (reason === "missing_refresh_token") {
+    return "Session entreprise incomplète. Reconnectez-vous pour continuer.";
+  }
+  if (reason === "auth_ready_timeout") {
+    return "La session entreprise n'est pas prête. Reconnectez-vous.";
+  }
+  if (status === 401) {
+    return "Session expirée. Reconnectez-vous pour reprendre.";
+  }
+  return null;
+}

@@ -46,6 +46,12 @@ const IMAGE_COMPRESS = 0.75;
 
 const log = getLogger("Chat");
 
+function ensurePdfFilename(name?: string | null): string {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return `document_${Date.now()}.pdf`;
+  return /\.pdf$/i.test(trimmed) ? trimmed : `${trimmed}.pdf`;
+}
+
 const BRAND = "#00796b";
 const TXT = "#0f172a";
 const TXT_SEC = "#6b7280";
@@ -372,10 +378,11 @@ export default function ChatScreen() {
 
       try {
         const formData = new FormData();
+        const safePdfName = ensurePdfFilename(filename);
         formData.append("file", {
           uri: pdfUri,
           type: "application/pdf",
-          name: filename,
+          name: safePdfName,
         } as any);
 
         const uploadRes = await api.post("/messages/upload", formData, {
@@ -463,10 +470,16 @@ export default function ChatScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        const isPdf = asset.mimeType?.includes("pdf") || asset.name?.endsWith(".pdf");
+        const lowerName = String(asset.name || "").toLowerCase();
+        const lowerMime = String(asset.mimeType || "").toLowerCase();
+        const lowerUri = String(asset.uri || "").toLowerCase();
+        const isPdf =
+          lowerMime.includes("pdf") ||
+          lowerName.endsWith(".pdf") ||
+          lowerUri.endsWith(".pdf");
 
         if (isPdf) {
-          await handleSendPdf(asset.uri, asset.name || "document.pdf");
+          await handleSendPdf(asset.uri, ensurePdfFilename(asset.name));
         } else {
           await handleSendImage(asset.uri);
         }

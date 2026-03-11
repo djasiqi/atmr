@@ -1,7 +1,6 @@
 // src/app/(auth)/login.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   TouchableOpacity,
@@ -11,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 

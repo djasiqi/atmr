@@ -8,10 +8,9 @@ export const useRideCreate = (onSuccess?: () => Promise<void>) => {
 
     const create = useCallback(
         async (payload: RideCreatePayload) => {
-            // ✅ P1-4 Phase 3.3: Utiliser client_name au lieu de customer_name
-            // Validation basique : client_id OU client_name requis
-            if (!payload.client_id && !payload.client_name?.trim()) {
-                Alert.alert("Erreur", "Un client doit être sélectionné ou un nom de client doit être fourni.");
+            // client_id requis (alignement web — plus de client_name seul)
+            if (!payload.client_id) {
+                Alert.alert("Erreur", "Un client existant doit être sélectionné.");
                 return null;
             }
 

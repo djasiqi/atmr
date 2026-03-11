@@ -41,6 +41,12 @@ export const VersionProvider = ({ children }: { children: ReactNode }) => {
         try {
             const result = await checkVersion();
             setVersionInfo(result);
+            log.info("Version check status", {
+                status: result.status,
+                currentVersion: result.current_version,
+                latestVersion: result.latest_version,
+                minRequiredVersion: result.min_required_version,
+            });
         } catch (err) {
             const error =
                 err instanceof Error ? err : new Error("Erreur vérification version");

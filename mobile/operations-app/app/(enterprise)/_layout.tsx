@@ -11,10 +11,12 @@ import { EnterpriseHeader } from "@/components/enterprise/EnterpriseHeader";
 import { EnterpriseReconnectBanner } from "@/components/common/EnterpriseReconnectBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnreadMessages } from "@/hooks/useUnreadMessages";
+import { useEnterpriseNotifications } from "@/hooks/useEnterpriseNotifications";
 
 export default function EnterpriseLayout() {
   const { enterpriseSession } = useAuth();
   const { unreadCount } = useUnreadMessages();
+  useEnterpriseNotifications();
   const initialMode =
     (enterpriseSession?.company?.dispatchMode as
       | "manual"

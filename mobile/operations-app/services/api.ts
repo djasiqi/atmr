@@ -35,9 +35,9 @@ const debugLog = (data: Record<string, unknown>) => {
 // --- Config base URL (inclut /api pour matcher le backend) ---
 const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
-const PROD_API_URL =
-  ENV_API_URL || expoExtra.publicApiUrl || expoExtra.productionApiUrl;
+const PROD_API_URL = ENV_API_URL;
 const DEV_API_URL = expoExtra.devApiUrl || expoExtra.publicApiUrl;
+const APP_VARIANT = String(expoExtra.APP_VARIANT || process.env.APP_VARIANT || "prod");
 
 const getDevHost = (): string => {
   // Sur le web, toujours utiliser localhost (le navigateur tourne sur la même machine)
@@ -77,6 +77,9 @@ const getDevBaseURL = () => {
 // En web bundled, __DEV__ peut être false même en développement local
 // On vérifie aussi l'origine de la page (localhost) et l'environnement d'exécution
 const isDevelopment = () => {
+  if (APP_VARIANT === "prod") {
+    return false;
+  }
   // Vérifier __DEV__ d'abord
   if (__DEV__) {
     return true;
@@ -105,6 +108,20 @@ const isDevelopment = () => {
   return false;
 };
 
+const validateProdApiUrl = (value: unknown): string => {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("EXPO_PUBLIC_API_URL is required in production");
+  }
+  const normalized = value.trim().replace(/\/$/, "");
+  if (!normalized.startsWith("https://")) {
+    throw new Error("EXPO_PUBLIC_API_URL must be HTTPS in production");
+  }
+  if (normalized.includes("localhost") || normalized.includes("127.0.0.1")) {
+    throw new Error("EXPO_PUBLIC_API_URL must not point to localhost in production");
+  }
+  return normalized;
+};
+
 // Déterminer l'URL de base à utiliser
 const getBaseURL = () => {
   const isDev = isDevelopment();
@@ -122,7 +139,7 @@ const getBaseURL = () => {
   }
   
   // En production, utiliser PROD_API_URL
-  return PROD_API_URL || "";
+  return validateProdApiUrl(PROD_API_URL);
 };
 
 export const baseURL = `${getBaseURL().replace(/\/$/, "")}/api/v1`;
@@ -872,6 +889,19 @@ export type Driver = {
     public_id: string;
   };
   company: { id: number; name: string };
+  // Champs HR / profil étendu (optionnels, renvoyés par le backend)
+  contract_type?: string;
+  nationality?: string;
+  avs_number?: string;
+  employment_start_date?: string;
+  employment_end_date?: string;
+  weekly_hours?: number | null;
+  license_categories?: string[];
+  license_valid_until?: string;
+  medical_valid_until?: string;
+  trainings?: Array<{ name: string; valid_until?: string }>;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
 };
 
 export const registerPushToken = async (payload: {

@@ -16,7 +16,7 @@ const log = getLogger("TabLayout");
 // NOTE : On retire AuthProvider et useNotifications. Ils sont déjà gérés par le layout parent.
 
 export default function TabLayout() {
-  log.info("tab layout rendered", { timestamp: new Date().toISOString() });
+  log.debug("tab layout rendered", { timestamp: new Date().toISOString() });
   
   const insets = useSafeAreaInsets();
 

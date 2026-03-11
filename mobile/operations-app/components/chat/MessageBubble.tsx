@@ -8,6 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Message } from "@/services/api";
+import { resolveMediaUrl } from "@/services/mediaUrl";
 import Avatar from "./Avatar";
 
 const BRAND = "#00796b";
@@ -48,8 +49,8 @@ export default function MessageBubble({ message, currentUserId, onPressImage, on
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const imageUri = message.image_url || message.image;
-  const pdfUri = message.pdf_url || message.pdf;
+  const imageUri = resolveMediaUrl(message.image_url || message.image);
+  const pdfUri = resolveMediaUrl(message.pdf_url || message.pdf);
 
   return (
     <Animated.View

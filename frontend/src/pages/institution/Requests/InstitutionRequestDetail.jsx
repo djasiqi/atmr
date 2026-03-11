@@ -254,10 +254,8 @@ const InstitutionRequestDetail = () => {
   }, [sendMutation, request?.id]);
 
   const handleCancel = async () => {
-    const reason = window.prompt('Raison de l\'annulation (optionnel) :');
-    if (reason === null) return;
     try {
-      await cancelMutation.mutateAsync({ requestId: request.id, reason });
+      await cancelMutation.mutateAsync({ requestId: request.id, reason: '' });
       toast.success('Demande annulée');
     } catch (err) {
       if (err?.response?.status === 409) {

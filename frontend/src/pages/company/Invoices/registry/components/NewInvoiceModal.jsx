@@ -5,6 +5,7 @@ import styles from './NewInvoiceModal.module.css';
 import { formatCurrencyCHF, generateInvoice, invoiceService } from '../../../../../services/invoiceService';
 import { setBookingPayer } from '../../../../../services/billingReviewService';
 import ReservationSelector from './ReservationSelector';
+import PartnerTransferSelector from './PartnerTransferSelector';
 import useUrlSearchSync from '../../../../../hooks/useUrlSearchSync';
 import useCompanyData from '../../../../../hooks/useCompanyData';
 
@@ -131,6 +132,15 @@ const NewInvoiceModal = ({
   const [showS2Exclusions, setShowS2Exclusions] = useState(false); // Exclusions (fermé par défaut)
   const [showDirectTransports, setShowDirectTransports] = useState(false); // Transports à facturer (fermé par défaut, comme S2)
   const [showPartnerSummary, setShowPartnerSummary] = useState(true); // Facture partenaire (ouvert par défaut)
+  const [partnerOverrides, setPartnerOverrides] = useState({}); // { transferId: { amount?, note? } }
+  const [partnerSelectedTransfers, setPartnerSelectedTransfers] = useState([]); // Transferts sélectionnés pour la facture
+
+  useEffect(() => {
+    if (billingType === 'partner') {
+      setPartnerOverrides({});
+      setPartnerSelectedTransfers([]);
+    }
+  }, [formData.partnership_id, formData.period_year, formData.period_month, billingType]);
   const [showS2Patients, setShowS2Patients] = useState(false); // Patients inclus (fermé par défaut)
   const [showS2Advanced, setShowS2Advanced] = useState(false); // Options avancées (fermé par défaut)
   const [expandedPatientId, setExpandedPatientId] = useState(null); // Patient dont on affiche les détails
@@ -1298,6 +1308,15 @@ const NewInvoiceModal = ({
     return partners.find((p) => p.partnership_id === id) || null;
   }, [formData.partnership_id, partners]);
 
+  const partnerTotalComputed = useMemo(() => {
+    if (partnerSelectedTransfers.length === 0) return null;
+    return partnerSelectedTransfers.reduce((sum, t) => {
+      const ov = partnerOverrides[String(t.id)] || partnerOverrides[t.id] || {};
+      const amount = ov.amount ?? t.partner_cost ?? 0;
+      return sum + Number(amount);
+    }, 0);
+  }, [partnerSelectedTransfers, partnerOverrides]);
+
   // ✅ Vérifier si une réservation est minimale (contient uniquement l'ID)
   const isMinimalReservation = useCallback((reservation) => {
     return reservation && typeof reservation.id !== 'undefined' && 
@@ -1935,12 +1954,18 @@ const NewInvoiceModal = ({
           }
         }
       } else if (billingType === 'partner') {
-        // Facturation partenaire
+        // Facturation partenaire — avec sélection et overrides si disponibles
         const payload = {
           partnership_id: parseInt(formData.partnership_id),
           period_year: formData.period_year,
           period_month: formData.period_month,
         };
+        if (partnerSelectedTransfers.length > 0) {
+          payload.transfer_ids = partnerSelectedTransfers.map((t) => t.id);
+        }
+        if (Object.keys(partnerOverrides).length > 0) {
+          payload.overrides = partnerOverrides;
+        }
 
         result = await invoiceService.generatePartnerInvoice(companyId, payload);
 
@@ -2072,7 +2097,7 @@ const NewInvoiceModal = ({
   const years = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i);
 
   return (
-    <div className="modal-overlay">
+    <div className="modal-overlay modal-invoice">
       <div className={`modal-content modal-xl ${styles.modalInvoice}`} data-tour-id="invoice-new-modal">
         <div className="modal-header">
           <h2 className="modal-title">Nouvelle facture</h2>
@@ -3394,21 +3419,38 @@ const NewInvoiceModal = ({
                     onClick={() => setShowPartnerSummary(!showPartnerSummary)}
                     className={`${styles.accordion} ${styles.accordionInfo} ${showPartnerSummary ? styles.isOpen : ''}`}
                   >
-                    <span>✓ Facture partenaire</span>
+                    <span>✓ Liste des transferts et ajustements</span>
                     <span>{showPartnerSummary ? '▼' : '▶'}</span>
                   </button>
                   {showPartnerSummary && (
                     <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
-                      <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.8 }}>
-                        <div><strong>1 facture</strong> pour {selectedPartner.partner_company_name}</div>
-                        <div style={{ marginTop: 12 }}>
-                          <div>• <strong>Période :</strong> {monthName} {formData.period_year}</div>
-                          <div>• <strong>Transferts inclus :</strong> {selectedPartner.unbilled_transfers_count}</div>
-                          <div style={{ marginTop: 8, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
-                            • <strong>Total :</strong> {formatCurrency(selectedPartner.total_amount)}
-                          </div>
-                        </div>
-                      </div>
+                      <PartnerTransferSelector
+                        companyId={companyId}
+                        partnershipId={parseInt(formData.partnership_id, 10)}
+                        period={{
+                          year: formData.period_year,
+                          month: formData.period_month,
+                        }}
+                        overrides={partnerOverrides}
+                        onOverrideChange={(transferId, override) => {
+                          setPartnerOverrides((prev) => {
+                            const next = { ...prev };
+                            const key = String(transferId);
+                            if (override.amount === undefined && override.note === undefined) {
+                              delete next[key];
+                            } else {
+                              next[key] = { ...(next[key] || {}), ...override };
+                              if (next[key].amount === null) delete next[key].amount;
+                              if (next[key].note === null) delete next[key].note;
+                              if (Object.keys(next[key]).length === 0) delete next[key];
+                            }
+                            return next;
+                          });
+                        }}
+                        onSelectionChange={(selected) => {
+                          setPartnerSelectedTransfers(selected);
+                        }}
+                      />
                     </div>
                   )}
                 </div>
@@ -3514,7 +3556,17 @@ const NewInvoiceModal = ({
                   ) : billingType === 'partner' ? (
                     selectedPartner ? (
                       <span className={styles.stickyFooterTotal}>
-                        1 facture partenaire • {selectedPartner.unbilled_transfers_count} transfert{selectedPartner.unbilled_transfers_count > 1 ? 's' : ''} • Total <strong>{formatCurrency(selectedPartner.total_amount)}</strong>
+                        1 facture partenaire •{' '}
+                        {partnerSelectedTransfers.length > 0
+                          ? `${partnerSelectedTransfers.length} transfert${partnerSelectedTransfers.length > 1 ? 's' : ''}`
+                          : `${selectedPartner.unbilled_transfers_count} transfert${selectedPartner.unbilled_transfers_count > 1 ? 's' : ''}`}
+                        {' • '}
+                        Total{' '}
+                        <strong>
+                          {partnerTotalComputed != null
+                            ? formatCurrency(partnerTotalComputed)
+                            : formatCurrency(selectedPartner.total_amount)}
+                        </strong>
                       </span>
                     ) : (
                       <span className={styles.stickyFooterEmpty}>Sélectionnez un partenaire</span>

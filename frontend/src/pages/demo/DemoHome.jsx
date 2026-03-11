@@ -236,7 +236,7 @@ const DemoHome = () => {
           <div className={styles.grid}>
             {showTransportCard && (
               <article className={styles.card}>
-                <h3>Découvrir pour un transporteur</h3>
+                <h2>Découvrir pour un transporteur</h2>
                 <p>Dispatch, suivi opérationnel et facturation.</p>
                 <button type="button" className={styles.ctaPrimary} onClick={goTransporteur}>
                   Commencer ce parcours
@@ -246,7 +246,7 @@ const DemoHome = () => {
 
             {showInstitutionCard && (
               <article className={styles.card}>
-                <h3>Découvrir pour une institution</h3>
+                <h2>Découvrir pour une institution</h2>
                 <p>Créer une demande, suivre son statut, puis consulter l’historique.</p>
                 <button type="button" className={styles.ctaSecondary} onClick={goInstitution}>
                   Commencer ce parcours
@@ -255,7 +255,7 @@ const DemoHome = () => {
             )}
 
             <article className={styles.card}>
-              <h3>Explorer librement</h3>
+              <h2>Explorer librement</h2>
               <p>Accès direct à la plateforme sans étapes de démonstration guidées.</p>
               <button type="button" className={styles.ctaSecondary} onClick={goFree}>
                 Explorer

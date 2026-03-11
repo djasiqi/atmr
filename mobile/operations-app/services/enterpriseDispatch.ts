@@ -280,6 +280,12 @@ const normalizeDispatchMessage = (message: any): DispatchMessage => {
     sender_name: message?.sender_name ?? null,
     content: message?.content ?? "",
     created_at: createdAt,
+    image: message?.image ?? null,
+    image_url: message?.image_url ?? null,
+    pdf: message?.pdf ?? null,
+    pdf_url: message?.pdf_url ?? null,
+    pdf_filename: message?.pdf_filename ?? null,
+    pdf_size: message?.pdf_size ?? null,
   };
 };
 

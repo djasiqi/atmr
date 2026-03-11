@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSocketStatus } from "@/hooks/useSocketStatus";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 const BRAND = "#00796B";
 const TXT = "#0f172a";
@@ -59,7 +60,7 @@ export default function TripHeader({
           </View>
           <View>
             <Text style={st.summaryValue}>
-              {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              {formatTimeLocal(new Date())}
             </Text>
             <Text style={st.summaryLabel}>Heure</Text>
           </View>

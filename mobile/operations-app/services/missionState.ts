@@ -101,7 +101,6 @@ class MissionStateManagerImpl {
   private reconciliationInProgress = false;
   private lastMapsOpenAt = 0;
   private lastNavigatedTarget: string | null = null;
-  private static RECONCILIATION_INTERVAL_MS = 3 * 60 * 1000;
   private static RECONCILIATION_COOLDOWN_MS = 20_000;
   private static MAPS_DEBOUNCE_MS = 3_000;
 
@@ -310,7 +309,7 @@ class MissionStateManagerImpl {
     };
     this.hydrated = true;
     await this.persist();
-    this.startReconciliationTimer();
+    // Plan 2G/3G Phase 6 : réconciliation gérée par syncEngine (3 min)
     this.emit("mission_started");
   }
 
@@ -523,13 +522,7 @@ class MissionStateManagerImpl {
     return this.state.activeMission !== null;
   }
 
-  private startReconciliationTimer(): void {
-    this.stopReconciliationTimer();
-    this.reconciliationTimer = setInterval(() => {
-      this.reconcileNow();
-    }, MissionStateManagerImpl.RECONCILIATION_INTERVAL_MS);
-  }
-
+  /** Plan 2G/3G Phase 6 : réconciliation gérée par syncEngine (3 min). */
   private stopReconciliationTimer(): void {
     if (this.reconciliationTimer) {
       clearInterval(this.reconciliationTimer);

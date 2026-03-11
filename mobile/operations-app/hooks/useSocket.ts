@@ -17,25 +17,24 @@ export const useSocket = (
   const driverIdRef = useRef<number | undefined>(driver?.id);
   driverIdRef.current = driver?.id;
 
-  log.info("hook executed", {
-    timestamp: new Date().toISOString(),
-    hasOnNewBooking: !!onNewBooking,
-    hasOnTeamMessage: !!onTeamMessage
-  });
-  
   const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const isMountedRef = useRef(true);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef<number>(5000); // ✅ Augmenté de 2s à 5s -> 10s -> 20s ... (max 60s)
   const lastReconnectAttemptRef = useRef<number>(0); // ✅ Cooldown entre reconnexions
 
   useEffect(() => {
-    log.info("useEffect start", {
-      timestamp: new Date().toISOString()
-    });
+    if (__DEV__) {
+      log.debug("socket hook mount", {
+        hasOnNewBooking: !!onNewBooking,
+        hasOnTeamMessage: !!onTeamMessage,
+      });
+    }
     isMountedRef.current = true;
 
     const bindHandlers = (s: Socket) => {
+      socketRef.current = s;
       // Nettoyage complet pour éviter l'empilement de handlers (fuite mémoire)
       s.off("connect");
       s.off("disconnect");
@@ -60,14 +59,7 @@ export const useSocket = (
           reconnectTimerRef.current = null;
         }
         s.emit("join_driver_room");
-        
-        // ✅ P2-1: Resync queue GPS au reconnect
-        try {
-          const { syncLocationQueue } = await import("@/services/locationQueue");
-          await syncLocationQueue(s);
-        } catch (error) {
-          log.error("resync queue gps failed", { error });
-        }
+        // Plan 2G/3G Phase 5 : syncLocationQueue géré par syncEngine (addSocketConnectListener)
       });
 
       s.on("disconnect", () => {
@@ -93,15 +85,6 @@ export const useSocket = (
           timestamp: new Date().toISOString()
         });
         s.emit("join_driver_room");
-      });
-
-      // ✅ Listener pong pour heartbeat applicatif
-      s.on("pong", (data: any) => {
-        log.info("heartbeat pong", {
-          event: "heartbeat_pong",
-          timestamp: data?.timestamp,
-          received_at: new Date().toISOString()
-        });
       });
 
       s.on("new_booking", async (data: any) => {
@@ -288,18 +271,20 @@ export const useSocket = (
         reconnectTimerRef.current = null;
       }
       // Nettoyer tous les handlers pour éviter les fuites mémoire
-      if (socketInstance) {
-        socketInstance.off("connect");
-        socketInstance.off("disconnect");
-        socketInstance.off("connect_error");
-        socketInstance.off("reconnect");
-        socketInstance.off("pong");
-        socketInstance.off("new_booking");
-        socketInstance.off("booking_updated");
-        socketInstance.off("booking_reassigned");
-        socketInstance.off("team_chat_message");
-        socketInstance.off("error");
-        socketInstance.off("unauthorized");
+      const s = socketRef.current;
+      if (s) {
+        s.off("connect");
+        s.off("disconnect");
+        s.off("connect_error");
+        s.off("reconnect");
+        s.off("pong");
+        s.off("new_booking");
+        s.off("booking_updated");
+        s.off("booking_reassigned");
+        s.off("team_chat_message");
+        s.off("error");
+        s.off("unauthorized");
+        socketRef.current = null;
       }
     };
   }, []);

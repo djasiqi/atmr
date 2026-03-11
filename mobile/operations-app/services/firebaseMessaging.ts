@@ -1,12 +1,24 @@
 import { Platform } from "react-native";
-import messaging, {
+import {
   FirebaseMessagingTypes,
+  getMessaging,
+  onMessage,
+  getInitialNotification,
+  onNotificationOpenedApp,
+  requestPermission,
+  AuthorizationStatus,
+  getToken,
+  onTokenRefresh,
 } from "@react-native-firebase/messaging";
+import { getApp } from "@react-native-firebase/app";
 import notifee, { AndroidImportance, EventType } from "@notifee/react-native";
 import { getLogger } from "@/utils/logger";
 import { validateDeepLink } from "@/services/deepLinkHandler";
 
 const log = getLogger("FCM");
+const messaging = getMessaging(getApp());
+let permissionRequestPromise: Promise<boolean> | null = null;
+let tokenRequestPromise: Promise<string | null> | null = null;
 
 export type FCMData = {
   type: string;
@@ -53,7 +65,7 @@ async function ensureChannel(): Promise<void> {
  * iOS notification+data: system already shows it — skip display to avoid duplicates.
  */
 export function registerForegroundHandler(): () => void {
-  return messaging().onMessage(async (remoteMessage) => {
+  return onMessage(messaging, async (remoteMessage) => {
     log.info("foreground message received", {
       type: remoteMessage.data?.type,
       hasNotification: !!remoteMessage.notification,
@@ -85,7 +97,7 @@ export function registerForegroundHandler(): () => void {
  */
 export async function handleInitialNotification(): Promise<void> {
   try {
-    const remoteMessage = await messaging().getInitialNotification();
+    const remoteMessage = await getInitialNotification(messaging);
     if (remoteMessage) {
       log.info("initial notification (killed->tap)", {
         type: remoteMessage.data?.type,
@@ -103,7 +115,7 @@ export async function handleInitialNotification(): Promise<void> {
  * Returns unsubscribe function.
  */
 export function registerNotificationOpenedHandler(): () => void {
-  return messaging().onNotificationOpenedApp((remoteMessage) => {
+  return onNotificationOpenedApp(messaging, (remoteMessage) => {
     log.info("notification opened (background->tap)", {
       type: remoteMessage.data?.type,
       booking_id: remoteMessage.data?.booking_id,
@@ -131,16 +143,27 @@ export function registerNotifeeForegroundHandler(): () => void {
  * On Android 13+ POST_NOTIFICATIONS is handled by expo-notifications.
  */
 export async function requestFCMPermission(): Promise<boolean> {
+  if (permissionRequestPromise) {
+    return permissionRequestPromise;
+  }
+  permissionRequestPromise = (async () => {
+    try {
+      const authStatus = await requestPermission(messaging);
+      const enabled =
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
+      log.info("FCM permission", { authStatus, enabled });
+      return enabled;
+    } catch (e) {
+      log.error("FCM permission request failed", { error: e });
+      return false;
+    }
+  })();
+
   try {
-    const authStatus = await messaging().requestPermission();
-    const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
-    log.info("FCM permission", { authStatus, enabled });
-    return enabled;
-  } catch (e) {
-    log.error("FCM permission request failed", { error: e });
-    return false;
+    return await permissionRequestPromise;
+  } finally {
+    permissionRequestPromise = null;
   }
 }
 
@@ -148,13 +171,24 @@ export async function requestFCMPermission(): Promise<boolean> {
  * Get the FCM registration token for this device.
  */
 export async function getFCMToken(): Promise<string | null> {
+  if (tokenRequestPromise) {
+    return tokenRequestPromise;
+  }
+  tokenRequestPromise = (async () => {
+    try {
+      const token = await getToken(messaging);
+      log.info("FCM token retrieved", { tokenPrefix: token?.substring(0, 12) });
+      return token;
+    } catch (e) {
+      log.error("getFCMToken failed", { error: e });
+      return null;
+    }
+  })();
+
   try {
-    const token = await messaging().getToken();
-    log.info("FCM token retrieved", { tokenPrefix: token?.substring(0, 12) });
-    return token;
-  } catch (e) {
-    log.error("getFCMToken failed", { error: e });
-    return null;
+    return await tokenRequestPromise;
+  } finally {
+    tokenRequestPromise = null;
   }
 }
 
@@ -164,7 +198,7 @@ export async function getFCMToken(): Promise<string | null> {
 export function onFCMTokenRefresh(
   callback: (token: string) => void
 ): () => void {
-  return messaging().onTokenRefresh((token) => {
+  return onTokenRefresh(messaging, (token) => {
     log.info("FCM token refreshed", { tokenPrefix: token?.substring(0, 12) });
     callback(token);
   });

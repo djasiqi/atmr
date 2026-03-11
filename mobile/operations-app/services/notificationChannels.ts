@@ -4,6 +4,10 @@ import { Platform } from "react-native";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("Channels");
+let notificationChannelsConfigured = false;
+let notificationChannelsSetupPromise: Promise<void> | null = null;
+let killModeReadinessLogged = false;
+let killModeReadinessPromise: Promise<void> | null = null;
 
 /**
  * Types de canaux de notification Android
@@ -110,31 +114,47 @@ export async function setupNotificationChannels(): Promise<void> {
     return;
   }
 
-  try {
-    log.info("configuring notification channels");
-
-    for (const config of CHANNEL_CONFIGS) {
-      await Notifications.setNotificationChannelAsync(config.id, {
-        name: config.name,
-        description: config.description,
-        importance: config.importance,
-        sound: config.sound || undefined,
-        vibrationPattern: config.vibrationPattern || undefined,
-        enableLights: config.enableLights,
-        lightColor: config.lightColor,
-        bypassDnd: config.bypassDnd,
-        lockscreenVisibility:
-          Notifications.AndroidNotificationVisibility.PUBLIC,
-      });
-
-      // P2: Proof log — canal créé (diagnostic app killed)
-      log.info("channel created", { id: config.id, name: config.name });
-    }
-
-    log.success("all channels configured");
-  } catch (error) {
-    log.error("channel configuration failed", { error });
+  if (notificationChannelsConfigured) {
+    log.debug("notification channels already configured");
+    return;
   }
+  if (notificationChannelsSetupPromise) {
+    await notificationChannelsSetupPromise;
+    return;
+  }
+
+  notificationChannelsSetupPromise = (async () => {
+    try {
+      log.info("configuring notification channels");
+
+      for (const config of CHANNEL_CONFIGS) {
+        await Notifications.setNotificationChannelAsync(config.id, {
+          name: config.name,
+          description: config.description,
+          importance: config.importance,
+          sound: config.sound || undefined,
+          vibrationPattern: config.vibrationPattern || undefined,
+          enableLights: config.enableLights,
+          lightColor: config.lightColor,
+          bypassDnd: config.bypassDnd,
+          lockscreenVisibility:
+            Notifications.AndroidNotificationVisibility.PUBLIC,
+        });
+
+        // P2: Proof log — canal créé (diagnostic app killed)
+        log.info("channel created", { id: config.id, name: config.name });
+      }
+
+      log.success("all channels configured");
+      notificationChannelsConfigured = true;
+    } catch (error) {
+      log.error("channel configuration failed", { error });
+    } finally {
+      notificationChannelsSetupPromise = null;
+    }
+  })();
+
+  await notificationChannelsSetupPromise;
 }
 
 /** P0-A: Audit existence + importance + sound/vibration pour missions et missions_v2 */
@@ -220,53 +240,68 @@ async function auditChannelsForKillMode(): Promise<{
 /** P0-B: Log unique "1 ligne" KILL-MODE readiness au boot */
 export async function logKillModeReadiness(): Promise<void> {
   if (Platform.OS !== "android") return;
-
-  try {
-    const perm = await Notifications.getPermissionsAsync();
-    const granted = perm.status === "granted";
-    log.info("push proof permissions", {
-      status: perm.status,
-      granted,
-      canAskAgain: perm.canAskAgain ?? "?",
-    });
-    const channels = await auditChannelsForKillMode();
-
-    let manufacturer = "?";
-    let model = "?";
-    let androidVersion: number | string = "?";
-    try {
-      const Device = await import("expo-device");
-      manufacturer = (Device as any).manufacturer ?? "?";
-      model = (Device as any).modelName ?? (Device as any).modelId ?? "?";
-      androidVersion = Platform.Version ?? "?";
-    } catch {
-      // ignore
-    }
-
-    const permOk = perm.status === "granted";
-    const m2Exists = channels.missions_v2.exists;
-    const m2High = channels.missions_v2.isHigh;
-    const m1High = channels.missions.isHigh;
-
-    let ready = "✓";
-    if (!permOk) ready = "permission denied";
-    else if (!m2Exists)
-      ready = "missions_v2 non créé (ouvrir app une fois)";
-    else if (!m2High) ready = "missions_v2 importance≠HIGH";
-    else if (!m1High) ready = "missions legacy (missions_v2 OK)";
-
-    log.info("kill-mode readiness", {
-      ready,
-      permissions: perm.status,
-      missions: channels.missions.exists ? (channels.missions.isHigh ? "HIGH" : "legacy") : "absent",
-      missions_v2: channels.missions_v2.exists ? (channels.missions_v2.isHigh ? "HIGH" : "low") : "absent",
-      androidVersion,
-      manufacturer,
-      model,
-    });
-  } catch (e) {
-    log.warn("kill-mode readiness check failed", { error: e });
+  if (killModeReadinessLogged) {
+    log.debug("kill-mode readiness already logged");
+    return;
   }
+  if (killModeReadinessPromise) {
+    await killModeReadinessPromise;
+    return;
+  }
+
+  killModeReadinessPromise = (async () => {
+    try {
+      const perm = await Notifications.getPermissionsAsync();
+      const granted = perm.status === "granted";
+      log.info("push proof permissions", {
+        status: perm.status,
+        granted,
+        canAskAgain: perm.canAskAgain ?? "?",
+      });
+      const channels = await auditChannelsForKillMode();
+
+      let manufacturer = "?";
+      let model = "?";
+      let androidVersion: number | string = "?";
+      try {
+        const Device = await import("expo-device");
+        manufacturer = (Device as any).manufacturer ?? "?";
+        model = (Device as any).modelName ?? (Device as any).modelId ?? "?";
+        androidVersion = Platform.Version ?? "?";
+      } catch {
+        // ignore
+      }
+
+      const permOk = perm.status === "granted";
+      const m2Exists = channels.missions_v2.exists;
+      const m2High = channels.missions_v2.isHigh;
+      const m1High = channels.missions.isHigh;
+
+      let ready = "✓";
+      if (!permOk) ready = "permission denied";
+      else if (!m2Exists)
+        ready = "missions_v2 non créé (ouvrir app une fois)";
+      else if (!m2High) ready = "missions_v2 importance≠HIGH";
+      else if (!m1High) ready = "missions legacy (missions_v2 OK)";
+
+      log.info("kill-mode readiness", {
+        ready,
+        permissions: perm.status,
+        missions: channels.missions.exists ? (channels.missions.isHigh ? "HIGH" : "legacy") : "absent",
+        missions_v2: channels.missions_v2.exists ? (channels.missions_v2.isHigh ? "HIGH" : "low") : "absent",
+        androidVersion,
+        manufacturer,
+        model,
+      });
+      killModeReadinessLogged = true;
+    } catch (e) {
+      log.warn("kill-mode readiness check failed", { error: e });
+    } finally {
+      killModeReadinessPromise = null;
+    }
+  })();
+
+  await killModeReadinessPromise;
 }
 
 /** État complet pour Push Debug Card (dev-only) */

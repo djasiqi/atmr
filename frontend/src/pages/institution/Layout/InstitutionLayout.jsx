@@ -317,7 +317,6 @@ const InstitutionLayout = () => {
           <button
             className={styles.userBtn}
             onClick={() => setUserMenuOpen((p) => !p)}
-            aria-label="Menu utilisateur"
           >
             <div className={styles.userAvatar}>{initials}</div>
             <div className={styles.userMeta}>

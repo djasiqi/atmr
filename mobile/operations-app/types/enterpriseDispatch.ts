@@ -216,6 +216,12 @@ export interface DispatchMessage {
   sender_name?: string | null;
   content: string;
   created_at: string;
+  image?: string | null;
+  image_url?: string | null;
+  pdf?: string | null;
+  pdf_url?: string | null;
+  pdf_filename?: string | null;
+  pdf_size?: number | null;
 }
 
 // ✅ Types pour l'édition et la création de courses
@@ -243,9 +249,9 @@ export interface RideEditPayload {
   wheelchair_need?: boolean;
 }
 
+/** Payload création course mobile. L'adaptateur backend convertit pickup_address→pickup_location, is_return→is_round_trip. */
 export interface RideCreatePayload {
-  client_id?: string;
-  client_name?: string;
+  client_id: string; // requis (alignement web)
   pickup_address: string;
   dropoff_address: string;
   pickup_lat?: number;

@@ -46,6 +46,7 @@ export const useEnterpriseDriverTracking = () => {
   const [markers, setMarkers] = useState<DriverMarker[]>([]);
   const socketRef = useRef<Socket | null>(null);
   const httpPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastHttpFetchAtRef = useRef(0);
 
   const fetchLocationsViaHTTP = useCallback(async () => {
     const companyId = enterpriseSession?.company?.id;
@@ -55,6 +56,7 @@ export const useEnterpriseDriverTracking = () => {
     try {
       const url = `/driver/company/${companyId}/live-locations`;
       log.info("fetching live locations", { url });
+      lastHttpFetchAtRef.current = Date.now();
 
       const response = await enterpriseStandardApi.get<{
         items: Array<{
@@ -129,14 +131,25 @@ export const useEnterpriseDriverTracking = () => {
     }
   }, [enterpriseSession?.company?.id, enterpriseSession?.token]);
 
+  const fetchLocationsViaHTTPWithThrottle = useCallback(
+    (minDelayMs = 8000) => {
+      const now = Date.now();
+      if (now - lastHttpFetchAtRef.current < minDelayMs) {
+        return;
+      }
+      fetchLocationsViaHTTP();
+    },
+    [fetchLocationsViaHTTP]
+  );
+
   const refreshLocations = useCallback(() => {
     const socket = socketRef.current;
     if (socket) {
       socket.emit("get_driver_locations");
     }
-    // ✅ Toujours essayer HTTP aussi comme fallback
-    fetchLocationsViaHTTP();
-  }, [fetchLocationsViaHTTP]);
+    // HTTP seulement en fallback et avec throttling
+    fetchLocationsViaHTTPWithThrottle();
+  }, [fetchLocationsViaHTTPWithThrottle]);
 
   useEffect(() => {
     const token = enterpriseSession?.token;
@@ -191,9 +204,9 @@ export const useEnterpriseDriverTracking = () => {
         }
         if (!s) {
           log.warn("sockets unavailable, using http fallback", {});
-          fetchLocationsViaHTTP();
+          fetchLocationsViaHTTPWithThrottle(0);
           httpPollIntervalRef.current = setInterval(() => {
-            if (isActive) fetchLocationsViaHTTP();
+            if (isActive) fetchLocationsViaHTTPWithThrottle(0);
           }, 10000);
           return;
         }
@@ -203,18 +216,17 @@ export const useEnterpriseDriverTracking = () => {
 
         s.off("driver_location_update", handleDriverLocation);
         s.on("driver_location_update", handleDriverLocation);
-        s.emit("join_company");
         s.emit("get_driver_locations");
 
         httpPollIntervalRef.current = setInterval(() => {
-          if (isActive) fetchLocationsViaHTTP();
+          if (isActive) fetchLocationsViaHTTPWithThrottle(25000);
         }, 30000);
       } catch (error) {
         log.warn("enterprise socket connection failed", { error });
         if (!isActive) return;
-        fetchLocationsViaHTTP();
+        fetchLocationsViaHTTPWithThrottle(0);
         httpPollIntervalRef.current = setInterval(() => {
-          if (isActive) fetchLocationsViaHTTP();
+          if (isActive) fetchLocationsViaHTTPWithThrottle(0);
         }, 10000);
       }
     })();
@@ -233,7 +245,7 @@ export const useEnterpriseDriverTracking = () => {
         httpPollIntervalRef.current = null;
       }
     };
-  }, [enterpriseSession?.token, fetchLocationsViaHTTP]);
+  }, [enterpriseSession?.token, fetchLocationsViaHTTPWithThrottle]);
 
   return {
     markers,

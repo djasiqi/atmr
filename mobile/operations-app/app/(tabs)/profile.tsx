@@ -42,6 +42,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { profileStyles as s } from "@/styles/profileStyles";
 import { PushDebugCard } from "@/components/common/PushDebugCard";
+import { NetworkDebugCard } from "@/components/common/NetworkDebugCard";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("Profile");
@@ -481,9 +482,9 @@ export default function ProfileScreen() {
             <Text style={s.infoLabel}>Formations</Text>
             <View style={s.chipRow}>
               {(driver.trainings ?? []).length > 0
-                ? (driver.trainings as string[]).map((t: string, i: number) => (
+                ? (driver.trainings ?? []).map((t: { name: string; valid_until?: string } | string, i: number) => (
                     <View key={i} style={s.chip}>
-                      <Text style={s.chipText}>{t}</Text>
+                      <Text style={s.chipText}>{typeof t === "string" ? t : t.name}</Text>
                     </View>
                   ))
                 : <Text style={[s.infoValue, s.infoValueMuted]}>Aucune</Text>
@@ -592,6 +593,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {__DEV__ && <NetworkDebugCard />}
         {__DEV__ && <PushDebugCard />}
 
         {__DEV__ && (

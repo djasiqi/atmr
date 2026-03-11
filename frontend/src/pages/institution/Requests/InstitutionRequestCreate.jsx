@@ -78,7 +78,7 @@ const EMPTY_FORM = {
   dropoff_service: '',
   dropoff_doctor: '',
   floor_elevator_info: '',
-  round_trip: false,
+  round_trip: true,
   return_time: '',
   return_date: '',
   return_hour: '',
@@ -656,8 +656,10 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           <div className={styles.missionPatientRow}>
             {/* Patient selector (first = takes remaining space) */}
               <div data-tour-id="institution-request-patient">
+              <label htmlFor="patient-select" className={styles.formLabel}>Patient</label>
               <AsyncCreatableSelect
                 inputId="patient-select"
+                aria-label="Patient"
                 cacheOptions
                 defaultOptions={defaultPatientOptions}
                 loadOptions={loadPatientOptions}
@@ -885,10 +887,10 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             </div>
 
             <div className={styles.tripPills}>
-              <button type="button" className={styles.whenShortcut} onClick={() => setTimeShortcut(0)} aria-label="Urgent — le plus vite possible"
+              <button type="button" className={styles.whenShortcut} onClick={() => setTimeShortcut(0)} aria-label="Urgent"
                 style={formData.is_urgent ? { borderColor: 'var(--danger)', background: '#FEE2E2', color: 'var(--danger)', fontWeight: 600 } : undefined}
                 >🚨 Urgent</button>
-              <button type="button" className={styles.whenShortcut} onClick={setTimeTomorrow9} aria-label="Demain à 9 heures">Demain 9h</button>
+              <button type="button" className={styles.whenShortcut} onClick={setTimeTomorrow9} aria-label="Demain 9h">Demain 9h</button>
             </div>
           </div>
 
@@ -970,7 +972,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
           <div className={styles.detailsPanel}>
 
             {/* ═══ SECTION 1 — Infos départ ═══ */}
-            <h3 className={styles.detailsPanelTitle}>📍 Départ</h3>
+            <h2 className={styles.detailsPanelTitle}>📍 Départ</h2>
 
             {/* Départ institution → Service / Bâtiment */}
             {formData.pickup_type === 'institution' && (
@@ -1029,9 +1031,9 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             <hr className={styles.detailsDivider} />
 
             {/* ═══ SECTION 2 — Infos arrivée ═══ */}
-            <h3 className={styles.detailsPanelTitle}>
+            <h2 className={styles.detailsPanelTitle}>
               {formData.dropoff_type === 'domicile' ? '🏠 Arrivée — Domicile' : '🏥 Arrivée'}
-            </h3>
+            </h2>
 
             {/* Arrivée institution → Service / Bâtiment */}
             {formData.dropoff_type === 'institution' && (
@@ -1097,7 +1099,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
             <hr className={styles.detailsDivider} />
 
             {/* ═══ SECTION 3 — Infos patient ═══ */}
-            <h3 className={styles.detailsPanelTitle}>👤 Patient & contact</h3>
+            <h2 className={styles.detailsPanelTitle}>👤 Patient & contact</h2>
 
             {formData.mission_type === 'patient_transport' && (
               <div className={styles.needsChips} style={{ marginBottom: 10, flexWrap: 'nowrap' }}>

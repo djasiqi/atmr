@@ -270,7 +270,13 @@ export default function InlineDatePicker({ value, onChange, placeholder: _placeh
           placeholder="__.__.____"
           maxLength={10}
         />
-        <button type="button" className={dp.iconBtn} onClick={() => setOpen(!open)} tabIndex={-1}>
+        <button
+          type="button"
+          className={dp.iconBtn}
+          onClick={() => setOpen(!open)}
+          tabIndex={-1}
+          aria-label={open ? 'Fermer le sélecteur de date' : 'Ouvrir le sélecteur de date'}
+        >
           <FiCalendar size={14} />
         </button>
       </div>
@@ -278,9 +284,13 @@ export default function InlineDatePicker({ value, onChange, placeholder: _placeh
       {open && createPortal(
         <div ref={popoverRef} className={dp.popover} style={{ top: pos.top, left: pos.left }}>
           <div className={dp.header}>
-            <button type="button" className={dp.navBtn} onClick={prevMonth}><FiChevronLeft size={14} /></button>
+            <button type="button" className={dp.navBtn} onClick={prevMonth} aria-label="Mois précédent">
+              <FiChevronLeft size={14} />
+            </button>
             <span className={dp.headerTitle}>{MONTHS[viewMonth]} {viewYear}</span>
-            <button type="button" className={dp.navBtn} onClick={nextMonth}><FiChevronRight size={14} /></button>
+            <button type="button" className={dp.navBtn} onClick={nextMonth} aria-label="Mois suivant">
+              <FiChevronRight size={14} />
+            </button>
           </div>
           <div className={dp.weekRow}>
             {DAYS.map((d) => <span key={d} className={dp.weekDay}>{d}</span>)}

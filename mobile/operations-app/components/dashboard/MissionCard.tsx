@@ -15,11 +15,11 @@ import {
 } from "@/services/authGuards";
 import { getPickupHints, getDropoffHints } from "@/src/domain/missionHints";
 import { getLogger } from "@/utils/logger";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 const log = getLogger("MissionCard");
-// ——— Helpers (pas de logique métier dans le JSX) ———
-const formatTime = (d: Date) =>
-  d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// ——— Helpers : heure locale sans fuseau horaire ———
+const formatTime = (d: Date) => formatTimeLocal(d);
 const formatDurationMinutes = (seconds: number) => Math.max(0, Math.round(seconds / 60));
 /** Afficher la ligne "Départ" uniquement avant le début de la course (assigned/en_route). */
 const shouldShowDeparture = (normalizedStatus: string) =>

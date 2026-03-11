@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { styles, palette } from "@/styles/missionHeaderStyles";
 import { useSocketStatus } from "@/hooks/useSocketStatus";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 
 type Props = {
   driverName: string;
@@ -89,7 +90,7 @@ const MissionHeader: React.FC<Props> = ({ driverName, missionCount = 0 }) => {
           </View>
           <View>
             <Text style={styles.summaryValue}>
-              {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              {formatTimeLocal(new Date())}
             </Text>
             <Text style={styles.summaryLabel}>Heure</Text>
           </View>

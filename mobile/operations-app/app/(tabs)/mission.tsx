@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { ScrollView, Alert, Linking, View, RefreshControl, Platform, AppState } from "react-native";
+import { ScrollView, Alert, Linking, View, RefreshControl, Platform, AppState, InteractionManager } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { useLocation } from "@/hooks/useLocation";
+import { useTrackingState } from "@/hooks/useTrackingState";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useDynamicETA } from "@/hooks/useDynamicETA";
 import { useMissionLayout } from "@/hooks/useMissionLayout";
@@ -23,7 +24,7 @@ import { MissionStateManager, type MissionBarStatus } from "@/services/missionSt
 import { showMissionNotification, dismissMissionNotification } from "@/services/missionBarAndroid";
 import { openNavigation as openNavigationApp } from "@/services/deepLinks";
 import { registerNotifeeForegroundHandler } from "@/services/missionBarBackground";
-import { sendDriverHeartbeat, onBookingsResync } from "@/services/socket";
+import { onBookingsResync } from "@/services/socket";
 import {
   organizeMissionsForDisplay,
   getNextDestination,
@@ -39,6 +40,12 @@ import {
   cleanupExpiredReminders,
 } from "@/services/localNotifications";
 import { getLogger } from "@/utils/logger";
+import { TrackingStateBanner } from "@/components/common/TrackingStateBanner";
+import {
+  requestBackgroundPermissionIfNeeded,
+  buildBgTrackingInputs,
+  refreshBackgroundTrackingNotification,
+} from "@/services/locationTracker";
 
 const log = getLogger("Mission");
 
@@ -64,10 +71,12 @@ function isMissionReturn(is_return: any): boolean {
 }
 
 export default function MissionScreen() {
-  log.info("mission screen rendered", { timestamp: new Date().toISOString() });
-
-  const { driver } = useAuth();
+  const { driver, mode, isDriverAuthenticated } = useAuth();
   const { location } = useLocation();
+  const trackingState = useTrackingState({
+    isDriverAuthenticated: !!isDriverAuthenticated,
+    role: mode === "driver" ? "driver" : "enterprise",
+  });
   const socket = useSocket();
   useNotifications();
   const { contentWidth, mapHeight, horizontalPadding } = useMissionLayout();
@@ -91,7 +100,6 @@ export default function MissionScreen() {
   const [completingMissionId, setCompletingMissionId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<number>(Date.now()); // Track last update time
 
   // v2: backend envoie désormais client.phone et client.gp_phone (bouton Appeler) — bump pour invalider ancien cache
   const MISSIONS_CACHE_KEY = "missions_cache_v2";
@@ -112,6 +120,13 @@ export default function MissionScreen() {
   const nextDestination = useMemo(() => {
     return getNextDestination(activeMissions);
   }, [activeMissions]);
+
+  // ✅ Phase 1 - Quick Wins: Planifier rappels pour les missions actives
+  useEffect(() => {
+    if (__DEV__) {
+      log.info("mission screen mounted");
+    }
+  }, []);
 
   // ✅ Phase 1 - Quick Wins: Planifier rappels pour les missions actives
   useEffect(() => {
@@ -177,7 +192,6 @@ export default function MissionScreen() {
       );
 
       setMissions(sorted);
-      setLastUpdate(Date.now()); // Mettre à jour le timestamp de dernière mise à jour
     } catch {
       Alert.alert("Erreur", "Impossible de charger les missions.");
     } finally {
@@ -279,7 +293,6 @@ export default function MissionScreen() {
       if (cancelledMission) {
         Alert.alert("❌ Mission annulée", "Une mission a été annulée.");
       }
-      setLastUpdate(Date.now()); // Mettre à jour le timestamp
     };
 
     // ✅ Mission réassignée à un autre chauffeur → rafraîchir la liste + notifier
@@ -294,7 +307,6 @@ export default function MissionScreen() {
       } catch { }
       // Refresh silencieux pour être sûr de ne plus voir la mission
       loadMissions(true);
-      setLastUpdate(Date.now());
     };
 
     // Gestion de la déconnexion WebSocket
@@ -325,7 +337,6 @@ export default function MissionScreen() {
           new Date(b.scheduled_time).getTime()
       );
       setMissions(sorted);
-      setLastUpdate(Date.now());
       // Mettre à jour le cache
       AsyncStorage.setItem(MISSIONS_CACHE_KEY, JSON.stringify(sorted)).catch(
         () => { }
@@ -349,18 +360,28 @@ export default function MissionScreen() {
 
     const unsubNotifee = registerNotifeeForegroundHandler();
 
-    const appStateSub = AppState.addEventListener("change", async (state) => {
+    const appStateSub = AppState.addEventListener("change", (state) => {
       if (state === "active" && MissionStateManager.isActive()) {
-        await MissionStateManager.syncPendingActions();
-        try {
-          const fresh = await getAssignedTrips();
-          await MissionStateManager.updateFromServer(fresh);
-          if (MissionStateManager.isActive()) {
-            await showMissionNotification(MissionStateManager.getState());
-          } else {
-            await dismissMissionNotification();
-          }
-        } catch { /* best-effort */ }
+        InteractionManager.runAfterInteractions(async () => {
+          await MissionStateManager.syncPendingActions();
+          try {
+            const fresh = await getAssignedTrips();
+            await MissionStateManager.updateFromServer(fresh);
+            if (MissionStateManager.isActive()) {
+              const inputs = await buildBgTrackingInputs({
+                isAuthenticated: !!isDriverAuthenticated,
+                role: mode === "driver" ? "driver" : "enterprise",
+                hasActiveMission: true,
+              });
+              const refreshed = await refreshBackgroundTrackingNotification(inputs);
+              if (!refreshed) {
+                await showMissionNotification(MissionStateManager.getState());
+              }
+            } else {
+              await dismissMissionNotification();
+            }
+          } catch { /* best-effort */ }
+        });
       }
     });
 
@@ -369,7 +390,15 @@ export default function MissionScreen() {
         await dismissMissionNotification();
       } else if (event === "state_changed" || event === "transition_confirmed" || event === "reconciliation") {
         if (MissionStateManager.isActive()) {
-          await showMissionNotification(MissionStateManager.getState());
+          const inputs = await buildBgTrackingInputs({
+            isAuthenticated: !!isDriverAuthenticated,
+            role: mode === "driver" ? "driver" : "enterprise",
+            hasActiveMission: true,
+          });
+          const refreshed = await refreshBackgroundTrackingNotification(inputs);
+          if (!refreshed) {
+            await showMissionNotification(MissionStateManager.getState());
+          }
         }
       }
     });
@@ -379,54 +408,9 @@ export default function MissionScreen() {
       appStateSub.remove();
       unsubState();
     };
-  }, []);
+  }, [isDriverAuthenticated, mode]);
 
-  // ✅ Polling de secours : actualiser toutes les 60s si socket déconnecté ou si pas de missions depuis >60s
-  useEffect(() => {
-    const pollingInterval = setInterval(() => {
-      const now = Date.now();
-      const timeSinceLastUpdate = now - lastUpdate;
-      const shouldPoll =
-        !socket?.connected || // Socket déconnecté
-        (missions.length === 0 && timeSinceLastUpdate > 60000); // Pas de missions depuis >60s
-
-      if (shouldPoll) {
-        log.info("fallback polling triggered", {
-          socketConnected: socket?.connected,
-          timeSinceLastUpdateSeconds: Math.round(timeSinceLastUpdate / 1000),
-        });
-        loadMissions(true); // Refresh silencieux
-      }
-    }, 60000); // Toutes les 60s
-
-    return () => clearInterval(pollingInterval);
-  }, [socket, missions.length, lastUpdate, loadMissions]);
-
-  // ✅ Heartbeat métier : envoyer métadonnées toutes les 60s si socket connecté et mission active
-  useEffect(() => {
-    if (!socket?.connected || missions.length === 0) return;
-
-    const heartbeatInterval = setInterval(() => {
-      if (socket?.connected && missions.length > 0) {
-        // Utiliser la première mission active pour le heartbeat
-        const firstMission = missions[0];
-        sendDriverHeartbeat({
-          last_mission_id: firstMission.id,
-          location: location?.coords ? {
-            lat: location.coords.latitude,
-            lon: location.coords.longitude
-          } : undefined
-        }).catch((err) => {
-          log.warn("driver heartbeat error", {
-            error: err?.message || String(err),
-            timestamp: new Date().toISOString(),
-          });
-        });
-      }
-    }, 60000); // Toutes les 60s
-
-    return () => clearInterval(heartbeatInterval);
-  }, [socket, missions, location]);
+  // Plan 2G/3G Phase 6 : fallback 60s et heartbeat 60s migrés vers syncEngine
 
   const openNavigation = useCallback(async (destination: string, mission?: Booking) => {
     if (mission && Platform.OS !== "web") {
@@ -529,6 +513,13 @@ export default function MissionScreen() {
         <MissionHeader
           driverName={driver.first_name || "Chauffeur"}
           missionCount={activeMissions.length}
+        />
+
+        <TrackingStateBanner
+          displayState={trackingState.displayState}
+          onRequestPermission={async () => {
+            await requestBackgroundPermissionIfNeeded();
+          }}
         />
 
         {location && nextDestination && (

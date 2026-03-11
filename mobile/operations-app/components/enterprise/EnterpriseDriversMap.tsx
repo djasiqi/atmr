@@ -60,7 +60,7 @@ export const EnterpriseDriversMap: React.FC<EnterpriseDriversMapProps> = ({
   fallbackMessage = "Position des chauffeurs indisponible pour le moment",
 }) => {
   useEffect(() => {
-    log.info("markers received", { count: markers.length, first: markers[0] });
+    log.debug("markers received", { count: markers.length });
   }, [markers]);
 
   const getInitials = useCallback((label: string) => {
@@ -88,6 +88,7 @@ export const EnterpriseDriversMap: React.FC<EnterpriseDriversMapProps> = ({
   }, []);
 
   const mapRef = useRef<MapView | null>(null);
+  const previousMarkersCountRef = useRef(0);
 
   const region = useMemo(() => {
     if (!markers.length) {
@@ -110,7 +111,11 @@ export const EnterpriseDriversMap: React.FC<EnterpriseDriversMapProps> = ({
   }, [markers]);
 
   useEffect(() => {
-    if (mapRef.current && markers.length > 1) {
+    const previousCount = previousMarkersCountRef.current;
+    previousMarkersCountRef.current = markers.length;
+
+    // Evite de réanimer la carte à chaque update de position.
+    if (mapRef.current && markers.length > 1 && previousCount !== markers.length) {
       mapRef.current.fitToCoordinates(
         markers.map((m) => ({ latitude: m.latitude, longitude: m.longitude })),
         {

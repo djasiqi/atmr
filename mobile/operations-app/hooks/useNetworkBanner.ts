@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { AppState, AppStateStatus } from "react-native";
+import { AppState, AppStateStatus, InteractionManager } from "react-native";
 import {
   getNetworkStateSnapshot,
   subscribeToNetworkState,
@@ -38,7 +38,11 @@ export function useNetworkBanner(): boolean {
     check();
     const unsub = subscribeToNetworkState(check);
     const appSub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state === "active") check();
+      if (state === "active") {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(check, 0);
+        });
+      }
     });
 
     return () => {

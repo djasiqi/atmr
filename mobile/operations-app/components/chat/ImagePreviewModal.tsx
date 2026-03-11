@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
     Gesture,
     GestureDetector,
+    GestureHandlerRootView,
 } from "react-native-gesture-handler";
 import { Image } from "react-native";
 
@@ -84,26 +85,31 @@ export default function ImagePreviewModal({
 
     return (
         <Modal visible={visible} transparent animationType="none">
-            <Animated.View style={[styles.container, animatedContainer]}>
-                <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+            <GestureHandlerRootView style={styles.gestureRoot}>
+                <Animated.View style={[styles.container, animatedContainer]}>
+                    <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
 
-                <GestureDetector gesture={composed}>
-                    <AnimatedImage
-                        source={{ uri }}
-                        style={[styles.image, animatedImage]}
-                        resizeMode="contain"
-                    />
-                </GestureDetector>
+                    <GestureDetector gesture={composed}>
+                        <AnimatedImage
+                            source={{ uri }}
+                            style={[styles.image, animatedImage]}
+                            resizeMode="contain"
+                        />
+                    </GestureDetector>
 
-                <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                    <Ionicons name="close" size={30} color="#FFFFFF" />
-                </TouchableOpacity>
-            </Animated.View>
+                    <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                        <Ionicons name="close" size={30} color="#FFFFFF" />
+                    </TouchableOpacity>
+                </Animated.View>
+            </GestureHandlerRootView>
         </Modal>
     );
 }
 
 const styles = StyleSheet.create({
+    gestureRoot: {
+        flex: 1,
+    },
     container: {
         flex: 1,
         backgroundColor: "rgba(0,0,0,0.25)",

@@ -270,6 +270,47 @@ export async function getQueueSize(): Promise<number> {
   return queue.length;
 }
 
+const HTTP_FALLBACK_TIMEOUT_MS = 5000;
+let flushHttpInFlight: Promise<void> | null = null;
+
+/**
+ * Envoie la dernière position en queue via HTTP (fallback quand socket déconnecté).
+ * Maintient le chauffeur "en ligne" côté entreprise pendant l'arrière-plan.
+ * Timeout 5s pour éviter ANR si l'app est en transition background.
+ * Singleflight : évite les appels concurrents qui peuvent provoquer ANR.
+ */
+export async function flushLatestPositionViaHttp(): Promise<void> {
+  if (flushHttpInFlight) return flushHttpInFlight;
+  flushHttpInFlight = (async () => {
+    try {
+      const queue = await getLocationQueue();
+      if (queue.length === 0) return;
+      const latest = queue[queue.length - 1];
+      const { updateDriverLocation } = await import("./api");
+      const httpPromise = updateDriverLocation({
+        latitude: latest.latitude,
+        longitude: latest.longitude,
+        speed: latest.speed,
+        heading: latest.heading,
+        accuracy: latest.accuracy,
+        timestamp: latest.timestamp,
+      });
+      await Promise.race([
+        httpPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("HTTP location timeout")), HTTP_FALLBACK_TIMEOUT_MS)
+        ),
+      ]);
+      log.info("latest position sent via HTTP fallback");
+    } catch (e: any) {
+      log.warn("HTTP location fallback failed", { error: e?.message ?? String(e) });
+    } finally {
+      flushHttpInFlight = null;
+    }
+  })();
+  return flushHttpInFlight;
+}
+
 /**
  * ✅ P2-1: Synchronise la queue GPS avec le serveur via Socket.IO.
  * Appelée automatiquement lors de la reconnexion.

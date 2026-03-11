@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
-import { AppState, type AppStateStatus } from "react-native";
 import { getLogger } from "@/utils/logger";
+import { getNetworkStateSnapshot } from "./networkState";
 import { api } from "./api";
 import type { MissionBarStatus } from "./missionState";
 
@@ -58,31 +57,19 @@ export class PendingActionsQueue {
   private lastFlushAt = 0;
   private manager: MissionStateManagerLike;
   private loaded = false;
-  private netInfoUnsub: (() => void) | null = null;
-  private appStateUnsub: ReturnType<typeof AppState.addEventListener> | null = null;
-
   constructor(manager: MissionStateManagerLike) {
     this.manager = manager;
   }
 
   // -- Lifecycle -----------------------------------------------------------
-
+  // Plan 2G/3G : Les triggers (online, foreground, socket connect) sont gérés par syncEngine.
+  // startListening/stopListening conservés pour compatibilité mais ne font plus rien.
   startListening(): void {
-    this.netInfoUnsub = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) {
-        this.flush();
-      }
-    });
-    this.appStateUnsub = AppState.addEventListener("change", (s: AppStateStatus) => {
-      if (s === "active") this.flush();
-    });
+    // Nop — syncEngine appelle flush() via MissionStateManager.syncPendingActions()
   }
 
   stopListening(): void {
-    this.netInfoUnsub?.();
-    this.netInfoUnsub = null;
-    this.appStateUnsub?.remove();
-    this.appStateUnsub = null;
+    // Nop
   }
 
   // -- Persistence ---------------------------------------------------------
@@ -145,8 +132,8 @@ export class PendingActionsQueue {
 
     // Attempt immediate send (awaited, bypasses global cooldown)
     try {
-      const net = await NetInfo.fetch();
-      if (net.isConnected && net.isInternetReachable !== false) {
+      const net = getNetworkStateSnapshot();
+      if (net?.isConnected === true && net?.isInternetReachable !== false) {
         await this.flushBooking(params.bookingId);
       }
     } catch {
@@ -171,8 +158,8 @@ export class PendingActionsQueue {
     await this.pruneStale();
     if (this.actions.length === 0) return;
 
-    const net = await NetInfo.fetch();
-    if (!net.isConnected || net.isInternetReachable === false) return;
+    const net = getNetworkStateSnapshot();
+    if (net?.isConnected !== true || net?.isInternetReachable === false) return;
 
     const bookingIds = [...new Set(this.actions.map((a) => a.bookingId))];
     await Promise.all(bookingIds.map((id) => this.flushBooking(id)));

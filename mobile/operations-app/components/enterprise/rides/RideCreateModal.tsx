@@ -59,9 +59,8 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     const { setSelectedDate } = useEnterpriseContext();
     const { loading, create } = useRideCreate(onSuccess);
 
-    // Client
+    // Client (obligatoire — alignement web)
     const [client, setClient] = useState<ClientOption | null>(null);
-    const [customerName, setCustomerName] = useState("");
 
     // Addresses
     const [pickupAddress, setPickupAddress] = useState("");
@@ -130,7 +129,6 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
     useEffect(() => {
         if (!visible) {
             setClient(null);
-            setCustomerName("");
             setPickupAddress("");
             setPickupSuggestion(undefined);
             setDropoffAddress("");
@@ -215,7 +213,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
         setScheduledTime(d);
     }, []);
 
-    const canSubmit = (client !== null || customerName.trim().length > 0)
+    const canSubmit = client !== null
         && pickupAddress.trim().length > 0
         && dropoffAddress.trim().length > 0
         && scheduledTime !== null;
@@ -224,7 +222,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
         if (!canSubmit) return;
 
         const payload: RideCreatePayload = {
-            ...(client?.id ? { client_id: client.id } : { client_name: customerName || "" }),
+            client_id: client!.id,
             pickup_address: pickupAddress,
             dropoff_address: dropoffAddress,
             pickup_lat: pickupSuggestion?.lat,
@@ -304,7 +302,7 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                         keyboardShouldPersistTaps="handled"
                         nestedScrollEnabled
                     >
-                    {/* Client */}
+                    {/* Client — obligatoire (alignement web) */}
                     <View style={s.fieldGroup}>
                         <Text style={s.label}>Client <Text style={s.required}>*</Text></Text>
                         <ClientSelector
@@ -314,16 +312,9 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
                             onNewClient={() => onOpenClientCreate?.()}
                         />
                         {!client && (
-                            <View style={s.inputRow}>
-                                <Ionicons name="person-outline" size={16} color={TEXT_MUTED} />
-                                <TextInput
-                                    style={s.inputText}
-                                    value={customerName}
-                                    onChangeText={setCustomerName}
-                                    placeholder="Rechercher un client…"
-                                    placeholderTextColor={TEXT_MUTED}
-                                />
-                            </View>
+                            <Text style={[s.labelSm, { marginTop: 6, color: TEXT_MUTED }]}>
+                                Veuillez sélectionner un client existant pour créer une réservation.
+                            </Text>
                         )}
                     </View>
 

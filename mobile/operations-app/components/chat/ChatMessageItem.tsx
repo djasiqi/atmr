@@ -3,6 +3,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Message } from "@/services/api";
+import { resolveMediaUrl } from "@/services/mediaUrl";
 import { chatStyles } from "@/styles/chatStyles";
 
 interface ChatMessageItemProps {
@@ -22,8 +23,10 @@ export default function ChatMessageItem({
         : chatStyles.messageTextCompany;
 
     // Détecter si le message contient une image ou un PDF
-    const hasImage = message.image_url || message.image;
-    const hasPdf = message.pdf_url || message.pdf;
+    const imageUri = resolveMediaUrl(message.image_url || message.image);
+    const pdfUri = resolveMediaUrl(message.pdf_url || message.pdf);
+    const hasImage = !!imageUri;
+    const hasPdf = !!pdfUri;
     const hasContent = message.content && message.content.trim().length > 0;
 
     return (
@@ -45,7 +48,6 @@ export default function ChatMessageItem({
 
             {/* Image */}
             {hasImage && (() => {
-                const imageUri = message.image_url || message.image;
                 if (!imageUri) return null;
                 return (
                     <TouchableOpacity
@@ -71,7 +73,6 @@ export default function ChatMessageItem({
                 <TouchableOpacity
                     style={chatStyles.pdfMessage}
                     onPress={() => {
-                        const pdfUri = message.pdf_url || message.pdf;
                         if (pdfUri && onPdfPress) {
                             onPdfPress(pdfUri);
                         }

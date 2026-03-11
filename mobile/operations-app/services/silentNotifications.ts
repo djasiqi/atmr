@@ -9,12 +9,11 @@
  * - Précharger cartes et itinéraires
  * - Mettre à jour profil chauffeur sans déranger
  * 
- * NOTE: Nécessite l'installation de expo-background-fetch:
- * npx expo install expo-background-fetch expo-task-manager
+ * NOTE: Depuis SDK récents, expo-background-fetch est déprécié.
+ * Cette implémentation n'en dépend plus en runtime pour éviter les warnings.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getLogger } from "@/utils/logger";
 import { scheduleMissionReminder } from "./localNotifications";
@@ -22,15 +21,12 @@ import { trackNotificationEvent } from "./notificationAnalytics";
 
 const log = getLogger("SilentNotif");
 
-// Import conditionnel de BackgroundFetch (optionnel)
-let BackgroundFetch: any = null;
 let TaskManager: any = null;
 
 try {
-  BackgroundFetch = require("expo-background-fetch");
   TaskManager = require("expo-task-manager");
 } catch (e) {
-  getLogger("SilentNotif").warn("expo-background-fetch not installed, background limited");
+  getLogger("SilentNotif").warn("expo-task-manager not installed, background limited");
 }
 
 /**
@@ -56,35 +52,28 @@ export enum BackgroundFetchResult {
  * Définition de la tâche de synchronisation background
  */
 const BACKGROUND_SYNC_TASK = "background-data-sync";
+let backgroundSyncConfigured = false;
+let backgroundTaskDefined = false;
 
 /**
  * Configure la synchronisation en arrière-plan
  * À appeler au démarrage de l'app
  */
 export async function setupBackgroundSync(): Promise<void> {
-  if (!BackgroundFetch || !TaskManager) {
-    log.warn("background sync unavailable (expo-background-fetch missing)");
+  if (!TaskManager) {
+    log.warn("background sync unavailable (task manager missing)");
+    return;
+  }
+  if (backgroundSyncConfigured) {
+    log.debug("background sync already configured (in-memory)");
     return;
   }
 
   try {
-    // Vérifier si déjà enregistrée
-    const isRegistered = await TaskManager.isTaskRegisteredAsync(
-      BACKGROUND_SYNC_TASK
-    );
-
-    if (!isRegistered) {
-      // Enregistrer la tâche
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_SYNC_TASK, {
-        minimumInterval: 15 * 60, // 15 minutes
-        stopOnTerminate: false, // Continue après fermeture app
-        startOnBoot: true, // Démarre au boot device
-      });
-
-      log.success("background sync configured");
-    } else {
-      log.info("background sync already configured");
-    }
+    // Le sync background est piloté par silent push + TaskManager.
+    // Pas d'enregistrement BackgroundFetch (déprécié).
+    backgroundSyncConfigured = true;
+    log.success("background sync configured");
   } catch (error) {
     log.error("background sync configuration failed", { error });
   }
@@ -94,12 +83,8 @@ export async function setupBackgroundSync(): Promise<void> {
  * Annule la synchronisation en arrière-plan
  */
 export async function unregisterBackgroundSync(): Promise<void> {
-  try {
-    await BackgroundFetch.unregisterTaskAsync(BACKGROUND_SYNC_TASK);
-    log.success("background sync disabled");
-  } catch (error) {
-    log.error("disable background sync failed", { error });
-  }
+  backgroundSyncConfigured = false;
+  log.info("background sync disabled");
 }
 
 /**
@@ -328,6 +313,13 @@ export async function clearCachedData(): Promise<void> {
  * À appeler au niveau global (avant registerRootComponent)
  */
 export function defineBackgroundSyncTask(): void {
+  if (!TaskManager) {
+    return;
+  }
+  if (backgroundTaskDefined) {
+    return;
+  }
+  backgroundTaskDefined = true;
   TaskManager.defineTask(BACKGROUND_SYNC_TASK, async () => {
     try {
       log.info("background sync task started");
@@ -340,14 +332,14 @@ export function defineBackgroundSyncTask(): void {
 
       if (hasCachedData) {
         log.info("cached data available");
-        return BackgroundFetch.BackgroundFetchResult.NewData;
+        return;
       }
 
       log.info("no data pending");
-      return BackgroundFetch.BackgroundFetchResult.NoData;
+      return;
     } catch (error) {
       log.error("background task failed", { error });
-      return BackgroundFetch.BackgroundFetchResult.Failed;
+      return;
     }
   });
 }

@@ -2,19 +2,25 @@
 import { getLogger } from "@/utils/logger";
 import { io, type Socket } from "socket.io-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { baseURL, getAssignedTrips, getCompanyMessages, refreshDriverTokenSingleflight, type Booking, type Message } from "./api";
 import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from "./conflictResolution";
 import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
 import type { SessionEvent } from "./sessionJournal";
-import { getNetworkStateSnapshot } from "./networkState";
+import { getNetworkStateSnapshot, subscribeToNetworkState } from "./networkState";
 import { extractAuthStatus } from "./socketAuthUtils";
 import { secureStorage } from "./storage";
 import { logAuthEvent } from "./authLogging";
 
 const log = getLogger("Socket");
+
+/** Plan 2G/3G : Listeners appelés à chaque connexion socket (pour syncEngine flush). */
+const socketConnectListeners = new Set<() => void>();
+export function addSocketConnectListener(cb: () => void): () => void {
+  socketConnectListeners.add(cb);
+  return () => socketConnectListeners.delete(cb);
+}
 
 /** Rôle socket stable — source unique de vérité (éviter strings magiques). */
 export type SocketRole = "driver" | "enterprise";
@@ -167,11 +173,15 @@ function checkAndAddEventId(eventId: string | undefined | null, eventName: strin
 
 // ✅ Résoudre l'URL Socket.IO depuis EXPO_PUBLIC_SOCKET_URL ou fallback
 const getSocketOrigin = (): string => {
+  const appVariant = String(Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod");
+  const isProduction =
+    appVariant === "prod" &&
+    !__DEV__ &&
+    Constants.executionEnvironment === "standalone";
   // PRIORITÉ 1: Variable d'environnement dédiée
   const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
   if (socketUrl) {
     // Validation en production : doit être HTTPS
-    const isProduction = !__DEV__ || Constants.expoConfig?.extra?.APP_VARIANT === "prod";
     if (isProduction && !socketUrl.startsWith("https://")) {
       log.error("invalid socket url in production", { socketUrl });
       throw new Error("EXPO_PUBLIC_SOCKET_URL invalide en production");
@@ -184,11 +194,24 @@ const getSocketOrigin = (): string => {
   const expoExtra = Constants.expoConfig?.extra || {};
   const configSocketUrl = expoExtra.socketUrl;
   if (configSocketUrl) {
+    if (
+      isProduction &&
+      (String(configSocketUrl).includes("localhost") ||
+        String(configSocketUrl).includes("127.0.0.1") ||
+        !String(configSocketUrl).startsWith("https://"))
+    ) {
+      throw new Error("socketUrl doit être HTTPS et non-localhost en production");
+    }
     // ✅ Normaliser : supprimer slash final pour éviter //socket.io
     return configSocketUrl.replace(/\/+$/, "");
   }
 
-  // PRIORITÉ 3: Fallback vers baseURL (plus robuste avec URL API)
+  // En production: pas de fallback implicite
+  if (isProduction) {
+    throw new Error("EXPO_PUBLIC_SOCKET_URL est requis en production");
+  }
+
+  // PRIORITÉ 3: Fallback vers baseURL (dev uniquement)
   // ✅ Utiliser URL API pour extraire origin (plus robuste)
   try {
     const apiUrl = new URL(baseURL);
@@ -222,18 +245,7 @@ const getSocketOrigin = (): string => {
     return "http://localhost:5000";
   }
 
-  // PRIORITÉ 5: Production - erreur si non défini
-  // ✅ AMÉLIORATION: Logger l'erreur mais utiliser baseURL comme dernier recours
-  log.error("socket url undefined in production, using baseurl fallback", {});
-  // Utiliser baseURL comme dernier recours au lieu de throw
-  try {
-    const apiUrl = new URL(baseURL);
-    const socketOrigin = `${apiUrl.protocol}//${apiUrl.host}`;
-    // ✅ Normaliser : supprimer slash final pour éviter //socket.io
-    return socketOrigin.replace(/\/+$/, "");
-  } catch {
-    throw new Error("EXPO_PUBLIC_SOCKET_URL est requis en production");
-  }
+  throw new Error("Impossible de résoudre l'URL socket");
 };
 
 let SOCKET_ORIGIN = getSocketOrigin();
@@ -269,9 +281,12 @@ try {
 let socket: Socket | null = null;
 let socketRole: SocketRole | null = null;
 let connectPromise: Promise<Socket> | null = null;
+let connectPreparationPromise: Promise<void> | null = null;
+let connectPreparationRole: SocketRole | null = null;
 let lastHeartbeat = Date.now(); // Track last heartbeat timestamp
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null; // Interval for sending pings
-let networkUnsubscribe: (() => void) | null = null; // NetInfo unsubscribe function
+let lastHeartbeatTimeoutWarningAt = 0;
+let networkUnsubscribe: (() => void) | null = null; // networkState unsubscribe
 
 const IS_DEV = __DEV__;
 
@@ -341,6 +356,18 @@ export async function connectSocket(
     return connectPromise;
   }
 
+  // Singleflight dès l'entrée: éviter plusieurs initialisations parallèles
+  // avant que connectPromise soit assigné (fenêtre de course observée en logs).
+  if (!connectPromise && connectPreparationPromise && connectPreparationRole === role) {
+    await connectPreparationPromise;
+    if (connectPromise && socketRole === role) {
+      return connectPromise;
+    }
+    if (socket && socket.connected && socketRole === role) {
+      return socket;
+    }
+  }
+
   // ✅ Vérifier que socket n'est pas déjà connecté
   if (socket && socket.connected && socketRole === role) {
     return socket;  // Réutiliser connexion existante
@@ -359,6 +386,11 @@ export async function connectSocket(
 
   socketRole = role;
   emitSocketStatusChange();
+  let resolvePreparation: (() => void) | undefined;
+  connectPreparationRole = role;
+  connectPreparationPromise = new Promise<void>((resolve) => {
+    resolvePreparation = resolve;
+  });
 
   // ✅ Setup centralized booking event listeners
   function setupBookingListeners(s: Socket | null) {
@@ -468,28 +500,29 @@ export async function connectSocket(
     emitSocketStatusChange();
   }
 
-  // ✅ R1: device_id + session_diag dans socket.auth pour corrélation backend (connect/disconnect)
-  let device_id: string | undefined;
-  let session_diag: string | null = null;
-  if (socketRole === "driver") {
-    try {
-      const { asyncStorage } = await import("./storage");
-      device_id = await asyncStorage.getOrCreateDeviceId();
-    } catch {
-      // R3: storage edge-case — pas de logout, socket continue sans device_id, event pour enquête
-      device_id = undefined;
-      pushSessionEvent("DEVICE_ID_ERROR");
+  try {
+    // ✅ R1: device_id + session_diag dans socket.auth pour corrélation backend (connect/disconnect)
+    let device_id: string | undefined;
+    let session_diag: string | null = null;
+    if (socketRole === "driver") {
+      try {
+        const { asyncStorage } = await import("./storage");
+        device_id = await asyncStorage.getOrCreateDeviceId();
+      } catch {
+        // R3: storage edge-case — pas de logout, socket continue sans device_id, event pour enquête
+        device_id = undefined;
+        pushSessionEvent("DEVICE_ID_ERROR");
+      }
+      session_diag = getSessionDiagHeaderValue(); // peut être null, auth envoyé quand même (token seul minimum)
     }
-    session_diag = getSessionDiagHeaderValue(); // peut être null, auth envoyé quand même (token seul minimum)
-  }
 
-  log.info("before socket creation", { SOCKET_ORIGIN });
-  
-  const authExtras: SocketAuthExtras =
-    socketRole === "driver" ? { device_id, session_diag: session_diag ?? undefined } : {};
-  
-  connectPromise = new Promise<Socket>((resolve, reject) => {
-    try {
+    log.info("before socket creation", { SOCKET_ORIGIN });
+
+    const authExtras: SocketAuthExtras =
+      socketRole === "driver" ? { device_id, session_diag: session_diag ?? undefined } : {};
+
+    connectPromise = new Promise<Socket>((resolve, reject) => {
+      try {
       // ✅ Normalisation finale avant l'appel io() pour éviter //socket.io
       const normalizedOrigin = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
       const opts = buildOptions(token, socketRole ?? "driver", authExtras);
@@ -499,6 +532,7 @@ export async function connectSocket(
       log.info("socket created", { id: socket ? (socket.id || "pending") : null });
 
       socket.on("connect", async () => {
+        lastHeartbeatTimeoutWarningAt = 0;
         // ✅ P2.1.1: Reset backoff après connexion réussie
         if (socketRole === "driver") {
           driverConnectErrorAuthAttempts = 0;
@@ -521,6 +555,13 @@ export async function connectSocket(
         }
         logAuthEvent("SOCKET_CONNECT", { role: socketRole, outcome: "success" });
         emitSocketStatusChange();
+        socketConnectListeners.forEach((cb) => {
+          try {
+            cb();
+          } catch (e) {
+            log.warn("socketConnect listener error", { error: e });
+          }
+        });
         log.info("connected", { socket_id: socket?.id, user_type: socketRole || "unknown" });
         
         if (socketRole === "driver") {
@@ -554,7 +595,7 @@ export async function connectSocket(
                 const serverBookings = await getAssignedTrips({ since });
                 
                 // ✅ Charger les données locales depuis le cache
-                const MISSIONS_CACHE_KEY = "missions_cache_v1";
+                const MISSIONS_CACHE_KEY = "missions_cache_v2";
                 const localBookingsRaw = await AsyncStorage.getItem(MISSIONS_CACHE_KEY);
                 let localBookings: Booking[] = [];
                 
@@ -570,6 +611,25 @@ export async function connectSocket(
                 
                 // ✅ Détecter et résoudre les conflits
                 const resolutionResult = resolveBookingConflicts(localBookings, serverBookings);
+                
+                // ✅ Resync incrémental (since) : si le serveur retourne vide, cela signifie
+                // "aucun changement depuis last_sync", pas "toutes les missions supprimées".
+                // On conserve les données locales ou on fait un full fetch si pas de cache.
+                let finalResolved = resolutionResult.resolved;
+                if (since && serverBookings.length === 0) {
+                  if (localBookings.length > 0) {
+                    finalResolved = localBookings;
+                    log.info("resync incremental empty server, keeping local", {
+                      local_count: localBookings.length,
+                    });
+                  } else {
+                    const fullBookings = await getAssignedTrips();
+                    finalResolved = fullBookings;
+                    log.info("resync incremental empty server, full fetch", {
+                      full_count: fullBookings.length,
+                    });
+                  }
+                }
                 
                 // ✅ Logger les conflits détectés
                 if (resolutionResult.hasConflicts) {
@@ -608,9 +668,9 @@ export async function connectSocket(
                 }
                 
                 // ✅ Émettre les données résolues (pas les données serveur brutes)
-                resyncEmitter.emit("bookings:resync", resolutionResult.resolved);
+                resyncEmitter.emit("bookings:resync", finalResolved);
                 log.info("resync complete", {
-                  bookings_count: resolutionResult.resolved.length,
+                  bookings_count: finalResolved.length,
                   conflicts_count: resolutionResult.conflicts.length,
                   has_conflicts: resolutionResult.hasConflicts,
                 });
@@ -739,36 +799,39 @@ export async function connectSocket(
           const currentSocket = socket;
           if (currentSocket && currentSocket.connected) {
             const timeSinceLastHeartbeat = Date.now() - lastHeartbeat;
-            // Si pas de pong depuis >60s, forcer reconnexion
+            // Ne pas forcer disconnect/reconnect ici: Socket.IO gère déjà heartbeat
+            // transport. Un timeout applicatif peut être un faux positif et couper
+            // une connexion saine (vu sur Android en conditions réelles).
             if (timeSinceLastHeartbeat > 60000) {
-              log.warn("heartbeat timeout, force reconnect", {
-                time_since_last_ms: timeSinceLastHeartbeat,
-                threshold_ms: 60000,
-              });
-              currentSocket.disconnect();
-              currentSocket.connect();
-              lastHeartbeat = Date.now();
-            } else {
-              currentSocket.emit("ping");
-              log.info("heartbeat ping", {});
+              const now = Date.now();
+              if (now - lastHeartbeatTimeoutWarningAt > 5 * 60 * 1000) {
+                lastHeartbeatTimeoutWarningAt = now;
+                log.debug("heartbeat stale (no forced reconnect)", {
+                  time_since_last_ms: timeSinceLastHeartbeat,
+                  threshold_ms: 60000,
+                });
+              }
             }
+            currentSocket.emit("ping");
+            log.info("heartbeat ping", {});
           }
         }, 30000); // Toutes les 30s
         
-        // ✅ Détection réseau (NetInfo)
+        // ✅ Plan 2G/3G : Détection réseau via networkState (source unique)
         if (!networkUnsubscribe) {
-          networkUnsubscribe = NetInfo.addEventListener((state: { isConnected: boolean | null }) => {
-            const isConnected = state.isConnected ?? false;
+          networkUnsubscribe = subscribeToNetworkState(() => {
+            const state = getNetworkStateSnapshot();
+            const isConnected =
+              state?.isConnected === true && state?.isInternetReachable !== false;
             const currentSocket = socket;
-            
+
             if (!isConnected && currentSocket?.connected) {
               log.info("network offline", {});
               currentSocket.disconnect();
             }
-            
+
             if (isConnected && !currentSocket?.connected) {
               log.info("network online", {});
-              // Reconnecter explicitement (Socket.IO ne le fait pas toujours après disconnect manuel)
               try {
                 currentSocket?.connect();
               } catch (e) {
@@ -1101,13 +1164,20 @@ export async function connectSocket(
         log.info("driver arrived dropoff", { driver_id: data?.driver_id });
         // TODO: Afficher notification "Driver arrivé à destination"
       });
-    } catch (e) {
-      connectPromise = null;
-      reject(e);
-    }
-  });
+      } catch (e) {
+        connectPromise = null;
+        reject(e);
+      }
+    });
 
-  return connectPromise;
+    return connectPromise;
+  } finally {
+    resolvePreparation?.();
+    if (connectPreparationRole === role) {
+      connectPreparationPromise = null;
+      connectPreparationRole = null;
+    }
+  }
 }
 
 export function getSocket(): Socket | null {
@@ -1142,6 +1212,7 @@ export function disconnectSocket() {
     socketRole = null;
     connectPromise = null;
     lastHeartbeat = Date.now();
+    lastHeartbeatTimeoutWarningAt = 0;
     reconnectExhausted = false; // P2.1.2: reset on explicit disconnect
   }
 }
@@ -1270,6 +1341,52 @@ export async function sendDriverLocation(payload: {
   } catch {
     s?.emit("driver_location", payload);
     log.info("driver location emitted", { reason: "no driver_id" });
+  }
+}
+
+/** Plan 2G/3G Phase 6 : Déclenche resync missions depuis syncEngine (fallback 60s). */
+export async function triggerMissionResync(forceResync = false): Promise<void> {
+  if (socketRole !== "driver") return;
+  try {
+    const lastSync = await AsyncStorage.getItem("last_sync_timestamp");
+    const now = Date.now();
+    const shouldResync = forceResync || !lastSync || (now - Number(lastSync)) > 5 * 60 * 1000;
+    if (!shouldResync) return;
+
+    const since = lastSync && !forceResync ? new Date(Number(lastSync)).toISOString() : undefined;
+    const serverBookings = await getAssignedTrips({ since });
+
+    const MISSIONS_CACHE_KEY = "missions_cache_v2";
+    const localBookingsRaw = await AsyncStorage.getItem(MISSIONS_CACHE_KEY);
+    let localBookings: Booking[] = [];
+    if (localBookingsRaw) {
+      try {
+        localBookings = JSON.parse(localBookingsRaw);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const resolutionResult = resolveBookingConflicts(localBookings, serverBookings);
+    let finalResolved = resolutionResult.resolved;
+    if (since && serverBookings.length === 0) {
+      if (localBookings.length > 0) {
+        finalResolved = localBookings;
+        log.info("triggerMissionResync incremental empty server, keeping local", {
+          local_count: localBookings.length,
+        });
+      } else {
+        const fullBookings = await getAssignedTrips();
+        finalResolved = fullBookings;
+        log.info("triggerMissionResync incremental empty server, full fetch", {
+          full_count: fullBookings.length,
+        });
+      }
+    }
+    resyncEmitter.emit("bookings:resync", finalResolved);
+    await AsyncStorage.setItem("last_sync_timestamp", now.toString());
+  } catch (e) {
+    log.warn("triggerMissionResync error", { error: e });
   }
 }
 

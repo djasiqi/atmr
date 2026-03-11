@@ -75,6 +75,36 @@ async function flushPositionBatch() {
     await enqueueLocationBatch(queued);
 
     log.info("positions enqueued", { count: queued.length, driverId });
+
+    // ✅ Fallback HTTP en arrière-plan : fire-and-forget pour éviter ANR.
+    // Android ~5–10s max pour les tâches background — on ne bloque pas.
+    const latest = queued[queued.length - 1];
+    if (latest) {
+      (async () => {
+        try {
+          const { updateDriverLocation } = await import("../services/api");
+          await Promise.race([
+            updateDriverLocation({
+              latitude: latest.latitude,
+              longitude: latest.longitude,
+              speed: latest.speed,
+              heading: latest.heading,
+              accuracy: latest.accuracy,
+              timestamp: latest.timestamp,
+            }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("timeout")), 5000)
+            ),
+          ]);
+          log.info("position sent via HTTP (background fallback)", { driverId });
+        } catch (e: any) {
+          log.warn("HTTP location fallback failed", {
+            error: e?.message ?? String(e),
+            driverId,
+          });
+        }
+      })();
+    }
   } catch (error) {
     log.error("enqueue batch failed", { error });
   }

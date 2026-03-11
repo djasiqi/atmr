@@ -334,6 +334,18 @@ export const invoiceService = {
     return response.data;
   },
 
+  // Récupérer les transferts facturables pour un partenariat + période
+  async fetchPartnerTransfers(companyId, partnershipId, { year, month }) {
+    const params = new URLSearchParams();
+    if (year) params.append('year', year);
+    if (month) params.append('month', month);
+    const query = params.toString();
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/partners/${partnershipId}/transfers?${query}`
+    );
+    return response.data;
+  },
+
   // Générer une facture partenaire
   async generatePartnerInvoice(companyId, data) {
     const response = await apiClient.post(

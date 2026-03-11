@@ -2,11 +2,22 @@ import notifee, { AndroidImportance, AndroidVisibility } from "@notifee/react-na
 import * as Location from "expo-location";
 import { Platform } from "react-native";
 import type { MissionState, MissionBarStatus, BookingPreview } from "./missionState";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 import { MissionStateManager } from "./missionState";
 
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 const NOTIFICATION_ID = "mission-bar";
 const CHANNEL_ID = "mission_active";
+let foregroundServiceRegistered = false;
+
+if (Platform.OS === "android" && !foregroundServiceRegistered) {
+  foregroundServiceRegistered = true;
+  try {
+    notifee.registerForegroundService(() => new Promise(() => {}));
+  } catch {
+    // noop
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Tracking guard: avoid 2 foreground services
@@ -69,12 +80,23 @@ function formatNextBooking(state: MissionState): string {
   const preview = state.nextBookingPreview;
   if (!preview) return "";
   const time = preview.pickup_at
-    ? new Date(preview.pickup_at).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" })
+    ? formatTimeLocal(preview.pickup_at)
     : "";
   if (state.privacyMode || !preview.can_show_identity) {
     return time ? `Prochaine course à ${time}` : "Course suivante";
   }
   return `Prochaine ${time} · ${preview.client_display} · ${preview.pickup_short}`;
+}
+
+/** Contenu de notification pour mission (réutilisé par le foreground service GPS). */
+export function getMissionNotificationContent(state: MissionState): {
+  title: string;
+  body: string;
+} {
+  return {
+    title: formatMissionTitle(state),
+    body: formatNextBooking(state) || "Mission en cours",
+  };
 }
 
 function buildActionsForStatus(status: MissionBarStatus): Array<{
@@ -124,6 +146,8 @@ export async function showMissionNotification(state: MissionState): Promise<void
   await ensureChannel();
 
   const trackingActive = await isTrackingServiceActive();
+  // Une seule notification : le foreground service GPS affiche déjà la mission.
+  if (trackingActive) return;
 
   await notifee.displayNotification({
     id: NOTIFICATION_ID,

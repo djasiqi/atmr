@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Alert, AppState, AppStateStatus } from "react-native";
+import { Alert, AppState, AppStateStatus, InteractionManager } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 
@@ -67,6 +67,7 @@ import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import { pushSessionEvent } from "@/services/sessionJournal";
 import { setLogoutMarker, shouldShowLogoutBanner } from "@/services/logoutMarker";
 import { connectSocket, disconnectSocket } from "@/services/socket";
+import { ensureBackgroundTrackingStopped } from "@/services/locationTracker";
 // ✅ PHASE 2 : Import de l'authentification biométrique
 import {
   autoLoginWithBiometric,
@@ -89,6 +90,12 @@ const debugLog = (data: Record<string, unknown>) => {
 
 const MODE_KEY = "auth.mode";
 const ENTERPRISE_DEVICE_KEY = "enterprise.device_id";
+/**
+ * Verrou global de bootstrap auth (single-run par instance).
+ * Reset au unmount pour que StrictMode remount re-exécute le bootstrap
+ * et restaure l'état (mode, driver) depuis le storage.
+ */
+let authBootstrapOncePromise: Promise<void> | null = null;
 
 type AuthMode = "driver" | "enterprise";
 
@@ -126,6 +133,18 @@ interface EnterpriseSessionState {
   scopes: string[];
   sessionId: string;
 }
+
+/**
+ * Cache d'état auth au niveau module — survit aux remounts (StrictMode, hot reload).
+ * Évite le flash enterprise + arrêt sync/socket quand AuthProvider remonte avec état initial.
+ */
+let authStateCache: {
+  mode: AuthMode;
+  driver: Driver | null;
+  driverToken: string | null;
+  enterpriseSession: EnterpriseSessionState | null;
+  initialLoading: boolean;
+} | null = null;
 
 interface EnterpriseMfaChallenge {
   challengeId: string;
@@ -187,19 +206,40 @@ const parseEnterpriseSuccess = (
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [mode, setModeState] = useState<AuthMode>("enterprise");
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [mode, setModeState] = useState<AuthMode>(
+    () => authStateCache?.mode ?? "enterprise"
+  );
+  const [initialLoading, setInitialLoading] = useState(
+    () => authStateCache?.initialLoading ?? true
+  );
   const [deviceId, setDeviceId] = useState<string | null>(null);
 
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [driverToken, setDriverToken] = useState<string | null>(null);
+  const [driver, setDriver] = useState<Driver | null>(
+    () => authStateCache?.driver ?? null
+  );
+  const [driverToken, setDriverToken] = useState<string | null>(
+    () => authStateCache?.driverToken ?? null
+  );
   const [driverLoading, setDriverLoading] = useState(false);
 
   const [enterpriseSession, setEnterpriseSession] =
-    useState<EnterpriseSessionState | null>(null);
+    useState<EnterpriseSessionState | null>(
+      () => authStateCache?.enterpriseSession ?? null
+    );
   const [enterpriseLoading, setEnterpriseLoading] = useState(false);
   const [pendingEnterpriseMfa, setPendingEnterpriseMfa] =
     useState<EnterpriseMfaChallenge | null>(null);
+
+  /** Sync état → cache module (survit remount StrictMode / hot reload). */
+  useEffect(() => {
+    authStateCache = {
+      mode,
+      driver,
+      driverToken,
+      enterpriseSession,
+      initialLoading,
+    };
+  }, [mode, driver, driverToken, enterpriseSession, initialLoading]);
 
   /** P0.1 — Garde anti double-exécution (driver). */
   const driverLogoutInProgressRef = useRef(false);
@@ -255,6 +295,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setDriverLoading(true);
       notifyAuthNotReady();
       try {
+        await ensureBackgroundTrackingStopped("logout");
         if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "driver", reason, ts: Date.now() });
         }
@@ -369,7 +410,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const handleEnterpriseSuccess = useCallback(
-    async (payload: EnterpriseTokenPayload) => {
+    async (
+      payload: EnterpriseTokenPayload,
+      options?: { skipModeUpdate?: boolean }
+    ) => {
       const session = parseEnterpriseSuccess(payload);
       setEnterpriseSession(session);
       setPendingEnterpriseMfa(null);
@@ -394,7 +438,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Marquer que la session vient d'être créée pour éviter la vérification immédiate
         ["enterprise_session_just_created", "true"],
       ]);
-      await storeMode("enterprise");
+      // ✅ Ne pas écraser le mode lors d'une restauration bootstrap (évite redirection driver → enterprise)
+      if (!options?.skipModeUpdate) {
+        await storeMode("enterprise");
+      }
       // ✅ P1 strict: rendre l'auth "ready" avant que des requêtes enterprise partent
       notifyAuthReady();
 
@@ -426,7 +473,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let enterpriseRestored = false;
     /** Session chauffeur réellement restaurée (profil chargé). Évite notifyAuthReady() en finally quand le driver n'a pas de token. */
     let driverSessionRestored = false;
-    (async () => {
+    const runBootstrap = async () => {
       pushSessionEvent("APP_START");
       try {
         // ⚡ OPTIMISATION Phase 2 : Lecture parallèle des tokens et données de stockage
@@ -701,7 +748,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     try {
                       const refreshResponse =
                         await refreshEnterpriseTokenSingleflight(refreshToken);
-                      await handleEnterpriseSuccess(refreshResponse);
+                      await handleEnterpriseSuccess(refreshResponse, {
+                        skipModeUpdate: true,
+                      });
                     } catch (refreshError) {
                       log.warn("enterprise token refresh failed", { error: refreshError });
                       // Ne pas nettoyer la session ici - laisser l'utilisateur utiliser l'app
@@ -748,9 +797,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       }
-    })();
+    };
+
+    const executeBootstrapOnce = async () => {
+      // Ne jamais skip : hot reload / StrictMode remount réinitialise l'état React
+      // mais les variables module persistent → on doit toujours re-exécuter pour restaurer depuis storage
+      if (!authBootstrapOncePromise) {
+        authBootstrapOncePromise = runBootstrap();
+      } else {
+        log.info("auth bootstrap already running, reusing global promise");
+      }
+
+      await authBootstrapOncePromise;
+
+      // Le mount "abonné" (qui n'a pas exécuté runBootstrap) doit aussi sortir du loading.
+      if (isMounted) {
+        setInitialLoading(false);
+      }
+    };
+
+    void executeBootstrapOnce();
     return () => {
       isMounted = false;
+      // StrictMode / hot reload remount : reset pour re-exécuter le bootstrap et restaurer mode/driver depuis storage
+      authBootstrapOncePromise = null;
     };
   }, [clearDriverStorage, clearEnterpriseStorage, storeMode, handleEnterpriseSuccess]);
 
@@ -950,6 +1020,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (nextAppState === "active") {
         pushSessionEvent("APP_FOREGROUND");
         pushSessionEvent("FOREGROUND_RESYNC_START");
+        // Différer le resync lourd pour laisser la transition foreground se terminer (évite ANR)
+        InteractionManager.runAfterInteractions(() => {
+        setTimeout(async () => {
         let resyncOk = true;
         try {
           // 1) Recharger tokens depuis storage et refresh si expiré / proche expiration
@@ -1006,8 +1079,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } finally {
           pushSessionEvent(resyncOk ? "FOREGROUND_RESYNC_SUCCESS" : "FOREGROUND_RESYNC_FAIL");
         }
+        }, 200);
+        });
       } else {
-        pushSessionEvent("APP_BACKGROUND");
+        // Différer pour éviter ANR lors de la transition background (low memory)
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(() => pushSessionEvent("APP_BACKGROUND"), 0);
+        });
       }
     };
 
@@ -1024,6 +1102,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleEnterpriseAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
         pushSessionEvent("ENTERPRISE_APP_FOREGROUND");
+        InteractionManager.runAfterInteractions(async () => {
         try {
           const expiresAt = getTokenExpiration(enterpriseSession.token);
           const refreshThreshold = 10 * 60 * 1000; // 10 minutes
@@ -1051,6 +1130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (e) {
           log.warn("enterprise foreground resync error", { error: e });
         }
+        });
       }
     };
 

@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/hooks/useAuth";
 import { getCompletedTrips, getAssignedTrips, getCompanyTodayTrips, Booking } from "@/services/api";
 import { isCompletedStatus, isCanceledStatus } from "@/utils/bookingStatus";
+import { formatTimeLocal } from "@/utils/formatTimeLocal";
 import { Loader } from "@/components/ui/Loader";
 import TripHeader from "@/components/dashboard/TripHeader";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -42,7 +43,7 @@ function isTimeUndefined(iso: string): boolean {
 
 function formatHour(iso: string, isReturn?: boolean): string {
   if (isReturn && isTimeUndefined(iso)) return "Heure à définir";
-  return new Date(iso).toLocaleTimeString("fr-CH", { hour: "2-digit", minute: "2-digit" });
+  return formatTimeLocal(iso);
 }
 
 function shortenAddress(addr: string | undefined): string {
