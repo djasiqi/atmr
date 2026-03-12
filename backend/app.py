@@ -911,7 +911,10 @@ def create_app(config_name: str | None = None):
         # Gérer les prérequêtes CORS
         if request.method == "OPTIONS":
             response = make_response("", 204)
-            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            origin = request.headers.get("Origin")
+            if origin and origin in cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
             response.headers["Access-Control-Allow-Headers"] = "Content-Type"
             return response
@@ -1000,18 +1003,18 @@ def create_app(config_name: str | None = None):
             raise NotFound from e
 
         # Content-Length explicite : évite ERR_CONNECTION_RESET avec certains clients/proxies
-        return Response(
-            data,
-            mimetype=mimetype,
-            headers={
-                "Content-Length": str(len(data)),
-                "Content-Disposition": f'{disposition}; filename="{candidate.name}"',
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type",
-                "Cache-Control": "public, max-age=3600",
-            },
-        )
+        headers = {
+            "Content-Length": str(len(data)),
+            "Content-Disposition": f'{disposition}; filename="{candidate.name}"',
+            "X-Content-Type-Options": "nosniff",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Cache-Control": "public, max-age=3600",
+        }
+        origin = request.headers.get("Origin")
+        if origin and origin in cors_origins:
+            headers["Access-Control-Allow-Origin"] = origin
+        return Response(data, mimetype=mimetype, headers=headers)
 
     # 4) Sécurité (CSP)
     # ✅ FIX: Désactiver HTTPS en mode testing pour éviter
@@ -1666,7 +1669,6 @@ def create_app(config_name: str | None = None):
                 if path in {
                     "/",
                     "/health",
-                    "/config",
                     "/docs",
                     "/favicon.ico",
                     "/robots.txt",
@@ -1839,16 +1841,6 @@ def create_app(config_name: str | None = None):
         # après l'initialisation de Talisman
         # Il sera exempt de la redirection HTTPS via un décorateur
         # ou une configuration spéciale
-
-        @app.route("/config")
-        def show_config():  # pyright: ignore[reportUnusedFunction]
-            return jsonify(
-                {
-                    "env": config_name,
-                    "DATABASE_URI": app.config.get("SQLALCHEMY_DATABASE_URI"),
-                    "UPLOADS_PUBLIC_BASE": app.config.get("UPLOADS_PUBLIC_BASE"),
-                }
-            ), 200
 
         noisy_paths = {
             "/companies/me/dispatch/status",

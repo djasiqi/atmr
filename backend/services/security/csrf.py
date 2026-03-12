@@ -27,13 +27,33 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 CSRF_COOKIE_NAME = "csrf_token"  # Pour support cookie (optionnel)
 
 
+def _is_production() -> bool:
+    """Détecte si l'application est en mode production."""
+    try:
+        from flask import current_app
+
+        if current_app and current_app.config:
+            env = (
+                current_app.config.get("ENVIRONMENT")
+                or current_app.config.get("FLASK_CONFIG")
+                or ""
+            )
+            if isinstance(env, str) and env.lower() == "production":
+                return True
+    except Exception:
+        pass
+    return (
+        os.getenv("FLASK_CONFIG", "").lower() == "production"
+        or os.getenv("FLASK_ENV", "").lower() == "production"
+    )
+
+
 def _get_csrf_secret() -> str:
     """Récupère la clé secrète pour signer les tokens CSRF.
 
-    Utilise JWT_SECRET_KEY ou SECRET_KEY, avec fallback.
-
-    Returns:
-        Clé secrète pour CSRF
+    Utilise JWT_SECRET_KEY ou SECRET_KEY ou FLASK_SECRET_KEY.
+    En production : aucun fallback autorisé (RuntimeError si secret manquant).
+    En dev/test : fallback toléré avec warning.
     """
     secret = (
         os.getenv("JWT_SECRET_KEY")
@@ -41,8 +61,14 @@ def _get_csrf_secret() -> str:
         or os.getenv("FLASK_SECRET_KEY")
     )
     if not secret:
+        if _is_production():
+            raise RuntimeError(
+                "[CSRF] Production: aucune clé secrète trouvée (JWT_SECRET_KEY, "
+                "SECRET_KEY ou FLASK_SECRET_KEY). Configurez une clé valide."
+            )
         logger.warning(
-            "[CSRF] ⚠️ Aucune clé secrète trouvée pour CSRF. Utilisation d'une clé temporaire (non sécurisée en production)."
+            "[CSRF] ⚠️ Aucune clé secrète trouvée pour CSRF. "
+            "Utilisation d'une clé temporaire (dev/test uniquement)."
         )
         secret = "temporary-csrf-secret-change-in-production"
     return secret
