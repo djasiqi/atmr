@@ -170,10 +170,17 @@ const PartnerTransferSelector = ({
     return <div className={styles.error}>{error}</div>;
   }
   if (transfers.length === 0) {
+    const monthLabel = period?.month
+      ? new Date(Number(period.year || new Date().getFullYear()), Number(period.month) - 1, 1)
+        .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+      : null;
     return (
       <div className={styles.empty}>
         <div className={styles.emptyIcon}>🚗</div>
-        <p>Aucun transfert non facturé pour cette période</p>
+        <p>
+          Aucun transfert non facturé pour cette période
+          {monthLabel ? ` (${monthLabel})` : ''}
+        </p>
       </div>
     );
   }

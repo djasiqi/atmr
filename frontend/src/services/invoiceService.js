@@ -326,10 +326,14 @@ export const invoiceService = {
     return response.data;
   },
 
-  // Récupérer les partenaires facturables
-  async fetchBillablePartners(companyId) {
+  // Récupérer les partenaires facturables (optionnellement filtrés par période)
+  async fetchBillablePartners(companyId, filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.year) params.append('year', filters.year);
+    if (filters.month) params.append('month', filters.month);
+    const query = params.toString();
     const response = await apiClient.get(
-      `${API_BASE}/invoices/companies/${companyId}/partners/billable`
+      `${API_BASE}/invoices/companies/${companyId}/partners/billable${query ? `?${query}` : ''}`
     );
     return response.data;
   },

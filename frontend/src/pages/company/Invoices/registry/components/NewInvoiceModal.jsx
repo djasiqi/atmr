@@ -857,7 +857,10 @@ const NewInvoiceModal = ({
         setPartnersLoading(true);
         let response;
         try {
-          response = await invoiceService.fetchBillablePartners(companyId);
+          response = await invoiceService.fetchBillablePartners(companyId, {
+            year: formData.period_year,
+            month: formData.period_month,
+          });
         } catch (err) {
           throw err;
         }
@@ -882,7 +885,7 @@ const NewInvoiceModal = ({
     return () => {
       isMounted = false;
     };
-  }, [companyId, open, billingType]);
+  }, [companyId, open, billingType, formData.period_year, formData.period_month]);
 
   useEffect(() => {
     if (!open || !companyId) return;
