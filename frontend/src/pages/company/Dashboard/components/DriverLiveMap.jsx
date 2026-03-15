@@ -37,6 +37,7 @@ const createStyledTooltip = (driver, opts = {}) => {
 
   const statusConf = {
     available: { label: 'Disponible', dot: AVAILABLE_LIGHT_GREEN, bg: '#dcfce7', color: '#15803d' },
+    assigned:  { label: 'Assigné',   dot: '#f59e0b', bg: '#fef3c7', color: '#b45309' },
     busy:      { label: 'En course',  dot: '#00796B', bg: '#e0f2f1', color: '#00695C' },
     offline:   { label: 'Hors-ligne', dot: '#91A3A0', bg: '#f1f5f9', color: '#64748b' },
     emergency: { label: 'Urgence',    dot: '#ef4444', bg: '#fee2e2', color: '#dc2626' },
@@ -53,7 +54,7 @@ const createStyledTooltip = (driver, opts = {}) => {
   let metaLine = '';
   if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
     metaLine = formatLastSeen(lastSeenSeconds);
-  } else if (status === 'busy' && clientShort) {
+  } else if ((status === 'busy' || status === 'assigned') && clientShort) {
     metaLine = clientShort;
   }
 
@@ -409,7 +410,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     };
     if (MAP_DEBUG) setMapDebugInfo({ ...debug });
 
-    const onLoc = (data) => {
+    // P1: Backend = source de vérité. driver_live_state_update contient le contrat canonique
+    // (status, mission_status, presence_status, etc.). driver_location_update en fallback.
+    const applyLocationUpdate = (data, fromLiveState = false) => {
       const map = mapRef.current;
       debug.received += 1;
 
@@ -455,8 +458,14 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         is_active: true,
       };
       const lastLoc = lastLocationsRef.current[id];
-      const status = data.status ?? lastLoc?.status ?? getDriverStatus(fullDriver);
-      const isStale = (data.is_stale ?? lastLoc?.is_stale) === true;
+      // Priorité stricte: driver_live_state_update = source canonique. driver_location_update ne doit jamais écraser le statut.
+      const status =
+        fromLiveState && data.status != null
+          ? data.status
+          : (lastLoc?.status ?? getDriverStatus(fullDriver));
+      const isStale = fromLiveState && data.location_status
+        ? data.location_status === 'stale'
+        : ((data.is_stale ?? lastLoc?.is_stale) === true);
       const tooltipOpts = {
         status,
         clientShort: data.client_short ?? lastLoc?.client_short,
@@ -464,8 +473,16 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         isStale,
       };
 
+      if (fromLiveState) {
+        lastLocationsRef.current[id] = {
+          ...lastLoc,
+          ...data,
+          driver_id: id,
+          client_short: data.client_short ?? lastLoc?.client_short,
+        };
+      }
+
       upsertMarker(id, ll, status, isStale, fullDriver, tooltipOpts);
-      // Donnée socket = GPS temps réel → toujours localisé
       updateLocatedSet(id, true);
       setShowNoGpsBanner(false);
 
@@ -475,7 +492,10 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       }
     };
 
-    socket.on('driver_location_update', onLoc);
+    const onLiveState = (data) => applyLocationUpdate(data, true);
+    const onLocationUpdate = (data) => applyLocationUpdate(data, false);
+    socket.on('driver_live_state_update', onLiveState);
+    socket.on('driver_location_update', onLocationUpdate);
 
     let fallbackId = null;
     let retryId = null;
@@ -505,7 +525,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       if (fallbackId != null) clearTimeout(fallbackId);
       if (retryId != null) clearTimeout(retryId);
       if (onJoined) socket.off('joined_company', onJoined);
-      socket.off('driver_location_update', onLoc);
+      socket.off('driver_live_state_update', onLiveState);
+      socket.off('driver_location_update', onLocationUpdate);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company?.id]);

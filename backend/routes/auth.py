@@ -403,6 +403,7 @@ class Login(Resource):
             user = None if not auth_result.success else auth_result.user
 
             if not user:
+                err_code = (auth_result.error or {}).get("error", "invalid_credentials")
                 # ✅ Priorité 7: Audit logging pour login échoué
                 try:
                     AuditLogger.log_action(
@@ -413,7 +414,7 @@ class Login(Resource):
                         result_message="Email ou mot de passe invalide",
                         action_details={
                             "email": mask_email(email),
-                            "reason": "invalid_credentials",
+                            "reason": err_code,
                         },
                         ip_address=request.remote_addr,
                         user_agent=request.headers.get("User-Agent"),
@@ -441,14 +442,22 @@ class Login(Resource):
                 # ✅ P0: Ajouter trace_id dans l'erreur
                 trace_id = get_trace_id()
                 logger.warning(
-                    "Login failed - email: %s, trace_id: %s",
+                    "Login failed - email: %s, reason: %s, trace_id: %s",
                     mask_email(email),
+                    err_code,
                     trace_id,
                 )
-                # ✅ FIX: Utiliser le format standard v2
+                # Messages génériques côté API ; le mobile affiche des messages clairs
+                auth_code = (
+                    AuthErrorCodes.EMAIL_NOT_FOUND
+                    if err_code == AuthErrorCodes.EMAIL_NOT_FOUND
+                    else AuthErrorCodes.INVALID_PASSWORD
+                    if err_code == AuthErrorCodes.INVALID_PASSWORD
+                    else AuthErrorCodes.INVALID_CREDENTIALS
+                )
                 return auth_error(
-                    AuthErrorCodes.INVALID_CREDENTIALS,
-                    "Email ou mot de passe invalide",
+                    auth_code,
+                    "Identifiants incorrects",
                     401,
                     details={"trace_id": trace_id},
                 )

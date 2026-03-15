@@ -1,6 +1,5 @@
 # pyright: reportArgumentType=false
 import logging
-import re
 from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -43,7 +42,6 @@ from routes.api_error_models import (
     create_validation_error_model,
 )
 from routes.api_error_utils import create_error_response
-from shared.constants import ErrorCodes
 from routes.db_error_utils import format_integrity_error
 from services.partnerships.exceptions import StatsComputationError
 from services.security.idempotency import IdempotencyService
@@ -51,13 +49,14 @@ from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update
 from shared.response_helpers import paginated_response, success_response
-from shared.time_utils import parse_local_naive
 from shared.upload_validation import (
     ALLOWED_LOGO_EXT,
     validate_file_upload,
 )
 
 # Constantes pour les valeurs magiques
+LAT_MIN, LAT_MAX = -90, 90
+LON_MIN, LON_MAX = -180, 180
 HOURS_PER_DAY = 24
 WEEKEND_START_INDEX = 5
 MINUTES_PER_HOUR = 60
@@ -286,9 +285,15 @@ vehicle_create_model = companies_ns.model(
         "seats": fields.Integer(allow_null=True),  # ✅ Permettre None
         "wheelchair_accessible": fields.Boolean(allow_null=True),
         "insurance_company_name": fields.String(allow_null=True),
-        "insurance_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
-        "inspection_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
-        "tachograph_expires_at": fields.String(description="YYYY-MM-DD", allow_null=True),
+        "insurance_expires_at": fields.String(
+            description="YYYY-MM-DD", allow_null=True
+        ),
+        "inspection_expires_at": fields.String(
+            description="YYYY-MM-DD", allow_null=True
+        ),
+        "tachograph_expires_at": fields.String(
+            description="YYYY-MM-DD", allow_null=True
+        ),
         "is_active": fields.Boolean(allow_null=True),
     },
 )
@@ -410,7 +415,9 @@ manual_booking_model = companies_ns.model(
         "amount_source": fields.String(description="preferential | simulated | manual"),
         "amount_locked": fields.Boolean(description="Montant verrouillé côté UI"),
         "pricing_profile_id": fields.Integer(description="ID profil pricing actif"),
-        "pricing_profile_version_id": fields.Integer(description="ID version pricing active"),
+        "pricing_profile_version_id": fields.Integer(
+            description="ID version pricing active"
+        ),
         "medical_facility": fields.String,
         "doctor_name": fields.String,
         "hospital_service": fields.String,
@@ -2442,6 +2449,22 @@ class CompanyDriversLocations(Resource):
         if not drivers:
             return {"locations": []}, 200
 
+        # Paramètres optionnels viewport bbox (standard Leaflet/Mapbox/Google)
+        bbox_ne_lat = request.args.get("bbox_ne_lat", type=float)
+        bbox_ne_lng = request.args.get("bbox_ne_lng", type=float)
+        bbox_sw_lat = request.args.get("bbox_sw_lat", type=float)
+        bbox_sw_lng = request.args.get("bbox_sw_lng", type=float)
+        use_bbox = (
+            bbox_ne_lat is not None
+            and bbox_ne_lng is not None
+            and bbox_sw_lat is not None
+            and bbox_sw_lng is not None
+            and LAT_MIN <= bbox_sw_lat <= LAT_MAX
+            and LAT_MIN <= bbox_ne_lat <= LAT_MAX
+            and LON_MIN <= bbox_sw_lng <= LON_MAX
+            and LON_MIN <= bbox_ne_lng <= LON_MAX
+        )
+
         # 1) Pipeline Redis (batch) - évite N round-trips
         redis_results = []
         redis_ok = False
@@ -2469,6 +2492,7 @@ class CompanyDriversLocations(Resource):
         active_bookings_map: dict[int, dict[str, Any]] = {}
         if driver_ids:
             active_statuses = (
+                BookingStatus.ASSIGNED.value,
                 BookingStatus.EN_ROUTE.value,
                 BookingStatus.IN_PROGRESS.value,
             )
@@ -2480,6 +2504,7 @@ class CompanyDriversLocations(Resource):
                 .with_entities(
                     Booking.driver_id,
                     Booking.id,
+                    Booking.status,
                     Booking.pickup_location,
                     Booking.dropoff_location,
                 )
@@ -2498,6 +2523,10 @@ class CompanyDriversLocations(Resource):
                         if len(pickup_str) > _MAX_LOCATION_STR_LEN
                         else pickup
                     )
+                    raw_status = getattr(b, "status", None)
+                    mission_status_val = (
+                        getattr(raw_status, "value", None) or str(raw_status or "")
+                    )
                     active_bookings_map[driver_id_val] = {
                         "current_booking_id": getattr(b, "id", None),
                         "client_short": client_short
@@ -2506,6 +2535,7 @@ class CompanyDriversLocations(Resource):
                             if len(dropoff_str) > _MAX_LOCATION_STR_LEN
                             else dropoff
                         ),
+                        "mission_status": mission_status_val,
                     }
 
         now = datetime.now(UTC)
@@ -2560,17 +2590,36 @@ class CompanyDriversLocations(Resource):
                     last_seen_seconds = 0
                     is_stale = False
 
-            # status: available | busy | offline (backend = source de vérité)
+            # status: available | assigned | busy | offline (backend = source de vérité)
             is_active = _as_bool(getattr(driver, "is_active", True))
             active_booking = active_bookings_map.get(driver.id, {})
             has_active_booking = bool(active_booking.get("current_booking_id"))
+            mission_status = active_booking.get("mission_status")
 
             if not is_active or is_stale:
                 status = "offline"
-            elif has_active_booking:
+            elif mission_status == BookingStatus.ASSIGNED.value:
+                status = "assigned"
+            elif mission_status in (
+                BookingStatus.EN_ROUTE.value,
+                BookingStatus.IN_PROGRESS.value,
+            ):
                 status = "busy"
             else:
                 status = "available"
+
+            presence_status = (
+                "offline"
+                if not is_active
+                else ("degraded" if is_stale else "online")
+            )
+            location_status = "stale" if is_stale else "fresh"
+            offline_reason = (
+                "no_signal"
+                if status == "offline"
+                else ("location_stale" if presence_status == "degraded" else "")
+            )
+            is_available = status == "available"
 
             first_name = getattr(getattr(driver, "user", None), "first_name", None)
             loc_item = {
@@ -2585,6 +2634,11 @@ class CompanyDriversLocations(Resource):
                 "last_seen_seconds": last_seen_seconds,
                 "is_stale": is_stale,
                 "status": status,
+                "mission_status": mission_status,
+                "presence_status": presence_status,
+                "location_status": location_status,
+                "is_available": is_available,
+                "offline_reason": offline_reason,
             }
             if has_active_booking:
                 loc_item["current_booking_id"] = active_booking.get(
@@ -2592,6 +2646,37 @@ class CompanyDriversLocations(Resource):
                 )
                 loc_item["client_short"] = active_booking.get("client_short", "")
             locations.append(loc_item)
+
+        # Métriques drivers_status_total (snapshot)
+        status_counts = {"available": 0, "assigned": 0, "busy": 0, "offline": 0}
+        for loc in locations:
+            s = loc.get("status")
+            if s in status_counts:
+                status_counts[s] += 1
+        try:
+            from services.monitoring.websocket_metrics import ws_metrics
+
+            ws_metrics.set_drivers_status_total(
+                available=status_counts["available"],
+                assigned=status_counts["assigned"],
+                busy=status_counts["busy"],
+                offline=status_counts["offline"],
+            )
+        except Exception:
+            pass
+
+        # Filtrage optionnel par viewport bbox
+        if use_bbox:
+            lat_min = min(bbox_sw_lat, bbox_ne_lat)
+            lat_max = max(bbox_sw_lat, bbox_ne_lat)
+            lng_min = min(bbox_sw_lng, bbox_ne_lng)
+            lng_max = max(bbox_sw_lng, bbox_ne_lng)
+            locations = [
+                loc
+                for loc in locations
+                if lat_min <= loc["latitude"] <= lat_max
+                and lng_min <= loc["longitude"] <= lng_max
+            ]
 
         # Log WARN 1 fois / 10 min si Redis OK mais 0 loc pour tous les chauffeurs
         if redis_ok and cid and len(drivers) > 0 and len(locations) == 0:
@@ -3307,7 +3392,6 @@ class CreateManualReservation(Resource):
         return resp, 201
 
 
-
 # ======================================================
 # 16. Détails d'un client + ses réservations + factures
 # ======================================================
@@ -3567,8 +3651,7 @@ class CompanyInstitutionSearch(Resource):
             return {"institutions": [], "total": 0}, 200
 
         results = (
-            Institution.query
-            .filter(Institution.name.ilike(f"%{q}%"))
+            Institution.query.filter(Institution.name.ilike(f"%{q}%"))
             .order_by(Institution.name)
             .limit(10)
             .all()
@@ -5002,12 +5085,16 @@ class SingleReservation(Resource):
                     )
                 )
             except Exception as notif_err:
-                logger.warning(
-                    "BookingCancelledEvent publish failed: %s", notif_err
-                )
+                logger.warning("BookingCancelledEvent publish failed: %s", notif_err)
 
             from shared.audit_helpers import audit_log as _audit_log
-            _audit_log("booking_cancelled", "operations", resource_type="booking", resource_id=reservation_id)
+
+            _audit_log(
+                "booking_cancelled",
+                "operations",
+                resource_type="booking",
+                resource_id=reservation_id,
+            )
 
             resp: dict[str, Any] = {
                 "message": uc_result.message or "La réservation a été annulée."
@@ -5015,7 +5102,9 @@ class SingleReservation(Resource):
             if uc_result.is_cancellation_billable is not None:
                 resp["is_cancellation_billable"] = uc_result.is_cancellation_billable
             if uc_result.cancellation_display_label:
-                resp["cancellation_display_label"] = uc_result.cancellation_display_label
+                resp["cancellation_display_label"] = (
+                    uc_result.cancellation_display_label
+                )
             return resp, 200
 
         except Exception as e:

@@ -1,18 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Alert, Platform } from 'react-native';
-import MapView, { Marker, LatLng, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, LatLng, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { GOOGLE_API_KEY } from '../../src/config/env';
 import { styles, LIRIE_MAP_STYLE, MAP_BRAND } from '@/styles/missionMapStyles';
 import { getLogger } from "@/utils/logger";
+import { getDriverRoute } from "@/services/api";
+import { decodePolyline } from "@/utils/polyline";
 
 const log = getLogger("MissionMap");
 
 type Props = {
   location: { coords: { latitude: number; longitude: number } };
   destination: string;
+  /** Coords backend (pickup_lat/lon, dropoff_lat/lon). Si fournies, aucun géocodage. */
+  destinationCoords?: { latitude: number; longitude: number } | null;
+  /** false par défaut. true seulement pour compatibilité legacy ou données incomplètes. */
+  allowGeocodeFallback?: boolean;
   contentWidth?: number;
   mapHeight?: number;
 };
@@ -22,10 +28,20 @@ const DIRECTIONS_KEY = GOOGLE_API_KEY;
 const mask = (val: string | undefined) =>
   val ? `${val.slice(0, 6)}...${val.slice(-4)}` : 'undefined';
 
-const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapHeight }) => {
+const MissionMap: React.FC<Props> = ({
+  location,
+  destination,
+  destinationCoords: destinationCoordsProp,
+  allowGeocodeFallback = false,
+  contentWidth,
+  mapHeight,
+}) => {
   const mapRef = useRef<MapView | null>(null);
   const [destinationCoords, setDestinationCoords] = useState<LatLng | null>(null);
+  const [routeCoords, setRouteCoords] = useState<LatLng[] | null>(null);
+  const [useGoogleFallback, setUseGoogleFallback] = useState(false);
   const lastGeocodeAlertAtRef = useRef<number>(0);
+  const lastRouteKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!DIRECTIONS_KEY) {
@@ -35,13 +51,22 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
     }
   }, []);
 
+  // 1. Si destinationCoords fournies -> utiliser directement, aucun géocodage
   useEffect(() => {
+    if (destinationCoordsProp != null) {
+      setDestinationCoords({
+        latitude: destinationCoordsProp.latitude,
+        longitude: destinationCoordsProp.longitude,
+      });
+      return;
+    }
+    // 2. Sinon, si allowGeocodeFallback et destination string -> géocoder (legacy)
+    if (!allowGeocodeFallback || !destination?.trim()) {
+      setDestinationCoords(null);
+      return;
+    }
     const fetchDestinationCoords = async () => {
       try {
-        if (!destination?.trim()) {
-          setDestinationCoords(null);
-          return;
-        }
         const geocode = await Location.geocodeAsync(destination);
         if (geocode.length > 0) {
           setDestinationCoords({
@@ -74,7 +99,7 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
     };
 
     fetchDestinationCoords();
-  }, [destination]);
+  }, [destinationCoordsProp, allowGeocodeFallback, destination]);
 
   const region = useMemo(
     () => ({
@@ -87,6 +112,90 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
   );
 
   const canDrawRoute = Boolean(DIRECTIONS_KEY && destinationCoords);
+
+  useEffect(() => {
+    if (!destinationCoords) {
+      lastRouteKeyRef.current = null;
+      setRouteCoords(null);
+      setUseGoogleFallback(false);
+    }
+  }, [destinationCoords]);
+
+  const routeKey = destinationCoords
+    ? `${location.coords.latitude},${location.coords.longitude}:${destinationCoords.latitude},${destinationCoords.longitude}`
+    : null;
+
+  const hasCachedRoute =
+    routeKey != null &&
+    lastRouteKeyRef.current === routeKey &&
+    routeCoords != null &&
+    routeCoords.length > 0;
+
+  const needsDirectionsFetch =
+    canDrawRoute && routeKey != null && lastRouteKeyRef.current !== routeKey;
+
+  // Priorité OSRM (backend) puis fallback Google Directions
+  useEffect(() => {
+    if (!needsDirectionsFetch || !destinationCoords || !routeKey) return;
+
+    setUseGoogleFallback(false);
+    setRouteCoords(null);
+    let cancelled = false;
+
+    const fetchOsrmRoute = async () => {
+      try {
+        const res = await getDriverRoute(
+          location.coords.latitude,
+          location.coords.longitude,
+          destinationCoords.latitude,
+          destinationCoords.longitude
+        );
+        if (cancelled) return;
+
+        let coords: LatLng[];
+        if (res.polyline_encoded) {
+          coords = decodePolyline(res.polyline_encoded);
+        } else if (res.coordinates?.length) {
+          coords = res.coordinates.map((c) => ({
+            latitude: c.lat,
+            longitude: c.lon,
+          }));
+        } else {
+          setUseGoogleFallback(true);
+          return;
+        }
+
+        if (coords.length > 0) {
+          lastRouteKeyRef.current = routeKey;
+          setRouteCoords(coords);
+          if (mapRef.current) {
+            mapRef.current.fitToCoordinates(coords, {
+              edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+              animated: true,
+            });
+          }
+        } else {
+          setUseGoogleFallback(true);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          log.warn("OSRM route failed, fallback to Google", { error: e });
+          setUseGoogleFallback(true);
+        }
+      }
+    };
+
+    fetchOsrmRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    needsDirectionsFetch,
+    routeKey,
+    destinationCoords,
+    location.coords.latitude,
+    location.coords.longitude,
+  ]);
 
   const containerStyle = [
     styles.container,
@@ -134,9 +243,16 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
           </Marker>
         )}
 
-        {canDrawRoute && (
+        {hasCachedRoute && routeCoords && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeWidth={4}
+            strokeColor={MAP_BRAND.primary}
+          />
+        )}
+        {needsDirectionsFetch && useGoogleFallback && (
           <MapViewDirections
-            key="directions"
+            key={`directions-${routeKey}`}
             origin={location.coords}
             destination={destinationCoords!}
             apikey={DIRECTIONS_KEY}
@@ -145,11 +261,15 @@ const MissionMap: React.FC<Props> = ({ location, destination, contentWidth, mapH
             strokeColor={MAP_BRAND.primary}
             optimizeWaypoints
             onReady={(result) => {
-              if (mapRef.current && result.coordinates?.length) {
-                mapRef.current.fitToCoordinates(result.coordinates, {
-                  edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-                  animated: true,
-                });
+              if (result.coordinates?.length) {
+                lastRouteKeyRef.current = routeKey;
+                setRouteCoords(result.coordinates);
+                if (mapRef.current) {
+                  mapRef.current.fitToCoordinates(result.coordinates, {
+                    edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+                    animated: true,
+                  });
+                }
               }
             }}
             onError={(e) => {

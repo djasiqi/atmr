@@ -352,6 +352,59 @@ export function filterNextMissionsOnly(missions: Booking[]): Booking[] {
 }
 
 /**
+ * Coordonnées pour la prochaine destination (priorité aux coords backend)
+ */
+export interface NextDestinationCoords {
+  latitude: number;
+  longitude: number;
+}
+
+/**
+ * Trouve les coordonnées de la prochaine destination à afficher sur la carte.
+ * Priorité : mission en cours (in_progress) > mission en route (en_route) > mission assignée.
+ * Utilise pickup_lat/lon et dropoff_lat/lon du backend quand disponibles.
+ */
+export function getNextDestinationCoords(missions: Booking[]): NextDestinationCoords | null {
+  if (missions.length === 0) return null;
+
+  const inProgress = missions.find((m) => m.status?.toLowerCase() === "in_progress");
+  if (inProgress?.dropoff_lat != null && inProgress?.dropoff_lon != null) {
+    return { latitude: inProgress.dropoff_lat, longitude: inProgress.dropoff_lon };
+  }
+
+  const enRoute = missions.find((m) => m.status?.toLowerCase() === "en_route");
+  if (enRoute?.pickup_lat != null && enRoute?.pickup_lon != null) {
+    return { latitude: enRoute.pickup_lat, longitude: enRoute.pickup_lon };
+  }
+
+  const assigned = missions
+    .filter((m) => m.status?.toLowerCase() === "assigned")
+    .sort(
+      (a, b) =>
+        new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+    );
+
+  if (assigned.length > 0 && assigned[0].pickup_lat != null && assigned[0].pickup_lon != null) {
+    return { latitude: assigned[0].pickup_lat, longitude: assigned[0].pickup_lon };
+  }
+
+  const firstWithCoords = missions.find(
+    (m) =>
+      (m.status?.toLowerCase() === "in_progress" && m.dropoff_lat != null && m.dropoff_lon != null) ||
+      (m.status?.toLowerCase() === "en_route" && m.pickup_lat != null && m.pickup_lon != null) ||
+      (m.pickup_lat != null && m.pickup_lon != null)
+  );
+  if (firstWithCoords?.dropoff_lat != null && firstWithCoords?.dropoff_lon != null) {
+    return { latitude: firstWithCoords.dropoff_lat, longitude: firstWithCoords.dropoff_lon };
+  }
+  if (firstWithCoords?.pickup_lat != null && firstWithCoords?.pickup_lon != null) {
+    return { latitude: firstWithCoords.pickup_lat, longitude: firstWithCoords.pickup_lon };
+  }
+
+  return null;
+}
+
+/**
  * Trouve la prochaine destination à afficher sur la carte
  * Priorité : mission en cours (in_progress) > mission assignée la plus proche
  */

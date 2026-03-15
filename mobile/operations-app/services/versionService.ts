@@ -128,10 +128,11 @@ export async function checkVersion(): Promise<VersionCheckResponse> {
 
   versionCheckInFlight = (async () => {
     try {
-      const response = await api.post<VersionCheckResponse>("/app/version-check", {
-        platform,
-        current_version: currentVersion,
-      });
+      const response = await api.post<VersionCheckResponse>(
+        "/app/version-check",
+        { platform, current_version: currentVersion },
+        { timeout: 8000 }
+      );
 
       return normalizeVersionStatus(response.data);
     } catch (error: any) {

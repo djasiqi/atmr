@@ -14,7 +14,7 @@ import {
   openSamsungBatterySettings,
 } from "../../services/batteryOptimization";
 
-const DISMISS_KEY = "battery_guide_dismissed_v1";
+export const BATTERY_GUIDE_DISMISSED_KEY = "battery_guide_dismissed_v1";
 
 interface Props {
   visible: boolean;
@@ -27,7 +27,7 @@ export function BatteryOptimizationGuide({ visible, onDismiss }: Props) {
 
   useEffect(() => {
     setSamsung(isSamsungDevice());
-    AsyncStorage.getItem(DISMISS_KEY).then((val) => {
+    AsyncStorage.getItem(BATTERY_GUIDE_DISMISSED_KEY).then((val) => {
       setPermanentlyDismissed(val === "true");
     });
   }, []);
@@ -43,17 +43,16 @@ export function BatteryOptimizationGuide({ visible, onDismiss }: Props) {
     >
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <Text style={styles.title}>Optimisation de la batterie</Text>
+          <Text style={styles.title}>Paramètres batterie</Text>
           <Text style={styles.body}>
-            Pour recevoir les notifications de mission même quand l'application
-            est en arrière-plan, veuillez désactiver l'optimisation de batterie
-            pour Liri Opérations.
+            Désactivez l'optimisation de batterie pour recevoir les notifications
+            en arrière-plan.
           </Text>
 
           {samsung && (
             <Text style={styles.body}>
-              Sur Samsung, allez aussi dans les paramètres de batterie et
-              désactivez « Mise en veille de l'application » pour Liri.
+              Samsung : désactivez « Mise en veille » pour Liri dans les
+              paramètres.
             </Text>
           )}
 
@@ -75,7 +74,7 @@ export function BatteryOptimizationGuide({ visible, onDismiss }: Props) {
               }}
             >
               <Text style={styles.secondaryBtnText}>
-                Ouvrir paramètres Samsung
+                Paramètres Samsung
               </Text>
             </TouchableOpacity>
           )}
@@ -87,7 +86,7 @@ export function BatteryOptimizationGuide({ visible, onDismiss }: Props) {
           <TouchableOpacity
             style={styles.dismissBtn}
             onPress={async () => {
-              await AsyncStorage.setItem(DISMISS_KEY, "true");
+              await AsyncStorage.setItem(BATTERY_GUIDE_DISMISSED_KEY, "true");
               setPermanentlyDismissed(true);
               onDismiss();
             }}
@@ -103,42 +102,43 @@ export function BatteryOptimizationGuide({ visible, onDismiss }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.52)",
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 14,
+    padding: 22,
     width: "100%",
-    maxWidth: 360,
-    elevation: 8,
+    maxWidth: 340,
+    elevation: 6,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
   },
   title: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1F2937",
-    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 10,
     textAlign: "center",
+    letterSpacing: -0.2,
   },
   body: {
     fontSize: 14,
-    color: "#4B5563",
+    color: "#525252",
     lineHeight: 20,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   primaryBtn: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#00796B",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 6,
   },
   primaryBtnText: {
     color: "#fff",
@@ -146,28 +146,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   secondaryBtn: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "#F5F5F5",
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 6,
   },
   secondaryBtnText: {
-    color: "#374151",
+    color: "#404040",
     fontSize: 14,
     fontWeight: "500",
   },
   dismissBtn: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 2,
   },
   dismissText: {
-    color: "#9CA3AF",
+    color: "#737373",
     fontSize: 13,
   },
   neverText: {
-    color: "#D1D5DB",
+    color: "#A3A3A3",
     fontSize: 12,
     textDecorationLine: "underline" as const,
   },

@@ -6,11 +6,10 @@ import {
     TouchableOpacity,
     FlatList,
     ActivityIndicator,
-    Alert,
     StyleSheet,
     ScrollView,
-    Platform,
 } from "react-native";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import { Ionicons } from "@expo/vector-icons";
 import {
     fetchPartnershipsForTransfer,
@@ -54,6 +53,7 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
     ride,
     onSuccess,
 }) => {
+    const appAlert = useAppAlert();
     const [partnerships, setPartnerships] = useState<Partnership[]>([]);
     const [selectedPartnership, setSelectedPartnership] = useState<Partnership | null>(null);
     const [loading, setLoading] = useState(false);
@@ -100,20 +100,12 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
         });
 
         if (!selectedPartnership) {
-            if (Platform.OS === "web") {
-                window.alert("Veuillez sélectionner une entreprise partenaire");
-            } else {
-                Alert.alert("Erreur", "Veuillez sélectionner une entreprise partenaire");
-            }
+            appAlert.showAlert("Erreur", "Veuillez sélectionner une entreprise partenaire");
             return;
         }
 
         if (!ride) {
-            if (Platform.OS === "web") {
-                window.alert("Aucune course sélectionnée");
-            } else {
-                Alert.alert("Erreur", "Aucune course sélectionnée");
-            }
+            appAlert.showAlert("Erreur", "Aucune course sélectionnée");
             return;
         }
 
@@ -130,32 +122,21 @@ export const TransferRideModal: React.FC<TransferRideModalProps> = ({
 
             await proposeTransfer(selectedPartnership.id, ride.id);
 
-            if (Platform.OS === "web") {
-                window.alert(
-                    `Course transférée avec succès à ${selectedPartnership.partner_company_name}`,
-                );
-            } else {
-                Alert.alert(
-                    "Succès",
-                    `Course transférée avec succès à ${selectedPartnership.partner_company_name}`,
-                    [{ text: "OK", onPress: () => { onSuccess(); onClose(); } }],
-                );
-                return;
-            }
-
-            onSuccess();
-            onClose();
+            appAlert.showAlert(
+                "Succès",
+                `Course transférée avec succès à ${selectedPartnership.partner_company_name}`,
+                () => {
+                    onSuccess();
+                    onClose();
+                }
+            );
         } catch (err: any) {
             log.error("transfer failed", { error: err });
             const errorMessage =
                 err?.response?.data?.error || err?.message || "Erreur lors du transfert";
             setError(errorMessage);
 
-            if (Platform.OS === "web") {
-                window.alert(errorMessage);
-            } else {
-                Alert.alert("Erreur", errorMessage);
-            }
+            appAlert.showAlert("Erreur", errorMessage);
         } finally {
             setLoadingTransfer(false);
         }

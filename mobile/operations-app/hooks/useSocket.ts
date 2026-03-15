@@ -248,8 +248,11 @@ export const useSocket = (
           id: s?.id,
         });
         
-        if (!s || !isMountedRef.current) {
-          // échec initial → planifie une reconnexion
+        if (!isMountedRef.current) {
+          // Composant démonté (ex. Strict Mode, navigation) — ne pas logger d'échec ni planifier de reconnexion
+          return;
+        }
+        if (!s) {
           log.warn("connection failed, scheduling reconnection");
           scheduleReconnection();
           return;

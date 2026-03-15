@@ -234,11 +234,18 @@ export const RideCreateModal: React.FC<RideCreateModalProps> = ({
             priority,
             amount: amount ? parseFloat(amount) : undefined,
             is_return: isReturn,
-            return_time: returnTime ? (() => {
-                const rd = dayjs(returnTime);
-                if (rd.hour() === 0 && rd.minute() === 0) return rd.format("YYYY-MM-DD");
-                return rd.format("YYYY-MM-DDTHH:mm:ss");
-            })() : undefined,
+            // Aligné sur le web : return_date toujours envoyé pour A/R (date du retour).
+            // return_time uniquement si heure fixée (sinon = heure à définir, comme le web).
+            ...(isReturn && scheduledTime ? (() => {
+                const base = returnTime || scheduledTime;
+                const d = dayjs(base);
+                const dateStr = d.format("YYYY-MM-DD");
+                const hourDefined = d.hour() !== 0 || d.minute() !== 0;
+                return {
+                    return_date: dateStr,
+                    ...(hourDefined ? { return_time: d.format("YYYY-MM-DDTHH:mm:ss") } : {}),
+                };
+            })() : {}),
             wheelchair_client_has: wheelchairClientHas || undefined,
             wheelchair_need: wheelchairNeed || undefined,
             medical_facility: medicalFacility || undefined,

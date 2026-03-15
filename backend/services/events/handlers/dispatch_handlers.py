@@ -39,7 +39,7 @@ def handle_dispatch_requested(event: dict[str, Any]) -> None:
 
     trigger1: Any = getattr(_queue, "trigger_on_booking_change", None)
     if callable(trigger1):
-        trigger1(company_id, action=action)
+        trigger1(company_id, params={"action": action})
         return
 
     trigger2: Any = getattr(_queue, "trigger", None)
@@ -48,6 +48,5 @@ def handle_dispatch_requested(event: dict[str, Any]) -> None:
         return
 
     logger.warning(
-        "[EventBus] Aucun trigger compatible trouvé dans "
-        "services.unified_dispatch.queue"
+        "[EventBus] Aucun trigger compatible trouvé dans services.unified_dispatch.queue"
     )

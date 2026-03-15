@@ -159,6 +159,7 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
           </div>
           <div className={tp.footer}>
             <button type="button" className={tp.footerBtn} onClick={() => { const now = new Date(); selectPreset(`${pad(now.getHours())}:${pad(Math.ceil(now.getMinutes() / 5) * 5 % 60)}`); }}>Maintenant</button>
+            <button type="button" className={tp.footerBtn} onClick={() => { selectPreset('00:00'); close(); }}>À définir</button>
             {value && <button type="button" className={tp.footerBtnClear} onClick={() => { onChange(''); setMasked(''); close(); }}>Effacer</button>}
           </div>
         </div>,

@@ -20,8 +20,6 @@ from models import (
     Assignment,
     AutonomousAction,
     Booking,
-    Client,
-    ClientType,
     Company,
     DispatchMode,
     Driver,
@@ -2739,7 +2737,7 @@ class MobileCreateRide(Resource):
         Utilise le use-case canonique CreateManualBookingUseCase (même source de vérité que le web).
         Le payload mobile est transformé via l'adaptateur vers le contrat canonique.
         """
-        company, company_id = _get_company_context()
+        _company, company_id = _get_company_context()
         payload = request.get_json(silent=True) or {}
 
         # client_id requis (plus de création sans client - alignement web)
@@ -2858,8 +2856,8 @@ class MobileCreateRide(Resource):
                         assignment_writer=writer
                     )
                     uc_result = assign_uc.execute(
-                        booking=first_outbound,
-                        driver=driver,
+                        booking=cast(Any, first_outbound),
+                        driver=cast(Any, driver),
                         company_id=company_id,
                     )
                     if uc_result.ok:
@@ -2888,6 +2886,9 @@ class MobileCreateRide(Resource):
         )
 
         # Réponse au format attendu par le mobile
+        if not first_outbound:
+            company_mobile_dispatch_ns.abort(500, "Erreur lors de la création de la course")
+            raise AssertionError("No outbound created") from None
         summary = _build_ride_summary(
             first_outbound, current_company_id=company_id
         )

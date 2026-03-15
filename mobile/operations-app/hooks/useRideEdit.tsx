@@ -1,12 +1,13 @@
 import { useState, useCallback } from "react";
-import { Alert } from "react-native";
 import { RideDetail, RideEditPayload } from "@/types/enterpriseDispatch";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import { updateRide, getDispatchRideDetails } from "@/services/enterpriseDispatch";
 import { getLogger } from "@/utils/logger";
 
 const log = getLogger("RideEdit");
 
 export const useRideEdit = (onSuccess?: () => Promise<void>) => {
+    const appAlert = useAppAlert();
     const [loading, setLoading] = useState(false);
     const [rideDetail, setRideDetail] = useState<RideDetail | null>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
@@ -53,20 +54,20 @@ export const useRideEdit = (onSuccess?: () => Promise<void>) => {
                 if (onSuccess) {
                     await onSuccess();
                 }
-                Alert.alert("Succès", "La course a été mise à jour avec succès.");
+                appAlert.showAlert("Succès", "La course a été mise à jour avec succès.");
                 return updated;
             } catch (error: any) {
                 const message =
                     error?.response?.data?.error ??
                     error?.message ??
                     "Impossible de mettre à jour la course.";
-                Alert.alert("Erreur", message);
+                appAlert.showAlert("Erreur", message);
                 throw error;
             } finally {
                 setLoading(false);
             }
         },
-        [onSuccess]
+        [onSuccess, appAlert]
     );
 
     const clear = useCallback(() => {

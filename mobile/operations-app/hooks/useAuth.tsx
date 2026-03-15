@@ -173,7 +173,7 @@ interface AuthContextType {
   enterpriseLoading: boolean;
   pendingEnterpriseMfa: EnterpriseMfaChallenge | null;
   loginEnterprise: (
-    params: EnterpriseLoginParams
+    params: EnterpriseLoginParams & { rememberMe?: boolean }
   ) => Promise<
     | { mfaRequired: true; challenge: EnterpriseMfaChallenge }
     | { mfaRequired: false }
@@ -229,6 +229,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [enterpriseLoading, setEnterpriseLoading] = useState(false);
   const [pendingEnterpriseMfa, setPendingEnterpriseMfa] =
     useState<EnterpriseMfaChallenge | null>(null);
+  const [pendingEnterpriseRememberMe, setPendingEnterpriseRememberMe] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
 
   /** Sync état → cache module (survit remount StrictMode / hot reload). */
   useEffect(() => {
@@ -344,14 +348,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         notifyAuthNotReady();
         await clearEnterpriseStorage();
+        const keepRememberedCreds = await getRememberMe("enterprise");
+        if (!keepRememberedCreds) {
+          await clearRememberedCredentials("enterprise");
+        }
         invalidateEnterpriseInterceptorCache();
         setEnterpriseSession(null);
         setPendingEnterpriseMfa(null);
+        setPendingEnterpriseRememberMe(null);
       } finally {
         enterpriseLogoutInProgressRef.current = false;
       }
     },
-    [clearEnterpriseStorage]
+    [clearEnterpriseStorage, getRememberMe, clearRememberedCredentials]
   );
 
   const handleDriverLoginSuccess = useCallback(
@@ -611,8 +620,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     if (autoLoginError instanceof BiometricNoCredentialsError) {
                       if (isMounted) {
                         Alert.alert(
-                          "Reconnexion nécessaire",
-                          "Vos identifiants enregistrés ne sont plus disponibles. Veuillez saisir vos identifiants pour vous reconnecter.",
+                          "Reconnexion requise",
+                          "Identifiants expirés ou indisponibles. Veuillez vous reconnecter.",
                           [{ text: "Se connecter", style: "default" }]
                         );
                       }
@@ -660,8 +669,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 if (autoLoginError instanceof BiometricNoCredentialsError) {
                   if (isMounted) {
                     Alert.alert(
-                      "Reconnexion nécessaire",
-                      "Vos identifiants enregistrés ne sont plus disponibles. Veuillez saisir vos identifiants pour vous reconnecter.",
+                      "Reconnexion requise",
+                      "Identifiants expirés ou indisponibles. Veuillez vous reconnecter.",
                       [{ text: "Se connecter", style: "default" }]
                     );
                   }
@@ -799,6 +808,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
+    const BOOTSTRAP_TIMEOUT_MS = 25000;
+
     const executeBootstrapOnce = async () => {
       // Ne jamais skip : hot reload / StrictMode remount réinitialise l'état React
       // mais les variables module persistent → on doit toujours re-exécuter pour restaurer depuis storage
@@ -808,11 +819,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         log.info("auth bootstrap already running, reusing global promise");
       }
 
-      await authBootstrapOncePromise;
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          log.warn("bootstrap timeout, releasing loading to avoid infinite spinner");
+          resolve();
+        }, BOOTSTRAP_TIMEOUT_MS);
+      });
 
-      // Le mount "abonné" (qui n'a pas exécuté runBootstrap) doit aussi sortir du loading.
-      if (isMounted) {
-        setInitialLoading(false);
+      try {
+        await Promise.race([authBootstrapOncePromise, timeoutPromise]);
+      } catch (e) {
+        log.warn("bootstrap error", { error: e });
+      } finally {
+        // Timeout ou succès : toujours sortir du loading pour éviter boucle infinie
+        if (isMounted) {
+          setInitialLoading(false);
+        }
       }
     };
 
@@ -1275,25 +1297,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ✅ Recharger la session entreprise après un switchMode vers "enterprise"
   // Ce useEffect se déclenche quand le mode change vers "enterprise" et qu'il n'y a pas encore de session chargée
   useEffect(() => {
-    // #region agent log
-    debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode entry', data: { mode, hasEnterpriseSession: !!enterpriseSession, initialLoading }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-    // #endregion
 
     if (mode !== "enterprise" || enterpriseSession || initialLoading) {
-      // #region agent log
-      if (mode === "enterprise") {
-        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode skipped', data: { reason: enterpriseSession ? 'hasSession' : initialLoading ? 'loading' : 'notEnterprise' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-      }
-      // #endregion
       return;
     }
 
     let isMounted = true;
     (async () => {
       try {
-        // #region agent log
-        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode loading session', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-        // #endregion
 
         // ✅ CORRECTION : Utiliser SecureStore pour le token
         const [enterpriseToken, enterpriseSessionRaw, justCreated] = await Promise.all([
@@ -1302,9 +1313,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           AsyncStorage.getItem("enterprise_session_just_created"),
         ]);
 
-        // #region agent log
-        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw, justCreated }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-        // #endregion
 
         if (enterpriseToken && enterpriseSessionRaw && isMounted) {
           try {
@@ -1312,9 +1320,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // Restaurer la session depuis le stockage
             setEnterpriseSession({ ...parsed, token: enterpriseToken });
 
-            // #region agent log
-            debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode session set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-            // #endregion
 
             // Si la session vient d'être créée (juste après un switch), ne pas la vérifier immédiatement
             if (justCreated === "true") {
@@ -1323,16 +1328,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           } catch (error) {
             log.warn("enterprise session load error after switch", { error });
-            // #region agent log
-            debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-            // #endregion
           }
         }
       } catch (error) {
         log.warn("enterprise async storage read error after switch", { error });
-        // #region agent log
-        debugLog({ location: 'useAuth.tsx:useEffect:switchMode', message: 'useEffect switchMode AsyncStorage error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'G' });
-        // #endregion
       }
     })();
 
@@ -1376,9 +1375,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // ✅ Fonction pour charger la session driver depuis SecureStorage sans faire de requête API
   // Utile après un switchMode quand la session vient d'être créée
   const loadDriverSession = useCallback(async () => {
-    // #region agent log
-    sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
-    // #endregion
 
     setDriverLoading(true);
     try {
@@ -1388,9 +1384,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         secureStorage.getUserPublicId(),
       ]);
 
-      // #region agent log
-      sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession loaded', data: { hasToken: !!accessToken, hasRefreshToken: !!refreshToken, hasUserPublicId: !!userPublicId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
-      // #endregion
 
       if (accessToken) {
         setDriverToken(accessToken);
@@ -1401,9 +1394,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setDriver(profile);
           await asyncStorage.setDriverId(profile.id);
 
-          // #region agent log
-          debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession set', data: { hasToken: !!accessToken, driverId: profile.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
-          // #endregion
 
           log.success("driver session loaded from storage", {
             hasToken: !!accessToken,
@@ -1412,9 +1402,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           });
         } catch (profileError) {
           log.warn("driver profile load error", { error: profileError });
-          // #region agent log
-          debugLog({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession profile error', data: { error: String(profileError) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
-          // #endregion
           // Ne pas nettoyer la session ici, le token est valide mais le profil ne peut pas être chargé
         }
       } else {
@@ -1424,9 +1411,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       log.error("driver session load error", { error });
-      // #region agent log
-      sendIngestEvent({ location: 'useAuth.tsx:loadDriverSession', message: 'loadDriverSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'K' });
-      // #endregion
       setDriver(null);
       setDriverToken(null);
     } finally {
@@ -1490,13 +1474,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [driverToken, forceLogoutDriverInternal]);
 
   const loginEnterpriseHandler = useCallback(
-    async (params: EnterpriseLoginParams) => {
+    async (params: EnterpriseLoginParams & { rememberMe?: boolean }) => {
+      const { rememberMe, ...apiParams } = params;
       setEnterpriseLoading(true);
       try {
         const device = await ensureDeviceId();
         const response: EnterpriseLoginResponse = await loginEnterprise({
-          ...params,
-          device_id: params.device_id ?? device,
+          ...apiParams,
+          device_id: apiParams.device_id ?? device,
         });
 
         if ((response as EnterpriseLoginMfaPayload).mfa_required) {
@@ -1508,11 +1493,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             message: mfa.message,
           };
           setPendingEnterpriseMfa(challenge);
+          if (rememberMe && params.email && params.password) {
+            setPendingEnterpriseRememberMe({
+              email: params.email.trim(),
+              password: params.password,
+            });
+          }
           await storeMode("enterprise");
           return { mfaRequired: true as const, challenge };
         }
 
         await handleEnterpriseSuccess(response as EnterpriseTokenPayload);
+        if (rememberMe && params.email && params.password) {
+          try {
+            await persistRememberMe(true, "enterprise");
+            await setRememberedCredentials(
+              params.email.trim(),
+              params.password,
+              "enterprise"
+            );
+          } catch {
+            await persistRememberMe(false, "enterprise");
+          }
+        } else {
+          await persistRememberMe(false, "enterprise");
+          await clearRememberedCredentials("enterprise");
+        }
         log.success("enterprise login succeeded, session stored");
         return { mfaRequired: false as const };
       } catch (error: any) {
@@ -1546,19 +1552,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           device_id: device,
         });
         await handleEnterpriseSuccess(response);
+        const pending = pendingEnterpriseRememberMe;
+        setPendingEnterpriseRememberMe(null);
+        if (pending) {
+          try {
+            await persistRememberMe(true, "enterprise");
+            await setRememberedCredentials(
+              pending.email,
+              pending.password,
+              "enterprise"
+            );
+          } catch {
+            await persistRememberMe(false, "enterprise");
+          }
+        }
       } finally {
         setEnterpriseLoading(false);
       }
     },
-    [ensureDeviceId, handleEnterpriseSuccess, pendingEnterpriseMfa]
+    [
+      ensureDeviceId,
+      handleEnterpriseSuccess,
+      pendingEnterpriseMfa,
+      pendingEnterpriseRememberMe,
+    ]
   );
 
   // ✅ Fonction pour charger la session depuis AsyncStorage sans faire de requête API
   // Utile après un switchMode quand la session vient d'être créée
   const loadEnterpriseSession = useCallback(async () => {
-    // #region agent log
-    sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession entry', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
-    // #endregion
 
     setEnterpriseLoading(true);
     try {
@@ -1568,17 +1590,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         AsyncStorage.getItem(ENTERPRISE_SESSION_KEY),
       ]);
 
-      // #region agent log
-      sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession loaded', data: { hasToken: !!enterpriseToken, hasSession: !!enterpriseSessionRaw }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
-      // #endregion
 
       if (enterpriseToken && enterpriseSessionRaw) {
         const parsed: EnterpriseSessionState = JSON.parse(enterpriseSessionRaw);
         setEnterpriseSession({ ...parsed, token: enterpriseToken });
 
-        // #region agent log
-        debugLog({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession set', data: { hasToken: !!enterpriseToken, companyId: parsed.company?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
-        // #endregion
 
         log.success("enterprise session loaded from storage", {
           hasToken: !!enterpriseToken,
@@ -1591,9 +1607,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       log.error("enterprise session load error", { error });
-      // #region agent log
-      sendIngestEvent({ location: 'useAuth.tsx:loadEnterpriseSession', message: 'loadEnterpriseSession error', data: { error: String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H' });
-      // #endregion
       setEnterpriseSession(null);
     } finally {
       setEnterpriseLoading(false);

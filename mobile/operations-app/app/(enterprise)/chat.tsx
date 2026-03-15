@@ -413,31 +413,31 @@ export default function EnterpriseChatScreen() {
           countUnreadInMessages(sorted);
         }
 
-        // Scroll vers le bas après un délai
+        // Scroll vers le bas après rendu (plusieurs tentatives pour gérer le timing du layout)
+        const doScroll = () => {
+          if (!flatListRef.current) return;
+          try {
+            if (layoutHeightRef.current > 0 && contentHeightRef.current > 0) {
+              const offset = contentHeightRef.current - layoutHeightRef.current;
+              if (offset > 0) {
+                flatListRef.current.scrollToOffset({ offset, animated: false });
+              } else {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+            } else {
+              flatListRef.current.scrollToEnd({ animated: false });
+            }
+            isAtBottomRef.current = true;
+            setShowScrollButton(false);
+          } catch (e) {
+            log.warn("initial scroll error", { error: e });
+          }
+        };
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            setTimeout(() => {
-              if (flatListRef.current && layoutHeightRef.current > 0) {
-                const offset = contentHeightRef.current - layoutHeightRef.current;
-                if (offset > 0) {
-                  flatListRef.current.scrollToOffset({ offset, animated: false });
-                } else {
-                  flatListRef.current.scrollToEnd({ animated: false });
-                }
-                setTimeout(() => {
-                  if (flatListRef.current && layoutHeightRef.current > 0) {
-                    const offset2 = contentHeightRef.current - layoutHeightRef.current;
-                    if (offset2 > 0) {
-                      flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
-                    } else {
-                      flatListRef.current.scrollToEnd({ animated: false });
-                    }
-                    isAtBottomRef.current = true;
-                    setShowScrollButton(false);
-                  }
-                }, 150);
-              }
-            }, 100);
+            setTimeout(doScroll, 50);
+            setTimeout(doScroll, 150);
+            setTimeout(doScroll, 350);
           });
         });
       } catch (e) {
@@ -595,14 +595,16 @@ export default function EnterpriseChatScreen() {
         }
       }
 
-      if (messages.length > 0 && isAtBottomRef.current) {
-        const t = setTimeout(() => {
-          scrollToBottom(false);
-          setTimeout(() => {
-            scrollToBottom(false);
-          }, 100);
-        }, 100);
-        return () => clearTimeout(t);
+      // Toujours scroller vers le bas à l'accès au chat pour afficher le dernier message
+      if (messages.length > 0) {
+        const t1 = setTimeout(() => scrollToBottom(false), 50);
+        const t2 = setTimeout(() => scrollToBottom(false), 200);
+        const t3 = setTimeout(() => scrollToBottom(false), 400);
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+        };
       }
       return () => { };
     }, [messages.length, scrollToBottom, markAsRead])
@@ -781,30 +783,26 @@ export default function EnterpriseChatScreen() {
           if (!hasDoneInitialScrollRef.current) {
             hasDoneInitialScrollRef.current = true;
             previousContentHeightRef.current = contentHeight;
+            const doScroll = () => {
+              if (!flatListRef.current) return;
+              if (layoutHeightRef.current > 0) {
+                const offset = contentHeightRef.current - layoutHeightRef.current;
+                if (offset > 0) {
+                  flatListRef.current.scrollToOffset({ offset, animated: false });
+                } else {
+                  flatListRef.current.scrollToEnd({ animated: false });
+                }
+              } else {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+              isAtBottomRef.current = true;
+              setShowScrollButton(false);
+            };
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                setTimeout(() => {
-                  if (flatListRef.current && layoutHeightRef.current > 0) {
-                    const offset = contentHeight - layoutHeightRef.current;
-                    if (offset > 0) {
-                      flatListRef.current.scrollToOffset({ offset, animated: false });
-                    } else {
-                      flatListRef.current.scrollToEnd({ animated: false });
-                    }
-                    setTimeout(() => {
-                      if (flatListRef.current && layoutHeightRef.current > 0) {
-                        const offset2 = contentHeightRef.current - layoutHeightRef.current;
-                        if (offset2 > 0) {
-                          flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
-                        } else {
-                          flatListRef.current.scrollToEnd({ animated: false });
-                        }
-                        isAtBottomRef.current = true;
-                        setShowScrollButton(false);
-                      }
-                    }, 100);
-                  }
-                }, 100);
+                doScroll();
+                setTimeout(doScroll, 100);
+                setTimeout(doScroll, 300);
               });
             });
             return;

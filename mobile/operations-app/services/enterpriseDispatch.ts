@@ -242,17 +242,13 @@ export interface SwitchToDriverResponse {
 }
 
 export const switchToDriverToken = async (): Promise<SwitchToDriverResponse> => {
-  // #region agent log
   sendIngestEvent({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken entry',data:{url:'/auth/me/switch-to-driver'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'});
-  // #endregion
   
   const response = await enterpriseApi.post<SwitchToDriverResponse>(
     "/auth/me/switch-to-driver"
   );
   
-  // #region agent log
   sendIngestEvent({location:'enterpriseDispatch.ts:switchToDriverToken',message:'switchToDriverToken success',data:{hasToken:!!response.data.token,hasRefreshToken:!!response.data.refresh_token,status:response.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'});
-  // #endregion
   
   return response.data;
 };

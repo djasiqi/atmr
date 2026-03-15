@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { ScrollView, Alert, Linking, View, RefreshControl, Platform, AppState, InteractionManager } from "react-native";
+import { ScrollView, Alert, Linking, View, Text, RefreshControl, Platform, AppState, InteractionManager } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { useLocation } from "@/hooks/useLocation";
@@ -28,6 +28,7 @@ import { onBookingsResync } from "@/services/socket";
 import {
   organizeMissionsForDisplay,
   getNextDestination,
+  getNextDestinationCoords,
   filterActiveMissions,
   filterNextMissionsOnly,
   type DisplayMission,
@@ -40,6 +41,7 @@ import {
   cleanupExpiredReminders,
 } from "@/services/localNotifications";
 import { getLogger } from "@/utils/logger";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import { TrackingStateBanner } from "@/components/common/TrackingStateBanner";
 import {
   requestBackgroundPermissionIfNeeded,
@@ -72,6 +74,7 @@ function isMissionReturn(is_return: any): boolean {
 
 export default function MissionScreen() {
   const { driver, mode, isDriverAuthenticated } = useAuth();
+  const appAlert = useAppAlert();
   const { location } = useLocation();
   const trackingState = useTrackingState({
     isDriverAuthenticated: !!isDriverAuthenticated,
@@ -119,6 +122,11 @@ export default function MissionScreen() {
   // Trouver la prochaine destination pour la carte
   const nextDestination = useMemo(() => {
     return getNextDestination(activeMissions);
+  }, [activeMissions]);
+
+  // Coords backend (priorité) — évite le géocodage mobile
+  const nextDestinationCoords = useMemo(() => {
+    return getNextDestinationCoords(activeMissions);
   }, [activeMissions]);
 
   // ✅ Phase 1 - Quick Wins: Planifier rappels pour les missions actives
@@ -193,14 +201,14 @@ export default function MissionScreen() {
 
       setMissions(sorted);
     } catch {
-      Alert.alert("Erreur", "Impossible de charger les missions.");
+      appAlert.showAlert("Erreur", "Impossible de charger les missions.");
     } finally {
       if (!isRefreshAction) {
         setIsLoading(false);
       }
       setIsRefreshing(false);
     }
-  }, [driver]);
+  }, [driver, appAlert]);
 
   // Fonction de rafraîchissement pour pull-to-refresh
   const onRefresh = useCallback(async () => {
@@ -262,6 +270,10 @@ export default function MissionScreen() {
         );
         return updated;
       });
+      // ✅ Mettre à jour MissionStateManager pour réconciliation du tracking background (EN_ROUTE)
+      if (MissionStateManager.isActive() && MissionStateManager.getState().activeMission?.id === data.id) {
+        MissionStateManager.applyBookingUpdate(data).catch(() => {});
+      }
       // ✅ Si la mission a été annulée, afficher un message
       // Note: Si la mission est libérée (retour à ASSIGNED), elle reste dans la liste
       // et sera réassignée automatiquement, pas besoin d'alerte
@@ -272,7 +284,7 @@ export default function MissionScreen() {
 
         Alert.alert(
           "Course annulée",
-          "La course a été annulée et sera facturée comme booking annulé."
+          "Elle sera facturée comme annulation."
         );
       }
     };
@@ -291,7 +303,7 @@ export default function MissionScreen() {
       // Vérifier si une mission visible a été annulée
       const cancelledMission = missions.find((m) => m.id === id);
       if (cancelledMission) {
-        Alert.alert("❌ Mission annulée", "Une mission a été annulée.");
+        appAlert.showAlert("Mission annulée", "Une mission a été annulée.");
       }
     };
 
@@ -300,9 +312,9 @@ export default function MissionScreen() {
       try {
         const bookingId = payload?.booking_id ?? payload?.id ?? null;
         log.info("booking reassigned", { bookingId });
-        Alert.alert(
-          "🔄 Mission réassignée",
-          "Une mission a été réassignée. Vos courses vont être mises à jour."
+        appAlert.showAlert(
+          "Mission réassignée",
+          "Vos courses seront mises à jour."
         );
       } catch { }
       // Refresh silencieux pour être sûr de ne plus voir la mission
@@ -352,7 +364,7 @@ export default function MissionScreen() {
       socket.off("reconnect", onReconnect);
       unsubscribeResync();
     };
-  }, [socket, loadMissions]);
+  }, [socket, loadMissions, appAlert]);
 
   // ✅ Mission Bar: foreground Notifee handler + AppState reconciliation
   useEffect(() => {
@@ -474,13 +486,13 @@ export default function MissionScreen() {
         error.response?.data?.error ||
         error.response?.data?.message ||
         "Impossible de terminer la mission.";
-      Alert.alert("Erreur", msg);
+      appAlert.showAlert("Erreur", msg);
       log.error("confirm completion failed", { error });
     } finally {
       // Toujours débloquer le bouton
       setIsSubmitting(false);
     }
-  }, [completingMissionId, missions, isSubmitting]);
+  }, [completingMissionId, missions, isSubmitting, appAlert]);
 
   if (!driver || isLoading) {
     return (
@@ -526,6 +538,8 @@ export default function MissionScreen() {
           <MissionMap
             location={location}
             destination={nextDestination}
+            destinationCoords={nextDestinationCoords}
+            allowGeocodeFallback={false}
             contentWidth={contentWidth}
             mapHeight={mapHeight}
           />

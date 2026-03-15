@@ -103,6 +103,14 @@
   flex-shrink: 0;
 }
 
+.courseRef {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
 .lineSep {
   flex-shrink: 0;
   color: var(--text-tertiary);

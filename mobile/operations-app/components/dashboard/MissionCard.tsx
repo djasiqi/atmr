@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, Alert, Modal, Pressable, ScrollView, TouchableWithoutFeedback, Platform } from "react-native";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import type { Booking as Mission, BookingStatus } from "@/services/api";
@@ -149,6 +150,7 @@ const MissionCard: MissionCardType = ({
   hasGPS,
   etaLoading = false,
 }) => {
+  const appAlert = useAppAlert();
   const [status, setStatus] = useState<Mission["status"] | undefined>(
     mission?.status
   );
@@ -199,17 +201,14 @@ const MissionCard: MissionCardType = ({
       onStatusChange?.(mission.id, newStatus);
       if (newStatus === "COMPLETED") onComplete?.(mission.id);
       if (newStatus === "CANCELED") {
-        // ✅ Mission annulée : notifier selon le type
+        // ✅ Mission annulée : notifier selon le type (modal plateforme)
         if (cancelReason === "RELEASE") {
-          Alert.alert(
+          appAlert.showAlert(
             "Course libérée",
-            "La course a été libérée. Un autre chauffeur pourra être assigné."
+            "Elle sera réassignée à un autre chauffeur."
           );
         } else {
-          Alert.alert(
-            "Course annulée",
-            "La course a été annulée avec justification."
-          );
+          appAlert.showAlert("Course annulée", "Course annulée avec justification.");
         }
       }
     } catch (error: any) {
@@ -225,7 +224,7 @@ const MissionCard: MissionCardType = ({
         error?.response?.data?.error ??
         error?.message ??
         "Erreur inconnue";
-      Alert.alert("Erreur", `Impossible de mettre à jour le statut : ${errorMsg}`);
+      appAlert.showAlert("Erreur", `Impossible de mettre à jour le statut : ${errorMsg}`);
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -1141,10 +1140,10 @@ const MissionCard: MissionCardType = ({
             {/* Body */}
             <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
               <Text style={{ fontSize: 14, color: "#1E293B", fontWeight: "500", lineHeight: 21, marginBottom: 10 }}>
-                Voulez-vous libérer cette course ?
+                Libérer cette course ?
               </Text>
               <Text style={{ fontSize: 13, color: "#64748B", lineHeight: 19 }}>
-                La course sera remise dans le pool de dispatch et pourra être réassignée à un autre chauffeur.
+                Elle sera réassignée à un autre chauffeur.
               </Text>
 
               <View
@@ -1163,7 +1162,7 @@ const MissionCard: MissionCardType = ({
               >
                 <Ionicons name="information-circle-outline" size={16} color="#00796B" />
                 <Text style={{ fontSize: 12, color: "#64748B", flex: 1, lineHeight: 17 }}>
-                  Aucune facturation ne sera appliquée pour une libération.
+                  Sans facturation.
                 </Text>
               </View>
             </View>

@@ -3,17 +3,19 @@
   "compilerOptions": {
     "jsx": "react-native",
     "esModuleInterop": true,
-    "baseUrl": ".",                     // Point de départ des imports
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],                  // "@/services/api" = "./services/api.ts"
-      "@types/*": ["app/types/*"]      // "@types/driver" = "app/types/driver.ts"
+      "@/*": [
+        "./*"
+      ],
+      "@types/*": [
+        "app/types/*"
+      ]
     },
     "strict": true
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "**/*.tsx"
   ]
 }

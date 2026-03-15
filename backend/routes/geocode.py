@@ -3,6 +3,8 @@
 # pyright: reportUnusedFunction=false
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
 import os
 import re
@@ -15,7 +17,7 @@ import requests
 from flask import current_app, request
 from flask_restx import Resource
 
-from ext import redis_client
+from ext import limiter, redis_client
 from models.enums import GeoUnitType
 from models.geo_unit import GeoUnit
 from services.geolocation.google_places import (
@@ -54,6 +56,10 @@ ZONE_QUERY_CACHE_VERSION = "2"
 ZONE_REVERSE_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_REVERSE", "172800"))
 ZONE_GEOMETRY_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_GEOMETRY", "604800"))
 GEOADMIN_ENABLED = os.getenv("GEOADMIN_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# Cache Redis autocomplete / place-details (Bloc 2)
+GEOCODE_AUTOCOMPLETE_CACHE_TTL = int(os.getenv("GEOCODE_AUTOCOMPLETE_CACHE_TTL", "300"))  # 5 min
+GEOCODE_PLACE_DETAILS_CACHE_TTL = int(os.getenv("GEOCODE_PLACE_DETAILS_CACHE_TTL", "3600"))  # 1 h
 GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip("/")
 GEOADMIN_CB_FAIL_THRESHOLD = int(os.getenv("GEOADMIN_CB_FAIL_THRESHOLD", "10"))
 GEOADMIN_CB_WINDOW_SECONDS = int(os.getenv("GEOADMIN_CB_WINDOW_SECONDS", "60"))
@@ -289,6 +295,70 @@ def _zone_cache_set_dict(cache_key: str, payload: Dict[str, Any], ttl_seconds: i
         redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False))
     except Exception:
         return
+
+
+def _geocode_autocomplete_cache_key(q: str, lat: float, lon: float) -> str:
+    """Clé Redis pour le cache autocomplete (q + bias arrondi)."""
+    q_norm = (q or "").strip().lower()
+    lat_rnd = round(lat, 4)
+    lon_rnd = round(lon, 4)
+    raw = f"{q_norm}|{lat_rnd}|{lon_rnd}"
+    h = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    return f"geocode:autocomplete:{h}"
+
+
+def _geocode_autocomplete_cache_get(cache_key: str) -> List[Dict[str, Any]] | None:
+    if not redis_client:
+        return None
+    try:
+        raw = redis_client.get(cache_key)
+        if not raw:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+        if isinstance(parsed, list):
+            return cast(List[Dict[str, Any]], parsed)
+        return None
+    except Exception:
+        return None
+
+
+def _geocode_autocomplete_cache_set(
+    cache_key: str, items: List[Dict[str, Any]], ttl_seconds: int
+) -> None:
+    if not redis_client:
+        return
+    with contextlib.suppress(Exception):
+        redis_client.setex(
+            cache_key, max(ttl_seconds, 1), json.dumps(items, ensure_ascii=False)
+        )
+
+
+def _geocode_place_cache_key(place_id: str) -> str:
+    return f"geocode:place:{place_id}"
+
+
+def _geocode_place_cache_get(cache_key: str) -> Dict[str, Any] | None:
+    if not redis_client:
+        return None
+    try:
+        raw = redis_client.get(cache_key)
+        if not raw:
+            return None
+        parsed = json.loads(raw.decode("utf-8"))
+        if isinstance(parsed, dict):
+            return cast(Dict[str, Any], parsed)
+        return None
+    except Exception:
+        return None
+
+
+def _geocode_place_cache_set(cache_key: str, payload: Dict[str, Any], ttl_seconds: int) -> None:
+    if not redis_client:
+        return
+    with contextlib.suppress(Exception):
+        redis_client.setex(
+            cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False)
+        )
 
 
 def _simplify_ring(ring: list[list[float]], step: int = 6) -> list[list[float]]:
@@ -1105,6 +1175,7 @@ class GeocodeAutocomplete(Resource):
             "company_id": "Optionnel: filtre favoris d'une société",
         },
     )
+    @limiter.limit("60 per minute")
     def get(self):
         q = (request.args.get("q") or "").strip()
         if len(q) < MIN_QUERY_LENGTH:
@@ -1174,8 +1245,14 @@ class GeocodeAutocomplete(Resource):
             except Exception as e:
                 current_app.logger.warning("Favorites lookup failed: %s", e)
 
-        # 3) Google Places API (prioritaire) ou fallback Photon
-        if USE_GOOGLE_PLACES:
+        # 3) Google Places API (prioritaire) ou fallback Photon — avec cache Redis
+        cache_key = _geocode_autocomplete_cache_key(q, lat, lon)
+        api_results = _geocode_autocomplete_cache_get(cache_key)
+
+        if api_results is not None:
+            results.extend(api_results)
+        elif USE_GOOGLE_PLACES:
+            api_results = []
             try:
                 # ✅ FIX: Recherche multi-pays - d'abord Suisse (CH), puis France (FR)
                 # Pour la zone frontalière Genève, permettre recherche dans les deux pays
@@ -1241,7 +1318,7 @@ class GeocodeAutocomplete(Resource):
                     # récupérer les coordonnées via Place Details
                     # (mais c'est plus coûteux en quota)
                     # Pour l'autocomplete, on retourne juste les suggestions
-                    results.append(
+                    api_results.append(
                         {
                             "source": "google_places",
                             "label": pred.get("description", ""),
@@ -1279,7 +1356,7 @@ class GeocodeAutocomplete(Resource):
                                 len(photon_results),
                                 q,
                             )
-                        results.extend(photon_results)
+                        api_results.extend(photon_results)
                     except requests.HTTPError as e2:
                         # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
                         if e2.response and e2.response.status_code == HTTP_FORBIDDEN:
@@ -1328,7 +1405,7 @@ class GeocodeAutocomplete(Resource):
                             len(photon_results),
                             q,
                         )
-                    results.extend(photon_results)
+                    api_results.extend(photon_results)
                 except requests.HTTPError as e2:
                     # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
                     if e2.response and e2.response.status_code == HTTP_FORBIDDEN:
@@ -1357,8 +1434,13 @@ class GeocodeAutocomplete(Resource):
                     current_app.logger.warning(
                         "⚠️ Photon autocomplete error (non-HTTP): %s", e2
                     )
+            _geocode_autocomplete_cache_set(
+                cache_key, api_results, GEOCODE_AUTOCOMPLETE_CACHE_TTL
+            )
+            results.extend(api_results)
         else:
             # 3) Photon (biais Genève + hint hôpital) - mode fallback
+            api_results = []
             try:
                 ph = photon_query(
                     q,
@@ -1374,7 +1456,7 @@ class GeocodeAutocomplete(Resource):
                         len(photon_results),
                         q,
                     )
-                results.extend(photon_results)
+                api_results.extend(photon_results)
             except requests.HTTPError as e:
                 # ✅ CORRECTION : Gérer spécifiquement les erreurs HTTP (403, 429, etc.)
                 if e.response and e.response.status_code == HTTP_FORBIDDEN:
@@ -1400,6 +1482,10 @@ class GeocodeAutocomplete(Resource):
                 current_app.logger.warning(
                     "⚠️ Photon autocomplete error (non-HTTP): %s", e
                 )
+            _geocode_autocomplete_cache_set(
+                cache_key, api_results, GEOCODE_AUTOCOMPLETE_CACHE_TTL
+            )
+            results.extend(api_results)
 
         # 4) Dédup (adresse + coords arrondies)
         seen: set[Tuple[str, float, float]] = set()
@@ -1431,6 +1517,7 @@ class PlaceDetails(Resource):
             "place_id": "ID Google Places de l'adresse sélectionnée",
         },
     )
+    @limiter.limit("30 per minute")
     def get(self):
         """Récupère les détails complets d'un lieu
         (coordonnées GPS incluses) via son place_id.
@@ -1452,10 +1539,14 @@ class PlaceDetails(Resource):
                 logger_instance=current_app.logger,
             )
 
+        cache_key = _geocode_place_cache_key(place_id)
+        cached = _geocode_place_cache_get(cache_key)
+        if cached:
+            return cached, 200
+
         try:
             details = get_place_details(place_id)
-
-            return {
+            payload = {
                 "source": "google_places",
                 "place_id": details.get("place_id"),
                 "address": details.get("address"),
@@ -1464,7 +1555,11 @@ class PlaceDetails(Resource):
                 "name": details.get("name"),
                 "types": details.get("types", []),
                 "address_components": details.get("address_components", []),
-            }, 200
+            }
+            _geocode_place_cache_set(
+                cache_key, payload, GEOCODE_PLACE_DETAILS_CACHE_TTL
+            )
+            return payload, 200
 
         except GooglePlacesError as e:
             current_app.logger.error("❌ Erreur Place Details: %s", e)
@@ -1480,6 +1575,7 @@ class GeocodeAddress(Resource):
             "country": "Code pays (ex: CH) - optionnel",
         },
     )
+    @limiter.limit("30 per minute")
     def get(self):
         """Géocode une adresse complète et retourne les coordonnées GPS.
         Utilisé lorsqu'une adresse est saisie manuellement (sans autocomplete).

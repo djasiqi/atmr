@@ -118,7 +118,8 @@ let taskRegistered = false;
 let taskDefinitionAttempted = false;
 
 // Définir la tâche en arrière-plan (uniquement si TaskManager est disponible)
-if (TaskManager && !taskDefinitionAttempted) {
+// Workaround expo/expo#25325 : en __DEV__, éviter defineTask pour stopper la boucle de reload
+if (TaskManager && !taskDefinitionAttempted && !__DEV__) {
   taskDefinitionAttempted = true;
   try {
     // Définir la tâche directement (defineTask est idempotent mais on protège quand même)

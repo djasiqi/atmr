@@ -67,7 +67,7 @@ export interface RideSummary {
     dropoff_address: string;
     distance_km?: number | null;
   };
-  status: "assigned" | "unassigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "cancelled" | "pending";
+  status: "assigned" | "unassigned" | "completed" | "return_completed" | "in_progress" | "en_route" | "cancelled" | "canceled" | "pending";
   driver: {
     id?: string | null;
     name?: string | null;
@@ -263,6 +263,9 @@ export interface RideCreatePayload {
   priority?: "LOW" | "NORMAL" | "HIGH";
   amount?: number;
   is_return?: boolean;
+  /** Date du retour (YYYY-MM-DD), aligné sur le web. Obligatoire pour A/R. */
+  return_date?: string;
+  /** Heure du retour (ISO datetime). Omis = heure à définir. */
   return_time?: string;
   assign_driver_id?: string;
   wheelchair_client_has?: boolean;

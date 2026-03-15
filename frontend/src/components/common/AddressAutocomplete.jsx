@@ -4,14 +4,60 @@ import { createPortal } from 'react-dom';
 import apiClient from '../../utils/apiClient';
 import acStyles from './AddressAutocomplete.module.css';
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 min
+const CACHE_MAX_SIZE = 50;
+const DEFAULT_BIAS = { lat: 46.2044, lon: 6.1432 };
+
+function buildCacheKey(query, bias) {
+  const q = (query || '').toString().trim().toLowerCase();
+  if (!q) return null;
+  if (!bias || bias.lat == null || bias.lon == null) return q;
+  const lat = Number(bias.lat).toFixed(2);
+  const lon = Number(bias.lon).toFixed(2);
+  return `${q}|${lat},${lon}`;
+}
+
+function createAutocompleteLRUCache() {
+  const entries = new Map();
+  const order = [];
+
+  function get(key) {
+    const entry = entries.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.at > CACHE_TTL_MS) {
+      entries.delete(key);
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+      return null;
+    }
+    return entry.data;
+  }
+
+  function set(key, data) {
+    if (entries.has(key)) {
+      const i = order.indexOf(key);
+      if (i >= 0) order.splice(i, 1);
+    } else if (order.length >= CACHE_MAX_SIZE) {
+      const oldest = order.shift();
+      entries.delete(oldest);
+    }
+    entries.set(key, { data, at: Date.now() });
+    order.push(key);
+  }
+
+  return { get, set };
+}
+
+const autocompleteCache = createAutocompleteLRUCache();
+
 export default function AddressAutocomplete({
   name,
   value,
   onChange,
   onSelect,
   placeholder = 'Saisir une adresse…',
-  minChars = 2,
-  debounceMs = 250,
+  minChars = 3,
+  debounceMs = 350,
   bias, // { lat, lon } optionnel – par défaut centre Genève
   maxResults = 8,
   inputClassName,
@@ -37,8 +83,8 @@ export default function AddressAutocomplete({
   const rafIdRef = useRef(null);
   const pendingRef = useRef(false);
 
-  // Biais géographique (Genève par défaut)
-  const BIAS = bias || { lat: 46.2044, lon: 6.1432 };
+  // Biais géographique (Genève par défaut) – useMemo pour stabilité des deps useCallback
+  const BIAS = useMemo(() => (bias != null ? bias : DEFAULT_BIAS), [bias]);
 
   // Base Photon (env front ou cloud public)
   const PHOTON_BASE = process.env.REACT_APP_PHOTON_URL || 'https://photon.komoot.io';
@@ -178,6 +224,14 @@ export default function AddressAutocomplete({
       return [];
     }
 
+    const cacheKey = buildCacheKey(q, BIAS);
+    if (cacheKey) {
+      const cached = autocompleteCache.get(cacheKey);
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     // 1) Proxy backend
     try {
       // ✅ URL relative au baseURL (pas de / initial) pour que prod atteigne /api/v1/geocode/autocomplete
@@ -190,6 +244,7 @@ export default function AddressAutocomplete({
         if (Array.isArray(data)) {
           if (data.length > 0) {
             console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
+            if (cacheKey) autocompleteCache.set(cacheKey, data);
             return data;
           } else {
             // Ne pas logger d'avertissement pour les valeurs par défaut
@@ -226,6 +281,7 @@ export default function AddressAutocomplete({
       const normalized = normalizePhoton(feats);
       if (normalized.length > 0) {
         console.log(`[AddressAutocomplete] ✅ Photon fallback retourne ${normalized.length} résultats pour "${q}"`);
+        if (cacheKey) autocompleteCache.set(cacheKey, normalized);
       } else {
         console.log(`[AddressAutocomplete] ⚠️ Photon fallback ne trouve aucun résultat pour "${q}"`);
       }
@@ -238,7 +294,7 @@ export default function AddressAutocomplete({
       console.error(`[AddressAutocomplete] ❌ Erreur Photon fallback:`, error);
       return [];
     }
-  }, [BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, isCanceledError]);
+  }, [BIAS, PHOTON_BASE, maxResults, isCanceledError]);
 
   // Charger les suggestions (debounce + abort)
   useEffect(() => {

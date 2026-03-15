@@ -22,7 +22,7 @@ const toYMD = (raw) => {
 const whenOf = (r) => r?.scheduled_time ?? r?.pickup_time ?? r?.date_time ?? r?.datetime ?? null;
 const norm = (s) => String(s || '').toLowerCase();
 const isActive = (s) =>
-  ['en_route', 'in_progress', 'onboard', 'en_route_pickup', 'en_route_dropoff', 'assigned'].includes(norm(s));
+  ['en_route', 'in_progress', 'onboard', 'en_route_pickup', 'en_route_dropoff'].includes(norm(s));
 
 const OverviewCards = ({
   reservations,
@@ -59,7 +59,10 @@ const OverviewCards = ({
   }, [dayList, pendingReservations, assignedReservations, day]);
 
   const availableDrivers = useMemo(
-    () => (Array.isArray(driver) ? driver : []).filter((d) => d?.is_active && d?.is_available).length,
+    () =>
+      (Array.isArray(driver) ? driver : []).filter(
+        (d) => d?.is_active && String(d?.status || '').toLowerCase() === 'available'
+      ).length,
     [driver]
   );
 

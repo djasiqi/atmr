@@ -41,6 +41,10 @@ except ImportError:
 # Constantes pour éviter les valeurs magiques
 LAT_THRESHOLD = 90
 LON_THRESHOLD = 180
+LAT_MIN = -LAT_THRESHOLD
+LAT_MAX = LAT_THRESHOLD
+LON_MIN = -LON_THRESHOLD
+LON_MAX = LON_THRESHOLD
 MIN_POINTS_FOR_MATCHING = 3
 MIN_TOKEN_LENGTH = 10
 
@@ -129,7 +133,9 @@ booking_status_model = driver_ns.model(
                 "Nouveau statut (en_route, in_progress, completed, return_completed, canceled)"
             ),
         ),
-        "cancel_reason": fields.String(description="CANCEL ou RELEASE (si status=canceled)"),
+        "cancel_reason": fields.String(
+            description="CANCEL ou RELEASE (si status=canceled)"
+        ),
         "reason_code": fields.String(
             description="Motif facturation (NO_SHOW, COMPANY_ISSUE, LAST_MINUTE, etc.)"
         ),
@@ -896,6 +902,7 @@ class DriverMobileSnapshot(Resource):
 
         try:
             from services.monitoring.prometheus import track_driver_mobile_snapshot
+
             track_driver_mobile_snapshot("success")
         except Exception:
             pass
@@ -932,10 +939,12 @@ class DriverNextBookingPreview(Resource):
         next_booking = (
             Booking.query.filter(Booking.driver_id == driver.id)
             .filter(
-                Booking.status.in_([
-                    BookingStatus.ASSIGNED,
-                    BookingStatus.ACCEPTED,
-                ])
+                Booking.status.in_(
+                    [
+                        BookingStatus.ASSIGNED,
+                        BookingStatus.ACCEPTED,
+                    ]
+                )
             )
             .filter(Booking.scheduled_time >= now)
             .order_by(Booking.scheduled_time.asc())
@@ -949,6 +958,7 @@ class DriverNextBookingPreview(Resource):
         if hasattr(next_booking, "institution_id") and next_booking.institution_id:
             try:
                 from models.institution_settings import InstitutionSettings
+
                 settings = InstitutionSettings.query.filter_by(
                     institution_id=next_booking.institution_id
                 ).first()
@@ -961,7 +971,9 @@ class DriverNextBookingPreview(Resource):
         if can_show and client:
             first = getattr(client, "first_name", "") or ""
             last = getattr(client, "last_name", "") or ""
-            display = f"{first[:1]}. {last[:1]}." if first and last else "Course suivante"
+            display = (
+                f"{first[:1]}. {last[:1]}." if first and last else "Course suivante"
+            )
         else:
             display = "Course suivante"
 
@@ -971,13 +983,108 @@ class DriverNextBookingPreview(Resource):
         return {
             "next_booking_preview": {
                 "id": next_booking.id,
-                "pickup_at": next_booking.scheduled_time.isoformat() if next_booking.scheduled_time else None,
+                "pickup_at": next_booking.scheduled_time.isoformat()
+                if next_booking.scheduled_time
+                else None,
                 "client_display": display,
                 "pickup_short": pickup.split(",")[0].strip()[:30] if pickup else "",
                 "dropoff_short": dropoff.split(",")[0].strip()[:30] if dropoff else "",
                 "can_show_identity": can_show,
             }
         }, 200
+
+
+@driver_ns.route("/me/route")
+class DriverRoute(Resource):
+    """Endpoint métier : itinéraire OSRM pour la mission active du chauffeur."""
+
+    @jwt_required()
+    @role_required(UserRole.driver)
+    @driver_ns.doc(
+        params={
+            "origin_lat": "Latitude origine (obligatoire)",
+            "origin_lon": "Longitude origine (obligatoire)",
+            "dest_lat": "Latitude destination (obligatoire)",
+            "dest_lon": "Longitude destination (obligatoire)",
+        },
+    )
+    def get(self):
+        import os
+
+        _, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+
+        origin_lat = request.args.get("origin_lat")
+        origin_lon = request.args.get("origin_lon")
+        dest_lat = request.args.get("dest_lat")
+        dest_lon = request.args.get("dest_lon")
+
+        if not all([origin_lat, origin_lon, dest_lat, dest_lon]):
+            return {
+                "error": "origin_lat, origin_lon, dest_lat, dest_lon sont requis"
+            }, 400
+
+        assert origin_lat is not None
+        assert origin_lon is not None
+        assert dest_lat is not None
+        assert dest_lon is not None
+        try:
+            o_lat = float(origin_lat)
+            o_lon = float(origin_lon)
+            d_lat = float(dest_lat)
+            d_lon = float(dest_lon)
+        except (TypeError, ValueError):
+            return {"error": "Coordonnées invalides"}, 400
+
+        out_of_bounds = (
+            not (LAT_MIN <= o_lat <= LAT_MAX)
+            or not (LON_MIN <= o_lon <= LON_MAX)
+            or not (LAT_MIN <= d_lat <= LAT_MAX)
+            or not (LON_MIN <= d_lon <= LON_MAX)
+        )
+        if out_of_bounds:
+            return {"error": "Coordonnées hors bornes (lat -90/90, lon -180/180)"}, 400
+
+        osrm_base = os.getenv("OSRM_BASE_URL", "http://osrm:5000") or "http://osrm:5000"
+
+        try:
+            from ext import redis_client
+            from services.geolocation.osrm import route_info
+
+            info = route_info(
+                origin=(o_lat, o_lon),
+                destination=(d_lat, d_lon),
+                base_url=osrm_base,
+                profile="driving",
+                overview="full",
+                geometries="polyline",
+                steps=False,
+                annotations=False,
+                redis_client=redis_client,
+                timeout=15,
+            )
+
+            geometry = info.get("geometry")
+            polyline_encoded = geometry if isinstance(geometry, str) else ""
+            coordinates = None
+            if isinstance(geometry, dict) and geometry.get("type") == "LineString":
+                coords = geometry.get("coordinates", [])
+                coordinates = [{"lat": c[1], "lon": c[0]} for c in coords]
+
+            resp = {
+                "polyline_encoded": polyline_encoded,
+                "distance_meters": int(info.get("distance", 0)),
+                "duration_seconds": int(info.get("duration", 0)),
+            }
+            if coordinates:
+                resp["coordinates"] = coordinates
+
+            return resp, 200
+
+        except Exception as e:
+            logger.warning("[DriverRoute] OSRM error: %s", e)
+            return {"error": "Calcul d'itinéraire indisponible"}, 503
 
 
 @driver_ns.route("/me/bookings/eta")
@@ -1000,7 +1107,9 @@ class DriverBookingsETA(Resource):
 
         # Récupérer les courses d'aujourd'hui (non terminées)
         # Utiliser now_local().date() pour cohérence Europe/Zurich (éviter décalage si serveur en UTC)
-        today_start, today_end = day_local_bounds(now_local().date().strftime("%Y-%m-%d"))
+        today_start, today_end = day_local_bounds(
+            now_local().date().strftime("%Y-%m-%d")
+        )
 
         from repositories.booking_repository import BookingRepository
 
@@ -1476,10 +1585,21 @@ class BookingDetails(Resource):
 @driver_ns.route("/company/<int:company_id>/live-locations")
 class CompanyLiveLocations(Resource):
     @jwt_required()
+    @role_required(UserRole.company)
     def get(self, company_id: int):
         """Retourne la dernière position connue
         de tous les chauffeurs de l'entreprise."""
         try:
+            from application.users.get_current_company import GetCurrentCompanyUseCase
+
+            uc_company = GetCurrentCompanyUseCase()
+            result_company = uc_company.execute()
+            if result_company.error or not result_company.company:
+                return {"error": "Entreprise non trouvée."}, 403
+            user_company_id = result_company.company.id
+            if int(user_company_id) != int(company_id):
+                return {"error": "Accès interdit à cette entreprise."}, 403
+
             from application.drivers.get_company_drivers_live_locations import (
                 GetCompanyDriversLiveLocationsUseCase,
             )
@@ -1493,7 +1613,11 @@ class CompanyLiveLocations(Resource):
                 get_last_location_fn=get_driver_last_location,
             )
             uc_res = uc.execute(company_id=company_id)
-            return uc_res.response, uc_res.status_code
+            headers = {
+                "Deprecation": "true",
+                "Sunset": "2025-12-31",
+            }
+            return uc_res.response, uc_res.status_code, headers
         except (ValueError, TypeError) as e:
             logger.warning(
                 "❌ Erreur validation lors récupération locations company %s: %s - %s",
@@ -1501,7 +1625,7 @@ class CompanyLiveLocations(Resource):
                 type(e).__name__,
                 e,
             )
-            return {"items": []}, 200
+            return {"items": []}, 200, {"Deprecation": "true", "Sunset": "2025-12-31"}
         except SQLAlchemyError as e:
             logger.exception(
                 "❌ Erreur DB lors récupération locations company %s: %s - %s",
@@ -1510,13 +1634,13 @@ class CompanyLiveLocations(Resource):
                 e,
             )
             sentry_sdk.capture_exception(e)
-            return {"items": []}, 200
+            return {"items": []}, 200, {"Deprecation": "true", "Sunset": "2025-12-31"}
         except Exception as e:
             logger.exception(
                 "❌ Erreur inattendue get_location_history (company_id=%s)", company_id
             )
             sentry_sdk.capture_exception(e)
-            return {"items": []}, 200
+            return {"items": []}, 200, {"Deprecation": "true", "Sunset": "2025-12-31"}
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/status", methods=["PUT", "OPTIONS"])
@@ -1959,8 +2083,7 @@ class DriverCompanyBookingsToday(Resource):
         today_end = dt_type.combine(today_local, time_type.max)
 
         bookings = (
-            BookingModel.query
-            .filter(BookingModel.company_id == driver.company_id)
+            BookingModel.query.filter(BookingModel.company_id == driver.company_id)
             .filter(BookingModel.scheduled_time >= today_start)
             .filter(BookingModel.scheduled_time <= today_end)
             .order_by(BookingModel.scheduled_time.asc())
@@ -2688,7 +2811,10 @@ class TestPushNotification(Resource):
             seen_tokens: set[str] = set()
             active_tokens: list[object] = []
             for dt in all_tokens:
-                if dt.token not in seen_tokens and len(active_tokens) < MAX_TEST_PUSH_PER_MIN:
+                if (
+                    dt.token not in seen_tokens
+                    and len(active_tokens) < MAX_TEST_PUSH_PER_MIN
+                ):
                     seen_tokens.add(dt.token)
                     active_tokens.append(dt)
 
@@ -2704,18 +2830,23 @@ class TestPushNotification(Resource):
                     driver_id=driver.id,
                     bypass_rate_limit=True,
                 )
-                results.append({
-                    "token_preview": dt.token[:20] + "...",
-                    "platform": dt.platform,
-                    "ok": res.get("ok", False),
-                    "error": res.get("error"),
-                })
+                results.append(
+                    {
+                        "token_preview": dt.token[:20] + "...",
+                        "platform": dt.platform,
+                        "ok": res.get("ok", False),
+                        "error": res.get("error"),
+                    }
+                )
 
             all_ok = all(r["ok"] for r in results)
             errors_count = sum(1 for r in results if not r["ok"])
             logger.info(
                 "test_push driver_id=%s tokens=%d ok=%s errors=%d",
-                driver.id, len(active_tokens), all_ok, errors_count,
+                driver.id,
+                len(active_tokens),
+                all_ok,
+                errors_count,
             )
             return {
                 "ok": all_ok,
@@ -2726,5 +2857,6 @@ class TestPushNotification(Resource):
         except Exception as e:
             logger.exception("❌ Erreur test-push pour driver")
             import sentry_sdk
+
             sentry_sdk.capture_exception(e)
             return {"error": "Erreur interne"}, 500

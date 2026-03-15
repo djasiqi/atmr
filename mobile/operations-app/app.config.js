@@ -6,6 +6,7 @@ const withAndroidBackButtonMod = require('./prebuild-mods/withAndroidBackButtonM
 const withAndroidGoogleMapsKey = require('./prebuild-mods/withAndroidGoogleMapsKey');
 const withAndroidImmersiveMode = require('./prebuild-mods/withAndroidImmersiveMode');
 const withAndroidR8Enabled = require('./prebuild-mods/withAndroidR8Enabled');
+const withAndroidIconBackground = require('./prebuild-mods/withAndroidIconBackground');
 const withAndroidNotificationColorFix = require('./prebuild-mods/withAndroidNotificationColorFix');
 const withIosFirebaseModularHeaders = require('./prebuild-mods/withIosFirebaseModularHeaders');
 
@@ -49,9 +50,10 @@ function envOrExistingFile(envValue, relativePath) {
 
 module.exports = withAndroidR8Enabled(
   withAndroidImmersiveMode(
-    withAndroidGoogleMapsKey(
-      withAndroidBackButtonMod(() => ({
-  name: isDevVariant ? "Liri Opérations Dev" : "Liri Opérations",
+    withAndroidIconBackground(
+      withAndroidGoogleMapsKey(
+        withAndroidBackButtonMod(() => ({
+  name: isDevVariant ? "Lirie Dev" : "Lirie",
   slug: "operations-app",
   runtimeVersion: isDevVariant ? `${runtimeBase}-dev` : runtimeBase,
   // ✅ Configuration EAS Update
@@ -180,7 +182,7 @@ module.exports = withAndroidR8Enabled(
     "expo-document-picker",
   ],
 
-  experiments: { typedRoutes: true },
+  experiments: { typedRoutes: false }, // Désactivé: @expo/router-server requiert Expo 55+
 
   extra: {
     APP_VARIANT: APP_VARIANT, // Passer APP_VARIANT pour détection runtime
@@ -201,6 +203,7 @@ module.exports = withAndroidR8Enabled(
 
   owner: "drinjasiqi",
 }))
+      )
     )
   )
 );

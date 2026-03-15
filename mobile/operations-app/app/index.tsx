@@ -76,12 +76,12 @@ export default function IndexScreen() {
   const description =
     selectedMode === "enterprise"
       ? {
-        title: "Espace Enterprise Dispatch",
-        text: "Pilotez les assignations, suivez les alertes critiques et ajustez les paramètres en temps réel depuis votre téléphone.",
+        title: "Espace Dispatch",
+        text: "Assignations, alertes et paramètres en temps réel.",
       }
       : {
         title: "Espace Chauffeur",
-        text: "Consultez vos missions quotidiennes, mettez à jour votre disponibilité et gardez le contact avec l’équipe.",
+        text: "Missions, disponibilité et communication.",
       };
 
   return (
@@ -95,7 +95,7 @@ export default function IndexScreen() {
         <Text style={styles.brand}>Bienvenue</Text>
         <Text style={styles.headline}>Choisissez votre espace</Text>
         <Text style={styles.subtitle}>
-          Accédez aux outils dédiés à la conduite ou au dispatch en un seul geste.
+          Conduite ou dispatch, en un geste.
         </Text>
 
         <View
@@ -173,7 +173,7 @@ export default function IndexScreen() {
           activeOpacity={0.9}
           onPress={handleContinue}
         >
-          <Text style={styles.primaryButtonText}>Accéder à cet espace</Text>
+          <Text style={styles.primaryButtonText}>Continuer</Text>
         </TouchableOpacity>
       </View>
     </View>

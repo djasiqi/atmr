@@ -13,7 +13,7 @@ from flask_restx import (
     fields,
     reqparse,
 )
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from sqlalchemy.orm import aliased, joinedload
 
@@ -3549,7 +3549,79 @@ class CancelInvoice(Resource):
             invoice = invoice_repo.find_model_by_id_with_eager_loading(
                 invoice_id, company_id
             )
+
+            # Si ce n'est pas une facture normale, vérifier si c'est une facture partenaire
             if not invoice:
+                from models.booking_transfer import BookingTransfer
+                from models.enums import TransferStatus
+                from models.partner_invoice import (
+                    PartnerInvoice,
+                    PartnerInvoiceStatus,
+                    partner_invoice_transfers,
+                )
+
+                partner_invoice = PartnerInvoice.query.get(invoice_id)
+                if partner_invoice:
+                    # Vérifier que l'entreprise est associée à cette facture partenaire
+                    transfers_count = (
+                        db.session.query(BookingTransfer)
+                        .join(
+                            partner_invoice_transfers,
+                            BookingTransfer.id
+                            == partner_invoice_transfers.c.booking_transfer_id,
+                        )
+                        .filter(
+                            partner_invoice_transfers.c.partner_invoice_id
+                            == partner_invoice.id,
+                            BookingTransfer.executing_company_id == company_id,
+                            BookingTransfer.status == TransferStatus.COMPLETED,
+                        )
+                        .count()
+                    )
+                    is_executing_company = (
+                        partner_invoice.executing_company_id == company_id
+                    )
+
+                    if transfers_count > 0 or is_executing_company:
+                        if partner_invoice.status == PartnerInvoiceStatus.CANCELLED:
+                            return APIErrorHandler.handle_validation_error(
+                                "La facture partenaire est déjà annulée.",
+                                logger_instance=logger,
+                            )
+                        if (
+                            partner_invoice.status == PartnerInvoiceStatus.PAID
+                            and partner_invoice.amount_paid > 0
+                        ):
+                            return APIErrorHandler.handle_validation_error(
+                                "Impossible d'annuler une facture partenaire déjà payée.",
+                                logger_instance=logger,
+                            )
+
+                        partnership_id = partner_invoice.partnership_id
+                        period_year = partner_invoice.period_year
+                        period_month = partner_invoice.period_month
+                        executing_company_id = partner_invoice.executing_company_id
+
+                        db.session.delete(partner_invoice)
+                        db.session.commit()
+
+                        draft_context = {
+                            "billing_type": "partner",
+                            "partnership_id": partnership_id,
+                            "period_year": period_year,
+                            "period_month": period_month,
+                            "executing_company_id": executing_company_id,
+                        }
+
+                        return {
+                            "message": (
+                                "La facture partenaire a été annulée. "
+                                "Vous pouvez régénérer une nouvelle facture "
+                                "avec les mêmes paramètres."
+                            ),
+                            "draft": draft_context,
+                        }, 200
+
                 return APIErrorHandler.handle_not_found(
                     "Facture",
                     invoice_id if "invoice_id" in locals() else None,
@@ -4459,14 +4531,26 @@ class PartnerTransfersForInvoice(Resource):
             )
 
             DECEMBER = 12
-            start_date = datetime(year, month, 1, tzinfo=UTC)
-            if month == DECEMBER:
-                end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
-            else:
-                end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+            # scheduled_time est naïf (sans TZ) → bornes naïves
+            start_naive = datetime(year, month, 1)
+            end_naive = (
+                datetime(year + 1, 1, 1)
+                if month == DECEMBER
+                else datetime(year, month + 1, 1)
+            )
+            # validated_at est timezone-aware → bornes UTC
+            start_utc = datetime(year, month, 1, tzinfo=UTC)
+            end_utc = (
+                datetime(year + 1, 1, 1, tzinfo=UTC)
+                if month == DECEMBER
+                else datetime(year, month + 1, 1, tzinfo=UTC)
+            )
 
+            # Inclure si date de la course OU date de validation dans la période
+            # (évite les exclusions dues aux fuseaux horaires)
             transfers = (
                 db.session.query(BookingTransfer)
+                .join(Booking, BookingTransfer.booking_id == Booking.id)
                 .options(
                     joinedload(BookingTransfer.booking)
                     .joinedload(Booking.client)
@@ -4477,8 +4561,18 @@ class PartnerTransfersForInvoice(Resource):
                     BookingTransfer.status == TransferStatus.COMPLETED,
                     BookingTransfer.is_validated == True,  # noqa: E712
                     BookingTransfer.executing_company_id == company.id,
-                    BookingTransfer.validated_at >= start_date,
-                    BookingTransfer.validated_at < end_date,
+                    or_(
+                        and_(
+                            Booking.scheduled_time.isnot(None),
+                            Booking.scheduled_time >= start_naive,
+                            Booking.scheduled_time < end_naive,
+                        ),
+                        and_(
+                            BookingTransfer.validated_at.isnot(None),
+                            BookingTransfer.validated_at >= start_utc,
+                            BookingTransfer.validated_at < end_utc,
+                        ),
+                    ),
                 )
                 .filter(
                     ~BookingTransfer.id.in_(
@@ -4489,7 +4583,9 @@ class PartnerTransfersForInvoice(Resource):
                         )
                     )
                 )
-                .order_by(BookingTransfer.validated_at.asc())
+                .order_by(
+                    func.coalesce(Booking.scheduled_time, BookingTransfer.validated_at).asc()
+                )
                 .all()
             )
 
@@ -4514,6 +4610,11 @@ class PartnerTransfersForInvoice(Resource):
                         "dropoff_location": b.dropoff_location if b else None,
                         "client_name": (
                             b.customer_full_name if b and hasattr(b, "customer_full_name") else "—"
+                        ),
+                        "time_formatted": (
+                            b.scheduled_time.strftime("%H:%M")
+                            if b and b.scheduled_time
+                            else None
                         ),
                     }
                 )
@@ -4551,6 +4652,9 @@ class BillablePartners(Resource):
             )
             if error_response or not company:
                 return error_response, status_code
+
+            year = request.args.get("year", type=int)
+            month = request.args.get("month", type=int)
 
             from models.booking_transfer import BookingTransfer
             from models.enums import PartnershipStatus, TransferStatus
@@ -4785,13 +4889,13 @@ class BillablePartners(Resource):
                 # - Statut COMPLETED (les transferts ACCEPTED ne sont pas encore facturables)
                 # - executing_company_id == company.id (l'entreprise actuelle est l'exécutante)
                 # - Non facturés
+                # - Si year/month fournis : filtrer par date de la course (scheduled_time)
                 # Note: On inclut les transferts COMPLETED même s'ils ne sont pas encore validés,
                 # pour que l'entreprise puisse voir ce qui sera facturable une fois validé.
                 # Le service de génération de facture vérifiera que seuls les transferts validés
                 # sont inclus dans la facture.
 
-                # D'abord, chercher tous les transferts pour ce partenariat avec executing_company_id
-                all_transfers_for_billing = (
+                all_transfers_query = (
                     db.session.query(BookingTransfer)
                     .filter(
                         BookingTransfer.partnership_id == partnership.id,
@@ -4800,8 +4904,38 @@ class BillablePartners(Resource):
                         BookingTransfer.status
                         == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
                     )
-                    .all()
                 )
+                if year and month:
+                    DECEMBER = 12
+                    start_naive = datetime(year, month, 1)
+                    end_naive = (
+                        datetime(year + 1, 1, 1)
+                        if month == DECEMBER
+                        else datetime(year, month + 1, 1)
+                    )
+                    start_utc = datetime(year, month, 1, tzinfo=UTC)
+                    end_utc = (
+                        datetime(year + 1, 1, 1, tzinfo=UTC)
+                        if month == DECEMBER
+                        else datetime(year, month + 1, 1, tzinfo=UTC)
+                    )
+                    all_transfers_query = all_transfers_query.join(
+                        Booking, BookingTransfer.booking_id == Booking.id
+                    ).filter(
+                        or_(
+                            and_(
+                                Booking.scheduled_time.isnot(None),
+                                Booking.scheduled_time >= start_naive,
+                                Booking.scheduled_time < end_naive,
+                            ),
+                            and_(
+                                BookingTransfer.validated_at.isnot(None),
+                                BookingTransfer.validated_at >= start_utc,
+                                BookingTransfer.validated_at < end_utc,
+                            ),
+                        )
+                    )
+                all_transfers_for_billing = all_transfers_query.all()
 
                 # Récupérer les IDs des transferts déjà facturés (non annulés)
                 from models.partner_invoice import PartnerInvoiceStatus
@@ -5589,11 +5723,10 @@ class BulkSendInvoices(Resource):
                 message=f"{len(updated)} facture(s) marquée(s) comme envoyée(s)",
             )
 
-        except (OperationalError, DBAPIError, IntegrityError) as e:
-            logger.error("Erreur DB bulk-send: %s", str(e))
-            db.session.rollback()
-            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
-            logger.exception("Erreur inattendue bulk-send")
+            if isinstance(e, (OperationalError, DBAPIError, IntegrityError)):
+                logger.error("Erreur DB bulk-send: %s", str(e))
+            else:
+                logger.exception("Erreur inattendue bulk-send")
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)

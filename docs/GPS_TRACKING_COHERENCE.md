@@ -101,12 +101,28 @@ driver:{driver_id}:loc
 
 ## 3️⃣ Backend → Frontends (Temps réel)
 
+### Priorité stricte des sources (P1)
+
+```
+driver_live_state_update (source principale, payload canonique)
+↓
+driver_location_update (fallback position seule)
+↓
+HTTP refresh
+```
+
+**Règle** : `driver_live_state_update` contient le contrat canonique (status, mission_status, presence_status). `driver_location_update` ne doit **jamais** écraser le statut. Les frontends doivent :
+- Écouter les deux événements
+- Si `payload.status` présent → traiter comme payload canonique
+- Sinon → mise à jour position seule uniquement (conserver le dernier statut connu)
+
 ### A) Socket.IO (Temps réel)
 
-#### Événement
+#### Événements
 
 ```javascript
-socket.on('driver_location_update', (data) => { ... });
+socket.on('driver_live_state_update', (data) => { ... });  // Source principale
+socket.on('driver_location_update', (data) => { ... });     // Fallback position
 ```
 
 #### Format de données (OUTPUT - Socket.IO)
@@ -131,12 +147,27 @@ socket.on('driver_location_update', (data) => { ... });
 
 ### B) HTTP Polling (Fallback)
 
-#### Endpoint
+#### Endpoint principal (recommandé)
+
+```http
+GET /api/v1/companies/me/drivers/locations
+Authorization: Bearer {JWT_TOKEN}
+```
+
+**Paramètres optionnels viewport bbox** (standard Leaflet/Mapbox/Google) :
+
+- `bbox_ne_lat`, `bbox_ne_lng`, `bbox_sw_lat`, `bbox_sw_lng`
+
+Si les 4 paramètres sont fournis et valides, seuls les chauffeurs dont la position est dans le viewport sont retournés.
+
+#### Endpoint legacy (déprécié)
 
 ```http
 GET /api/v1/driver/company/{company_id}/live-locations
 Authorization: Bearer {JWT_TOKEN}
 ```
+
+**Headers** : `Deprecation: true`, `Sunset: 2025-12-31`. Migrer vers `/companies/me/drivers/locations`.
 
 #### Format de données (OUTPUT - HTTP)
 
@@ -203,15 +234,19 @@ const onLoc = (data) => {
 
 ### Code de réception (CORRIGÉ)
 
-#### A) Socket.IO
+#### A) Socket.IO — Priorité stricte
 
 ```typescript
-const handleDriverLocation = (payload: DriverLocationEvent) => {
-  // ✅ COMPATIBLE avec les deux formats
-  const latitude = toNumber(payload.latitude ?? payload.lat);
-  const longitude = toNumber(payload.longitude ?? payload.lon);
-  // ...
+// driver_live_state_update = source principale (payload canonique)
+const handleLiveStateUpdate = (payload) => {
+  if (payload.status != null) updateDriverFromLiveState(payload);
+  else updateDriverPosition(payload);
 };
+// driver_location_update = fallback position seule (ne jamais écraser le statut)
+const handleLocationUpdate = (payload) => updateDriverPosition(payload);
+
+socket.on('driver_live_state_update', handleLiveStateUpdate);
+socket.on('driver_location_update', handleLocationUpdate);
 ```
 
 #### B) HTTP Polling
@@ -219,9 +254,9 @@ const handleDriverLocation = (payload: DriverLocationEvent) => {
 ```typescript
 const fetchLocationsViaHTTP = async () => {
   const response = await axios.get(
-    `${standardApiURL}/driver/company/${companyId}/live-locations`
+    `${standardApiURL}/companies/me/drivers/locations`
   );
-  const items = response.data?.items || [];
+  const items = response.data?.locations || [];
 
   const newMarkers = items.map((item) => {
     // ✅ COMPATIBLE avec les deux formats
@@ -400,6 +435,43 @@ Si on veut uniformiser à 100%, deux options:
 - [x] Types TypeScript mis à jour
 - [x] Documentation synchronisée
 - [x] Tests manuels validés
+
+---
+
+## 🚀 Validation finale production (Phase 6)
+
+Avant passage en production, exécuter manuellement les 3 scénarios suivants.
+
+### Scénario 1 — Mission réelle
+
+**Parcours** : `ASSIGNED` → `EN_ROUTE` → `IN_PROGRESS` → `COMPLETED`
+
+**Vérifier la cohérence sur** :
+
+- [ ] REST `GET /companies/me/drivers/locations` — statut correct à chaque étape
+- [ ] Socket `driver_live_state_update` — payload reçu avec status
+- [ ] Web entreprise (DriverLiveMap) — affichage correct du statut
+- [ ] Mobile entreprise (EnterpriseDriversMap) — affichage correct du statut
+
+### Scénario 2 — Réseau instable
+
+**Simuler** : wifi → 4G → offline → reconnect
+
+**Vérifier** :
+
+- [ ] Reconnexion socket automatique
+- [ ] Mise à jour des drivers après reconnexion
+- [ ] Pas de perte de statut (priorité `driver_live_state_update` respectée)
+
+### Scénario 3 — Multi-chauffeurs
+
+**Simuler** : 20 chauffeurs, mises à jour toutes les 5 s
+
+**Vérifier** :
+
+- [ ] Endpoint carte (latence, stabilité)
+- [ ] Pipeline Redis (pas de timeout)
+- [ ] Fanout socket (tous les clients reçoivent les mises à jour)
 
 ---
 

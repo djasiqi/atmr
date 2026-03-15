@@ -142,7 +142,10 @@ def _generate_partner_scor_reference(partner_invoice: PartnerInvoice) -> str | N
 
 
 def generate_partner_invoice_pdf_content(
-    partner_invoice: PartnerInvoice, transfers: list[BookingTransfer]
+    partner_invoice: PartnerInvoice,
+    transfers: list[BookingTransfer],
+    *,
+    line_amounts: dict[int, Any] | None = None,
 ) -> bytes:
     """Génère le contenu PDF d'une facture partenaire.
 
@@ -155,6 +158,7 @@ def generate_partner_invoice_pdf_content(
     Args:
         partner_invoice: Facture partenaire
         transfers: Liste des transferts inclus dans la facture
+        line_amounts: Montants par transfer_id (après overrides) pour cohérence ligne/total
 
     Returns:
         Contenu PDF en bytes
@@ -467,7 +471,14 @@ def generate_partner_invoice_pdf_content(
             departure = "N/A"
             arrival = "N/A"
 
-        amount = f"{transfer.partner_cost:.2f}" if transfer.partner_cost else "0.00"
+        # Montant effectif (override si fourni, sinon partner_cost)
+        line_amt = (line_amounts or {}).get(transfer.id)
+        if line_amt is not None:
+            amount = f"{float(line_amt):.2f}"
+        elif transfer.partner_cost is not None:
+            amount = f"{float(transfer.partner_cost):.2f}"
+        else:
+            amount = "0.00"
         table_data.append([date_str, client_name, departure, arrival, amount])
 
     # Style tableau IDENTIQUE à pdf.py (pas de couleurs de fond)

@@ -10,6 +10,7 @@ et appelées par le framework.
 
 # ruff: noqa: I001
 import logging
+import time
 import traceback
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -23,7 +24,8 @@ from flask_socketio import SocketIO, emit, join_room
 from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefusedError
 
 from ext import db, redis_client
-from models import Company, Driver, Message, SenderRole, User, UserRole
+from models import Booking, Company, Driver, Message, SenderRole, User, UserRole
+from models.enums import BookingStatus
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.geolocation.location import get_location_service
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
@@ -161,6 +163,106 @@ def _parse_timestamp(timestamp_value: Any) -> datetime:
 
     # Fallback: utiliser maintenant
     return datetime.now(UTC)
+
+
+def _resolve_mission_status_for_driver(driver_id: int) -> str:
+    """Retourne le mission_status canonique pour un chauffeur."""
+    statuses = (
+        BookingStatus.ASSIGNED.value,
+        BookingStatus.EN_ROUTE.value,
+        BookingStatus.IN_PROGRESS.value,
+    )
+    rows = (
+        Booking.query.filter(
+            Booking.driver_id == driver_id,
+            Booking.status.in_(statuses),
+        )
+        .with_entities(Booking.status)
+        .all()
+    )
+    found: set[str] = set()
+    for row in rows:
+        raw = getattr(row, "status", None)
+        status_value = getattr(raw, "value", raw)
+        found.add(str(status_value or "").upper())
+    if BookingStatus.IN_PROGRESS.value in found:
+        return BookingStatus.IN_PROGRESS.value
+    if BookingStatus.EN_ROUTE.value in found:
+        return BookingStatus.EN_ROUTE.value
+    if BookingStatus.ASSIGNED.value in found:
+        return BookingStatus.ASSIGNED.value
+    return "NONE"
+
+
+def _resolve_driver_status(
+    *,
+    mission_status: str,
+    is_active: bool,
+    presence_status: str,
+) -> str:
+    if not is_active or presence_status == "offline":
+        return "offline"
+    if mission_status in {BookingStatus.EN_ROUTE.value, BookingStatus.IN_PROGRESS.value}:
+        return "busy"
+    if mission_status == BookingStatus.ASSIGNED.value:
+        return "assigned"
+    return "available"
+
+
+def _parse_iso_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    with suppress(Exception):
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return None
+
+
+def _compute_presence_from_signals(
+    *,
+    loc_ts: str | None,
+    last_seen_ts: str | None,
+) -> tuple[str, str, str]:
+    """Retourne (presence_status, location_status, offline_reason)."""
+    online_window_sec = 120
+    loc_fresh_sec = 90
+    offline_window_sec = 240
+    now = datetime.now(UTC)
+
+    loc_age_sec: int | None = None
+    heartbeat_age_sec: int | None = None
+
+    loc_dt = _parse_iso_utc(loc_ts)
+    if loc_dt is not None:
+        with suppress(Exception):
+            loc_age_sec = int(max(0, (now - loc_dt).total_seconds()))
+
+    hb_dt = _parse_iso_utc(last_seen_ts)
+    if hb_dt is not None:
+        with suppress(Exception):
+            heartbeat_age_sec = int(max(0, (now - hb_dt).total_seconds()))
+
+    if loc_age_sec is None:
+        location_status = "missing"
+    elif loc_age_sec < loc_fresh_sec:
+        location_status = "fresh"
+    elif loc_age_sec < offline_window_sec:
+        location_status = "stale"
+    else:
+        location_status = "missing"
+
+    has_recent_signal = (
+        (loc_age_sec is not None and loc_age_sec < online_window_sec)
+        or (heartbeat_age_sec is not None and heartbeat_age_sec < online_window_sec)
+    )
+    is_offline = (
+        (loc_age_sec is None or loc_age_sec >= offline_window_sec)
+        and (heartbeat_age_sec is None or heartbeat_age_sec >= offline_window_sec)
+    )
+    if is_offline:
+        return ("offline", location_status, "no_signal")
+    if has_recent_signal and location_status == "fresh":
+        return ("online", location_status, "")
+    return ("degraded", location_status, "location_stale")
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -644,7 +746,6 @@ def init_chat_socket(socketio: SocketIO):
                     ]
                     for ip in ips_to_remove:
                         _TOKEN_EXPIRED_TRACKING.pop(ip, None)
-
 
                 # ✅ Logger seulement si should_log (réduire bruit)
                 if should_log:
@@ -1633,6 +1734,9 @@ def init_chat_socket(socketio: SocketIO):
         """Handler pour la réception de la localisation du chauffeur.
         ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id.
 
+        Policy ASSIGNED (P1): Les chauffeurs ASSIGNED peuvent envoyer des positions
+        comme les autres (même rate limit). Voir backend/docs/POLICY_DRIVER_LOCATION_ASSIGNED.md.
+
         Note: PLR0911 (too many returns) ignoré car les returns sont nécessaires
         pour la validation et la gestion d'erreurs (sécurité, rate limiting, etc.).
         """
@@ -1642,6 +1746,7 @@ def init_chat_socket(socketio: SocketIO):
         driver_id_log: int | None = None
         company_id_log: int | None = None
         payload_driver_id_log: Any = None
+        t0 = time.perf_counter()
         try:
             # 1. Récupération du SID pour le debug
             current_sid = _get_sid()
@@ -1668,93 +1773,67 @@ def init_chat_socket(socketio: SocketIO):
             user_id = user.id
             user_id_log = user_id
 
-            # 4. Nouvelle approche: extraire driver_id du payload si disponible
+            # 4. Ownership: driver strictement dérivé du JWT
             payload_driver_id = data.get("driver_id")
             payload_driver_id_log = payload_driver_id
 
-            # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
-            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            if user_role != "driver" or not user_id:
+                emit("error", {"error": "Accès réservé aux chauffeurs."})
+                return
 
-            # Déterminer driver_id pour rate limiting
-            driver_id_for_rate_limit = payload_driver_id
-            if not driver_id_for_rate_limit:
-                # Fallback: chercher via user_id
-                driver = Driver.query.filter_by(user_id=user_id).first()
-                if driver:
-                    driver_id_for_rate_limit = driver.id
+            driver = Driver.query.filter_by(user_id=user_id).first()
+            if driver is None:
+                emit("error", {"error": "Chauffeur introuvable."})
+                return
 
-            if driver_id_for_rate_limit:
-                allowed, retry_after = ws_rate_limiter.check_rate_limit(
-                    "driver_location",
-                    user_id=user_id,
-                    driver_id=int(driver_id_for_rate_limit),
-                    client_ip=client_ip,
-                )
-                if not allowed:
-                    logger.warning(
-                        "🚫 Rate limit driver_location dépassé pour driver_id=%s, retry_after=%d",
-                        driver_id_for_rate_limit,
-                        retry_after or 0,
-                    )
-                    emit(
-                        "rate_limit_exceeded",
-                        {
-                            "event": "rate_limit_exceeded",
-                            "message": f"Trop de mises à jour de position. Réessayez dans {retry_after} secondes.",
-                            "attempts": 1,
-                            "retry_after_seconds": retry_after,
-                        },
-                    )
-                    ws_metrics.on_error("rate_limit_exceeded")
-                    ws_metrics.on_rate_limit_hit("driver_location")
-                    return
-
-            # 5. Déterminer le driver à utiliser
-            driver: Driver | None = None
-
-            if payload_driver_id and isinstance(payload_driver_id, (int, str)):
-                # Priorité au driver_id du payload (plus fiable)
+            if payload_driver_id is not None and isinstance(payload_driver_id, (int, str)):
                 try:
                     candidate_id = int(payload_driver_id)
-                    driver = Driver.query.get(candidate_id)
-                    if driver:
-                        logger.info("✅ Driver trouvé via payload: %s", driver.id)
-                    else:
+                    if candidate_id != int(driver.id):
                         logger.warning(
-                            "⚠️ Driver introuvable via payload_driver_id=%s",
+                            "⛔ driver_id payload invalide: payload=%s, jwt_driver=%s",
                             candidate_id,
+                            driver.id,
                         )
+                        emit("error", {"error": "driver_id invalide pour cette session."})
+                        return
                 except (ValueError, TypeError):
-                    logger.warning(
-                        "⚠️ driver_id non convertible: %s",
-                        payload_driver_id,
-                    )
+                    emit("error", {"error": "driver_id invalide."})
+                    return
 
-            if not driver and user_id and user_role == "driver":
-                # Fallback: recherche via user_id
-                driver = Driver.query.filter_by(user_id=user_id).first()
-                if driver:
-                    logger.info("✅ Driver trouvé via user_id: %s", driver.id)
-                else:
-                    logger.warning("⚠️ Aucun driver associé à user_id=%s", user_id)
-
-            # Évite l'évaluation booléenne d'une colonne SQLA :
-            # on récupère un int ou None
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
-            if driver:
-                driver_id_log = driver.id
+            driver_id_log = driver.id
             if company_id_val:
                 company_id_log = company_id_val
-            if (driver is None) or (company_id_val is None):
-                logger.error(
-                    "❌ Driver introuvable: payload_driver_id=%s, user_id=%s",
-                    payload_driver_id,
-                    user_id,
+            if company_id_val is None:
+                emit("error", {"error": "Chauffeur non lié à une entreprise."})
+                return
+
+            # ✅ Rate limiting
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "driver_location",
+                user_id=user_id,
+                driver_id=int(driver.id),
+                client_ip=client_ip,
+            )
+            if not allowed:
+                logger.warning(
+                    "🚫 Rate limit driver_location dépassé pour driver_id=%s, retry_after=%d",
+                    driver.id,
+                    retry_after or 0,
                 )
                 emit(
-                    "error",
-                    {"error": "Chauffeur introuvable ou non lié à une entreprise."},
+                    "rate_limit_exceeded",
+                    {
+                        "event": "rate_limit_exceeded",
+                        "message": f"Trop de mises à jour de position. Réessayez dans {retry_after} secondes.",
+                        "attempts": 1,
+                        "retry_after_seconds": retry_after,
+                    },
                 )
+                ws_metrics.on_error("rate_limit_exceeded")
+                ws_metrics.on_rate_limit_hit("driver_location")
                 return
 
             latitude = data.get("latitude")
@@ -1833,11 +1912,18 @@ def init_chat_socket(socketio: SocketIO):
                 # Fallback: utiliser position brute
                 snapped_lat, snapped_lon = latitude, longitude
 
-            # 7. Diffuser la position aux rooms de l'entreprise
+            # 7. P2: Fanout realtime unifié
             now_iso = datetime.now(UTC).isoformat()
-            company_room = f"company_{company_id_val}"
-            cast("Any", emit)(
-                "driver_location_update",
+            mission_status = _resolve_mission_status_for_driver(driver.id)
+            driver_status = _resolve_driver_status(
+                mission_status=mission_status,
+                is_active=bool(getattr(driver, "is_active", True)),
+                presence_status="online",
+            )
+            from services.realtime.socketio import fanout_driver_location_update
+
+            fanout_driver_location_update(
+                company_id_val,
                 {
                     "driver_id": driver.id,
                     "first_name": getattr(
@@ -1847,11 +1933,24 @@ def init_chat_socket(socketio: SocketIO):
                     "longitude": snapped_lon,
                     "timestamp": now_iso,
                 },
-                room=company_room,
+                {
+                    "driver_id": driver.id,
+                    "lat": snapped_lat,
+                    "lng": snapped_lon,
+                    "timestamp": now_iso,
+                    "status": driver_status,
+                    "mission_status": mission_status,
+                    "presence_status": "online",
+                    "location_status": "fresh",
+                    "is_available": driver_status == "available",
+                    "offline_reason": "",
+                },
             )
+            elapsed = time.perf_counter() - t0
+            ws_metrics.on_driver_location_latency(elapsed)
             logger.info(
-                "📡 Loc -> %s (driver %s) %s,%s",
-                company_room,
+                "📡 Loc -> company_%s (driver %s) %s,%s",
+                company_id_val,
                 driver.id,
                 snapped_lat,
                 snapped_lon,
@@ -1927,94 +2026,67 @@ def init_chat_socket(socketio: SocketIO):
             payload_driver_id = data.get("driver_id")
             payload_driver_id_log = payload_driver_id
 
-            # ✅ Rate limiting: vérifier après avoir récupéré user_id et driver_id
-            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            if user_role != "driver":
+                emit("error", {"error": "Accès réservé aux chauffeurs."})
+                return {"success": False, "error": "Accès réservé aux chauffeurs"}
 
-            # Déterminer driver_id pour rate limiting
-            driver_id_for_rate_limit = payload_driver_id
-            if not driver_id_for_rate_limit:
-                # Fallback: chercher via user_id
-                driver = Driver.query.filter_by(user_id=user_id).first()
-                if driver:
-                    driver_id_for_rate_limit = driver.id
+            driver = Driver.query.filter_by(user_id=user_id).first()
+            if driver is None:
+                emit("error", {"error": "Chauffeur introuvable."})
+                return {"success": False, "error": "Chauffeur introuvable"}
 
-            if driver_id_for_rate_limit:
-                allowed, retry_after = ws_rate_limiter.check_rate_limit(
-                    "driver_location_batch",
-                    user_id=user_id,
-                    driver_id=int(driver_id_for_rate_limit),
-                    client_ip=client_ip,
-                )
-                if not allowed:
-                    logger.warning(
-                        "🚫 Rate limit driver_location_batch dépassé pour driver_id=%s, retry_after=%d",
-                        driver_id_for_rate_limit,
-                        retry_after or 0,
-                    )
-                    emit(
-                        "rate_limit_exceeded",
-                        {
-                            "event": "rate_limit_exceeded",
-                            "message": f"Trop de mises à jour batch. Réessayez dans {retry_after} secondes.",
-                            "attempts": 1,
-                            "retry_after_seconds": retry_after,
-                        },
-                    )
-                    ws_metrics.on_error("rate_limit_exceeded")
-                    ws_metrics.on_rate_limit_hit("driver_location_batch")
-                    return {
-                        "success": False,
-                        "error": "Rate limit exceeded",
-                        "retry_after": retry_after,
-                    }
-
-            payload_driver_id = data.get("driver_id")
-            driver: Driver | None = None
-
-            if payload_driver_id and isinstance(payload_driver_id, (int, str)):
+            if payload_driver_id is not None and isinstance(payload_driver_id, (int, str)):
                 try:
                     candidate_id = int(payload_driver_id)
-                    driver = Driver.query.get(candidate_id)
-                    if driver:
-                        logger.info(
-                            "✅ Driver trouvé via payload: %s",
+                    if candidate_id != int(driver.id):
+                        logger.warning(
+                            "⛔ driver_id payload invalide (batch): payload=%s, jwt_driver=%s",
+                            candidate_id,
                             driver.id,
                         )
+                        emit("error", {"error": "driver_id invalide pour cette session."})
+                        return {"success": False, "error": "driver_id invalide pour cette session"}
                 except (ValueError, TypeError):
-                    logger.warning(
-                        "⚠️ driver_id non convertible: %s",
-                        payload_driver_id,
-                    )
-
-            if not driver and user_role == "driver":
-                driver = Driver.query.filter_by(user_id=user.id).first()
-                if driver:
-                    logger.info(
-                        "✅ Driver trouvé via user_id: %s",
-                        driver.id,
-                    )
+                    emit("error", {"error": "driver_id invalide."})
+                    return {"success": False, "error": "driver_id invalide"}
 
             company_id_val = tcast("int | None", getattr(driver, "company_id", None))
-            if driver:
-                driver_id_log = driver.id
+            driver_id_log = driver.id
             if company_id_val:
                 company_id_log = company_id_val
-            if (driver is None) or (company_id_val is None):
-                logger.error(
-                    (
-                        "❌ Driver introuvable pour driver_location_batch: "
-                        "payload_driver_id=%s, user_id=%s"
-                    ),
-                    payload_driver_id,
-                    user.id,
+            if company_id_val is None:
+                emit("error", {"error": "Chauffeur non lié à une entreprise."})
+                return {"success": False, "error": "Chauffeur non lié à une entreprise"}
+
+            # ✅ Rate limiting
+            client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+            allowed, retry_after = ws_rate_limiter.check_rate_limit(
+                "driver_location_batch",
+                user_id=user_id,
+                driver_id=int(driver.id),
+                client_ip=client_ip,
+            )
+            if not allowed:
+                logger.warning(
+                    "🚫 Rate limit driver_location_batch dépassé pour driver_id=%s, retry_after=%d",
+                    driver.id,
+                    retry_after or 0,
                 )
                 emit(
-                    "error",
-                    {"error": "Chauffeur introuvable ou non lié à une entreprise."},
+                    "rate_limit_exceeded",
+                    {
+                        "event": "rate_limit_exceeded",
+                        "message": f"Trop de mises à jour batch. Réessayez dans {retry_after} secondes.",
+                        "attempts": 1,
+                        "retry_after_seconds": retry_after,
+                    },
                 )
+                ws_metrics.on_error("rate_limit_exceeded")
+                ws_metrics.on_rate_limit_hit("driver_location_batch")
                 return {
                     "success": False,
-                    "error": "Chauffeur introuvable ou non lié à une entreprise",
+                    "error": "Rate limit exceeded",
+                    "retry_after": retry_after,
                 }
 
             positions = data.get("positions", [])
@@ -2138,9 +2210,20 @@ def init_chat_socket(socketio: SocketIO):
                         # Fallback: utiliser position brute
                         snapped_lat, snapped_lon = latitude, longitude
 
-                    # Diffuser chaque position (snapée)
-                    cast("Any", emit)(
-                        "driver_location_update",
+                    # P2: Fanout realtime unifié
+                    mission_status = _resolve_mission_status_for_driver(driver.id)
+                    driver_status = _resolve_driver_status(
+                        mission_status=mission_status,
+                        is_active=bool(getattr(driver, "is_active", True)),
+                        presence_status="online",
+                    )
+                    ts_str = (
+                        timestamp.isoformat() if timestamp else now_iso
+                    )
+                    from services.realtime.socketio import fanout_driver_location_update
+
+                    fanout_driver_location_update(
+                        company_id_val,
                         {
                             "driver_id": driver.id,
                             "first_name": getattr(
@@ -2148,11 +2231,20 @@ def init_chat_socket(socketio: SocketIO):
                             ),
                             "latitude": snapped_lat,
                             "longitude": snapped_lon,
-                            "timestamp": timestamp.isoformat()
-                            if timestamp
-                            else now_iso,
+                            "timestamp": ts_str,
                         },
-                        room=company_room,
+                        {
+                            "driver_id": driver.id,
+                            "lat": snapped_lat,
+                            "lng": snapped_lon,
+                            "timestamp": ts_str,
+                            "status": driver_status,
+                            "mission_status": mission_status,
+                            "presence_status": "online",
+                            "location_status": "fresh",
+                            "is_available": driver_status == "available",
+                            "offline_reason": "",
+                        },
                     )
 
                     # ✅ P2: Incrémenter compteur de positions traitées avec succès
@@ -2351,7 +2443,9 @@ def init_chat_socket(socketio: SocketIO):
             if user_role != "institution":
                 emit(
                     "error",
-                    {"error": "Seuls les utilisateurs institution peuvent rejoindre cette room."},
+                    {
+                        "error": "Seuls les utilisateurs institution peuvent rejoindre cette room."
+                    },
                 )
                 return
 
@@ -2446,6 +2540,9 @@ def init_chat_socket(socketio: SocketIO):
                         h_raw = redis_client.hgetall(key)
                         # Calme Pylance: redis-py retourne un dict[bytes, bytes]
                         h = cast("Mapping[bytes, Any]", h_raw)
+                        last_seen_raw = redis_client.get(f"driver:{driver.id}:last_seen")
+                    else:
+                        last_seen_raw = None
 
                     if h:
                         # Redis returns bytes -> decode
@@ -2463,9 +2560,29 @@ def init_chat_socket(socketio: SocketIO):
                                 with suppress(Exception):
                                     loc_data[kf] = float(loc_data[kf])
 
-                        # Emit location to the company room
-                        cast("Any", emit)(
-                            "driver_location_update",
+                        last_seen_str = None
+                        if isinstance(last_seen_raw, bytes):
+                            with suppress(Exception):
+                                last_seen_str = last_seen_raw.decode()
+                        elif isinstance(last_seen_raw, str):
+                            last_seen_str = last_seen_raw
+                        mission_status = _resolve_mission_status_for_driver(driver.id)
+                        presence_status, location_status, offline_reason = (
+                            _compute_presence_from_signals(
+                                loc_ts=tcast("str | None", loc_data.get("ts")),
+                                last_seen_ts=last_seen_str,
+                            )
+                        )
+                        status = _resolve_driver_status(
+                            mission_status=mission_status,
+                            is_active=bool(getattr(driver, "is_active", True)),
+                            presence_status=presence_status,
+                        )
+                        ts_val = loc_data.get("ts") or datetime.now(UTC).isoformat()
+                        from services.realtime.socketio import fanout_driver_location_update
+
+                        fanout_driver_location_update(
+                            company_id,
                             {
                                 "driver_id": driver.id,
                                 "first_name": getattr(
@@ -2473,16 +2590,36 @@ def init_chat_socket(socketio: SocketIO):
                                 ),
                                 "latitude": loc_data.get("lat"),
                                 "longitude": loc_data.get("lon"),
-                                "timestamp": loc_data.get("ts")
-                                or datetime.now(UTC).isoformat(),
+                                "timestamp": ts_val,
+                            },
+                            {
+                                "driver_id": driver.id,
+                                "lat": loc_data.get("lat"),
+                                "lng": loc_data.get("lon"),
+                                "timestamp": ts_val,
+                                "status": status,
+                                "mission_status": mission_status,
+                                "presence_status": presence_status,
+                                "location_status": location_status,
+                                "is_available": status == "available",
+                                "offline_reason": offline_reason,
                             },
                         )
                     elif (driver.latitude is not None) and (
                         driver.longitude is not None
                     ):
-                        # Fallback to DB if Redis doesnt have data
-                        cast("Any", emit)(
-                            "driver_location_update",
+                        # Fallback to DB if Redis doesnt have data — P2: fanout unifié
+                        mission_status = _resolve_mission_status_for_driver(driver.id)
+                        status = _resolve_driver_status(
+                            mission_status=mission_status,
+                            is_active=bool(getattr(driver, "is_active", True)),
+                            presence_status="degraded",
+                        )
+                        ts_val = datetime.now(UTC).isoformat()
+                        from services.realtime.socketio import fanout_driver_location_update
+
+                        fanout_driver_location_update(
+                            company_id,
                             {
                                 "driver_id": driver.id,
                                 "first_name": getattr(
@@ -2490,7 +2627,19 @@ def init_chat_socket(socketio: SocketIO):
                                 ),
                                 "latitude": driver.latitude,
                                 "longitude": driver.longitude,
-                                "timestamp": datetime.now(UTC).isoformat(),
+                                "timestamp": ts_val,
+                            },
+                            {
+                                "driver_id": driver.id,
+                                "lat": driver.latitude,
+                                "lng": driver.longitude,
+                                "timestamp": ts_val,
+                                "status": status,
+                                "mission_status": mission_status,
+                                "presence_status": "degraded",
+                                "location_status": "stale",
+                                "is_available": status == "available",
+                                "offline_reason": "location_stale",
                             },
                         )
                 except Exception as e:
@@ -2589,7 +2738,9 @@ def init_chat_socket(socketio: SocketIO):
                                 e,
                             )
                     except Exception as e:
-                        logger.warning("Unexpected error leaving room for institution: %s", e)
+                        logger.warning(
+                            "Unexpected error leaving room for institution: %s", e
+                        )
 
             # ✅ Métriques
             try:

@@ -179,11 +179,11 @@ class CreateManualBookingUseCase:
                 )
             try:
                 billed_to_company_id = int(billed_to_company_id)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError) as e:
                 raise CreateManualBookingError(
                     "billed_to_company_id doit être un entier.",
                     status_code=400,
-                )
+                ) from e
             from repositories.company_repository import CompanyRepository
 
             company_repo = CompanyRepository()
@@ -219,7 +219,8 @@ class CreateManualBookingUseCase:
                             time_only = time_parts[-1].split(":")[:2]
                             time_only = ":".join(time_only)
                     combined = f"{return_date_str}T{time_only}"
-                    if len(combined.split("T")[1].split(":")) == 2:
+                    _HOUR_MIN_PARTS = 2
+                    if len(combined.split("T")[1].split(":")) == _HOUR_MIN_PARTS:
                         combined = f"{combined}:00"
                     return_dt = parse_local_naive(combined)
                     return_time_confirmed = True
@@ -373,9 +374,10 @@ class CreateManualBookingUseCase:
                     scheduled.hour if scheduled else datetime.now(UTC).hour
                 )
                 rush_hour_factor = 1
-                if MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
-                    rush_hour_factor = 1.3
-                elif EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
+                if (
+                    MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD
+                    or EVENING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD
+                ):
                     rush_hour_factor = 1.3
                 elif LUNCH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD:
                     rush_hour_factor = 1.15

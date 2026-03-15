@@ -4,13 +4,13 @@ import logging
 from functools import wraps
 from typing import Any
 
-import sentry_sdk  # pyright: ignore[reportMissingImports]
-from flask import (  # pyright: ignore[reportMissingImports]
+import sentry_sdk
+from flask import (
     request,
     url_for,
 )
-from flask_jwt_extended import jwt_required  # pyright: ignore[reportMissingImports]
-from flask_restx import (  # pyright: ignore[reportMissingImports]
+from flask_jwt_extended import jwt_required
+from flask_restx import (
     Namespace,
     Resource,
     fields,
@@ -130,7 +130,7 @@ def _queue_trigger(company_id: int | None, action: str) -> None:
         # API moderne
         t1 = getattr(queue, "trigger_on_booking_change", None)
         if callable(t1):
-            t1(company_id, action=action)
+            t1(company_id, params={"action": action})
             return
         # API alternative
         t2 = getattr(queue, "trigger", None)
@@ -154,7 +154,7 @@ def _build_pagination_links(
         dict avec 'Link' header + metadata pagination
 
     """
-    from flask import current_app  # pyright: ignore[reportMissingImports]
+    from flask import current_app
 
     total_pages = (total + per_page - 1) // per_page
     links = []
@@ -401,7 +401,7 @@ def _validate_booking_request(
         Tuple (user, client, error_response) où error_response est None si OK
     """
     # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-    from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+    from marshmallow import ValidationError
 
     try:
         validate_request(BookingCreateSchema(), data)
@@ -580,9 +580,7 @@ class BookingResource(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingUpdateSchema
             from schemas.validation_utils import (
@@ -675,8 +673,7 @@ class BookingResource(Resource):
                         invalidate_osrm_matrix_cache_adapter(coords=coords)
 
                     logger.info(
-                        "[Cache] ✅ Invalidated geocoding and OSRM cache for "
-                        "booking #%s (addresses changed)",
+                        "[Cache] ✅ Invalidated geocoding and OSRM cache for booking #%s (addresses changed)",
                         booking.id,
                     )
                 except Exception as e:
@@ -864,9 +861,7 @@ class ListBookings(Resource):
                 )
 
             # ✅ 2.4: Validation Marshmallow pour query params
-            from marshmallow import (  # pyright: ignore[reportMissingImports]
-                ValidationError,
-            )
+            from marshmallow import ValidationError
 
             from schemas.booking_schemas import BookingListSchema
             from schemas.validation_utils import (

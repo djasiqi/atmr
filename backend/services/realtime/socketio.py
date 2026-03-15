@@ -218,6 +218,24 @@ def emit_company_event(
     )
 
 
+def fanout_driver_location_update(
+    company_id: int,
+    location_payload: dict[str, Any],
+    live_state_payload: dict[str, Any],
+    *,
+    namespace: str = DEFAULT_NAMESPACE,
+) -> None:
+    """P2: Fanout realtime unifié — émet driver_location_update + driver_live_state_update
+    vers la room entreprise. Utilisé par handle_driver_location, handle_driver_location_batch,
+    et get_driver_locations.
+    """
+    room = get_company_room(company_id)
+    _safe_emit("driver_location_update", location_payload, room=room, namespace=namespace)
+    _safe_emit(
+        "driver_live_state_update", live_state_payload, room=room, namespace=namespace
+    )
+
+
 def emit_date_event(
     date_str: str,
     event: str,
@@ -672,6 +690,7 @@ __all__ = [
     "emit_dispatch_run_failed",
     "emit_dispatch_run_started",
     "emit_driver_event",
+    "fanout_driver_location_update",
     "get_company_room",
     "get_date_room",
     "get_driver_room",

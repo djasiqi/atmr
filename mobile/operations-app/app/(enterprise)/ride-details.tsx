@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import { router, useLocalSearchParams } from "expo-router";
 import * as Crypto from "expo-crypto";
 import dayjs from "dayjs";
@@ -115,6 +116,7 @@ const CANCEL_REASONS = [
 export default function RideDetailsScreen() {
   const { rideId } = useLocalSearchParams<{ rideId?: string }>();
   const { enterpriseSession } = useAuth();
+  const appAlert = useAppAlert();
   const dispatchMode = (enterpriseSession?.company?.dispatchMode as "manual" | "semi_auto" | "fully_auto" | undefined) || "manual";
   const isManualMode = dispatchMode === "manual";
 
@@ -242,10 +244,9 @@ export default function RideDetailsScreen() {
           // Erreur de conflit : afficher un message clair avec Alert
           const conflictMessage = responseMessage ||
             "Le chauffeur est déjà assigné à une autre course à ce moment. Veuillez choisir un autre chauffeur ou modifier l'horaire.";
-          Alert.alert(
+          appAlert.showAlert(
             "⚠️ Conflit d'assignation",
-            conflictMessage + "\n\nVeuillez choisir un autre chauffeur ou modifier l'horaire de la course.",
-            [{ text: "Compris", style: "default" }]
+            conflictMessage + "\n\nVeuillez choisir un autre chauffeur ou modifier l'horaire de la course."
           );
           setErrorMessage(conflictMessage);
         } else {
@@ -259,7 +260,7 @@ export default function RideDetailsScreen() {
         setActionLoading(false);
       }
     },
-    [allowEmergency, isAssigned, loadDetail, manualReason, rideId]
+    [allowEmergency, isAssigned, loadDetail, manualReason, rideId, appAlert]
   );
 
   const handleMarkUrgent = useCallback(async () => {
@@ -273,7 +274,7 @@ export default function RideDetailsScreen() {
     try {
       await markRideUrgent(rideId, { extra_delay_minutes: 15 });
       await loadDetail();
-      Alert.alert(
+      appAlert.showAlert(
         "Urgence enregistrée",
         "La course est marquée urgente (+15 min)."
       );
@@ -323,12 +324,12 @@ export default function RideDetailsScreen() {
     try {
       await scheduleRide(rideId, { pickup_at: isoDate });
       await loadDetail();
-      Alert.alert(
+      const isSentinel = Number(hour) === 0 && Number(minute) === 0;
+      appAlert.showAlert(
         "Horaire planifié",
-        `Pickup replanifié à ${hour.padStart(2, "0")}:${minute.padStart(
-          2,
-          "0"
-        )}.`
+        isSentinel
+          ? "Heure replacée à « À définir »."
+          : `Pickup replanifié à ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}.`
       );
       setScheduleVisible(false);
       setScheduleValue("");
@@ -347,6 +348,7 @@ export default function RideDetailsScreen() {
     loadDetail,
     rideId,
     scheduleValue,
+    appAlert,
   ]);
 
   const handleCancel = useCallback(async () => {
@@ -362,7 +364,7 @@ export default function RideDetailsScreen() {
           try {
             await cancelRide(rideId, reason.code);
             await loadDetail();
-            Alert.alert("Course annulée");
+            appAlert.showAlert("Course annulée", "");
           } catch (error: any) {
             const message =
               error?.response?.data?.error ??
@@ -376,7 +378,7 @@ export default function RideDetailsScreen() {
       })),
       { cancelable: true }
     );
-  }, [loadDetail, rideId]);
+  }, [loadDetail, rideId, appAlert]);
 
   const manualAssignDisabled =
     manualDriverId.trim().length === 0 || actionLoading;
@@ -491,31 +493,40 @@ export default function RideDetailsScreen() {
         })()}
       </View>
 
-      {/* ✅ Section Actions rapides (affichée seulement si pas d'heure planifiée) */}
-      {showUrgentActions && (
+      {/* ✅ Section Actions rapides : urgent (si heure à définir) + modifier horaire (toujours) */}
+      {(!isCompletedStatus(summary?.status ?? "") && summary?.status !== "cancelled" && summary?.status !== "canceled") && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions rapides</Text>
           <View style={styles.quickActions}>
-            <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={handleMarkUrgent}
-              disabled={actionLoading}
-            >
-              {actionLoading ? (
-                <ActivityIndicator size="small" color={BRAND} />
-              ) : (
-                <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
-              )}
-            </TouchableOpacity>
+            {showUrgentActions && (
+              <TouchableOpacity
+                style={styles.quickActionButton}
+                onPress={handleMarkUrgent}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator size="small" color={BRAND} />
+                ) : (
+                  <Text style={styles.quickActionText}>Marquer urgent +15 min</Text>
+                )}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.quickActionButton}
               onPress={() => {
-                setScheduleValue("");
+                const pickup = summary?.time?.pickup_at;
+                setScheduleValue(
+                  pickup && !isPickupSentinel(pickup)
+                    ? dayjs(pickup).format("HH:mm")
+                    : ""
+                );
                 setScheduleVisible(true);
               }}
               disabled={actionLoading}
             >
-              <Text style={styles.quickActionText}>Planifier l'horaire</Text>
+              <Text style={styles.quickActionText}>
+                {showUrgentActions ? "Planifier l'horaire" : "Modifier l'horaire"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -650,16 +661,35 @@ export default function RideDetailsScreen() {
       <Modal visible={scheduleVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Planifier l’horaire</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={scheduleValue}
-              onChangeText={setScheduleValue}
-              placeholder="HH:mm"
-              placeholderTextColor={TEXT_MUTED}
-              keyboardType="numeric"
-              autoFocus
-            />
+            <Text style={styles.modalTitle}>
+              {showUrgentActions ? "Planifier l'horaire" : "Modifier l'horaire"}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <TextInput
+                style={[styles.modalInput, { flex: 1 }]}
+                value={scheduleValue}
+                onChangeText={setScheduleValue}
+                placeholder="HH:mm"
+                placeholderTextColor={TEXT_MUTED}
+                keyboardType="numeric"
+                autoFocus
+              />
+              <Pressable
+                style={({ pressed }) => [
+                  {
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    backgroundColor: pressed ? "rgba(0,121,107,0.15)" : "rgba(0,121,107,0.1)",
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: BRAND,
+                  },
+                ]}
+                onPress={() => setScheduleValue("00:00")}
+              >
+                <Text style={{ color: BRAND, fontWeight: "600", fontSize: 14 }}>À définir</Text>
+              </Pressable>
+            </View>
             <View style={styles.modalActions}>
               <Pressable
                 style={styles.modalCancel}

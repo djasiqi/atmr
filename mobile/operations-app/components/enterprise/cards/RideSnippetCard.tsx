@@ -418,13 +418,11 @@ export const RideSnippetCard: React.FC<{
             // ✅ P0-1: Utiliser la fonction de normalisation
             const isCompleted = isCompletedStatus(normalizedStatus);
 
-            // #region agent log
             (() => {
               try {
                 sendIngestEvent({ location: 'RideSnippetCard.tsx:427', message: 'Quick actions rendering', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction, hasOnPrimaryAction: !!ride.onPrimaryAction, isCompleted: isCompleted, assignedTo: ride.assignedTo, quickIcon: ride.quickIcon, primaryIcon: ride.primaryIcon, willShowActions: !!(ride.onQuickAction || ride.onPrimaryAction) && !isCompleted, willShowQuick: !!(ride.onQuickAction && (!ride.assignedTo || ride.quickIcon)) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run8', hypothesisId: 'H3-H4' });
               } catch { }
             })();
-            // #endregion
             return (ride.onQuickAction || ride.onPrimaryAction) && !isCompleted ? (
               <View style={styles.expandedActions}>
                 {ride.onQuickAction && (!ride.assignedTo || ride.quickIcon) ? (
@@ -434,11 +432,9 @@ export const RideSnippetCard: React.FC<{
                       ride.quickIconColor && { backgroundColor: ride.quickIconColor + "15" }, // Bg semi-transparent
                     ]}
                     onPress={(e) => {
-                      // #region agent log
                       try {
                         sendIngestEvent({ location: 'RideSnippetCard.tsx:onQuickAction:click', message: 'Quick action button clicked', data: { rideId: ride.id, hasOnQuickAction: !!ride.onQuickAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' });
                       } catch { }
-                      // #endregion
                       ride.onQuickAction?.(e);
                     }}
                   >
@@ -456,11 +452,9 @@ export const RideSnippetCard: React.FC<{
                       ride.primaryIconColor && { backgroundColor: ride.primaryIconColor }, // ✅ Couleur personnalisée
                     ]}
                     onPress={(e) => {
-                      // #region agent log
                       try {
                         sendIngestEvent({ location: 'RideSnippetCard.tsx:onPrimaryAction:click', message: 'Primary action button clicked', data: { rideId: ride.id, hasOnPrimaryAction: !!ride.onPrimaryAction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1' });
                       } catch { }
-                      // #endregion
                       ride.onPrimaryAction?.(e);
                     }}
                   >

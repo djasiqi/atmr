@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, cast
 
 from sqlalchemy import (
@@ -772,8 +771,20 @@ class Booking(db.Model):
         #   - Les dates passées sont acceptées (pour import historique)
         #   - Le booking est exclu du dispatch automatique (voir get_bookings_for_dispatch)
         #   - Utile pour les retours avec heure à confirmer ou imports de données anciennes
+        # ✅ Sentinelle 00:00:00 = "heure à définir" : ne pas valider "dans le passé"
+        is_sentinel_midnight = (
+            st is not None
+            and st.hour == 0
+            and st.minute == 0
+            and st.second == 0
+        )
         time_confirmed = getattr(self, "time_confirmed", True)
-        if st and st < now_local() and time_confirmed:
+        if (
+            st
+            and not is_sentinel_midnight
+            and st < now_local()
+            and time_confirmed
+        ):
             msg = "Heure prévue dans le passé."
             raise ValueError(msg)
         return st

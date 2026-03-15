@@ -1,15 +1,21 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { getLoginStyles } from "@/styles/loginStyles";
 
-export default function ForgotPasswordScreen() {
+const SUPPORT_EMAIL = "info@lirie.ch";
+
+export default function EnterpriseForgotPasswordScreen() {
   const { styles, palette } = React.useMemo(
-    () => getLoginStyles("driver"),
+    () => getLoginStyles("enterprise"),
     []
   );
+
+  const openEmail = () => {
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -35,7 +41,7 @@ export default function ForgotPasswordScreen() {
               width: 48,
               height: 48,
               borderRadius: 24,
-              backgroundColor: "rgba(10,127,89,0.12)",
+              backgroundColor: "rgba(10,122,77,0.2)",
               alignItems: "center",
               justifyContent: "center",
               marginBottom: 16,
@@ -61,10 +67,24 @@ export default function ForgotPasswordScreen() {
               marginBottom: 20,
             }}
           >
-            Les comptes chauffeur utilisent des identifiants gérés par votre
-            entreprise. Pour réinitialiser votre mot de passe, contactez votre
-            employeur ou l’administrateur dispatch.
+            Pour réinitialiser le mot de passe de votre compte entreprise,
+            contactez le support à l’adresse suivante :
           </Text>
+          <TouchableOpacity
+            onPress={openEmail}
+            style={{ marginBottom: 20 }}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: palette.accent,
+                fontWeight: "600",
+              }}
+            >
+              {SUPPORT_EMAIL}
+            </Text>
+          </TouchableOpacity>
           <Text
             style={{
               fontSize: 14,
@@ -73,8 +93,7 @@ export default function ForgotPasswordScreen() {
               opacity: 0.9,
             }}
           >
-            L’administrateur peut réinitialiser votre mot de passe depuis le
-            dashboard entreprise et vous communiquera le nouveau.
+            Le support vous communiquera la procédure de réinitialisation.
           </Text>
 
           <TouchableOpacity

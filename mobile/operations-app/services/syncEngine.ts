@@ -30,6 +30,14 @@ let reconciliationInterval: ReturnType<typeof setInterval> | null = null;
 let missionFallbackInterval: ReturnType<typeof setInterval> | null = null;
 let missionHeartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
+function isMissionCriticalTrackingMode(): boolean {
+  if (getSocketRole() !== "driver") return false;
+  if (!MissionStateManager.isActive()) return false;
+  const status = MissionStateManager.getState().currentStatus;
+  // Règle figée: ASSIGNED n'est pas mission-critical en background.
+  return status === "EN_ROUTE" || status === "IN_PROGRESS";
+}
+
 function triggerPendingActionsFlush(): void {
   MissionStateManager.syncPendingActions().catch((e) => {
     log.warn("syncPendingActions error", { error: e });
@@ -38,6 +46,8 @@ function triggerPendingActionsFlush(): void {
 
 function triggerLocationFlush(): void {
   if (getSocketRole() !== "driver") return;
+  const missionCritical = isMissionCriticalTrackingMode();
+  if (AppState.currentState !== "active" && !missionCritical) return;
   const socket = getSocket();
   const doFlush = () => {
     if (socket?.connected) {
@@ -51,7 +61,12 @@ function triggerLocationFlush(): void {
       });
     }
   };
-  // En arrière-plan : différer pour éviter ANR pendant la transition
+  // En arrière-plan mission critical: flush immédiat.
+  if (AppState.currentState !== "active" && missionCritical) {
+    doFlush();
+    return;
+  }
+  // En arrière-plan non critical (si appelé): différer.
   if (AppState.currentState !== "active") {
     InteractionManager.runAfterInteractions(doFlush);
   } else {
@@ -64,7 +79,7 @@ class SyncEngineImpl {
 
   start(): void {
     if (this.started) {
-      log.warn("syncEngine already started");
+      log.debug("syncEngine already started (double mount, no-op)");
       return;
     }
     initConnectivityPolicy();
@@ -109,7 +124,7 @@ class SyncEngineImpl {
     }, 3 * 60 * 1000);
 
     missionFallbackInterval = setInterval(() => {
-      if (AppState.currentState !== "active") return;
+      if (AppState.currentState !== "active" && !isMissionCriticalTrackingMode()) return;
       if (getSocketRole() === "driver") {
         triggerMissionResync(true).catch((e) => {
           log.warn("triggerMissionResync error", { error: e });
@@ -118,10 +133,15 @@ class SyncEngineImpl {
     }, 60000);
 
     missionHeartbeatInterval = setInterval(() => {
-      if (AppState.currentState !== "active") return;
+      if (AppState.currentState !== "active" && !isMissionCriticalTrackingMode()) return;
       if (getSocketRole() !== "driver") return;
       const socket = getSocket();
-      if (!socket?.connected || !MissionStateManager.isActive()) return;
+      if (!MissionStateManager.isActive()) return;
+      if (!socket?.connected) {
+        // En mission critical background, maintenir la présence via fallback HTTP.
+        triggerLocationFlush();
+        return;
+      }
       const state = MissionStateManager.getState();
       const missionId = state?.activeMission?.id;
       if (!missionId) return;

@@ -7,11 +7,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List
 
 try:
-    from prometheus_client import (  # pyright: ignore[reportMissingImports]
-        Counter,
-        Gauge,
-        Histogram,
-    )
+    from prometheus_client import Counter, Gauge, Histogram
 except ImportError:
     # Prometheus client non disponible (tests, dev sans prometheus)
     Counter = None
@@ -79,6 +75,16 @@ class WebSocketMetrics:
                 "Total erreurs Socket.IO",
                 ["error_type"],
             )
+            self._prom_drivers_status_total = Gauge(
+                "drivers_status_total",
+                "Nombre de chauffeurs par statut (available, assigned, busy, offline)",
+                ["status"],
+            )
+            self._prom_driver_location_latency = Histogram(
+                "driver_location_latency_seconds",
+                "Latence socket driver_location (réception → fanout)",
+                buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+            )
         else:
             # Pas de Prometheus disponible
             self._prom_connections_active = None
@@ -89,6 +95,8 @@ class WebSocketMetrics:
             self._prom_heartbeat_latency = None
             self._prom_rate_limit_hits = None
             self._prom_errors_total = None
+            self._prom_drivers_status_total = None
+            self._prom_driver_location_latency = None
 
     def on_connect(
         self,
@@ -186,6 +194,25 @@ class WebSocketMetrics:
         """
         if self._prom_rate_limit_hits:
             self._prom_rate_limit_hits.labels(event=event).inc()
+
+    def set_drivers_status_total(
+        self,
+        available: int = 0,
+        assigned: int = 0,
+        busy: int = 0,
+        offline: int = 0,
+    ) -> None:
+        """Met à jour les gauges drivers_status_total (snapshot par company ou global)."""
+        if self._prom_drivers_status_total:
+            self._prom_drivers_status_total.labels(status="available").set(available)
+            self._prom_drivers_status_total.labels(status="assigned").set(assigned)
+            self._prom_drivers_status_total.labels(status="busy").set(busy)
+            self._prom_drivers_status_total.labels(status="offline").set(offline)
+
+    def on_driver_location_latency(self, latency_seconds: float) -> None:
+        """Enregistre la latence driver_location (réception → fanout)."""
+        if self._prom_driver_location_latency:
+            self._prom_driver_location_latency.observe(latency_seconds)
 
     def on_room_leave(self, room_name: str):
         """Enregistre qu'un client a quitté une room.

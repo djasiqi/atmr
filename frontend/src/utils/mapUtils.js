@@ -31,6 +31,7 @@ export const MAP_COLORS = {
 // Couleurs des marqueurs chauffeurs par statut
 export const STATUS_COLORS = {
   available: MAP_COLORS.success,
+  assigned: MAP_COLORS.warning,
   busy: MAP_COLORS.brand,
   offline: MAP_COLORS.muted,
   emergency: MAP_COLORS.danger,
@@ -126,9 +127,14 @@ export const resolveDriverCoords = (d, companyFallback) => {
 
 /**
  * Détermine le statut d'un chauffeur.
+ * P1: Le backend (REST / driver_live_state_update) est la source de vérité.
+ * Cette fonction sert uniquement de fallback quand status n'est pas fourni par le backend.
  */
 export const getDriverStatus = (driver) => {
+  const backendStatus = String(driver?.status || '').toLowerCase();
+  if (backendStatus) return backendStatus;
   if (!driver.is_active) return 'offline';
+  if (driver.mission_status === 'ASSIGNED') return 'assigned';
   if (driver.current_booking_id || driver.status === 'busy') return 'busy';
   if (driver.emergency_mode) return 'emergency';
   return 'available';

@@ -61,12 +61,13 @@ const API_PREFIX = "/api/v1/company_mobile";
 // Détecter le mode développement de manière plus fiable
 // En web bundled, __DEV__ peut être false même en développement local
 const isDevelopment = () => {
-  if (APP_VARIANT === "prod") {
-    return false;
-  }
-  // Vérifier __DEV__ d'abord
+  // En runtime Metro/Expo dev, __DEV__ est la source de vérité.
+  // APP_VARIANT peut rester "prod" pour des raisons de build native.
   if (__DEV__) {
     return true;
+  }
+  if (APP_VARIANT === "prod") {
+    return false;
   }
   
   // En web, vérifier si on est sur localhost (développement local)
@@ -122,6 +123,10 @@ const getBaseURL = () => {
   const isDev = isDevelopment();
   
   if (isDev) {
+    // Switch explicite : forcer prod en dev (téléphone réel, tunnel, backend local inaccessible)
+    if (process.env.EXPO_PUBLIC_USE_PROD_IN_DEV === '1') {
+      return `${validateProdApiUrl(PROD_API_URL)}${API_PREFIX}`;
+    }
     // En développement, sur le web, toujours utiliser localhost (ignorer DEV_API_URL si défini à la prod)
     if (Platform.OS === 'web') {
       return getDevBaseURL();
@@ -714,11 +719,9 @@ enterpriseApi.interceptors.request.use(
       if (isExplicitPublicAuthRoute) {
         return config;
       }
-      // #region agent log
       const isLoginRequest = config.url?.includes("/auth/login");
       const isPublic = isPublicEndpoint(config.url, "enterprise");
       debugLog({location:'enterpriseAuth.ts:268',message:'interceptor request entry',data:{url:config.url,method:config.method,isLoginRequest,baseURL:config.baseURL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
-      // #endregion
       
       // ✅ CORRECTION #1 : Guard d'initialisation
       // Attendre que l'auth soit prête avant de permettre les requêtes (sauf login)
@@ -781,9 +784,7 @@ enterpriseApi.interceptors.request.use(
               });
             }
           }
-          // #region agent log
           debugLog({location:'enterpriseAuth.ts:278',message:'token check',data:{url:config.url,hasToken:!!token,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
-          // #endregion
           if (token) {
             headers.set("Authorization", `Bearer ${token}`);
             log.debug("token added to request", { url: config.url });
@@ -830,9 +831,7 @@ enterpriseApi.interceptors.request.use(
       // Les autres endpoints /auth/ (comme /auth/me/driver-account, /auth/refresh, etc.) nécessitent une session
       if (!isLoginRequest) {
         const sessionRaw = await AsyncStorage.getItem(ENTERPRISE_SESSION_KEY);
-        // #region agent log
         debugLog({location:'enterpriseAuth.ts:301',message:'session check',data:{url:config.url,hasSession:!!sessionRaw,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
-        // #endregion
         if (sessionRaw) {
           try {
             const session = JSON.parse(sessionRaw);
@@ -866,7 +865,6 @@ enterpriseApi.interceptors.request.use(
         }
       }
 
-      // #region agent log
       const finalHeaders: Record<string, string> = {};
       // Axios v1: config.headers peut être AxiosHeaders, un objet simple, ou undefined.
       // Sur certains chemins (ex: login), `headers` peut ne pas implémenter `forEach`.
@@ -894,7 +892,6 @@ enterpriseApi.interceptors.request.use(
         // ne jamais casser la requête juste pour le logging
       }
       debugLog({location:'enterpriseAuth.ts:333',message:'interceptor request exit',data:{url:config.url,headers:finalHeaders,isLoginRequest},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'});
-      // #endregion
       config.headers = headers;
       return config;
     } catch (err) {
@@ -1045,7 +1042,6 @@ export const loginEnterprise = async (
   params: EnterpriseLoginParams
 ): Promise<EnterpriseLoginResponse> => {
   try {
-    // #region agent log
     const fullURL = `${baseURL}/auth/login`;
     const logData = {
       location:'enterpriseAuth.ts:407',
@@ -1066,7 +1062,6 @@ export const loginEnterprise = async (
       hypothesisId:'D'
     };
     debugLog(logData);
-    // #endregion
     log.info("login request", {
       hasEmail: Boolean(params.email),
       hasPassword: Boolean(params.password),
@@ -1078,10 +1073,8 @@ export const loginEnterprise = async (
       "/auth/login",
       params
     );
-    // #region agent log
     const successLogData = {location:'enterpriseAuth.ts:422',message:'loginEnterprise success',data:{status:response.status,hasToken:!!(response.data as any)?.token,hasMfa:!!(response.data as any)?.mfa_required},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
     debugLog(successLogData);
-    // #endregion
     log.info("login response received", {
       hasToken: !!(response.data as any)?.token,
       hasMfa: !!(response.data as any)?.mfa_required,
@@ -1089,7 +1082,6 @@ export const loginEnterprise = async (
     });
     return response.data;
   } catch (err: unknown) {
-    // #region agent log
     const errorData: any = {errorType:err instanceof Error ? err.constructor.name : typeof err};
     if (axios.isAxiosError(err)) {
       errorData.status = err.response?.status;
@@ -1101,7 +1093,6 @@ export const loginEnterprise = async (
     }
     const errorLogData = {location:'enterpriseAuth.ts:432',message:'loginEnterprise error',data:errorData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
     debugLog(errorLogData);
-    // #endregion
     const isNetErr =
       (axios.isAxiosError(err) && (err as any)?.code === "ERR_NETWORK") ||
       (axios.isAxiosError(err) && err.message?.toLowerCase().includes("network error"));

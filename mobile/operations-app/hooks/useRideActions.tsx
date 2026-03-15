@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Alert, Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import { useAuth } from "@/hooks/useAuth";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 import {
     markRideUrgent,
     assignRide,
@@ -44,6 +45,7 @@ const showAlert = (title: string, message: string, buttons: Array<{ text: string
  */
 export function useRideActions(onSuccess?: () => void | Promise<void>) {
     const { enterpriseSession } = useAuth();
+    const appAlert = useAppAlert();
     const dispatchMode = (enterpriseSession?.company?.dispatchMode as "manual" | "semi_auto" | "fully_auto" | undefined) || "manual";
     const isManualMode = dispatchMode === "manual";
 
@@ -66,26 +68,26 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     extra_delay_minutes: extraDelayMinutes,
                     reason: "Action mobile: urgence",
                 });
-                Alert.alert(
+                appAlert.showAlert(
                     "Urgence",
                     `La course a été marquée urgente avec un délai +${extraDelayMinutes} minutes.`
                 );
                 await onSuccess?.();
             } catch (error: any) {
                 if (error?.response?.status === 409) {
-                    Alert.alert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
+                    appAlert.showAlert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
                     return;
                 }
                 const message =
                     error?.response?.data?.error ??
                     error?.message ??
                     "Impossible de marquer la course urgente.";
-                Alert.alert("Erreur", message);
+                appAlert.showAlert("Erreur", message);
             } finally {
                 setMarkingUrgent(null);
             }
         },
-        [markingUrgent, onSuccess]
+        [markingUrgent, onSuccess, appAlert]
     );
 
     // ✅ Ouvrir le modal d'assignation
@@ -177,7 +179,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                 // Afficher un message informatif mais ne pas bloquer
                 if (error?.response?.status !== 404) {
                     // Ne pas alerter pour les 404 (course introuvable), juste logger
-                    Alert.alert(
+                    appAlert.showAlert(
                         "Avertissement",
                         `${message}\n\nVous pouvez toujours sélectionner un chauffeur manuellement.`
                     );
@@ -241,7 +243,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     });
                 }
                 log.success("assignment done", { rideId: selectedRide.id });
-                Alert.alert(
+                appAlert.showAlert(
                     "Assignation effectuée",
                     "La course a été mise à jour avec succès."
                 );
@@ -282,13 +284,7 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                     }
                     alertMessage += "\n\nLe chauffeur a déjà une course assignée à la même heure. Veuillez choisir un autre chauffeur ou modifier l'heure de la course.";
 
-                    Alert.alert(
-                        "⚠️ Conflit de planning",
-                        alertMessage,
-                        [
-                            { text: "OK", style: "default" },
-                        ]
-                    );
+                    appAlert.showAlert("⚠️ Conflit de planning", alertMessage);
                 } else if (status === 500) {
                     // ✅ Gestion spécifique des erreurs 500 (erreur serveur)
                     // En mode manuel, on peut toujours réassigner même si les suggestions ne sont pas actives
@@ -329,23 +325,21 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                         errorData?.message ??
                         error?.message ??
                         "Impossible de finaliser l'assignation.";
-                    Alert.alert("Erreur", message);
+                    appAlert.showAlert("Erreur", message);
                 }
             } finally {
                 setAssigning(false);
             }
         },
-        [selectedRide, handleCloseAssignModal, onSuccess]
+        [selectedRide, handleCloseAssignModal, onSuccess, appAlert]
     );
 
     // ✅ Accepter un transfert de course
     const handleAcceptTransfer = useCallback(
         async (transferId: string) => {
-            // #region agent log
             try {
                 sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer', message: 'handleAcceptTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' });
             } catch { }
-            // #endregion
             showAlert(
                 "Accepter le transfert",
                 "Voulez-vous accepter cette course transférée ?",
@@ -356,29 +350,24 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                         style: "default",
                         onPress: async () => {
                             try {
-                                // #region agent log
                                 try {
                                     sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer:onPress', message: 'Calling acceptTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' });
                                 } catch { }
-                                // #endregion
                                 await acceptTransfer(transferId);
-                                showAlert(
+                                appAlert.showAlert(
                                     "Transfert accepté",
-                                    "La course vous a été transférée avec succès.",
-                                    [{ text: "OK" }]
+                                    "La course vous a été transférée avec succès."
                                 );
                                 await onSuccess?.();
                             } catch (error: any) {
-                                // #region agent log
                                 try {
                                     sendIngestEvent({ location: 'useRideActions.tsx:handleAcceptTransfer:error', message: 'acceptTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' });
                                 } catch { }
-                                // #endregion
                                 const message =
                                     error?.response?.data?.error ??
                                     error?.message ??
                                     "Impossible d'accepter le transfert.";
-                                showAlert("Erreur", message, [{ text: "OK" }]);
+                                appAlert.showAlert("Erreur", message);
                             }
                         },
                     },
@@ -391,11 +380,9 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
     // ✅ Refuser un transfert de course
     const handleRejectTransfer = useCallback(
         async (transferId: string) => {
-            // #region agent log
             try {
                 sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer', message: 'handleRejectTransfer called', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H1-H2' });
             } catch { }
-            // #endregion
             showAlert(
                 "Refuser le transfert",
                 "Voulez-vous refuser cette course transférée ?",
@@ -406,36 +393,31 @@ export function useRideActions(onSuccess?: () => void | Promise<void>) {
                         style: "destructive",
                         onPress: async () => {
                             try {
-                                // #region agent log
                                 try {
                                     sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer:onPress', message: 'Calling rejectTransfer', data: { transferId: transferId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H3' });
                                 } catch { }
-                                // #endregion
                                 await rejectTransfer(transferId);
-                                showAlert(
+                                appAlert.showAlert(
                                     "Transfert refusé",
-                                    "La course a été retournée à l'entreprise émettrice.",
-                                    [{ text: "OK" }]
+                                    "La course a été retournée à l'entreprise émettrice."
                                 );
                                 await onSuccess?.();
                             } catch (error: any) {
-                                // #region agent log
                                 try {
                                     sendIngestEvent({ location: 'useRideActions.tsx:handleRejectTransfer:error', message: 'rejectTransfer error', data: { transferId: transferId, error: String(error), errorMessage: error?.message, errorResponse: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run11', hypothesisId: 'H4' });
                                 } catch { }
-                                // #endregion
                                 const message =
                                     error?.response?.data?.error ??
                                     error?.message ??
                                     "Impossible de refuser le transfert.";
-                                showAlert("Erreur", message, [{ text: "OK" }]);
+                                appAlert.showAlert("Erreur", message);
                             }
                         },
                     },
                 ]
             );
         },
-        [onSuccess]
+        [onSuccess, appAlert]
     );
 
     return {

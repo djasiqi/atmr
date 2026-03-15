@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 
 from ext import db
 from infrastructure.invoices.invoice_calculator import (
@@ -14,6 +14,7 @@ from infrastructure.invoices.invoice_calculator import (
     round_to_5_cents,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
+from models.booking import Booking
 from models.booking_transfer import BookingTransfer
 from models.enums import TransferStatus
 from models.partner_invoice import (
@@ -64,7 +65,7 @@ class PartnerInvoiceService:
         month: int,
         executing_company_id: int,
         transfer_ids: list[int] | None = None,
-        overrides: dict[int, dict] | None = None,
+        overrides: dict[int, dict[str, object]] | None = None,
     ) -> PartnerInvoice:
         """Génère une facture mensuelle consolidée pour un partenariat.
 
@@ -118,24 +119,40 @@ class PartnerInvoiceService:
         # (gérée par la requête qui exclut les transferts déjà facturés)
 
         # Récupérer tous les transferts validés et non facturés de la période
-        # où l'entreprise exécutante est celle qui génère la facture
+        # Inclure si scheduled_time OU validated_at dans la période (évite exclusions TZ)
         DECEMBER = 12
-        start_date = datetime(year, month, 1, tzinfo=UTC)
-        if month == DECEMBER:
-            end_date = datetime(year + 1, 1, 1, tzinfo=UTC)
-        else:
-            end_date = datetime(year, month + 1, 1, tzinfo=UTC)
+        start_naive = datetime(year, month, 1)
+        end_naive = (
+            datetime(year + 1, 1, 1)
+            if month == DECEMBER
+            else datetime(year, month + 1, 1)
+        )
+        start_utc = datetime(year, month, 1, tzinfo=UTC)
+        end_utc = (
+            datetime(year + 1, 1, 1, tzinfo=UTC)
+            if month == DECEMBER
+            else datetime(year, month + 1, 1, tzinfo=UTC)
+        )
 
         all_eligible = (
-            BookingTransfer.query.filter_by(
-                partnership_id=partnership_id,
-                status=TransferStatus.COMPLETED,
-                is_validated=True,
-                executing_company_id=executing_company_id,
-            )
+            BookingTransfer.query.join(Booking, BookingTransfer.booking_id == Booking.id)
             .filter(
-                BookingTransfer.validated_at >= start_date,
-                BookingTransfer.validated_at < end_date,
+                BookingTransfer.partnership_id == partnership_id,
+                BookingTransfer.status == TransferStatus.COMPLETED,
+                BookingTransfer.is_validated == True,  # noqa: E712
+                BookingTransfer.executing_company_id == executing_company_id,
+                or_(
+                    and_(
+                        Booking.scheduled_time.isnot(None),
+                        Booking.scheduled_time >= start_naive,
+                        Booking.scheduled_time < end_naive,
+                    ),
+                    and_(
+                        BookingTransfer.validated_at.isnot(None),
+                        BookingTransfer.validated_at >= start_utc,
+                        BookingTransfer.validated_at < end_utc,
+                    ),
+                ),
             )
             .filter(
                 ~BookingTransfer.id.in_(
@@ -163,8 +180,9 @@ class PartnerInvoiceService:
                 f"Aucun transfert validé non facturé trouvé pour la période {year}-{month:02d}"
             )
 
-        # Calculer les totaux (avec overrides optionnels)
+        # Calculer les totaux et les montants par ligne (avec overrides optionnels)
         overrides_map = overrides or {}
+        line_amounts: dict[int, Decimal] = {}
         subtotal = Decimal("0")
         for transfer in transfers:
             ov = overrides_map.get(transfer.id, {})
@@ -177,6 +195,7 @@ class PartnerInvoiceService:
                 base = Decimal("0")
             if base > 0:
                 rounded_cost = round_to_5_cents(base)
+                line_amounts[transfer.id] = rounded_cost
                 subtotal += rounded_cost
 
         # Arrondir le subtotal total à 5 centimes
@@ -307,7 +326,9 @@ class PartnerInvoiceService:
 
         # Générer le PDF (brouillon : la facture reste DRAFT jusqu'à action explicite "Envoyer")
         try:
-            pdf_url = self._generate_invoice_pdf(partner_invoice, transfers)
+            pdf_url = self._generate_invoice_pdf(
+                partner_invoice, transfers, line_amounts=line_amounts
+            )
             partner_invoice.pdf_url = pdf_url
         except Exception as e:
             logger.warning(
@@ -333,13 +354,18 @@ class PartnerInvoiceService:
         return partner_invoice
 
     def _generate_invoice_pdf(
-        self, partner_invoice: PartnerInvoice, transfers: list[BookingTransfer]
+        self,
+        partner_invoice: PartnerInvoice,
+        transfers: list[BookingTransfer],
+        *,
+        line_amounts: dict[int, Decimal] | None = None,
     ) -> str:
         """Génère le PDF de la facture partenaire.
 
         Args:
             partner_invoice: Facture partenaire
             transfers: Liste des transferts inclus dans la facture
+            line_amounts: Montants par transfer_id (après overrides), pour affichage cohérent
 
         Returns:
             URL du PDF généré
@@ -353,7 +379,9 @@ class PartnerInvoiceService:
         )
 
         # Générer le contenu PDF
-        pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
+        pdf_content = generate_partner_invoice_pdf_content(
+            partner_invoice, transfers, line_amounts=line_amounts or {}
+        )
 
         # Sauvegarder le fichier
         filename = (

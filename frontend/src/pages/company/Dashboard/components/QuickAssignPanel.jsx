@@ -21,13 +21,24 @@ const QuickAssignPanel = ({
 }) => {
   const [selectedDriverId, setSelectedDriverId] = useState(null);
 
+  const resolveDriverAvailability = (driver) => {
+    const backendStatus = String(driver?.status || '').toLowerCase();
+    if (backendStatus === 'busy') return { label: 'En course', isAvailable: false };
+    if (backendStatus === 'assigned') return { label: 'Assigné', isAvailable: false };
+    if (backendStatus === 'offline') return { label: 'Hors ligne', isAvailable: false };
+    if (backendStatus === 'available') return { label: 'Disponible', isAvailable: true };
+    return { label: 'Indisponible', isAvailable: false };
+  };
+
   const sortedDrivers = useMemo(() => {
     if (!drivers) return [];
     return [...drivers]
       .filter((d) => d.is_active)
       .sort((a, b) => {
-        if (a.is_available && !b.is_available) return -1;
-        if (!a.is_available && b.is_available) return 1;
+        const aAvail = resolveDriverAvailability(a).isAvailable;
+        const bAvail = resolveDriverAvailability(b).isAvailable;
+        if (aAvail && !bAvail) return -1;
+        if (!aAvail && bAvail) return 1;
         const nameA = a.full_name || a.username || '';
         const nameB = b.full_name || b.username || '';
         return nameA.localeCompare(nameB);
@@ -128,7 +139,7 @@ const QuickAssignPanel = ({
 
           <section className={styles.driverSection} data-tour-id="quick-assign-driver-section">
             <h4 className={styles.driverSectionTitle}>
-              Chauffeurs disponibles ({sortedDrivers.filter((d) => d.is_available).length})
+              Chauffeurs disponibles ({sortedDrivers.filter((d) => resolveDriverAvailability(d).isAvailable).length})
             </h4>
 
             <div className={styles.driverList}>
@@ -138,20 +149,21 @@ const QuickAssignPanel = ({
               {sortedDrivers.map((d) => {
                 const isSelected = selectedDriverId === d.id;
                 const driverName = d.full_name || d.username || `Chauffeur #${d.id}`;
+                const availability = resolveDriverAvailability(d);
                 return (
                   <button
                     key={d.id}
                     data-tour-id="quick-assign-driver-option"
-                    className={`${styles.driverCard} ${isSelected ? styles.driverCardSelected : ''} ${!d.is_available ? styles.driverCardBusy : ''}`}
+                    className={`${styles.driverCard} ${isSelected ? styles.driverCardSelected : ''} ${!availability.isAvailable ? styles.driverCardBusy : ''}`}
                     onClick={() => setSelectedDriverId(d.id)}
                     type="button"
                   >
                     <div className={styles.driverInfo}>
                       <span className={styles.driverName}>{driverName}</span>
                       <span
-                        className={`${styles.driverStatus} ${d.is_available ? styles.statusAvailable : styles.statusBusy}`}
+                        className={`${styles.driverStatus} ${availability.isAvailable ? styles.statusAvailable : styles.statusBusy}`}
                       >
-                        {d.is_available ? 'Disponible' : 'En course'}
+                        {availability.label}
                       </span>
                     </div>
                     {isSelected && <FiCheck size={16} className={styles.checkIcon} />}

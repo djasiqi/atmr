@@ -16,12 +16,14 @@ import {
   type BgTrackingInputs,
   type PermissionStatus,
 } from "./backgroundTrackingGating";
-import { LOCATION_TASK_NAME } from "@/tasks/locationTask";
 import {
   getMissionNotificationContent,
   dismissMissionNotification,
 } from "./missionBarAndroid";
 import { MissionStateManager } from "./missionState";
+
+// Constante locale pour éviter de charger locationTask en __DEV__ (boucle reload expo/expo#25325)
+const LOCATION_TASK_NAME = "background-location-task";
 
 const log = getLogger("Tracker");
 
@@ -115,6 +117,7 @@ export async function ensureBackgroundTrackingStopped(
   reason: BgStopReason
 ): Promise<void> {
   if (Platform.OS === "web") return;
+  if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   if (bgOperationInProgress) return;
   const stopRequestedTs = Date.now();
   bgOperationInProgress = true;
@@ -149,6 +152,7 @@ export async function ensureBackgroundTrackingStarted(
   inputs: BgTrackingInputs
 ): Promise<void> {
   if (Platform.OS === "web") return;
+  if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   if (bgOperationInProgress) return;
   if (!shouldRunBackgroundTracking(inputs)) {
     log.debug("bg_tracking_start_skip", { reason, inputs_deny: true });
@@ -194,6 +198,7 @@ export async function refreshBackgroundTrackingNotification(
   inputs: BgTrackingInputs
 ): Promise<boolean> {
   if (Platform.OS === "web") return false;
+  if (__DEV__) return false; // Workaround expo/expo#25325 : pas de task en __DEV__
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (!started) return false;
@@ -211,6 +216,7 @@ export async function reconcileBackgroundTrackingState(
   inputs: BgTrackingInputs
 ): Promise<void> {
   if (Platform.OS === "web") return;
+  if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   lastReconciliationTrigger = trigger;
   const shouldRun = shouldRunBackgroundTracking(inputs);
   let started = false;

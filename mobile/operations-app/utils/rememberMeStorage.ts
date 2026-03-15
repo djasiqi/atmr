@@ -15,11 +15,23 @@ export class RememberMeStorageError extends Error {
   }
 }
 
-const KEY_REMEMBER_ME = "driver.rememberMe";
-const KEY_EMAIL = "driver.rememberedEmail";
-const KEY_PASSWORD = "driver.rememberedPassword";
+export type RememberMeMode = "driver" | "enterprise";
+
+const PREFIX = {
+  driver: "driver",
+  enterprise: "enterprise",
+} as const;
 
 export type RememberedCredentials = { email: string; password: string };
+
+function keys(mode: RememberMeMode) {
+  const p = PREFIX[mode];
+  return {
+    rememberMe: `${p}.rememberMe`,
+    email: `${p}.rememberedEmail`,
+    password: `${p}.rememberedPassword`,
+  };
+}
 
 async function getItem(key: string): Promise<string | null> {
   try {
@@ -42,27 +54,34 @@ async function deleteItem(key: string): Promise<void> {
 }
 
 /** Retourne true si "Se souvenir de moi" est activé. */
-export async function getRememberMe(): Promise<boolean> {
-  const v = await getItem(KEY_REMEMBER_ME);
+export async function getRememberMe(mode: RememberMeMode = "driver"): Promise<boolean> {
+  const v = await getItem(keys(mode).rememberMe);
   return v === "true";
 }
 
 /** Persiste la préférence "Se souvenir de moi". */
-export async function setRememberMe(value: boolean): Promise<void> {
+export async function setRememberMe(
+  value: boolean,
+  mode: RememberMeMode = "driver"
+): Promise<void> {
+  const k = keys(mode);
   if (value) {
-    await setItem(KEY_REMEMBER_ME, "true");
+    await setItem(k.rememberMe, "true");
   } else {
-    await deleteItem(KEY_REMEMBER_ME);
-    await clearRememberedCredentials();
+    await deleteItem(k.rememberMe);
+    await clearRememberedCredentials(mode);
   }
 }
 
 /** Retourne email + mot de passe mémorisés, ou null si incomplet / erreur. */
-export async function getRememberedCredentials(): Promise<RememberedCredentials | null> {
+export async function getRememberedCredentials(
+  mode: RememberMeMode = "driver"
+): Promise<RememberedCredentials | null> {
   try {
+    const k = keys(mode);
     const [email, password] = await Promise.all([
-      getItem(KEY_EMAIL),
-      getItem(KEY_PASSWORD),
+      getItem(k.email),
+      getItem(k.password),
     ]);
     if (email?.trim() && password != null && password.length > 0) {
       return { email: email.trim(), password };
@@ -76,18 +95,20 @@ export async function getRememberedCredentials(): Promise<RememberedCredentials 
 /** Enregistre email + mot de passe dans SecureStore. Ne pas logger le password. */
 export async function setRememberedCredentials(
   email: string,
-  password: string
+  password: string,
+  mode: RememberMeMode = "driver"
 ): Promise<void> {
+  const k = keys(mode);
   await Promise.all([
-    setItem(KEY_EMAIL, email.trim()),
-    setItem(KEY_PASSWORD, password),
+    setItem(k.email, email.trim()),
+    setItem(k.password, password),
   ]);
 }
 
 /** Supprime email et mot de passe mémorisés (rememberMe reste inchangé). */
-export async function clearRememberedCredentials(): Promise<void> {
-  await Promise.all([
-    deleteItem(KEY_EMAIL),
-    deleteItem(KEY_PASSWORD),
-  ]);
+export async function clearRememberedCredentials(
+  mode: RememberMeMode = "driver"
+): Promise<void> {
+  const k = keys(mode);
+  await Promise.all([deleteItem(k.email), deleteItem(k.password)]);
 }

@@ -32,7 +32,12 @@ const PartnerTransferSelector = ({
           partnershipId,
           { year: period.year, month: period.month }
         );
-        const list = Array.isArray(data?.transfers) ? data.transfers : [];
+        // API retourne { data: { transfers: [...] } }
+        const list = Array.isArray(data?.data?.transfers)
+          ? data.data.transfers
+          : Array.isArray(data?.transfers)
+            ? data.transfers
+            : [];
         setTransfers(list);
         setSelectedIds(list.map((t) => t.id));
       } catch (err) {
@@ -218,6 +223,8 @@ const PartnerTransferSelector = ({
           const amount = computeAmount(transfer);
           const ov = overrides?.[String(transfer.id)] || overrides?.[transfer.id] || {};
           const routeLabel = `${transfer.pickup_location || '—'} → ${transfer.dropoff_location || '—'}`;
+          const courseRef = transfer.booking_id ? `#${transfer.booking_id}` : '';
+          const timePart = transfer.time_formatted ? ` ${transfer.time_formatted}` : '';
 
           return (
             <label
@@ -232,7 +239,15 @@ const PartnerTransferSelector = ({
               />
               <div className={styles.transferContent}>
                 <div className={styles.transferSingleLine}>
-                  <span className={styles.date}>{formatDate(transfer.date)}</span>
+                  <span className={styles.date} title={`Course ${courseRef}`}>
+                    {formatDate(transfer.date)}{timePart}
+                  </span>
+                  {courseRef && (
+                    <>
+                      <span className={styles.lineSep}>•</span>
+                      <span className={styles.courseRef}>{courseRef}</span>
+                    </>
+                  )}
                   <span className={styles.lineSep}>•</span>
                   <span className={styles.route} title={routeLabel}>
                     {routeLabel}

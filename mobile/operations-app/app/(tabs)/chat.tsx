@@ -520,34 +520,31 @@ export default function ChatScreen() {
         // Si on a moins de 20 messages, il n'y a plus de messages à charger
         setHasMoreMessages(loaded.length >= 20);
 
-        // Forcer le scroll vers le bas après un délai pour s'assurer que tout est rendu
-        // Utiliser requestAnimationFrame pour une transition plus fluide
+        // Forcer le scroll vers le bas après rendu (plusieurs tentatives pour gérer le timing)
+        const doScroll = () => {
+          if (!flatListRef.current) return;
+          try {
+            if (layoutHeightRef.current > 0 && contentHeightRef.current > 0) {
+              const offset = contentHeightRef.current - layoutHeightRef.current;
+              if (offset > 0) {
+                flatListRef.current.scrollToOffset({ offset, animated: false });
+              } else {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+            } else {
+              flatListRef.current.scrollToEnd({ animated: false });
+            }
+            isAtBottomRef.current = true;
+            setShowScrollButton(false);
+          } catch (e) {
+            log.warn("initial scroll error", { error: e });
+          }
+        };
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            setTimeout(() => {
-              if (flatListRef.current && layoutHeightRef.current > 0) {
-                const offset = contentHeightRef.current - layoutHeightRef.current;
-                if (offset > 0) {
-                  flatListRef.current.scrollToOffset({ offset, animated: false });
-                } else {
-                  flatListRef.current.scrollToEnd({ animated: false });
-                }
-                // Une seule vérification après un court délai pour garantir le scroll complet
-                setTimeout(() => {
-                  if (flatListRef.current && layoutHeightRef.current > 0) {
-                    const offset2 = contentHeightRef.current - layoutHeightRef.current;
-                    if (offset2 > 0) {
-                      flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
-                    } else {
-                      flatListRef.current.scrollToEnd({ animated: false });
-                    }
-                    // S'assurer qu'on est bien en bas
-                    isAtBottomRef.current = true;
-                    setShowScrollButton(false);
-                  }
-                }, 150);
-              }
-            }, 100);
+            setTimeout(doScroll, 50);
+            setTimeout(doScroll, 150);
+            setTimeout(doScroll, 350);
           });
         });
       } catch (e) {
@@ -562,16 +559,16 @@ export default function ChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (messages.length > 0 && isAtBottomRef.current) {
-        // Utiliser plusieurs délais pour s'assurer que le layout est prêt
-        const t = setTimeout(() => {
-          scrollToBottom(false);
-          // Double vérification pour s'assurer que le scroll est bien effectué
-          setTimeout(() => {
-            scrollToBottom(false);
-          }, 100);
-        }, 100);
-        return () => clearTimeout(t);
+      // Toujours scroller vers le bas à l'accès au chat pour afficher le dernier message
+      if (messages.length > 0) {
+        const t1 = setTimeout(() => scrollToBottom(false), 50);
+        const t2 = setTimeout(() => scrollToBottom(false), 200);
+        const t3 = setTimeout(() => scrollToBottom(false), 400);
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+          clearTimeout(t3);
+        };
       }
       return () => { };
     }, [messages.length, scrollToBottom])
@@ -771,39 +768,30 @@ export default function ChatScreen() {
           // Stocker la hauteur du contenu pour calculer l'offset de scroll
           contentHeightRef.current = contentHeight;
 
-          // 1er rendu après chargement → scroll instantané et invisible vers le dernier message
+          // 1er rendu après chargement → scroll instantané vers le dernier message
           if (!hasDoneInitialScrollRef.current) {
             hasDoneInitialScrollRef.current = true;
             previousContentHeightRef.current = contentHeight;
-            // Scroll immédiat et invisible (sans animation) pour afficher directement le dernier message
-            // Utiliser plusieurs requestAnimationFrame et setTimeout pour s'assurer que le layout et le padding sont prêts
+            const doScroll = () => {
+              if (!flatListRef.current) return;
+              if (layoutHeightRef.current > 0 && contentHeightRef.current > 0) {
+                const offset = contentHeightRef.current - layoutHeightRef.current;
+                if (offset > 0) {
+                  flatListRef.current.scrollToOffset({ offset, animated: false });
+                } else {
+                  flatListRef.current.scrollToEnd({ animated: false });
+                }
+              } else {
+                flatListRef.current.scrollToEnd({ animated: false });
+              }
+              isAtBottomRef.current = true;
+              setShowScrollButton(false);
+            };
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                setTimeout(() => {
-                  if (flatListRef.current && layoutHeightRef.current > 0) {
-                    // Calculer l'offset nécessaire pour scroller jusqu'en bas
-                    const offset = contentHeight - layoutHeightRef.current;
-                    if (offset > 0) {
-                      flatListRef.current.scrollToOffset({ offset, animated: false });
-                    } else {
-                      flatListRef.current.scrollToEnd({ animated: false });
-                    }
-                    // Une seule vérification après un court délai pour garantir le scroll complet
-                    setTimeout(() => {
-                      if (flatListRef.current && layoutHeightRef.current > 0) {
-                        const offset2 = contentHeightRef.current - layoutHeightRef.current;
-                        if (offset2 > 0) {
-                          flatListRef.current.scrollToOffset({ offset: offset2, animated: false });
-                        } else {
-                          flatListRef.current.scrollToEnd({ animated: false });
-                        }
-                        // S'assurer qu'on est bien en bas
-                        isAtBottomRef.current = true;
-                        setShowScrollButton(false);
-                      }
-                    }, 100);
-                  }
-                }, 100);
+                doScroll();
+                setTimeout(doScroll, 100);
+                setTimeout(doScroll, 300);
               });
             });
             return;

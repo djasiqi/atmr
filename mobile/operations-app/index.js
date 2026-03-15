@@ -1,9 +1,29 @@
+import './polyfills';
+
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import { DevSettings, Platform } from 'react-native';
+
+try {
+  const originalDevReload = DevSettings?.reload?.bind(DevSettings);
+  if (originalDevReload) {
+    DevSettings.reload = (...args) => {
+      const stackText = String(new Error('devsettings reload stack').stack ?? '');
+      const shouldIgnoreAutoReload =
+        __DEV__ &&
+        Platform.OS === 'android' &&
+        (stackText.includes('registerBundleEntryPoints') ||
+          stackText.includes('registerBundle') ||
+          stackText.includes('index.bundle'));
+      if (shouldIgnoreAutoReload) {
+        return;
+      }
+      return originalDevReload(...args);
+    };
+  }
+} catch {}
 
 // ✅ Notifee: onBackgroundEvent DOIT être enregistré AVANT toute autre exécution.
-// Sinon "no background event handler has been set" et les actions (Mission Bar) ne marchent pas en background.
-// On enregistre un noop immédiatement pour éviter le warning, puis le handler complet.
 notifee.onBackgroundEvent(async () => {});
 try {
   const { registerNotifeeBackgroundHandler } = require('./services/missionBarBackground');
@@ -26,18 +46,13 @@ async function ensureChannel() {
   channelReady = true;
 }
 
-// Android data-only messages trigger this handler when app is killed/background.
-// iOS does NOT execute JS in killed state — system tray handles display natively.
 const messaging = getMessaging();
 setBackgroundMessageHandler(messaging, async (remoteMessage) => {
   try {
     const { data } = remoteMessage;
     if (!data) return;
-
     if (data.type === 'silent_update') return;
-
     await ensureChannel();
-
     await notifee.displayNotification({
       title: data.title || 'Liri Opérations',
       body: data.body || '',
@@ -54,4 +69,8 @@ setBackgroundMessageHandler(messaging, async (remoteMessage) => {
   }
 });
 
-import 'expo-router/entry';
+try {
+  require('expo-router/entry');
+} catch (e) {
+  throw e;
+}

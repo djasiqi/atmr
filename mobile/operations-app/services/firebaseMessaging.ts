@@ -180,7 +180,14 @@ export async function getFCMToken(): Promise<string | null> {
       log.info("FCM token retrieved", { tokenPrefix: token?.substring(0, 12) });
       return token;
     } catch (e) {
-      log.error("getFCMToken failed", { error: e });
+      // En dev Android, l'absence de config Firebase complète ne doit pas afficher une erreur bloquante.
+      const message =
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : Object.prototype.toString.call(e);
+      log.warn("getFCMToken unavailable", { message, platform: Platform.OS });
       return null;
     }
   })();

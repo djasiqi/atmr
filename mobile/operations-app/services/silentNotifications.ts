@@ -23,10 +23,13 @@ const log = getLogger("SilentNotif");
 
 let TaskManager: any = null;
 
-try {
-  TaskManager = require("expo-task-manager");
-} catch (e) {
-  getLogger("SilentNotif").warn("expo-task-manager not installed, background limited");
+// Workaround expo/expo#25325 : ne pas charger expo-task-manager en __DEV__ (boucle de reload)
+if (!__DEV__) {
+  try {
+    TaskManager = require("expo-task-manager");
+  } catch (e) {
+    getLogger("SilentNotif").warn("expo-task-manager not installed, background limited");
+  }
 }
 
 /**

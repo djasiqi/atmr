@@ -649,14 +649,26 @@ export const TimeDatePicker: React.FC<TimeDatePickerProps> = ({
                             {mode !== "date" && (
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Heure (HH:mm)</Text>
-                                    <TextInput
-                                        style={styles.input}
-                                        value={timeInput}
-                                        onChangeText={handleTimeChange}
-                                        placeholder="14:30"
-                                        keyboardType="numeric"
-                                        maxLength={5}
-                                    />
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                                        <TextInput
+                                            style={[styles.input, { flex: 1 }]}
+                                            value={timeInput}
+                                            onChangeText={handleTimeChange}
+                                            placeholder="14:30"
+                                            keyboardType="numeric"
+                                            maxLength={5}
+                                        />
+                                        <TouchableOpacity
+                                            style={styles.heureADefinirBtn}
+                                            onPress={() => {
+                                                setSelectedHour(0);
+                                                setSelectedMinute(0);
+                                                setTimeInput("00:00");
+                                            }}
+                                        >
+                                            <Text style={styles.heureADefinirBtnText}>⏱️ À définir</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             )}
 
@@ -809,6 +821,19 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         color: palette.text,
         fontSize: 15,
+    },
+    heureADefinirBtn: {
+        backgroundColor: palette.buttonBg,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    heureADefinirBtnText: {
+        color: palette.accent,
+        fontSize: 13,
+        fontWeight: "600",
     },
     modalActions: {
         flexDirection: "row",

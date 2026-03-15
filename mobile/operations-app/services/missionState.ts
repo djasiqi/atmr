@@ -295,7 +295,13 @@ class MissionStateManagerImpl {
   // -- Public API ----------------------------------------------------------
 
   async startMission(mission: Booking, destination?: string): Promise<void> {
-    const status = normalizeBookingStatus(mission.status) as MissionBarStatus;
+    const missionStatus = normalizeBookingStatus(mission.status) as MissionBarStatus;
+    // Ne pas régresser : si on a déjà EN_ROUTE/IN_PROGRESS (ex. transition optimiste),
+    // garder le statut le plus avancé pour éviter de désactiver le tracking mission-critical.
+    const status =
+      this.state.activeMission?.id === mission.id && isAhead(this.state.currentStatus, missionStatus)
+        ? this.state.currentStatus
+        : missionStatus;
     const privacyFromBooking = (mission as any).can_show_identity === false
       || (mission as any).institution_privacy_mode === true;
     this.state = {
@@ -385,6 +391,16 @@ class MissionStateManagerImpl {
     if (reason === "conflict" || reason === "stale") {
       this.reconcileNow();
     }
+  }
+
+  /**
+   * Applique une mise à jour de booking reçue via socket (booking_updated).
+   * Met à jour le statut local si le serveur est en avance, et émet reconciliation
+   * pour déclencher la réconciliation du tracking background.
+   */
+  async applyBookingUpdate(booking: Booking): Promise<void> {
+    if (!this.state.activeMission || this.state.activeMission.id !== booking.id) return;
+    await this.updateFromServer([booking]);
   }
 
   /**

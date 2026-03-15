@@ -30,7 +30,10 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
 
   const getAvailabilityStatus = (driver) => {
     if (!driver.is_active) return { label: 'Hors ligne', className: s.statusOffline };
-    if (driver.current_trip_id) return { label: 'En course', className: s.statusOnTrip };
+    const backendStatus = String(driver?.status || '').toLowerCase();
+    if (backendStatus === 'busy') return { label: 'En course', className: s.statusOnTrip };
+    if (backendStatus === 'assigned') return { label: 'Assigné', className: s.statusOnTrip };
+    if (backendStatus === 'offline') return { label: 'Hors ligne', className: s.statusOffline };
     return { label: 'Disponible', className: s.statusAvailable };
   };
 

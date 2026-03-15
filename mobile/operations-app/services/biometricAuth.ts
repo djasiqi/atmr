@@ -42,7 +42,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
     log.success("biometric auth available", {});
     return true;
   } catch (error) {
-    log.error("biometric availability check failed", { error });
+    log.warn("biometric availability check failed", { error });
     return false;
   }
 }
@@ -59,7 +59,7 @@ export async function getAvailableBiometricTypes(): Promise<
     log.info("available biometric types", { types });
     return types;
   } catch (error) {
-    log.error("get biometric types failed", { error });
+    log.warn("get biometric types failed", { error });
     return [];
   }
 }
@@ -93,7 +93,7 @@ export async function authenticateWithBiometric(
       return false;
     }
   } catch (error) {
-    log.error("biometric auth failed", { error });
+    log.warn("biometric auth failed", { error });
     return false;
   }
 }
@@ -144,7 +144,7 @@ export async function autoLoginWithBiometric(
       return false;
     }
 
-    log.info("attempting login with saved credentials", {});
+    log.info("attempting login with saved credentials", { email: savedCreds.email });
 
     const loginResponse = await loginDriver(savedCreds.email, savedCreds.password);
 
@@ -163,7 +163,23 @@ export async function autoLoginWithBiometric(
     return true;
   } catch (error: any) {
     if (error instanceof BiometricNoCredentialsError) throw error;
-    log.error("auto-login with biometric failed", { error });
+    const status = error?.response?.status;
+    const message = error?.message ?? String(error);
+    const isNetwork =
+      (typeof message === "string" && message.toLowerCase().includes("network")) ||
+      error?.code === "ERR_NETWORK";
+    log.warn("auto-login with biometric failed", {
+      status,
+      message,
+      isNetwork,
+      hasResponse: !!error?.response,
+    });
+    if (status === 401 || status === 403) {
+      // Identifiants mémorisés obsolètes/invalides: éviter la boucle d'échecs au prochain bootstrap.
+      await setRememberMe(false);
+      await clearRememberedCredentials();
+      throw new BiometricNoCredentialsError();
+    }
     return false;
   }
 }

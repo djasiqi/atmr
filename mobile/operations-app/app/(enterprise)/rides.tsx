@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -44,6 +43,7 @@ import { router } from "expo-router";
 import { secureStorage } from "@/services/storage";
 import { getLogger } from "@/utils/logger";
 import { getEnterpriseAuthRecoveryMessage } from "@/services/enterpriseAuth";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 
 const log = getLogger("Rides");
 
@@ -75,6 +75,7 @@ const DANGER = "#dc3545";
 
 export default function EnterpriseRidesScreen() {
   const { enterpriseSession, refreshEnterprise } = useAuth();
+  const appAlert = useAppAlert();
   const { selectedDate } = useEnterpriseContext();
   const tabBarHeight = useBottomTabBarHeight();
   const isFocused = useIsFocused();
@@ -289,7 +290,7 @@ export default function EnterpriseRidesScreen() {
     async (ride: RideSummary) => {
       // Garde-fou local : urgent uniquement si pickup_at sentinelle (00:00 ou absent)
       if (!isPickupSentinel(ride.time?.pickup_at)) {
-        Alert.alert(
+        appAlert.showAlert(
           "Course déjà planifiée",
           "Urgent disponible uniquement pour une course sans heure (00:00)."
         );
@@ -301,7 +302,7 @@ export default function EnterpriseRidesScreen() {
         await markRideUrgent(ride.id, { extra_delay_minutes: 15 });
         await loadRides();
         const urgentTime = dayjs().add(15, "minute");
-        Alert.alert(
+        appAlert.showAlert(
           "Urgent",
           `La course a été planifiée pour ${urgentTime.format("HH:mm")} (dans 15 minutes).`
         );
@@ -312,7 +313,7 @@ export default function EnterpriseRidesScreen() {
           return;
         }
         if (error?.response?.status === 409) {
-          Alert.alert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
+          appAlert.showAlert("Course déjà planifiée", "Course déjà planifiée (urgent indisponible).");
           return;
         }
         const message =
@@ -320,13 +321,13 @@ export default function EnterpriseRidesScreen() {
           error?.response?.data?.error ??
           error?.message ??
           "Impossible de planifier la course en urgence.";
-        Alert.alert("Erreur", message);
+        appAlert.showAlert("Erreur", message);
       } finally {
         setActionLoading(false);
         setUrgentLoadingRideId(null);
       }
     },
-    [loadRides]
+    [loadRides, appAlert]
   );
 
   const confirmSchedule = useCallback(async () => {

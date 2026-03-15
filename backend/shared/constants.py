@@ -233,6 +233,12 @@ class AuthErrorCodes:
     INVALID_CREDENTIALS = "invalid_credentials"
     """Email ou mot de passe incorrect. HTTP 401."""
 
+    EMAIL_NOT_FOUND = "email_not_found"
+    """Email inexistant. HTTP 401."""
+
+    INVALID_PASSWORD = "invalid_password"
+    """Mot de passe incorrect. HTTP 401."""
+
     MISSING_TOKEN = "missing_token"
     """Token JWT manquant dans la requête. HTTP 401."""
 
@@ -285,6 +291,8 @@ AUTH_ERROR_HTTP_STATUS = {
     AuthErrorCodes.LOGIN_ERROR: 400,
     # 401 Unauthorized
     AuthErrorCodes.INVALID_CREDENTIALS: 401,
+    AuthErrorCodes.EMAIL_NOT_FOUND: 401,
+    AuthErrorCodes.INVALID_PASSWORD: 401,
     AuthErrorCodes.MISSING_TOKEN: 401,
     # 403 Forbidden
     AuthErrorCodes.ACCOUNT_LOCKED: 403,

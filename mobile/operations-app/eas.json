@@ -6,11 +6,12 @@
       "distribution": "internal",
       "channel": "development",
       "env": {
-        // ✅ Pour que le dev build Android puisse obtenir un token FCM avec le google-services.json actuel
-        // (qui correspond à ch.liri.operations), on build en variant "prod" même en dev-client.
-        // Sinon app.config.js bascule sur ch.liri.operations.dev et Firebase/FCM échoue (FIS_AUTH_ERROR).
-        "APP_VARIANT": "prod",
-        "EXPO_NO_UPDATES": "1"
+        "APP_VARIANT": "dev",
+        "EXPO_NO_UPDATES": "1",
+        "EXPO_PUBLIC_USE_PROD_IN_DEV": "0",
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.146:5000",
+        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.1.146:5000",
+        "EXPO_PUBLIC_BACKEND_PORT": "5000"
       },
       "android": {
         "buildType": "apk",
@@ -26,7 +27,9 @@
       "environment": "production",
       "channel": "preview",
       "env": {
-        "APP_VARIANT": "prod"
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_API_URL": "https://api.lirie.ch",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.lirie.ch"
       },
       "android": {
         "buildType": "apk"
@@ -41,7 +44,9 @@
       "channel": "production",
       "prebuildCommand": "node ./scripts/check-build-ready.js",
       "env": {
-        "APP_VARIANT": "prod"
+        "APP_VARIANT": "prod",
+        "EXPO_PUBLIC_API_URL": "https://api.lirie.ch",
+        "EXPO_PUBLIC_SOCKET_URL": "https://api.lirie.ch"
       },
       "android": {
         "buildType": "app-bundle",

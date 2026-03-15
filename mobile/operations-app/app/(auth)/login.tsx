@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   TextInput,
   ActivityIndicator,
 } from "react-native";
@@ -26,9 +25,11 @@ import {
 } from "@/utils/rememberMeStorage";
 import { consumeLogoutMarker } from "@/services/logoutMarker";
 import { SessionExpiredBanner } from "@/components/common/SessionExpiredBanner";
+import { useAppAlert } from "@/contexts/AppAlertContext";
 
 export default function LoginScreen() {
   const { login, loading, setMode } = useAuth();
+  const appAlert = useAppAlert();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -93,7 +94,7 @@ export default function LoginScreen() {
         setRememberMe(true);
       } catch {
         setRememberMe(false);
-        Alert.alert("", "Impossible d'enregistrer sur cet appareil.");
+        appAlert.showAlert("", "Impossible d'enregistrer sur cet appareil.");
       }
     } else {
       try {
@@ -105,9 +106,22 @@ export default function LoginScreen() {
     }
   };
 
+  const getLoginErrorMessage = (e: unknown): string => {
+    if (e instanceof RememberMeStorageError) return "";
+    const err = e as { response?: { data?: { error?: string } } };
+    const code = err?.response?.data?.error;
+    if (code === "email_not_found") {
+      return "Mail n'existe pas. Veuillez contacter votre employeur.";
+    }
+    if (code === "invalid_password") {
+      return "Mots de passe incorrect.";
+    }
+    return "Identifiants incorrects.";
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert(
+      appAlert.showAlert(
         "Erreur",
         "Veuillez entrer votre email et votre mot de passe."
       );
@@ -118,11 +132,12 @@ export default function LoginScreen() {
       router.replace("/(tabs)/mission");
     } catch (e) {
       if (e instanceof RememberMeStorageError) {
-        Alert.alert("", "Impossible d'enregistrer sur cet appareil.");
+        appAlert.showAlert("", "Impossible d'enregistrer sur cet appareil.");
         router.replace("/(tabs)/mission");
         return;
       }
-      Alert.alert("Connexion échouée", "Email ou mot de passe incorrect.");
+      const message = getLoginErrorMessage(e);
+      appAlert.showAlert("Connexion échouée", message);
     }
   };
 

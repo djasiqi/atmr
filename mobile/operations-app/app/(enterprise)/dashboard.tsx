@@ -422,22 +422,18 @@ export default function EnterpriseDashboardScreen() {
       delayed: 0,
     };
 
-    // #region agent log
     try {
       sendIngestEvent({ location: 'dashboard.tsx:filteredRides', message: 'All rides before filtering', data: { total_rides: sortedManualRides.length, rides_sample: sortedManualRides.slice(0, 3).map(r => ({ id: r.id, status: r.status, status_type: typeof r.status, driver_name: r.driver?.name })) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' });
     } catch { }
-    // #endregion
 
     sortedManualRides.forEach((ride) => {
       const status = ride.status ? String(ride.status).toLowerCase().trim() : undefined;
       // ✅ Compter les courses PENDING (transférées en attente)
       if (status === "pending") {
         counts.pending++;
-        // #region agent log
         try {
           sendIngestEvent({ location: 'dashboard.tsx:pendingCount', message: 'Found PENDING ride', data: { ride_id: ride.id, status: ride.status, status_normalized: status }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H1' });
         } catch { }
-        // #endregion
       }
       // ✅ Compter aussi les courses avec transfert PENDING (en attente d'acceptation)
       if (ride.transfer?.status === "PENDING") {
@@ -470,11 +466,9 @@ export default function EnterpriseDashboardScreen() {
     // Filtrer selon le filtre sélectionné
     let filtered = [...sortedManualRides];
     if (rideFilter === "pending") {
-      // #region agent log
       try {
         sendIngestEvent({ location: 'dashboard.tsx:pendingFilter', message: 'Applying PENDING filter', data: { total_before_filter: sortedManualRides.length, pending_count: counts.pending }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' });
       } catch { }
-      // #endregion
       // ✅ Filtre pour afficher les courses PENDING ou avec transfert PENDING
       filtered = filtered.filter((r) => {
         const status = r.status ? String(r.status).toLowerCase().trim() : undefined;
@@ -510,11 +504,9 @@ export default function EnterpriseDashboardScreen() {
     }
     // "all" : pas de filtre
 
-    // #region agent log
     try {
       sendIngestEvent({ location: 'dashboard.tsx:filterResult', message: 'Filter result', data: { filter: rideFilter, filtered_count: filtered.length, counts: counts }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run2', hypothesisId: 'H3' });
     } catch { }
-    // #endregion
 
     return { filteredRides: filtered, filterCounts: counts };
   }, [sortedManualRides, rideFilter]);
@@ -613,11 +605,9 @@ export default function EnterpriseDashboardScreen() {
           let delayMinutes: number | null = null;
           const isCompleted = isCompletedStatus(ride.status);
 
-          // #region agent log
           try {
             sendIngestEvent({ location: 'dashboard.tsx:611', message: 'Ride processing', data: { rideId: ride.id, status: ride.status, normalizedStatus: normalizedStatus, isCompleted: isCompleted, hasTransfer: !!ride.transfer, transferStatus: ride.transfer?.status, isReceiver: ride.transfer?.is_receiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H1-H2-H3' });
           } catch { }
-          // #endregion
 
           if (!isCompleted && ride.driver?.name && ride.time.pickup_at) {
             const scheduledTime = dayjs(ride.time.pickup_at);
@@ -655,13 +645,11 @@ export default function EnterpriseDashboardScreen() {
           const isPendingTransferReceiver = ride.transfer?.status === "PENDING" && ride.transfer.is_receiver;
           const isPendingTransferSender = ride.transfer?.status === "PENDING" && ride.transfer.is_sender;
 
-          // #region agent log - Debug transfer roles
           if (ride.transfer?.status === "PENDING") {
             try {
               sendIngestEvent({ location: 'dashboard.tsx:663', message: 'Transfer roles check', data: { rideId: ride.id, transferId: ride.transfer?.id, transferStatus: ride.transfer?.status, is_sender: ride.transfer?.is_sender, is_receiver: ride.transfer?.is_receiver, isPendingTransferSender: isPendingTransferSender, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run13-roles', hypothesisId: 'ROLES' });
             } catch { }
           }
-          // #endregion
 
           // ✅ Logique d'affichage des boutons :
           // - Receveur : Accepter (droite) + Refuser (gauche) + Transférer (footer)
@@ -696,14 +684,12 @@ export default function EnterpriseDashboardScreen() {
                     ? undefined
                     : isPendingTransferReceiver && ride.transfer?.id
                       ? () => rideActions.handleRejectTransfer(ride.transfer!.id) // ❌ Refuser (receveur)
-                      : !canManageRide || !isPickupSentinel(ride.time?.pickup_at)
+                        : !canManageRide || !isPickupSentinel(ride.time?.pickup_at)
                         ? undefined
                         : () => handleUrgentDelay(ride.id); // 🚨 Marquer urgent (sentinel 00:00 uniquement)
-                  // #region agent log
                   try {
                     sendIngestEvent({ location: 'dashboard.tsx:697-onQuickAction', message: 'onQuickAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' });
                   } catch { }
-                  // #endregion
                   return value;
                 })(),
                 onPrimaryAction: (() => {
@@ -714,11 +700,9 @@ export default function EnterpriseDashboardScreen() {
                       : !canManageRide
                         ? undefined
                         : () => rideActions.handleOpenAssignModal(ride); // 👤 Assigner un chauffeur
-                  // #region agent log
                   try {
                     sendIngestEvent({ location: 'dashboard.tsx:708-onPrimaryAction', message: 'onPrimaryAction computed', data: { rideId: ride.id, transferId: ride.transfer?.id, hasValue: !!value, isCompleted: isCompleted, canManageRide: canManageRide, isPendingTransferReceiver: isPendingTransferReceiver }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run12-final', hypothesisId: 'H1-FIX' });
                   } catch { }
-                  // #endregion
                   return value;
                 })(),
                 // ✅ Icônes et couleurs pour le RECEVEUR uniquement
@@ -745,9 +729,7 @@ export default function EnterpriseDashboardScreen() {
                   </TouchableOpacity>
                 ) : undefined,
               }}
-              // #region agent log
-              {...(() => { try { sendIngestEvent({ location: 'dashboard.tsx:679', message: 'RideSnippetCard props', data: { rideId: ride.id, hasOnQuickAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), hasOnPrimaryAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined, primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H4' }); } catch { } return {}; })()}
-              // #endregion
+              {...(() => { try { sendIngestEvent({ location: 'dashboard.tsx:679', message: 'RideSnippetCard props', data: { rideId: ride.id, hasOnQuickAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), hasOnPrimaryAction: !!(isCompleted || !canManageRide ? undefined : isPendingTransferReceiver ? () => { } : () => { }), quickIcon: isPendingTransferReceiver ? "close-circle-outline" : undefined, primaryIcon: isPendingTransferReceiver ? "checkmark-circle-outline" : undefined }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run3', hypothesisId: 'H4'               }); } catch { } return {}; })()}
               expanded={expandedRideId === ride.id}
               onToggle={() => {
                 setExpandedRideId(expandedRideId === ride.id ? null : ride.id);

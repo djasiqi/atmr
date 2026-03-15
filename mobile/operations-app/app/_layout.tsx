@@ -62,7 +62,7 @@ import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { PushFailureBanner } from "@/components/common/PushFailureBanner";
 import { GpsDisabledBanner } from "@/components/common/GpsDisabledBanner";
 import { InAppNotificationToast } from "@/components/common/InAppNotificationToast";
-import { BatteryOptimizationGuide } from "@/components/common/BatteryOptimizationGuide";
+import { BatteryOptimizationGuide, BATTERY_GUIDE_DISMISSED_KEY } from "@/components/common/BatteryOptimizationGuide";
 import { checkBatteryOptimization } from "@/services/batteryOptimization";
 import { getLogger } from "@/utils/logger";
 
@@ -72,31 +72,31 @@ const log = getLogger("App");
 let pendingSyncEngineStopTimer: ReturnType<typeof setTimeout> | null = null;
 const SYNC_ENGINE_STOP_DELAY_MS = 400;
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 // P0.2.C — Init cache réseau pour logs (corrélation logout ↔ offline)
-initNetworkStateCache();
+// ✅ Désactivé temporairement — audit bootstrap Phase 4
+// initNetworkStateCache();
 // P2.2 — Init log context (device_id hash pour corrélation multi-tenant)
-initLogContext();
+// initLogContext();
 // Version check - gestion des mises à jour obligatoires/recommandées
 import { VersionProvider, useVersion } from "@/contexts/VersionContext";
+import { AppAlertProvider } from "@/contexts/AppAlertContext";
 import { UpdateRequiredScreen } from "@/components/version/UpdateRequiredScreen";
 import { UpdateRecommendedModal } from "@/components/version/UpdateRecommendedModal";
 
 // ✅ Enregistrer la tâche de localisation en arrière-plan (uniquement si le module natif est disponible)
-// Note: expo-task-manager nécessite un rebuild natif. En développement avec Expo Go, on skip.
-if (Platform.OS !== "web") {
+// Workaround expo/expo#25325 : en __DEV__, les tâches background provoquent une boucle de reload.
+if (Platform.OS !== "web" && !__DEV__) {
   try {
     require("@/tasks/locationTask");
   } catch (error) {
-    // Module natif non disponible (Expo Go ou build non mis à jour)
-    // C'est normal en développement, le tracking arrière-plan nécessite un development build
     log.info("task manager unavailable (expo go, needs dev build)", { error });
   }
 }
 
 // ✅ Phase 2.6: Définir la tâche de synchronisation silencieuse en arrière-plan
-if (Platform.OS !== "web") {
+if (Platform.OS !== "web" && !__DEV__) {
   try {
     const { defineBackgroundSyncTask } = require("@/services/silentNotifications");
     defineBackgroundSyncTask();
@@ -108,26 +108,29 @@ if (Platform.OS !== "web") {
 
 // Notifee onBackgroundEvent est enregistré dans index.js (avant expo-router/entry).
 
-Sentry.init({
-  dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",
-  sendDefaultPii: true,
-  tracesSampleRate: 1.0,
-  profilesSampleRate: 1.0,
-  // Session Replay desactive : ReplayIntegration provoque des Background ANR
-  // sur Android via un ReentrantLock dans AndroidConnectionStatusProvider.updateCache()
-  // appelé de maniere synchrone sur le main thread pendant onStart.
-  // Bug SDK Sentry @sentry/react-native ~7.2.x — reactiver apres upgrade.
-  // replaysSessionSampleRate: 0.1,
-  // replaysOnErrorSampleRate: 1.0,
-  // integrations: [Sentry.mobileReplayIntegration()],
-});
+// ✅ Désactivé temporairement — audit bootstrap Phase 5
+// Sentry.init({
+//   dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",
+//   sendDefaultPii: true,
+//   tracesSampleRate: 1.0,
+//   profilesSampleRate: 1.0,
+//   beforeSend(event, hint) {
+//     const ex = hint?.originalException as Error | undefined;
+//     const msg = ex?.message ?? event?.message ?? "";
+//     if (typeof msg === "string" && msg.includes("Unable to activate keep awake")) return null;
+//     if (typeof msg === "string" && msg.includes("Unable to deactivate keep awake")) return null;
+//     return event;
+//   },
+// });
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
       <VersionProvider>
         <AuthProvider>
-          <RootNav />
+          <AppAlertProvider>
+            <RootNav />
+          </AppAlertProvider>
         </AuthProvider>
       </VersionProvider>
     </GestureHandlerRootView>
@@ -155,7 +158,7 @@ function RootNav() {
     if (splashHiddenRef.current) return;
     if (loading || versionLoading) return;
     splashHiddenRef.current = true;
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
   }, [loading, versionLoading]);
 
   // P0.5: Mettre à jour le mode notif dès que l'auth est connue (handler boot-level)
@@ -504,6 +507,7 @@ function RootNav() {
   }, [driver, isDriverAuthenticated, loading]);
 
   // A1: Vérifier l'optimisation batterie Samsung après login driver
+  // Respecte "Ne plus afficher" : on lit la préférence AVANT de décider d'afficher
   useEffect(() => {
     if (loading || !isDriverAuthenticated || !driver) return;
     if (Platform.OS !== "android") return;
@@ -512,7 +516,11 @@ function RootNav() {
     }
     (async () => {
       try {
-        const { needsExemption } = await checkBatteryOptimization();
+        const [dismissed, { needsExemption }] = await Promise.all([
+          AsyncStorage.getItem(BATTERY_GUIDE_DISMISSED_KEY),
+          checkBatteryOptimization(),
+        ]);
+        if (dismissed === "true") return;
         if (needsExemption) setShowBatteryGuide(true);
       } catch {
         // best-effort
@@ -565,9 +573,11 @@ function RootNav() {
   }, [isDriverAuthenticated, loading, handleDeepLink, isRuntimeInternalLink]);
 
   // ✅ Plan 2G/3G : syncEngine démarre/arrête avec le driver
+  // Important: ne pas lancer le tracking en mode entreprise (évite "no driver_id, skip enqueue"
+  // et envoi de positions incorrectes quand l'utilisateur consulte le dashboard).
   useEffect(() => {
     if (loading || versionLoading) return;
-    if (!isDriverAuthenticated || !driver) {
+    if (mode !== "driver" || !isDriverAuthenticated || !driver) {
       // Anti-flap: pendant l'hydratation auth, éviter stop/start immédiat.
       if (syncEngineStopTimerRef.current) {
         clearTimeout(syncEngineStopTimerRef.current);
@@ -593,12 +603,13 @@ function RootNav() {
       getSyncEngine().start();
       syncEngineStartedRef.current = true;
     }
-  }, [driver?.id, isDriverAuthenticated, loading, versionLoading]);
+  }, [driver?.id, isDriverAuthenticated, mode, loading, versionLoading]);
 
   // ✅ 4. Fréquence GPS Adaptative Mobile : Démarrer tracking adaptatif pour les drivers
+  // Important: uniquement en mode driver (évite envoi de positions en mode entreprise).
   useEffect(() => {
     if (loading || versionLoading) return;
-    if (!isDriverAuthenticated || !driver) {
+    if (mode !== "driver" || !isDriverAuthenticated || !driver) {
       if (adaptiveTrackingStopTimerRef.current) {
         clearTimeout(adaptiveTrackingStopTimerRef.current);
       }
@@ -634,7 +645,7 @@ function RootNav() {
         });
       }
     })();
-  }, [driver?.id, isDriverAuthenticated, loading, versionLoading]);
+  }, [driver?.id, isDriverAuthenticated, mode, loading, versionLoading]);
 
   // ✅ Background GPS : réconciliation (mission-active only). Jamais de start au boot.
   // Règle B : réconciliation non-démarrante si pas de mission active.
@@ -669,7 +680,16 @@ function RootNav() {
     if (Platform.OS === "web") return;
     if (mode !== "driver") return;
     const unsub = MissionStateManager.subscribe((event) => {
-      if (event !== "mission_started" && event !== "mission_stopped") return;
+      // Réconcilier aussi sur transition_confirmed/state_changed pour démarrer le tracking
+      // dès EN_ROUTE (mission-critical), avant que le chauffeur ouvre Maps et passe en arrière-plan.
+      if (
+        event !== "mission_started" &&
+        event !== "mission_stopped" &&
+        event !== "transition_confirmed" &&
+        event !== "state_changed" &&
+        event !== "reconciliation"
+      )
+        return;
       (async () => {
         if (event === "mission_started") {
           await requestBackgroundPermissionIfNeeded();

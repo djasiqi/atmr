@@ -141,6 +141,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
 
   const isDateTimeInPast = useMemo(() => {
     if (!form.scheduled_date || !form.scheduled_time) return false;
+    // 00:00 = sentinelle "heure à définir", ne pas considérer comme "dans le passé"
+    if (form.scheduled_time === "00:00") return false;
     const combined = new Date(`${form.scheduled_date}T${form.scheduled_time}:00`);
     return !isNaN(combined.getTime()) && combined < new Date();
   }, [form.scheduled_date, form.scheduled_time]);

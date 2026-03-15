@@ -520,8 +520,7 @@ const DispatchTable = ({
       .filter(
         (d) =>
           d.id !== currentId &&
-          ((typeof d.status === 'string' && d.status.toLowerCase() === 'available') ||
-            d.is_available === true)
+          (typeof d.status === 'string' && d.status.toLowerCase() === 'available')
       )
       .sort((a, b) => {
         const an = a.name || a.username || '';

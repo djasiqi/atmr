@@ -22,7 +22,6 @@ from unittest.mock import patch
 
 import pytest
 
-from ext import db
 from models import Booking
 from tests.e2e.helpers.e2e_helpers import (
     create_test_client,
@@ -32,6 +31,7 @@ from tests.e2e.helpers.e2e_helpers import (
 
 def _company_headers(app, company):
     from flask_jwt_extended import create_access_token
+
     from models import User, UserRole
 
     user = getattr(company, "user", None) or User.query.filter_by(

@@ -22,9 +22,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app import create_app
-from db import db
-from models import Booking, BookingStatus, Client, Company, Driver, User, UserRole
+from app import create_app  # noqa: E402
+from db import db  # noqa: E402
+from models import (  # noqa: E402
+    Booking,
+    BookingStatus,
+    Client,
+    Company,
+    Driver,
+    User,
+    UserRole,
+)
 
 DEFAULTS = {
     "company_name": "Liri Review Company",

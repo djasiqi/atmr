@@ -8,10 +8,7 @@ vers ce use case.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 
@@ -83,10 +80,16 @@ class AuthenticateUserUseCase:
         from repositories.user_repository import UserRepository
         user_repo = UserRepository()
         user = user_repo.find_model_by_email(input_data.email)
-        if not user or not user.check_password(input_data.password):
+        if not user:
             return AuthenticateUserOutput(
                 success=False,
-                error={"error": "Email ou mot de passe invalide"},
+                error={"error": "email_not_found"},
+                status_code=401,
+            )
+        if not user.check_password(input_data.password):
+            return AuthenticateUserOutput(
+                success=False,
+                error={"error": "invalid_password"},
                 status_code=401,
             )
 

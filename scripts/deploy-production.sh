@@ -59,6 +59,11 @@ export POSTGRES_HOST="${27:-postgres}"
 export FLASK_ENV="${28:-production}"
 export FLASK_CONFIG="${29:-production}"
 export ENVIRONMENT="${30:-production}"
+# Réglages mobile/token/websocket (optionnels, avec defaults robustes)
+export JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS="${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS:-259200}"
+export JWT_DECODE_LEEWAY_SECONDS="${JWT_DECODE_LEEWAY_SECONDS:-300}"
+export SOCKETIO_PING_TIMEOUT_SECONDS="${SOCKETIO_PING_TIMEOUT_SECONDS:-180}"
+export SOCKETIO_PING_INTERVAL_SECONDS="${SOCKETIO_PING_INTERVAL_SECONDS:-25}"
 
 # Validation des secrets
 MISSING_SECRETS=()
@@ -193,6 +198,10 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   echo "FLASK_ENV=${FLASK_ENV}"
   echo "FLASK_CONFIG=${FLASK_CONFIG}"
   echo "ENVIRONMENT=${ENVIRONMENT}"
+  echo "JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS=${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS}"
+  echo "JWT_DECODE_LEEWAY_SECONDS=${JWT_DECODE_LEEWAY_SECONDS}"
+  echo "SOCKETIO_PING_TIMEOUT_SECONDS=${SOCKETIO_PING_TIMEOUT_SECONDS}"
+  echo "SOCKETIO_PING_INTERVAL_SECONDS=${SOCKETIO_PING_INTERVAL_SECONDS}"
   # backend:5000 = appel interne via réseau Docker (bypass Talisman via X-Internal-Gateway-Auth)
   # 127.0.0.1 peut échouer (Connection refused) dans certains environnements
   echo "GATEWAY_APP_AUTH_URL=http://backend:5000/api/v1/auth/login"

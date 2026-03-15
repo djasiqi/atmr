@@ -20,11 +20,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Tuple
 
-import requests  # pyright: ignore[reportMissingModuleSource]
-from requests import (  # pyright: ignore[reportMissingModuleSource]
-    RequestException,
-    Timeout,
-)
+import requests
+from requests import RequestException, Timeout
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -428,6 +425,43 @@ class LocationService:
                     },
                 )
                 self.redis_client.expire(key, DEFAULT_DRIVER_LOC_TTL_SEC)
+
+                # P2: GEO index Redis — index spatial par entreprise pour GEORADIUS/GEOSEARCH
+                if company_id is not None:
+                    try:
+                        geo_key = f"driver_locations:geo:{company_id}"
+                        self.redis_client.geoadd(
+                            geo_key,
+                            [longitude, latitude, str(driver_id)],
+                        )
+                        self.redis_client.expire(geo_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                    except Exception as geo_err:
+                        logger.debug(
+                            "[LocationService] Redis GEOADD failed (non-blocking): %s",
+                            geo_err,
+                        )
+
+                # P2: Stream ingestion — XADD pour analytics/replay
+                try:
+                    stream_key = "driver_location_stream"
+                    self.redis_client.xadd(
+                        stream_key,
+                        {
+                            "driver_id": str(driver_id),
+                            "company_id": str(company_id) if company_id else "",
+                            "lat": str(latitude),
+                            "lon": str(longitude),
+                            "ts": ts_iso,
+                            "source": source,
+                        },
+                        maxlen=10000,
+                        approximate=True,
+                    )
+                except Exception as stream_err:
+                    logger.debug(
+                        "[LocationService] Redis XADD failed (non-blocking): %s",
+                        stream_err,
+                    )
             except (ConnectionError, OSError, TimeoutError) as e:
                 # Erreurs réseau attendues : Redis indisponible, timeout
                 logger.warning(

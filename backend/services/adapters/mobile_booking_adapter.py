@@ -10,10 +10,13 @@ et ne doivent pas être inclus dans le payload retourné.
 
 from __future__ import annotations
 
+# Longueur d'une date ISO YYYY-MM-DD
+_ISO_DATE_LEN = 10
+
 
 def map_mobile_ride_payload_to_manual_booking_payload(
-    payload: dict,
-) -> dict:
+    payload: dict[str, object],
+) -> dict[str, object]:
     """Convertit le payload mobile vers le format canonique ManualBookingCreateSchema.
 
     Conversions:
@@ -31,7 +34,7 @@ def map_mobile_ride_payload_to_manual_booking_payload(
     Returns:
         Payload conforme à ManualBookingCreateSchema
     """
-    result: dict = {}
+    result: dict[str, object] = {}
 
     # Adresses (conversion des noms)
     if "pickup_address" in payload:
@@ -43,23 +46,48 @@ def map_mobile_ride_payload_to_manual_booking_payload(
     if "is_return" in payload:
         result["is_round_trip"] = bool(payload["is_return"])
 
-    # return_time → return_date / return_time
+    # return_date / return_time (aligné sur le web)
+    # Web envoie return_date (YYYY-MM-DD) + return_time optionnel (heure à définir si absent)
+    # Mobile peut envoyer return_date directement (comme le web) ou return_time à convertir
+    return_date_raw = payload.get("return_date")
     return_time_raw = payload.get("return_time")
-    if return_time_raw:
+
+    if return_date_raw:
+        # Mobile envoie return_date directement (format web) → priorité
+        result["return_date"] = str(return_date_raw).strip()
+        if return_time_raw:
+            return_time_str = str(return_time_raw).strip()
+            if "T" in return_time_str:
+                parts = return_time_str.split("T")
+                if len(parts) > 1:
+                    time_part = parts[1]
+                    _HOUR_MIN_PARTS = 2
+                    if len(time_part.split(":")) == _HOUR_MIN_PARTS:
+                        time_part = f"{time_part}:00"
+                    result["return_time"] = f"{parts[0]}T{time_part}"
+    elif return_time_raw:
+        # Fallback : return_time seul (conversion legacy)
         return_time_str = str(return_time_raw).strip()
         if "T" in return_time_str:
-            # Datetime: YYYY-MM-DDTHH:mm:ss
             parts = return_time_str.split("T")
             result["return_date"] = parts[0]
             if len(parts) > 1:
                 time_part = parts[1]
-                if len(time_part.split(":")) == 2:
+                _HOUR_MIN_PARTS = 2
+                if len(time_part.split(":")) == _HOUR_MIN_PARTS:
                     time_part = f"{time_part}:00"
                 result["return_time"] = f"{parts[0]}T{time_part}"
         else:
-            # Date seule: YYYY-MM-DD (heure à confirmer)
             result["return_date"] = return_time_str
-            # Pas de return_time → heure à confirmer
+    elif result.get("is_round_trip") and payload.get("scheduled_time"):
+        # Dernier recours : dériver return_date de scheduled_time (même jour)
+        scheduled = str(payload["scheduled_time"]).strip()
+        if "T" in scheduled:
+            result["return_date"] = scheduled.split("T")[0]
+        else:
+            result["return_date"] = (
+                scheduled[:_ISO_DATE_LEN] if len(scheduled) >= _ISO_DATE_LEN else scheduled
+            )
 
     # Champs pass-through (noms identiques)
     pass_through = [

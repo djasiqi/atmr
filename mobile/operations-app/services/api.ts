@@ -77,12 +77,13 @@ const getDevBaseURL = () => {
 // En web bundled, __DEV__ peut être false même en développement local
 // On vérifie aussi l'origine de la page (localhost) et l'environnement d'exécution
 const isDevelopment = () => {
-  if (APP_VARIANT === "prod") {
-    return false;
-  }
-  // Vérifier __DEV__ d'abord
+  // En runtime Metro/Expo dev, __DEV__ est la source de vérité.
+  // APP_VARIANT peut rester "prod" pour des raisons de build native.
   if (__DEV__) {
     return true;
+  }
+  if (APP_VARIANT === "prod") {
+    return false;
   }
   
   // En web, vérifier si on est sur localhost (développement local)
@@ -127,6 +128,10 @@ const getBaseURL = () => {
   const isDev = isDevelopment();
   
   if (isDev) {
+    // Switch explicite : forcer prod en dev (téléphone réel, tunnel, backend local inaccessible)
+    if (process.env.EXPO_PUBLIC_USE_PROD_IN_DEV === '1') {
+      return validateProdApiUrl(PROD_API_URL);
+    }
     // En développement, sur le web, toujours utiliser localhost (ignorer DEV_API_URL si défini à la prod)
     if (Platform.OS === 'web') {
       return getDevBaseURL();
@@ -276,7 +281,6 @@ export const api = axios.create({
   },
 });
 
-// #region agent log
 // Log de la configuration des headers au démarrage (dev uniquement)
 if (__DEV__) {
   const hasXRequestedWith = Platform.OS !== "web";
@@ -299,7 +303,6 @@ if (__DEV__) {
     hypothesisId: "A",
   });
 }
-// #endregion
 
 // ⚡ Phase 3 : Cache partagé pour l'intercepteur request
 // Réduit les lectures SecureStore répétées lors de requêtes simultanées
@@ -430,9 +433,7 @@ api.interceptors.request.use(
         log.warn("no csrf token for request", { method: config.method, url: config.url });
       }
     }
-
-    // #region agent log
-    // #endregion
+    
     const now = Date.now();
 
     // ⚡ OPTIMISATION : Utiliser le cache si disponible et valide
@@ -471,7 +472,6 @@ api.interceptors.request.use(
       }
     }
 
-    // #region agent log + debug non sensible (QA / 24h — __DEV__ uniquement)
     const logData = {
       location: "api.ts:interceptor:request",
       message: "interceptor request entry",
@@ -504,7 +504,6 @@ api.interceptors.request.use(
     }
     log.debug("driver api interceptor", logData);
     debugLog(logData);
-    // #endregion
 
     // ✅ Ne pas ajouter le token pour les requêtes de login/refresh
     // ✅ IMPORTANT: ne pas écraser un Authorization explicite (ex: appels enterprise via `api`)
@@ -711,8 +710,12 @@ api.interceptors.response.use(
       }
     }
 
+    // ✅ Ne pas traiter 401 sur /auth/login : mauvais identifiants, pas session expirée
+    const isLoginRequest =
+      originalRequest?.url === "/auth/login" ||
+      originalRequest?.url?.endsWith("/auth/login");
     const isAuthError = error.response?.status === 401;
-    if (isAuthError && !originalRequest._retry) {
+    if (isAuthError && !originalRequest._retry && !isLoginRequest) {
       // ✅ P0.1: 401 = access token expiré/invalide → journal avant refresh
       pushSessionEvent("API_401");
 
@@ -834,7 +837,6 @@ api.interceptors.response.use(
           baseUrl: baseURL.replace("/api/v1", ""),
           origin,
         })
-        // #region agent log — H3: URL exacte appelée lors de ERR_NETWORK
         const fullURL = (originalRequest?.baseURL || "") + (originalRequest?.url || "");
         sendIngestEvent({
           location: "api.ts:response_interceptor",
@@ -845,7 +847,6 @@ api.interceptors.response.use(
           runId: "run1",
           hypothesisId: "H3",
         });
-        // #endregion
       }
     }
     return Promise.reject(error);
@@ -953,7 +954,6 @@ export const loginDriver = async (
   password: string
 ): Promise<AuthResponse> => {
   try {
-    // #region agent log
     const fullURL = `${baseURL}/auth/login`;
     const logData = {
       location: "api.ts:loginDriver",
@@ -974,8 +974,6 @@ export const loginDriver = async (
     };
     log.debug("loginDriver entry", logData);
     debugLog(logData);
-    // #endregion
-    // #region agent log
     const requestHeaders = {
       "X-Requested-With": api.defaults.headers.common["X-Requested-With"] || api.defaults.headers["X-Requested-With"] || "not set",
       "Content-Type": api.defaults.headers.common["Content-Type"] || api.defaults.headers["Content-Type"],
@@ -997,13 +995,11 @@ export const loginDriver = async (
     };
     log.debug("loginDriver before request", preRequestLog);
     debugLog(preRequestLog);
-    // #endregion
     // Appel principal via Axios
     const response = await api.post<AuthResponse>("/auth/login", {
       email,
       password,
     });
-    // #region agent log
     const successLogData = {
       location: "api.ts:loginDriver",
       message: "loginDriver success",
@@ -1032,10 +1028,8 @@ export const loginDriver = async (
     };
     log.debug("loginDriver success", successLogData);
     debugLog(successLogData);
-    // #endregion
     const data = response.data;
     
-    // #region agent log
     const storageLog = {
       location: "api.ts:loginDriver",
       message: "loginDriver storing tokens",
@@ -1054,11 +1048,9 @@ export const loginDriver = async (
     };
     log.debug("loginDriver storing tokens", storageLog);
     debugLog(storageLog);
-    // #endregion
     
     // ✅ Stocker le token d'accès dans AsyncStorage
     if (data?.token) {
-      // #region agent log
       const beforeStoreLog = {
         location: "api.ts:loginDriver",
         message: "before setAccessToken",
@@ -1069,11 +1061,9 @@ export const loginDriver = async (
         hypothesisId: "D",
       };
       debugLog(beforeStoreLog);
-      // #endregion
       await secureStorage.setAccessToken(data.token);
       // ✅ Forcer l'intercepteur à relire le token à la prochaine requête (évite cache null)
       invalidateInterceptorCache();
-      // #region agent log
       const afterStoreLog = {
         location: "api.ts:loginDriver",
         message: "after setAccessToken",
@@ -1084,7 +1074,6 @@ export const loginDriver = async (
         hypothesisId: "D",
       };
       debugLog(afterStoreLog);
-      // #endregion
     }
     
     // ✅ Stocker le refresh_token dans SecureStore (sécurisé)
@@ -1243,7 +1232,6 @@ export interface SwitchToEnterpriseResponse {
 }
 
 export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseResponse> => {
-  // #region agent log
   const logData = {
     location: "api.ts:switchToEnterpriseToken",
     message: "switchToEnterpriseToken entry",
@@ -1258,12 +1246,10 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
   };
   log.debug("switchToEnterpriseToken entry", logData);
   debugLog(logData);
-  // #endregion
   try {
     const response = await api.post<SwitchToEnterpriseResponse>(
       "/driver/me/switch-to-enterprise"
     );
-    // #region agent log
     const successLogData = {
       location: "api.ts:switchToEnterpriseToken",
       message: "switchToEnterpriseToken success",
@@ -1280,10 +1266,8 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
     };
     log.success("switchToEnterpriseToken success", successLogData);
     debugLog(successLogData);
-    // #endregion
     return response.data;
   } catch (error: any) {
-    // #region agent log
     const errorLogData = {
       location: "api.ts:switchToEnterpriseToken",
       message: "switchToEnterpriseToken error",
@@ -1302,7 +1286,6 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
     };
     log.error("switchToEnterpriseToken error", errorLogData);
     debugLog(errorLogData);
-    // #endregion
     throw error;
   }
 };
@@ -1376,6 +1359,29 @@ export const updateDriverLocationLegacy = async (
   latitude: number,
   longitude: number
 ) => updateDriverLocation({ latitude, longitude });
+
+export interface DriverRouteResponse {
+  polyline_encoded?: string;
+  coordinates?: Array<{ lat: number; lon: number }>;
+  distance_meters: number;
+  duration_seconds: number;
+}
+
+export const getDriverRoute = async (
+  originLat: number,
+  originLon: number,
+  destLat: number,
+  destLon: number
+): Promise<DriverRouteResponse> => {
+  const params = new URLSearchParams({
+    origin_lat: String(originLat),
+    origin_lon: String(originLon),
+    dest_lat: String(destLat),
+    dest_lon: String(destLon),
+  });
+  const res = await api.get<DriverRouteResponse>(`/driver/me/route?${params}`);
+  return res.data;
+};
 
 // ========== Bookings ==========
 export type Booking = {

@@ -14,6 +14,7 @@ type DriverMarker = {
   name: string;
   latitude: number;
   longitude: number;
+  status?: string;
   updatedAt?: string;
 };
 
@@ -21,13 +22,21 @@ type DriverLocationEvent = {
   driver_id?: number | string;
   first_name?: string | null;
   last_name?: string | null;
-  // ✅ Accepter les deux formats pour compatibilité
   latitude?: number | string | null;
   lat?: number | string | null;
   longitude?: number | string | null;
   lon?: number | string | null;
   timestamp?: string | null;
   ts?: string | null;
+};
+
+/** Payload canonique : driver_live_state_update (source principale) */
+type DriverLiveStateEvent = DriverLocationEvent & {
+  status?: string | null;
+  mission_status?: string | null;
+  client_short?: string | null;
+  presence_status?: string | null;
+  location_status?: string | null;
 };
 
 const toNumber = (value: unknown): number | null => {
@@ -47,41 +56,40 @@ export const useEnterpriseDriverTracking = () => {
   const socketRef = useRef<Socket | null>(null);
   const httpPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHttpFetchAtRef = useRef(0);
+  const lastLiveStateRef = useRef<Record<string, { status?: string }>>({});
 
   const fetchLocationsViaHTTP = useCallback(async () => {
-    const companyId = enterpriseSession?.company?.id;
     const token = enterpriseSession?.token;
-    if (!companyId || !token) return;
+    if (!token) return;
 
     try {
-      const url = `/driver/company/${companyId}/live-locations`;
+      const url = "/companies/me/drivers/locations";
       log.info("fetching live locations", { url });
       lastHttpFetchAtRef.current = Date.now();
 
       const response = await enterpriseStandardApi.get<{
-        items: Array<{
+        locations: Array<{
           driver_id: number;
           first_name?: string | null;
           last_name?: string | null;
-          // ✅ Accepter les deux formats pour compatibilité
           latitude?: number | null;
           lat?: number | null;
           longitude?: number | null;
           lon?: number | null;
           timestamp?: string | null;
           ts?: string | null;
+          status?: string | null;
         }>;
       }>(url);
 
       log.info("live locations response received", { status: response.status });
-      const items = response.data?.items || [];
+      const items = response.data?.locations || [];
       log.info("live locations items count", { count: items.length });
       const newMarkers: DriverMarker[] = items
         .map((item) => {
-          // ✅ FIX: Accepter les deux formats (lat/latitude, lon/longitude)
-          // Backend retourne "lat"/"lon", pas "latitude"/"longitude"
-          const latitude = toNumber(item.latitude ?? item.lat);
-          const longitude = toNumber(item.longitude ?? item.lon);
+          // Compat lat/latitude, lon/longitude, timestamp/ts
+          const latitude = toNumber(item.lat ?? item.latitude);
+          const longitude = toNumber(item.lon ?? item.longitude);
           if (latitude === null || longitude === null) return null;
 
           const nameParts = [item.first_name, item.last_name]
@@ -97,7 +105,8 @@ export const useEnterpriseDriverTracking = () => {
             name: markerName,
             latitude,
             longitude,
-            updatedAt: item.timestamp ?? undefined,
+            status: item.status ?? undefined,
+            updatedAt: item.timestamp ?? item.ts ?? undefined,
           } as DriverMarker;
         })
         .filter((marker): marker is DriverMarker => marker !== null);
@@ -129,7 +138,7 @@ export const useEnterpriseDriverTracking = () => {
         log.error("http live locations fetch failed", { error });
       }
     }
-  }, [enterpriseSession?.company?.id, enterpriseSession?.token]);
+  }, [enterpriseSession?.token]);
 
   const fetchLocationsViaHTTPWithThrottle = useCallback(
     (minDelayMs = 8000) => {
@@ -161,14 +170,47 @@ export const useEnterpriseDriverTracking = () => {
     let isActive = true;
     let socketInstance: Socket | null = null;
 
-    const handleDriverLocation = (payload: DriverLocationEvent) => {
+    const updateDriverFromLiveState = (payload: DriverLiveStateEvent) => {
       if (!isActive || !payload) return;
       const driverIdRaw = payload.driver_id;
       if (driverIdRaw === undefined || driverIdRaw === null) return;
       const driverId = String(driverIdRaw);
 
-      // ✅ FIX: Accepter les deux formats (lat/latitude, lon/longitude)
-      // Backend émet "lat"/"lon" via Socket.IO, pas "latitude"/"longitude"
+      const latitude = toNumber(payload.latitude ?? payload.lat);
+      const longitude = toNumber(payload.longitude ?? payload.lon);
+      if (latitude === null || longitude === null) return;
+
+      const nameParts = [payload.first_name, payload.last_name]
+        .filter(Boolean)
+        .map((part) => String(part));
+      const markerName =
+        nameParts.length > 0 ? nameParts.join(" ") : `Chauffeur ${driverId}`;
+
+      const status = payload.status ?? undefined;
+      lastLiveStateRef.current[driverId] = { status };
+
+      setMarkers((prev) => {
+        const others = prev.filter((marker) => marker.id !== driverId);
+        return [
+          ...others,
+          {
+            id: driverId,
+            name: markerName,
+            latitude,
+            longitude,
+            status,
+            updatedAt: payload.timestamp ?? payload.ts ?? undefined,
+          },
+        ];
+      });
+    };
+
+    const updateDriverPosition = (payload: DriverLocationEvent) => {
+      if (!isActive || !payload) return;
+      const driverIdRaw = payload.driver_id;
+      if (driverIdRaw === undefined || driverIdRaw === null) return;
+      const driverId = String(driverIdRaw);
+
       const latitude = toNumber(payload.latitude ?? payload.lat);
       const longitude = toNumber(payload.longitude ?? payload.lon);
       if (latitude === null || longitude === null) return;
@@ -180,6 +222,8 @@ export const useEnterpriseDriverTracking = () => {
         nameParts.length > 0 ? nameParts.join(" ") : `Chauffeur ${driverId}`;
 
       setMarkers((prev) => {
+        const existing = prev.find((m) => m.id === driverId);
+        const status = existing?.status ?? lastLiveStateRef.current[driverId]?.status;
         const others = prev.filter((marker) => marker.id !== driverId);
         return [
           ...others,
@@ -188,18 +232,33 @@ export const useEnterpriseDriverTracking = () => {
             name: markerName,
             latitude,
             longitude,
-            updatedAt: payload.timestamp ?? undefined,
+            status,
+            updatedAt: payload.timestamp ?? payload.ts ?? undefined,
           },
         ];
       });
+    };
+
+    const handleLiveStateUpdate = (payload: DriverLiveStateEvent) => {
+      if (payload.status !== undefined && payload.status !== null) {
+        updateDriverFromLiveState(payload);
+      } else {
+        updateDriverPosition(payload);
+      }
+    };
+
+    const handleLocationUpdate = (payload: DriverLocationEvent) => {
+      updateDriverPosition(payload);
     };
 
     (async () => {
       try {
         const s = await connectSocket(token, "enterprise");
         if (!isActive) {
-          // Composant démonté pendant le connect — nettoyer immédiatement
-          if (s) s.off("driver_location_update", handleDriverLocation);
+          if (s) {
+            s.off("driver_live_state_update", handleLiveStateUpdate);
+            s.off("driver_location_update", handleLocationUpdate);
+          }
           return;
         }
         if (!s) {
@@ -214,8 +273,10 @@ export const useEnterpriseDriverTracking = () => {
         socketInstance = s;
         socketRef.current = s;
 
-        s.off("driver_location_update", handleDriverLocation);
-        s.on("driver_location_update", handleDriverLocation);
+        s.off("driver_live_state_update", handleLiveStateUpdate);
+        s.off("driver_location_update", handleLocationUpdate);
+        s.on("driver_live_state_update", handleLiveStateUpdate);
+        s.on("driver_location_update", handleLocationUpdate);
         s.emit("get_driver_locations");
 
         httpPollIntervalRef.current = setInterval(() => {
@@ -234,10 +295,12 @@ export const useEnterpriseDriverTracking = () => {
     return () => {
       isActive = false;
       if (socketInstance) {
-        socketInstance.off("driver_location_update", handleDriverLocation);
+        socketInstance.off("driver_live_state_update", handleLiveStateUpdate);
+        socketInstance.off("driver_location_update", handleLocationUpdate);
       }
       if (socketRef.current) {
-        socketRef.current.off("driver_location_update", handleDriverLocation);
+        socketRef.current.off("driver_live_state_update", handleLiveStateUpdate);
+        socketRef.current.off("driver_location_update", handleLocationUpdate);
         socketRef.current = null;
       }
       if (httpPollIntervalRef.current) {
