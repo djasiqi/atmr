@@ -267,6 +267,14 @@ class PartnerInvoiceService:
             executing_company_id
         )
 
+        # Délai de paiement: priorité aux paramètres de l'entreprise exécutante
+        # (cohérent avec la section "Paramètres de paiement" côté settings).
+        payment_terms_days = int(
+            billing_settings.payment_terms_days
+            if billing_settings and billing_settings.payment_terms_days
+            else (partnership.payment_terms_days or 30)
+        )
+
         # Calculer la TVA
         vat_rate = Decimal(str(billing_settings.vat_rate or 0))
         vat_applicable = billing_settings.vat_applicable and vat_rate > Decimal("0")
@@ -310,7 +318,7 @@ class PartnerInvoiceService:
         partner_invoice.currency = transfers[0].currency if transfers else "CHF"
         partner_invoice.status = PartnerInvoiceStatus.DRAFT
         partner_invoice.issued_at = now
-        partner_invoice.due_date = now + timedelta(days=partnership.payment_terms_days)
+        partner_invoice.due_date = now + timedelta(days=payment_terms_days)
 
         db.session.add(partner_invoice)
         db.session.flush()

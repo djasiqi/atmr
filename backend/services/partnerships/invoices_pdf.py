@@ -233,11 +233,12 @@ def generate_partner_invoice_pdf_content(
     ).first()
 
     # === CONSTRUIRE LE FOOTER (identique à pdf.py) ===
-    payment_terms_days = 30
-    if partnership and partnership.payment_terms_days:
-        payment_terms_days = partnership.payment_terms_days
-    elif billing_settings and billing_settings.payment_terms_days:
-        payment_terms_days = int(billing_settings.payment_terms_days)
+    # Délai de paiement: priorité aux paramètres de l'entreprise exécutante.
+    payment_terms_days = int(
+        billing_settings.payment_terms_days
+        if billing_settings and billing_settings.payment_terms_days
+        else (partnership.payment_terms_days if partnership and partnership.payment_terms_days else 30)
+    )
 
     overdue_fee = 5.00
     if billing_settings and billing_settings.overdue_fee:

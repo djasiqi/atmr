@@ -4,14 +4,12 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
       "channel": "development",
       "env": {
         "APP_VARIANT": "dev",
         "EXPO_NO_UPDATES": "1",
-        "EXPO_PUBLIC_USE_PROD_IN_DEV": "0",
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.146:5000",
-        "EXPO_PUBLIC_SOCKET_URL": "http://192.168.1.146:5000",
-        "EXPO_PUBLIC_BACKEND_PORT": "5000"
+        "EXPO_PUBLIC_USE_PROD_IN_DEV": "0"
       },
       "android": {
         "buildType": "apk",
@@ -24,12 +22,10 @@
     },
     "internal": {
       "distribution": "internal",
-      "environment": "production",
+      "environment": "preview",
       "channel": "preview",
       "env": {
-        "APP_VARIANT": "prod",
-        "EXPO_PUBLIC_API_URL": "https://api.lirie.ch",
-        "EXPO_PUBLIC_SOCKET_URL": "https://api.lirie.ch"
+        "APP_VARIANT": "prod"
       },
       "android": {
         "buildType": "apk"
@@ -42,11 +38,9 @@
       "distribution": "store",
       "environment": "production",
       "channel": "production",
-      "prebuildCommand": "node ./scripts/check-build-ready.js",
+      "prebuildCommand": "node ./scripts/check-build-ready.js --",
       "env": {
-        "APP_VARIANT": "prod",
-        "EXPO_PUBLIC_API_URL": "https://api.lirie.ch",
-        "EXPO_PUBLIC_SOCKET_URL": "https://api.lirie.ch"
+        "APP_VARIANT": "prod"
       },
       "android": {
         "buildType": "app-bundle",

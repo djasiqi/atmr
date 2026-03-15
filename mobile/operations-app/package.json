@@ -1,7 +1,7 @@
 {
   "name": "liri-operations",
   "main": "index.js",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "scripts": {
     "start": "cross-env NODE_OPTIONS=--max-old-space-size=8192 node scripts/start-tunnel.js",
     "start:clear": "cross-env NODE_OPTIONS=--max-old-space-size=8192 node scripts/start-tunnel.js --clear",
