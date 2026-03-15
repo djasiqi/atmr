@@ -14,19 +14,12 @@ from typing import Any, Protocol
 logger = logging.getLogger(__name__)
 
 
-class BookingLike(Protocol):
-    """Protocole pour un booking avec méthode serialize."""
-
-    id: int
-    serialize: dict[str, Any]
-
-
 class BookingRepoPort(Protocol):
     """Port pour récupérer un booking."""
 
     def find_model_by_id_with_eager_loading(
         self, booking_id: int
-    ) -> BookingLike | None:
+    ) -> Any | None:
         """Récupère un booking avec eager loading pour éviter N+1."""
         ...
 
@@ -54,7 +47,7 @@ class GetBookingOutput:
     """
 
     found: bool
-    booking: BookingLike | None = None
+    booking: Any | None = None
     error: dict[str, str] | None = None
     status_code: int | None = None
 
