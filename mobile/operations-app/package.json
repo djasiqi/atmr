@@ -11,7 +11,7 @@
     "start:localhost": "cross-env NODE_OPTIONS=--max-old-space-size=8192 expo start --host localhost --clear",
     "reset-project": "node ./scripts/reset-project.js",
     "prebuild": "expo prebuild --clean",
-    "eas-build-pre-install": "node ./scripts/write-google-services.js",
+    "eas-build-pre-install": "node ./scripts/write-google-services.js && node ./scripts/eas-preinstall-check.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "cross-env NODE_OPTIONS=--max-old-space-size=12288 expo start --web",

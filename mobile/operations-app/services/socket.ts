@@ -181,6 +181,26 @@ const getSocketOrigin = (): string => {
   // PRIORITÉ 1: Variable d'environnement dédiée
   const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
   if (socketUrl) {
+    if (!isProduction) {
+      // Guardrail dev: if API and Socket hosts diverge, prefer API host to avoid endless reconnect loop.
+      try {
+        const apiUrl = new URL(baseURL);
+        const socketParsed = new URL(socketUrl);
+        if (apiUrl.host && socketParsed.host && apiUrl.host !== socketParsed.host) {
+          const fallbackOrigin = `${apiUrl.protocol}//${apiUrl.host}`.replace(/\/+$/, "");
+          log.warn("socket url host mismatch in dev, fallback to api host", {
+            socketHost: socketParsed.host,
+            apiHost: apiUrl.host,
+            fallbackOrigin,
+          });
+          return fallbackOrigin;
+        }
+      } catch (e) {
+        log.warn("socket url parse mismatch guard skipped", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
     // Validation en production : doit être HTTPS
     if (isProduction && !socketUrl.startsWith("https://")) {
       log.error("invalid socket url in production", { socketUrl });
@@ -325,7 +345,9 @@ function buildOptions(
     reconnectionDelayMax: 30000 + jitterMax,
     timeout: 20000,
     forceNew: false,
-    transports: ["websocket", "polling"],
+    // Start with polling, then upgrade to websocket when possible.
+    // This avoids immediate TransportError on networks/proxies that block websocket handshake.
+    transports: ["polling", "websocket"],
     upgrade: true,
     rememberUpgrade: true,
     secure: IS_SECURE,
@@ -972,7 +994,17 @@ export async function connectSocket(
                            errorMsg.includes("Trop de tentatives") ||
                            errorMsg.includes("retry_after");
 
-        log.error("connect error", { error: errorMsg, is_rate_limit: isRateLimit });
+        const isTransportError =
+          errorMsg.toLowerCase().includes("websocket error") ||
+          errorMsg.toLowerCase().includes("transport");
+        if (isTransportError) {
+          log.warn("connect transport issue", {
+            error: errorMsg,
+            is_rate_limit: isRateLimit,
+          });
+        } else {
+          log.error("connect error", { error: errorMsg, is_rate_limit: isRateLimit });
+        }
 
         // ✅ Si rate limit, désactiver reconnexion automatique pour éviter boucle
         if (isRateLimit && socket && socket.io) {

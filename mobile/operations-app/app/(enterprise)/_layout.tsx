@@ -92,7 +92,13 @@ export default function EnterpriseLayout() {
             }}
           />
           {/* Routes complémentaires (détails, écrans modaux) masquées de la barre */}
-          <Tabs.Screen name="ride-details" options={{ href: null }} />
+          <Tabs.Screen
+            name="ride-details"
+            options={{
+              tabBarButton: () => null,
+              title: "Détails course",
+            }}
+          />
         </Tabs>
       </View>
     </EnterpriseProvider>

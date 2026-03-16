@@ -38,7 +38,6 @@
       "distribution": "store",
       "environment": "production",
       "channel": "production",
-      "prebuildCommand": "node ./scripts/check-build-ready.js --",
       "env": {
         "APP_VARIANT": "prod"
       },
