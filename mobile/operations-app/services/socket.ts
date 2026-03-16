@@ -248,13 +248,22 @@ const getSocketOrigin = (): string => {
   throw new Error("Impossible de résoudre l'URL socket");
 };
 
-let SOCKET_ORIGIN = getSocketOrigin();
-// ✅ Normalisation finale : s'assurer qu'il n'y a pas de slash final
-// Utiliser une regex plus robuste pour supprimer tous les slashes finaux
-SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
-// ✅ Double vérification : s'assurer qu'il n'y a pas de slash final après trim
-if (SOCKET_ORIGIN.endsWith("/")) {
-  SOCKET_ORIGIN = SOCKET_ORIGIN.slice(0, -1);
+let SOCKET_ORIGIN = "";
+try {
+  SOCKET_ORIGIN = getSocketOrigin();
+  // ✅ Normalisation finale : s'assurer qu'il n'y a pas de slash final
+  // Utiliser une regex plus robuste pour supprimer tous les slashes finaux
+  SOCKET_ORIGIN = SOCKET_ORIGIN.replace(/\/+$/, "").trim();
+  // ✅ Double vérification : s'assurer qu'il n'y a pas de slash final après trim
+  if (SOCKET_ORIGIN.endsWith("/")) {
+    SOCKET_ORIGIN = SOCKET_ORIGIN.slice(0, -1);
+  }
+} catch (error) {
+  // Fail-safe bootstrap: ne jamais faire crasher l'app au chargement.
+  SOCKET_ORIGIN = "";
+  log.error("socket origin resolution failed", {
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 // ✅ Détection Android emulator
@@ -328,6 +337,15 @@ export async function connectSocket(
   token: string,
   role: SocketRole = "driver"
 ): Promise<Socket | null> {
+  if (!SOCKET_ORIGIN) {
+    log.error("socket disabled: invalid or missing socket origin", {
+      role,
+      appVariant: String(
+        Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod"
+      ),
+    });
+    return null;
+  }
   // ✅ Feature flag : désactiver Socket.IO si EXPO_PUBLIC_SOCKET_ENABLED=false
   const socketEnabled = process.env.EXPO_PUBLIC_SOCKET_ENABLED !== 'false';
   if (!socketEnabled) {

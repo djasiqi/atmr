@@ -61,6 +61,7 @@ const getDevHost = (): string => {
 
 const ENV_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT;
 const PORT = ENV_PORT || expoExtra.backendPort || "5000";
+const PROD_API_FALLBACK = "https://api.lirie.ch";
 
 // En développement, forcer l'utilisation de getDevHost() pour éviter de pointer vers la production
 // Surtout important sur le web où on doit utiliser l'hôte local
@@ -109,16 +110,19 @@ const isDevelopment = () => {
   return false;
 };
 
-const validateProdApiUrl = (value: unknown): string => {
+const validateProdApiUrl = (value: unknown): string | null => {
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error("EXPO_PUBLIC_API_URL is required in production");
+    log.error("invalid prod api url: missing EXPO_PUBLIC_API_URL", {});
+    return null;
   }
   const normalized = value.trim().replace(/\/$/, "");
   if (!normalized.startsWith("https://")) {
-    throw new Error("EXPO_PUBLIC_API_URL must be HTTPS in production");
+    log.error("invalid prod api url: must be https", { value: normalized });
+    return null;
   }
   if (normalized.includes("localhost") || normalized.includes("127.0.0.1")) {
-    throw new Error("EXPO_PUBLIC_API_URL must not point to localhost in production");
+    log.error("invalid prod api url: localhost forbidden", { value: normalized });
+    return null;
   }
   return normalized;
 };
@@ -130,7 +134,7 @@ const getBaseURL = () => {
   if (isDev) {
     // Switch explicite : forcer prod en dev (téléphone réel, tunnel, backend local inaccessible)
     if (process.env.EXPO_PUBLIC_USE_PROD_IN_DEV === '1') {
-      return validateProdApiUrl(PROD_API_URL);
+      return validateProdApiUrl(PROD_API_URL) ?? PROD_API_FALLBACK;
     }
     // En développement, sur le web, toujours utiliser localhost (ignorer DEV_API_URL si défini à la prod)
     if (Platform.OS === 'web') {
@@ -144,7 +148,7 @@ const getBaseURL = () => {
   }
   
   // En production, utiliser PROD_API_URL
-  return validateProdApiUrl(PROD_API_URL);
+  return validateProdApiUrl(PROD_API_URL) ?? PROD_API_FALLBACK;
 };
 
 export const baseURL = `${getBaseURL().replace(/\/$/, "")}/api/v1`;
