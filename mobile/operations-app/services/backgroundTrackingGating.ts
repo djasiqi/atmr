@@ -10,6 +10,7 @@ export type PermissionStatus = "granted" | "denied" | "undetermined";
 export interface BgTrackingInputs {
   isAuthenticated: boolean;
   role: "driver" | "enterprise";
+  platform?: "ios" | "android" | "web";
   hasActiveMission: boolean;
   fgPermission: PermissionStatus;
   bgPermission: PermissionStatus;
@@ -45,12 +46,17 @@ export function deriveStartContract(
   inputs: BgTrackingInputs,
   notAlreadyStarted: boolean
 ): StartContract {
+  const requiresBgPermission = inputs.platform === "ios";
   return {
     isAuthenticated: inputs.isAuthenticated,
     roleIsDriver: inputs.role === "driver",
     hasActiveMission: inputs.hasActiveMission,
     fgPermissionGranted: inputs.fgPermission === "granted",
-    bgPermissionGranted: inputs.bgPermission === "granted",
+    // Android: foreground service location can continue with foreground permission.
+    // iOS: requires background permission for true background updates.
+    bgPermissionGranted: requiresBgPermission
+      ? inputs.bgPermission === "granted"
+      : true,
     killSwitchAllowed: !inputs.killSwitchEnabled,
     notAlreadyStarted,
   };
@@ -102,7 +108,8 @@ export interface StopContract {
  */
 export function deriveStopContract(inputs: BgTrackingInputs): StopContract {
   const fgOk = inputs.fgPermission === "granted";
-  const bgOk = inputs.bgPermission === "granted";
+  const requiresBgPermission = inputs.platform === "ios";
+  const bgOk = requiresBgPermission ? inputs.bgPermission === "granted" : true;
   return {
     missionEnded: !inputs.hasActiveMission,
     logout: !inputs.isAuthenticated,
@@ -136,11 +143,12 @@ export function satisfiesStopContract(contract: StopContract): boolean {
  * Règle D : kill switch priorité absolue.
  */
 export function shouldRunBackgroundTracking(inputs: BgTrackingInputs): boolean {
+  const requiresBgPermission = inputs.platform === "ios";
   if (inputs.killSwitchEnabled) return false;
   if (inputs.role !== "driver") return false;
   if (!inputs.isAuthenticated) return false;
   if (!inputs.hasActiveMission) return false;
   if (inputs.fgPermission !== "granted") return false;
-  if (inputs.bgPermission !== "granted") return false;
+  if (requiresBgPermission && inputs.bgPermission !== "granted") return false;
   return true;
 }

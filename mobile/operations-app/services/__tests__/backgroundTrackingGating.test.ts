@@ -15,6 +15,7 @@ function inputs(overrides: Partial<BgTrackingInputs> = {}): BgTrackingInputs {
   return {
     isAuthenticated: true,
     role: "driver",
+    platform: "android",
     hasActiveMission: true,
     fgPermission: "granted",
     bgPermission: "granted",
@@ -49,9 +50,18 @@ describe("shouldRunBackgroundTracking", () => {
     expect(shouldRunBackgroundTracking(inputs({ fgPermission: "undetermined" }))).toBe(false);
   });
 
-  it("returns false when background permission not granted", () => {
-    expect(shouldRunBackgroundTracking(inputs({ bgPermission: "denied" }))).toBe(false);
-    expect(shouldRunBackgroundTracking(inputs({ bgPermission: "undetermined" }))).toBe(false);
+  it("returns true on android when background permission not granted", () => {
+    expect(shouldRunBackgroundTracking(inputs({ bgPermission: "denied" }))).toBe(true);
+    expect(shouldRunBackgroundTracking(inputs({ bgPermission: "undetermined" }))).toBe(true);
+  });
+
+  it("returns false on ios when background permission not granted", () => {
+    expect(
+      shouldRunBackgroundTracking(inputs({ platform: "ios", bgPermission: "denied" }))
+    ).toBe(false);
+    expect(
+      shouldRunBackgroundTracking(inputs({ platform: "ios", bgPermission: "undetermined" }))
+    ).toBe(false);
   });
 });
 

@@ -3,6 +3,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Slot, useSegments, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import * as SplashScreen from "expo-splash-screen";
+import * as Application from "expo-application";
+import * as Updates from "expo-updates";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import * as Notifications from "expo-notifications";
 import {
@@ -55,7 +57,11 @@ import {
 } from "@/services/locationTracker";
 import { MissionStateManager } from "@/services/missionState";
 import { validateDeepLink } from "@/services/deepLinkHandler";
-import { initNetworkStateCache } from "@/services/networkState";
+import {
+  initNetworkStateCache,
+  getNetworkStateSnapshot,
+  subscribeToNetworkState,
+} from "@/services/networkState";
 import { getSyncEngine } from "@/services/syncEngine";
 import { initLogContext } from "@/services/logContext";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
@@ -65,6 +71,7 @@ import { InAppNotificationToast } from "@/components/common/InAppNotificationToa
 import { BatteryOptimizationGuide, BATTERY_GUIDE_DISMISSED_KEY } from "@/components/common/BatteryOptimizationGuide";
 import { checkBatteryOptimization } from "@/services/batteryOptimization";
 import { getLogger } from "@/utils/logger";
+import { getConnectionState, subscribeSocketStatus } from "@/services/socket";
 
 const log = getLogger("App");
 
@@ -75,8 +82,7 @@ const SYNC_ENGINE_STOP_DELAY_MS = 400;
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
 // P0.2.C — Init cache réseau pour logs (corrélation logout ↔ offline)
-// ✅ Désactivé temporairement — audit bootstrap Phase 4
-// initNetworkStateCache();
+initNetworkStateCache();
 // P2.2 — Init log context (device_id hash pour corrélation multi-tenant)
 // initLogContext();
 // Version check - gestion des mises à jour obligatoires/recommandées
@@ -108,20 +114,85 @@ if (Platform.OS !== "web" && !__DEV__) {
 
 // Notifee onBackgroundEvent est enregistré dans index.js (avant expo-router/entry).
 
-// ✅ Désactivé temporairement — audit bootstrap Phase 5
-// Sentry.init({
-//   dsn: "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104",
-//   sendDefaultPii: true,
-//   tracesSampleRate: 1.0,
-//   profilesSampleRate: 1.0,
-//   beforeSend(event, hint) {
-//     const ex = hint?.originalException as Error | undefined;
-//     const msg = ex?.message ?? event?.message ?? "";
-//     if (typeof msg === "string" && msg.includes("Unable to activate keep awake")) return null;
-//     if (typeof msg === "string" && msg.includes("Unable to deactivate keep awake")) return null;
-//     return event;
-//   },
-// });
+const SENTRY_DSN =
+  process.env.EXPO_PUBLIC_SENTRY_DSN ||
+  "https://500ea836dce2e802b27109d857cb3534@o4509736814772224.ingest.de.sentry.io/4509736867201104";
+const SENTRY_APP_ID_PROD = "ch.liri.operations";
+const SENTRY_IS_PROD_RUNTIME =
+  !__DEV__ && Application.applicationId === SENTRY_APP_ID_PROD;
+const SENTRY_SENSITIVE_KEY_RE =
+  /(authorization|token|password|cookie|secret|api.?key|refresh|session)/i;
+
+function redactSensitiveValue(value: unknown): unknown {
+  if (value == null) return value;
+  if (typeof value === "string") {
+    if (value.length <= 12) return "***";
+    return `${value.slice(0, 4)}...${value.slice(-4)}`;
+  }
+  if (Array.isArray(value)) return value.map((v) => redactSensitiveValue(v));
+  if (typeof value !== "object") return value;
+  const output: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (SENTRY_SENSITIVE_KEY_RE.test(key)) {
+      output[key] = typeof val === "string" ? redactSensitiveValue(val) : "***";
+      continue;
+    }
+    output[key] = redactSensitiveValue(val);
+  }
+  return output;
+}
+
+function sanitizeSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  const cloned: Sentry.ErrorEvent = {
+    ...event,
+    request: event.request
+      ? (redactSensitiveValue(event.request) as Record<string, unknown>)
+      : event.request,
+    contexts: event.contexts
+      ? (redactSensitiveValue(event.contexts) as any)
+      : event.contexts,
+    extra: event.extra
+      ? (redactSensitiveValue(event.extra) as Record<string, unknown>)
+      : event.extra,
+    user: event.user ? (redactSensitiveValue(event.user) as Sentry.User) : event.user,
+    breadcrumbs: event.breadcrumbs?.map((b) => ({
+      ...b,
+      data: b.data
+        ? (redactSensitiveValue(b.data) as Record<string, unknown>)
+        : b.data,
+    })),
+  };
+  return cloned;
+}
+
+Sentry.init({
+  dsn: SENTRY_DSN,
+  enabled: SENTRY_IS_PROD_RUNTIME,
+  sendDefaultPii: false,
+  tracesSampleRate: 0.2,
+  profilesSampleRate: 0,
+  beforeBreadcrumb(breadcrumb) {
+    if (breadcrumb?.data) {
+      return {
+        ...breadcrumb,
+        data: redactSensitiveValue(breadcrumb.data) as Record<string, unknown>,
+      };
+    }
+    return breadcrumb;
+  },
+  beforeSend(event, hint) {
+    const ex = hint?.originalException as Error | undefined;
+    const msg = ex?.message ?? event?.message ?? "";
+    if (
+      typeof msg === "string" &&
+      (msg.includes("Unable to activate keep awake") ||
+        msg.includes("Unable to deactivate keep awake"))
+    ) {
+      return null;
+    }
+    return sanitizeSentryEvent(event);
+  },
+});
 
 export default function RootLayout() {
   return (
@@ -154,6 +225,61 @@ function RootNav() {
   const { status: updateStatus, isLoading: versionLoading } = useVersion();
 
   const splashHiddenRef = useRef(false);
+
+  useEffect(() => {
+    if (!SENTRY_IS_PROD_RUNTIME) return;
+    const appVersion = Constants.expoConfig?.version ?? "unknown";
+    const runtimeVersion =
+      String(Updates.runtimeVersion ?? Constants.expoConfig?.runtimeVersion ?? "unknown");
+    Sentry.setTag("app_version", appVersion);
+    Sentry.setTag("runtime_version", runtimeVersion);
+    Sentry.setTag("platform", Platform.OS);
+    Sentry.setTag("native_app_id", Application.applicationId ?? "unknown");
+  }, []);
+
+  useEffect(() => {
+    if (!SENTRY_IS_PROD_RUNTIME) return;
+    Sentry.setContext("auth_state", {
+      mode,
+      is_authenticated: isAuthenticated,
+      is_driver_authenticated: isDriverAuthenticated,
+      is_enterprise_authenticated: isEnterpriseAuthenticated,
+    });
+  }, [mode, isAuthenticated, isDriverAuthenticated, isEnterpriseAuthenticated]);
+
+  useEffect(() => {
+    if (!SENTRY_IS_PROD_RUNTIME) return;
+    const applyState = () => {
+      const net = getNetworkStateSnapshot();
+      Sentry.setContext("network_state", {
+        isConnected: net?.isConnected ?? null,
+        isInternetReachable: net?.isInternetReachable ?? null,
+        type: net?.type ?? "unknown",
+      });
+    };
+    applyState();
+    const unsubscribe = subscribeToNetworkState(applyState);
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!SENTRY_IS_PROD_RUNTIME) return;
+    const applySocket = () => {
+      Sentry.setContext("socket_state", {
+        connection_state: getConnectionState(),
+      });
+    };
+    applySocket();
+    const unsubscribe = subscribeSocketStatus((payload) => {
+      Sentry.setContext("socket_state", {
+        connection_state: payload.connectionState,
+        reconnect_exhausted: payload.reconnectExhausted,
+        auth_recovery_exhausted: payload.authRecoveryExhausted,
+        role: payload.role,
+      });
+    });
+    return unsubscribe;
+  }, []);
   useEffect(() => {
     if (splashHiddenRef.current) return;
     if (loading || versionLoading) return;
@@ -341,7 +467,6 @@ function RootNav() {
     if (pushInitForDriverRef.current === currentUserId) {
       return;
     }
-    pushInitForDriverRef.current = currentUserId;
 
     // ✅ Initialiser le token CSRF au démarrage (pour les requêtes POST/PUT/DELETE/PATCH)
     initializeCSRFToken();
@@ -357,6 +482,7 @@ function RootNav() {
     registeringRef.current = true;
 
     let cancelled = false;
+    let registrationCompleted = false;
 
     (async () => {
       try {
@@ -392,12 +518,9 @@ function RootNav() {
         if (!fcmToken) {
           log.info("FCM token unavailable, trying Expo fallback");
           const tokens = await initNotifications({ withExpoToken: true, maxRetries: 2 });
-          if (cancelled) return;
           tokenToUse = (tokens as any)?.expo ?? (tokens as any)?.device ?? null;
           provider = "expo";
         }
-
-        if (cancelled) return;
 
         if (!tokenToUse) {
           const isExpoGo =
@@ -431,6 +554,8 @@ function RootNav() {
             provider,
           });
           await AsyncStorage.setItem(key, tokenToUse);
+          pushInitForDriverRef.current = currentUserId;
+          registrationCompleted = true;
           log.success("push token registered on backend", { response, provider });
         } catch (e: any) {
           log.error("push token registration failed", {
@@ -456,6 +581,10 @@ function RootNav() {
 
     return () => {
       cancelled = true;
+      if (!registrationCompleted && pushInitForDriverRef.current === currentUserId) {
+        // Sécurité: si un état concurrent invalide un run en cours, garder la possibilité de retry.
+        pushInitForDriverRef.current = null;
+      }
     };
   }, [driver, isDriverAuthenticated, loading, versionLoading]);
 
@@ -653,17 +782,29 @@ function RootNav() {
     if (Platform.OS === "web") return;
     if (mode !== "driver") return;
     const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
-      if (state !== "active") return;
-      InteractionManager.runAfterInteractions(() => {
-        setTimeout(async () => {
-          const inputs = await buildBgTrackingInputs({
-            isAuthenticated: !!isDriverAuthenticated,
-            role: "driver",
-            hasActiveMission: MissionStateManager.isActive(),
-          });
-          await reconcileBackgroundTrackingState("app_resume", inputs);
-        }, 150);
-      });
+      if (state === "active") {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(async () => {
+            const inputs = await buildBgTrackingInputs({
+              isAuthenticated: !!isDriverAuthenticated,
+              role: "driver",
+              hasActiveMission: MissionStateManager.isActive(),
+            });
+            await reconcileBackgroundTrackingState("app_resume", inputs);
+          }, 150);
+        });
+        return;
+      }
+      // Quand l'utilisateur ouvre Google Maps (app en background),
+      // forcer une réconciliation immédiate pour garantir le démarrage du task natif.
+      setTimeout(async () => {
+        const inputs = await buildBgTrackingInputs({
+          isAuthenticated: !!isDriverAuthenticated,
+          role: "driver",
+          hasActiveMission: MissionStateManager.isActive(),
+        });
+        await reconcileBackgroundTrackingState("app_background", inputs);
+      }, 0);
     });
     return () => sub.remove();
   }, [mode, isDriverAuthenticated]);

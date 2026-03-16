@@ -28,6 +28,7 @@ export async function registerForPushAsync() {
   if (finalStatus !== 'granted') return null;
 
   const token = await Notifications.getExpoPushTokenAsync();
-  log.info("Expo push token", { token: token.data });
+  const preview = token?.data ? `${token.data.slice(0, 6)}...${token.data.slice(-4)}` : "n/a";
+  log.info("Expo push token generated", { token_preview: preview });
   return token.data;
 }

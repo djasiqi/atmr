@@ -296,6 +296,7 @@ export async function buildBgTrackingInputs(params: {
   const killSwitchEnabled = await isKillSwitchEnabled();
   return {
     ...params,
+    platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web",
     fgPermission: fg,
     bgPermission: bg,
     killSwitchEnabled,

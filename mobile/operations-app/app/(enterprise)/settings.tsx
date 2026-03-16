@@ -141,12 +141,11 @@ export default function EnterpriseSettingsScreen() {
 
       const driverTokenResponse = await switchToDriverToken();
 
-      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token, userPublicId: driverTokenResponse.user?.public_id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
+      sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchToDriverToken', data: { hasToken: !!driverTokenResponse.token, hasRefreshToken: !!driverTokenResponse.refresh_token }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
 
       log.info("driver tokens received", {
         hasToken: !!driverTokenResponse.token,
         hasRefreshToken: !!driverTokenResponse.refresh_token,
-        userPublicId: driverTokenResponse.user.public_id,
       });
 
       await secureStorage.setAccessToken(driverTokenResponse.token);

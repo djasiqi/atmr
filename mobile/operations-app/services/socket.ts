@@ -4,7 +4,8 @@ import { io, type Socket } from "socket.io-client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import { baseURL, getAssignedTrips, getCompanyMessages, refreshDriverTokenSingleflight, type Booking, type Message } from "./api";
+import * as Application from "expo-application";
+import { baseURL, getAssignedTrips, getCompanyMessages, type Booking, type Message } from "./api";
 import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from "./conflictResolution";
 import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
 import type { SessionEvent } from "./sessionJournal";
@@ -12,8 +13,13 @@ import { getNetworkStateSnapshot, subscribeToNetworkState } from "./networkState
 import { extractAuthStatus } from "./socketAuthUtils";
 import { secureStorage } from "./storage";
 import { logAuthEvent } from "./authLogging";
+import { refreshDriverTokenOrchestrated } from "./driverTokenOrchestrator";
 
 const log = getLogger("Socket");
+const NATIVE_APP_ID = Application.applicationId || "";
+const IS_NATIVE_PROD_APP_ID = NATIVE_APP_ID === "ch.liri.operations";
+const EXECUTION_ENVIRONMENT = String(Constants.executionEnvironment || "");
+const IS_PRODUCTION_RUNTIME = !__DEV__ && IS_NATIVE_PROD_APP_ID;
 
 /** Plan 2G/3G : Listeners appelés à chaque connexion socket (pour syncEngine flush). */
 const socketConnectListeners = new Set<() => void>();
@@ -173,7 +179,11 @@ function checkAndAddEventId(eventId: string | undefined | null, eventName: strin
 
 // ✅ Résoudre l'URL Socket.IO depuis EXPO_PUBLIC_SOCKET_URL ou fallback
 const getSocketOrigin = (): string => {
-  const appVariant = String(Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod");
+  const rawAppVariant = String(
+    Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod"
+  );
+  const nativeAppId = Application.applicationId || "";
+  const appVariant = nativeAppId === "ch.liri.operations" ? "prod" : rawAppVariant;
   const isProduction =
     appVariant === "prod" &&
     !__DEV__ &&
@@ -316,6 +326,7 @@ let lastHeartbeat = Date.now(); // Track last heartbeat timestamp
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null; // Interval for sending pings
 let lastHeartbeatTimeoutWarningAt = 0;
 let networkUnsubscribe: (() => void) | null = null; // networkState unsubscribe
+let offlineDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 const IS_DEV = __DEV__;
 
@@ -335,6 +346,7 @@ function buildOptions(
   const auth: Record<string, unknown> = { token };
   if (extras?.device_id != null) auth.device_id = extras.device_id;
   if (extras?.session_diag != null) auth.session_diag = extras.session_diag;
+  const useWebsocketOnly = IS_PRODUCTION_RUNTIME;
   const base = {
     path: "/socket.io", // ⚠️ sans slash final
     auth,
@@ -345,10 +357,10 @@ function buildOptions(
     reconnectionDelayMax: 30000 + jitterMax,
     timeout: 20000,
     forceNew: false,
-    // Start with polling, then upgrade to websocket when possible.
-    // This avoids immediate TransportError on networks/proxies that block websocket handshake.
-    transports: ["polling", "websocket"],
-    upgrade: true,
+    // En production mobile, forcer websocket pour eviter les boucles xhr post/poll (HTTP 400).
+    // En dev, garder polling+websocket pour compatibilite reseaux locaux.
+    transports: useWebsocketOnly ? ["websocket"] : ["polling", "websocket"],
+    upgrade: !useWebsocketOnly,
     rememberUpgrade: true,
     secure: IS_SECURE,
   };
@@ -556,7 +568,11 @@ export async function connectSocket(
       session_diag = getSessionDiagHeaderValue(); // peut être null, auth envoyé quand même (token seul minimum)
     }
 
-    log.info("before socket creation", { SOCKET_ORIGIN });
+    log.info("before socket creation", {
+      SOCKET_ORIGIN,
+      execution_environment: EXECUTION_ENVIRONMENT,
+      is_production_runtime: IS_PRODUCTION_RUNTIME,
+    });
 
     const authExtras: SocketAuthExtras =
       socketRole === "driver" ? { device_id, session_diag: session_diag ?? undefined } : {};
@@ -866,8 +882,24 @@ export async function connectSocket(
             const currentSocket = socket;
 
             if (!isConnected && currentSocket?.connected) {
-              log.info("network offline", {});
-              currentSocket.disconnect();
+              if (!offlineDisconnectTimer) {
+                offlineDisconnectTimer = setTimeout(() => {
+                  offlineDisconnectTimer = null;
+                  const latestState = getNetworkStateSnapshot();
+                  const stillOffline =
+                    latestState?.isConnected !== true ||
+                    latestState?.isInternetReachable === false;
+                  if (stillOffline && currentSocket.connected) {
+                    log.info("network offline (debounced)", {});
+                    currentSocket.disconnect();
+                  }
+                }, 5000);
+              }
+            }
+
+            if (isConnected && offlineDisconnectTimer) {
+              clearTimeout(offlineDisconnectTimer);
+              offlineDisconnectTimer = null;
             }
 
             if (isConnected && !currentSocket?.connected) {
@@ -1043,7 +1075,7 @@ export async function connectSocket(
 
           setTimeout(async () => {
             try {
-              const newToken = await refreshDriverTokenSingleflight();
+              const newToken = await refreshDriverTokenOrchestrated("socket_connect_error");
               pushSessionEvent("SOCKET_AUTH_REFRESH_SUCCESS");
               if (socket?.auth && typeof socket.auth === "object") {
                 (socket.auth as Record<string, unknown>).token = newToken;
@@ -1111,37 +1143,19 @@ export async function connectSocket(
           
           // Essayer de rafraîchir le token
           try {
-            const { refreshAccessToken } = await import("./api");
-            const { secureStorage } = await import("./storage");
-            
-            const refreshToken = await secureStorage.getRefreshToken();
-            if (refreshToken) {
-              log.info("refreshing token", {});
-              
-              const refreshResponse = await refreshAccessToken(refreshToken);
-              
-              if (refreshResponse.access_token) {
-                // Sauvegarder le nouveau token
-                await secureStorage.setAccessToken(refreshResponse.access_token);
-                if (refreshResponse.refresh_token) {
-                  await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-                }
-                
-                log.info("token refreshed, will reconnect manually", {});
-                
-                // Réactiver reconnexion et reconnecter manuellement après un court délai
-                setTimeout(() => {
-                  if (socket && socket.io) {
-                    (socket.io.opts as any).reconnection = true;
-                    socket.connect();
-                  }
-                }, 1000);
-              } else {
-                log.error("token refresh failed, no token", {});
-              }
-            } else {
-              log.error("token refresh failed, no refresh token", {});
+            log.info("refreshing token", {});
+            const newToken = await refreshDriverTokenOrchestrated("socket_unauthorized");
+            if (socket?.auth && typeof socket.auth === "object") {
+              (socket.auth as Record<string, unknown>).token = newToken;
             }
+            log.info("token refreshed, will reconnect manually", {});
+            // Réactiver reconnexion et reconnecter manuellement après un court délai
+            setTimeout(() => {
+              if (socket && socket.io) {
+                (socket.io.opts as any).reconnection = true;
+                socket.connect();
+              }
+            }, 1000);
           } catch (refreshError: any) {
             log.error("token refresh error", {
               error: refreshError?.message || String(refreshError),
@@ -1250,6 +1264,10 @@ export function disconnectSocket() {
     if (networkUnsubscribe) {
       networkUnsubscribe();
       networkUnsubscribe = null;
+    }
+    if (offlineDisconnectTimer) {
+      clearTimeout(offlineDisconnectTimer);
+      offlineDisconnectTimer = null;
     }
     
     log.info("disconnect cleanup", {});

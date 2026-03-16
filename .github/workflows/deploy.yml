@@ -40,6 +40,9 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-and-push:
     name: Build & Push Production Image
@@ -55,7 +58,7 @@ jobs:
       push_success: ${{ steps.verify_push.outputs.success }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate required secrets
         run: |
@@ -287,7 +290,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate required secrets
         run: |
@@ -432,7 +435,9 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
-            chmod 600 /srv/atmr/firebase-service-account.json
+            # Le backend tourne avec un user non-root dans le conteneur:
+            # le fichier doit être lisible via bind mount.
+            chmod 644 /srv/atmr/firebase-service-account.json
             echo "✅ Firebase service account permissions set"
 
       - name: Deploy via SSH

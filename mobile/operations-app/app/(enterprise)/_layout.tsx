@@ -95,7 +95,7 @@ export default function EnterpriseLayout() {
           <Tabs.Screen
             name="ride-details"
             options={{
-              tabBarButton: () => null,
+              href: null,
               title: "Détails course",
             }}
           />

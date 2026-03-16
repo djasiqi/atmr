@@ -263,7 +263,6 @@ export default function ProfileScreen() {
       log.info("enterprise tokens received", {
         hasToken: !!enterpriseTokenResponse.token,
         hasRefreshToken: !!enterpriseTokenResponse.refresh_token,
-        userPublicId: enterpriseTokenResponse.user.public_id,
       });
 
       await secureStorage.setEnterpriseToken(enterpriseTokenResponse.token);

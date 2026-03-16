@@ -200,12 +200,16 @@ def _resolve_driver_status(
     is_active: bool,
     presence_status: str,
 ) -> str:
-    if not is_active or presence_status == "offline":
+    if not is_active:
         return "offline"
+    # Garde métier: ne jamais basculer "offline" pendant une mission active.
+    # Même si le signal est stale, on maintient un statut opérationnel.
     if mission_status in {BookingStatus.EN_ROUTE.value, BookingStatus.IN_PROGRESS.value}:
         return "busy"
     if mission_status == BookingStatus.ASSIGNED.value:
         return "assigned"
+    if presence_status == "offline":
+        return "offline"
     return "available"
 
 

@@ -111,6 +111,15 @@ module.exports = withAndroidR8Enabled(
       "android.permission.FOREGROUND_SERVICE_LOCATION",
       "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
     ],
+    // Durcissement permissions: on bloque explicitement les permissions
+    // non utilisées et à risque qui peuvent être injectées transitive-ment
+    // par certaines dépendances Android.
+    blockedPermissions: [
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.RECORD_AUDIO",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+    ],
     config: {
       googleMaps: {
         apiKey: process.env.EXPO_PUBLIC_ANDROID_MAPS_API_KEY,

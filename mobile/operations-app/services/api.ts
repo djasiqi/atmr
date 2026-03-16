@@ -1,6 +1,7 @@
 // services/api.ts
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import * as Application from "expo-application";
 import axios, { isAxiosError } from "axios";
 import { getLogger } from "@/utils/logger";
 import { secureStorage, asyncStorage } from "./storage";
@@ -37,7 +38,10 @@ const expoExtra = Constants.expoConfig?.extra || {};
 const ENV_API_URL = process.env.EXPO_PUBLIC_API_URL;
 const PROD_API_URL = ENV_API_URL;
 const DEV_API_URL = expoExtra.devApiUrl || expoExtra.publicApiUrl;
-const APP_VARIANT = String(expoExtra.APP_VARIANT || process.env.APP_VARIANT || "prod");
+const RAW_APP_VARIANT = String(expoExtra.APP_VARIANT || process.env.APP_VARIANT || "prod");
+const NATIVE_APP_ID = Application.applicationId || "";
+const IS_NATIVE_PROD_APP_ID = NATIVE_APP_ID === "ch.liri.operations";
+const APP_VARIANT = IS_NATIVE_PROD_APP_ID ? "prod" : RAW_APP_VARIANT;
 
 const getDevHost = (): string => {
   // Sur le web, toujours utiliser localhost (le navigateur tourne sur la même machine)
@@ -169,6 +173,9 @@ try {
     ENV_PORT,
     PORT,
     APP_VARIANT: (Constants.expoConfig as any)?.extra?.APP_VARIANT,
+    APP_VARIANT_RESOLVED: APP_VARIANT,
+    NATIVE_APP_ID,
+    IS_NATIVE_PROD_APP_ID,
   });
 } catch {
   // ignore
@@ -202,9 +209,13 @@ async function fetchCSRFToken(): Promise<string | null> {
       log.info("csrf token fetch started", { url });
 
       let token: string | null = null;
-      if (Platform.OS === "web" && typeof fetch !== "undefined") {
-        // Requête simple GET (pas de Content-Type ni autre header) → pas de preflight, GET envoyé directement
-        const res = await fetch(url, { method: "GET", credentials: "omit" });
+      if (typeof fetch !== "undefined") {
+        // RN/Expo: fetch est plus robuste au boot que certains adapters Axios récents.
+        // Web: on garde "credentials: omit" pour éviter un preflight inutile.
+        const res = await fetch(url, {
+          method: "GET",
+          credentials: Platform.OS === "web" ? "omit" : "same-origin",
+        });
         if (res.ok) {
           const data = await res.json();
           token = data?.csrf_token ?? null;

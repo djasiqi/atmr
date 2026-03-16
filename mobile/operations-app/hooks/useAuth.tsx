@@ -18,7 +18,6 @@ import {
   Driver,
   fetchDriverProfile,
   loginDriver,
-  refreshDriverTokenSingleflight,
   invalidateInterceptorCache,
 } from "@/services/api";
 import { secureStorage, asyncStorage } from "@/services/storage";
@@ -75,6 +74,7 @@ import {
 } from "@/services/biometricAuth";
 import { sendIngestEvent } from "@/src/config/telemetry";
 import { getLogger } from "@/utils/logger";
+import { refreshDriverTokenOrchestrated } from "@/services/driverTokenOrchestrator";
 
 const log = getLogger("Auth");
 
@@ -560,7 +560,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (!profileLoaded && driverRefreshToken) {
               try {
                 // ✅ Utiliser le singleflight driver (cohérence + évite races)
-                const newAccessToken = await refreshDriverTokenSingleflight();
+                const newAccessToken = await refreshDriverTokenOrchestrated("boot_restore");
                 setDriverToken(newAccessToken);
                 notifyAuthReady();
 
@@ -884,7 +884,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               throw new Error("Pas de refresh token disponible");
             }
 
-            const newAccessToken = await refreshDriverTokenSingleflight();
+            const newAccessToken = await refreshDriverTokenOrchestrated("proactive_refresh");
             setDriverToken(newAccessToken);
             resetDriverProactiveRefreshCooldown();
 
@@ -977,7 +977,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         while (retryCount < MAX_RETRIES) {
           try {
-            const newAccessToken = await refreshDriverTokenSingleflight();
+            const newAccessToken = await refreshDriverTokenOrchestrated("proactive_refresh");
             setDriverToken(newAccessToken);
             invalidateInterceptorCache();
             resetDriverProactiveRefreshCooldown();
@@ -1053,7 +1053,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const refreshToken = await secureStorage.getRefreshToken();
             if (refreshToken) {
               try {
-                const newAccessToken = await refreshDriverTokenSingleflight();
+                const newAccessToken = await refreshDriverTokenOrchestrated("foreground_resync");
                 setDriverToken(newAccessToken);
                 invalidateInterceptorCache();
               } catch (_e) {
@@ -1067,7 +1067,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const refreshToken = await secureStorage.getRefreshToken();
               if (refreshToken) {
                 try {
-                  const newAccessToken = await refreshDriverTokenSingleflight();
+                  const newAccessToken = await refreshDriverTokenOrchestrated("foreground_resync");
                   setDriverToken(newAccessToken);
                   invalidateInterceptorCache();
                 } catch (_e) {
@@ -1445,7 +1445,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // P1.B: Sur 401/403, tenter refresh+retry avant logout. Réseau/5xx => jamais logout.
       if (isHttpAuthError(error)) {
         try {
-          const newToken = await refreshDriverTokenSingleflight();
+          const newToken = await refreshDriverTokenOrchestrated("profile_refresh");
           setDriverToken(newToken);
           invalidateInterceptorCache();
           const profile = await fetchDriverProfile();

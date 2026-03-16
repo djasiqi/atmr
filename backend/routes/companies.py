@@ -2596,15 +2596,17 @@ class CompanyDriversLocations(Resource):
             has_active_booking = bool(active_booking.get("current_booking_id"))
             mission_status = active_booking.get("mission_status")
 
-            if not is_active or is_stale:
+            if not is_active:
                 status = "offline"
-            elif mission_status == BookingStatus.ASSIGNED.value:
-                status = "assigned"
             elif mission_status in (
                 BookingStatus.EN_ROUTE.value,
                 BookingStatus.IN_PROGRESS.value,
             ):
                 status = "busy"
+            elif mission_status == BookingStatus.ASSIGNED.value:
+                status = "assigned"
+            elif is_stale:
+                status = "offline"
             else:
                 status = "available"
 
