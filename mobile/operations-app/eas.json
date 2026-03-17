@@ -42,7 +42,8 @@
       "channel": "production",
       "env": {
         "APP_VARIANT": "prod",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_USE_COMMUNITY_AUTOLINKING": "1"
       },
       "android": {
         "buildType": "app-bundle",

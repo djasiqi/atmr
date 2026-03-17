@@ -1,12 +1,5 @@
-# CNG/Prebuild workflow : android/ et ios/ sont régénérés à chaque build depuis app.config.js
-# Cela résout le problème d'autolinking avec React Native 0.79 et Expo SDK 53
-android/
-ios/
-/# Même chose, mais en "root-anchored" (EAS/doctor recommande /android)
-/android
-/android/**
-/ios
-/ios/**
+# Build natif versionné : on envoie android/ et ios/ à EAS
+# pour garantir que le cloud utilise exactement la configuration Gradle du repo.
 
 # Dépendances (reinstallées sur EAS)
 node_modules/
