@@ -14,6 +14,9 @@ class _FakeRes:
     snapped_lon: float
     source: str
     geofence_events: list[str]
+    accept_status: str = "accepted_canonical"
+    accept_reason: str = ""
+    received_at: str | None = None
 
 
 def test_update_driver_location_use_case_returns_snapped_and_events() -> None:
@@ -33,3 +36,4 @@ def test_update_driver_location_use_case_returns_snapped_and_events() -> None:
     assert res.snapped_lon == 2.2
     assert res.source == "osrm_nearest"
     assert res.geofence_events == ["arrived_at_pickup"]
+    assert res.accept_status == "accepted_canonical"

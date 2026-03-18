@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   fetchCompanyReservations,
-  fetchCompanyDriver,
+  fetchCompanyDriversCanonical,
   fetchCompanyInfo,
 } from '../services/companyService';
 import { getAccessToken } from './useAuthToken';
@@ -84,7 +84,7 @@ const useCompanyData = ({ day } = {}) => {
   const loadDriver = useCallback(async () => {
     try {
       setLoadingDriver(true);
-      const data = await fetchCompanyDriver();
+      const data = await fetchCompanyDriversCanonical();
       // Le service renvoie déjà un ARRAY normalisé
       setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
       setError(null); // Réinitialiser l'erreur en cas de succès

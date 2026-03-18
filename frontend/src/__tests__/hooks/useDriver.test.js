@@ -1,23 +1,40 @@
 // frontend/tests/hooks/useDriver.test.js
 import { renderHook, waitFor, act } from '@testing-library/react';
 import useDriver from 'hooks/useDriver';
-import { fetchCompanyDriver, updateDriverStatus, deleteDriver } from 'services/companyService';
+import {
+  fetchCompanyDriversCanonical,
+  updateDriverStatus,
+  deleteDriver,
+} from 'services/companyService';
+import { getCompanySocket, joinCompanyRoom } from 'services/companySocket';
 
 // Mocks
 jest.mock('services/companyService');
+jest.mock('services/companySocket');
 
 describe('useDriver', () => {
+  let handlers;
+  let socket;
+
   const mockDrivers = [
     {
       id: 1,
-      user: { first_name: 'Pierre', last_name: 'Martin' },
+      company_id: 99,
+      first_name: 'Pierre',
+      last_name: 'Martin',
+      status: 'available',
+      location_status: 'offline',
+      presence_status: 'offline',
+      last_seen_seconds: 1200,
       is_available: true,
       is_active: true,
       vehicle_type: 'berline',
     },
     {
       id: 2,
-      user: { first_name: 'Marie', last_name: 'Dubois' },
+      company_id: 99,
+      first_name: 'Marie',
+      last_name: 'Dubois',
       is_available: false,
       is_active: true,
       vehicle_type: 'ambulance',
@@ -28,9 +45,24 @@ describe('useDriver', () => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation();
 
-    fetchCompanyDriver.mockResolvedValue(mockDrivers);
+    handlers = {};
+    socket = {
+      on: jest.fn((event, cb) => {
+        handlers[event] = cb;
+      }),
+      off: jest.fn((event) => {
+        delete handlers[event];
+      }),
+    };
+    getCompanySocket.mockReturnValue(socket);
+    joinCompanyRoom.mockResolvedValue();
+    fetchCompanyDriversCanonical.mockResolvedValue(mockDrivers);
     updateDriverStatus.mockResolvedValue({ success: true });
     deleteDriver.mockResolvedValue({ success: true });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('devrait charger les chauffeurs au montage', async () => {
@@ -43,7 +75,8 @@ describe('useDriver', () => {
     });
 
     expect(result.current.drivers).toEqual(mockDrivers);
-    expect(fetchCompanyDriver).toHaveBeenCalled();
+    expect(fetchCompanyDriversCanonical).toHaveBeenCalled();
+    expect(joinCompanyRoom).toHaveBeenCalledWith(99);
   });
 
   it("devrait mettre à jour le statut d'un chauffeur", async () => {
@@ -85,7 +118,7 @@ describe('useDriver', () => {
   });
 
   it('devrait gérer les erreurs de chargement', async () => {
-    fetchCompanyDriver.mockRejectedValue(new Error('Network error'));
+    fetchCompanyDriversCanonical.mockRejectedValue(new Error('Network error'));
 
     const { result } = renderHook(() => useDriver());
 
@@ -105,18 +138,18 @@ describe('useDriver', () => {
     });
 
     // Premier appel au montage
-    expect(fetchCompanyDriver).toHaveBeenCalledTimes(1);
+    expect(fetchCompanyDriversCanonical).toHaveBeenCalledTimes(1);
 
     // Rafraîchir
     await act(async () => {
       await result.current.refreshDrivers();
     });
 
-    expect(fetchCompanyDriver).toHaveBeenCalledTimes(2);
+    expect(fetchCompanyDriversCanonical).toHaveBeenCalledTimes(2);
   });
 
   it('devrait gérer un tableau vide de chauffeurs', async () => {
-    fetchCompanyDriver.mockResolvedValue([]);
+    fetchCompanyDriversCanonical.mockResolvedValue([]);
 
     const { result } = renderHook(() => useDriver());
 
@@ -168,5 +201,45 @@ describe('useDriver', () => {
 
     // Le chauffeur ne devrait pas être supprimé de l'état local
     expect(result.current.drivers).toHaveLength(2);
+  });
+
+  it('applique les deltas socket live sur la source partagée', async () => {
+    const { result } = renderHook(() => useDriver());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => {
+      handlers.driver_live_state_update({
+        driver_id: 1,
+        lat: 46.2044,
+        lng: 6.1432,
+        status: 'busy',
+        location_status: 'live',
+        presence_status: 'online',
+        last_seen_seconds: 3,
+      });
+    });
+
+    const updated = result.current.drivers.find((d) => d.id === 1);
+    expect(updated.status).toBe('busy');
+    expect(updated.location_status).toBe('live');
+    expect(updated.presence_status).toBe('online');
+    expect(updated.last_seen_seconds).toBe(3);
+    expect(updated.latitude).toBe(46.2044);
+    expect(updated.longitude).toBe(6.1432);
+  });
+
+  it('au reconnect déclenche un resync REST canonique', async () => {
+    const { result } = renderHook(() => useDriver());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const before = fetchCompanyDriversCanonical.mock.calls.length;
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('company_socket_reconnected'));
+    });
+
+    await waitFor(() => {
+      expect(fetchCompanyDriversCanonical.mock.calls.length).toBeGreaterThan(before);
+    });
+    expect(result.current.error).toBeNull();
   });
 });

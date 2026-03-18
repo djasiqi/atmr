@@ -88,6 +88,7 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                       <FiHome size={12} className={styles.institutionIcon} />
                     )}
                     <strong title={displayName}>{displayName}</strong>
+                    <span className={styles.clientId} title="ID client"> #{client.id}</span>
                   </div>
                 </td>
                 <td>

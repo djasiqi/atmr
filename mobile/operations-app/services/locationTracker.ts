@@ -14,6 +14,7 @@ import {
   getFirstStopCondition,
   deriveStopContract,
   type BgTrackingInputs,
+  type LocationMode,
   type PermissionStatus,
 } from "./backgroundTrackingGating";
 import {
@@ -21,6 +22,7 @@ import {
   dismissMissionNotification,
 } from "./missionBarAndroid";
 import { MissionStateManager } from "./missionState";
+import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
 
 // Constante locale pour éviter de charger locationTask en __DEV__ (boucle reload expo/expo#25325)
 const LOCATION_TASK_NAME = "background-location-task";
@@ -33,6 +35,8 @@ const log = getLogger("Tracker");
 
 const BG_DIAG_KEY = "@atmr:bg_tracking_diag";
 const KILL_SWITCH_KEY = "driver_background_tracking_enabled";
+const LOCATION_MODE_KEY = "@atmr:location_mode";
+const AVAILABILITY_PRESENCE_ENABLED_KEY = "@atmr:availability_presence_enabled";
 
 export type BgStartReason = "mission_active" | "reconciliation" | "notification_refresh";
 export type BgStopReason =
@@ -52,6 +56,7 @@ let lastStopReason: string | null = null;
 let lastReconciliationTrigger: string | null = null;
 let lastStateChangeTs = 0;
 let bgTrackingStartedCache = false;
+let currentLocationMode: LocationMode = "mission_live";
 
 /** Snapshot diagnostic lisible pour QA (@atmr:bg_tracking_diag). */
 async function persistDiagnostic(): Promise<void> {
@@ -165,10 +170,11 @@ export async function ensureBackgroundTrackingStarted(
       log.info("bg_tracking_start_skip", { reason, already_started: true });
       return;
     }
+    const isPresenceMode = inputs.locationMode === "availability_presence";
     const opts: Location.LocationTaskOptions = {
       accuracy: Location.Accuracy.Balanced,
-      timeInterval: 10000,
-      distanceInterval: 10,
+      timeInterval: isPresenceMode ? 180000 : 15000,
+      distanceInterval: isPresenceMode ? 50 : 10,
     };
     if (Platform.OS === "android") {
       const state = MissionStateManager.getState();
@@ -294,13 +300,69 @@ export async function buildBgTrackingInputs(params: {
 }): Promise<BgTrackingInputs> {
   const { fg, bg } = await getPermissionStatuses();
   const killSwitchEnabled = await isKillSwitchEnabled();
+  const availabilityPresenceEnabled = await isAvailabilityPresenceEnabled();
+  const persistedMode = await getPersistedLocationMode(params.hasActiveMission);
+  const fsmState = resolvePresenceState({
+    isAuthenticated: params.isAuthenticated,
+    isDriver: params.role === "driver",
+    hasFgPermission: fg === "granted",
+    hasBgPermission: bg === "granted",
+    appInBackground: false,
+    hasActiveMission: params.hasActiveMission,
+    availabilityPresenceEnabled,
+  });
+  const fsmMode = resolveLocationModeFromState(fsmState);
+  const locationMode: LocationMode =
+    params.hasActiveMission || fsmMode === "mission_live" ? "mission_live" : persistedMode;
+  currentLocationMode = locationMode;
   return {
     ...params,
     platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web",
     fgPermission: fg,
     bgPermission: bg,
     killSwitchEnabled,
+    locationMode,
+    availabilityPresenceEnabled,
   };
+}
+
+export async function getPersistedLocationMode(
+  hasActiveMission = false
+): Promise<LocationMode> {
+  try {
+    const raw = (await AsyncStorage.getItem(LOCATION_MODE_KEY))?.trim();
+    if (
+      raw === "mission_live" ||
+      raw === "availability_presence" ||
+      raw === "passive_last_known"
+    ) {
+      return raw;
+    }
+  } catch {
+    // ignore
+  }
+  return hasActiveMission ? "mission_live" : "availability_presence";
+}
+
+export async function setPersistedLocationMode(mode: LocationMode): Promise<void> {
+  currentLocationMode = mode;
+  await AsyncStorage.setItem(LOCATION_MODE_KEY, mode);
+}
+
+export function getCurrentLocationMode(): LocationMode {
+  return currentLocationMode;
+}
+
+export async function isAvailabilityPresenceEnabled(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(AVAILABILITY_PRESENCE_ENABLED_KEY);
+    if (!raw) {
+      return process.env.EXPO_PUBLIC_LOCATION_PRESENCE_HEARTBEAT_ENABLED !== "false";
+    }
+    return raw === "true";
+  } catch {
+    return process.env.EXPO_PUBLIC_LOCATION_PRESENCE_HEARTBEAT_ENABLED !== "false";
+  }
 }
 
 /**
@@ -377,7 +439,7 @@ export class AdaptiveLocationTracker {
   private readonly INTERVAL_MOVING_MS =
     parseInt(process.env.EXPO_PUBLIC_GPS_FAST_MS ?? "5000", 10) || 5000;
   private readonly INTERVAL_STATIONARY_MS =
-    parseInt(process.env.EXPO_PUBLIC_GPS_SLOW_MS ?? "30000", 10) || 30000;
+    parseInt(process.env.EXPO_PUBLIC_GPS_SLOW_MS ?? "60000", 10) || 60000;
   private readonly INTERVAL_BATTERY_LOW_MS = 60000; // 60s si batterie < 20%
 
   /**
@@ -446,23 +508,26 @@ export class AdaptiveLocationTracker {
       return;
     }
 
-    // Calculer vitesse moyenne depuis dernière position
-    const speed = this.calculateSpeed();
-
-    // Adapter fréquence selon vitesse
-    if (speed > this.SPEED_THRESHOLD_MOVING) {
-      // En mouvement (> 3.6 km/h)
-      this.updateInterval = this.INTERVAL_MOVING_MS;
+    const mode = getCurrentLocationMode();
+    if (mode === "mission_live") {
+      this.updateInterval = this.INTERVAL_MOVING_MS; // v2.1: 5s fixé
+    } else if (mode === "availability_presence") {
+      this.updateInterval = this.INTERVAL_STATIONARY_MS; // v2.1: 60s fixé
     } else {
-      // Immobile
       this.updateInterval = this.INTERVAL_STATIONARY_MS;
     }
 
     // Vérifier batterie et ajuster si nécessaire
     this.checkBatteryLevel().then((batteryLevel) => {
       if (batteryLevel !== null && batteryLevel < 0.2) {
-        // < 20% : mode économie
-        this.updateInterval = this.INTERVAL_BATTERY_LOW_MS;
+        // < 20% : mission_live plafonné à 15s, présence reste légère.
+        if (mode === "mission_live") {
+          this.updateInterval = 15000;
+        } else if (mode === "availability_presence") {
+          this.updateInterval = 180000;
+        } else {
+          this.updateInterval = this.INTERVAL_BATTERY_LOW_MS;
+        }
         log.info("low battery interval reduced", {
           batteryLevel: (batteryLevel * 100).toFixed(0),
           intervalMs: this.updateInterval,
@@ -600,8 +665,9 @@ export class AdaptiveLocationTracker {
     const now = Date.now();
     const timeSinceLastSend = now - this.lastSentAt;
 
-    // Toujours envoyer si > 60s depuis dernier envoi (heartbeat)
-    if (timeSinceLastSend >= 60000) {
+    const currentMode = getCurrentLocationMode();
+    const heartbeatMs = currentMode === "mission_live" ? 15000 : 60000;
+    if (timeSinceLastSend >= heartbeatMs) {
       return true;
     }
 
@@ -643,6 +709,10 @@ export class AdaptiveLocationTracker {
         accuracy: accuracy ? Number(accuracy) : 0,
         timestamp: location.timestamp || Date.now(),
         driver_id,
+        location_mode: getCurrentLocationMode(),
+        recorded_at: new Date(location.timestamp || Date.now()).toISOString(),
+        sent_at: new Date().toISOString(),
+        is_background: false,
       });
       log.success("position enqueued", {
         speedKmh: (this.lastSpeed * 3.6).toFixed(1),

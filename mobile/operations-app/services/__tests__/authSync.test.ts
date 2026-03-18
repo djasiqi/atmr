@@ -3,9 +3,11 @@
  * Bootstrap sans session = on ne appelle jamais notifyAuthReady → isAuthReady reste false.
  */
 import {
+  getAuthBootstrapState,
   notifyAuthReady,
   notifyAuthNotReady,
   isAuthReadySync,
+  setAuthStateRecovering,
   waitForAuthReady,
 } from "../authSync";
 
@@ -34,6 +36,14 @@ describe("authSync", () => {
       notifyAuthNotReady();
       expect(isAuthReadySync()).toBe(false);
     });
+
+    it("expose un état bootstrap explicite", () => {
+      expect(getAuthBootstrapState()).toBe("INVALID");
+      setAuthStateRecovering();
+      expect(getAuthBootstrapState()).toBe("RECOVERING");
+      notifyAuthReady();
+      expect(getAuthBootstrapState()).toBe("READY");
+    });
   });
 
   describe("waitForAuthReady", () => {
@@ -42,8 +52,8 @@ describe("authSync", () => {
       await expect(waitForAuthReady(100)).resolves.toBeUndefined();
     });
 
-    it("rejette après timeout si isAuthReady reste false", async () => {
-      await expect(waitForAuthReady(50)).rejects.toThrow(/Timeout/);
+    it("rejette avec AUTH_NOT_READY si isAuthReady reste false", async () => {
+      await expect(waitForAuthReady(50)).rejects.toThrow(/AUTH_NOT_READY/);
     });
   });
 });

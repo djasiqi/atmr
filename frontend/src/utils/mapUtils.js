@@ -153,6 +153,19 @@ export const formatLastSeen = (lastSeenSeconds) => {
   return '> 1h';
 };
 
+export const getFreshnessStatus = (driver) => {
+  const backendStatus = String(driver?.location_status || '').toLowerCase();
+  if (backendStatus === 'live' || backendStatus === 'recent' || backendStatus === 'stale' || backendStatus === 'offline') {
+    return backendStatus;
+  }
+  const v = Number(driver?.last_seen_seconds);
+  if (!Number.isFinite(v)) return 'offline';
+  if (v <= 20) return 'live';
+  if (v <= 90) return 'recent';
+  if (v <= 300) return 'stale';
+  return 'offline';
+};
+
 // ─── Marqueurs SVG professionnels Lirie ───
 
 /**

@@ -13,6 +13,7 @@ Ce service unifie toute la logique de localisation :
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -32,6 +33,7 @@ from models import Assignment, AssignmentStatus, Driver, TripTracking
 from repositories.assignment_repository import AssignmentRepository
 from repositories.driver_repository import DriverRepository
 from services.geolocation.geofencing import get_geofencing_service
+from services.geolocation.presence import normalize_location_mode
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +42,15 @@ LAT_THRESHOLD = 90.0
 LON_THRESHOLD = 180.0
 MIN_POINTS_FOR_MATCHING = 3  # Minimum de points pour map-matching
 DEFAULT_OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
-DEFAULT_DRIVER_LOC_TTL_SEC = int(os.getenv("DRIVER_LOC_TTL_SEC", "600"))  # 10 min
+DEFAULT_DRIVER_LOC_TTL_SEC = int(os.getenv("DRIVER_LOC_TTL_SEC", "1200"))  # 20 min
 DEFAULT_MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))  # 5 points
 DEFAULT_GEOFENCE_RADIUS_M = 50.0  # 50m pour détection arrivée pickup/dropoff
 TRIP_TRACKING_MIN_INTERVAL_SEC = 30  # Minimum 30s entre logs pour performance
+ARBITRATION_CLOSE_WINDOW_SEC = 3
+MISSION_TOO_OLD_SEC = 120
+AVAILABILITY_TOO_OLD_SEC = 600
+LOW_ACCURACY_THRESHOLD_M = 1500.0
+LOCATION_V21_ENABLED = os.getenv("DRIVER_LOCATION_V21_ENABLED", "true").lower() != "false"
 
 
 @dataclass
@@ -58,6 +65,12 @@ class LocationUpdateResult:
         default_factory=list
     )  # Events geofencing déclenchés
     trip_logged: bool = False  # Si position loggée dans historique
+    accept_status: str = "accepted_canonical"
+    accept_reason: str = ""
+    should_fanout: bool = True
+    should_persist_db: bool = True
+    received_at: str | None = None
+    degraded_context: bool = False
 
 
 class LocationService:
@@ -94,6 +107,11 @@ class LocationService:
         accuracy: float | None = None,
         source: str = "gps",  # noqa: ARG002
         timestamp: datetime | None = None,
+        location_mode: str = "mission_live",
+        recorded_at: datetime | None = None,
+        sent_at: datetime | None = None,
+        is_background: bool = False,
+        mission_id: int | None = None,
         db_session: Session | None = None,
     ) -> LocationUpdateResult:
         """Met à jour la position d'un chauffeur (snap OSRM + map-matching + stockage).
@@ -123,6 +141,14 @@ class LocationService:
         """
         if timestamp is None:
             timestamp = datetime.now(UTC)
+        recorded_dt = recorded_at or timestamp
+        sent_dt = sent_at or datetime.now(UTC)
+        driver_repo = DriverRepository()
+        driver_dto = driver_repo.find_by_id(driver_id)
+        company_id = driver_dto.company_id if driver_dto else None
+        v21_enabled = self._is_v21_enabled_for_company(company_id)
+        normalized_mode = normalize_location_mode(location_mode) if v21_enabled else "mission_live"
+        degraded_context = normalized_mode == "mission_live" and mission_id is None
 
         # 1. Validation
         if not (-LAT_THRESHOLD <= latitude <= LAT_THRESHOLD):
@@ -133,56 +159,50 @@ class LocationService:
         snapped_lat, snapped_lon = latitude, longitude
         snap_source = "raw"
 
-        # 2. Snap OSRM nearest
-        try:
-            snapped = self._snap_to_road(longitude, latitude)
-            if snapped:
-                snapped_lon, snapped_lat = snapped
-                snap_source = "osrm_nearest"
-        except (RequestException, Timeout, ConnectionError, OSError) as e:
-            # Erreurs réseau attendues : OSRM indisponible, timeout
-            logger.debug(
-                "[LocationService] Snap OSRM failed (network error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
-        except (ValueError, TypeError, KeyError) as e:
-            # Erreurs de validation attendues : réponse JSON invalide
-            logger.debug(
-                "[LocationService] Snap OSRM failed (validation error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
-        except Exception:
-            # Erreur inattendue lors du snap OSRM
-            logger.debug("[LocationService] Snap OSRM failed")
+        # 2-3. Snap/match uniquement en mission_live
+        if normalized_mode == "mission_live":
+            try:
+                snapped = self._snap_to_road(longitude, latitude)
+                if snapped:
+                    snapped_lon, snapped_lat = snapped
+                    snap_source = "osrm_nearest"
+            except (RequestException, Timeout, ConnectionError, OSError) as e:
+                logger.debug(
+                    "[LocationService] Snap OSRM failed (network error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                logger.debug(
+                    "[LocationService] Snap OSRM failed (validation error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except Exception:
+                logger.debug("[LocationService] Snap OSRM failed")
 
-        # 3. Map-matching si ring buffer suffisant
-        try:
-            matched = self._map_match(driver_id, snapped_lon, snapped_lat)
-            if matched:
-                snapped_lon, snapped_lat = matched
-                snap_source = "osrm_match"
-        except (RequestException, Timeout, ConnectionError, OSError) as e:
-            # Erreurs réseau attendues : OSRM indisponible, timeout
-            logger.debug(
-                "[LocationService] Map-matching failed (network error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
-        except (ValueError, TypeError, KeyError) as e:
-            # Erreurs de validation attendues : réponse JSON invalide
-            logger.debug(
-                "[LocationService] Map-matching failed (validation error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
-        except Exception:
-            # Erreur inattendue lors du map-matching
-            logger.debug("[LocationService] Map-matching failed")
+            try:
+                matched = self._map_match(driver_id, snapped_lon, snapped_lat)
+                if matched:
+                    snapped_lon, snapped_lat = matched
+                    snap_source = "osrm_match"
+            except (RequestException, Timeout, ConnectionError, OSError) as e:
+                logger.debug(
+                    "[LocationService] Map-matching failed (network error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except (ValueError, TypeError, KeyError) as e:
+                logger.debug(
+                    "[LocationService] Map-matching failed (validation error: %s): %s",
+                    type(e).__name__,
+                    str(e),
+                )
+            except Exception:
+                logger.debug("[LocationService] Map-matching failed")
 
         # 4. Stockage Redis + DB
-        self._store_location(
+        accept_status, accept_reason, received_at = self._store_location(
             driver_id=driver_id,
             latitude=snapped_lat,
             longitude=snapped_lon,
@@ -191,39 +211,51 @@ class LocationService:
             accuracy=accuracy,
             source=snap_source,
             timestamp=timestamp,
+            location_mode=normalized_mode,
+            recorded_at=recorded_dt,
+            sent_at=sent_dt,
+            is_background=is_background,
+            mission_id=mission_id,
             db_session=db_session,
+            degraded_context=degraded_context,
+            company_id=company_id,
         )
+        should_fanout = accept_status == "accepted_canonical"
+        should_persist_db = accept_status == "accepted_canonical"
 
         # 5. Détection geofencing (pickup/dropoff)
         geofencing_service = get_geofencing_service()
-        geofence_events = geofencing_service.check_active_assignment_geofencing(
-            driver_id=driver_id,
-            driver_lat=snapped_lat,
-            driver_lon=snapped_lon,
-        )
+        geofence_events: list[str] = []
+        if should_persist_db:
+            geofence_events = geofencing_service.check_active_assignment_geofencing(
+                driver_id=driver_id,
+                driver_lat=snapped_lat,
+                driver_lon=snapped_lon,
+            )
 
         # 6. Log historique si en trajet
-        trip_logged = self._log_trip_tracking(
-            driver_id=driver_id,
-            latitude=snapped_lat,
-            longitude=snapped_lon,
-            speed=speed,
-            heading=heading,
-            accuracy=accuracy,
-            timestamp=timestamp,
-            db_session=db_session,
-        )
+        trip_logged = False
+        if should_persist_db:
+            trip_logged = self._log_trip_tracking(
+                driver_id=driver_id,
+                latitude=snapped_lat,
+                longitude=snapped_lon,
+                speed=speed,
+                heading=heading,
+                accuracy=accuracy,
+                timestamp=timestamp,
+                db_session=db_session,
+            )
 
         # Event métier (consommable par d'autres services) - sans changer le comportement actuel
         try:
-            driver_repo = DriverRepository()
-            driver_dto = driver_repo.find_by_id(driver_id)
-            publish_event(
-                DriverLocationUpdatedEvent(
-                    driver_id=driver_id,
-                    company_id=driver_dto.company_id if driver_dto else None,
+            if should_fanout:
+                publish_event(
+                    DriverLocationUpdatedEvent(
+                        driver_id=driver_id,
+                        company_id=company_id,
+                    )
                 )
-            )
         except (ValueError, TypeError, AttributeError, KeyError):
             # Erreurs de validation attendues : données invalides
             # Ne pas faire échouer l'endpoint de localisation pour un event
@@ -240,6 +272,12 @@ class LocationService:
             source=snap_source,
             geofence_events=geofence_events,
             trip_logged=trip_logged,
+            accept_status=accept_status,
+            accept_reason=accept_reason,
+            should_fanout=should_fanout,
+            should_persist_db=should_persist_db,
+            received_at=received_at,
+            degraded_context=degraded_context,
         )
 
     def _snap_to_road(
@@ -385,8 +423,16 @@ class LocationService:
         accuracy: float | None,
         source: str,
         timestamp: datetime,
+        location_mode: str,
+        recorded_at: datetime,
+        sent_at: datetime,
+        is_background: bool,
+        mission_id: int | None = None,
         db_session: Session | None = None,
-    ) -> None:
+        *,
+        degraded_context: bool = False,
+        company_id: int | None = None,
+    ) -> tuple[str, str, str]:
         """Stocke la position dans Redis et DB.
 
         Args:
@@ -401,18 +447,63 @@ class LocationService:
             db_session: Session DB (optionnel)
         """
         ts_iso = timestamp.isoformat()
+        recorded_iso = recorded_at.isoformat()
+        sent_iso = sent_at.isoformat()
+        received_iso = datetime.now(UTC).isoformat()
+        accept_status = "accepted_canonical"
+        accept_reason = ""
+        if not self.redis_client:
+            # Sans Redis, aucun arbitrage canonique fiable n'est possible.
+            accept_status = "accepted_observability_only"
+            accept_reason = "redis_unavailable_no_arbitration"
 
         # Redis
         if self.redis_client:
             try:
-                key = f"driver:{driver_id}:loc"
-                # ✅ Utilisation du repository pour découpler de SQLAlchemy
-                driver_repo = DriverRepository()
-                driver_dto = driver_repo.find_by_id(driver_id)
-                company_id = driver_dto.company_id if driver_dto else None
+                canonical_key = f"driver:{driver_id}:loc:canonical"
+                legacy_key = f"driver:{driver_id}:loc"
+                # Compat lecture/écriture pendant migration P2.
+                key = canonical_key
 
+                existing_raw = self.redis_client.hgetall(key) or {}
+                if not existing_raw:
+                    existing_raw = self.redis_client.hgetall(legacy_key) or {}
+                existing: dict[str, str] = {}
+                for ek, ev in existing_raw.items():
+                    try:
+                        existing[ek.decode() if isinstance(ek, bytes) else str(ek)] = (
+                            ev.decode() if isinstance(ev, bytes) else str(ev)
+                        )
+                    except Exception:
+                        continue
+
+                accept_status, accept_reason = self._arbitrate_update(
+                    existing=existing,
+                    location_mode=location_mode,
+                    recorded_at=recorded_at,
+                    accuracy=accuracy,
+                )
+                existing_company = existing.get("company_id")
+                if (
+                    existing_company
+                    and company_id is not None
+                    and existing_company != str(company_id)
+                ):
+                    accept_status = "rejected_invalid"
+                    accept_reason = "cross_tenant_mismatch"
+                if (
+                    degraded_context
+                    and location_mode == "mission_live"
+                    and mission_id is None
+                    and accept_status == "accepted_canonical"
+                    and not accept_reason
+                ):
+                    accept_reason = "mission_live_missing_mission_id"
+
+                # last_raw toujours mis à jour pour observabilité.
+                raw_key = f"driver:{driver_id}:loc:last_raw"
                 self.redis_client.hset(
-                    key,
+                    raw_key,
                     mapping={
                         "company_id": str(company_id) if company_id else "",
                         "lat": str(latitude),
@@ -421,13 +512,46 @@ class LocationService:
                         "heading": str(heading) if heading is not None else "",
                         "accuracy": str(accuracy) if accuracy is not None else "",
                         "ts": ts_iso,
+                        "recorded_at": recorded_iso,
+                        "sent_at": sent_iso,
+                        "received_at": received_iso,
+                        "location_mode": location_mode,
+                        "is_background": "1" if is_background else "0",
+                        "mission_id": str(mission_id) if mission_id is not None else "",
+                        "degraded_context": "1" if degraded_context else "0",
                         "source": source,
+                        "accept_status": accept_status,
+                        "accept_reason": accept_reason,
                     },
                 )
-                self.redis_client.expire(key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                self.redis_client.expire(raw_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+
+                if accept_status == "accepted_canonical":
+                    canonical_mapping = {
+                        "company_id": str(company_id) if company_id else "",
+                        "lat": str(latitude),
+                        "lon": str(longitude),
+                        "speed": str(speed) if speed is not None else "",
+                        "heading": str(heading) if heading is not None else "",
+                        "accuracy": str(accuracy) if accuracy is not None else "",
+                        "ts": ts_iso,
+                        "recorded_at": recorded_iso,
+                        "sent_at": sent_iso,
+                        "received_at": received_iso,
+                        "location_mode": location_mode,
+                        "is_background": "1" if is_background else "0",
+                        "mission_id": str(mission_id) if mission_id is not None else "",
+                        "degraded_context": "1" if degraded_context else "0",
+                        "source": source,
+                    }
+                    self.redis_client.hset(canonical_key, mapping=canonical_mapping)
+                    self.redis_client.expire(canonical_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                    # Compatibilité transitoire: maintenir l'ancienne clé.
+                    self.redis_client.hset(legacy_key, mapping=canonical_mapping)
+                    self.redis_client.expire(legacy_key, DEFAULT_DRIVER_LOC_TTL_SEC)
 
                 # P2: GEO index Redis — index spatial par entreprise pour GEORADIUS/GEOSEARCH
-                if company_id is not None:
+                if company_id is not None and accept_status == "accepted_canonical":
                     try:
                         geo_key = f"driver_locations:geo:{company_id}"
                         self.redis_client.geoadd(
@@ -452,7 +576,13 @@ class LocationService:
                             "lat": str(latitude),
                             "lon": str(longitude),
                             "ts": ts_iso,
+                            "recorded_at": recorded_iso,
+                            "received_at": received_iso,
+                            "location_mode": location_mode,
+                            "degraded_context": "1" if degraded_context else "0",
                             "source": source,
+                            "accept_status": accept_status,
+                            "accept_reason": accept_reason,
                         },
                         maxlen=10000,
                         approximate=True,
@@ -469,6 +599,8 @@ class LocationService:
                     type(e).__name__,
                     str(e),
                 )
+                accept_status = "accepted_observability_only"
+                accept_reason = "redis_unavailable_no_arbitration"
             except (ValueError, TypeError) as e:
                 # Erreurs de validation attendues : données non sérialisables
                 logger.warning(
@@ -476,26 +608,44 @@ class LocationService:
                     type(e).__name__,
                     str(e),
                 )
+                accept_status = "accepted_observability_only"
+                accept_reason = "redis_unavailable_no_arbitration"
             except Exception:
                 # Erreur inattendue lors du stockage Redis
                 logger.warning("[LocationService] Redis store failed")
+                accept_status = "accepted_observability_only"
+                accept_reason = "redis_unavailable_no_arbitration"
+        if degraded_context and location_mode == "mission_live" and mission_id is None:
+            logger.warning(
+                "[LocationService] mission_live sans mission_id (driver=%s, company=%s)",
+                driver_id,
+                company_id,
+            )
+            if self.redis_client:
+                with contextlib.suppress(Exception):
+                    self.redis_client.incr("driver_location:mission_live_missing_mission_id:global")
+                    if company_id:
+                        self.redis_client.incr(
+                            f"driver_location:mission_live_missing_mission_id:company:{company_id}"
+                        )
 
         # DB
         session = db_session or db.session
         try:
-            # ✅ Utilisation du repository pour découpler de SQLAlchemy
-            driver_repo = DriverRepository()
-            driver_dto = driver_repo.find_by_id(driver_id)
-            if driver_dto:
-                # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
-                driver = Driver.query.get(driver_dto.id)
-                if driver:
-                    driver.latitude = latitude
-                    driver.longitude = longitude
-                    driver.last_position_update = timestamp
-                    session.add(driver)
-                if not db_session:
-                    session.commit()
+            if accept_status == "accepted_canonical":
+                # ✅ Utilisation du repository pour découpler de SQLAlchemy
+                driver_repo = DriverRepository()
+                driver_dto = driver_repo.find_by_id(driver_id)
+                if driver_dto:
+                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
+                    driver = Driver.query.get(driver_dto.id)
+                    if driver:
+                        driver.latitude = latitude
+                        driver.longitude = longitude
+                        driver.last_position_update = timestamp
+                        session.add(driver)
+                    if not db_session:
+                        session.commit()
         except (OperationalError, DBAPIError) as e:
             # Erreurs DB attendues : connexion, timeout
             if not db_session:
@@ -518,7 +668,75 @@ class LocationService:
             # Erreur inattendue lors du stockage DB
             if not db_session:
                 session.rollback()
-            logger.warning("[LocationService] DB store failed")
+        return accept_status, accept_reason, received_iso
+
+    def _is_v21_enabled_for_company(self, company_id: int | None) -> bool:
+        if not LOCATION_V21_ENABLED:
+            return False
+        if company_id is None:
+            return LOCATION_V21_ENABLED
+        raw = os.getenv("DRIVER_LOCATION_V21_TENANT_OVERRIDES", "").strip()
+        if not raw:
+            return LOCATION_V21_ENABLED
+        for token in raw.split(","):
+            item = token.strip()
+            if not item or ":" not in item:
+                continue
+            cid_raw, enabled_raw = item.split(":", 1)
+            with contextlib.suppress(Exception):
+                if int(cid_raw.strip()) != int(company_id):
+                    continue
+                return enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
+        return LOCATION_V21_ENABLED
+
+    def _arbitrate_update(  # noqa: PLR0911
+        self,
+        *,
+        existing: dict[str, str],
+        location_mode: str,
+        recorded_at: datetime,
+        accuracy: float | None,
+    ) -> tuple[str, str]:
+        # Payload invalide en pratique filtré avant. On garde la classification ici.
+        if location_mode not in {
+            "mission_live",
+            "availability_presence",
+            "passive_last_known",
+        }:
+            return "rejected_invalid", "invalid_payload"
+
+        now = datetime.now(UTC)
+        age_sec = max(0, int((now - recorded_at).total_seconds()))
+        max_age = MISSION_TOO_OLD_SEC if location_mode == "mission_live" else AVAILABILITY_TOO_OLD_SEC
+        if age_sec > max_age:
+            return "accepted_observability_only", "too_old_for_mode"
+
+        if accuracy is not None and accuracy > LOW_ACCURACY_THRESHOLD_M:
+            return "accepted_observability_only", "accuracy_too_low"
+
+        current_recorded = existing.get("recorded_at") or existing.get("ts")
+        if not current_recorded:
+            return "accepted_canonical", ""
+        try:
+            current_dt = datetime.fromisoformat(current_recorded.replace("Z", "+00:00"))
+        except Exception:
+            return "accepted_canonical", ""
+
+        if recorded_at > current_dt:
+            return "accepted_canonical", ""
+
+        delta = abs((recorded_at - current_dt).total_seconds())
+        if delta <= ARBITRATION_CLOSE_WINDOW_SEC:
+            priorities = {
+                "mission_live": 3,
+                "availability_presence": 2,
+                "passive_last_known": 1,
+            }
+            current_mode = normalize_location_mode(existing.get("location_mode"))
+            if priorities.get(location_mode, 0) >= priorities.get(current_mode, 0):
+                return "accepted_canonical", ""
+
+        return "accepted_observability_only", "older_than_canonical"
 
     def _log_trip_tracking(
         self,

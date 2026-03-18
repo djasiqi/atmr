@@ -14,21 +14,39 @@ import { getNetworkStateSnapshot } from "@/services/networkState";
 
 const log = getLogger("AuthCtrl");
 import {
+  getLogoutSeverity,
+  normalizeLogoutReason,
+  type ForceLogoutMetadata,
   type DriverLogoutReason,
   type EnterpriseLogoutReason,
 } from "@/services/authLogoutReasons";
 import { logAuthEvent } from "@/services/authLogging";
 
-export type { DriverLogoutReason, EnterpriseLogoutReason };
+export type {
+  DriverLogoutReason,
+  EnterpriseLogoutReason,
+  ForceLogoutMetadata,
+};
 
-type ForceLogoutDriverCallback = (reason: DriverLogoutReason) => void | Promise<void>;
-type ForceLogoutEnterpriseCallback = (reason: EnterpriseLogoutReason) => void | Promise<void>;
+type ForceLogoutDriverCallback = (
+  reason: DriverLogoutReason,
+  metadata: ForceLogoutMetadata
+) => void | Promise<void>;
+type ForceLogoutEnterpriseCallback = (
+  reason: EnterpriseLogoutReason,
+  metadata: ForceLogoutMetadata
+) => void | Promise<void>;
 
 let forceLogoutDriverCallback: ForceLogoutDriverCallback | null = null;
 let forceLogoutEnterpriseCallback: ForceLogoutEnterpriseCallback | null = null;
 
 /** P0.1 — Pending logout si callback absent (cold start). */
-type PendingLogout = { route: "driver" | "enterprise"; reason: string; ts: number };
+type PendingLogout = {
+  route: "driver" | "enterprise";
+  reason: string;
+  ts: number;
+  metadata: ForceLogoutMetadata;
+};
 let pendingDriver: PendingLogout | null = null;
 let pendingEnterprise: PendingLogout | null = null;
 
@@ -44,10 +62,10 @@ let lastEnterpriseLogout: { reason: string; ts: number } | null = null;
 export function registerForceLogoutDriver(cb: ForceLogoutDriverCallback): () => void {
   forceLogoutDriverCallback = cb;
   if (pendingDriver) {
-    const { reason } = pendingDriver;
+    const { reason, metadata } = pendingDriver;
     pendingDriver = null;
     log.info("drain pending driver logout", { reason });
-    void Promise.resolve(cb(reason as DriverLogoutReason)).catch((e: unknown) => {
+    void Promise.resolve(cb(reason as DriverLogoutReason, metadata)).catch((e: unknown) => {
       log.error("drain pending driver error", { error: e });
     });
   }
@@ -63,10 +81,10 @@ export function registerForceLogoutDriver(cb: ForceLogoutDriverCallback): () => 
 export function registerForceLogoutEnterprise(cb: ForceLogoutEnterpriseCallback): () => void {
   forceLogoutEnterpriseCallback = cb;
   if (pendingEnterprise) {
-    const { reason } = pendingEnterprise;
+    const { reason, metadata } = pendingEnterprise;
     pendingEnterprise = null;
     log.info("drain pending enterprise logout", { reason });
-    void Promise.resolve(cb(reason as EnterpriseLogoutReason)).catch((e: unknown) => {
+    void Promise.resolve(cb(reason as EnterpriseLogoutReason, metadata)).catch((e: unknown) => {
       log.error("drain pending enterprise error", { error: e });
     });
   }
@@ -81,13 +99,20 @@ export function registerForceLogoutEnterprise(cb: ForceLogoutEnterpriseCallback)
  */
 function logLogoutTransition(
   route: "driver" | "enterprise",
-  reason: string,
+  metadata: ForceLogoutMetadata,
   extra?: Record<string, unknown>
 ): void {
+  const normalizedReason = normalizeLogoutReason(metadata.reason);
   const network = getNetworkStateSnapshot();
   logAuthEvent("LOGOUT_TRANSITION", {
     route,
-    reason,
+    reason: normalizedReason,
+    severity: metadata.severity,
+    trigger_source: metadata.trigger_source,
+    ...(metadata.role ? { role: metadata.role } : {}),
+    ...(metadata.tenant_id ? { tenant_id: metadata.tenant_id } : {}),
+    ...(metadata.session_id ? { session_id: metadata.session_id } : {}),
+    ...(metadata.device_id ? { device_id: metadata.device_id } : {}),
     app_version: Constants.expoConfig?.version ?? "?",
     ...(network ? { network_connected: network.isConnected } : {}),
     ...extra,
@@ -121,9 +146,21 @@ function shouldDedupeEnterprise(reason: string): boolean {
  * P0.1 — Pending si callback absent ; dedupe si invoqué en rafale.
  */
 export async function invokeForceLogoutDriver(
-  reason: DriverLogoutReason
+  metadata: ForceLogoutMetadata & { reason: DriverLogoutReason }
 ): Promise<void> {
-  logLogoutTransition("driver", reason);
+  if (!metadata.trigger_source || !metadata.severity || !metadata.source) {
+    throw new Error("forceLogout driver metadata incomplete");
+  }
+  const reason = normalizeLogoutReason(metadata.reason) as DriverLogoutReason;
+  const finalMetadata: ForceLogoutMetadata = {
+    ...metadata,
+    source: "driver",
+    reason,
+    severity: metadata.severity || getLogoutSeverity(reason),
+  };
+  logLogoutTransition("driver", {
+    ...finalMetadata,
+  });
 
   if (shouldDedupeDriver(reason)) {
     log.info("dedupe driver logout", { reason, windowMs: DEDUPE_MS });
@@ -131,9 +168,16 @@ export async function invokeForceLogoutDriver(
   }
 
   if (forceLogoutDriverCallback) {
-    await forceLogoutDriverCallback(reason);
+    await forceLogoutDriverCallback(reason, finalMetadata);
   } else {
-    pendingDriver = { route: "driver", reason, ts: Date.now() };
+    pendingDriver = {
+      route: "driver",
+      reason,
+      ts: Date.now(),
+      metadata: {
+        ...finalMetadata,
+      },
+    };
     log.warn("force logout driver callback not registered", { reason });
   }
 }
@@ -144,9 +188,23 @@ export async function invokeForceLogoutDriver(
  * P0.1 — Pending si callback absent ; dedupe si invoqué en rafale.
  */
 export async function invokeForceLogoutEnterprise(
-  reason: EnterpriseLogoutReason
+  metadata: ForceLogoutMetadata & {
+    reason: EnterpriseLogoutReason;
+  }
 ): Promise<void> {
-  logLogoutTransition("enterprise", reason);
+  if (!metadata.trigger_source || !metadata.severity || !metadata.source) {
+    throw new Error("forceLogout enterprise metadata incomplete");
+  }
+  const reason = normalizeLogoutReason(metadata.reason) as EnterpriseLogoutReason;
+  const finalMetadata: ForceLogoutMetadata = {
+    ...metadata,
+    source: "enterprise",
+    reason,
+    severity: metadata.severity || getLogoutSeverity(reason),
+  };
+  logLogoutTransition("enterprise", {
+    ...finalMetadata,
+  });
 
   if (shouldDedupeEnterprise(reason)) {
     log.info("dedupe enterprise logout", { reason, windowMs: DEDUPE_MS });
@@ -154,9 +212,16 @@ export async function invokeForceLogoutEnterprise(
   }
 
   if (forceLogoutEnterpriseCallback) {
-    await forceLogoutEnterpriseCallback(reason);
+    await forceLogoutEnterpriseCallback(reason, finalMetadata);
   } else {
-    pendingEnterprise = { route: "enterprise", reason, ts: Date.now() };
+    pendingEnterprise = {
+      route: "enterprise",
+      reason,
+      ts: Date.now(),
+      metadata: {
+        ...finalMetadata,
+      },
+    };
     log.warn("force logout enterprise callback not registered", { reason });
   }
 }

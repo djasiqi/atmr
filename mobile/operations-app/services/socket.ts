@@ -10,16 +10,68 @@ import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from 
 import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
 import type { SessionEvent } from "./sessionJournal";
 import { getNetworkStateSnapshot, subscribeToNetworkState } from "./networkState";
-import { extractAuthStatus } from "./socketAuthUtils";
+import { extractAuthStatus, getSocketAuthFailureDecision } from "./socketAuthUtils";
 import { secureStorage } from "./storage";
 import { logAuthEvent } from "./authLogging";
 import { refreshDriverTokenOrchestrated } from "./driverTokenOrchestrator";
+import {
+  ENTERPRISE_SESSION_KEY,
+  runEnterpriseRefreshSingleflight,
+} from "./enterpriseAuth";
+import { buildAuthNamespace } from "./storage/keys";
+import {
+  invokeForceLogoutDriver,
+  invokeForceLogoutEnterprise,
+} from "./authController";
 
 const log = getLogger("Socket");
 const NATIVE_APP_ID = Application.applicationId || "";
 const IS_NATIVE_PROD_APP_ID = NATIVE_APP_ID === "ch.liri.operations";
 const EXECUTION_ENVIRONMENT = String(Constants.executionEnvironment || "");
 const IS_PRODUCTION_RUNTIME = !__DEV__ && IS_NATIVE_PROD_APP_ID;
+
+async function getEnterpriseSocketSessionKey(): Promise<string> {
+  const raw = await AsyncStorage.getItem(ENTERPRISE_SESSION_KEY);
+  if (!raw) {
+    return buildAuthNamespace({
+      role: "enterprise",
+      userId: "unknown",
+      tenantId: null,
+      sessionId: null,
+    });
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return buildAuthNamespace({
+      role: "enterprise",
+      userId: parsed?.user?.public_id || "unknown",
+      tenantId: parsed?.company?.id ?? null,
+      sessionId: parsed?.sessionId ?? null,
+    });
+  } catch {
+    return buildAuthNamespace({
+      role: "enterprise",
+      userId: "unknown",
+      tenantId: null,
+      sessionId: null,
+    });
+  }
+}
+
+function toCanonicalLogoutReason(
+  reason: string
+):
+  | "refresh_invalid"
+  | "refresh_expired"
+  | "session_revoked"
+  | "account_disabled"
+  | "tenant_access_revoked" {
+  if (reason === "refresh_expired") return "refresh_expired";
+  if (reason === "session_revoked") return "session_revoked";
+  if (reason === "account_disabled") return "account_disabled";
+  if (reason === "tenant_access_revoked") return "tenant_access_revoked";
+  return "refresh_invalid";
+}
 
 /** Plan 2G/3G : Listeners appelés à chaque connexion socket (pour syncEngine flush). */
 const socketConnectListeners = new Set<() => void>();
@@ -1055,14 +1107,14 @@ export async function connectSocket(
         const network = getNetworkStateSnapshot();
         const isOnline = network?.isConnected !== false;
         // Garde offline : ne pas tenter refresh si réseau down (battery drain)
-        const isDriverAuthError =
-          socketRole === "driver" &&
+        const isSocketAuthError =
+          (socketRole === "driver" || socketRole === "enterprise") &&
           (authStatus === 401 || authStatus === 403) &&
           isOnline &&
           driverConnectErrorAuthAttempts < MAX_DRIVER_AUTH_REFRESH_ATTEMPTS &&
           !manualReconnectInProgress;
 
-        if (isDriverAuthError && socket && socket.io) {
+        if (isSocketAuthError && socket && socket.io) {
           manualReconnectInProgress = true;
           driverConnectErrorAuthAttempts++;
           const wasReconnection = (socket.io.opts as any).reconnection;
@@ -1075,7 +1127,16 @@ export async function connectSocket(
 
           setTimeout(async () => {
             try {
-              const newToken = await refreshDriverTokenOrchestrated("socket_connect_error");
+              const newToken =
+                socketRole === "driver"
+                  ? await refreshDriverTokenOrchestrated("socket_connect_error")
+                  : (
+                      await runEnterpriseRefreshSingleflight(
+                        await getEnterpriseSocketSessionKey(),
+                        "socket_reconnect",
+                        (await secureStorage.getEnterpriseRefreshToken()) ?? undefined
+                      )
+                    ).token;
               pushSessionEvent("SOCKET_AUTH_REFRESH_SUCCESS");
               if (socket?.auth && typeof socket.auth === "object") {
                 (socket.auth as Record<string, unknown>).token = newToken;
@@ -1084,9 +1145,24 @@ export async function connectSocket(
                 socket?.connect();
               }
             } catch (refreshErr: unknown) {
-              const refreshStatus = (refreshErr as { response?: { status?: number } })?.response?.status;
-              const isAuthInvalid = (refreshErr as { reason?: string })?.reason?.includes("refresh_rejected");
-              if (refreshStatus === 401 || refreshStatus === 403 || isAuthInvalid) {
+              const decision = getSocketAuthFailureDecision(refreshErr);
+              if (decision.shouldLogout) {
+                const reason = toCanonicalLogoutReason(decision.reason);
+                if (socketRole === "driver") {
+                  await invokeForceLogoutDriver({
+                    reason,
+                    severity: decision.severity,
+                    source: "driver",
+                    trigger_source: "socket_reconnect",
+                  });
+                } else {
+                  await invokeForceLogoutEnterprise({
+                    reason,
+                    severity: decision.severity,
+                    source: "enterprise",
+                    trigger_source: "socket_reconnect",
+                  });
+                }
                 connectPromise = null;
                 reject(refreshErr);
               } else {
@@ -1144,7 +1220,16 @@ export async function connectSocket(
           // Essayer de rafraîchir le token
           try {
             log.info("refreshing token", {});
-            const newToken = await refreshDriverTokenOrchestrated("socket_unauthorized");
+            const newToken =
+              socketRole === "driver"
+                ? await refreshDriverTokenOrchestrated("socket_unauthorized")
+                : (
+                    await runEnterpriseRefreshSingleflight(
+                      await getEnterpriseSocketSessionKey(),
+                      "socket_reconnect",
+                      (await secureStorage.getEnterpriseRefreshToken()) ?? undefined
+                    )
+                  ).token;
             if (socket?.auth && typeof socket.auth === "object") {
               (socket.auth as Record<string, unknown>).token = newToken;
             }
@@ -1157,6 +1242,25 @@ export async function connectSocket(
               }
             }, 1000);
           } catch (refreshError: any) {
+            const decision = getSocketAuthFailureDecision(refreshError);
+            if (decision.shouldLogout) {
+              const reason = toCanonicalLogoutReason(decision.reason);
+              if (socketRole === "driver") {
+                await invokeForceLogoutDriver({
+                  reason,
+                  severity: decision.severity,
+                  source: "driver",
+                  trigger_source: "socket_reconnect",
+                });
+              } else if (socketRole === "enterprise") {
+                await invokeForceLogoutEnterprise({
+                  reason,
+                  severity: decision.severity,
+                  source: "enterprise",
+                  trigger_source: "socket_reconnect",
+                });
+              }
+            }
             log.error("token refresh error", {
               error: refreshError?.message || String(refreshError),
             });
@@ -1379,7 +1483,16 @@ export async function sendDriverLocation(payload: {
   heading?: number;
   accuracy?: number;
   timestamp?: number | string;
+  location_mode?: "mission_live" | "availability_presence" | "passive_last_known";
+  recorded_at?: string;
+  sent_at?: string;
+  is_background?: boolean;
+  mission_id?: number | null;
 }) {
+  if (payload.location_mode === "availability_presence") {
+    log.info("driver location socket blocked for availability_presence");
+    return;
+  }
   if (socketRole !== "driver") {
     log.warn("cannot send location", { reason: "socket_not_driver", currentRole: socketRole });
     return;

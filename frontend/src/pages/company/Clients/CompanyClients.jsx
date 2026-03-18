@@ -281,12 +281,15 @@ const CompanyClients = () => {
 
     setIsDrawerOpen(false);
     setSelectedClientId(null);
+    setPendingOpenClientId(null);
     setIsEditMode(false);
     setHasUnsavedChanges(false);
     setClientDetails(null);
 
     const newSearchParams = new URLSearchParams(searchParams);
     newSearchParams.delete('selected');
+    newSearchParams.delete('openClientId');
+    newSearchParams.delete('clientId');
     setSearchParams(newSearchParams);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

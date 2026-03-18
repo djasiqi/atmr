@@ -223,12 +223,32 @@ def fanout_driver_location_update(
     location_payload: dict[str, Any],
     live_state_payload: dict[str, Any],
     *,
+    accept_status: str,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
     """P2: Fanout realtime unifié — émet driver_location_update + driver_live_state_update
     vers la room entreprise. Utilisé par handle_driver_location, handle_driver_location_batch,
     et get_driver_locations.
     """
+    if company_id <= 0:
+        app_logger.error("[socketio] invalid company_id in fanout_driver_location_update")
+        return
+    if not accept_status.strip():
+        raise ValueError("accept_status is required for fanout_driver_location_update")
+    if accept_status != "accepted_canonical":
+        app_logger.info(
+            "[socketio] fanout skipped non canonical accept_status=%s",
+            accept_status,
+        )
+        return
+    payload_company = live_state_payload.get("company_id") or location_payload.get("company_id")
+    if payload_company is not None and str(payload_company) != str(company_id):
+        app_logger.error(
+            "[socketio] cross_tenant_mismatch blocked in fanout company_id=%s payload_company=%s",
+            company_id,
+            payload_company,
+        )
+        return
     room = get_company_room(company_id)
     _safe_emit("driver_location_update", location_payload, room=room, namespace=namespace)
     _safe_emit(

@@ -104,3 +104,53 @@ class TestSocketDriverLocation:
         ), f"Expected error message, got: {payload}"
 
         mock_location_service.update_driver_location.assert_not_called()
+
+    def test_socket_single_rejects_availability_presence(
+        self, app, db, test_driver
+    ):
+        """availability_presence est interdit sur driver_location (single)."""
+        from flask_jwt_extended import create_access_token
+
+        if not test_driver or not test_driver.user:
+            pytest.skip("test_driver fixture required")
+        user = test_driver.user
+        driver = test_driver
+        db.session.refresh(driver)
+        db.session.refresh(user)
+
+        with app.app_context():
+            token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims={"role": "driver", "aud": "atmr-api"},
+                expires_delta=timedelta(hours=1),
+            )
+            client = socketio.test_client(
+                app,
+                auth={"token": token},
+                flask_test_client=app.test_client(),
+            )
+
+        if not client.is_connected():
+            pytest.skip("Socket client could not connect")
+
+        mock_location_service = MagicMock()
+        with patch(
+            "sockets.chat.get_location_service",
+            return_value=mock_location_service,
+        ):
+            client.emit(
+                "driver_location",
+                {
+                    "latitude": 46.2044,
+                    "longitude": 6.1432,
+                    "location_mode": "availability_presence",
+                    "recorded_at": "2026-03-18T10:00:00Z",
+                },
+            )
+
+        received = client.get_received()
+        error_events = [e for e in received if e.get("name") == "error"]
+        assert error_events, f"Expected error event, got: {[e.get('name') for e in received]}"
+        payload = error_events[0].get("args", [{}])[0]
+        assert payload.get("reason") == "availability_presence_socket_forbidden"
+        mock_location_service.update_driver_location.assert_not_called()

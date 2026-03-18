@@ -64,3 +64,21 @@ export const NON_AUTH_KEYS = [
   "driver_saved_email",
   "driver_saved_password_encrypted",
 ] as const;
+
+export type AuthNamespaceParams = {
+  role: "driver" | "enterprise";
+  userId: string | number;
+  tenantId?: string | number | null;
+  sessionId?: string | null;
+};
+
+/**
+ * Namespace logique isolé pour éviter collisions multi-compte/multi-tenant.
+ */
+export function buildAuthNamespace(params: AuthNamespaceParams): string {
+  const role = String(params.role);
+  const user = String(params.userId);
+  const tenant = params.tenantId != null ? String(params.tenantId) : "none";
+  const session = params.sessionId ? String(params.sessionId) : "none";
+  return `${role}:${user}:${tenant}:${session}`;
+}

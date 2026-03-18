@@ -257,6 +257,36 @@ export const fetchCompanyDriverLocations = async () => {
   }
 };
 
+export const fetchCompanyDriversCanonical = async () => {
+  const [drivers, locations] = await Promise.all([
+    fetchCompanyDriver(),
+    fetchCompanyDriverLocations(),
+  ]);
+  const byId = new Map();
+  (locations || []).forEach((loc) => {
+    const id = Number(loc.driver_id ?? loc.id);
+    if (Number.isFinite(id)) byId.set(id, loc);
+  });
+  return (drivers || []).map((drv) => {
+    const id = Number(drv.id);
+    const loc = byId.get(id);
+    if (!loc) return drv;
+    return {
+      ...drv,
+      latitude: loc.lat ?? loc.latitude ?? drv.latitude,
+      longitude: loc.lon ?? loc.longitude ?? drv.longitude,
+      last_seen_seconds: loc.last_seen_seconds ?? drv.last_seen_seconds ?? null,
+      location_status: loc.location_status ?? drv.location_status ?? null,
+      presence_status: loc.presence_status ?? drv.presence_status ?? null,
+      location_mode: loc.location_mode ?? drv.location_mode ?? null,
+      recorded_at: loc.recorded_at ?? drv.recorded_at ?? null,
+      received_at: loc.received_at ?? drv.received_at ?? null,
+      mission_status: loc.mission_status ?? drv.mission_status ?? null,
+      status: loc.status ?? drv.status,
+    };
+  });
+};
+
 /**
  * Crée un nouveau chauffeur (Utilisateur + Profil Chauffeur).
  * (nécessaire pour CompanyDriver.jsx)

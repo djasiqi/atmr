@@ -64,6 +64,7 @@ import {
 } from "@/services/networkState";
 import { getSyncEngine } from "@/services/syncEngine";
 import { initLogContext } from "@/services/logContext";
+import { getAuthKpiSnapshot, logAuthEvent } from "@/services/authLogging";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { PushFailureBanner } from "@/components/common/PushFailureBanner";
 import { GpsDisabledBanner } from "@/components/common/GpsDisabledBanner";
@@ -214,6 +215,7 @@ function RootNav() {
     isAuthenticated,
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
+    authSessionState,
     loading,
     driver,
   } = useAuth();
@@ -398,6 +400,13 @@ function RootNav() {
   // 🔐 Redirections selon l’état d’auth
   useEffect(() => {
     if (loading) return;
+    if (
+      authSessionState === "BOOTSTRAPPING" ||
+      authSessionState === "RECOVERING" ||
+      authSessionState === "DEGRADED"
+    ) {
+      return;
+    }
     const firstSegment = (segments[0] as string | undefined) ?? "";
     const isDriverAuthGroup = firstSegment === "(auth)";
     const isEnterpriseAuthGroup = firstSegment === "(enterprise-auth)";
@@ -452,6 +461,7 @@ function RootNav() {
       }
     }
   }, [
+    authSessionState,
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
     loading,
@@ -459,6 +469,15 @@ function RootNav() {
     router,
     segments,
   ]);
+
+  // KPI auth pilote: snapshot périodique agrégé pour Go/No-Go.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const snapshot = getAuthKpiSnapshot();
+      logAuthEvent("AUTH_KPI_SNAPSHOT", snapshot);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // 🔔 Config + enregistrement push (quand prêt)
   useEffect(() => {
@@ -920,6 +939,9 @@ function RootNav() {
     <>
       <InAppNotificationToast />
       <OfflineBanner />
+      {(authSessionState === "RECOVERING" || authSessionState === "DEGRADED") && (
+        <SessionRecoveryBanner state={authSessionState} />
+      )}
       {pushFailed && <PushFailureBanner />}
       <GpsDisabledBanner />
       <Slot />
@@ -929,6 +951,18 @@ function RootNav() {
         onDismiss={() => setShowBatteryGuide(false)}
       />
     </>
+  );
+}
+
+function SessionRecoveryBanner({ state }: { state: "RECOVERING" | "DEGRADED" }) {
+  const message =
+    state === "RECOVERING"
+      ? "Reconnexion en cours. La session reste active."
+      : "Connexion dégradée. Nouvelle tentative automatique en cours.";
+  return (
+    <View style={styles.recoveryBanner}>
+      <Text style={styles.recoveryBannerText}>{message}</Text>
+    </View>
   );
 }
 
@@ -1008,5 +1042,18 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.4)",
     letterSpacing: 1.5,
     textTransform: "uppercase",
+  },
+  recoveryBanner: {
+    backgroundColor: "#FFF4E5",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5D7A1",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  recoveryBannerText: {
+    color: "#8A5A00",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

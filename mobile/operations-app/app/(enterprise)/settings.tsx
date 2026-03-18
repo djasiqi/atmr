@@ -20,7 +20,11 @@ import {
   DriverAccountInfo,
   switchToDriverToken,
 } from "@/services/enterpriseDispatch";
-import { secureStorage, asyncStorage } from "@/services/storage";
+import {
+  secureStorage,
+  asyncStorage,
+  setActiveAuthNamespace,
+} from "@/services/storage";
 import { fetchDriverProfile, invalidateInterceptorCache } from "@/services/api";
 import { notifyAuthReady } from "@/services/authSync";
 import { sendIngestEvent } from "@/src/config/telemetry";
@@ -148,6 +152,16 @@ export default function EnterpriseSettingsScreen() {
         hasRefreshToken: !!driverTokenResponse.refresh_token,
       });
 
+      // ✅ Isolation driver/enterprise : nettoyer les tokens entreprise AVANT de stocker les tokens driver
+      await logoutEnterprise();
+      log.success("enterprise storage cleared before driver tokens");
+
+      await setActiveAuthNamespace({
+        role: "driver",
+        userId: driverTokenResponse.user.public_id || "unknown",
+        tenantId: null,
+        sessionId: null,
+      });
       await secureStorage.setAccessToken(driverTokenResponse.token);
       if (driverTokenResponse.refresh_token) {
         await secureStorage.setRefreshToken(driverTokenResponse.refresh_token);
@@ -165,9 +179,6 @@ export default function EnterpriseSettingsScreen() {
       sendIngestEvent({ location: 'settings.tsx:handleSwitchToDriver', message: 'Après switchMode driver', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'I' });
 
       log.success("mode switched to driver");
-
-      await logoutEnterprise();
-      log.success("enterprise storage cleared");
 
       notifyAuthReady();
 

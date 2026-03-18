@@ -61,6 +61,13 @@
   white-space: nowrap;
 }
 
+.clientId {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+
 .headerBadges {
   display: flex;
   flex-wrap: wrap;

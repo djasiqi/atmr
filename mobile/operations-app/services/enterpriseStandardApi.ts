@@ -27,11 +27,14 @@ enterpriseStandardApi.interceptors.request.use(async (config) => {
 
   if (!isPublic) {
     try {
-      await waitForAuthReady(5000);
+      await waitForAuthReady({
+        timeoutMs: 5000,
+        reasonOnTimeout: "auth_recovering",
+      });
     } catch {
       throw new AuthNotReadyError({
         kind: "enterpriseStandard",
-        reason: "auth_ready_timeout",
+        reason: "auth_recovering",
         url: config.url,
       });
     }

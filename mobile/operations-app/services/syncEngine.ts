@@ -16,7 +16,8 @@ import { subscribeToNetworkState, getNetworkStateSnapshot } from "./networkState
 import { addSocketConnectListener, getSocket, getSocketRole, sendDriverHeartbeat, triggerMissionResync } from "./socket";
 import { MissionStateManager } from "./missionState";
 import { syncLocationQueue, flushLatestPositionViaHttp } from "./locationQueue";
-import { getAdaptiveLocationTracker } from "./locationTracker";
+import { getAdaptiveLocationTracker, getCurrentLocationMode } from "./locationTracker";
+import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
 
 const log = getLogger("SyncEngine");
 
@@ -29,13 +30,24 @@ let locationFlushInterval: ReturnType<typeof setInterval> | null = null;
 let reconciliationInterval: ReturnType<typeof setInterval> | null = null;
 let missionFallbackInterval: ReturnType<typeof setInterval> | null = null;
 let missionHeartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let presenceHeartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
 function isMissionCriticalTrackingMode(): boolean {
   if (getSocketRole() !== "driver") return false;
-  if (!MissionStateManager.isActive()) return false;
-  const status = MissionStateManager.getState().currentStatus;
-  // Règle figée: ASSIGNED n'est pas mission-critical en background.
-  return status === "EN_ROUTE" || status === "IN_PROGRESS";
+  const state = resolvePresenceState({
+    isAuthenticated: true,
+    isDriver: true,
+    hasFgPermission: true,
+    hasBgPermission: true,
+    appInBackground: AppState.currentState !== "active",
+    hasActiveMission: MissionStateManager.isActive(),
+    availabilityPresenceEnabled: true,
+  });
+  return resolveLocationModeFromState(state) === "mission_live";
+}
+
+function isAvailabilityPresenceMode(): boolean {
+  return getSocketRole() === "driver" && getCurrentLocationMode() === "availability_presence";
 }
 
 function triggerPendingActionsFlush(): void {
@@ -47,7 +59,8 @@ function triggerPendingActionsFlush(): void {
 function triggerLocationFlush(): void {
   if (getSocketRole() !== "driver") return;
   const missionCritical = isMissionCriticalTrackingMode();
-  if (AppState.currentState !== "active" && !missionCritical) return;
+  const presenceMode = isAvailabilityPresenceMode();
+  if (AppState.currentState !== "active" && !missionCritical && !presenceMode) return;
   const socket = getSocket();
   const doFlush = () => {
     if (socket?.connected) {
@@ -154,6 +167,16 @@ class SyncEngineImpl {
       });
     }, 60000);
 
+    // Heartbeat présence hors mission: 180s en background (HTTP only).
+    presenceHeartbeatInterval = setInterval(() => {
+      if (AppState.currentState === "active") return;
+      if (!isAvailabilityPresenceMode()) return;
+      if (MissionStateManager.isActive()) return;
+      flushLatestPositionViaHttp().catch((e) => {
+        log.warn("presence heartbeat fallback error", { error: e });
+      });
+    }, 180000);
+
     this.started = true;
     log.success("syncEngine started");
   }
@@ -186,6 +209,10 @@ class SyncEngineImpl {
     if (missionHeartbeatInterval) {
       clearInterval(missionHeartbeatInterval);
       missionHeartbeatInterval = null;
+    }
+    if (presenceHeartbeatInterval) {
+      clearInterval(presenceHeartbeatInterval);
+      presenceHeartbeatInterval = null;
     }
     stopConnectivityPolicy();
     this.started = false;

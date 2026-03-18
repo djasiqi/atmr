@@ -61,6 +61,13 @@
   white-space: nowrap;
 }
 
+.clientId {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+
 .unsavedIndicator {
   color: #f59e0b;
   font-weight: bold;

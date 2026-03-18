@@ -1,3 +1,5 @@
+import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
+
 /**
  * Background tracking gating — Phase 1: mission active uniquement.
  *
@@ -6,6 +8,10 @@
  */
 
 export type PermissionStatus = "granted" | "denied" | "undetermined";
+export type LocationMode =
+  | "mission_live"
+  | "availability_presence"
+  | "passive_last_known";
 
 export interface BgTrackingInputs {
   isAuthenticated: boolean;
@@ -15,6 +21,8 @@ export interface BgTrackingInputs {
   fgPermission: PermissionStatus;
   bgPermission: PermissionStatus;
   killSwitchEnabled: boolean;
+  locationMode: LocationMode;
+  availabilityPresenceEnabled?: boolean;
 }
 
 /**
@@ -111,7 +119,8 @@ export function deriveStopContract(inputs: BgTrackingInputs): StopContract {
   const requiresBgPermission = inputs.platform === "ios";
   const bgOk = requiresBgPermission ? inputs.bgPermission === "granted" : true;
   return {
-    missionEnded: !inputs.hasActiveMission,
+    missionEnded:
+      inputs.locationMode === "mission_live" && !inputs.hasActiveMission,
     logout: !inputs.isAuthenticated,
     permissionRevoked: !fgOk || !bgOk,
     roleNonDriver: inputs.role !== "driver",
@@ -147,7 +156,24 @@ export function shouldRunBackgroundTracking(inputs: BgTrackingInputs): boolean {
   if (inputs.killSwitchEnabled) return false;
   if (inputs.role !== "driver") return false;
   if (!inputs.isAuthenticated) return false;
-  if (!inputs.hasActiveMission) return false;
+  const fsmState = resolvePresenceState({
+    isAuthenticated: inputs.isAuthenticated,
+    isDriver: inputs.role === "driver",
+    hasFgPermission: inputs.fgPermission === "granted",
+    hasBgPermission: requiresBgPermission ? inputs.bgPermission === "granted" : true,
+    appInBackground: true,
+    hasActiveMission: inputs.hasActiveMission,
+    availabilityPresenceEnabled: !!inputs.availabilityPresenceEnabled,
+  });
+  if (resolveLocationModeFromState(fsmState) === "passive_last_known") return false;
+  if (inputs.locationMode === "passive_last_known") return false;
+  if (
+    inputs.locationMode === "availability_presence" &&
+    !inputs.availabilityPresenceEnabled
+  ) {
+    return false;
+  }
+  if (inputs.locationMode === "mission_live" && !inputs.hasActiveMission) return false;
   if (inputs.fgPermission !== "granted") return false;
   if (requiresBgPermission && inputs.bgPermission !== "granted") return false;
   return true;

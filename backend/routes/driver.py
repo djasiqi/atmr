@@ -26,6 +26,12 @@ from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update
+from services.geolocation.presence import (
+    compute_last_seen_seconds,
+    compute_location_status,
+    presence_status_from_location_status,
+)
+from services.realtime.socketio import fanout_driver_location_update
 
 # Note: Modèles (DelayEvent, Driver) utilisés pour types/annotations
 # TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles
@@ -115,12 +121,25 @@ photo_model = driver_ns.model(
 location_model = driver_ns.model(
     "DriverLocation",
     {
-        "latitude": fields.Float(required=True, description="Latitude"),
-        "longitude": fields.Float(required=True, description="Longitude"),
+        "latitude": fields.Float(required=False, description="Latitude"),
+        "longitude": fields.Float(required=False, description="Longitude"),
+        "lat": fields.Float(required=False, description="Latitude canonique"),
+        "lon": fields.Float(required=False, description="Longitude canonique"),
         "speed": fields.Float(required=False, description="Vitesse m/s"),
+        "speed_mps": fields.Float(required=False, description="Vitesse m/s canonique"),
         "heading": fields.Float(required=False, description="Cap en degrés"),
         "accuracy": fields.Float(required=False, description="Précision en mètres"),
+        "accuracy_m": fields.Float(required=False, description="Précision en mètres canonique"),
         "ts": fields.String(required=False, description="Horodatage ISO8601"),
+        "recorded_at": fields.String(required=False, description="Horodatage GPS ISO8601"),
+        "sent_at": fields.String(required=False, description="Horodatage envoi ISO8601"),
+        "location_mode": fields.String(
+            required=False,
+            description="mission_live|availability_presence|passive_last_known",
+        ),
+        "is_background": fields.Boolean(required=False, description="Position collectée en background"),
+        "mission_id": fields.Integer(required=False, description="Mission active (optionnel)"),
+        "device_status": fields.Raw(required=False, description="Métadonnées device"),
     },
 )
 
@@ -1195,14 +1214,20 @@ class DriverLocation(Resource):
             if not p:
                 result = {"error": "No data provided"}
                 status_code = 400
-            elif "latitude" not in p or "longitude" not in p:
-                result = {"error": "Latitude and longitude are required"}
+            elif ("latitude" not in p and "lat" not in p) or ("longitude" not in p and "lon" not in p):
+                result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}
+                status_code = 400
+            elif "location_mode" not in p or "recorded_at" not in p:
+                result = {
+                    "error": "location_mode and recorded_at are required",
+                    "reason": "missing_required_fields",
+                }
                 status_code = 400
             else:
                 # Validation et conversion
                 try:
-                    lat = float(p["latitude"])
-                    lon = float(p["longitude"])
+                    lat = float(p.get("lat", p.get("latitude")))
+                    lon = float(p.get("lon", p.get("longitude")))
 
                     if result is None and (
                         (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD))
@@ -1212,10 +1237,22 @@ class DriverLocation(Resource):
                         status_code = 400
 
                     if result is None:
-                        speed = float(p.get("speed", 0.0) or 0.0)
+                        speed = float(
+                            p.get("speed_mps", p.get("speed", 0.0)) or 0.0
+                        )
                         heading = float(p.get("heading", 0.0) or 0.0)
-                        accuracy = float(p.get("accuracy", 0.0) or 0.0)
-                        ts = p.get("ts") or datetime.now(UTC).isoformat()
+                        accuracy = float(
+                            p.get("accuracy_m", p.get("accuracy", 0.0)) or 0.0
+                        )
+                        recorded_at = (
+                            p.get("recorded_at")
+                            or p.get("ts")
+                            or datetime.now(UTC).isoformat()
+                        )
+                        sent_at = p.get("sent_at") or datetime.now(UTC).isoformat()
+                        location_mode = p.get("location_mode") or "mission_live"
+                        is_background = bool(p.get("is_background", False))
+                        mission_id = p.get("mission_id")
 
                         from application.drivers.update_driver_location import (
                             UpdateDriverLocationCommand,
@@ -1225,6 +1262,10 @@ class DriverLocation(Resource):
                             create_location_update_fn,
                         )
 
+                        source = "raw"
+                        accept_status = "accepted_observability_only"
+                        accept_reason = "location_update_not_attempted"
+                        received_at = datetime.now(UTC).isoformat()
                         try:
                             # ✅ DDD: Utilise adapter au lieu de service directement
                             uc = UpdateDriverLocationUseCase(
@@ -1238,7 +1279,12 @@ class DriverLocation(Resource):
                                     speed=speed if speed > 0 else None,
                                     heading=heading if heading >= 0 else None,
                                     accuracy=accuracy if accuracy > 0 else None,
-                                    ts=ts,
+                                    ts=recorded_at,
+                                    recorded_at=recorded_at,
+                                    sent_at=sent_at,
+                                    location_mode=location_mode,
+                                    is_background=is_background,
+                                    mission_id=mission_id,
                                 )
                             )
 
@@ -1246,6 +1292,9 @@ class DriverLocation(Resource):
                             lat = uc_result.snapped_lat
                             lon = uc_result.snapped_lon
                             source = uc_result.source
+                            received_at = uc_result.received_at or received_at
+                            accept_status = uc_result.accept_status
+                            accept_reason = uc_result.accept_reason
 
                             # Émettre events geofencing si détectés
                             for event in uc_result.geofence_events:
@@ -1263,49 +1312,106 @@ class DriverLocation(Resource):
                                     )
 
                         except Exception as e_loc:
-                            logger.warning(
+                            logger.exception(
                                 "[LocationService] HTTP location update failed: %s",
                                 str(e_loc),
                             )
-                            source = "raw"  # Fallback
+                            result = {
+                                "error": "Location service unavailable",
+                                "reason": "location_update_failed",
+                            }
+                            status_code = 503
 
-                        # 5) Diffusion temps réel à la room entreprise
-                        try:
-                            room = f"company_{driver.company_id}"
+                        # 5) Diffusion temps réel à la room entreprise (canonique uniquement)
+                        if result is None:
+                            try:
+                                # Extraire first_name et last_name depuis driver.user
+                                first_name = None
+                                last_name = None
+                                if hasattr(driver, "user") and driver.user is not None:
+                                    first_name = getattr(driver.user, "first_name", None)
+                                    last_name = getattr(driver.user, "last_name", None)
 
-                            # Extraire first_name et last_name depuis driver.user
-                            first_name = None
-                            last_name = None
-                            if hasattr(driver, "user") and driver.user is not None:
-                                first_name = getattr(driver.user, "first_name", None)
-                                last_name = getattr(driver.user, "last_name", None)
+                                # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
+                                last_seen_seconds = compute_last_seen_seconds(recorded_at)
+                                location_status = compute_location_status(
+                                    mode=location_mode, last_seen_seconds=last_seen_seconds
+                                )
+                                presence_status = presence_status_from_location_status(
+                                    location_status
+                                )
 
-                            # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
-                            socketio.emit(
-                                "driver_location_update",
-                                {
-                                    "driver_id": driver.id,
-                                    "company_id": driver.company_id,
-                                    "lat": lat,
-                                    "lon": lon,
-                                    "speed": speed,
-                                    "heading": heading,
-                                    "accuracy": accuracy,
-                                    "ts": ts,
-                                    "source": source,
-                                    "first_name": first_name,
-                                    "last_name": last_name,
-                                },
-                                to=room,
-                            )
-                        except Exception:
-                            pass
+                                company_id_raw = getattr(driver, "company_id", None)
+                                company_id_for_room = (
+                                    int(company_id_raw)
+                                    if company_id_raw is not None
+                                    else None
+                                )
+                                if company_id_for_room is None:
+                                    raise ValueError("driver.company_id is missing")
+                                fanout_driver_location_update(
+                                    company_id_for_room,
+                                    {
+                                        "driver_id": driver.id,
+                                        "company_id": driver.company_id,
+                                        "lat": lat,
+                                        "lon": lon,
+                                        "speed": speed,
+                                        "speed_mps": speed,
+                                        "heading": heading,
+                                        "accuracy": accuracy,
+                                        "accuracy_m": accuracy,
+                                        "ts": recorded_at,
+                                        "recorded_at": recorded_at,
+                                        "sent_at": sent_at,
+                                        "received_at": received_at,
+                                        "is_background": is_background,
+                                        "mission_id": mission_id,
+                                        "location_mode": location_mode,
+                                        "last_seen_seconds": last_seen_seconds,
+                                        "location_status": location_status,
+                                        "presence_status": presence_status,
+                                        "source": source,
+                                        "first_name": first_name,
+                                        "last_name": last_name,
+                                    },
+                                    {
+                                        "driver_id": driver.id,
+                                        "company_id": driver.company_id,
+                                        "lat": lat,
+                                        "lng": lon,
+                                        "timestamp": recorded_at,
+                                        "recorded_at": recorded_at,
+                                        "received_at": received_at,
+                                        "status": "busy" if mission_id else "available",
+                                        "mission_status": None,
+                                        "presence_status": presence_status,
+                                        "location_status": location_status,
+                                        "is_available": not bool(mission_id),
+                                        "offline_reason": "",
+                                        "last_seen_seconds": last_seen_seconds,
+                                        "location_mode": location_mode,
+                                        "mission_id": mission_id,
+                                        "first_name": first_name,
+                                        "last_name": last_name,
+                                    },
+                                    accept_status=accept_status,
+                                )
+                            except Exception as fanout_err:
+                                logger.warning(
+                                    "[LocationService] fanout failed: %s",
+                                    str(fanout_err),
+                                )
 
-                        result = {
-                            "ok": True,
-                            "source": source,
-                            "message": "Location updated",
-                        }
+                            result = {
+                                "ok": True,
+                                "source": source,
+                                "message": "Location updated",
+                                "location_mode": location_mode,
+                                "accept_status": accept_status,
+                                "accept_reason": accept_reason,
+                                "received_at": received_at,
+                            }
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400

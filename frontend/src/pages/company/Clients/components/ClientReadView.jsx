@@ -202,6 +202,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
       <header className={styles.header} data-drawer-header>
         <div className={styles.headerTop}>
           <button
+            type="button"
             onClick={onClose}
             className={styles.closeButton}
             aria-label="Fermer"
@@ -210,7 +211,7 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
             <FiX size={18} />
           </button>
           <div className={styles.headerTitle}>
-            <h2 className={styles.clientName}>{displayName}</h2>
+            <h2 className={styles.clientName}>{displayName}{client?.id != null && <span className={styles.clientId} title="ID client"> #{client.id}</span>}</h2>
             <div className={styles.headerBadges}>
               {client.is_institution ? (
                 <span className={styles.badgeInstitution}>

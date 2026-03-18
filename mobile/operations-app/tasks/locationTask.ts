@@ -27,6 +27,25 @@ try {
 }
 
 const LOCATION_TASK_NAME = "background-location-task";
+const LOCATION_MODE_KEY = "@atmr:location_mode";
+
+async function getBackgroundLocationMode(): Promise<
+  "mission_live" | "availability_presence" | "passive_last_known"
+> {
+  try {
+    const mode = (await AsyncStorage.getItem(LOCATION_MODE_KEY))?.trim();
+    if (
+      mode === "mission_live" ||
+      mode === "availability_presence" ||
+      mode === "passive_last_known"
+    ) {
+      return mode;
+    }
+  } catch {
+    // ignore
+  }
+  return "availability_presence";
+}
 
 // Buffer pour les positions (batching)
 let positionBuffer: Array<{
@@ -60,6 +79,7 @@ async function flushPositionBatch() {
     const driverId = parseInt(driverIdStr, 10);
     const batch = [...positionBuffer];
     positionBuffer = []; // Clear buffer
+    const locationMode = await getBackgroundLocationMode();
 
     const queued: QueuedLocation[] = batch.map((p) => ({
       latitude: p.latitude,
@@ -69,6 +89,10 @@ async function flushPositionBatch() {
       accuracy: p.accuracy,
       timestamp: p.timestamp,
       driver_id: driverId,
+      location_mode: locationMode,
+      recorded_at: new Date(p.timestamp || Date.now()).toISOString(),
+      sent_at: new Date().toISOString(),
+      is_background: true,
     }));
 
     // Une seule opération AsyncStorage au lieu de N (évite Background ANR)
@@ -85,12 +109,17 @@ async function flushPositionBatch() {
           const { updateDriverLocation } = await import("../services/api");
           await Promise.race([
             updateDriverLocation({
-              latitude: latest.latitude,
-              longitude: latest.longitude,
-              speed: latest.speed,
+              lat: latest.latitude,
+              lon: latest.longitude,
+              speed_mps: latest.speed,
               heading: latest.heading,
-              accuracy: latest.accuracy,
-              timestamp: latest.timestamp,
+              accuracy_m: latest.accuracy,
+              recorded_at:
+                latest.recorded_at ||
+                new Date(latest.timestamp || Date.now()).toISOString(),
+              sent_at: new Date().toISOString(),
+              is_background: true,
+              location_mode: latest.location_mode || locationMode,
             }),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error("timeout")), 5000)

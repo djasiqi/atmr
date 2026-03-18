@@ -20,7 +20,11 @@ import {
   loginDriver,
   invalidateInterceptorCache,
 } from "@/services/api";
-import { secureStorage, asyncStorage } from "@/services/storage";
+import {
+  secureStorage,
+  asyncStorage,
+  setActiveAuthNamespace,
+} from "@/services/storage";
 import {
   getRememberMe,
   setRememberMe as persistRememberMe,
@@ -37,20 +41,34 @@ import {
   EnterpriseTokenPayload,
   fetchEnterpriseSession,
   loginEnterprise,
-  refreshEnterpriseTokenSingleflight,
   refreshEnterpriseToken,
+  runEnterpriseRefreshSingleflight,
   verifyEnterpriseMfa,
   invalidateEnterpriseInterceptorCache,
 } from "@/services/enterpriseAuth";
-import { notifyAuthReady, notifyAuthNotReady } from "@/services/authSync";
+import {
+  type AuthSessionState,
+  assertSessionPurgeAllowed,
+  getAuthBootstrapState,
+  notifyAuthReady,
+  notifyAuthNotReady,
+  subscribeAuthSessionState,
+} from "@/services/authSync";
 import { setLogContextUser } from "@/services/logContext";
 import {
+  type ForceLogoutMetadata,
+  invokeForceLogoutDriver,
+  invokeForceLogoutEnterprise,
   registerForceLogoutDriver,
   registerForceLogoutEnterprise,
   type DriverLogoutReason,
   type EnterpriseLogoutReason,
 } from "@/services/authController";
-import { isAuthNotReadyError } from "@/services/authGuards";
+import {
+  getAuthFailureReason,
+  isAuthNotReadyError,
+  shouldLogoutFromRefreshFailure,
+} from "@/services/authGuards";
 import { isNetworkError, isHttpAuthError, getHttpStatus } from "@/utils/authErrorHelpers";
 import {
   isDriverProactiveRefreshInCooldown,
@@ -75,6 +93,7 @@ import {
 import { sendIngestEvent } from "@/src/config/telemetry";
 import { getLogger } from "@/utils/logger";
 import { refreshDriverTokenOrchestrated } from "@/services/driverTokenOrchestrator";
+import { buildAuthNamespace } from "@/services/storage/keys";
 
 const log = getLogger("Auth");
 
@@ -119,6 +138,25 @@ const accessStillValid = (token: string | null, skewMs = 2 * 60 * 1000): boolean
   const exp = getTokenExpiration(token);
   if (!exp) return false;
   return Date.now() < exp - skewMs;
+};
+
+const buildEnterpriseSessionKeyFromState = (
+  session: EnterpriseSessionState | null
+): string => {
+  if (!session) {
+    return buildAuthNamespace({
+      role: "enterprise",
+      userId: "unknown",
+      tenantId: null,
+      sessionId: null,
+    });
+  }
+  return buildAuthNamespace({
+    role: "enterprise",
+    userId: session.user?.public_id || "unknown",
+    tenantId: session.company?.id ?? null,
+    sessionId: session.sessionId ?? null,
+  });
 };
 
 interface EnterpriseSessionState {
@@ -185,6 +223,7 @@ interface AuthContextType {
   logoutEnterprise: () => Promise<void>;
 
   isAuthenticated: boolean;
+  authSessionState: AuthSessionState;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -233,6 +272,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     email: string;
     password: string;
   } | null>(null);
+  const [authSessionState, setAuthSessionState] = useState<AuthSessionState>(
+    () => getAuthBootstrapState()
+  );
 
   /** Sync état → cache module (survit remount StrictMode / hot reload). */
   useEffect(() => {
@@ -244,6 +286,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       initialLoading,
     };
   }, [mode, driver, driverToken, enterpriseSession, initialLoading]);
+
+  useEffect(() => {
+    setAuthSessionState(getAuthBootstrapState());
+    return subscribeAuthSessionState((state) => {
+      setAuthSessionState(state);
+    });
+  }, []);
 
   /** P0.1 — Garde anti double-exécution (driver). */
   const driverLogoutInProgressRef = useRef(false);
@@ -293,12 +342,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   /** P0 — Porte de sortie unique pour invalider la session driver (storage + état + socket). */
   const forceLogoutDriverInternal = useCallback(
-    async (reason: DriverLogoutReason) => {
+    async (reason: DriverLogoutReason, metadata?: ForceLogoutMetadata) => {
       if (driverLogoutInProgressRef.current) return;
       driverLogoutInProgressRef.current = true;
       setDriverLoading(true);
       notifyAuthNotReady();
       try {
+        if (!metadata?.severity || !metadata?.trigger_source || !metadata?.source) {
+          log.warn("forceLogout driver metadata missing in callback", { reason });
+        }
+        assertSessionPurgeAllowed(reason);
         await ensureBackgroundTrackingStopped("logout");
         if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "driver", reason, ts: Date.now() });
@@ -339,14 +392,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   /** P0 — Porte de sortie unique pour invalider la session enterprise (storage + état). */
   const forceLogoutEnterpriseInternal = useCallback(
-    async (reason: EnterpriseLogoutReason) => {
+    async (reason: EnterpriseLogoutReason, metadata?: ForceLogoutMetadata) => {
       if (enterpriseLogoutInProgressRef.current) return;
       enterpriseLogoutInProgressRef.current = true;
       try {
+        if (!metadata?.severity || !metadata?.trigger_source || !metadata?.source) {
+          log.warn("forceLogout enterprise metadata missing in callback", { reason });
+        }
+        notifyAuthNotReady();
+        assertSessionPurgeAllowed(reason);
         if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "enterprise", reason, ts: Date.now() });
         }
-        notifyAuthNotReady();
         await clearEnterpriseStorage();
         const keepRememberedCreds = await getRememberMe("enterprise");
         if (!keepRememberedCreds) {
@@ -369,6 +426,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // ✅ Les tokens sont déjà stockés dans loginDriver() (SecureStore + AsyncStorage)
       setDriverToken(response.token);
       pushSessionEvent("TOKEN_STORED");
+      await setActiveAuthNamespace({
+        role: "driver",
+        userId: response.user?.public_id || "unknown",
+        tenantId: null,
+        sessionId: null,
+      });
       await storeMode("driver");
       // ✅ P1 strict: rendre l'auth "ready" avant tout appel protégé (ex: /driver/me/profile)
       // Sinon l'intercepteur rejette avec AUTH_NOT_READY et on se retrouve avec un faux "login failed".
@@ -400,6 +463,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw new Error("Profil chauffeur indisponible (AUTH_NOT_READY)");
         }
         setDriver(profile);
+        await setActiveAuthNamespace({
+          role: "driver",
+          userId: profile.id || "unknown",
+          tenantId: null,
+          sessionId: null,
+        });
         // ✅ Stocker driver_id pour navigation rapide
         await asyncStorage.setDriverId(profile.id);
       } catch (error) {
@@ -410,7 +479,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         // P1.B: Ne logout que sur 401/403 (auth invalide). Réseau/5xx => conserver tokens, erreur UI.
         if (isHttpAuthError(error)) {
-          await forceLogoutDriverInternal("login_profile_failed");
+          await invokeForceLogoutDriver({
+            reason: "login_profile_failed",
+            severity: "AUTH_HARD_FAILURE",
+            source: "driver",
+            trigger_source: "manual_action",
+          });
         }
         throw error;
       }
@@ -424,6 +498,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       options?: { skipModeUpdate?: boolean }
     ) => {
       const session = parseEnterpriseSuccess(payload);
+      await setActiveAuthNamespace({
+        role: "enterprise",
+        userId: session.user?.public_id || "unknown",
+        tenantId: session.company?.id ?? null,
+        sessionId: session.sessionId ?? null,
+      });
       setEnterpriseSession(session);
       setPendingEnterpriseMfa(null);
 
@@ -544,6 +624,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
                   setDriver(profile);
+                  await setActiveAuthNamespace({
+                    role: "driver",
+                    userId: profile.id || "unknown",
+                    tenantId: null,
+                    sessionId: null,
+                  });
                   await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
                   driverSessionRestored = true;
@@ -571,6 +657,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
                   setDriver(profile);
+                  await setActiveAuthNamespace({
+                    role: "driver",
+                    userId: profile.id || "unknown",
+                    tenantId: null,
+                    sessionId: null,
+                  });
                   await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
                   driverSessionRestored = true;
@@ -584,9 +676,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   // Pas de forceLogout, pas de wipe storage
                 } else if (isHttpAuthError(refreshError)) {
                   const status = getHttpStatus(refreshError);
-                  await forceLogoutDriverInternal(
-                    status === 401 ? "refresh_rejected_401" : "refresh_rejected_403"
-                  );
+                  await invokeForceLogoutDriver({
+                    reason: status === 401 ? "refresh_invalid" : "account_disabled",
+                    severity: "AUTH_HARD_FAILURE",
+                    source: "driver",
+                    trigger_source: "bootstrap",
+                  });
                 } else {
                   // 5xx, autre → pas de logout
                   log.warn("boot server error, tokens kept");
@@ -607,6 +702,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                       const profile = await fetchDriverProfile();
                       if (isMounted) {
                         setDriver(profile);
+                        await setActiveAuthNamespace({
+                          role: "driver",
+                          userId: profile.id || "unknown",
+                          tenantId: null,
+                          sessionId: null,
+                        });
                         await asyncStorage.setDriverId(profile.id);
                         await storeMode("driver");
                         profileLoaded = true;
@@ -631,9 +732,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     // ✅ P0.2.B : Pas de forceLogout sur erreur réseau ou autre
                     if (isMounted && isHttpAuthError(autoLoginError)) {
                       const status = getHttpStatus(autoLoginError);
-                      await forceLogoutDriverInternal(
-                        status === 401 ? "refresh_rejected_401" : "refresh_rejected_403"
-                      );
+                      await invokeForceLogoutDriver({
+                        reason:
+                          status === 401 ? "refresh_invalid" : "account_disabled",
+                        severity: "AUTH_HARD_FAILURE",
+                        source: "driver",
+                        trigger_source: "bootstrap",
+                      });
                     }
                   }
                   // Si toujours pas de profil chargé : pas de forceLogout (tokens conservés pour retry)
@@ -656,6 +761,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   const profile = await fetchDriverProfile();
                   if (isMounted) {
                     setDriver(profile);
+                    await setActiveAuthNamespace({
+                      role: "driver",
+                      userId: profile.id || "unknown",
+                      tenantId: null,
+                      sessionId: null,
+                    });
                     await asyncStorage.setDriverId(profile.id);
                     await storeMode("driver");
                     profileLoaded = true;
@@ -680,9 +791,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // ✅ P0.2.B : Pas de forceLogout sur erreur réseau ; uniquement 401/403
                 if (isMounted && isHttpAuthError(autoLoginError)) {
                   const status = getHttpStatus(autoLoginError);
-                  await forceLogoutDriverInternal(
-                    status === 401 ? "refresh_rejected_401" : "refresh_rejected_403"
-                  );
+                  await invokeForceLogoutDriver({
+                    reason: status === 401 ? "refresh_invalid" : "account_disabled",
+                    severity: "AUTH_HARD_FAILURE",
+                    source: "driver",
+                    trigger_source: "bootstrap",
+                  });
                 }
               }
             }
@@ -755,8 +869,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   const refreshToken = await secureStorage.getEnterpriseRefreshToken() ?? parsed.refreshToken;
                   if (refreshToken) {
                     try {
-                      const refreshResponse =
-                        await refreshEnterpriseTokenSingleflight(refreshToken);
+                      const refreshResponse = await runEnterpriseRefreshSingleflight(
+                        buildEnterpriseSessionKeyFromState({
+                          ...parsed,
+                          token: enterpriseToken,
+                        } as EnterpriseSessionState),
+                        "bootstrap",
+                        refreshToken
+                      );
                       await handleEnterpriseSuccess(refreshResponse, {
                         skipModeUpdate: true,
                       });
@@ -778,8 +898,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           } catch (error) {
             log.warn("enterprise session restore failed", { error });
             enterpriseRestored = false;
-            await clearEnterpriseStorage();
-            setEnterpriseSession(null);
+            await invokeForceLogoutEnterprise({
+              reason: "refresh_invalid",
+              severity: "AUTH_HARD_FAILURE",
+              source: "enterprise",
+              trigger_source: "bootstrap",
+            });
           }
         }
       } finally {
@@ -939,7 +1063,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // ✅ Si 403 (compte désactivé) et access expiré, forcer déconnexion
           if (status === 403) {
             log.error("driver account disabled on proactive refresh", { errorData });
-            await forceLogoutDriverInternal("refresh_rejected_403");
+            await invokeForceLogoutDriver({
+              reason: "account_disabled",
+              severity: "AUTH_HARD_FAILURE",
+              source: "driver",
+              trigger_source: "foreground_resume",
+            });
             return;
           }
 
@@ -1021,7 +1150,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (status === 403) {
             log.error("driver account disabled on immediate refresh", { errorData });
-            await forceLogoutDriverInternal("refresh_rejected_403");
+            await invokeForceLogoutDriver({
+              reason: "account_disabled",
+              severity: "AUTH_HARD_FAILURE",
+              source: "driver",
+              trigger_source: "proactive_refresh",
+            });
             return;
           }
 
@@ -1139,8 +1273,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               (await secureStorage.getEnterpriseRefreshToken());
             if (refreshToken) {
               try {
-                const refreshResponse =
-                  await refreshEnterpriseTokenSingleflight(refreshToken);
+                const refreshResponse = await runEnterpriseRefreshSingleflight(
+                  buildEnterpriseSessionKeyFromState(enterpriseSession),
+                  "foreground_resume",
+                  refreshToken
+                );
                 await handleEnterpriseSuccess(refreshResponse);
                 invalidateEnterpriseInterceptorCache();
                 log.success("enterprise foreground resync refreshed token");
@@ -1195,8 +1332,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             log.debug("enterprise proactive refresh token available", { length: refreshToken.length });
 
-            const refreshResponse =
-              await refreshEnterpriseTokenSingleflight(refreshToken);
+            const refreshResponse = await runEnterpriseRefreshSingleflight(
+              buildEnterpriseSessionKeyFromState(enterpriseSession),
+              "proactive_refresh",
+              refreshToken
+            );
             await handleEnterpriseSuccess(refreshResponse);
 
             // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
@@ -1226,7 +1366,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (status === 403) {
               log.error("enterprise account disabled on proactive refresh", { errorData });
-              await forceLogoutEnterpriseInternal("refresh_rejected_403");
+              await invokeForceLogoutEnterprise({
+                reason: "account_disabled",
+                severity: "AUTH_HARD_FAILURE",
+                source: "enterprise",
+                trigger_source: "foreground_resume",
+              });
               return;
             }
 
@@ -1260,8 +1405,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           // ✅ CORRECTION : Utiliser SecureStore pour le refresh token
           const refreshToken = enterpriseSession.refreshToken || await secureStorage.getEnterpriseRefreshToken();
           if (refreshToken) {
-            const refreshResponse =
-              await refreshEnterpriseTokenSingleflight(refreshToken);
+            const refreshResponse = await runEnterpriseRefreshSingleflight(
+              buildEnterpriseSessionKeyFromState(enterpriseSession),
+              "proactive_refresh",
+              refreshToken
+            );
             await handleEnterpriseSuccess(refreshResponse);
 
             // ⚡ CORRECTION : Invalider le cache interceptor pour forcer l'utilisation du nouveau token
@@ -1283,7 +1431,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (status === 403) {
             log.error("enterprise account disabled on immediate refresh", { errorData });
-            await forceLogoutEnterpriseInternal("refresh_rejected_403");
+            await invokeForceLogoutEnterprise({
+              reason: "account_disabled",
+              severity: "AUTH_HARD_FAILURE",
+              source: "enterprise",
+              trigger_source: "proactive_refresh",
+            });
             return;
           }
 
@@ -1369,8 +1522,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = useCallback(async () => {
     pushSessionEvent("LOGOUT_TRIGGERED");
-    await forceLogoutDriverInternal("manual_logout");
-  }, [forceLogoutDriverInternal]);
+    await invokeForceLogoutDriver({
+      reason: "manual_logout",
+      severity: "AUTH_MANUAL",
+      source: "driver",
+      trigger_source: "manual_action",
+    });
+  }, []);
 
   // ✅ Fonction pour charger la session driver depuis SecureStorage sans faire de requête API
   // Utile après un switchMode quand la session vient d'être créée
@@ -1392,6 +1550,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const profile = await fetchDriverProfile();
           setDriver(profile);
+          await setActiveAuthNamespace({
+            role: "driver",
+            userId: profile.id || userPublicId || "unknown",
+            tenantId: null,
+            sessionId: null,
+          });
           await asyncStorage.setDriverId(profile.id);
 
 
@@ -1437,6 +1601,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const profile = await fetchDriverProfile();
       setDriver(profile);
+      await setActiveAuthNamespace({
+        role: "driver",
+        userId: profile.id || "unknown",
+        tenantId: null,
+        sessionId: null,
+      });
       await asyncStorage.setDriverId(profile.id);
       log.success("driver profile refreshed", { profileId: profile.id });
     } catch (error: any) {
@@ -1450,13 +1620,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           invalidateInterceptorCache();
           const profile = await fetchDriverProfile();
           setDriver(profile);
+          await setActiveAuthNamespace({
+            role: "driver",
+            userId: profile.id || "unknown",
+            tenantId: null,
+            sessionId: null,
+          });
           await asyncStorage.setDriverId(profile.id);
           log.success("driver profile refreshed after retry");
           return;
         } catch (retryError) {
           if (isHttpAuthError(retryError)) {
             log.error("driver profile auth invalid after retry", { status: getHttpStatus(retryError) });
-            await forceLogoutDriverInternal("profile_auth_invalid");
+            await invokeForceLogoutDriver({
+              reason: "profile_auth_invalid",
+              severity: "AUTH_HARD_FAILURE",
+              source: "driver",
+              trigger_source: "manual_action",
+            });
           } else {
             log.warn("driver profile retry failed", { error: retryError });
           }
@@ -1618,16 +1799,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refreshToken = await secureStorage.getEnterpriseRefreshToken();
     if (!refreshToken) return;
     try {
-      const response = await refreshEnterpriseTokenSingleflight(refreshToken);
+      const response = await runEnterpriseRefreshSingleflight(
+        buildEnterpriseSessionKeyFromState(enterpriseSession),
+        "manual_action",
+        refreshToken
+      );
       await handleEnterpriseSuccess(response);
     } catch (error) {
-      log.warn("enterprise refresh token invalid", { error });
-      await forceLogoutEnterpriseInternal("refresh_rejected_401");
+      const decision = shouldLogoutFromRefreshFailure(error, "refresh_endpoint");
+      if (!decision.shouldLogout) {
+        log.warn("enterprise refresh soft failure, keep session", {
+          reason: decision.reason,
+        });
+        return;
+      }
+      const reason =
+        getAuthFailureReason(error) === "refresh_expired"
+          ? "refresh_expired"
+          : "refresh_invalid";
+      await invokeForceLogoutEnterprise({
+        reason: reason as EnterpriseLogoutReason,
+        severity: "AUTH_HARD_FAILURE",
+        source: "enterprise",
+        trigger_source: "manual_action",
+      });
     }
-  }, [handleEnterpriseSuccess, forceLogoutEnterpriseInternal]);
+  }, [handleEnterpriseSuccess]);
 
   const logoutEnterprise = useCallback(async () => {
-    await forceLogoutEnterpriseInternal("manual_logout");
+    await invokeForceLogoutEnterprise({
+      reason: "manual_logout",
+      severity: "AUTH_MANUAL",
+      source: "enterprise",
+      trigger_source: "manual_action",
+    });
   }, [forceLogoutEnterpriseInternal]);
 
   // P0 — Enregistrer les callbacks pour que les intercepteurs (api.ts, enterpriseAuth.ts) puissent invalider la session
@@ -1707,6 +1912,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       logoutEnterprise,
 
       isAuthenticated,
+      authSessionState,
     }),
     [
       deviceId,
@@ -1716,6 +1922,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       enterpriseLoading,
       enterpriseSession,
       isAuthenticated,
+      authSessionState,
       isDriverAuthenticated,
       isEnterpriseAuthenticated,
       loading,

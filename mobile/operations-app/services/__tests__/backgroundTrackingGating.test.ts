@@ -20,6 +20,8 @@ function inputs(overrides: Partial<BgTrackingInputs> = {}): BgTrackingInputs {
     fgPermission: "granted",
     bgPermission: "granted",
     killSwitchEnabled: false,
+    locationMode: "mission_live",
+    availabilityPresenceEnabled: true,
     ...overrides,
   };
 }
@@ -41,8 +43,20 @@ describe("shouldRunBackgroundTracking", () => {
     expect(shouldRunBackgroundTracking(inputs({ isAuthenticated: false }))).toBe(false);
   });
 
-  it("returns false when no active mission", () => {
+  it("returns false when no active mission in mission_live", () => {
     expect(shouldRunBackgroundTracking(inputs({ hasActiveMission: false }))).toBe(false);
+  });
+
+  it("returns true in availability_presence even without mission", () => {
+    expect(
+      shouldRunBackgroundTracking(
+        inputs({
+          hasActiveMission: false,
+          locationMode: "availability_presence",
+          availabilityPresenceEnabled: true,
+        })
+      )
+    ).toBe(true);
   });
 
   it("returns false when foreground permission not granted", () => {
@@ -99,6 +113,13 @@ describe("StopContract", () => {
   it("mission_ended when no active mission", () => {
     const contract = deriveStopContract(inputs({ hasActiveMission: false }));
     expect(getFirstStopCondition(contract)).toBe("mission_ended");
+  });
+
+  it("does not stop on mission_ended in availability_presence", () => {
+    const contract = deriveStopContract(
+      inputs({ hasActiveMission: false, locationMode: "availability_presence" })
+    );
+    expect(getFirstStopCondition(contract)).toBe(null);
   });
 
   it("logout when not authenticated", () => {

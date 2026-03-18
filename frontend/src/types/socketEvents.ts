@@ -125,11 +125,38 @@ export interface DriverLocationUpdatePayload {
   latitude?: number; // Alias de "lat"
   longitude?: number; // Alias de "lon"
   speed?: number;
+  speed_mps?: number;
   heading?: number;
   accuracy?: number;
+  accuracy_m?: number;
   ts?: string; // Backend utilise "ts" (pas "timestamp")
   timestamp?: string; // Alias de "ts"
+  recorded_at?: string;
+  received_at?: string;
+  sent_at?: string;
+  location_mode?: "mission_live" | "availability_presence" | "passive_last_known";
+  location_status?: "live" | "recent" | "stale" | "offline";
+  presence_status?: "online" | "degraded" | "offline";
+  last_seen_seconds?: number | null;
+  mission_id?: number | null;
   source?: string;
+}
+
+export interface DriverLiveStateUpdatePayload {
+  driver_id: number;
+  company_id?: number;
+  lat?: number;
+  lng?: number;
+  status?: "available" | "assigned" | "busy" | "offline";
+  mission_status?: string;
+  presence_status?: "online" | "degraded" | "offline";
+  location_status?: "live" | "recent" | "stale" | "offline";
+  location_mode?: "mission_live" | "availability_presence" | "passive_last_known";
+  last_seen_seconds?: number | null;
+  mission_id?: number | null;
+  timestamp?: string;
+  recorded_at?: string;
+  received_at?: string;
 }
 
 export interface TeamChatMessageReceivedPayload {
@@ -208,6 +235,7 @@ export interface SocketEventMapServer {
   joined_driver_room: JoinedDriverRoomPayload;
   joined_company: JoinedCompanyPayload;
   driver_location_update: DriverLocationUpdatePayload;
+  driver_live_state_update: DriverLiveStateUpdatePayload;
   team_chat_message: TeamChatMessageReceivedPayload;
   typing_start: TypingStartReceivedPayload;
   typing_stop: TypingStopReceivedPayload;

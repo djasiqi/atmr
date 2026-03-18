@@ -1,11 +1,11 @@
 // services/location.ts
 
 import * as Location from "expo-location";
-import {
-  updateDriverLocation,
-  type DriverLocationPayload, // ← on réutilise le type exporté par api.ts
-} from "@/services/api";
+import { type DriverLocationPayload } from "@/services/api";
 import { getLogger } from "@/utils/logger";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { enqueueLocation } from "./locationQueue";
+import { getCurrentLocationMode } from "./locationTracker";
 
 const log = getLogger("LocationSvc");
 
@@ -27,7 +27,7 @@ export const getDistanceInMeters = (
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-/** Envoi simple (utilisé par le watcher) */
+/** Envoi simple (legacy): enqueue uniquement, plus d'appel HTTP direct. */
 export const sendDriverLocation = async (payload: DriverLocationPayload) => {  try {
     log.info("send start", { payload });
     
@@ -61,11 +61,26 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
 
     log.info("clean payload", cleanPayload);
 
-    const res = await updateDriverLocation(cleanPayload);
-    log.success("position sent", { ok: res?.ok ?? true, source: res?.source });
-
-    if (res?.message) log.info("api message", { message: res.message });
-    return res;
+    const driverIdStr = await AsyncStorage.getItem("driver_id");
+    const driver_id = driverIdStr ? parseInt(driverIdStr, 10) : 0;
+    if (!driver_id || !Number.isFinite(driver_id)) {
+      return { ok: false, message: "driver_id manquant" };
+    }
+    await enqueueLocation({
+      latitude: Number(cleanPayload.latitude),
+      longitude: Number(cleanPayload.longitude),
+      speed: Number(cleanPayload.speed || 0),
+      heading: Number(cleanPayload.heading || 0),
+      accuracy: Number(cleanPayload.accuracy || 10),
+      timestamp: Date.now(),
+      driver_id,
+      location_mode: getCurrentLocationMode(),
+      recorded_at: cleanPayload.ts || new Date().toISOString(),
+      sent_at: new Date().toISOString(),
+      is_background: false,
+    });
+    log.success("position enqueued from legacy helper");
+    return { ok: true };
     
   } catch (e: any) {
     // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur

@@ -1151,7 +1151,7 @@ def _get_reminder_footer_message(level: int) -> str:
             "ne nous est pas parvenu. Nous vous remercions de bien vouloir procéder à "
             "son règlement sous 10 jours."
         )
-    if level == 2:
+    if level == LEVEL_THRESHOLD:
         return (
             "Malgré notre précédent rappel, le règlement de cette facture ne nous est "
             "pas parvenu. Nous vous prions de bien vouloir régulariser cette situation "
@@ -1857,8 +1857,6 @@ def _build_totals_table(
     total_label = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
     total_amt = f"CHF {final_total:.2f}" if is_s2 else f"{final_total:.2f}"
 
-    _fee_level_labels = {1: "1er", 2: "2e", 3: "dernier"}
-    fee_suffix = _fee_level_labels.get(reminder_level, f"n°{reminder_level}") if reminder_level else ""
     reminder_fee_label = "Frais de rappel :"
     reminder_fee_amt = f"CHF {reminder_fee_float:.2f}"
     principal_amt = f"CHF {principal_float:.2f}"
@@ -2074,17 +2072,26 @@ class PDFService:
         """
         return self.template_builder.extract_invoice_data(invoice)
 
-    def generate_invoice_pdf(self, invoice, *, force_regenerate: bool = False):
+    def generate_invoice_pdf(
+        self,
+        invoice,
+        *,
+        force_regenerate: bool = False,
+        force_bypass_locked: bool = False,
+    ):
         """Génère le PDF d'une facture.
 
         Args:
             invoice: La facture pour laquelle générer le PDF
             force_regenerate: Si True, régénère même si pdf_url existe déjà
                 (utilisé par l'endpoint regenerate-pdf)
+            force_bypass_locked: Si True, régénère même pour factures SENT/PARTIALLY_PAID/PAID
+                (réservé aux corrections admin manuelles, ex: adresse client)
 
         ⚠️ PROTECTION IMMUTABILITÉ:
         Ne modifie JAMAIS invoice.pdf_url si:
         - invoice.status est SENT, PARTIALLY_PAID, ou PAID (facture verrouillée)
+          sauf si force_bypass_locked=True
         - invoice.pdf_url existe déjà ET force_regenerate=False
         """
         from models.enums import InvoiceStatus
@@ -2093,9 +2100,10 @@ class PDFService:
         invoice_id = getattr(invoice, "id", None)
         has_existing_pdf_url = bool(getattr(invoice, "pdf_url", None))
         app_logger.info(
-            "[PDF] generate_invoice_pdf entry: invoice_id=%s, force_regenerate=%s, has_existing_pdf_url=%s",
+            "[PDF] generate_invoice_pdf entry: invoice_id=%s, force_regenerate=%s, force_bypass_locked=%s, has_existing_pdf_url=%s",
             invoice_id,
             force_regenerate,
+            force_bypass_locked,
             has_existing_pdf_url,
         )
 
@@ -2105,7 +2113,7 @@ class PDFService:
             InvoiceStatus.PARTIALLY_PAID,
             InvoiceStatus.PAID,
         }
-        if invoice.status in locked_statuses:
+        if invoice.status in locked_statuses and not force_bypass_locked:
             app_logger.warning(
                 "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: invoice_id=%s, status=%s, pdf_url=%s. Action=SKIP_LOCKED",
                 invoice.id,
@@ -3586,9 +3594,6 @@ class PDFService:
             principal_float = float(reminder_ctx["reminder_principal"])
             reminder_fee_float = float(reminder_ctx["reminder_fee"])
             final_total = float(reminder_ctx["reminder_total_due"])
-            level = reminder_ctx.get("reminder_level")
-            _fee_labels_m = {1: "1er", 2: "2e", 3: "dernier"}
-            fee_sfx = _fee_labels_m.get(level, f"n°{level}") if level else ""
             reminder_fee_label = "Frais de rappel :"
             total_data = [
                 ["Montant facture initiale :", f"CHF {principal_float:.2f}"],
@@ -4848,9 +4853,6 @@ class PDFService:
             ["Date d'émission initiale:", invoice.issued_at.strftime("%d.%m.%Y")],
             ["Nouvelle échéance:", invoice.due_date.strftime("%d.%m.%Y")],
         ]
-
-        _fee_labels_leg = {1: "1er", 2: "2e", 3: "dernier"}
-        fee_sfx_leg = _fee_labels_leg.get(level, f"n°{level}")
 
         if reminder and reminder.total_due > 0:
             invoice_info.extend(

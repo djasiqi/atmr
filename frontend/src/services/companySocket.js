@@ -243,12 +243,20 @@ export function getCompanySocket() {
           if (currentCompanyId) {
             try {
               socket.emit('join_company', { company_id: currentCompanyId });
+              socket.emit('get_driver_locations');
               console.log(JSON.stringify({
                 event: 'socket_rejoin_room',
                 room: 'company',
                 company_id: currentCompanyId,
                 timestamp: new Date().toISOString()
               }));
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('company_socket_reconnected', {
+                    detail: { companyId: currentCompanyId, at: Date.now() },
+                  })
+                );
+              }
             } catch (err) {
               console.error(JSON.stringify({
                 event: 'socket_rejoin_error',

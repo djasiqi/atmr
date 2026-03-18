@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FiEdit, FiTrash2, FiMoreVertical, FiEye, FiPower } from 'react-icons/fi';
 import s from './CompanyDriverTable.module.css';
+import { formatLastSeen, getFreshnessStatus } from '../../../utils/mapUtils';
 
 const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }) => {
   const [openMenu, setOpenMenu] = useState(null);
@@ -37,6 +38,14 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
     return { label: 'Disponible', className: s.statusAvailable };
   };
 
+  const getFreshnessLabel = (driver) => {
+    const status = getFreshnessStatus(driver);
+    if (status === 'live') return `Live · ${formatLastSeen(driver.last_seen_seconds)}`;
+    if (status === 'recent') return `Recent · ${formatLastSeen(driver.last_seen_seconds)}`;
+    if (status === 'stale') return `Stale · ${formatLastSeen(driver.last_seen_seconds)}`;
+    return 'Offline';
+  };
+
   return (
     <div className={s.tableContainer}>
       <table className={s.table}>
@@ -45,6 +54,7 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
             <th>Chauffeur</th>
             <th>Vehicule</th>
             <th>Disponibilite</th>
+            <th>Fraicheur</th>
             <th>Compte</th>
             <th className={s.thActions}>Actions</th>
           </tr>
@@ -88,6 +98,11 @@ const CompanyDriverTable = ({ drivers, onEdit, onToggleStatus, onDeleteRequest }
                 <td>
                   <span className={`${s.statusBadge} ${availability.className}`}>
                     {availability.label}
+                  </span>
+                </td>
+                <td>
+                  <span className={s.driverSub}>
+                    {getFreshnessLabel(driver)}
                   </span>
                 </td>
                 <td>

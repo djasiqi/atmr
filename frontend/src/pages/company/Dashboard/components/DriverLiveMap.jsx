@@ -2,8 +2,6 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { GoogleMap } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import { getCompanySocket, joinCompanyRoom } from '../../../../services/companySocket';
-import { fetchCompanyDriverLocations } from '../../../../services/companyService';
 import useCompanyData from '../../../../hooks/useCompanyData';
 import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../components/common/MapPlaceholder';
@@ -26,9 +24,6 @@ const MAP_DEBUG =
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
-
-// Seuil de fraîcheur GPS (5 minutes) pour considérer un chauffeur comme "localisé"
-const LOCATED_THRESHOLD_SEC = 300;
 
 // Popup chauffeur — mini card structurée, classes CSS globales .lirie-popup-*
 const createStyledTooltip = (driver, opts = {}) => {
@@ -79,19 +74,17 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const { isLoaded: gmLoaded } = useGoogleMapsLoaded();
   const mapRef = useRef(null);
   const markersRef = useRef({});
-  const hasAutoFittedRef = useRef(false);
-  const lastLocationsRef = useRef({});
   const clustererRef = useRef(null);
   const infoWindowRef = useRef(null);
   const locatedIdsRef = useRef(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [mapReady, setMapReady] = useState(false);
-  const [mapDebugInfo, setMapDebugInfo] = useState(null);
+  const [mapDebugInfo] = useState(null);
   const [showNoGpsBanner, setShowNoGpsBanner] = useState(false);
   const [locatedCount, setLocatedCount] = useState(0);
-  const { driver: staticDrivers, company } = useCompanyData();
+  const { company } = useCompanyData();
 
-  const allDrivers = propDrivers || staticDrivers;
+  const allDrivers = Array.isArray(propDrivers) ? propDrivers : [];
   const drivers = searchQuery
     ? allDrivers.filter((d) => d.username?.toLowerCase().includes(searchQuery.toLowerCase()))
     : allDrivers;
@@ -282,254 +275,9 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     }
   }, [drivers, companyCoords, upsertMarker, removeMarker, fitBoundsToMarkers, updateLocatedSet]);
 
-  // Rejoindre la room entreprise
   useEffect(() => {
-    if (company?.id) {
-      joinCompanyRoom(company.id).catch(() => {});
-    }
-  }, [company?.id]);
-
-  // REST: polling des positions
-  const POLL_INTERVAL_MS = 5000;
-  useEffect(() => {
-    if (!company?.id) return;
-    let cancelled = false;
-    let pollCount = 0;
-    let intervalId = null;
-
-    const poll = async () => {
-      if (cancelled) return;
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      try {
-        const locations = await fetchCompanyDriverLocations();
-        if (cancelled) return;
-        const map = mapRef.current;
-        if (!map || !Array.isArray(locations) || locations.length === 0) return;
-
-        pollCount += 1;
-        const locMap = {};
-        locations.forEach((loc) => {
-          const id = loc.driver_id ?? loc.id;
-          if (id) locMap[id] = loc;
-        });
-        lastLocationsRef.current = locMap;
-
-        locations.forEach((loc) => {
-          const id = loc.driver_id ?? loc.id;
-          const lat = loc.lat ?? loc.latitude;
-          const lon = loc.lon ?? loc.longitude;
-          const { center: ll } = normaliseCoords(lat, lon);
-          if (!id || !ll) return;
-
-          const fullDriver = allDrivers.find((d) => d.id === id) || {
-            id,
-            first_name: loc.first_name,
-            is_active: true,
-          };
-          const status = loc.status ?? getDriverStatus(fullDriver);
-          const isStale = loc.is_stale === true;
-          const tooltipOpts = {
-            lastSeenSeconds: loc.last_seen_seconds,
-            isStale,
-            status,
-            clientShort: loc.client_short,
-          };
-
-          upsertMarker(id, ll, status, isStale, fullDriver, tooltipOpts);
-
-          // Localisé = GPS frais (timestamp disponible et < 5 min)
-          const isFreshGps = loc.last_seen_seconds != null && loc.last_seen_seconds < LOCATED_THRESHOLD_SEC;
-          updateLocatedSet(id, isFreshGps);
-
-          if (!hasAutoFittedRef.current && Object.keys(markersRef.current).length > 0) {
-            fitBoundsToMarkers(14);
-            hasAutoFittedRef.current = true;
-          }
-        });
-
-        if (MAP_DEBUG && pollCount === 1) {
-          console.log('[DriverLiveMap] REST: count=', locations.length);
-        }
-      } catch (e) {
-        if (!cancelled && MAP_DEBUG) console.warn('[DriverLiveMap] REST poll error:', e);
-      }
-    };
-
-    const startPolling = () => {
-      if (intervalId) return;
-      poll();
-      intervalId = setInterval(poll, POLL_INTERVAL_MS);
-    };
-    const stopPolling = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
-
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      startPolling();
-    }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') startPolling();
-      else stopPolling();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      cancelled = true;
-      stopPolling();
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.id]);
-
-  // Socket: écouter les mises à jour live
-  useEffect(() => {
-    const socket = getCompanySocket();
-    if (!socket) return;
-
-    hasAutoFittedRef.current = false;
-
-    const requestLocations = () => {
-      try {
-        socket.emit('get_driver_locations');
-      } catch (e) {
-        console.error('Failed to request driver locations:', e);
-      }
-    };
-
-    const debug = {
-      received: 0,
-      valid: 0,
-      lastUpdate: null,
-      sample: null,
-      exclusionReasons: [],
-      joinedReceived: false,
-      fallbackUsed: false,
-    };
-    if (MAP_DEBUG) setMapDebugInfo({ ...debug });
-
-    // P1: Backend = source de vérité. driver_live_state_update contient le contrat canonique
-    // (status, mission_status, presence_status, etc.). driver_location_update en fallback.
-    const applyLocationUpdate = (data, fromLiveState = false) => {
-      const map = mapRef.current;
-      debug.received += 1;
-
-      if (!map) {
-        if (MAP_DEBUG) {
-          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat('map_not_ready')).slice(-5);
-          setMapDebugInfo({ ...debug });
-        }
-        return;
-      }
-
-      const id = data.driver_id ?? data.id;
-      const lat = data.lat ?? data.latitude ?? data.current_lat;
-      const lon = data.lon ?? data.lng ?? data.longitude ?? data.current_lon;
-      const { center: ll, reason } = normaliseCoords(lat, lon);
-
-      if (!id) {
-        if (MAP_DEBUG) {
-          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat('missing_driver_id')).slice(-5);
-          setMapDebugInfo({ ...debug });
-        }
-        return;
-      }
-      if (!ll) {
-        if (MAP_DEBUG) {
-          debug.exclusionReasons = (debug.exclusionReasons.slice(-4).concat(reason || 'invalid_coords')).slice(-5);
-          setMapDebugInfo({ ...debug });
-        }
-        return;
-      }
-
-      debug.valid += 1;
-      if (debug.valid === 1) debug.sample = { driver_id: id, lat: ll.lat, lon: ll.lng };
-      debug.lastUpdate = new Date().toISOString();
-      if (MAP_DEBUG) setMapDebugInfo({ ...debug });
-
-      const firstName = data.first_name || data.name || `Driver ${id}`;
-      const wasEmpty = Object.keys(markersRef.current).length === 0;
-
-      const fullDriver = drivers.find((d) => d.id === id) || {
-        id,
-        first_name: firstName,
-        is_active: true,
-      };
-      const lastLoc = lastLocationsRef.current[id];
-      // Priorité stricte: driver_live_state_update = source canonique. driver_location_update ne doit jamais écraser le statut.
-      const status =
-        fromLiveState && data.status != null
-          ? data.status
-          : (lastLoc?.status ?? getDriverStatus(fullDriver));
-      const isStale = fromLiveState && data.location_status
-        ? data.location_status === 'stale'
-        : ((data.is_stale ?? lastLoc?.is_stale) === true);
-      const tooltipOpts = {
-        status,
-        clientShort: data.client_short ?? lastLoc?.client_short,
-        lastSeenSeconds: data.last_seen_seconds ?? lastLoc?.last_seen_seconds,
-        isStale,
-      };
-
-      if (fromLiveState) {
-        lastLocationsRef.current[id] = {
-          ...lastLoc,
-          ...data,
-          driver_id: id,
-          client_short: data.client_short ?? lastLoc?.client_short,
-        };
-      }
-
-      upsertMarker(id, ll, status, isStale, fullDriver, tooltipOpts);
-      updateLocatedSet(id, true);
-      setShowNoGpsBanner(false);
-
-      if (wasEmpty && !hasAutoFittedRef.current) {
-        fitBoundsToMarkers(14);
-        hasAutoFittedRef.current = true;
-      }
-    };
-
-    const onLiveState = (data) => applyLocationUpdate(data, true);
-    const onLocationUpdate = (data) => applyLocationUpdate(data, false);
-    socket.on('driver_live_state_update', onLiveState);
-    socket.on('driver_location_update', onLocationUpdate);
-
-    let fallbackId = null;
-    let retryId = null;
-    let onJoined = null;
-
-    if (company?.id) {
-      try {
-        socket.emit('join_company', { company_id: company.id });
-      } catch {}
-      onJoined = () => {
-        if (MAP_DEBUG) setMapDebugInfo((p) => ({ ...(p || {}), joinedReceived: true }));
-        requestLocations();
-        socket.off('joined_company', onJoined);
-      };
-      socket.once('joined_company', onJoined);
-      fallbackId = setTimeout(() => {
-        socket.off('joined_company', onJoined);
-        if (MAP_DEBUG) setMapDebugInfo((p) => ({ ...(p || {}), fallbackUsed: true }));
-        if (Object.keys(markersRef.current).length === 0) requestLocations();
-      }, 1500);
-      retryId = setTimeout(() => {
-        if (Object.keys(markersRef.current).length === 0) requestLocations();
-      }, 3000);
-    }
-
-    return () => {
-      if (fallbackId != null) clearTimeout(fallbackId);
-      if (retryId != null) clearTimeout(retryId);
-      if (onJoined) socket.off('joined_company', onJoined);
-      socket.off('driver_live_state_update', onLiveState);
-      socket.off('driver_location_update', onLocationUpdate);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [company?.id]);
+    setShowNoGpsBanner(allDrivers.length > 0 && locatedCount === 0);
+  }, [locatedCount, allDrivers.length]);
 
   // Compteur chauffeurs total
   const totalCount = allDrivers.length;

@@ -4,14 +4,20 @@ import { Platform } from "react-native";
 import * as Application from "expo-application";
 import axios, { isAxiosError } from "axios";
 import { getLogger } from "@/utils/logger";
-import { secureStorage, asyncStorage } from "./storage";
+import {
+  secureStorage,
+  asyncStorage,
+  commitSessionTokensAtomically,
+} from "./storage";
 
 const log = getLogger("Api");
 import {
   AuthInvalidError,
   AuthNotReadyError,
+  getAuthFailureReason,
   isPublicEndpoint,
   reportAuthNotReadyMetric,
+  shouldLogoutFromRefreshFailure,
 } from "@/services/authGuards";
 import { logAuthEvent, beginRefreshCycle } from "@/services/authLogging";
 import { notifyAuthNotReady, isAuthReadySync } from "@/services/authSync";
@@ -21,6 +27,7 @@ import {
   pushSessionEvent,
 } from "@/services/sessionJournal";
 import { sendIngestEvent } from "@/src/config/telemetry";
+import { buildAuthNamespace } from "@/services/storage/keys";
 
 // Helper pour les logs de debug (dev uniquement, ingest désactivable via EXPO_PUBLIC_DISABLE_INGEST)
 const debugLog = (data: Record<string, unknown>) => {
@@ -379,7 +386,10 @@ api.interceptors.request.use(
     if (!isPublic) {
       try {
         const { waitForAuthReady } = await import("@/services/authSync");
-        await waitForAuthReady(5000);
+        await waitForAuthReady({
+          timeoutMs: 5000,
+          reasonOnTimeout: "auth_bootstrapping",
+        });
       } catch (error) {
         // ✅ P1 (strict): ne jamais envoyer une requête protégée sans auth prête
         if (__DEV__) {
@@ -387,12 +397,12 @@ api.interceptors.request.use(
         }
         reportAuthNotReadyMetric({
           kind: "driver",
-          reason: "auth_ready_timeout",
+          reason: "auth_bootstrapping",
           url: config.url,
         });
         throw new AuthNotReadyError({
           kind: "driver",
-          reason: "auth_ready_timeout",
+          reason: "auth_bootstrapping",
           url: config.url,
         });
       }
@@ -614,54 +624,124 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
-// ✅ Singleflight global : partage le refresh entre intercepteur et refresh proactif (useAuth)
-let driverRefreshPromise: Promise<string> | null = null;
+const driverRefreshPromiseBySessionKey = new Map<string, Promise<string>>();
 
-export async function refreshDriverTokenSingleflight(): Promise<string> {
-  if (driverRefreshPromise) {
-    return driverRefreshPromise;
+async function getDriverSessionKey(): Promise<string> {
+  const token = await secureStorage.getAccessToken();
+  const userPublicId = (await secureStorage.getUserPublicId()) ?? "unknown";
+  let tenantId: string | number | null = null;
+  let sessionId: string | null = null;
+
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      tenantId = payload?.company_id ?? null;
+      sessionId = payload?.session_id ?? null;
+    } catch {
+      // no-op: fallback namespace stays stable on user id
+    }
   }
 
-  driverRefreshPromise = (async () => {
-    const refreshToken = await secureStorage.getRefreshToken();
-    if (!refreshToken) {
-      throw new Error("Pas de refresh token disponible");
-    }
+  return buildAuthNamespace({
+    role: "driver",
+    userId: userPublicId,
+    tenantId,
+    sessionId,
+  });
+}
 
-    const refreshResponse = await refreshAccessToken(refreshToken);
-    const newAccessToken = refreshResponse.access_token;
+export async function runDriverRefreshSingleflight(
+  sessionKey: string,
+  source:
+    | "api_interceptor"
+    | "api_401"
+    | "foreground_resume"
+    | "foreground_resync"
+    | "proactive_refresh"
+    | "socket_reconnect"
+    | "socket_connect_error"
+    | "socket_unauthorized"
+    | "bootstrap"
+    | "boot_restore"
+    | "profile_refresh"
+    | "manual_action"
+): Promise<string> {
+  const key = sessionKey || "driver:unknown:none:none";
+  const existing = driverRefreshPromiseBySessionKey.get(key);
+  if (existing) return existing;
 
-    // Stocker le nouveau token dans SecureStore
-    await secureStorage.setAccessToken(newAccessToken);
+  const promise = performDriverRefresh(source).finally(() => {
+    driverRefreshPromiseBySessionKey.delete(key);
+  });
+  driverRefreshPromiseBySessionKey.set(key, promise);
+  return promise;
+}
 
-    // Rotation soft : sauvegarder le nouveau refresh token de maniere atomique.
-    // Ne jamais ecraser le token en memoire tant que la persistance n'a pas reussi.
-    // En cas d'echec, l'ancien reste valide grace a la rotation soft backend.
-    if (refreshResponse.refresh_token) {
-      try {
-        await secureStorage.setRefreshToken(refreshResponse.refresh_token);
-        log.info("refresh_saved_ok");
-      } catch (storageError) {
-        log.warn("refresh_save_failed, keeping old token", { error: storageError });
-      }
-    }
+async function performDriverRefresh(
+  source:
+    | "api_interceptor"
+    | "api_401"
+    | "foreground_resume"
+    | "foreground_resync"
+    | "proactive_refresh"
+    | "socket_reconnect"
+    | "socket_connect_error"
+    | "socket_unauthorized"
+    | "bootstrap"
+    | "boot_restore"
+    | "profile_refresh"
+    | "manual_action"
+): Promise<string> {
+  const normalizedTriggerSource =
+    source === "foreground_resync"
+      ? "foreground_resume"
+      : source === "api_401"
+        ? "api_interceptor"
+        : source === "socket_connect_error" || source === "socket_unauthorized"
+          ? "socket_reconnect"
+          : source === "boot_restore" || source === "profile_refresh"
+            ? "manual_action"
+            : source;
+  const refreshToken = await secureStorage.getRefreshToken();
+  if (!refreshToken) {
+    throw new Error("Pas de refresh token disponible");
+  }
 
-    // Mettre à jour le cache de l'intercepteur pour cohérence immédiate
-    interceptorTokenCache = newAccessToken;
-    interceptorTokenCacheTime = Date.now();
-
-    return newAccessToken;
-  })();
-
-  // Débloquer les requêtes en attente même si le refresh a été déclenché hors intercepteur
-  driverRefreshPromise
-    .then((token) => processQueue(null, token))
-    .catch((err) => processQueue(err, null))
-    .finally(() => {
-      driverRefreshPromise = null;
+  // ✅ Isolation driver/enterprise : ne jamais envoyer un token entreprise à l'endpoint driver
+  const { isDriverRefreshToken } = await import("@/utils/jwtAudience");
+  if (!isDriverRefreshToken(refreshToken)) {
+    log.warn("driver refresh token has wrong audience (enterprise token?), clearing");
+    await invokeForceLogoutDriver({
+      reason: "refresh_invalid",
+      severity: "AUTH_HARD_FAILURE",
+      source: "driver",
+      trigger_source: normalizedTriggerSource,
     });
+    throw new AuthInvalidError({ route: "driver", reason: "refresh_invalid" });
+  }
 
-  return driverRefreshPromise;
+  const refreshResponse = await refreshAccessToken(refreshToken);
+  const newAccessToken = refreshResponse.access_token;
+
+  await commitSessionTokensAtomically({
+    scope: "driver",
+    accessToken: newAccessToken,
+    refreshToken: refreshResponse.refresh_token,
+    trigger_source: normalizedTriggerSource,
+  });
+
+  // Mettre à jour le cache de l'intercepteur pour cohérence immédiate
+  interceptorTokenCache = newAccessToken;
+  interceptorTokenCacheTime = Date.now();
+
+  return newAccessToken;
+}
+
+export async function refreshDriverTokenSingleflight(): Promise<string> {
+  return runDriverRefreshSingleflight(
+    await getDriverSessionKey(),
+    "manual_action"
+  );
 }
 
 // Interceptor response avec refresh automatique
@@ -678,26 +758,45 @@ api.interceptors.response.use(
     if (originalRequest?.url?.includes("/auth/refresh-token")) {
       const refreshStatus = error.response?.status;
       const isNetworkError = !error.response;
+      const serverReason = error.response?.data?.reason;
 
       if (refreshStatus === 401) {
+        const decision = shouldLogoutFromRefreshFailure(error, "refresh_endpoint");
+        // Politique prudente: 401 non structuré => pas de logout immédiat.
+        if (decision.reason === "unknown_refresh_401") {
+          logAuthEvent("AUTH_REFRESH_FAIL_SOFT", {
+            route: "driver",
+            status: refreshStatus,
+            reason: decision.reason,
+            refresh_attempted: true,
+            outcome: "retry_later",
+            source: "refresh_endpoint",
+          });
+          processQueue(error, null);
+          return Promise.reject(error);
+        }
         pushSessionEvent("REFRESH_FAIL");
-        const reason = "refresh_rejected_401";
-        logAuthEvent("AUTH_REFRESH_FAIL", {
+        const reason = serverReason === "refresh_expired" ? "refresh_expired" : "refresh_invalid";
+        logAuthEvent("AUTH_REFRESH_FAIL_HARD", {
           route: "driver",
           status: refreshStatus,
+          reason,
           refresh_attempted: true,
           outcome: "logout",
           source: "refresh_endpoint",
         });
-        log.warn("refresh token rejected (401), redirecting to login", {});
         processQueue(new AuthInvalidError({ route: "driver", reason }), null);
-        await invokeForceLogoutDriver(reason);
+        await invokeForceLogoutDriver({
+          reason,
+          severity: "AUTH_HARD_FAILURE",
+          source: "driver",
+          trigger_source: "api_interceptor",
+        });
         return Promise.reject(new AuthInvalidError({ route: "driver", reason }));
       } else if (refreshStatus === 403) {
-        const serverReason = error.response?.data?.reason;
         if (serverReason === "account_disabled") {
           pushSessionEvent("REFRESH_FAIL");
-          logAuthEvent("AUTH_REFRESH_FAIL", {
+          logAuthEvent("AUTH_REFRESH_FAIL_HARD", {
             route: "driver",
             status: 403,
             refresh_attempted: true,
@@ -705,9 +804,13 @@ api.interceptors.response.use(
             source: "refresh_endpoint",
             server_reason: serverReason,
           });
-          log.warn("refresh token rejected (account disabled)", {});
           processQueue(new AuthInvalidError({ route: "driver", reason: "account_disabled" }), null);
-          await invokeForceLogoutDriver("account_disabled");
+          await invokeForceLogoutDriver({
+            reason: "account_disabled",
+            severity: "AUTH_HARD_FAILURE",
+            source: "driver",
+            trigger_source: "api_interceptor",
+          });
           return Promise.reject(new AuthInvalidError({ route: "driver", reason: "account_disabled" }));
         }
         log.warn("refresh token 403 without account_disabled, treating as transient", {
@@ -764,7 +867,11 @@ api.interceptors.response.use(
       logAuthEvent("AUTH_REFRESH_START", { route: "driver", trigger: "api_401", refresh_cycle_id: refreshCycleId });
 
       try {
-        const newAccessToken = await refreshDriverTokenSingleflight();
+        const sessionKey = await getDriverSessionKey();
+        const newAccessToken = await runDriverRefreshSingleflight(
+          sessionKey,
+          "api_interceptor"
+        );
         pushSessionEvent("REFRESH_SUCCESS");
         logAuthEvent("AUTH_REFRESH_SUCCESS", { route: "driver" });
         if (__DEV__) {
@@ -789,12 +896,34 @@ api.interceptors.response.use(
         });
         
         if (refreshStatus === 401) {
+          const decision = shouldLogoutFromRefreshFailure(
+            refreshError,
+            "refresh_endpoint"
+          );
+          if (!decision.shouldLogout) {
+            logAuthEvent("AUTH_REFRESH_FAIL_SOFT", {
+              route: "driver",
+              status: 401,
+              refresh_attempted: true,
+              outcome: "retry_later",
+              reason: decision.reason,
+              source: "api_401_catch",
+            });
+            processQueue(refreshError, null);
+            return Promise.reject(refreshError);
+          }
           pushSessionEvent("REFRESH_FAIL");
-          log.warn("refresh token expired, redirecting to login", {});
-
-          const reason = "refresh_rejected_401";
+          const reason =
+            getAuthFailureReason(refreshError) === "refresh_expired"
+              ? "refresh_expired"
+              : "refresh_invalid";
           processQueue(new AuthInvalidError({ route: "driver", reason }), null);
-          await invokeForceLogoutDriver(reason);
+          await invokeForceLogoutDriver({
+            reason,
+            severity: "AUTH_HARD_FAILURE",
+            source: "driver",
+            trigger_source: "api_interceptor",
+          });
           return Promise.reject(new AuthInvalidError({ route: "driver", reason }));
         } else if (isNetworkError) {
           logAuthEvent("AUTH_REFRESH_FAIL", {
@@ -1307,19 +1436,33 @@ export const switchToEnterpriseToken = async (): Promise<SwitchToEnterpriseRespo
 
 // ========== Localisation ==========
 export interface DriverLocationPayload {
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lon?: number;
   speed?: number;
+  speed_mps?: number;
   heading?: number;
   accuracy?: number;
+  accuracy_m?: number;
   timestamp?: number | string;
+  location_mode?: "mission_live" | "availability_presence" | "passive_last_known";
+  recorded_at?: string;
+  sent_at?: string;
+  is_background?: boolean;
+  mission_id?: number | null;
+  device_status?: {
+    battery_level?: number;
+    low_power_mode?: boolean;
+  };
 }
 type UpdateLocationResp = { ok?: boolean; source?: string; message?: string };
 
 export const updateDriverLocation = async (
   payload: DriverLocationPayload
 ): Promise<UpdateLocationResp> => {
-  const { latitude, longitude } = payload;
+  const latitude = payload.latitude ?? payload.lat;
+  const longitude = payload.longitude ?? payload.lon;
   if (typeof latitude !== "number" || typeof longitude !== "number") {
     throw new Error("Latitude et longitude doivent être numériques");
   }
@@ -1330,18 +1473,29 @@ export const updateDriverLocation = async (
     throw new Error("Coordonnées hors bornes");
   }
 
-  const ts =
-    typeof payload.timestamp === "number"
+  const recordedAt =
+    payload.recorded_at ??
+    (typeof payload.timestamp === "number"
       ? new Date(payload.timestamp).toISOString()
-      : payload.timestamp || new Date().toISOString();
+      : payload.timestamp || new Date().toISOString());
 
   const body = {
-    latitude: payload.latitude,
-    longitude: payload.longitude,
-    speed: payload.speed ?? 0,
+    latitude,
+    longitude,
+    lat: latitude,
+    lon: longitude,
+    speed: payload.speed_mps ?? payload.speed ?? 0,
+    speed_mps: payload.speed_mps ?? payload.speed ?? 0,
     heading: payload.heading ?? 0,
-    accuracy: payload.accuracy ?? 0,
-    ts,
+    accuracy: payload.accuracy_m ?? payload.accuracy ?? 0,
+    accuracy_m: payload.accuracy_m ?? payload.accuracy ?? 0,
+    ts: recordedAt,
+    recorded_at: recordedAt,
+    sent_at: payload.sent_at ?? new Date().toISOString(),
+    location_mode: payload.location_mode ?? "mission_live",
+    is_background: payload.is_background ?? false,
+    mission_id: payload.mission_id ?? null,
+    device_status: payload.device_status ?? undefined,
   };
 
   try {

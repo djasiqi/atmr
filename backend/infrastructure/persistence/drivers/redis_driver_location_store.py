@@ -19,13 +19,15 @@ def _dec(v: Any) -> Any:
 def get_driver_last_location(driver_id: int) -> dict[str, Any] | None:
     """Lit la dernière position du chauffeur depuis Redis.
 
-    Format clé : `driver:{driver_id}:loc` (hash).
+    Format clé canonique : `driver:{driver_id}:loc:canonical` (hash),
+    avec fallback transitoire vers `driver:{driver_id}:loc`.
     Retourne un dict déjà décodé (bytes -> str) et normalisé (floats quand possible).
     """
 
     rc: Any = redis_client
-    key = f"driver:{driver_id}:loc"
-    h = rc.hgetall(key)
+    canonical_key = f"driver:{driver_id}:loc:canonical"
+    legacy_key = f"driver:{driver_id}:loc"
+    h = rc.hgetall(canonical_key) or rc.hgetall(legacy_key)
     if not h:
         return None
 

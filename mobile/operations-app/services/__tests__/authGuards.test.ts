@@ -4,7 +4,10 @@
  */
 import {
   AuthNotReadyError,
+  getAuthFailureReason,
   isAuthNotReadyError,
+  isHardAuthFailure,
+  shouldLogoutFromRefreshFailure,
   getAuthNotReadyDisplayMessage,
   shouldShowAuthNotReadyAlert,
 } from "../authGuards";
@@ -74,6 +77,27 @@ describe("authGuards", () => {
 
     it("rejette une erreur classique", () => {
       expect(isAuthNotReadyError(new Error("Network"))).toBe(false);
+    });
+  });
+
+  describe("classification hard/soft", () => {
+    it("classifie refresh_invalid en hard failure", () => {
+      const err = {
+        response: {
+          status: 401,
+          data: { reason: "refresh_invalid" },
+        },
+      };
+      expect(getAuthFailureReason(err)).toBe("refresh_invalid");
+      expect(isHardAuthFailure(err, "refresh_endpoint")).toBe(true);
+      expect(shouldLogoutFromRefreshFailure(err, "refresh_endpoint").shouldLogout).toBe(true);
+    });
+
+    it("classifie 401 sans reason en unknown_refresh_401 (soft)", () => {
+      const err = { response: { status: 401, data: {} } };
+      const decision = shouldLogoutFromRefreshFailure(err, "refresh_endpoint");
+      expect(getAuthFailureReason(err)).toBe("unknown_refresh_401");
+      expect(decision.shouldLogout).toBe(false);
     });
   });
 });

@@ -44,6 +44,10 @@ from routes.api_error_models import (
 from routes.api_error_utils import create_error_response
 from routes.db_error_utils import format_integrity_error
 from services.partnerships.exceptions import StatsComputationError
+from services.geolocation.presence import (
+    compute_location_status,
+    presence_status_from_location_status,
+)
 from services.security.idempotency import IdempotencyService
 from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
@@ -2409,9 +2413,6 @@ class CompleteReservation(Resource):
 # ======================================================
 
 
-# Seuil stale: > 90s = signal ancien (griser marker côté frontend)
-STALE_THRESHOLD_SEC = 90
-
 # Throttle log "no driver loc in Redis" : 1 fois / 10 min par company
 _NO_DRIVER_LOC_LOG_LAST: dict[int, float] = {}
 _NO_DRIVER_LOC_LOG_INTERVAL_SEC = 600
@@ -2472,7 +2473,11 @@ class CompanyDriversLocations(Resource):
             try:
                 pipe = redis_client.pipeline()
                 for driver in drivers:
-                    pipe.hgetall(f"driver:{driver.id}:loc")
+                    canonical_key = f"driver:{driver.id}:loc:canonical"
+                    legacy_key = f"driver:{driver.id}:loc"
+                    # Compat migration: canonique puis legacy.
+                    pipe.hgetall(canonical_key)
+                    pipe.hgetall(legacy_key)
                 redis_results = pipe.execute()
                 redis_ok = True
             except (ConnectionError, OSError, TimeoutError) as e:
@@ -2543,9 +2548,13 @@ class CompanyDriversLocations(Resource):
         for i, driver in enumerate(drivers):
             lat, lon, ts = None, None, None
             used_db_fallback = False
-            h = redis_results[i] if i < len(redis_results) else None
+            loc_data: dict[str, Any] = {}
+            canonical_idx = i * 2
+            legacy_idx = canonical_idx + 1
+            h = redis_results[canonical_idx] if canonical_idx < len(redis_results) else None
+            if not h:
+                h = redis_results[legacy_idx] if legacy_idx < len(redis_results) else None
             if h:
-                loc_data = {}
                 for k, v in h.items():
                     try:
                         loc_data[k.decode()] = v.decode()
@@ -2569,7 +2578,7 @@ class CompanyDriversLocations(Resource):
             if lat is None or lon is None:
                 continue
 
-            # last_seen_seconds + is_stale
+            # last_seen_seconds + freshness backend-driven
             last_seen_seconds = None
             is_stale = True
             if ts:
@@ -2577,7 +2586,6 @@ class CompanyDriversLocations(Resource):
                     ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     delta = (now - ts_dt).total_seconds()
                     last_seen_seconds = int(delta)
-                    is_stale = delta > STALE_THRESHOLD_SEC
                 except Exception:
                     pass
             elif used_db_fallback:
@@ -2588,13 +2596,29 @@ class CompanyDriversLocations(Resource):
                 # comme fraîches pour garantir la visualisation des chauffeurs sur la carte.
                 if is_demo_company or driver_email.endswith("@demo.local"):
                     last_seen_seconds = 0
-                    is_stale = False
 
             # status: available | assigned | busy | offline (backend = source de vérité)
             is_active = _as_bool(getattr(driver, "is_active", True))
             active_booking = active_bookings_map.get(driver.id, {})
             has_active_booking = bool(active_booking.get("current_booking_id"))
             mission_status = active_booking.get("mission_status")
+            location_mode_raw = loc_data.get("location_mode", "availability_presence")
+            expected_mode = (
+                "mission_live"
+                if mission_status
+                in (
+                    BookingStatus.ASSIGNED.value,
+                    BookingStatus.EN_ROUTE.value,
+                    BookingStatus.IN_PROGRESS.value,
+                )
+                else "availability_presence"
+            )
+            location_mode = location_mode_raw or expected_mode
+            location_status = compute_location_status(
+                mode=location_mode, last_seen_seconds=last_seen_seconds
+            )
+            presence_status = presence_status_from_location_status(location_status)
+            is_stale = location_status in {"stale", "offline"}
 
             if not is_active:
                 status = "offline"
@@ -2605,20 +2629,15 @@ class CompanyDriversLocations(Resource):
                 status = "busy"
             elif mission_status == BookingStatus.ASSIGNED.value:
                 status = "assigned"
-            elif is_stale:
-                status = "offline"
             else:
                 status = "available"
 
-            presence_status = (
-                "offline"
-                if not is_active
-                else ("degraded" if is_stale else "online")
-            )
-            location_status = "stale" if is_stale else "fresh"
+            if not is_active:
+                presence_status = "offline"
+                location_status = "offline"
             offline_reason = (
                 "no_signal"
-                if status == "offline"
+                if location_status == "offline"
                 else ("location_stale" if presence_status == "degraded" else "")
             )
             is_available = status == "available"
@@ -2633,12 +2652,15 @@ class CompanyDriversLocations(Resource):
                 "lon": float(lon),
                 "first_name": first_name,
                 "timestamp": ts,
+                "recorded_at": loc_data.get("recorded_at") or ts,
+                "received_at": loc_data.get("received_at"),
                 "last_seen_seconds": last_seen_seconds,
                 "is_stale": is_stale,
                 "status": status,
                 "mission_status": mission_status,
                 "presence_status": presence_status,
                 "location_status": location_status,
+                "location_mode": location_mode,
                 "is_available": is_available,
                 "offline_reason": offline_reason,
             }

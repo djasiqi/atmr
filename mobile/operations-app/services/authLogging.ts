@@ -34,6 +34,13 @@ function getSessionId(): string {
 
 /** refresh_cycle_id — généré à chaque AUTH_REFRESH_START */
 let currentRefreshCycleId: string | null = null;
+const recoveryStartedAtByRoute = new Map<string, number>();
+const recoveryDurationsByRoute = new Map<string, number[]>();
+const forcedLogoutByReason: Record<string, number> = {};
+const forcedLogoutByReasonAndTenant: Record<string, number> = {};
+const refreshFailSoftByRoute: Record<string, number> = {};
+const refreshFailHardByRoute: Record<string, number> = {};
+let unknownRefresh401Count = 0;
 
 /**
  * Démarre un cycle refresh, retourne l'id à propager.
@@ -54,6 +61,98 @@ export function beginRefreshCycle(route: string): string {
 
 export function getCurrentRefreshCycleId(): string | null {
   return currentRefreshCycleId;
+}
+
+type AuthKpiSnapshot = {
+  ts: number;
+  unknown_refresh_401_count: number;
+  refresh_fail_soft_by_route: Record<string, number>;
+  refresh_fail_hard_by_route: Record<string, number>;
+  forced_logout_by_reason: Record<string, number>;
+  forced_logout_by_reason_tenant: Record<string, number>;
+  median_recovery_delay_ms_by_route: Record<string, number>;
+};
+
+function incrementCounter(
+  bag: Record<string, number>,
+  key: string
+): void {
+  bag[key] = (bag[key] ?? 0) + 1;
+}
+
+function computeMedian(values: number[]): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  }
+  return sorted[mid];
+}
+
+function updateAuthKpi(event: string, payload: Record<string, unknown>): void {
+  const route = String(payload.route ?? "unknown");
+  const reason = String(payload.reason ?? "unknown");
+  const tenantId = String(payload.tenant_id ?? "unknown");
+  const now = Date.now();
+
+  if (event === "AUTH_REFRESH_FAIL_SOFT") {
+    incrementCounter(refreshFailSoftByRoute, route);
+    if (reason === "unknown_refresh_401") {
+      unknownRefresh401Count += 1;
+    }
+    if (!recoveryStartedAtByRoute.has(route)) {
+      recoveryStartedAtByRoute.set(route, now);
+    }
+  }
+
+  if (event === "AUTH_REFRESH_FAIL_HARD") {
+    incrementCounter(refreshFailHardByRoute, route);
+  }
+
+  if (event === "AUTH_REFRESH_SUCCESS") {
+    const startedAt = recoveryStartedAtByRoute.get(route);
+    if (startedAt) {
+      const duration = now - startedAt;
+      const samples = recoveryDurationsByRoute.get(route) ?? [];
+      samples.push(duration);
+      if (samples.length > 200) samples.shift();
+      recoveryDurationsByRoute.set(route, samples);
+      recoveryStartedAtByRoute.delete(route);
+    }
+  }
+
+  if (event === "LOGOUT_TRANSITION") {
+    incrementCounter(forcedLogoutByReason, reason);
+    incrementCounter(forcedLogoutByReasonAndTenant, `${reason}|${tenantId}`);
+  }
+}
+
+export function getAuthKpiSnapshot(): AuthKpiSnapshot {
+  const medianRecoveryDelayMsByRoute: Record<string, number> = {};
+  for (const [route, samples] of recoveryDurationsByRoute.entries()) {
+    medianRecoveryDelayMsByRoute[route] = computeMedian(samples);
+  }
+  return {
+    ts: Date.now(),
+    unknown_refresh_401_count: unknownRefresh401Count,
+    refresh_fail_soft_by_route: { ...refreshFailSoftByRoute },
+    refresh_fail_hard_by_route: { ...refreshFailHardByRoute },
+    forced_logout_by_reason: { ...forcedLogoutByReason },
+    forced_logout_by_reason_tenant: { ...forcedLogoutByReasonAndTenant },
+    median_recovery_delay_ms_by_route: medianRecoveryDelayMsByRoute,
+  };
+}
+
+export function resetAuthKpiSnapshot(): void {
+  recoveryStartedAtByRoute.clear();
+  recoveryDurationsByRoute.clear();
+  unknownRefresh401Count = 0;
+  for (const key of Object.keys(forcedLogoutByReason)) delete forcedLogoutByReason[key];
+  for (const key of Object.keys(forcedLogoutByReasonAndTenant))
+    delete forcedLogoutByReasonAndTenant[key];
+  for (const key of Object.keys(refreshFailSoftByRoute)) delete refreshFailSoftByRoute[key];
+  for (const key of Object.keys(refreshFailHardByRoute)) delete refreshFailHardByRoute[key];
 }
 
 /** Dedupe anti-spam — key -> lastTs. Inclut role pour socket (driver/enterprise distincts). */
@@ -104,6 +203,7 @@ export function logAuthEvent(
 ): void {
   try {
     if (shouldDedupe(event, payload)) return;
+    updateAuthKpi(event, payload);
 
     const ctx = getLogContextSnapshot();
     const network = getNetworkStateSnapshot();

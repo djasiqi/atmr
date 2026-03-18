@@ -1,5 +1,7 @@
-import { refreshDriverTokenSingleflight } from "@/services/api";
+import { runDriverRefreshSingleflight } from "@/services/api";
 import { beginRefreshCycle, logAuthEvent } from "@/services/authLogging";
+import { secureStorage } from "@/services/storage";
+import { buildAuthNamespace } from "@/services/storage/keys";
 
 export type DriverRefreshTriggerSource =
   | "api_401"
@@ -25,7 +27,26 @@ export async function refreshDriverTokenOrchestrated(
     refresh_cycle_id: refreshCycleId,
   });
   try {
-    const token = await refreshDriverTokenSingleflight();
+    const userPublicId = (await secureStorage.getUserPublicId()) ?? "unknown";
+    const accessToken = await secureStorage.getAccessToken();
+    let tenantId: string | number | null = null;
+    let sessionId: string | null = null;
+    if (accessToken) {
+      try {
+        const payload = JSON.parse(atob(accessToken.split(".")[1]));
+        tenantId = payload?.company_id ?? null;
+        sessionId = payload?.session_id ?? null;
+      } catch {
+        // no-op
+      }
+    }
+    const sessionKey = buildAuthNamespace({
+      role: "driver",
+      userId: userPublicId,
+      tenantId,
+      sessionId,
+    });
+    const token = await runDriverRefreshSingleflight(sessionKey, triggerSource);
     logAuthEvent("AUTH_REFRESH_SUCCESS", {
       route: "driver",
       trigger_source: triggerSource,

@@ -34,6 +34,7 @@ class LocationServiceAdapter:
         accuracy: float | None = None,
         source: str = "gps",
         timestamp: Any | None = None,
+        **extra: Any,
     ) -> Any:
         """Met à jour la localisation d'un chauffeur via LocationService.
 
@@ -49,6 +50,7 @@ class LocationServiceAdapter:
             accuracy=accuracy,
             source=source,
             timestamp=timestamp,
+            **extra,
         )
 
 

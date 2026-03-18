@@ -27,6 +27,12 @@ from ext import db, redis_client
 from models import Booking, Company, Driver, Message, SenderRole, User, UserRole
 from models.enums import BookingStatus
 from schemas.socket_events import EVENT_VERSION, SocketEvent
+from services.geolocation.presence import (
+    compute_last_seen_seconds,
+    compute_location_status,
+    normalize_location_mode,
+    presence_status_from_location_status,
+)
 from services.geolocation.location import get_location_service
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
@@ -223,50 +229,26 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
 
 def _compute_presence_from_signals(
     *,
+    location_mode: str | None,
     loc_ts: str | None,
     last_seen_ts: str | None,
 ) -> tuple[str, str, str]:
     """Retourne (presence_status, location_status, offline_reason)."""
-    online_window_sec = 120
-    loc_fresh_sec = 90
-    offline_window_sec = 240
-    now = datetime.now(UTC)
-
-    loc_age_sec: int | None = None
-    heartbeat_age_sec: int | None = None
-
-    loc_dt = _parse_iso_utc(loc_ts)
-    if loc_dt is not None:
-        with suppress(Exception):
-            loc_age_sec = int(max(0, (now - loc_dt).total_seconds()))
-
-    hb_dt = _parse_iso_utc(last_seen_ts)
-    if hb_dt is not None:
-        with suppress(Exception):
-            heartbeat_age_sec = int(max(0, (now - hb_dt).total_seconds()))
-
-    if loc_age_sec is None:
-        location_status = "missing"
-    elif loc_age_sec < loc_fresh_sec:
-        location_status = "fresh"
-    elif loc_age_sec < offline_window_sec:
-        location_status = "stale"
-    else:
-        location_status = "missing"
-
-    has_recent_signal = (
-        (loc_age_sec is not None and loc_age_sec < online_window_sec)
-        or (heartbeat_age_sec is not None and heartbeat_age_sec < online_window_sec)
+    normalized_mode = normalize_location_mode(location_mode)
+    loc_age_sec = compute_last_seen_seconds(loc_ts)
+    heartbeat_age_sec = compute_last_seen_seconds(last_seen_ts)
+    age = loc_age_sec
+    if age is None:
+        age = heartbeat_age_sec
+    location_status = compute_location_status(
+        mode=normalized_mode, last_seen_seconds=age
     )
-    is_offline = (
-        (loc_age_sec is None or loc_age_sec >= offline_window_sec)
-        and (heartbeat_age_sec is None or heartbeat_age_sec >= offline_window_sec)
-    )
-    if is_offline:
-        return ("offline", location_status, "no_signal")
-    if has_recent_signal and location_status == "fresh":
-        return ("online", location_status, "")
-    return ("degraded", location_status, "location_stale")
+    presence_status = presence_status_from_location_status(location_status)
+    if presence_status == "offline":
+        return (presence_status, location_status, "no_signal")
+    if presence_status == "degraded":
+        return (presence_status, location_status, "location_stale")
+    return (presence_status, location_status, "")
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -1873,8 +1855,34 @@ def init_chat_socket(socketio: SocketIO):
             accuracy = data.get("accuracy")
             timestamp_value = data.get("timestamp")
             timestamp = _parse_timestamp(timestamp_value)
+            location_mode = normalize_location_mode(
+                tcast("str | None", data.get("location_mode"))
+            )
+            recorded_at_value = data.get("recorded_at") or timestamp_value
+            sent_at_value = data.get("sent_at")
+            mission_id = data.get("mission_id")
+            is_background = bool(data.get("is_background", False))
+            recorded_at_dt = _parse_timestamp(recorded_at_value)
+            sent_at_dt = _parse_timestamp(sent_at_value) if sent_at_value else datetime.now(UTC)
+            if data.get("location_mode") is None or data.get("recorded_at") is None:
+                emit(
+                    "error",
+                    {"error": "missing required fields", "reason": "missing_required_fields"},
+                )
+                return
+            if location_mode == "availability_presence":
+                emit(
+                    "error",
+                    {
+                        "error": "availability_presence not allowed on socket single",
+                        "reason": "availability_presence_socket_forbidden",
+                    },
+                )
+                return
 
             snapped_lat, snapped_lon = latitude, longitude
+            accept_status = "accepted_observability_only"
+            received_at = datetime.now(UTC).isoformat()
             try:
                 location_service = get_location_service()
                 result = location_service.update_driver_location(
@@ -1886,11 +1894,18 @@ def init_chat_socket(socketio: SocketIO):
                     accuracy=float(accuracy) if accuracy is not None else None,
                     source="gps",
                     timestamp=timestamp,
+                    location_mode=location_mode,
+                    recorded_at=recorded_at_dt,
+                    sent_at=sent_at_dt,
+                    is_background=is_background,
+                    mission_id=mission_id if isinstance(mission_id, int) else None,
                 )
 
                 # Utiliser position snapée
                 snapped_lat = result.snapped_lat
                 snapped_lon = result.snapped_lon
+                accept_status = result.accept_status
+                received_at = result.received_at or received_at
 
                 # Émettre events geofencing si détectés
                 for event in result.geofence_events:
@@ -1918,11 +1933,18 @@ def init_chat_socket(socketio: SocketIO):
 
             # 7. P2: Fanout realtime unifié
             now_iso = datetime.now(UTC).isoformat()
+            last_seen_seconds = compute_last_seen_seconds(
+                recorded_at_dt.isoformat() if recorded_at_dt else now_iso
+            )
+            location_status = compute_location_status(
+                mode=location_mode, last_seen_seconds=last_seen_seconds
+            )
+            presence_status = presence_status_from_location_status(location_status)
             mission_status = _resolve_mission_status_for_driver(driver.id)
             driver_status = _resolve_driver_status(
                 mission_status=mission_status,
                 is_active=bool(getattr(driver, "is_active", True)),
-                presence_status="online",
+                presence_status=presence_status,
             )
             from services.realtime.socketio import fanout_driver_location_update
 
@@ -1930,25 +1952,36 @@ def init_chat_socket(socketio: SocketIO):
                 company_id_val,
                 {
                     "driver_id": driver.id,
+                    "company_id": company_id_val,
                     "first_name": getattr(
                         getattr(driver, "user", None), "first_name", None
                     ),
                     "latitude": snapped_lat,
                     "longitude": snapped_lon,
-                    "timestamp": now_iso,
+                    "timestamp": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "received_at": received_at,
+                    "location_mode": location_mode,
                 },
                 {
                     "driver_id": driver.id,
+                    "company_id": company_id_val,
                     "lat": snapped_lat,
                     "lng": snapped_lon,
-                    "timestamp": now_iso,
+                    "timestamp": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
                     "status": driver_status,
                     "mission_status": mission_status,
-                    "presence_status": "online",
-                    "location_status": "fresh",
+                    "presence_status": presence_status,
+                    "location_status": location_status,
                     "is_available": driver_status == "available",
-                    "offline_reason": "",
+                    "offline_reason": "location_stale" if location_status == "stale" else "",
+                    "last_seen_seconds": last_seen_seconds,
+                    "location_mode": location_mode,
+                    "mission_id": mission_id,
+                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "received_at": received_at,
                 },
+                accept_status=accept_status,
             )
             elapsed = time.perf_counter() - t0
             ws_metrics.on_driver_location_latency(elapsed)
@@ -2175,8 +2208,41 @@ def init_chat_socket(socketio: SocketIO):
                     accuracy = pos.get("accuracy")
                     timestamp_value = pos.get("timestamp")
                     timestamp = _parse_timestamp(timestamp_value)
+                    location_mode = normalize_location_mode(
+                        tcast("str | None", pos.get("location_mode"))
+                    )
+                    recorded_at_value = pos.get("recorded_at") or timestamp_value
+                    sent_at_value = pos.get("sent_at")
+                    mission_id = pos.get("mission_id")
+                    is_background = bool(pos.get("is_background", False))
+                    recorded_at_dt = _parse_timestamp(recorded_at_value)
+                    sent_at_dt = (
+                        _parse_timestamp(sent_at_value)
+                        if sent_at_value
+                        else datetime.now(UTC)
+                    )
+                    if pos.get("location_mode") is None or pos.get("recorded_at") is None:
+                        rejected_positions.append(
+                            {
+                                "index": idx,
+                                "reason": "missing_required_fields",
+                                "position": pos,
+                            }
+                        )
+                        continue
+                    if location_mode == "availability_presence":
+                        rejected_positions.append(
+                            {
+                                "index": idx,
+                                "reason": "availability_presence_socket_forbidden",
+                                "position": pos,
+                            }
+                        )
+                        continue
 
                     snapped_lat, snapped_lon = latitude, longitude
+                    accept_status = "accepted_observability_only"
+                    received_at = datetime.now(UTC).isoformat()
                     try:
                         location_service = get_location_service()
                         result = location_service.update_driver_location(
@@ -2188,11 +2254,18 @@ def init_chat_socket(socketio: SocketIO):
                             accuracy=float(accuracy) if accuracy is not None else None,
                             source="gps",
                             timestamp=timestamp,
+                            location_mode=location_mode,
+                            recorded_at=recorded_at_dt,
+                            sent_at=sent_at_dt,
+                            is_background=is_background,
+                            mission_id=mission_id if isinstance(mission_id, int) else None,
                         )
 
                         # Utiliser position snapée
                         snapped_lat = result.snapped_lat
                         snapped_lon = result.snapped_lon
+                        accept_status = result.accept_status
+                        received_at = result.received_at or received_at
 
                         # Émettre events geofencing si détectés (seulement pour dernière position)
                         if pos == positions[-1]:
@@ -2216,13 +2289,22 @@ def init_chat_socket(socketio: SocketIO):
 
                     # P2: Fanout realtime unifié
                     mission_status = _resolve_mission_status_for_driver(driver.id)
+                    last_seen_seconds = compute_last_seen_seconds(
+                        recorded_at_dt.isoformat() if recorded_at_dt else now_iso
+                    )
+                    location_status = compute_location_status(
+                        mode=location_mode, last_seen_seconds=last_seen_seconds
+                    )
+                    presence_status = presence_status_from_location_status(location_status)
                     driver_status = _resolve_driver_status(
                         mission_status=mission_status,
                         is_active=bool(getattr(driver, "is_active", True)),
-                        presence_status="online",
+                        presence_status=presence_status,
                     )
                     ts_str = (
-                        timestamp.isoformat() if timestamp else now_iso
+                        recorded_at_dt.isoformat()
+                        if recorded_at_dt
+                        else (timestamp.isoformat() if timestamp else now_iso)
                     )
                     from services.realtime.socketio import fanout_driver_location_update
 
@@ -2230,25 +2312,38 @@ def init_chat_socket(socketio: SocketIO):
                         company_id_val,
                         {
                             "driver_id": driver.id,
+                            "company_id": company_id_val,
                             "first_name": getattr(
                                 getattr(driver, "user", None), "first_name", None
                             ),
                             "latitude": snapped_lat,
                             "longitude": snapped_lon,
                             "timestamp": ts_str,
+                            "recorded_at": ts_str,
+                            "received_at": received_at,
+                            "location_mode": location_mode,
                         },
                         {
                             "driver_id": driver.id,
+                            "company_id": company_id_val,
                             "lat": snapped_lat,
                             "lng": snapped_lon,
                             "timestamp": ts_str,
                             "status": driver_status,
                             "mission_status": mission_status,
-                            "presence_status": "online",
-                            "location_status": "fresh",
+                            "presence_status": presence_status,
+                            "location_status": location_status,
                             "is_available": driver_status == "available",
-                            "offline_reason": "",
+                            "offline_reason": "location_stale"
+                            if location_status == "stale"
+                            else "",
+                            "last_seen_seconds": last_seen_seconds,
+                            "location_mode": location_mode,
+                            "mission_id": mission_id,
+                            "recorded_at": ts_str,
+                            "received_at": received_at,
                         },
+                        accept_status=accept_status,
                     )
 
                     # ✅ P2: Incrémenter compteur de positions traitées avec succès
@@ -2535,13 +2630,23 @@ def init_chat_socket(socketio: SocketIO):
             # For each driver, get location from Redis or DB
             for driver in drivers:
                 try:
-                    # Try Redis first
+                    # Try Redis first (canonical then legacy during migration).
                     h: Mapping[bytes, Any] = {}
+                    redis_source: str | None = None
                     if (
                         redis_client
                     ):  # ✅ Vérification explicite pour satisfaire le linter
-                        key = f"driver:{driver.id}:loc"
-                        h_raw = redis_client.hgetall(key)
+                        canonical_key = f"driver:{driver.id}:loc:canonical"
+                        legacy_key = f"driver:{driver.id}:loc"
+                        canonical_raw = redis_client.hgetall(canonical_key)
+                        legacy_raw = (
+                            redis_client.hgetall(legacy_key) if not canonical_raw else None
+                        )
+                        h_raw = canonical_raw or legacy_raw
+                        if canonical_raw:
+                            redis_source = "canonical"
+                        elif legacy_raw:
+                            redis_source = "legacy"
                         # Calme Pylance: redis-py retourne un dict[bytes, bytes]
                         h = cast("Mapping[bytes, Any]", h_raw)
                         last_seen_raw = redis_client.get(f"driver:{driver.id}:last_seen")
@@ -2573,6 +2678,9 @@ def init_chat_socket(socketio: SocketIO):
                         mission_status = _resolve_mission_status_for_driver(driver.id)
                         presence_status, location_status, offline_reason = (
                             _compute_presence_from_signals(
+                                location_mode=tcast(
+                                    "str | None", loc_data.get("location_mode")
+                                ),
                                 loc_ts=tcast("str | None", loc_data.get("ts")),
                                 last_seen_ts=last_seen_str,
                             )
@@ -2585,19 +2693,27 @@ def init_chat_socket(socketio: SocketIO):
                         ts_val = loc_data.get("ts") or datetime.now(UTC).isoformat()
                         from services.realtime.socketio import fanout_driver_location_update
 
+                        fanout_accept_status = (
+                            "accepted_canonical"
+                            if redis_source == "canonical"
+                            else "accepted_observability_only"
+                        )
                         fanout_driver_location_update(
                             company_id,
                             {
                                 "driver_id": driver.id,
+                                "company_id": company_id,
                                 "first_name": getattr(
                                     getattr(driver, "user", None), "first_name", None
                                 ),
                                 "latitude": loc_data.get("lat"),
                                 "longitude": loc_data.get("lon"),
                                 "timestamp": ts_val,
+                                "received_at": loc_data.get("received_at"),
                             },
                             {
                                 "driver_id": driver.id,
+                                "company_id": company_id,
                                 "lat": loc_data.get("lat"),
                                 "lng": loc_data.get("lon"),
                                 "timestamp": ts_val,
@@ -2607,7 +2723,9 @@ def init_chat_socket(socketio: SocketIO):
                                 "location_status": location_status,
                                 "is_available": status == "available",
                                 "offline_reason": offline_reason,
+                                "received_at": loc_data.get("received_at"),
                             },
+                            accept_status=fanout_accept_status,
                         )
                     elif (driver.latitude is not None) and (
                         driver.longitude is not None
@@ -2626,15 +2744,18 @@ def init_chat_socket(socketio: SocketIO):
                             company_id,
                             {
                                 "driver_id": driver.id,
+                                "company_id": company_id,
                                 "first_name": getattr(
                                     getattr(driver, "user", None), "first_name", None
                                 ),
                                 "latitude": driver.latitude,
                                 "longitude": driver.longitude,
                                 "timestamp": ts_val,
+                                "received_at": ts_val,
                             },
                             {
                                 "driver_id": driver.id,
+                                "company_id": company_id,
                                 "lat": driver.latitude,
                                 "lng": driver.longitude,
                                 "timestamp": ts_val,
@@ -2644,7 +2765,9 @@ def init_chat_socket(socketio: SocketIO):
                                 "location_status": "stale",
                                 "is_available": status == "available",
                                 "offline_reason": "location_stale",
+                                "received_at": ts_val,
                             },
+                            accept_status="accepted_observability_only",
                         )
                 except Exception as e:
                     # driver vient du for → devrait exister,

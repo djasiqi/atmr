@@ -5,6 +5,8 @@ import * as SecureStore from "expo-secure-store";
 import { Platform, AppState, type AppStateStatus } from "react-native";
 import { getLogger } from "@/utils/logger";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
+import { logAuthEvent } from "@/services/authLogging";
+import { setAuthStateDegraded } from "@/services/authSync";
 
 const log = getLogger("Storage");
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -45,6 +47,7 @@ import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
 import {
   DRIVER_AUTH_KEYS,
   ENTERPRISE_AUTH_KEYS,
+  buildAuthNamespace,
 } from "./storage/keys";
 
 // ============ Clés de stockage sécurisé (SecureStore) ============
@@ -60,6 +63,89 @@ const SECURE_KEYS = {
   SAVED_EMAIL: "driver_saved_email",
   SAVED_PASSWORD: "driver_saved_password_encrypted",
 } as const;
+
+const ASYNC_NAMESPACE_KEYS = {
+  DRIVER: "auth.namespace.driver",
+  ENTERPRISE: "auth.namespace.enterprise",
+} as const;
+
+let activeDriverNamespaceCache: string | null = null;
+let activeEnterpriseNamespaceCache: string | null = null;
+
+async function getActiveNamespace(scope: "driver" | "enterprise"): Promise<string | null> {
+  if (scope === "driver" && activeDriverNamespaceCache) return activeDriverNamespaceCache;
+  if (scope === "enterprise" && activeEnterpriseNamespaceCache)
+    return activeEnterpriseNamespaceCache;
+  const key =
+    scope === "driver" ? ASYNC_NAMESPACE_KEYS.DRIVER : ASYNC_NAMESPACE_KEYS.ENTERPRISE;
+  const stored = await AsyncStorage.getItem(key);
+  if (scope === "driver") activeDriverNamespaceCache = stored;
+  else activeEnterpriseNamespaceCache = stored;
+  return stored;
+}
+
+function withNamespace(baseKey: string, namespace: string | null): string {
+  return namespace ? `${baseKey}:${namespace}` : baseKey;
+}
+
+async function setScopedSecureValue(
+  scope: "driver" | "enterprise",
+  baseKey: string,
+  value: string
+): Promise<void> {
+  const namespace = await getActiveNamespace(scope);
+  await secureSet(withNamespace(baseKey, namespace), value);
+}
+
+async function getScopedSecureValue(
+  scope: "driver" | "enterprise",
+  baseKey: string
+): Promise<string | null> {
+  const namespace = await getActiveNamespace(scope);
+  const scopedKey = withNamespace(baseKey, namespace);
+  let value = await secureGet(scopedKey);
+  if (!value && namespace) {
+    // Migration backward: fallback legacy puis write namespacé.
+    const legacy = await secureGet(baseKey);
+    if (legacy) {
+      value = legacy;
+      await secureSet(scopedKey, legacy).catch(() => {});
+    }
+  }
+  return value;
+}
+
+async function removeScopedSecureValue(
+  scope: "driver" | "enterprise",
+  baseKey: string
+): Promise<void> {
+  const namespace = await getActiveNamespace(scope);
+  await secureDel(withNamespace(baseKey, namespace));
+  // Nettoyage legacy post-migration (best effort).
+  if (namespace) {
+    await secureDel(baseKey).catch(() => {});
+  }
+}
+
+export async function setActiveAuthNamespace(params: {
+  role: "driver" | "enterprise";
+  userId: string | number;
+  tenantId?: string | number | null;
+  sessionId?: string | null;
+}): Promise<string> {
+  const namespace = buildAuthNamespace({
+    role: params.role,
+    userId: params.userId,
+    tenantId: params.tenantId,
+    sessionId: params.sessionId,
+  });
+  const key =
+    params.role === "driver" ? ASYNC_NAMESPACE_KEYS.DRIVER : ASYNC_NAMESPACE_KEYS.ENTERPRISE;
+  await AsyncStorage.setItem(key, namespace);
+  if (params.role === "driver") activeDriverNamespaceCache = namespace;
+  else activeEnterpriseNamespaceCache = namespace;
+  return namespace;
+}
 
 // ============ Cache en mémoire pour optimisation des performances ============
 // ⚡ Phase 1 : Cache en mémoire pour réduire les lectures SecureStore répétées
@@ -118,16 +204,17 @@ export const secureStorage = {
     try {
       // Sauvegarder le backup et écrire le nouveau token en parallèle
       // pour réduire le temps de blocage du bridge natif (Android KeyStore)
-      const currentPrimary = cachedRefreshToken ?? await secureGet(SECURE_KEYS.REFRESH_TOKEN);
+      const currentPrimary =
+        cachedRefreshToken ?? (await getScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN));
       const backupPromise = currentPrimary
-        ? secureSet(SECURE_KEYS.REFRESH_TOKEN_BACKUP, currentPrimary).catch(() => {
+        ? setScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN_BACKUP, currentPrimary).catch(() => {
             log.warn("refresh_backup_save_failed (non-blocking)");
           })
         : Promise.resolve();
 
       await Promise.all([
         backupPromise,
-        secureSet(SECURE_KEYS.REFRESH_TOKEN, token),
+        setScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN, token),
       ]);
 
       cachedRefreshToken = token;
@@ -162,16 +249,16 @@ export const secureStorage = {
       refreshTokenCacheMissCount++;
     }
 
-    let token = await secureGet(SECURE_KEYS.REFRESH_TOKEN);
+    let token = await getScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN);
 
     // Fallback sur le backup si le primary est absent/corrompu
     if (!token) {
-      const backup = await secureGet(SECURE_KEYS.REFRESH_TOKEN_BACKUP);
+      const backup = await getScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN_BACKUP);
       if (backup) {
         log.warn("refresh_fallback_used: primary missing, using backup");
         token = backup;
         try {
-          await secureSet(SECURE_KEYS.REFRESH_TOKEN, backup);
+          await setScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN, backup);
         } catch {
           // best-effort
         }
@@ -213,8 +300,8 @@ export const secureStorage = {
    */
   async removeRefreshToken(): Promise<void> {
     await Promise.all([
-      secureDel(SECURE_KEYS.REFRESH_TOKEN),
-      secureDel(SECURE_KEYS.REFRESH_TOKEN_BACKUP),
+      removeScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN),
+      removeScopedSecureValue("driver", SECURE_KEYS.REFRESH_TOKEN_BACKUP),
     ]);
 
     cachedRefreshToken = null;
@@ -225,15 +312,15 @@ export const secureStorage = {
    * Stocke le public_id de l'utilisateur (pour auto-login)
    */
   async setUserPublicId(publicId: string): Promise<void> {
-    await secureSet(SECURE_KEYS.USER_PUBLIC_ID, publicId);
+    await setScopedSecureValue("driver", SECURE_KEYS.USER_PUBLIC_ID, publicId);
   },
 
   async getUserPublicId(): Promise<string | null> {
-    return await secureGet(SECURE_KEYS.USER_PUBLIC_ID);
+    return await getScopedSecureValue("driver", SECURE_KEYS.USER_PUBLIC_ID);
   },
 
   async removeUserPublicId(): Promise<void> {
-    await secureDel(SECURE_KEYS.USER_PUBLIC_ID);
+    await removeScopedSecureValue("driver", SECURE_KEYS.USER_PUBLIC_ID);
   },
 
   /**
@@ -243,7 +330,7 @@ export const secureStorage = {
    */
   async setAccessToken(token: string): Promise<void> {
     try {
-      await secureSet(SECURE_KEYS.ACCESS_TOKEN, token);
+      await setScopedSecureValue("driver", SECURE_KEYS.ACCESS_TOKEN, token);
 
       cachedAccessToken = token;
       tokenCacheTime = Date.now();
@@ -276,7 +363,7 @@ export const secureStorage = {
       accessTokenCacheMissCount++;
     }
 
-    const token = await secureGet(SECURE_KEYS.ACCESS_TOKEN);
+    const token = await getScopedSecureValue("driver", SECURE_KEYS.ACCESS_TOKEN);
 
     cachedAccessToken = token;
     tokenCacheTime = now;
@@ -313,7 +400,7 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeAccessToken(): Promise<void> {
-    await secureDel(SECURE_KEYS.ACCESS_TOKEN);
+    await removeScopedSecureValue("driver", SECURE_KEYS.ACCESS_TOKEN);
 
     cachedAccessToken = null;
     tokenCacheTime = 0;
@@ -467,7 +554,7 @@ export const secureStorage = {
    */
   async setEnterpriseToken(token: string): Promise<void> {
     try {
-      await secureSet(SECURE_KEYS.ENTERPRISE_TOKEN, token);
+      await setScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_TOKEN, token);
 
       cachedEnterpriseToken = token;
       enterpriseTokenCacheTime = Date.now();
@@ -494,7 +581,7 @@ export const secureStorage = {
       return cachedEnterpriseToken;
     }
 
-    const token = await secureGet(SECURE_KEYS.ENTERPRISE_TOKEN);
+    const token = await getScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_TOKEN);
 
     cachedEnterpriseToken = token;
     enterpriseTokenCacheTime = now;
@@ -507,7 +594,7 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeEnterpriseToken(): Promise<void> {
-    await secureDel(SECURE_KEYS.ENTERPRISE_TOKEN);
+    await removeScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_TOKEN);
 
     cachedEnterpriseToken = null;
     enterpriseTokenCacheTime = 0;
@@ -519,7 +606,7 @@ export const secureStorage = {
    */
   async setEnterpriseRefreshToken(token: string): Promise<void> {
     try {
-      await secureSet(SECURE_KEYS.ENTERPRISE_REFRESH, token);
+      await setScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_REFRESH, token);
 
       cachedEnterpriseRefreshToken = token;
       enterpriseRefreshTokenCacheTime = Date.now();
@@ -552,7 +639,7 @@ export const secureStorage = {
       return cachedEnterpriseRefreshToken;
     }
 
-    const token = await secureGet(SECURE_KEYS.ENTERPRISE_REFRESH);
+    const token = await getScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_REFRESH);
 
     cachedEnterpriseRefreshToken = token;
     enterpriseRefreshTokenCacheTime = now;
@@ -572,7 +659,7 @@ export const secureStorage = {
    * ⚡ Optimisation : Nettoie le cache en mémoire
    */
   async removeEnterpriseRefreshToken(): Promise<void> {
-    await secureDel(SECURE_KEYS.ENTERPRISE_REFRESH);
+    await removeScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_REFRESH);
 
     cachedEnterpriseRefreshToken = null;
     enterpriseRefreshTokenCacheTime = 0;
@@ -584,8 +671,8 @@ export const secureStorage = {
    */
   async clearEnterpriseTokens(): Promise<void> {
     await Promise.all([
-      secureDel(SECURE_KEYS.ENTERPRISE_TOKEN),
-      secureDel(SECURE_KEYS.ENTERPRISE_REFRESH),
+      removeScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_TOKEN),
+      removeScopedSecureValue("enterprise", SECURE_KEYS.ENTERPRISE_REFRESH),
     ]);
 
 
@@ -641,6 +728,130 @@ export const secureStorage = {
     };
   },
 };
+
+export type CommitSessionTokensParams = {
+  scope: "driver" | "enterprise";
+  accessToken: string;
+  refreshToken?: string | null;
+  expiresAt?: number | null;
+  sessionMeta?: Record<string, unknown>;
+  sessionStorageKey?: string;
+  trigger_source?: string;
+};
+
+type SessionCommitEvent = {
+  scope: "driver" | "enterprise";
+  trigger_source: string;
+  success: boolean;
+  has_refresh: boolean;
+};
+
+const sessionCommitListeners = new Set<(event: SessionCommitEvent) => void>();
+
+export function addSessionCommitListener(
+  listener: (event: SessionCommitEvent) => void
+): () => void {
+  sessionCommitListeners.add(listener);
+  return () => sessionCommitListeners.delete(listener);
+}
+
+function emitSessionCommitEvent(event: SessionCommitEvent): void {
+  sessionCommitListeners.forEach((listener) => {
+    try {
+      listener(event);
+    } catch (error) {
+      log.warn("session commit listener failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+}
+
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    return JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Commit ordonné des tokens de session pour éviter les désynchronisations
+ * mémoire/stockage lors d'une rotation de token.
+ */
+export async function commitSessionTokensAtomically(
+  params: CommitSessionTokensParams
+): Promise<void> {
+  const now = Date.now();
+  try {
+    if (params.scope === "driver") {
+      const payload = decodeJwtPayload(params.accessToken);
+      if (payload?.sub || payload?.user_id || payload?.public_id) {
+        await setActiveAuthNamespace({
+          role: "driver",
+          userId: payload?.public_id || payload?.user_id || payload?.sub,
+          tenantId: payload?.company_id ?? null,
+          sessionId: payload?.session_id ?? null,
+        });
+      }
+    } else if (params.sessionMeta) {
+      const meta = params.sessionMeta as any;
+      await setActiveAuthNamespace({
+        role: "enterprise",
+        userId: meta?.user?.public_id || meta?.user?.id || "unknown",
+        tenantId: meta?.company?.id ?? null,
+        sessionId: meta?.sessionId ?? meta?.session_id ?? null,
+      });
+    }
+
+    if (params.scope === "driver") {
+      await secureStorage.setAccessToken(params.accessToken);
+      if (params.refreshToken) {
+        await secureStorage.setRefreshToken(params.refreshToken);
+      }
+    } else {
+      await secureStorage.setEnterpriseToken(params.accessToken);
+      if (params.refreshToken) {
+        await secureStorage.setEnterpriseRefreshToken(params.refreshToken);
+      }
+    }
+
+    if (params.sessionStorageKey) {
+      const payload = {
+        ...(params.sessionMeta ?? {}),
+        expiresAt: params.expiresAt ?? null,
+        updatedAt: now,
+      };
+      await AsyncStorage.setItem(params.sessionStorageKey, JSON.stringify(payload));
+    }
+
+    logAuthEvent("AUTH_COMMIT_SUCCESS", {
+      route: params.scope,
+      trigger_source: params.trigger_source || "unknown",
+      has_refresh: Boolean(params.refreshToken),
+    });
+    emitSessionCommitEvent({
+      scope: params.scope,
+      trigger_source: params.trigger_source || "unknown",
+      success: true,
+      has_refresh: Boolean(params.refreshToken),
+    });
+  } catch (error) {
+    setAuthStateDegraded();
+    logAuthEvent("AUTH_COMMIT_PARTIAL_FAILURE", {
+      route: params.scope,
+      trigger_source: params.trigger_source || "unknown",
+      has_refresh: Boolean(params.refreshToken),
+    });
+    emitSessionCommitEvent({
+      scope: params.scope,
+      trigger_source: params.trigger_source || "unknown",
+      success: false,
+      has_refresh: Boolean(params.refreshToken),
+    });
+    throw error;
+  }
+}
 
 // ============ Stockage non-sécurisé (AsyncStorage) ============
 export const asyncStorage = {

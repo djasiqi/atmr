@@ -68,6 +68,7 @@ LOG_MAX_LENGTH = 100
 
 # Codes HTTP pour gestion des erreurs
 HTTP_INTERNAL_ERROR = 500
+HTTP_UNAUTHORIZED = 401
 
 # Whitelist des providers OIDC autorisés (configurable via env)
 ALLOWED_OIDC_PROVIDERS = set(
@@ -768,6 +769,21 @@ class EnterpriseMobileRefresh(Resource):
         # ✅ SECURITE: Vérifier la signature du refresh token
         # avec JWT_SECRET_KEY (contrairement à OIDC, nos tokens sont signés)
         decoded: Dict[str, Any] | None = None
+
+        def _refresh_reject(
+            reason: str, status: int = HTTP_UNAUTHORIZED
+        ) -> Tuple[Dict[str, Any], int]:
+            error = (
+                "refresh_rejected" if status == HTTP_UNAUTHORIZED else "access_forbidden"
+            )
+            return (
+                {
+                    "error": error,
+                    "reason": reason,
+                },
+                status,
+            )
+
         result: Tuple[Dict[str, Any], int] = (
             {"error": "Erreur interne."},
             HTTP_INTERNAL_ERROR,
@@ -784,43 +800,52 @@ class EnterpriseMobileRefresh(Resource):
                     logger_instance=logger,
                 )
 
+            # verify_aud=False : PyJWT valide l'aud par défaut et rejette les tokens
+            # avec aud != attendu. On désactive pour décoder puis vérifier manuellement,
+            # afin d'avoir des logs explicites (ex. "atmr-api" au lieu de "Invalid audience").
             decoded = jwt.decode(
                 data["refresh_token"],
                 secret_key,
                 algorithms=["HS256"],
-                options={"verify_signature": True, "verify_exp": True},
+                leeway=current_app.config.get("JWT_DECODE_LEEWAY", 0),
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": False,
+                },
             )
 
-            # Vérifier manuellement l'audience
+            # Vérifier manuellement l'audience (isolation driver vs enterprise)
             aud = decoded.get("aud") if decoded else None
             if aud and aud != MOBILE_AUDIENCE:
                 logger.warning(
-                    "[AUTH][Enterprise] Audience refresh token incorrecte: %s",
+                    "[AUTH][Enterprise] Refresh token avec audience incorrecte (attendu=%s, reçu=%s)",
+                    MOBILE_AUDIENCE,
                     _sanitize_log_data(str(aud)),
                 )
-                result = ({"error": "Refresh token invalide."}, 401)
+                result = _refresh_reject("refresh_invalid", 401)
 
         except jwt.ExpiredSignatureError:
             logger.warning("[AUTH][Enterprise] Refresh token expiré")
-            result = ({"error": "Refresh token expiré."}, 401)
+            result = _refresh_reject("refresh_expired", 401)
         except jwt.PyJWTError as exc:
             logger.warning(
                 "[AUTH][Enterprise] Refresh token invalide: %s",
                 _sanitize_log_data(str(exc)),
             )
-            result = ({"error": "Refresh token invalide."}, 401)
+            result = _refresh_reject("refresh_invalid", 401)
 
         # Si erreur de décodage, retourner immédiatement
         if result[1] != HTTP_INTERNAL_ERROR:
             return result
 
         if not decoded:
-            result = ({"error": "Refresh token invalide."}, 401)
+            result = _refresh_reject("refresh_invalid", 401)
         else:
             public_id = decoded.get("sub")
             session_id = decoded.get("session_id")
             if not public_id:
-                result = ({"error": "Refresh token invalide."}, 401)
+                result = _refresh_reject("refresh_invalid", 401)
             else:
                 # Utiliser le repository pour récupérer l'utilisateur
                 from repositories.user_repository import UserRepository
@@ -829,13 +854,15 @@ class EnterpriseMobileRefresh(Resource):
 
                 user = user_repo.find_by_public_id(str(public_id))
                 if not user or user.role not in (UserRole.COMPANY, UserRole.ADMIN):
-                    result = ({"error": "Accès refusé."}, 403)
+                    result = _refresh_reject("tenant_access_revoked", 403)
                 else:
                     # Récupérer l'entreprise via le modèle User directement car user est un DTO
                     user_model = User.query.filter_by(public_id=str(public_id)).first()
+                    if user_model and getattr(user_model, "active", True) is False:
+                        return _refresh_reject("account_disabled", 403)
                     company = user_model.company if user_model else None
                     if not company:
-                        result = ({"error": "Entreprise introuvable."}, 403)
+                        result = _refresh_reject("tenant_access_revoked", 403)
                     else:
                         response = _issue_tokens(user, company, session_id=session_id)  # pyright: ignore[reportArgumentType]
                         response["mfa_required"] = False

@@ -536,7 +536,7 @@ const ClientEditForm = ({
           </button>
           <div className={styles.headerTitle}>
             <h2 className={styles.clientName}>
-              Modifier : {displayName}
+              Modifier : {displayName}{client?.id != null && <span className={styles.clientId} title="ID client"> #{client.id}</span>}
             </h2>
           </div>
         </div>

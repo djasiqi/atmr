@@ -8,7 +8,8 @@ import { getSocket, getSocketRole } from "./socket";
 const log = getLogger("LocationQ");
 
 const LOCATION_QUEUE_KEY = "@atmr:location_queue";
-const MAX_QUEUE_SIZE = 1000; // Limiter la taille de la queue pour éviter l'overflow
+const MAX_QUEUE_SIZE = 1000; // hard-cap globale
+const MAX_MISSION_QUEUE_SIZE = 20; // v2.1: mission_live garde un buffer court
 
 // ✅ Client-side stabilisation (rate-limit + singleflight)
 const RESYNC_CHUNK_SIZE = 50; // éviter des payloads énormes
@@ -64,9 +65,12 @@ function resolveSocket(socketParam: any): any {
  * quand le batch avec callback échoue systématiquement.
  */
 function emitIndividualFallback(socket: any, payload: any): void {
-  const positions = payload.positions || [];
+  const positions = (payload.positions || []).filter(
+    (pos: any) => normalizeMode(pos.location_mode) !== "availability_presence"
+  );
   const driverId = payload.driver_id;
   for (const pos of positions) {
+    const timestampIso = new Date(pos.timestamp || Date.now()).toISOString();
     socket.emit("driver_location", {
       latitude: pos.latitude,
       longitude: pos.longitude,
@@ -74,6 +78,11 @@ function emitIndividualFallback(socket: any, payload: any): void {
       heading: pos.heading,
       accuracy: pos.accuracy,
       timestamp: pos.timestamp,
+      location_mode: normalizeMode(pos.location_mode),
+      recorded_at: pos.recorded_at || timestampIso,
+      sent_at: pos.sent_at || new Date().toISOString(),
+      is_background: pos.is_background ?? false,
+      mission_id: pos.mission_id ?? null,
       driver_id: driverId,
     });
   }
@@ -105,13 +114,23 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
     return;
   }
 
+  const filteredPayload = {
+    ...payload,
+    positions: (payload.positions || []).filter(
+      (pos: any) => normalizeMode(pos.location_mode) !== "availability_presence"
+    ),
+  };
+  if ((filteredPayload.positions || []).length === 0) {
+    return;
+  }
+
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       consecutiveBatchFailures++;
       reject(new Error("Timeout waiting for ACK"));
     }, 15000);
 
-    socket.emit("driver_location_batch", payload, (ack: any) => {
+    socket.emit("driver_location_batch", filteredPayload, (ack: any) => {
       clearTimeout(timeout);
       if (ack?.success) {
         consecutiveBatchFailures = 0; // Reset sur succès
@@ -139,6 +158,44 @@ export interface QueuedLocation {
   accuracy: number;
   timestamp: number;
   driver_id: number;
+  location_mode?: "mission_live" | "availability_presence" | "passive_last_known";
+  recorded_at?: string;
+  sent_at?: string;
+  is_background?: boolean;
+  mission_id?: number | null;
+}
+
+function normalizeMode(
+  mode?: string
+): "mission_live" | "availability_presence" | "passive_last_known" {
+  if (mode === "availability_presence" || mode === "passive_last_known") return mode;
+  return "mission_live";
+}
+
+function applyQueueRetention(queue: QueuedLocation[]): QueuedLocation[] {
+  const missionItems = queue.filter((q) => normalizeMode(q.location_mode) === "mission_live");
+  const missionTrimmed =
+    missionItems.length > MAX_MISSION_QUEUE_SIZE
+      ? missionItems.slice(missionItems.length - MAX_MISSION_QUEUE_SIZE)
+      : missionItems;
+
+  const latestAvailabilityByDriver = new Map<number, QueuedLocation>();
+  for (const item of queue) {
+    if (normalizeMode(item.location_mode) !== "availability_presence") continue;
+    latestAvailabilityByDriver.set(item.driver_id, item);
+  }
+
+  const passiveItems = queue.filter(
+    (q) => normalizeMode(q.location_mode) === "passive_last_known"
+  );
+
+  const merged = [...missionTrimmed, ...latestAvailabilityByDriver.values(), ...passiveItems].sort(
+    (a, b) => a.timestamp - b.timestamp
+  );
+  if (merged.length > MAX_QUEUE_SIZE) {
+    return merged.slice(merged.length - MAX_QUEUE_SIZE);
+  }
+  return merged;
 }
 
 /**
@@ -161,14 +218,17 @@ export async function enqueueLocation(
       return age < MAX_AGE_MS;
     });
     
-    // Ajouter la nouvelle position
-    validQueue.push(location);
+    const normalized: QueuedLocation = {
+      ...location,
+      location_mode: normalizeMode(location.location_mode),
+      recorded_at:
+        location.recorded_at || new Date(location.timestamp || Date.now()).toISOString(),
+      sent_at: location.sent_at || new Date().toISOString(),
+    };
+    validQueue.push(normalized);
 
     // Limiter la taille de la queue
-    if (validQueue.length > MAX_QUEUE_SIZE) {
-      // Garder les positions les plus récentes
-      validQueue.splice(0, validQueue.length - MAX_QUEUE_SIZE);
-    }
+    const retainedQueue = applyQueueRetention(validQueue);
 
     // Logger si des positions ont été expirées
     const expiredCount = queue.length - validQueue.length + 1;  // +1 car on vient d'ajouter
@@ -176,7 +236,7 @@ export async function enqueueLocation(
       log.info("expired positions dropped", { count: expiredCount - 1 });
     }
 
-    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(validQueue));
+    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(retainedQueue));
   } catch (error) {
     log.error("enqueue failed", { error });
   }
@@ -197,14 +257,16 @@ export async function enqueueLocationBatch(
 
     const merged = [...queue, ...locations].filter(
       (loc) => now - loc.timestamp < MAX_AGE_MS
-    );
+    ).map((loc) => ({
+      ...loc,
+      location_mode: normalizeMode(loc.location_mode),
+      recorded_at: loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
+      sent_at: loc.sent_at || new Date().toISOString(),
+    }));
+    const retained = applyQueueRetention(merged);
 
-    if (merged.length > MAX_QUEUE_SIZE) {
-      merged.splice(0, merged.length - MAX_QUEUE_SIZE);
-    }
-
-    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(merged));
-    log.info("batch enqueued", { added: locations.length, total: merged.length });
+    await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(retained));
+    log.info("batch enqueued", { added: locations.length, total: retained.length });
   } catch (error) {
     log.error("batch enqueue failed", { error });
   }
@@ -288,12 +350,17 @@ export async function flushLatestPositionViaHttp(): Promise<void> {
       const latest = queue[queue.length - 1];
       const { updateDriverLocation } = await import("./api");
       const httpPromise = updateDriverLocation({
-        latitude: latest.latitude,
-        longitude: latest.longitude,
-        speed: latest.speed,
+        lat: latest.latitude,
+        lon: latest.longitude,
+        speed_mps: latest.speed,
         heading: latest.heading,
-        accuracy: latest.accuracy,
-        timestamp: latest.timestamp,
+        accuracy_m: latest.accuracy,
+        recorded_at:
+          latest.recorded_at || new Date(latest.timestamp || Date.now()).toISOString(),
+        sent_at: new Date().toISOString(),
+        is_background: true,
+        location_mode: normalizeMode(latest.location_mode),
+        mission_id: latest.mission_id ?? null,
       });
       await Promise.race([
         httpPromise,
@@ -338,9 +405,42 @@ export async function syncLocationQueue(socket: any): Promise<void> {
     // être ajoutées (ex: task background) → la queue peut rester non vide, c'est normal.
     log.info("resync snapshot", { count: queue.length });
 
+    const presenceOnly = queue.filter(
+      (loc) => normalizeMode(loc.location_mode) === "availability_presence"
+    );
+    if (presenceOnly.length > 0) {
+      const latestByDriver = new Map<number, QueuedLocation>();
+      for (const loc of presenceOnly) {
+        latestByDriver.set(loc.driver_id, loc);
+      }
+      const { updateDriverLocation } = await import("./api");
+      for (const loc of latestByDriver.values()) {
+        await updateDriverLocation({
+          lat: loc.latitude,
+          lon: loc.longitude,
+          speed_mps: loc.speed,
+          heading: loc.heading,
+          accuracy_m: loc.accuracy,
+          recorded_at: loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
+          sent_at: new Date().toISOString(),
+          is_background: true,
+          location_mode: "availability_presence",
+          mission_id: null,
+        });
+      }
+      await removeSentLocations(presenceOnly);
+    }
+
+    const socketQueue = queue.filter(
+      (loc) => normalizeMode(loc.location_mode) !== "availability_presence"
+    );
+    if (socketQueue.length === 0) {
+      return;
+    }
+
     // Grouper par driver_id (au cas où)
     const byDriver = new Map<number, QueuedLocation[]>();
-    for (const loc of queue) {
+    for (const loc of socketQueue) {
       const driverQueue = byDriver.get(loc.driver_id) || [];
       driverQueue.push(loc);
       byDriver.set(loc.driver_id, driverQueue);
@@ -359,6 +459,12 @@ export async function syncLocationQueue(socket: any): Promise<void> {
             heading: loc.heading,
             accuracy: loc.accuracy,
             timestamp: loc.timestamp,
+            location_mode: normalizeMode(loc.location_mode),
+            recorded_at:
+              loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
+            sent_at: loc.sent_at || new Date().toISOString(),
+            is_background: loc.is_background ?? false,
+            mission_id: loc.mission_id ?? null,
           })),
           driver_id: driverId,
         };

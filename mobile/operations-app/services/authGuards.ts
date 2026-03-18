@@ -2,6 +2,28 @@ import { getLogger } from "@/utils/logger";
 
 const log = getLogger("AuthGuard");
 export type ApiKind = "driver" | "enterprise" | "enterpriseStandard";
+export type AuthFailureSeverity = "AUTH_HARD_FAILURE" | "AUTH_SOFT_FAILURE";
+export type AuthFailureContext =
+  | "refresh_endpoint"
+  | "business_endpoint"
+  | "socket";
+export type AuthFailureReason =
+  | "refresh_invalid"
+  | "refresh_expired"
+  | "session_revoked"
+  | "account_disabled"
+  | "tenant_access_revoked"
+  | "unknown_refresh_401"
+  | "network_error"
+  | "timeout"
+  | "dns_error"
+  | "offline"
+  | "rate_limited"
+  | "server_error"
+  | "auth_bootstrapping"
+  | "auth_recovering"
+  | "socket_transport_failure"
+  | "unknown";
 
 /**
  * Erreur stable pour rejet de la queue après échec refresh (session invalide).
@@ -103,13 +125,89 @@ export function getAuthNotReadyDisplayMessage(error: unknown): string | null {
   if (reason === "missing_access_token") {
     return "Session non prête. Veuillez patienter ou vous reconnecter.";
   }
-  if (reason === "auth_ready_timeout") {
+  if (reason === "auth_ready_timeout" || reason === "auth_bootstrapping") {
     return "Connexion en cours…";
+  }
+  if (reason === "auth_recovering") {
+    return "Reconnexion en cours…";
   }
   if (reason === "missing_token_and_refresh_failed") {
     return "Session expirée. Veuillez vous reconnecter.";
   }
   return "Connexion en cours…";
+}
+
+export function getAuthFailureReason(error: unknown): AuthFailureReason {
+  const e = error as any;
+  const status = e?.response?.status;
+  const serverReason = String(e?.response?.data?.reason || "").toLowerCase();
+  const code = String(e?.code || "").toUpperCase();
+  const message = String(e?.message || "").toLowerCase();
+
+  if (isAuthNotReadyError(error)) {
+    if (e.reason === "auth_recovering") return "auth_recovering";
+    return "auth_bootstrapping";
+  }
+  if (serverReason === "refresh_invalid" || serverReason === "refresh_rejected_401")
+    return "refresh_invalid";
+  if (serverReason === "refresh_expired") return "refresh_expired";
+  if (serverReason === "session_revoked") return "session_revoked";
+  if (serverReason === "account_disabled") return "account_disabled";
+  if (serverReason === "tenant_access_revoked") return "tenant_access_revoked";
+  if (status === 401) return "unknown_refresh_401";
+  if (status === 429) return "rate_limited";
+  if (status && status >= 500) return "server_error";
+  if (status === 0) return "offline";
+  if (code === "ERR_NETWORK") return "network_error";
+  if (code === "ECONNABORTED" || message.includes("timeout")) return "timeout";
+  if (message.includes("dns")) return "dns_error";
+  if (message.includes("socket") || message.includes("transport"))
+    return "socket_transport_failure";
+  return "unknown";
+}
+
+export function isHardAuthFailure(
+  error: unknown,
+  context: AuthFailureContext
+): boolean {
+  const reason = getAuthFailureReason(error);
+  if (context === "refresh_endpoint") {
+    return [
+      "refresh_invalid",
+      "refresh_expired",
+      "session_revoked",
+      "account_disabled",
+      "tenant_access_revoked",
+    ].includes(reason);
+  }
+  if (context === "socket") {
+    return ["account_disabled", "tenant_access_revoked"].includes(reason);
+  }
+  return ["account_disabled", "tenant_access_revoked"].includes(reason);
+}
+
+export function isSoftAuthFailure(
+  error: unknown,
+  context: AuthFailureContext
+): boolean {
+  return !isHardAuthFailure(error, context);
+}
+
+export function shouldLogoutFromRefreshFailure(
+  error: unknown,
+  context: AuthFailureContext
+): {
+  shouldLogout: boolean;
+  severity: AuthFailureSeverity;
+  reason: AuthFailureReason;
+} {
+  const reason = getAuthFailureReason(error);
+  const hard = isHardAuthFailure(error, context);
+  return {
+    shouldLogout: hard,
+    severity: hard ? "AUTH_HARD_FAILURE" : "AUTH_SOFT_FAILURE",
+    reason,
+  };
 }
 
 // Centralisation: définition "public endpoint" (pas besoin d'Authorization Bearer)

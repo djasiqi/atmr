@@ -17,6 +17,11 @@ class UpdateDriverLocationCommand:
     heading: float | None = None
     accuracy: float | None = None
     ts: str | None = None
+    location_mode: str | None = None
+    recorded_at: str | None = None
+    sent_at: str | None = None
+    is_background: bool = False
+    mission_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +30,9 @@ class UpdateDriverLocationResult:
     snapped_lon: float
     source: str
     geofence_events: list[str]
+    accept_status: str
+    accept_reason: str
+    received_at: str | None
 
 
 class UpdateDriverLocationUseCase:
@@ -62,18 +70,30 @@ class UpdateDriverLocationUseCase:
             accuracy=cmd.accuracy,
             source="gps",
             timestamp=timestamp,
+            location_mode=cmd.location_mode or "mission_live",
+            recorded_at=self._parse_ts(cmd.recorded_at) if cmd.recorded_at else timestamp,
+            sent_at=self._parse_ts(cmd.sent_at) if cmd.sent_at else self._now_utc(),
+            is_background=bool(cmd.is_background),
+            mission_id=cmd.mission_id,
         )
 
         snapped_lat = getattr(res, "snapped_lat", cmd.latitude)
         snapped_lon = getattr(res, "snapped_lon", cmd.longitude)
         source = getattr(res, "source", "raw")
         geofence_events = list(getattr(res, "geofence_events", []) or [])
+        accept_status = str(getattr(res, "accept_status", "accepted_observability_only"))
+        accept_reason = str(getattr(res, "accept_reason", ""))
+        received_at = getattr(res, "received_at", None)
+        received_at_str = str(received_at) if received_at is not None else None
 
         return UpdateDriverLocationResult(
             snapped_lat=float(snapped_lat),
             snapped_lon=float(snapped_lon),
             source=str(source),
             geofence_events=geofence_events,
+            accept_status=accept_status,
+            accept_reason=accept_reason,
+            received_at=received_at_str,
         )
 
     def _parse_ts(self, ts: str | None) -> datetime:

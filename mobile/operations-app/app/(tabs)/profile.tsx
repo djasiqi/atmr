@@ -29,7 +29,11 @@ import {
   testPushNotification,
 } from "@/services/api";
 import { sendIngestEvent } from "@/src/config/telemetry";
-import { secureStorage, asyncStorage } from "@/services/storage";
+import {
+  secureStorage,
+  asyncStorage,
+  setActiveAuthNamespace,
+} from "@/services/storage";
 import {
   ENTERPRISE_SESSION_KEY,
   fetchEnterpriseSession,
@@ -265,15 +269,6 @@ export default function ProfileScreen() {
         hasRefreshToken: !!enterpriseTokenResponse.refresh_token,
       });
 
-      await secureStorage.setEnterpriseToken(enterpriseTokenResponse.token);
-      if (enterpriseTokenResponse.refresh_token) {
-        await secureStorage.setEnterpriseRefreshToken(enterpriseTokenResponse.refresh_token);
-      } else {
-        await secureStorage.removeEnterpriseRefreshToken();
-      }
-      invalidateEnterpriseInterceptorCache();
-      log.info("enterprise tokens stored, cache invalidated", {});
-
       let enterprisePayload: EnterpriseTokenPayload;
       try {
         const session = await fetchEnterpriseSession(enterpriseTokenResponse.token);
@@ -313,6 +308,22 @@ export default function ProfileScreen() {
           mfa_required: false as const,
         };
       }
+
+      await setActiveAuthNamespace({
+        role: "enterprise",
+        userId: enterprisePayload.user.public_id,
+        tenantId: enterprisePayload.company.id,
+        sessionId: enterprisePayload.session_id || null,
+      });
+
+      await secureStorage.setEnterpriseToken(enterpriseTokenResponse.token);
+      if (enterpriseTokenResponse.refresh_token) {
+        await secureStorage.setEnterpriseRefreshToken(enterpriseTokenResponse.refresh_token);
+      } else {
+        await secureStorage.removeEnterpriseRefreshToken();
+      }
+      invalidateEnterpriseInterceptorCache();
+      log.info("enterprise tokens stored, cache invalidated", {});
 
       await AsyncStorage.multiSet([
         [

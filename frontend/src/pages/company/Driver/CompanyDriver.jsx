@@ -37,6 +37,7 @@ const AVAILABILITY_OPTIONS = [
   { value: 'all', label: 'Tous' },
   { value: 'available', label: 'Disponibles' },
   { value: 'onTrip', label: 'En course' },
+  { value: 'stale', label: 'Position périmée' },
   { value: 'offline', label: 'Hors ligne' },
 ];
 
@@ -101,13 +102,9 @@ const CompanyDriver = () => {
 
   // Stats
   const driverStats = useMemo(() => {
-    const OFFLINE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
-    const now = Date.now();
-
     const isRecentGps = (d) => {
-      if (!d.last_position_update) return false;
-      const elapsed = now - new Date(d.last_position_update).getTime();
-      return elapsed < OFFLINE_THRESHOLD_MS;
+      const freshness = String(d.location_status || '').toLowerCase();
+      return freshness === 'live' || freshness === 'recent';
     };
 
     const total = drivers.length;
@@ -135,6 +132,7 @@ const CompanyDriver = () => {
         availabilityFilter === 'all' ||
         (availabilityFilter === 'available' && drv.is_active && !drv.current_trip_id) ||
         (availabilityFilter === 'onTrip' && !!drv.current_trip_id) ||
+        (availabilityFilter === 'stale' && String(drv.location_status || '').toLowerCase() === 'stale') ||
         (availabilityFilter === 'offline' && !drv.is_active);
 
       return matchesSearch && matchesStatus && matchesAvailability;
