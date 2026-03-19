@@ -68,7 +68,8 @@ describe("locationQueue socket presence guards", () => {
     await expect(syncLocationQueue(socket)).rejects.toBeTruthy();
     await expect(syncLocationQueue(socket)).rejects.toBeTruthy();
     await expect(syncLocationQueue(socket)).rejects.toBeTruthy();
-    await syncLocationQueue(socket);
+    // 4e appel : fallback déclenché → throw "Fallback sent without ACK" (comportement attendu)
+    await expect(syncLocationQueue(socket)).rejects.toThrow("Fallback sent without ACK");
 
     expect(individualPayloads.length).toBeGreaterThan(0);
     const payload = individualPayloads[0];

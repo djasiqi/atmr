@@ -12,6 +12,7 @@ import {
   normaliseCoords,
   resolveDriverCoords,
   getDriverStatus,
+  getFreshnessStatus,
   formatLastSeen,
   makeCircleMarkerIcon,
   makeClusterIcon,
@@ -88,18 +89,6 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const drivers = searchQuery
     ? allDrivers.filter((d) => d.username?.toLowerCase().includes(searchQuery.toLowerCase()))
     : allDrivers;
-
-  // Met à jour le set des chauffeurs réellement localisés (GPS frais < 5 min)
-  const updateLocatedSet = useCallback((driverId, isLocated) => {
-    const set = locatedIdsRef.current;
-    const before = set.size;
-    if (isLocated) {
-      set.add(driverId);
-    } else {
-      set.delete(driverId);
-    }
-    if (set.size !== before) setLocatedCount(set.size);
-  }, []);
 
   // Coordonnées entreprise comme fallback
   const companyCoords = useMemo(() => {
@@ -235,30 +224,42 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (MAP_DEBUG) console.log('[DriverLiveMap] Google Map chargée');
   }, []);
 
-  // Placer les positions statiques au chargement
+  // Placer les positions statiques au chargement + recalculer les localisés (GPS frais < 5 min)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !Array.isArray(drivers)) return;
 
     let placed = 0;
+    const newLocatedIds = new Set();
+
     drivers.forEach((d) => {
-      if (markersRef.current[d.id]) return;
       const resolved = resolveDriverCoords(d, companyCoords);
       if (!resolved) return;
 
       const { coords, isFallback } = resolved;
       const status = isFallback ? 'offline' : getDriverStatus(d);
+      const freshness = getFreshnessStatus(d);
+      const isLocated = !isFallback && freshness !== 'offline';
+      if (isLocated) newLocatedIds.add(d.id);
+
       const tooltipOpts = isFallback ? { status: 'offline', isStale: true, noGps: true } : {};
-      upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
-      placed++;
+      if (!markersRef.current[d.id]) {
+        upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
+        placed++;
+      } else {
+        upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
+      }
     });
+
+    // Synchroniser le compteur localisés
+    locatedIdsRef.current = newLocatedIds;
+    setLocatedCount(newLocatedIds.size);
 
     // Supprimer les marqueurs des chauffeurs qui ne sont plus dans la liste
     const driverIds = new Set(drivers.map((d) => d.id));
     Object.keys(markersRef.current).forEach((driverId) => {
       if (!driverIds.has(Number(driverId))) {
         removeMarker(driverId);
-        updateLocatedSet(Number(driverId), false);
       }
     });
 
@@ -273,7 +274,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       map.setCenter(companyCoords || SWITZERLAND_CENTER);
       map.setZoom(companyCoords ? 13 : 9);
     }
-  }, [drivers, companyCoords, upsertMarker, removeMarker, fitBoundsToMarkers, updateLocatedSet]);
+  }, [drivers, companyCoords, upsertMarker, removeMarker, fitBoundsToMarkers]);
 
   useEffect(() => {
     setShowNoGpsBanner(allDrivers.length > 0 && locatedCount === 0);
@@ -416,6 +417,10 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: AVAILABLE_LIGHT_GREEN, flexShrink: 0 }} />
                 <span>Dispo</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+                <span>Assigné</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#00796B', flexShrink: 0 }} />

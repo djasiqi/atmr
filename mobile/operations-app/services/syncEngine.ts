@@ -51,27 +51,58 @@ function isAvailabilityPresenceMode(): boolean {
 }
 
 function triggerPendingActionsFlush(): void {
-  MissionStateManager.syncPendingActions().catch((e) => {
-    log.warn("syncPendingActions error", { error: e });
+  MissionStateManager.syncPendingActions().catch((e: unknown) => {
+    const err = e as { message?: string };
+    log.warn("syncPendingActions error", { message: err?.message ?? String(e) });
   });
 }
+
+let locationFlushConsecutiveFailures = 0;
+const LOCATION_FLUSH_BACKOFF_THRESHOLD = 2;
 
 function triggerLocationFlush(): void {
   if (getSocketRole() !== "driver") return;
   const missionCritical = isMissionCriticalTrackingMode();
   const presenceMode = isAvailabilityPresenceMode();
   if (AppState.currentState !== "active" && !missionCritical && !presenceMode) return;
+  // Backoff : éviter de hammer si erreurs répétées (401, réseau, etc.)
+  if (locationFlushConsecutiveFailures >= LOCATION_FLUSH_BACKOFF_THRESHOLD) {
+    log.debug("location flush skipped (backoff)", { failures: locationFlushConsecutiveFailures });
+    return;
+  }
   const socket = getSocket();
   const doFlush = () => {
     if (socket?.connected) {
-      syncLocationQueue(socket).catch((e) => {
-        log.warn("syncLocationQueue error", { error: e });
-      });
+      syncLocationQueue(socket)
+        .then(() => {
+          locationFlushConsecutiveFailures = 0;
+        })
+        .catch((e: unknown) => {
+          locationFlushConsecutiveFailures++;
+          const err = e as { message?: string; response?: { status?: number }; code?: string };
+          log.warn("syncLocationQueue error", {
+            message: err?.message ?? String(e),
+            status: err?.response?.status,
+            code: err?.code,
+            failures: locationFlushConsecutiveFailures,
+          });
+        });
     } else {
       // Socket déconnecté (ex. app en arrière-plan) : fallback HTTP pour maintenir "en ligne"
-      flushLatestPositionViaHttp().catch((e) => {
-        log.warn("HTTP location fallback error", { error: e });
-      });
+      flushLatestPositionViaHttp()
+        .then(() => {
+          locationFlushConsecutiveFailures = 0;
+        })
+        .catch((e: unknown) => {
+          locationFlushConsecutiveFailures++;
+          const err = e as { message?: string; response?: { status?: number }; code?: string };
+          log.warn("HTTP location fallback error", {
+            message: err?.message ?? String(e),
+            status: err?.response?.status,
+            code: err?.code,
+            failures: locationFlushConsecutiveFailures,
+          });
+        });
     }
   };
   // En arrière-plan mission critical: flush immédiat.
@@ -105,6 +136,7 @@ class SyncEngineImpl {
       if (AppState.currentState !== "active") return;
       const net = getNetworkStateSnapshot();
       if (net?.isConnected === true && net?.isInternetReachable !== false) {
+        locationFlushConsecutiveFailures = 0; // Reset backoff when network restored
         triggerPendingActionsFlush();
         triggerLocationFlush();
       }
@@ -112,6 +144,7 @@ class SyncEngineImpl {
 
     const appSub = AppState.addEventListener("change", (next) => {
       if (next === "active") {
+        locationFlushConsecutiveFailures = 0; // Reset backoff on foreground
         InteractionManager.runAfterInteractions(() => {
           setTimeout(() => {
             triggerPendingActionsFlush();
@@ -123,6 +156,7 @@ class SyncEngineImpl {
     appStateUnsub = () => appSub.remove();
 
     socketConnectUnsub = addSocketConnectListener(() => {
+      locationFlushConsecutiveFailures = 0; // Reset backoff on reconnect
       triggerPendingActionsFlush();
       triggerLocationFlush();
     });
@@ -131,16 +165,18 @@ class SyncEngineImpl {
 
     reconciliationInterval = setInterval(() => {
       if (AppState.currentState !== "active") return;
-      MissionStateManager.reconcileNow().catch((e) => {
-        log.warn("reconcileNow error", { error: e });
+      MissionStateManager.reconcileNow().catch((e: unknown) => {
+        const err = e as { message?: string };
+        log.warn("reconcileNow error", { message: err?.message ?? String(e) });
       });
     }, 3 * 60 * 1000);
 
     missionFallbackInterval = setInterval(() => {
       if (AppState.currentState !== "active" && !isMissionCriticalTrackingMode()) return;
       if (getSocketRole() === "driver") {
-        triggerMissionResync(true).catch((e) => {
-          log.warn("triggerMissionResync error", { error: e });
+        triggerMissionResync(true).catch((e: unknown) => {
+          const err = e as { message?: string };
+          log.warn("triggerMissionResync error", { message: err?.message ?? String(e) });
         });
       }
     }, 60000);
@@ -172,8 +208,13 @@ class SyncEngineImpl {
       if (AppState.currentState === "active") return;
       if (!isAvailabilityPresenceMode()) return;
       if (MissionStateManager.isActive()) return;
-      flushLatestPositionViaHttp().catch((e) => {
-        log.warn("presence heartbeat fallback error", { error: e });
+      flushLatestPositionViaHttp().catch((e: unknown) => {
+        const err = e as { message?: string; response?: { status?: number }; code?: string };
+        log.warn("presence heartbeat fallback error", {
+          message: err?.message ?? String(e),
+          status: err?.response?.status,
+          code: err?.code,
+        });
       });
     }, 180000);
 

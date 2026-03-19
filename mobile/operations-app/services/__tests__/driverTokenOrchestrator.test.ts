@@ -1,7 +1,20 @@
 import { refreshDriverTokenOrchestrated } from "@/services/driverTokenOrchestrator";
 
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn().mockResolvedValue(undefined),
+  multiRemove: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("expo-secure-store", () => ({
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock("@/services/api", () => ({
-  refreshDriverTokenSingleflight: jest.fn(),
+  runDriverRefreshSingleflight: jest.fn(),
 }));
 
 jest.mock("@/services/authLogging", () => ({
@@ -10,8 +23,8 @@ jest.mock("@/services/authLogging", () => ({
 }));
 
 describe("driverTokenOrchestrator", () => {
-  const { refreshDriverTokenSingleflight } = jest.requireMock("@/services/api") as {
-    refreshDriverTokenSingleflight: jest.Mock;
+  const { runDriverRefreshSingleflight } = jest.requireMock("@/services/api") as {
+    runDriverRefreshSingleflight: jest.Mock;
   };
   const { logAuthEvent } = jest.requireMock("@/services/authLogging") as {
     logAuthEvent: jest.Mock;
@@ -22,12 +35,12 @@ describe("driverTokenOrchestrator", () => {
   });
 
   it("doit logguer start/success et retourner le token", async () => {
-    refreshDriverTokenSingleflight.mockResolvedValue("token-new");
+    runDriverRefreshSingleflight.mockResolvedValue("token-new");
 
     const token = await refreshDriverTokenOrchestrated("socket_connect_error");
 
     expect(token).toBe("token-new");
-    expect(refreshDriverTokenSingleflight).toHaveBeenCalledTimes(1);
+    expect(runDriverRefreshSingleflight).toHaveBeenCalledTimes(1);
     expect(logAuthEvent).toHaveBeenCalledWith(
       "AUTH_REFRESH_START",
       expect.objectContaining({
@@ -49,7 +62,7 @@ describe("driverTokenOrchestrator", () => {
     const error = Object.assign(new Error("refresh failed"), {
       response: { status: 401 },
     });
-    refreshDriverTokenSingleflight.mockRejectedValue(error);
+    runDriverRefreshSingleflight.mockRejectedValue(error);
 
     await expect(
       refreshDriverTokenOrchestrated("socket_unauthorized")

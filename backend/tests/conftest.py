@@ -112,12 +112,14 @@ def pytest_ignore_collect(path: object, config: object) -> bool:
     is_ml = "/tests/ml/" in p
     is_rl = "/tests/rl/" in p
     is_md5_migration = p.endswith("/tests/security/test_md5_to_sha256_migration.py")
+    is_load_testing = "/tests/load_testing/" in p
 
     return (
         (is_e2e and not run_e2e)
         or (is_ml and not has_torch)
         or (is_rl and (not has_torch or not has_gymnasium or not has_optuna))
         or (is_md5_migration and not has_torch)
+        or is_load_testing  # locust/urllib3 RecursionError avec Python 3.14
     )
 
 
@@ -164,6 +166,43 @@ def app() -> Flask:
         }
     )
     return app
+
+
+def _postgresql_schema_ready(app: Flask) -> bool:
+    """Vérifie que le schéma PostgreSQL (table user) existe. Skip si SQLite ou erreur connexion."""
+    uri = (app.config.get("SQLALCHEMY_DATABASE_URI") or "").lower()
+    if "sqlite" in uri:
+        return False
+    try:
+        from sqlalchemy import text
+
+        with app.app_context():
+            try:
+                _db.session.execute(text('SELECT 1 FROM "user" LIMIT 1'))
+                return True
+            finally:
+                _db.session.rollback()
+    except Exception as e:
+        err = str(e).lower()
+        if "does not exist" in err or "relation" in err or "connection" in err or "connect" in err:
+            return False
+        raise
+
+
+@pytest.fixture(scope="session")
+def postgresql_schema_ready(app: Flask) -> bool:
+    """Session-scoped: schéma PostgreSQL prêt pour les tests d'intégration."""
+    return _postgresql_schema_ready(app)
+
+
+@pytest.fixture(autouse=True)
+def skip_integration_if_schema_missing(request, postgresql_schema_ready):
+    """Skip les tests @pytest.mark.integration si le schéma PostgreSQL n'est pas prêt."""
+    if "integration" in request.keywords and not postgresql_schema_ready:
+        pytest.skip(
+            "PostgreSQL schema not ready (table 'user' missing). "
+            "Run: docker compose -f docker-compose.test.yml up -d postgres_test && flask db upgrade"
+        )
 
 
 @pytest.fixture
