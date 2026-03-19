@@ -53,6 +53,7 @@ LON_MIN = -LON_THRESHOLD
 LON_MAX = LON_THRESHOLD
 MIN_POINTS_FOR_MATCHING = 3
 MIN_TOKEN_LENGTH = 10
+BODY_PREVIEW_MAX_LEN = 200
 
 # sentry (si initialisé dans app.py, on garde try/except pour éviter
 # ImportError en tests)
@@ -1217,7 +1218,7 @@ class DriverLocation(Resource):
                 logger.warning(
                     "📍 PUT /driver/me/location: JSON invalide ou vide. body_len=%s body_preview=%s",
                     len(raw) if raw else 0,
-                    (raw[:200] + "...") if raw and len(raw) > 200 else raw,
+                    (raw[:BODY_PREVIEW_MAX_LEN] + "...") if raw and len(raw) > BODY_PREVIEW_MAX_LEN else raw,
                 )
                 result = {
                     "error": "invalid_json",
@@ -1239,182 +1240,188 @@ class DriverLocation(Resource):
                     logger.debug("📍 recorded_at manquant, défaut=ts ou now")
                 # Validation et conversion
                 try:
-                    lat = float(p.get("lat", p.get("latitude")))
-                    lon = float(p.get("lon", p.get("longitude")))
-
-                    if result is None and (
-                        (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD))
-                        or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)
-                    ):
-                        result = {"error": "Coordinates out of valid range"}
+                    lat_val = p.get("lat") or p.get("latitude")
+                    lon_val = p.get("lon") or p.get("longitude")
+                    if lat_val is None or lon_val is None:
+                        result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}
                         status_code = 400
+                    else:
+                        lat = float(lat_val)
+                        lon = float(lon_val)
 
-                    if result is None:
-                        speed = float(
-                            p.get("speed_mps", p.get("speed", 0.0)) or 0.0
-                        )
-                        heading = float(p.get("heading", 0.0) or 0.0)
-                        accuracy = float(
-                            p.get("accuracy_m", p.get("accuracy", 0.0)) or 0.0
-                        )
-                        recorded_at = (
-                            p.get("recorded_at")
-                            or p.get("ts")
-                            or datetime.now(UTC).isoformat()
-                        )
-                        sent_at = p.get("sent_at") or datetime.now(UTC).isoformat()
-                        location_mode = p.get("location_mode") or "mission_live"
-                        is_background = bool(p.get("is_background", False))
-                        mission_id = p.get("mission_id")
+                        if result is None and (
+                            (not (-LAT_THRESHOLD <= lat <= LAT_THRESHOLD))
+                            or not (-LON_THRESHOLD <= lon <= LON_THRESHOLD)
+                        ):
+                            result = {"error": "Coordinates out of valid range"}
+                            status_code = 400
 
-                        from application.drivers.update_driver_location import (
-                            UpdateDriverLocationCommand,
-                            UpdateDriverLocationUseCase,
-                        )
-                        from drivers.infrastructure.adapters.location_adapter import (
-                            create_location_update_fn,
-                        )
-
-                        source = "raw"
-                        accept_status = "accepted_observability_only"
-                        accept_reason = "location_update_not_attempted"
-                        received_at = datetime.now(UTC).isoformat()
-                        try:
-                            # ✅ DDD: Utilise adapter au lieu de service directement
-                            uc = UpdateDriverLocationUseCase(
-                                update_location_fn=create_location_update_fn()
-                            )
-                            uc_result = uc.execute(
-                                UpdateDriverLocationCommand(
-                                    driver_id=driver.id,
-                                    latitude=lat,
-                                    longitude=lon,
-                                    speed=speed if speed > 0 else None,
-                                    heading=heading if heading >= 0 else None,
-                                    accuracy=accuracy if accuracy > 0 else None,
-                                    ts=recorded_at,
-                                    recorded_at=recorded_at,
-                                    sent_at=sent_at,
-                                    location_mode=location_mode,
-                                    is_background=is_background,
-                                    mission_id=mission_id,
-                                )
-                            )
-
-                            # Utiliser position snapée
-                            lat = uc_result.snapped_lat
-                            lon = uc_result.snapped_lon
-                            source = uc_result.source
-                            received_at = uc_result.received_at or received_at
-                            accept_status = uc_result.accept_status
-                            accept_reason = uc_result.accept_reason
-
-                            # Émettre events geofencing si détectés
-                            for event in uc_result.geofence_events:
-                                if event == "arrived_at_pickup":
-                                    socketio.emit(
-                                        "driver:arrived_at_pickup",
-                                        {"driver_id": driver.id},
-                                        to=f"company_{driver.company_id}",
-                                    )
-                                elif event == "arrived_at_dropoff":
-                                    socketio.emit(
-                                        "driver:arrived_at_dropoff",
-                                        {"driver_id": driver.id},
-                                        to=f"company_{driver.company_id}",
-                                    )
-
-                        except Exception as e_loc:
-                            logger.exception(
-                                "[LocationService] HTTP location update failed: %s",
-                                str(e_loc),
-                            )
-                            result = {
-                                "error": "Location service unavailable",
-                                "reason": "location_update_failed",
-                            }
-                            status_code = 503
-
-                        # 5) Diffusion temps réel à la room entreprise (canonique uniquement)
                         if result is None:
+                            speed = float(
+                                p.get("speed_mps", p.get("speed", 0.0)) or 0.0
+                            )
+                            heading = float(p.get("heading", 0.0) or 0.0)
+                            accuracy = float(
+                                p.get("accuracy_m", p.get("accuracy", 0.0)) or 0.0
+                            )
+                            recorded_at = (
+                                p.get("recorded_at")
+                                or p.get("ts")
+                                or datetime.now(UTC).isoformat()
+                            )
+                            sent_at = p.get("sent_at") or datetime.now(UTC).isoformat()
+                            location_mode = p.get("location_mode") or "mission_live"
+                            is_background = bool(p.get("is_background", False))
+                            mission_id = p.get("mission_id")
+
+                            from application.drivers.update_driver_location import (
+                                UpdateDriverLocationCommand,
+                                UpdateDriverLocationUseCase,
+                            )
+                            from drivers.infrastructure.adapters.location_adapter import (
+                                create_location_update_fn,
+                            )
+
+                            source = "raw"
+                            accept_status = "accepted_observability_only"
+                            accept_reason = "location_update_not_attempted"
+                            received_at = datetime.now(UTC).isoformat()
                             try:
-                                # Extraire first_name et last_name depuis driver.user
-                                first_name = None
-                                last_name = None
-                                if hasattr(driver, "user") and driver.user is not None:
-                                    first_name = getattr(driver.user, "first_name", None)
-                                    last_name = getattr(driver.user, "last_name", None)
+                                # ✅ DDD: Utilise adapter au lieu de service directement
+                                uc = UpdateDriverLocationUseCase(
+                                    update_location_fn=create_location_update_fn()
+                                )
+                                uc_result = uc.execute(
+                                    UpdateDriverLocationCommand(
+                                        driver_id=driver.id,
+                                        latitude=lat,
+                                        longitude=lon,
+                                        speed=speed if speed > 0 else None,
+                                        heading=heading if heading >= 0 else None,
+                                        accuracy=accuracy if accuracy > 0 else None,
+                                        ts=recorded_at,
+                                        recorded_at=recorded_at,
+                                        sent_at=sent_at,
+                                        location_mode=location_mode,
+                                        is_background=is_background,
+                                        mission_id=mission_id,
+                                    )
+                                )
 
-                                # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
-                                last_seen_seconds = compute_last_seen_seconds(recorded_at)
-                                location_status = compute_location_status(
-                                    mode=location_mode, last_seen_seconds=last_seen_seconds
-                                )
-                                presence_status = presence_status_from_location_status(
-                                    location_status
-                                )
+                                # Utiliser position snapée
+                                lat = uc_result.snapped_lat
+                                lon = uc_result.snapped_lon
+                                source = uc_result.source
+                                received_at = uc_result.received_at or received_at
+                                accept_status = uc_result.accept_status
+                                accept_reason = uc_result.accept_reason
 
-                                company_id_raw = getattr(driver, "company_id", None)
-                                company_id_for_room = (
-                                    int(company_id_raw)
-                                    if company_id_raw is not None
-                                    else None
+                                # Émettre events geofencing si détectés
+                                for event in uc_result.geofence_events:
+                                    if event == "arrived_at_pickup":
+                                        socketio.emit(
+                                            "driver:arrived_at_pickup",
+                                            {"driver_id": driver.id},
+                                            to=f"company_{driver.company_id}",
+                                        )
+                                    elif event == "arrived_at_dropoff":
+                                        socketio.emit(
+                                            "driver:arrived_at_dropoff",
+                                            {"driver_id": driver.id},
+                                            to=f"company_{driver.company_id}",
+                                        )
+
+                            except Exception as e_loc:
+                                logger.exception(
+                                    "[LocationService] HTTP location update failed: %s",
+                                    str(e_loc),
                                 )
-                                if company_id_for_room is None:
-                                    raise ValueError("driver.company_id is missing")
-                                fanout_driver_location_update(
-                                    company_id_for_room,
-                                    {
-                                        "driver_id": driver.id,
-                                        "company_id": driver.company_id,
-                                        "lat": lat,
-                                        "lon": lon,
-                                        "speed": speed,
-                                        "speed_mps": speed,
-                                        "heading": heading,
-                                        "accuracy": accuracy,
-                                        "accuracy_m": accuracy,
-                                        "ts": recorded_at,
-                                        "recorded_at": recorded_at,
-                                        "sent_at": sent_at,
-                                        "received_at": received_at,
-                                        "is_background": is_background,
-                                        "mission_id": mission_id,
-                                        "location_mode": location_mode,
-                                        "last_seen_seconds": last_seen_seconds,
-                                        "location_status": location_status,
-                                        "presence_status": presence_status,
-                                        "source": source,
-                                        "first_name": first_name,
-                                        "last_name": last_name,
-                                    },
-                                    {
-                                        "driver_id": driver.id,
-                                        "company_id": driver.company_id,
-                                        "lat": lat,
-                                        "lng": lon,
-                                        "timestamp": recorded_at,
-                                        "recorded_at": recorded_at,
-                                        "received_at": received_at,
-                                        "status": "busy" if mission_id else "available",
-                                        "mission_status": None,
-                                        "presence_status": presence_status,
-                                        "location_status": location_status,
-                                        "is_available": not bool(mission_id),
-                                        "offline_reason": "",
-                                        "last_seen_seconds": last_seen_seconds,
-                                        "location_mode": location_mode,
-                                        "mission_id": mission_id,
-                                        "first_name": first_name,
-                                        "last_name": last_name,
-                                    },
-                                    accept_status=accept_status,
-                                )
-                            except Exception as fanout_err:
-                                logger.warning(
-                                    "[LocationService] fanout failed: %s",
-                                    str(fanout_err),
-                                )
+                                result = {
+                                    "error": "Location service unavailable",
+                                    "reason": "location_update_failed",
+                                }
+                                status_code = 503
+
+                            # 5) Diffusion temps réel à la room entreprise (canonique uniquement)
+                            if result is None:
+                                try:
+                                    # Extraire first_name et last_name depuis driver.user
+                                    first_name = None
+                                    last_name = None
+                                    if hasattr(driver, "user") and driver.user is not None:
+                                        first_name = getattr(driver.user, "first_name", None)
+                                        last_name = getattr(driver.user, "last_name", None)
+
+                                    # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
+                                    last_seen_seconds = compute_last_seen_seconds(recorded_at)
+                                    location_status = compute_location_status(
+                                        mode=location_mode, last_seen_seconds=last_seen_seconds
+                                    )
+                                    presence_status = presence_status_from_location_status(
+                                        location_status
+                                    )
+
+                                    company_id_raw = getattr(driver, "company_id", None)
+                                    company_id_for_room = (
+                                        int(company_id_raw)
+                                        if company_id_raw is not None
+                                        else None
+                                    )
+                                    if company_id_for_room is None:
+                                        raise ValueError("driver.company_id is missing")
+                                    fanout_driver_location_update(
+                                        company_id_for_room,
+                                        {
+                                            "driver_id": driver.id,
+                                            "company_id": driver.company_id,
+                                            "lat": lat,
+                                            "lon": lon,
+                                            "speed": speed,
+                                            "speed_mps": speed,
+                                            "heading": heading,
+                                            "accuracy": accuracy,
+                                            "accuracy_m": accuracy,
+                                            "ts": recorded_at,
+                                            "recorded_at": recorded_at,
+                                            "sent_at": sent_at,
+                                            "received_at": received_at,
+                                            "is_background": is_background,
+                                            "mission_id": mission_id,
+                                            "location_mode": location_mode,
+                                            "last_seen_seconds": last_seen_seconds,
+                                            "location_status": location_status,
+                                            "presence_status": presence_status,
+                                            "source": source,
+                                            "first_name": first_name,
+                                            "last_name": last_name,
+                                        },
+                                        {
+                                            "driver_id": driver.id,
+                                            "company_id": driver.company_id,
+                                            "lat": lat,
+                                            "lng": lon,
+                                            "timestamp": recorded_at,
+                                            "recorded_at": recorded_at,
+                                            "received_at": received_at,
+                                            "status": "busy" if mission_id else "available",
+                                            "mission_status": None,
+                                            "presence_status": presence_status,
+                                            "location_status": location_status,
+                                            "is_available": not bool(mission_id),
+                                            "offline_reason": "",
+                                            "last_seen_seconds": last_seen_seconds,
+                                            "location_mode": location_mode,
+                                            "mission_id": mission_id,
+                                            "first_name": first_name,
+                                            "last_name": last_name,
+                                        },
+                                        accept_status=accept_status,
+                                    )
+                                except Exception as fanout_err:
+                                    logger.warning(
+                                        "[LocationService] fanout failed: %s",
+                                        str(fanout_err),
+                                    )
 
                             result = {
                                 "ok": True,

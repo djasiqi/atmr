@@ -28,7 +28,7 @@ const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
 
 // Popup chauffeur — mini card structurée, classes CSS globales .lirie-popup-*
 const createStyledTooltip = (driver, opts = {}) => {
-  const { lastSeenSeconds, isStale, status: statusOverride, clientShort, noGps } = opts;
+  const { lastSeenSeconds, isStale, status: statusOverride, clientShort, currentBookingId, noGps } = opts;
   const status = statusOverride ?? getDriverStatus(driver);
 
   const statusConf = {
@@ -50,8 +50,11 @@ const createStyledTooltip = (driver, opts = {}) => {
   let metaLine = '';
   if (status === 'offline' && (lastSeenSeconds != null || isStale)) {
     metaLine = formatLastSeen(lastSeenSeconds);
-  } else if ((status === 'busy' || status === 'assigned') && clientShort) {
-    metaLine = clientShort;
+  } else if (status === 'busy' || status === 'assigned') {
+    const parts = [];
+    if (currentBookingId) parts.push(`Mission #${currentBookingId}`);
+    if (clientShort) parts.push(clientShort);
+    metaLine = parts.join(' · ');
   }
 
   // Chips optionnels
@@ -242,7 +245,14 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       const isLocated = !isFallback && freshness !== 'offline';
       if (isLocated) newLocatedIds.add(d.id);
 
-      const tooltipOpts = isFallback ? { status: 'offline', isStale: true, noGps: true } : {};
+      const tooltipOpts = isFallback
+        ? { status: 'offline', isStale: true, noGps: true }
+        : {
+            lastSeenSeconds: d.last_seen_seconds,
+            isStale: d.location_status === 'stale' || d.location_status === 'offline',
+            clientShort: d.client_short,
+            currentBookingId: d.current_booking_id,
+          };
       if (!markersRef.current[d.id]) {
         upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
         placed++;

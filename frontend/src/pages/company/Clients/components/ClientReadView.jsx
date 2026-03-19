@@ -203,7 +203,10 @@ const ClientReadView = ({ client, onEdit, onClose, loading }) => {
         <div className={styles.headerTop}>
           <button
             type="button"
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose?.();
+            }}
             className={styles.closeButton}
             aria-label="Fermer"
             title="Fermer (ESC)"

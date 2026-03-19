@@ -283,6 +283,8 @@ export const fetchCompanyDriversCanonical = async () => {
       received_at: loc.received_at ?? drv.received_at ?? null,
       mission_status: loc.mission_status ?? drv.mission_status ?? null,
       status: loc.status ?? drv.status,
+      current_booking_id: loc.current_booking_id ?? drv.current_booking_id ?? null,
+      client_short: loc.client_short ?? drv.client_short ?? '',
     };
   });
 };

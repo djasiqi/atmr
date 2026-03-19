@@ -286,13 +286,14 @@ const CompanyClients = () => {
     setHasUnsavedChanges(false);
     setClientDetails(null);
 
-    const newSearchParams = new URLSearchParams(searchParams);
-    newSearchParams.delete('selected');
-    newSearchParams.delete('openClientId');
-    newSearchParams.delete('clientId');
-    setSearchParams(newSearchParams);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('selected');
+      next.delete('openClientId');
+      next.delete('clientId');
+      return next;
+    });
+  }, [hasUnsavedChanges, setSearchParams]);
 
   const handleEditInDrawer = useCallback(() => {
     setIsEditMode(true);

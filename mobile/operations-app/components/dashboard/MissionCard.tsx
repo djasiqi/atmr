@@ -259,8 +259,11 @@ const MissionCard: MissionCardType = ({
     return "";
   };
 
+  // GPS (navigation) : visible uniquement après "En route" — le chauffeur doit confirmer la mission avant d'accéder au GPS
   const shouldShowNavigation =
-    !isCompletedStatus(status) && !isCanceledStatus(status);
+    !isCompletedStatus(status) &&
+    !isCanceledStatus(status) &&
+    normalizedStatus !== "ASSIGNED";
 
   if (!mission) {
     return <EmptyStateComponent />;

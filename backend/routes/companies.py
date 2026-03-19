@@ -2490,6 +2490,8 @@ class CompanyDriversLocations(Resource):
                 redis_results = [None] * len(drivers)
 
         # 2) Batch query: bookings actifs par driver (ASSIGNED/EN_ROUTE/IN_PROGRESS) - pas de N+1
+        # Exclure les bookings "obsolètes" : EN_ROUTE/IN_PROGRESS avec scheduled_time > 24h dans le passé
+        # (course jamais terminée dans l'app → chauffeur affiché à tort comme "en course")
         from models import Booking
         from models.base import _as_bool
 
@@ -2501,10 +2503,15 @@ class CompanyDriversLocations(Resource):
                 BookingStatus.EN_ROUTE.value,
                 BookingStatus.IN_PROGRESS.value,
             )
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
             active_bookings = (
                 Booking.query.filter(
                     Booking.driver_id.in_(driver_ids),
                     Booking.status.in_(active_statuses),
+                    or_(
+                        Booking.scheduled_time.is_(None),
+                        Booking.scheduled_time >= cutoff,
+                    ),
                 )
                 .with_entities(
                     Booking.driver_id,
@@ -2513,6 +2520,7 @@ class CompanyDriversLocations(Resource):
                     Booking.pickup_location,
                     Booking.dropoff_location,
                 )
+                .order_by(Booking.updated_at.desc())
                 .all()
             )
             _MAX_LOCATION_STR_LEN = 30
@@ -2669,6 +2677,14 @@ class CompanyDriversLocations(Resource):
                     "current_booking_id"
                 )
                 loc_item["client_short"] = active_booking.get("client_short", "")
+                if status == "busy":
+                    logger.debug(
+                        "[drivers/locations] Chauffeur en course: driver_id=%s booking_id=%s mission_status=%s client=%s",
+                        driver.id,
+                        active_booking.get("current_booking_id"),
+                        mission_status,
+                        active_booking.get("client_short", "")[:50],
+                    )
             locations.append(loc_item)
 
         # Métriques drivers_status_total (snapshot)

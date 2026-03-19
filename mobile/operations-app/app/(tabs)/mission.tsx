@@ -386,7 +386,7 @@ export default function MissionScreen() {
               const inputs = await buildBgTrackingInputs({
                 isAuthenticated: !!isDriverAuthenticated,
                 role: mode === "driver" ? "driver" : "enterprise",
-                hasActiveMission: true,
+                hasActiveMission: MissionStateManager.isActive(),
               });
               const refreshed = await refreshBackgroundTrackingNotification(inputs);
               if (!refreshed) {
@@ -408,7 +408,7 @@ export default function MissionScreen() {
           const inputs = await buildBgTrackingInputs({
             isAuthenticated: !!isDriverAuthenticated,
             role: mode === "driver" ? "driver" : "enterprise",
-            hasActiveMission: true,
+            hasActiveMission: MissionStateManager.isActive(),
           });
           const refreshed = await refreshBackgroundTrackingNotification(inputs);
           if (!refreshed) {

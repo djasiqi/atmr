@@ -201,7 +201,7 @@ def skip_integration_if_schema_missing(request, postgresql_schema_ready):
     if "integration" in request.keywords and not postgresql_schema_ready:
         pytest.skip(
             "PostgreSQL schema not ready (table 'user' missing). "
-            "Run: docker compose -f docker-compose.test.yml up -d postgres_test && flask db upgrade"
+            + "Run: docker compose -f docker-compose.test.yml up -d postgres_test && flask db upgrade"
         )
 
 
