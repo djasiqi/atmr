@@ -24,14 +24,14 @@ from ext import db, role_required, socketio
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
-from shared.error_handlers import APIErrorHandler
-from shared.notifications import notify_booking_update
 from services.geolocation.presence import (
     compute_last_seen_seconds,
     compute_location_status,
     presence_status_from_location_status,
 )
 from services.realtime.socketio import fanout_driver_location_update
+from shared.error_handlers import APIErrorHandler
+from shared.notifications import notify_booking_update
 
 # Note: Modèles (DelayEvent, Driver) utilisés pour types/annotations
 # TODO: Migrer vers repositories quand les méthodes nécessaires seront disponibles

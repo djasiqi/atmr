@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import sockets.chat as chat
+from sockets import chat
 
 
 class _DummySocketIO:

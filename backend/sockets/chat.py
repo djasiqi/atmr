@@ -2131,6 +2131,19 @@ def init_chat_socket(socketio: SocketIO):
                 logger.warning("⚠️ driver_location_batch vide")
                 return {"success": False, "error": "Batch vide"}
 
+            # Instrumentation: tracer les clés reçues pour diagnostiquer payload cassé
+            first_pos = positions[0] if positions else {}
+            pos_keys = list(first_pos.keys()) if isinstance(first_pos, dict) else []
+            has_loc_mode = "location_mode" in first_pos and first_pos.get("location_mode") is not None
+            has_rec_at = "recorded_at" in first_pos and first_pos.get("recorded_at") is not None
+            if not has_loc_mode or not has_rec_at:
+                logger.warning(
+                    "driver_location_batch position missing required fields: keys=%s has_location_mode=%s has_recorded_at=%s",
+                    pos_keys,
+                    has_loc_mode,
+                    has_rec_at,
+                )
+
             company_room = f"company_{company_id_val}"
             now_iso = datetime.now(UTC).isoformat()
 
