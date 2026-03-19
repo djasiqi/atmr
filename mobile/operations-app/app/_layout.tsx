@@ -69,8 +69,6 @@ import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { PushFailureBanner } from "@/components/common/PushFailureBanner";
 import { GpsDisabledBanner } from "@/components/common/GpsDisabledBanner";
 import { InAppNotificationToast } from "@/components/common/InAppNotificationToast";
-import { BatteryOptimizationGuide, BATTERY_GUIDE_DISMISSED_KEY } from "@/components/common/BatteryOptimizationGuide";
-import { checkBatteryOptimization } from "@/services/batteryOptimization";
 import { getLogger } from "@/utils/logger";
 import { getConnectionState, subscribeSocketStatus } from "@/services/socket";
 
@@ -221,7 +219,6 @@ function RootNav() {
   } = useAuth();
   const userId = driver?.id ?? null;
   const [pushFailed, setPushFailed] = useState(false);
-  const [showBatteryGuide, setShowBatteryGuide] = useState(false);
 
   // Version check - récupération du statut de mise à jour
   const { status: updateStatus, isLoading: versionLoading } = useVersion();
@@ -652,27 +649,8 @@ function RootNav() {
     };
   }, [driver, isDriverAuthenticated, loading]);
 
-  // A1: Vérifier l'optimisation batterie Samsung après login driver
-  // Respecte "Ne plus afficher" : on lit la préférence AVANT de décider d'afficher
-  useEffect(() => {
-    if (loading || !isDriverAuthenticated || !driver) return;
-    if (Platform.OS !== "android") return;
-    if (String(Constants.expoConfig?.extra?.APP_VARIANT || process.env.APP_VARIANT || "prod") === "prod") {
-      return;
-    }
-    (async () => {
-      try {
-        const [dismissed, { needsExemption }] = await Promise.all([
-          AsyncStorage.getItem(BATTERY_GUIDE_DISMISSED_KEY),
-          checkBatteryOptimization(),
-        ]);
-        if (dismissed === "true") return;
-        if (needsExemption) setShowBatteryGuide(true);
-      } catch {
-        // best-effort
-      }
-    })();
-  }, [driver, isDriverAuthenticated, loading]);
+  // A1: Modal batterie désactivé — jugé inutile (réapparaissait à chaque démarrage malgré "Ne plus afficher").
+  // Le guide reste disponible dans le code si besoin futur (BatteryOptimizationGuide, batteryOptimization).
 
   // ✅ Initialiser le token CSRF pour les entreprises
   useEffect(() => {
@@ -944,10 +922,6 @@ function RootNav() {
       <GpsDisabledBanner />
       <Slot />
       {updateStatus === "UPDATE_RECOMMENDED" && <UpdateRecommendedModal />}
-      <BatteryOptimizationGuide
-        visible={showBatteryGuide}
-        onDismiss={() => setShowBatteryGuide(false)}
-      />
     </>
   );
 }
