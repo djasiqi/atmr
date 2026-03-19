@@ -41,6 +41,7 @@ import {
   cleanupExpiredReminders,
 } from "@/services/localNotifications";
 import { getLogger } from "@/utils/logger";
+import { isAuthNotReadyError } from "@/services/authGuards";
 import { useAppAlert } from "@/contexts/AppAlertContext";
 import { TrackingStateBanner } from "@/components/common/TrackingStateBanner";
 import {
@@ -200,8 +201,10 @@ export default function MissionScreen() {
       );
 
       setMissions(sorted);
-    } catch {
-      appAlert.showAlert("Erreur", "Impossible de charger les missions.");
+    } catch (err) {
+      if (!isAuthNotReadyError(err)) {
+        appAlert.showAlert("Erreur", "Impossible de charger les missions.");
+      }
     } finally {
       if (!isRefreshAction) {
         setIsLoading(false);

@@ -77,4 +77,63 @@ describe("locationQueue socket presence guards", () => {
     expect(typeof payload.sent_at).toBe("string");
   });
 
+  it("emitBatchWithAck normalise les positions legacy sans location_mode/recorded_at", async () => {
+    const emittedBatches: any[] = [];
+    const socket = {
+      connected: true,
+      emit: jest.fn((event: string, payload: any, ack?: (data: any) => void) => {
+        if (event === "driver_location_batch") {
+          emittedBatches.push(JSON.parse(JSON.stringify(payload)));
+          if (typeof ack === "function") ack({ success: true });
+        }
+      }),
+    };
+    (getSocket as jest.Mock).mockReturnValue(socket);
+
+    await clearLocationQueue();
+
+    const QUEUE_KEY = "@atmr:location_queue";
+    const legacyPosition = {
+      latitude: 46.19,
+      longitude: 6.14,
+      speed: 1.5,
+      heading: 90,
+      accuracy: 12,
+      timestamp: Date.now() - 5000,
+      driver_id: 42,
+    };
+    store.set(QUEUE_KEY, JSON.stringify([legacyPosition]));
+
+    await syncLocationQueue(socket);
+
+    expect(emittedBatches.length).toBe(1);
+    const pos = emittedBatches[0].positions[0];
+    expect(pos.location_mode).toBe("mission_live");
+    expect(typeof pos.recorded_at).toBe("string");
+    expect(pos.recorded_at.length).toBeGreaterThan(0);
+    expect(typeof pos.sent_at).toBe("string");
+    expect(pos.latitude).toBe(46.19);
+    expect(pos.longitude).toBe(6.14);
+  }, 20000);
+
+  it("getLocationQueue migre les positions legacy à la lecture", async () => {
+    const { getLocationQueue } = require("../locationQueue");
+    const QUEUE_KEY = "@atmr:location_queue";
+    const legacyPosition = {
+      latitude: 46.2,
+      longitude: 6.1,
+      speed: 0,
+      heading: 0,
+      accuracy: 10,
+      timestamp: Date.now(),
+      driver_id: 7,
+    };
+    store.set(QUEUE_KEY, JSON.stringify([legacyPosition]));
+
+    const queue = await getLocationQueue();
+    expect(queue[0].location_mode).toBe("mission_live");
+    expect(typeof queue[0].recorded_at).toBe("string");
+    expect(typeof queue[0].sent_at).toBe("string");
+  });
+
 });

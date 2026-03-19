@@ -114,15 +114,44 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
     return;
   }
 
-  const filteredPayload = {
-    ...payload,
-    positions: (payload.positions || []).filter(
+  const canonicalPositions = (payload.positions || [])
+    .filter(
       (pos: any) => normalizeMode(pos.location_mode) !== "availability_presence"
-    ),
-  };
-  if ((filteredPayload.positions || []).length === 0) {
+    )
+    .map((pos: any) => {
+      const ts = pos.timestamp || Date.now();
+      return {
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        speed: pos.speed ?? 0,
+        heading: pos.heading ?? 0,
+        accuracy: pos.accuracy ?? 0,
+        timestamp: ts,
+        location_mode: normalizeMode(pos.location_mode),
+        recorded_at: pos.recorded_at || new Date(ts).toISOString(),
+        sent_at: pos.sent_at || new Date().toISOString(),
+        is_background: pos.is_background ?? false,
+        mission_id: pos.mission_id ?? null,
+      };
+    });
+
+  if (canonicalPositions.length === 0) {
     return;
   }
+
+  if (__DEV__ || canonicalPositions.length <= 2) {
+    const sample = canonicalPositions[0];
+    log.info("batch emit sample", {
+      has_location_mode: !!sample.location_mode,
+      has_recorded_at: !!sample.recorded_at,
+      count: canonicalPositions.length,
+    });
+  }
+
+  const filteredPayload = {
+    ...payload,
+    positions: canonicalPositions,
+  };
 
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -282,7 +311,13 @@ export async function getLocationQueue(): Promise<QueuedLocation[]> {
     if (!data) {
       return [];
     }
-    return JSON.parse(data) as QueuedLocation[];
+    const raw = JSON.parse(data) as QueuedLocation[];
+    return raw.map((loc) => ({
+      ...loc,
+      location_mode: normalizeMode(loc.location_mode),
+      recorded_at: loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
+      sent_at: loc.sent_at || new Date().toISOString(),
+    }));
   } catch (error) {
     log.error("queue read failed", { error });
     return [];
@@ -362,13 +397,17 @@ export async function flushLatestPositionViaHttp(): Promise<void> {
         location_mode: normalizeMode(latest.location_mode),
         mission_id: latest.mission_id ?? null,
       });
-      await Promise.race([
+      const result = await Promise.race([
         httpPromise,
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("HTTP location timeout")), HTTP_FALLBACK_TIMEOUT_MS)
         ),
       ]);
-      log.info("latest position sent via HTTP fallback");
+      if ((result as any)?.ok === false) {
+        log.warn("HTTP location fallback rejected", { message: (result as any)?.message });
+      } else {
+        log.info("latest position sent via HTTP fallback");
+      }
     } catch (e: any) {
       log.warn("HTTP location fallback failed", { error: e?.message ?? String(e) });
     } finally {
@@ -414,8 +453,9 @@ export async function syncLocationQueue(socket: any): Promise<void> {
         latestByDriver.set(loc.driver_id, loc);
       }
       const { updateDriverLocation } = await import("./api");
+      let presenceAccepted = true;
       for (const loc of latestByDriver.values()) {
-        await updateDriverLocation({
+        const presResult = await updateDriverLocation({
           lat: loc.latitude,
           lon: loc.longitude,
           speed_mps: loc.speed,
@@ -427,8 +467,14 @@ export async function syncLocationQueue(socket: any): Promise<void> {
           location_mode: "availability_presence",
           mission_id: null,
         });
+        if (presResult?.ok === false) {
+          log.warn("presence location rejected", { message: presResult.message, driver_id: loc.driver_id });
+          presenceAccepted = false;
+        }
       }
-      await removeSentLocations(presenceOnly);
+      if (presenceAccepted) {
+        await removeSentLocations(presenceOnly);
+      }
     }
 
     const socketQueue = queue.filter(
@@ -452,20 +498,22 @@ export async function syncLocationQueue(socket: any): Promise<void> {
       for (let i = 0; i < locations.length; i += RESYNC_CHUNK_SIZE) {
         const chunk = locations.slice(i, i + RESYNC_CHUNK_SIZE);
         const payload = {
-          positions: chunk.map((loc) => ({
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            speed: loc.speed,
-            heading: loc.heading,
-            accuracy: loc.accuracy,
-            timestamp: loc.timestamp,
-            location_mode: normalizeMode(loc.location_mode),
-            recorded_at:
-              loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
-            sent_at: loc.sent_at || new Date().toISOString(),
-            is_background: loc.is_background ?? false,
-            mission_id: loc.mission_id ?? null,
-          })),
+          positions: chunk.map((loc) => {
+            const ts = loc.timestamp || Date.now();
+            return {
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              speed: loc.speed ?? 0,
+              heading: loc.heading ?? 0,
+              accuracy: loc.accuracy ?? 0,
+              timestamp: ts,
+              location_mode: normalizeMode(loc.location_mode),
+              recorded_at: loc.recorded_at || new Date(ts).toISOString(),
+              sent_at: loc.sent_at || new Date().toISOString(),
+              is_background: loc.is_background ?? false,
+              mission_id: loc.mission_id ?? null,
+            };
+          }),
           driver_id: driverId,
         };
 

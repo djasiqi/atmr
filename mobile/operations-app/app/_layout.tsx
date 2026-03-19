@@ -401,9 +401,7 @@ function RootNav() {
   useEffect(() => {
     if (loading) return;
     if (
-      authSessionState === "BOOTSTRAPPING" ||
-      authSessionState === "RECOVERING" ||
-      authSessionState === "DEGRADED"
+      authSessionState === "BOOTSTRAPPING"
     ) {
       return;
     }

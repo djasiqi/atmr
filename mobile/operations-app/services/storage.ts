@@ -78,14 +78,20 @@ async function getActiveNamespace(scope: "driver" | "enterprise"): Promise<strin
     return activeEnterpriseNamespaceCache;
   const key =
     scope === "driver" ? ASYNC_NAMESPACE_KEYS.DRIVER : ASYNC_NAMESPACE_KEYS.ENTERPRISE;
-  const stored = await AsyncStorage.getItem(key);
+  let stored = await AsyncStorage.getItem(key);
+  if (stored && stored.includes(":")) {
+    stored = stored.replace(/:/g, ".");
+    await AsyncStorage.setItem(key, stored).catch(() => {});
+  }
   if (scope === "driver") activeDriverNamespaceCache = stored;
   else activeEnterpriseNamespaceCache = stored;
   return stored;
 }
 
 function withNamespace(baseKey: string, namespace: string | null): string {
-  return namespace ? `${baseKey}:${namespace}` : baseKey;
+  if (!namespace) return baseKey;
+  const safe = namespace.replace(/[^A-Za-z0-9._-]/g, "_");
+  return `${baseKey}.ns.${safe}`;
 }
 
 async function setScopedSecureValue(
@@ -103,9 +109,13 @@ async function getScopedSecureValue(
 ): Promise<string | null> {
   const namespace = await getActiveNamespace(scope);
   const scopedKey = withNamespace(baseKey, namespace);
-  let value = await secureGet(scopedKey);
+  let value: string | null = null;
+  try {
+    value = await secureGet(scopedKey);
+  } catch {
+    // SecureStore key validation error (e.g. legacy `:` namespace) — fall through to legacy
+  }
   if (!value && namespace) {
-    // Migration backward: fallback legacy puis write namespacé.
     const legacy = await secureGet(baseKey);
     if (legacy) {
       value = legacy;
@@ -413,8 +423,11 @@ export const secureStorage = {
   async clearDriverAuthOnly(): Promise<void> {
     await Promise.all([
       ...DRIVER_AUTH_KEYS.secure.map((k) => secureDel(k)),
+      ...DRIVER_AUTH_KEYS.secure.map((k) => removeScopedSecureValue("driver", k).catch(() => {})),
       AsyncStorage.multiRemove([...DRIVER_AUTH_KEYS.async]),
     ]);
+    activeDriverNamespaceCache = null;
+    await AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.DRIVER).catch(() => {});
 
     cachedAccessToken = null;
     tokenCacheTime = 0;
@@ -440,8 +453,11 @@ export const secureStorage = {
   async clearEnterpriseAuthOnly(): Promise<void> {
     await Promise.all([
       ...ENTERPRISE_AUTH_KEYS.secure.map((k) => secureDel(k)),
+      ...ENTERPRISE_AUTH_KEYS.secure.map((k) => removeScopedSecureValue("enterprise", k).catch(() => {})),
       AsyncStorage.multiRemove([...ENTERPRISE_AUTH_KEYS.async]),
     ]);
+    activeEnterpriseNamespaceCache = null;
+    await AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.ENTERPRISE).catch(() => {});
 
     cachedEnterpriseToken = null;
     enterpriseTokenCacheTime = 0;

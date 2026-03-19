@@ -86,7 +86,7 @@ describe("commitSessionTokensAtomically", () => {
 
     expect(token).toBe("legacy-access-token");
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      "driver_access_token:driver:user-123:none:none",
+      "driver_access_token.ns.driver.user-123.none.none",
       "legacy-access-token",
       expect.anything()
     );

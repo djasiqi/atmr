@@ -31,7 +31,13 @@ export const useSocket = (
     const unsubscribers: Array<() => void> = [];
 
     (async () => {
-      const token = await secureStorage.getAccessToken();
+      let token: string | null = null;
+      try {
+        token = await secureStorage.getAccessToken();
+      } catch (err) {
+        log.warn("socket hook token read failed", { error: err });
+        return;
+      }
       if (!token) {
         log.warn("socket hook init aborted (no token)");
         return;

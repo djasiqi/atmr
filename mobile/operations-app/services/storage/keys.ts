@@ -73,12 +73,22 @@ export type AuthNamespaceParams = {
 };
 
 /**
+ * Sanitise un segment de namespace pour compatibilité SecureStore.
+ * SecureStore n'accepte que [A-Za-z0-9._-].
+ */
+export function sanitizeSegment(value: string): string {
+  if (!value) return "_";
+  return value.replace(/[^A-Za-z0-9._-]/g, "_") || "_";
+}
+
+/**
  * Namespace logique isolé pour éviter collisions multi-compte/multi-tenant.
+ * Utilise `.` comme séparateur (`:` est interdit par SecureStore).
  */
 export function buildAuthNamespace(params: AuthNamespaceParams): string {
-  const role = String(params.role);
-  const user = String(params.userId);
-  const tenant = params.tenantId != null ? String(params.tenantId) : "none";
-  const session = params.sessionId ? String(params.sessionId) : "none";
-  return `${role}:${user}:${tenant}:${session}`;
+  const role = sanitizeSegment(String(params.role));
+  const user = sanitizeSegment(String(params.userId ?? "unknown"));
+  const tenant = params.tenantId != null ? sanitizeSegment(String(params.tenantId)) : "none";
+  const session = params.sessionId ? sanitizeSegment(String(params.sessionId)) : "none";
+  return `${role}.${user}.${tenant}.${session}`;
 }

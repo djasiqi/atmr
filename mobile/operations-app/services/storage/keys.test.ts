@@ -10,6 +10,8 @@ import {
   ENTERPRISE_AUTH_KEYS,
   ENTERPRISE_AUTH_SECURE_KEYS,
   ENTERPRISE_AUTH_ASYNC_KEYS,
+  buildAuthNamespace,
+  sanitizeSegment,
 } from "./keys";
 
 describe("storage/keys — P1.A garde-fou", () => {
@@ -18,7 +20,8 @@ describe("storage/keys — P1.A garde-fou", () => {
       expect(DRIVER_AUTH_SECURE_KEYS).toContain("driver_refresh_token");
       expect(DRIVER_AUTH_SECURE_KEYS).toContain("driver_access_token");
       expect(DRIVER_AUTH_SECURE_KEYS).toContain("driver_user_public_id");
-      expect(DRIVER_AUTH_SECURE_KEYS).toHaveLength(3);
+      expect(DRIVER_AUTH_SECURE_KEYS).toContain("driver_refresh_token_backup");
+      expect(DRIVER_AUTH_SECURE_KEYS).toHaveLength(4);
     });
 
     it("doit contenir les clés AsyncStorage attendues (driver_id, driver_account_info)", () => {
@@ -81,6 +84,54 @@ describe("storage/keys — P1.A garde-fou", () => {
       enterpriseKeys.forEach((k) => {
         expect(driverKeys.has(k)).toBe(false);
       });
+    });
+  });
+
+  describe("sanitizeSegment", () => {
+    it("laisse passer les caractères autorisés SecureStore", () => {
+      expect(sanitizeSegment("abc123")).toBe("abc123");
+      expect(sanitizeSegment("a.b-c_d")).toBe("a.b-c_d");
+    });
+
+    it("remplace les caractères interdits par _", () => {
+      expect(sanitizeSegment("a:b")).toBe("a_b");
+      expect(sanitizeSegment("a/b@c!d")).toBe("a_b_c_d");
+    });
+
+    it("retourne _ pour une chaîne vide ou falsy", () => {
+      expect(sanitizeSegment("")).toBe("_");
+    });
+  });
+
+  describe("buildAuthNamespace", () => {
+    it("utilise . comme séparateur (pas :)", () => {
+      const ns = buildAuthNamespace({ role: "driver", userId: "123", tenantId: 456, sessionId: "s1" });
+      expect(ns).toBe("driver.123.456.s1");
+      expect(ns).not.toContain(":");
+    });
+
+    it("ne contient que des caractères valides SecureStore", () => {
+      const ns = buildAuthNamespace({ role: "enterprise", userId: "u@b", tenantId: "t:1", sessionId: null });
+      expect(ns).toMatch(/^[A-Za-z0-9._-]+$/);
+      expect(ns).not.toContain(":");
+      expect(ns).not.toContain("@");
+    });
+
+    it("utilise none pour tenant/session absents", () => {
+      const ns = buildAuthNamespace({ role: "driver", userId: "42" });
+      expect(ns).toBe("driver.42.none.none");
+    });
+
+    it("gère userId undefined/null avec fallback", () => {
+      const ns = buildAuthNamespace({ role: "driver", userId: undefined as any });
+      expect(ns).toMatch(/^driver\..+\.none\.none$/);
+      expect(ns).not.toContain("undefined");
+    });
+
+    it("produit des clés compatibles SecureStore quand concaténé", () => {
+      const ns = buildAuthNamespace({ role: "driver", userId: "123", tenantId: 456, sessionId: "s1" });
+      const fullKey = `driver_access_token.ns.${ns}`;
+      expect(fullKey).toMatch(/^[A-Za-z0-9._-]+$/);
     });
   });
 });
