@@ -427,7 +427,12 @@ export const secureStorage = {
       AsyncStorage.multiRemove([...DRIVER_AUTH_KEYS.async]),
     ]);
     activeDriverNamespaceCache = null;
-    await AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.DRIVER).catch(() => {});
+    try {
+      const p = AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.DRIVER);
+      await (p && typeof p.then === "function" ? p : Promise.resolve());
+    } catch {
+      // ignore (mock peut retourner undefined)
+    }
 
     cachedAccessToken = null;
     tokenCacheTime = 0;
@@ -457,7 +462,12 @@ export const secureStorage = {
       AsyncStorage.multiRemove([...ENTERPRISE_AUTH_KEYS.async]),
     ]);
     activeEnterpriseNamespaceCache = null;
-    await AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.ENTERPRISE).catch(() => {});
+    try {
+      const p = AsyncStorage.removeItem(ASYNC_NAMESPACE_KEYS.ENTERPRISE);
+      await (p && typeof p.then === "function" ? p : Promise.resolve());
+    } catch {
+      // ignore (mock peut retourner undefined)
+    }
 
     cachedEnterpriseToken = null;
     enterpriseTokenCacheTime = 0;
@@ -820,16 +830,19 @@ export async function commitSessionTokensAtomically(
       });
     }
 
+    // ✅ P0-1: Écrire refresh AVANT access pour éviter commit partiel.
+    // Si setRefreshToken échoue, access n'est pas touché. Si setAccessToken échoue après,
+    // on a nouveau refresh + ancien access → prochain 401 déclenchera refresh réussi.
     if (params.scope === "driver") {
-      await secureStorage.setAccessToken(params.accessToken);
       if (params.refreshToken) {
         await secureStorage.setRefreshToken(params.refreshToken);
       }
+      await secureStorage.setAccessToken(params.accessToken);
     } else {
-      await secureStorage.setEnterpriseToken(params.accessToken);
       if (params.refreshToken) {
         await secureStorage.setEnterpriseRefreshToken(params.refreshToken);
       }
+      await secureStorage.setEnterpriseToken(params.accessToken);
     }
 
     if (params.sessionStorageKey) {

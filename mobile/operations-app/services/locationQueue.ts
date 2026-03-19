@@ -78,7 +78,7 @@ function emitIndividualFallback(socket: any, payload: any): void {
       heading: pos.heading,
       accuracy: pos.accuracy,
       timestamp: pos.timestamp,
-      location_mode: normalizeMode(pos.location_mode),
+      location_mode: normalizeMode(pos.location_mode) || "mission_live",
       recorded_at: pos.recorded_at || timestampIso,
       sent_at: pos.sent_at || new Date().toISOString(),
       is_background: pos.is_background ?? false,
@@ -106,12 +106,13 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
   }
 
   // ✅ Si trop de failures batch consécutives, utiliser le fallback individuel
+  // IMPORTANT: throw pour que le caller ne retire PAS les positions (pas d'ACK)
   if (consecutiveBatchFailures >= MAX_BATCH_FAILURES_BEFORE_FALLBACK) {
     log.warn("batch failures fallback", { consecutiveBatchFailures });
     emitIndividualFallback(socket, payload);
     consecutiveBatchFailures = 0; // Reset pour réessayer le batch plus tard
     nextAllowedEmitAt = Date.now() + MIN_DELAY_BETWEEN_EMITS_MS;
-    return;
+    throw new Error("Fallback sent without ACK - positions kept in queue");
   }
 
   const canonicalPositions = (payload.positions || [])
@@ -127,7 +128,7 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
         heading: pos.heading ?? 0,
         accuracy: pos.accuracy ?? 0,
         timestamp: ts,
-        location_mode: normalizeMode(pos.location_mode),
+        location_mode: normalizeMode(pos.location_mode) || "mission_live",
         recorded_at: pos.recorded_at || new Date(ts).toISOString(),
         sent_at: pos.sent_at || new Date().toISOString(),
         is_background: pos.is_background ?? false,
@@ -137,6 +138,20 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
 
   if (canonicalPositions.length === 0) {
     return;
+  }
+
+  // Garantie stricte : aucune position sans champs requis (évite payload cassé en prod)
+  for (let i = 0; i < canonicalPositions.length; i++) {
+    const p = canonicalPositions[i];
+    if (!p.location_mode || !p.recorded_at) {
+      log.error("position missing required fields before emit", {
+        index: i,
+        has_location_mode: !!p.location_mode,
+        has_recorded_at: !!p.recorded_at,
+        sample: { latitude: p.latitude, longitude: p.longitude },
+      });
+      throw new Error(`Position ${i} missing location_mode or recorded_at`);
+    }
   }
 
   if (__DEV__ || canonicalPositions.length <= 2) {
@@ -153,6 +168,13 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
     positions: canonicalPositions,
   };
 
+  log.info("batch emit pre-send", {
+    count: canonicalPositions.length,
+    sample_keys: Object.keys(canonicalPositions[0] ?? {}),
+    has_location_mode: !!(canonicalPositions[0] as any)?.location_mode,
+    has_recorded_at: !!(canonicalPositions[0] as any)?.recorded_at,
+  });
+
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       consecutiveBatchFailures++;
@@ -162,6 +184,13 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
     socket.emit("driver_location_batch", filteredPayload, (ack: any) => {
       clearTimeout(timeout);
       if (ack?.success) {
+        const posCount = ack?.positions_count ?? 0;
+        const rejCount = ack?.rejected_count ?? 0;
+        if (posCount === 0 && rejCount > 0) {
+          consecutiveBatchFailures++;
+          reject(new Error("All positions rejected"));
+          return;
+        }
         consecutiveBatchFailures = 0; // Reset sur succès
         resolve();
       } else {
@@ -507,7 +536,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
               heading: loc.heading ?? 0,
               accuracy: loc.accuracy ?? 0,
               timestamp: ts,
-              location_mode: normalizeMode(loc.location_mode),
+              location_mode: normalizeMode(loc.location_mode) || "mission_live",
               recorded_at: loc.recorded_at || new Date(ts).toISOString(),
               sent_at: loc.sent_at || new Date().toISOString(),
               is_background: loc.is_background ?? false,

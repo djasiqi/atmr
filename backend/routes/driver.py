@@ -1195,7 +1195,7 @@ class DriverBookingsETA(Resource):
 class DriverLocation(Resource):
     @jwt_required()
     @role_required(UserRole.driver)
-    @driver_ns.expect(location_model)
+    @driver_ns.expect(location_model, validate=False)
     def put(self):
         """Tracking temps réel : enregistre la dernière position."""
         driver, error_response, status_code = get_driver_from_token()
@@ -1213,6 +1213,12 @@ class DriverLocation(Resource):
             logger.debug("📍 Received location data: %s (type=%s)", p, type(p))
 
             if not p:
+                raw = request.get_data(as_text=True)
+                logger.warning(
+                    "📍 PUT /driver/me/location: JSON invalide ou vide. body_len=%s body_preview=%s",
+                    len(raw) if raw else 0,
+                    (raw[:200] + "...") if raw and len(raw) > 200 else raw,
+                )
                 result = {
                     "error": "invalid_json",
                     "message": "Corps de requête JSON manquant ou invalide. Vérifiez le format du body.",
@@ -1221,13 +1227,16 @@ class DriverLocation(Resource):
             elif ("latitude" not in p and "lat" not in p) or ("longitude" not in p and "lon" not in p):
                 result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}
                 status_code = 400
-            elif "location_mode" not in p or "recorded_at" not in p:
-                result = {
-                    "error": "location_mode and recorded_at are required",
-                    "reason": "missing_required_fields",
-                }
-                status_code = 400
             else:
+                # Valeurs par défaut pour compatibilité avec anciennes versions app
+                if "location_mode" not in p or not p.get("location_mode"):
+                    p = dict(p)
+                    p["location_mode"] = "mission_live"
+                    logger.debug("📍 location_mode manquant, défaut=mission_live")
+                if "recorded_at" not in p or not p.get("recorded_at"):
+                    p = dict(p)
+                    p["recorded_at"] = p.get("ts") or datetime.now(UTC).isoformat()
+                    logger.debug("📍 recorded_at manquant, défaut=ts ou now")
                 # Validation et conversion
                 try:
                     lat = float(p.get("lat", p.get("latitude")))
