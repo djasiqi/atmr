@@ -47,6 +47,22 @@ describe("shouldRunBackgroundTracking", () => {
     expect(shouldRunBackgroundTracking(inputs({ hasActiveMission: false }))).toBe(false);
   });
 
+  it("returns false in mission_live when missionStatusEnabledForTracking is false (ASSIGNED)", () => {
+    expect(
+      shouldRunBackgroundTracking(
+        inputs({ hasActiveMission: true, missionStatusEnabledForTracking: false })
+      )
+    ).toBe(false);
+  });
+
+  it("returns true in mission_live when missionStatusEnabledForTracking is true (EN_ROUTE)", () => {
+    expect(
+      shouldRunBackgroundTracking(
+        inputs({ hasActiveMission: true, missionStatusEnabledForTracking: true })
+      )
+    ).toBe(true);
+  });
+
   it("returns true in availability_presence even without mission", () => {
     expect(
       shouldRunBackgroundTracking(

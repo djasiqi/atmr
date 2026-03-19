@@ -53,7 +53,10 @@ setBackgroundMessageHandler(messaging, async (remoteMessage) => {
     if (!data) return;
     if (data.type === 'silent_update') return;
     await ensureChannel();
+    // ID déterministe : évite doublons quand plusieurs FCM arrivent (ex: 2 DeviceTokens même appareil)
+    const notifId = `mission_${data.booking_id || data.trace_id || Date.now()}_${data.type || "push"}`.replace(/\s/g, "_");
     await notifee.displayNotification({
+      id: notifId,
       title: data.title || 'Liri Opérations',
       body: data.body || '',
       data,

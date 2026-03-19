@@ -18,6 +18,8 @@ export interface BgTrackingInputs {
   role: "driver" | "enterprise";
   platform?: "ios" | "android" | "web";
   hasActiveMission: boolean;
+  /** En mission_live : true uniquement si EN_ROUTE ou IN_PROGRESS (pas ASSIGNED). Évite la notif "Suivi en cours" avant que le chauffeur ait appuyé sur En route. */
+  missionStatusEnabledForTracking?: boolean;
   fgPermission: PermissionStatus;
   bgPermission: PermissionStatus;
   killSwitchEnabled: boolean;
@@ -174,6 +176,13 @@ export function shouldRunBackgroundTracking(inputs: BgTrackingInputs): boolean {
     return false;
   }
   if (inputs.locationMode === "mission_live" && !inputs.hasActiveMission) return false;
+  // En mission_live : tracking uniquement après EN_ROUTE (pas en ASSIGNED)
+  if (
+    inputs.locationMode === "mission_live" &&
+    inputs.missionStatusEnabledForTracking === false
+  ) {
+    return false;
+  }
   if (inputs.fgPermission !== "granted") return false;
   if (requiresBgPermission && inputs.bgPermission !== "granted") return false;
   return true;

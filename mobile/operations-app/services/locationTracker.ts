@@ -315,9 +315,16 @@ export async function buildBgTrackingInputs(params: {
   const locationMode: LocationMode =
     params.hasActiveMission || fsmMode === "mission_live" ? "mission_live" : persistedMode;
   currentLocationMode = locationMode;
+  // En mission_live : tracking uniquement après EN_ROUTE (pas en ASSIGNED)
+  const missionState = MissionStateManager.getState();
+  const missionStatusEnabledForTracking =
+    params.hasActiveMission &&
+    missionState.currentStatus !== "ASSIGNED" &&
+    (missionState.currentStatus === "EN_ROUTE" || missionState.currentStatus === "IN_PROGRESS");
   return {
     ...params,
     platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web",
+    missionStatusEnabledForTracking: params.hasActiveMission ? missionStatusEnabledForTracking : undefined,
     fgPermission: fg,
     bgPermission: bg,
     killSwitchEnabled,
