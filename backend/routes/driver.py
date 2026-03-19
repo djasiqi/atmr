@@ -1208,11 +1208,15 @@ class DriverLocation(Resource):
         status_code = 200
 
         try:
-            p = request.get_json(force=True)
+            # ✅ FIX invalid_json: silent=True évite BadRequest si body vide/malformé
+            p = request.get_json(force=True, silent=True)
             logger.debug("📍 Received location data: %s (type=%s)", p, type(p))
 
             if not p:
-                result = {"error": "No data provided"}
+                result = {
+                    "error": "invalid_json",
+                    "message": "Corps de requête JSON manquant ou invalide. Vérifiez le format du body.",
+                }
                 status_code = 400
             elif ("latitude" not in p and "lat" not in p) or ("longitude" not in p and "lon" not in p):
                 result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}

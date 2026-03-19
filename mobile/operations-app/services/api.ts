@@ -1479,7 +1479,7 @@ export const updateDriverLocation = async (
       ? new Date(payload.timestamp).toISOString()
       : payload.timestamp || new Date().toISOString());
 
-  const body = {
+  const body: Record<string, unknown> = {
     latitude,
     longitude,
     lat: latitude,
@@ -1495,13 +1495,22 @@ export const updateDriverLocation = async (
     location_mode: payload.location_mode ?? "mission_live",
     is_background: payload.is_background ?? false,
     mission_id: payload.mission_id ?? null,
-    device_status: payload.device_status ?? undefined,
   };
+  if (payload.device_status) {
+    body.device_status = payload.device_status;
+  }
 
   try {
+    // ✅ FIX invalid_json: sérialiser explicitement pour éviter body vide/malformé
+    // (React Native / axios / background peut parfois perdre le body sur PUT)
     const response = await api.put<UpdateLocationResp>(
       "/driver/me/location",
-      body
+      JSON.stringify(body),
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
     );
     return response.data ?? {};
   } catch (error: unknown) {
