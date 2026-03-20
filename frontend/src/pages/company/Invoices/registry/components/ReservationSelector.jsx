@@ -26,7 +26,8 @@ const ReservationSelector = ({
   const [error, setError] = useState(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
   const [expandedReservations, setExpandedReservations] = useState(new Set());
-  const [showAdjustments, setShowAdjustments] = useState({});
+  /** Un seul panneau d’ajustement ouvert à la fois → évite les sauts de scroll sur les longues listes */
+  const [openAdjustmentId, setOpenAdjustmentId] = useState(null);
   const [allowManualOverride, setAllowManualOverride] = useState(false);
   const [loadingReservationDetails, setLoadingReservationDetails] = useState(new Set());
   // ✅ État local pour les valeurs en cours de saisie (évite re-renders pendant la frappe)
@@ -282,11 +283,8 @@ const ReservationSelector = ({
     if (!selectedIds.includes(reservationId)) {
       setSelectedIds((prev) => [...prev, reservationId]);
     }
-    // Ouvrir l'ajustement
-    setShowAdjustments((prev) => ({
-      ...prev,
-      [reservationId]: !prev[reservationId],
-    }));
+    // Ouvrir / fermer (un seul panneau à la fois)
+    setOpenAdjustmentId((prev) => (prev === reservationId ? null : reservationId));
   };
 
   // Déterminer si un transport nécessite une vérification (ne doit pas être auto-sélectionné)
@@ -450,36 +448,31 @@ const ReservationSelector = ({
     });
   }, [overrides, reservations]);
 
-  // ✅ Auto-focus sur le champ "Montant HT" quand l'ajustement s'ouvre
+  // ✅ Auto-focus + garder la ligne visible dans la zone scrollable (évite les « sauts »)
   useEffect(() => {
-    Object.keys(showAdjustments).forEach((idStr) => {
-      const id = Number(idStr);
-      const isOpen = showAdjustments[idStr];
-      
-      if (isOpen) {
-        // Trouver la réservation
-        const reservation = reservations.find((r) => r.id === id);
-        if (!reservation) return;
-        
-        // Vérifier que la réservation n'est pas minimale (détails chargés)
-        const isMinimal = reservation && typeof reservation.id !== 'undefined' && 
-                          (reservation.amount === undefined || reservation.amount === null) &&
-                          !reservation.pickup_location && !reservation.dropoff_location;
-        if (isMinimal) return;
-        
-        // Récupérer la ref de l'input
-        const inputRef = amountInputRefs.current[id];
-        if (!inputRef) return;
-        
-        // Focus uniquement si l'input n'est pas déjà focus
-        if (document.activeElement !== inputRef) {
-          inputRef.focus();
-          // Bonus UX : sélectionner tout le texte pour permettre d'écraser en une frappe
-          inputRef.select();
-        }
+    if (openAdjustmentId == null) return;
+    const id = openAdjustmentId;
+    const reservation = reservations.find((r) => r.id === id);
+    if (!reservation) return;
+    const isMinimal =
+      reservation &&
+      typeof reservation.id !== 'undefined' &&
+      (reservation.amount === undefined || reservation.amount === null) &&
+      !reservation.pickup_location &&
+      !reservation.dropoff_location;
+    if (isMinimal) return;
+
+    const raf = requestAnimationFrame(() => {
+      const row = document.getElementById(`invoice-adjust-row-${id}`);
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const inputRef = amountInputRefs.current[id];
+      if (inputRef && document.activeElement !== inputRef) {
+        inputRef.focus();
+        inputRef.select();
       }
     });
-  }, [showAdjustments, reservations]);
+    return () => cancelAnimationFrame(raf);
+  }, [openAdjustmentId, reservations]);
 
   // ✅ Commit aussi sur Enter
   const handleAmountKeyDown = useCallback((e) => {
@@ -647,7 +640,7 @@ const ReservationSelector = ({
           return allReservations.map((reservation) => {
             const isSelected = selectedIds.includes(reservation.id);
             const isExpanded = expandedReservations.has(reservation.id);
-            const showAdjust = showAdjustments[reservation.id];
+            const showAdjust = openAdjustmentId === reservation.id;
             const isLoadingDetails = loadingReservationDetails.has(reservation.id);
             const isMinimal = isMinimalReservation(reservation);
             
@@ -860,7 +853,8 @@ const ReservationSelector = ({
           return (
             <label
               key={reservation.id}
-              className={`${styles.reservationItem} ${styles.reservationItemDense} ${isSelected ? styles.selected : ''} ${autoSelected ? styles.autoSelected : ''}`}
+              id={showAdjust ? `invoice-adjust-row-${reservation.id}` : undefined}
+              className={`${styles.reservationItem} ${styles.reservationItemDense} ${isSelected ? styles.selected : ''} ${autoSelected ? styles.autoSelected : ''} ${showAdjust ? styles.rowAdjustOpen : ''}`}
             >
               <input
                 type="checkbox"

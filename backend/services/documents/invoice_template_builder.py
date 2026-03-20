@@ -5,6 +5,7 @@ différents layouts (Standard/Minimal/Detailed) en utilisant CompanyBillingProfi
 comme source unique de données.
 """
 
+import html
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -494,17 +495,21 @@ class InvoiceTemplateBuilder:
             except Exception:
                 patient_name = "N/A"
 
-            lines.append(
-                {
-                    "date": booking.pickup_datetime.strftime("%d/%m/%Y")
-                    if booking.pickup_datetime
-                    else "N/A",
-                    "patient": patient_name,
-                    "departure": booking.pickup_address or "N/A",
-                    "arrival": booking.dropoff_address or "N/A",
-                    "amount": float(line.line_total),
-                }
-            )
+            adj_raw = getattr(line, "adjustment_note", None)
+            adj_note = str(adj_raw).strip() if adj_raw is not None else ""
+
+            row: dict[str, Any] = {
+                "date": booking.pickup_datetime.strftime("%d/%m/%Y")
+                if booking.pickup_datetime
+                else "N/A",
+                "patient": patient_name,
+                "departure": booking.pickup_address or "N/A",
+                "arrival": booking.dropoff_address or "N/A",
+                "amount": float(line.line_total),
+            }
+            if adj_note:
+                row["adjustment_note"] = adj_note
+            lines.append(row)
 
         return lines
 
@@ -614,13 +619,20 @@ class InvoiceTemplateBuilder:
                 if data.show_patient_column
                 else ""
             )
+            adj = line.get("adjustment_note")
+            adj_html = ""
+            if adj:
+                adj_html = (
+                    f'<br/><span style="font-size:0.8em;color:#718096;font-weight:400;">'
+                    f"{html.escape(str(adj))}</span>"
+                )
             rows_html += f"""
             <tr>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["date"]}</td>
                 {patient_cell}
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["departure"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{line["arrival"]}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF{adj_html}</td>
             </tr>
             """
 
@@ -672,9 +684,17 @@ class InvoiceTemplateBuilder:
 
         rows_html = ""
         for line in data.lines:
+            adj = line.get("adjustment_note")
+            date_cell = line["date"]
+            if adj:
+                date_cell = (
+                    f'{line["date"]}<br/>'
+                    f'<span style="font-size:0.75em;color:#718096;">'
+                    f"{html.escape(str(adj))}</span>"
+                )
             rows_html += f"""
             <tr>
-                <td style="padding: 6px; font-size: 0.85em;">{line["date"]}</td>
+                <td style="padding: 6px; font-size: 0.85em;">{date_cell}</td>
                 <td style="padding: 6px; font-size: 0.85em;">{line["amount"]:.2f} CHF</td>
             </tr>
             """
@@ -719,6 +739,13 @@ class InvoiceTemplateBuilder:
                 if data.show_patient_column
                 else ""
             )
+            adj = line.get("adjustment_note")
+            adj_html = ""
+            if adj:
+                adj_html = (
+                    f'<br/><span style="font-size:0.8em;color:#718096;font-weight:400;">'
+                    f"{html.escape(str(adj))}</span>"
+                )
             rows_html += f"""
             <tr style="{"background-color: #f7fafc;" if idx % 2 == 0 else ""}">
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center;">{idx}</td>
@@ -726,7 +753,7 @@ class InvoiceTemplateBuilder:
                 {patient_cell}
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; color: #4a5568;">{line["departure"]}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9em; color: #4a5568;">{line["arrival"]}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: bold;">{line["amount"]:.2f} CHF{adj_html}</td>
             </tr>
             """
 

@@ -1,6 +1,7 @@
 import logging
 import re
 import tempfile
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from qrbill import QRBill
 from reportlab.graphics import renderPDF
 from svglib.svglib import svg2rlg
 
+from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from models import CompanyBillingSettings
 from services.billing import BillingProfileService, generate_scor_reference
 
@@ -24,6 +26,97 @@ QRR_REF_BASE_LENGTH = 26  # Longueur base avant check digit
 QRR_MIN_IBAN_LENGTH = 5  # Longueur minimale IBAN pour validation
 
 app_logger = logging.getLogger("qrbill_service")
+
+# Tolérance (arrondis 5 c.) entre Σ lignes TTC et total_amount facture
+_QR_LINE_TOTAL_TOLERANCE = Decimal("0.05")
+
+
+def _format_amount_for_qrbill(amount: Decimal) -> str:
+    """Format fixe 2 décimales pour la lib qrbill / norme paiement CH."""
+    quantized = amount.quantize(Decimal("0.01"))
+    return f"{quantized:.2f}"
+
+
+def resolve_qr_bill_amount_decimal(
+    invoice: Any, override_amount: Any | None = None
+) -> Decimal:
+    """Montant à encoder sur le QR-facture (CHF), aligné sur ce qui est dû.
+
+    - Rappels / cas spéciaux : ``override_amount`` (ex. total dû rappel + frais).
+    - Sinon : ``balance_due`` (solde après acomptes), sinon ``total_amount``.
+
+    Arrondi **5 centimes** (0,05 CHF) :
+    - toujours pour ``override_amount`` (rappels) ;
+    - pour le montant facture / solde **tant qu'aucun acompte** n'a été enregistré
+      (sinon le solde partiel peut légitimement finir en centimes « non multiples de 5 »).
+
+    À la génération, ``total_amount`` est déjà arrondi 5 c. ; cet arrondi renforce
+    la cohérence QR / total affiché si des données legacy sont au centime « cassé ».
+    """
+    two = Decimal("0.01")
+    if override_amount is not None:
+        try:
+            d = Decimal(str(override_amount))
+        except (InvalidOperation, TypeError, ValueError):
+            app_logger.warning(
+                "[QR-Bill] override_amount invalide %r, repli sur facture",
+                override_amount,
+            )
+            d = Decimal("0.00")
+        out = max(d.quantize(two), Decimal("0.00"))
+        return max(round_to_5_cents(out), Decimal("0.00"))
+
+    out: Decimal | None = None
+    for attr in ("balance_due", "total_amount"):
+        raw = getattr(invoice, attr, None)
+        if raw is None:
+            continue
+        try:
+            out = max(Decimal(str(raw)).quantize(two), Decimal("0.00"))
+            break
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+    if out is None:
+        return Decimal("0.00")
+
+    paid_raw = getattr(invoice, "amount_paid", None)
+    try:
+        paid_d = Decimal(str(paid_raw if paid_raw is not None else 0)).quantize(two)
+    except (InvalidOperation, TypeError, ValueError):
+        paid_d = Decimal("0.00")
+
+    if paid_d <= Decimal("0.00"):
+        out = max(round_to_5_cents(out), Decimal("0.00"))
+    return out
+
+
+def warn_if_invoice_line_totals_mismatch_invoice_total(invoice: Any) -> None:
+    """Journalise un avertissement si Σ total_with_vat des lignes ≠ total_amount."""
+    if getattr(invoice, "id", None) is None:
+        return
+    lines = getattr(invoice, "lines", None) or []
+    if not lines:
+        return
+    total_ref = getattr(invoice, "total_amount", None)
+    if total_ref is None:
+        return
+    try:
+        sum_ttc = sum(
+            (Decimal(str(ln.total_with_vat or 0)) for ln in lines),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        ref_d = Decimal(str(total_ref)).quantize(Decimal("0.01"))
+    except (InvalidOperation, TypeError, ValueError):
+        return
+    if abs(sum_ttc - ref_d) > _QR_LINE_TOTAL_TOLERANCE:
+        app_logger.warning(
+            "[QR-Bill] Cohérence facture: somme des lignes TTC=%s vs "
+            "invoice.total_amount=%s (invoice_id=%s). Le montant QR est basé sur "
+            "balance_due/total_amount — vérifier les lignes et remises.",
+            sum_ttc,
+            ref_d,
+            getattr(invoice, "id", "?"),
+        )
 
 
 class QRBillService:
@@ -502,12 +595,21 @@ class QRBillService:
                 )
                 return None
 
+            warn_if_invoice_line_totals_mismatch_invoice_total(invoice)
+            qr_dec = resolve_qr_bill_amount_decimal(invoice, None)
+            qr_amount = _format_amount_for_qrbill(qr_dec)
+            app_logger.debug(
+                "[QR-Bill] Montant encodé (CHF)=%s pour facture %s",
+                qr_amount,
+                getattr(invoice, "invoice_number", "?"),
+            )
+
             # Créer le QR-Bill avec la vraie bibliothèque qrbill
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,
                 debtor=debtor_data,
-                amount=str(invoice.total_amount),
+                amount=qr_amount,
                 currency="CHF",
                 reference_number=self._get_payment_reference(invoice),
                 additional_information=(

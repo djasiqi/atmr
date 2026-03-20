@@ -5,8 +5,11 @@ import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLogger } from "@/utils/logger";
 import { enqueueLocationBatch, type QueuedLocation } from "../services/locationQueue";
+import { MissionStateManager } from "../services/missionState";
+import { resolveMissionContext } from "../services/locationMissionContext";
 
 const log = getLogger("LocationTask");
+const trackLog = getLogger("TRACK");
 
 // Vérifier si le module natif est disponible
 let TaskManager: any = null;
@@ -27,25 +30,10 @@ try {
 }
 
 const LOCATION_TASK_NAME = "background-location-task";
-const LOCATION_MODE_KEY = "@atmr:location_mode";
 
-async function getBackgroundLocationMode(): Promise<
-  "mission_live" | "availability_presence" | "passive_last_known"
-> {
-  try {
-    const mode = (await AsyncStorage.getItem(LOCATION_MODE_KEY))?.trim();
-    if (
-      mode === "mission_live" ||
-      mode === "availability_presence" ||
-      mode === "passive_last_known"
-    ) {
-      return mode;
-    }
-  } catch {
-    // ignore
-  }
-  return "availability_presence";
-}
+/** 3 lectures max (1 + 2 retries) pour laisser AsyncStorage s’aligner après setDriverId. */
+const DRIVER_ID_RETRY_DELAY_MS = 120;
+const DRIVER_ID_MAX_ATTEMPT_INDEX = 2;
 
 // Buffer pour les positions (batching)
 let positionBuffer: Array<{
@@ -68,18 +56,37 @@ async function flushPositionBatch() {
   }
 
   try {
-    // Récupérer le driver_id depuis le storage
-    const driverIdStr = await AsyncStorage.getItem("driver_id");
+    await MissionStateManager.ensureHydrated({ skipNetwork: true });
+
+    let driverIdStr: string | null = null;
+    for (let attempt = 0; attempt <= DRIVER_ID_MAX_ATTEMPT_INDEX; attempt++) {
+      driverIdStr = await AsyncStorage.getItem("driver_id");
+      if (driverIdStr) break;
+      trackLog.warn("driver_id missing", {
+        retryAttempt: attempt,
+        bufferSize: positionBuffer.length,
+      });
+      if (attempt < DRIVER_ID_MAX_ATTEMPT_INDEX) {
+        await new Promise((r) => setTimeout(r, DRIVER_ID_RETRY_DELAY_MS));
+      }
+    }
     if (!driverIdStr) {
-      log.warn("driver id not found");
-      positionBuffer = [];
       return;
     }
 
     const driverId = parseInt(driverIdStr, 10);
+    if (!Number.isFinite(driverId) || driverId <= 0) {
+      trackLog.warn("driver_id missing", {
+        retryAttempt: DRIVER_ID_MAX_ATTEMPT_INDEX,
+        bufferSize: positionBuffer.length,
+        invalid: true,
+      });
+      return;
+    }
+
     const batch = [...positionBuffer];
-    positionBuffer = []; // Clear buffer
-    const locationMode = await getBackgroundLocationMode();
+    positionBuffer = [];
+    const { missionId, mode } = resolveMissionContext();
 
     const queued: QueuedLocation[] = batch.map((p) => ({
       latitude: p.latitude,
@@ -89,19 +96,17 @@ async function flushPositionBatch() {
       accuracy: p.accuracy,
       timestamp: p.timestamp,
       driver_id: driverId,
-      location_mode: locationMode,
+      location_mode: mode,
+      mission_id: missionId,
       recorded_at: new Date(p.timestamp || Date.now()).toISOString(),
       sent_at: new Date().toISOString(),
       is_background: true,
     }));
 
-    // Une seule opération AsyncStorage au lieu de N (évite Background ANR)
     await enqueueLocationBatch(queued);
 
     log.info("positions enqueued", { count: queued.length, driverId });
 
-    // ✅ Fallback HTTP en arrière-plan : fire-and-forget pour éviter ANR.
-    // Android ~5–10s max pour les tâches background — on ne bloque pas.
     const latest = queued[queued.length - 1];
     if (latest) {
       (async () => {
@@ -119,7 +124,8 @@ async function flushPositionBatch() {
                 new Date(latest.timestamp || Date.now()).toISOString(),
               sent_at: new Date().toISOString(),
               is_background: true,
-              location_mode: latest.location_mode || locationMode,
+              location_mode: latest.location_mode,
+              mission_id: latest.mission_id ?? null,
             }),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error("timeout")), 5000)
@@ -163,14 +169,6 @@ if (TaskManager && !taskDefinitionAttempted && !__DEV__) {
     if (data) {
       const { locations } = data;
       log.info("locations received", { locations });
-
-      // Récupérer le driver_id
-      try {
-        const driverId = await AsyncStorage.getItem("driver_id");
-        log.info("driver id fetched", { driverId });
-      } catch (e) {
-        log.warn("driver id fetch error", { error: e });
-      }
 
       for (const location of locations) {
         const { latitude, longitude, speed, heading, accuracy } = location.coords;

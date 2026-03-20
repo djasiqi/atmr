@@ -17,6 +17,10 @@ jest.mock("../socket", () => ({
   getSocketRole: jest.fn(),
 }));
 
+jest.mock("../api", () => ({
+  updateDriverLocation: jest.fn().mockResolvedValue({ ok: true }),
+}));
+
 
 const store = new Map<string, string>();
 
@@ -78,8 +82,11 @@ describe("locationQueue socket presence guards", () => {
     expect(typeof payload.sent_at).toBe("string");
   });
 
-  it("emitBatchWithAck normalise les positions legacy sans location_mode/recorded_at", async () => {
+  it("positions legacy sans location_mode passent en availability_presence (HTTP présence)", async () => {
     const emittedBatches: any[] = [];
+    const { updateDriverLocation } = require("../api");
+    (updateDriverLocation as jest.Mock).mockClear();
+
     const socket = {
       connected: true,
       emit: jest.fn((event: string, payload: any, ack?: (data: any) => void) => {
@@ -107,14 +114,13 @@ describe("locationQueue socket presence guards", () => {
 
     await syncLocationQueue(socket);
 
-    expect(emittedBatches.length).toBe(1);
-    const pos = emittedBatches[0].positions[0];
-    expect(pos.location_mode).toBe("mission_live");
-    expect(typeof pos.recorded_at).toBe("string");
-    expect(pos.recorded_at.length).toBeGreaterThan(0);
-    expect(typeof pos.sent_at).toBe("string");
-    expect(pos.latitude).toBe(46.19);
-    expect(pos.longitude).toBe(6.14);
+    expect(emittedBatches.length).toBe(0);
+    expect(updateDriverLocation).toHaveBeenCalled();
+    const httpCall = (updateDriverLocation as jest.Mock).mock.calls[0][0];
+    expect(httpCall.location_mode).toBe("availability_presence");
+    expect(typeof httpCall.recorded_at).toBe("string");
+    expect(httpCall.lat).toBe(46.19);
+    expect(httpCall.lon).toBe(6.14);
   }, 20000);
 
   it("getLocationQueue migre les positions legacy à la lecture", async () => {
@@ -132,7 +138,7 @@ describe("locationQueue socket presence guards", () => {
     store.set(QUEUE_KEY, JSON.stringify([legacyPosition]));
 
     const queue = await getLocationQueue();
-    expect(queue[0].location_mode).toBe("mission_live");
+    expect(queue[0].location_mode).toBe("availability_presence");
     expect(typeof queue[0].recorded_at).toBe("string");
     expect(typeof queue[0].sent_at).toBe("string");
   });

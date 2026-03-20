@@ -160,6 +160,9 @@ const NewInvoiceModal = ({
   // NOUVEAU: Gestion des sélections de réservations par client
   const [selectedReservations, setSelectedReservations] = useState({}); // { client_id: [reservation_objects] }
   const [overrides, setOverrides] = useState({});
+  /** Remise globale (% sur tarif catalogue) — facturation directe */
+  const [directGlobalDiscountPercent, setDirectGlobalDiscountPercent] = useState('');
+  const [directGlobalDiscountNote, setDirectGlobalDiscountNote] = useState('');
   const [preselectedReservations, setPreselectedReservations] = useState({});
   useEffect(() => {
     if (!open) return;
@@ -212,6 +215,8 @@ const NewInvoiceModal = ({
       }
 
       setSelectedReservations({});
+      setDirectGlobalDiscountPercent('');
+      setDirectGlobalDiscountNote('');
       setClientSearch('');
       const el0 = clientSearchInputRef.current;
       if (el0) el0.value = '';
@@ -229,6 +234,8 @@ const NewInvoiceModal = ({
       period_month: new Date().getMonth() + 1,
     });
     setOverrides({});
+    setDirectGlobalDiscountPercent('');
+    setDirectGlobalDiscountNote('');
     setSelectedReservations({});
     setPreselectedReservations({});
     setShowDirectTransports(false);
@@ -239,6 +246,11 @@ const NewInvoiceModal = ({
     const el1 = clientSearchInputRef.current;
     if (el1) el1.value = '';
   }, [open, initialDraft]);
+
+  useEffect(() => {
+    setDirectGlobalDiscountPercent('');
+    setDirectGlobalDiscountNote('');
+  }, [formData.client_id]);
 
   useEffect(() => {
     if (!open || !initialized) return;
@@ -1506,6 +1518,62 @@ const NewInvoiceModal = ({
     [overrides]
   );
 
+  /**
+   * Remise globale : pour chaque transport sélectionné (détail chargé), remplace le montant HT
+   * par tarif catalogue × (1 − %/100), arrondi 0,05 CHF. Les overrides sont ceux envoyés à l’API.
+   */
+  const applyDirectGlobalDiscount = useCallback(() => {
+    const raw = String(directGlobalDiscountPercent).replace(',', '.').trim();
+    const pct = parseFloat(raw);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      toast.error('Indiquez un pourcentage de remise entre 0 et 100.');
+      return;
+    }
+    if (pct === 0) {
+      toast.message('Indiquez un pourcentage supérieur à 0, ou réinitialisez les lignes avec « Réinitialiser » sur chaque transport.');
+      return;
+    }
+    const factor = 1 - pct / 100;
+    const list = directSelection.filter((r) => !isMinimalReservation(r));
+    if (list.length === 0) {
+      toast.error(
+        'Ouvrez « Transports à facturer » et attendez le chargement de la liste : la remise globale nécessite le détail de chaque trajet.'
+      );
+      return;
+    }
+    const noteFromUser = directGlobalDiscountNote.trim();
+    const defaultNote = `Remise ${pct}%`;
+    const skipped = directSelection.length - list.length;
+    setOverrides((prev) => {
+      const next = { ...prev };
+      list.forEach((r) => {
+        const base = Number(r.amount ?? r.estimated_amount ?? 0);
+        if (!Number.isFinite(base) || base < 0) return;
+        const rawAmount = base * factor;
+        const newAmount = Math.round(rawAmount * 20) / 20;
+        const key = String(r.id);
+        next[key] = {
+          ...(next[key] || {}),
+          amount: newAmount,
+          note: noteFromUser || defaultNote,
+        };
+      });
+      return next;
+    });
+    if (skipped > 0) {
+      toast.success(
+        `Remise de ${pct}% sur ${list.length} transport(s). ${skipped} ligne(s) sans détail ignorée(s) — ouvrez la liste et attendez le chargement complet.`
+      );
+    } else {
+      toast.success(`Remise de ${pct}% appliquée sur ${list.length} transport(s).`);
+    }
+  }, [
+    directGlobalDiscountPercent,
+    directGlobalDiscountNote,
+    directSelection,
+    isMinimalReservation,
+  ]);
+
   const formatClientLabel = useCallback((client) => {
     if (!client) return 'Client';
     // Pour les clients institution facturés au patient : afficher le nom du patient
@@ -2264,6 +2332,57 @@ const NewInvoiceModal = ({
                   </button>
                   {showDirectTransports && (
                     <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
+                      <div className={styles.directDiscountBar}>
+                        <div className={styles.directDiscountBarHeader}>
+                          <strong>Remise globale (sur lignes sélectionnées)</strong>
+                          <span className={styles.directDiscountHint}>
+                            Applique un pourcentage sur le montant HT catalogue de chaque transport sélectionné
+                            (arrondi 0,05 CHF). Utile pour une remise forfaitaire sans modifier chaque ligne à la
+                            main ; vous pouvez toujours affiner avec ✏️ sur une ligne.
+                          </span>
+                        </div>
+                        <div className={styles.directDiscountRow}>
+                          <label className={styles.directDiscountLabel} htmlFor="direct_global_discount_pct">
+                            Remise (%)
+                            <input
+                              id="direct_global_discount_pct"
+                              type="text"
+                              inputMode="decimal"
+                              autoComplete="off"
+                              value={directGlobalDiscountPercent}
+                              onChange={(e) => setDirectGlobalDiscountPercent(e.target.value)}
+                              placeholder="ex. 22"
+                              disabled={loading}
+                            />
+                          </label>
+                          <label className={styles.directDiscountLabel} htmlFor="direct_global_discount_note">
+                            Note (facultatif)
+                            <input
+                              id="direct_global_discount_note"
+                              type="text"
+                              value={directGlobalDiscountNote}
+                              onChange={(e) => setDirectGlobalDiscountNote(e.target.value)}
+                              placeholder="ex. Convention entreprise"
+                              disabled={loading}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className={`btn btn-secondary ${styles.directDiscountApply}`}
+                            onClick={applyDirectGlobalDiscount}
+                            disabled={loading || !formData.client_id}
+                          >
+                            Appliquer aux lignes sélectionnées
+                          </button>
+                        </div>
+                        {hasUnhydratedMinimals && (
+                          <p className={styles.directDiscountWarn}>
+                            Certaines lignes sont encore sans détail : la remise ne s’applique qu’aux trajets
+                            chargés ci-dessous. Laissez la liste se charger ou désélectionnez puis resélectionnez
+                            après chargement.
+                          </p>
+                        )}
+                      </div>
                       <ReservationSelector
                         companyId={companyId}
                         clientId={parseInt(formData.client_id)}

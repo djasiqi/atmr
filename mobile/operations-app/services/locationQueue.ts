@@ -3,9 +3,11 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLogger } from "@/utils/logger";
+import { updateDriverLocation } from "./api";
 import { getSocket, getSocketRole } from "./socket";
 
 const log = getLogger("LocationQ");
+const trackLog = getLogger("TRACK");
 
 const LOCATION_QUEUE_KEY = "@atmr:location_queue";
 const MAX_QUEUE_SIZE = 1000; // hard-cap globale
@@ -78,7 +80,7 @@ function emitIndividualFallback(socket: any, payload: any): void {
       heading: pos.heading,
       accuracy: pos.accuracy,
       timestamp: pos.timestamp,
-      location_mode: normalizeMode(pos.location_mode) || "mission_live",
+      location_mode: normalizeMode(pos.location_mode) || "availability_presence",
       recorded_at: pos.recorded_at || timestampIso,
       sent_at: pos.sent_at || new Date().toISOString(),
       is_background: pos.is_background ?? false,
@@ -128,7 +130,7 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
         heading: pos.heading ?? 0,
         accuracy: pos.accuracy ?? 0,
         timestamp: ts,
-        location_mode: normalizeMode(pos.location_mode) || "mission_live",
+        location_mode: normalizeMode(pos.location_mode) || "availability_presence",
         recorded_at: pos.recorded_at || new Date(ts).toISOString(),
         sent_at: pos.sent_at || new Date().toISOString(),
         is_background: pos.is_background ?? false,
@@ -226,8 +228,10 @@ export interface QueuedLocation {
 function normalizeMode(
   mode?: string
 ): "mission_live" | "availability_presence" | "passive_last_known" {
-  if (mode === "availability_presence" || mode === "passive_last_known") return mode;
-  return "mission_live";
+  if (mode === "mission_live" || mode === "availability_presence" || mode === "passive_last_known") {
+    return mode;
+  }
+  return "availability_presence";
 }
 
 function applyQueueRetention(queue: QueuedLocation[]): QueuedLocation[] {
@@ -324,6 +328,15 @@ export async function enqueueLocationBatch(
     const retained = applyQueueRetention(merged);
 
     await AsyncStorage.setItem(LOCATION_QUEUE_KEY, JSON.stringify(retained));
+    if (__DEV__ && locations.length > 0) {
+      const s = locations[locations.length - 1];
+      trackLog.debug("enqueue", {
+        mode: normalizeMode(s.location_mode),
+        missionId: s.mission_id ?? null,
+        isBackground: !!s.is_background,
+        batchSize: locations.length,
+      });
+    }
     log.info("batch enqueued", { added: locations.length, total: retained.length });
   } catch (error) {
     log.error("batch enqueue failed", { error });
@@ -481,7 +494,6 @@ export async function syncLocationQueue(socket: any): Promise<void> {
       for (const loc of presenceOnly) {
         latestByDriver.set(loc.driver_id, loc);
       }
-      const { updateDriverLocation } = await import("./api");
       let presenceAccepted = true;
       for (const loc of latestByDriver.values()) {
         const presResult = await updateDriverLocation({
@@ -536,7 +548,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
               heading: loc.heading ?? 0,
               accuracy: loc.accuracy ?? 0,
               timestamp: ts,
-              location_mode: normalizeMode(loc.location_mode) || "mission_live",
+              location_mode: normalizeMode(loc.location_mode) || "availability_presence",
               recorded_at: loc.recorded_at || new Date(ts).toISOString(),
               sent_at: loc.sent_at || new Date().toISOString(),
               is_background: loc.is_background ?? false,

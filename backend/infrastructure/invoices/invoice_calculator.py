@@ -12,14 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 def round_to_5_cents(amount: Decimal) -> Decimal:
-    """Arrondit un montant à 5 centimes (0.05 CHF).
+    """Arrondit un montant à 5 centimes (0.05 CHF), demi au supérieur.
 
-    Exemples:
+    Exemples (arrondi bancaire HALF_UP sur multiples de 0,05) :
+        - 10.32 → 10.30
+        - 10.33 → 10.35
+        - 10.36 → 10.35
+        - 10.38 → 10.40
         - 10.12 → 10.10
-        - 10.13 → 10.15
-        - 10.17 → 10.15
         - 10.18 → 10.20
-        - 11.13 → 11.15
 
     Args:
         amount: Montant à arrondir

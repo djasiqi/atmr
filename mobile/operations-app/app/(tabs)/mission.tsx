@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { ScrollView, Alert, Linking, View, Text, RefreshControl, Platform, AppState, InteractionManager } from "react-native";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { ScrollView, Alert, Linking, View, Text, RefreshControl, Platform, AppState, InteractionManager, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocket } from "@/hooks/useSocket";
 import { useLocation } from "@/hooks/useLocation";
@@ -11,6 +11,7 @@ import MissionCard from "@/components/dashboard/MissionCard";
 import MissionGroupHeader from "@/components/dashboard/MissionGroupHeader";
 import MissionHeader from "@/components/dashboard/MissionHeader";
 import MissionMap from "@/components/dashboard/MissionMap";
+import { MissionListSkeleton } from "@/components/dashboard/MissionListSkeleton";
 import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModal";
 // SocketStatusIndicator is now integrated into MissionHeader
 import { Loader } from "@/components/ui/Loader";
@@ -105,6 +106,20 @@ export default function MissionScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  /** True dès qu’on a restauré des missions actives depuis AsyncStorage (STW-01 / STW-05). */
+  const cacheHadActiveMissionsRef = useRef(false);
+  const missionsNonEmptyRef = useRef(false);
+
+  useEffect(() => {
+    missionsNonEmptyRef.current = missions.length > 0;
+  }, [missions.length]);
+
+  useEffect(() => {
+    if (!driver?.id) {
+      cacheHadActiveMissionsRef.current = false;
+    }
+  }, [driver?.id]);
+
   // v2: backend envoie désormais client.phone et client.gp_phone (bouton Appeler) — bump pour invalider ancien cache
   const MISSIONS_CACHE_KEY = "missions_cache_v2";
 
@@ -136,6 +151,15 @@ export default function MissionScreen() {
       log.info("mission screen mounted");
     }
   }, []);
+
+  // Log map readiness (pour debug temps de chargement carte)
+  useEffect(() => {
+    if (__DEV__ && location && nextDestination) {
+      log.info("Mission map ready to render", {
+        hasNextDestCoords: nextDestinationCoords != null,
+      });
+    }
+  }, [location, nextDestination, nextDestinationCoords]);
 
   // ✅ Phase 1 - Quick Wins: Planifier rappels pour les missions actives
   useEffect(() => {
@@ -497,7 +521,7 @@ export default function MissionScreen() {
     }
   }, [completingMissionId, missions, isSubmitting, appAlert]);
 
-  if (!driver || isLoading) {
+  if (!driver) {
     return (
       <View
         style={{
@@ -511,6 +535,9 @@ export default function MissionScreen() {
       </View>
     );
   }
+
+  const showMissionSkeleton = isLoading && displayMissions.length === 0;
+  const showSyncBanner = isRefreshing || (isLoading && missions.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#f4f7fc" }}>
@@ -530,6 +557,20 @@ export default function MissionScreen() {
           missionCount={activeMissions.length}
         />
 
+        {showSyncBanner ? (
+          <View
+            style={[
+              styles.syncBanner,
+              { paddingHorizontal: horizontalPadding },
+            ]}
+          >
+            <ActivityIndicator size="small" color="#00796b" />
+            <Text style={styles.syncBannerText}>
+              Synchronisation des missions…
+            </Text>
+          </View>
+        ) : null}
+
         <TrackingStateBanner
           displayState={trackingState.displayState}
           onRequestPermission={async () => {
@@ -537,18 +578,25 @@ export default function MissionScreen() {
           }}
         />
 
-        {location && nextDestination && (
+        {location ? (
           <MissionMap
             location={location}
-            destination={nextDestination}
-            destinationCoords={nextDestinationCoords}
+            destination={nextDestination ?? ""}
+            destinationCoords={
+              nextDestination ? nextDestinationCoords : null
+            }
             allowGeocodeFallback={false}
             contentWidth={contentWidth}
             mapHeight={mapHeight}
           />
-        )}
+        ) : null}
 
-        {displayMissions.length > 0 ? (
+        {showMissionSkeleton ? (
+          <MissionListSkeleton
+            count={3}
+            horizontalPadding={horizontalPadding}
+          />
+        ) : displayMissions.length > 0 ? (
           <View style={{ paddingHorizontal: horizontalPadding, paddingTop: 4 }}>
             {displayMissions.map((displayMission, index) => {
               const { mission, missionNumber, groupInfo } = displayMission;
@@ -640,3 +688,18 @@ export default function MissionScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  syncBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+  },
+  syncBannerText: {
+    marginLeft: 8,
+    fontSize: 13,
+    color: "#004d40",
+  },
+});

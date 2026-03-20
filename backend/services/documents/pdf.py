@@ -7,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from time import perf_counter
 from typing import Any
+from xml.sax.saxutils import escape as _xml_escape
 
 from flask import current_app
 from sqlalchemy.orm import joinedload
@@ -1587,6 +1588,42 @@ def _build_recipient_block_flowable(
     return (para, lines)
 
 
+def _xml_escape_for_paragraph(text: str) -> str:
+    """Échappe & < > pour du contenu dans un ReportLab Paragraph (mini HTML)."""
+    return _xml_escape(text or "", {"'": "&apos;", '"': "&quot;"})
+
+
+def _collect_adjustment_notes_from_consolidated_item(
+    item: dict[str, Any],
+) -> str | None:
+    """Notes d'ajustement (ex. remise %) — trajets A/R = union des deux lignes, sans doublon."""
+    notes: list[str] = []
+    if item.get("is_round_trip"):
+        for key in ("line1", "line2"):
+            ln = item.get(key)
+            raw = getattr(ln, "adjustment_note", None) if ln is not None else None
+            if raw is not None:
+                s = str(raw).strip()
+                if s:
+                    notes.append(s)
+    else:
+        ln = item.get("line")
+        raw = getattr(ln, "adjustment_note", None) if ln is not None else None
+        if raw is not None:
+            s = str(raw).strip()
+            if s:
+                notes.append(s)
+    seen: set[str] = set()
+    unique: list[str] = []
+    for n in notes:
+        if n not in seen:
+            seen.add(n)
+            unique.append(n)
+    if not unique:
+        return None
+    return " · ".join(unique) if len(unique) > 1 else unique[0]
+
+
 def _build_s2_table(
     invoice: "Invoice",
     font_name: str,
@@ -1732,6 +1769,13 @@ def _build_s2_table(
         patient_cell = Paragraph(_format_patient_name_s2(pn_raw), s2_main_style)
         amt = item.get("amount") or Decimal("0")
         amount_val = f"{Decimal(amt):.2f}"
+        adj_note = _collect_adjustment_notes_from_consolidated_item(item)
+        note_suffix = ""
+        if adj_note:
+            esc_n = _xml_escape_for_paragraph(adj_note)
+            note_suffix = (
+                f"<br/><font size='7' color='#6b7280'><i>{esc_n}</i></font>"
+            )
         is_ar = (
             item.get("is_round_trip")
             and item.get("aller_detail")
@@ -1739,10 +1783,11 @@ def _build_s2_table(
         )
         if is_ar:
             base = item.get("transport_display", "")
+            esc_base = _xml_escape_for_paragraph(base)
             main_text = (
-                f"{base}&nbsp;<font color='#aaaaaa' size='8'>↔</font>&nbsp;[A/R]"
+                f"{esc_base}&nbsp;<font color='#aaaaaa' size='8'>↔</font>&nbsp;[A/R]"
             )
-            para_main = Paragraph(f"<b>{main_text}</b>", s2_main_style)
+            para_main = Paragraph(f"<b>{main_text}</b>{note_suffix}", s2_main_style)
             transport_cell = para_main
             amount_cell = Paragraph(
                 f'<para align="right"><b>{amount_val}</b></para>',
@@ -1750,7 +1795,8 @@ def _build_s2_table(
             )
         else:
             transport = item.get("transport_display", "")
-            transport_cell = Paragraph(transport, s2_main_style)
+            esc_tr = _xml_escape_for_paragraph(transport)
+            transport_cell = Paragraph(f"{esc_tr}{note_suffix}", s2_main_style)
             amount_cell = Paragraph(
                 f'<para align="right">{amount_val}</para>',
                 s2_main_style,
@@ -3340,6 +3386,19 @@ class PDFService:
             fontName=font_name,
         )
 
+        def _minimal_date_cell(date_str: str, inv_line: Any) -> Any:
+            """Date brute ou Paragraph si note d’ajustement (ex. remise %)."""
+            raw = getattr(inv_line, "adjustment_note", None)
+            note = str(raw).strip() if raw is not None else ""
+            if not note:
+                return date_str
+            esc_d = _xml_escape_for_paragraph(date_str)
+            esc_n = _xml_escape_for_paragraph(note)
+            return Paragraph(
+                f"{esc_d}<br/><font size='7' color='#6b7280'><i>{esc_n}</i></font>",
+                normal_style,
+            )
+
         story = []
         company = invoice.company
 
@@ -3548,21 +3607,25 @@ class PDFService:
                             patient_name = (
                                 patient_name[: MAX_PATIENT_NAME_LENGTH - 1] + "."
                             )
-                        table_data.append([date_str, patient_name, amount])
+                        table_data.append(
+                            [_minimal_date_cell(date_str, line), patient_name, amount]
+                        )
                     else:
-                        table_data.append([date_str, amount])
+                        table_data.append([_minimal_date_cell(date_str, line), amount])
                 else:
                     amount = f"{line.line_total:.2f}"
                     if is_third_party:
-                        table_data.append(["", "N/A", amount])
+                        table_data.append(
+                            [_minimal_date_cell("", line), "N/A", amount]
+                        )
                     else:
-                        table_data.append(["", amount])
+                        table_data.append([_minimal_date_cell("", line), amount])
             else:
                 amount = f"{line.line_total:.2f}"
                 if is_third_party:
-                    table_data.append(["", "N/A", amount])
+                    table_data.append([_minimal_date_cell("", line), "N/A", amount])
                 else:
-                    table_data.append(["", amount])
+                    table_data.append([_minimal_date_cell("", line), amount])
 
         if is_third_party:
             services_table = Table(table_data, colWidths=[3 * cm, 4 * cm, 2.5 * cm])
@@ -4999,6 +5062,8 @@ class PDFService:
                         self.billed_to_company_id = invoice.billed_to_company_id
                         self.billing_strategy = invoice.billing_strategy
                         self.total_amount = reminder.total_due
+                        # Aligné avec QRBillService.resolve_qr_bill_amount_decimal (balance_due prioritaire)
+                        self.balance_due = reminder.total_due
                         self.qr_reference = reminder.qr_reference
 
                 virtual_invoice = VirtualInvoiceForReminder(invoice, reminder)

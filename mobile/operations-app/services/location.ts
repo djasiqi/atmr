@@ -5,7 +5,7 @@ import { type DriverLocationPayload } from "@/services/api";
 import { getLogger } from "@/utils/logger";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { enqueueLocation } from "./locationQueue";
-import { getCurrentLocationMode } from "./locationTracker";
+import { resolveMissionContext } from "./locationMissionContext";
 
 const log = getLogger("LocationSvc");
 
@@ -66,6 +66,7 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
     if (!driver_id || !Number.isFinite(driver_id)) {
       return { ok: false, message: "driver_id manquant" };
     }
+    const { missionId, mode } = resolveMissionContext();
     await enqueueLocation({
       latitude: Number(cleanPayload.latitude),
       longitude: Number(cleanPayload.longitude),
@@ -74,7 +75,8 @@ export const sendDriverLocation = async (payload: DriverLocationPayload) => {  t
       accuracy: Number(cleanPayload.accuracy || 10),
       timestamp: Date.now(),
       driver_id,
-      location_mode: getCurrentLocationMode(),
+      location_mode: mode,
+      mission_id: missionId,
       recorded_at: cleanPayload.ts || new Date().toISOString(),
       sent_at: new Date().toISOString(),
       is_background: false,

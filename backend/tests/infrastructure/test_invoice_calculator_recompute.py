@@ -18,7 +18,10 @@ from decimal import Decimal
 import pytest
 
 from ext import db as _db
-from infrastructure.invoices.invoice_calculator import recompute_invoice_totals
+from infrastructure.invoices.invoice_calculator import (
+    recompute_invoice_totals,
+    round_to_5_cents,
+)
 from models import Client, Company, User
 from models.enums import InvoiceBillingStrategy, InvoiceStatus, UserRole
 from models.invoice import Invoice, InvoiceLine
@@ -293,3 +296,11 @@ class TestRecomputeInvoiceTotals:
         assert invoice.total_amount == Decimal("100.00")
         assert invoice.balance_due == Decimal("50.00")  # 100 - 50
         assert result["balance_due"] == Decimal("50.00")
+
+
+def test_round_to_5_cents_spec_examples() -> None:
+    """Arrondi total facture / QR : multiples de 0,05 CHF (demi au supérieur)."""
+    assert round_to_5_cents(Decimal("10.32")) == Decimal("10.30")
+    assert round_to_5_cents(Decimal("10.33")) == Decimal("10.35")
+    assert round_to_5_cents(Decimal("10.36")) == Decimal("10.35")
+    assert round_to_5_cents(Decimal("10.38")) == Decimal("10.40")

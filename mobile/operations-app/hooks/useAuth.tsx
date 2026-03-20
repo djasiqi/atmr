@@ -94,6 +94,7 @@ import { sendIngestEvent } from "@/src/config/telemetry";
 import { getLogger } from "@/utils/logger";
 import { refreshDriverTokenOrchestrated } from "@/services/driverTokenOrchestrator";
 import { buildAuthNamespace } from "@/services/storage/keys";
+import { FEATURE_RELEASE_DRIVER_LOADING_BEFORE_PROFILE } from "@/services/authFeatureFlags";
 
 const log = getLogger("Auth");
 
@@ -195,7 +196,10 @@ interface AuthContextType {
   mode: AuthMode;
   setMode: (mode: AuthMode) => Promise<void>;
   switchMode: (mode: AuthMode) => Promise<void>;
+  /** @deprecated Préférer splashBlocking + driverLoading pour les nouveaux écrans */
   loading: boolean;
+  /** Splash / shell : lecture stockage + bootstrap initial + chargement enterprise — sans driverLoading */
+  splashBlocking: boolean;
   deviceId: string | null;
 
   driver: Driver | null;
@@ -462,6 +466,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (!profile) {
           throw new Error("Profil chauffeur indisponible (AUTH_NOT_READY)");
         }
+        await asyncStorage.setDriverId(profile.id);
         setDriver(profile);
         await setActiveAuthNamespace({
           role: "driver",
@@ -469,8 +474,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           tenantId: null,
           sessionId: null,
         });
-        // ✅ Stocker driver_id pour navigation rapide
-        await asyncStorage.setDriverId(profile.id);
       } catch (error) {
         log.warn("driver profile fetch failed", { error });
         // ✅ Important: AUTH_NOT_READY est transitoire → ne pas effacer les tokens / ne pas logout
@@ -621,16 +624,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setDriverToken(driverAccessToken);
                 // ✅ Important: rendre l'auth prête avant d'appeler un endpoint protégé
                 notifyAuthReady();
+                // STR-02 (feature flag) : libérer driverLoading avant la fin du fetch profil
+                if (FEATURE_RELEASE_DRIVER_LOADING_BEFORE_PROFILE && isMounted) {
+                  log.info("[PERF] str02_release_driver_loading_before_profile", {
+                    phase: "after_access_token_ready",
+                  });
+                  setDriverLoading(false);
+                }
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
+                  await asyncStorage.setDriverId(profile.id);
                   setDriver(profile);
+                  log.info("[PERF] driver_profile_loaded", {
+                    t: Date.now(),
+                    source: "bootstrap_access_token",
+                  });
                   await setActiveAuthNamespace({
                     role: "driver",
                     userId: profile.id || "unknown",
                     tenantId: null,
                     sessionId: null,
                   });
-                  await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
                   driverSessionRestored = true;
                   // S'assurer qu'on est en mode driver
@@ -649,6 +663,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const newAccessToken = await refreshDriverTokenOrchestrated("boot_restore");
                 setDriverToken(newAccessToken);
                 notifyAuthReady();
+                if (FEATURE_RELEASE_DRIVER_LOADING_BEFORE_PROFILE && isMounted) {
+                  log.info("[PERF] str02_release_driver_loading_before_profile", {
+                    phase: "after_refresh_token_ready",
+                  });
+                  setDriverLoading(false);
+                }
 
                 // S'assurer qu'on est en mode driver
                 await storeMode("driver");
@@ -656,6 +676,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 // Charger le profil driver
                 const profile = await fetchDriverProfile();
                 if (isMounted) {
+                  await asyncStorage.setDriverId(profile.id);
                   setDriver(profile);
                   await setActiveAuthNamespace({
                     role: "driver",
@@ -663,7 +684,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     tenantId: null,
                     sessionId: null,
                   });
-                  await asyncStorage.setDriverId(profile.id);
                   profileLoaded = true;
                   driverSessionRestored = true;
                 }
@@ -699,6 +719,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                     if (biometricSuccess) {
                       notifyAuthReady();
+                      if (FEATURE_RELEASE_DRIVER_LOADING_BEFORE_PROFILE && isMounted) {
+                        log.info("[PERF] str02_release_driver_loading_before_profile", {
+                          phase: "biometric_after_refresh_fail",
+                        });
+                        setDriverLoading(false);
+                      }
                       const profile = await fetchDriverProfile();
                       if (isMounted) {
                         setDriver(profile);
@@ -758,8 +784,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
                 if (biometricSuccess) {
                   notifyAuthReady();
+                  if (FEATURE_RELEASE_DRIVER_LOADING_BEFORE_PROFILE && isMounted) {
+                    log.info("[PERF] str02_release_driver_loading_before_profile", {
+                      phase: "biometric_no_stored_tokens",
+                    });
+                    setDriverLoading(false);
+                  }
                   const profile = await fetchDriverProfile();
                   if (isMounted) {
+                    await asyncStorage.setDriverId(profile.id);
                     setDriver(profile);
                     await setActiveAuthNamespace({
                       role: "driver",
@@ -767,7 +800,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                       tenantId: null,
                       sessionId: null,
                     });
-                    await asyncStorage.setDriverId(profile.id);
                     await storeMode("driver");
                     profileLoaded = true;
                     driverSessionRestored = true;
@@ -928,6 +960,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (shouldNotifyAuthReady) {
             notifyAuthReady();
           }
+          log.info("[PERF] auth_bootstrap_run_complete", {
+            t: Date.now(),
+            shouldNotifyAuthReady,
+            enterprise_restored: enterpriseRestored ? 1 : 0,
+            driver_session_restored: driverSessionRestored ? 1 : 0,
+          });
         }
       }
     };
@@ -935,6 +973,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const BOOTSTRAP_TIMEOUT_MS = 25000;
 
     const executeBootstrapOnce = async () => {
+      log.info("[PERF] auth_bootstrap_race_start", { t: Date.now() });
       // Ne jamais skip : hot reload / StrictMode remount réinitialise l'état React
       // mais les variables module persistent → on doit toujours re-exécuter pour restaurer depuis storage
       if (!authBootstrapOncePromise) {
@@ -959,6 +998,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (isMounted) {
           setInitialLoading(false);
         }
+        log.info("[PERF] auth_bootstrap_shell_loading_end", { t: Date.now() });
       }
     };
 
@@ -1549,6 +1589,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Charger le profil driver pour mettre à jour le contexte
         try {
           const profile = await fetchDriverProfile();
+          await asyncStorage.setDriverId(profile.id);
           setDriver(profile);
           await setActiveAuthNamespace({
             role: "driver",
@@ -1556,7 +1597,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             tenantId: null,
             sessionId: null,
           });
-          await asyncStorage.setDriverId(profile.id);
 
 
           log.success("driver session loaded from storage", {
@@ -1600,6 +1640,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setDriverLoading(true);
     try {
       const profile = await fetchDriverProfile();
+      await asyncStorage.setDriverId(profile.id);
       setDriver(profile);
       await setActiveAuthNamespace({
         role: "driver",
@@ -1607,7 +1648,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         tenantId: null,
         sessionId: null,
       });
-      await asyncStorage.setDriverId(profile.id);
       log.success("driver profile refreshed", { profileId: profile.id });
     } catch (error: any) {
       const status = error?.response?.status;
@@ -1619,6 +1659,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setDriverToken(newToken);
           invalidateInterceptorCache();
           const profile = await fetchDriverProfile();
+          await asyncStorage.setDriverId(profile.id);
           setDriver(profile);
           await setActiveAuthNamespace({
             role: "driver",
@@ -1626,7 +1667,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             tenantId: null,
             sessionId: null,
           });
-          await asyncStorage.setDriverId(profile.id);
           log.success("driver profile refreshed after retry");
           return;
         } catch (retryError) {
@@ -1880,7 +1920,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isDriverAuthenticated = Boolean(driver && driverToken);
   const isEnterpriseAuthenticated = Boolean(enterpriseSession);
-  const loading = initialLoading || driverLoading || enterpriseLoading;
+  const splashBlocking = initialLoading || enterpriseLoading;
+  const loading = splashBlocking || driverLoading;
   const isAuthenticated =
     mode === "enterprise" ? isEnterpriseAuthenticated : isDriverAuthenticated;
 
@@ -1890,6 +1931,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setMode,
       switchMode,
       loading,
+      splashBlocking,
       deviceId,
 
       driver,
@@ -1926,6 +1968,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isDriverAuthenticated,
       isEnterpriseAuthenticated,
       loading,
+      splashBlocking,
       login,
       loginEnterpriseHandler,
       logout,

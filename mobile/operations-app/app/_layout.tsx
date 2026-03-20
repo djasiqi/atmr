@@ -215,6 +215,7 @@ function RootNav() {
     isEnterpriseAuthenticated,
     authSessionState,
     loading,
+    splashBlocking,
     driver,
   } = useAuth();
   const userId = driver?.id ?? null;
@@ -281,10 +282,10 @@ function RootNav() {
   }, []);
   useEffect(() => {
     if (splashHiddenRef.current) return;
-    if (loading || versionLoading) return;
+    if (splashBlocking || versionLoading) return;
     splashHiddenRef.current = true;
     SplashScreen.hideAsync().catch(() => { });
-  }, [loading, versionLoading]);
+  }, [splashBlocking, versionLoading]);
 
   // P0.5: Mettre à jour le mode notif dès que l'auth est connue (handler boot-level)
   useEffect(() => {
@@ -345,8 +346,8 @@ function RootNav() {
       const route = validation.type; // "booking", "bookings", "chat", "dispatch"
       const id = validation.id; // ID validé (entier positif) ou undefined
 
-      // Only navigate if driver is authenticated
-      if (!isDriverAuthenticated || loading) {
+      // Only navigate if driver is authenticated (splash bootstrap terminé)
+      if (!isDriverAuthenticated || splashBlocking) {
         log.info("driver not authenticated yet, deferring deep link");
         return;
       }
@@ -386,7 +387,7 @@ function RootNav() {
     } catch (error) {
       log.error("error handling deep link", { error });
     }
-  }, [isDriverAuthenticated, loading, router, isRuntimeInternalLink]);
+  }, [isDriverAuthenticated, splashBlocking, router, isRuntimeInternalLink]);
 
   // Si une mise à jour est REQUIRED, afficher l'écran bloquant
   // (avant même l'authentification)
@@ -396,7 +397,7 @@ function RootNav() {
 
   // 🔐 Redirections selon l’état d’auth
   useEffect(() => {
-    if (loading) return;
+    if (splashBlocking) return;
     if (
       authSessionState === "BOOTSTRAPPING"
     ) {
@@ -432,7 +433,7 @@ function RootNav() {
     } else {
       // En mode driver, attendre que le chargement soit terminé avant de naviguer
       // pour éviter de naviguer vers login pendant un switch de compte
-      if (!isDriverAuthenticated && !loading) {
+      if (!isDriverAuthenticated && !splashBlocking) {
         // Ne pas naviguer vers login si on est dans un contexte d'entreprise
         // (cela peut arriver lors d'un switch de compte)
         if (
@@ -459,7 +460,7 @@ function RootNav() {
     authSessionState,
     isDriverAuthenticated,
     isEnterpriseAuthenticated,
-    loading,
+    splashBlocking,
     mode,
     router,
     segments,
@@ -476,7 +477,7 @@ function RootNav() {
 
   // 🔔 Config + enregistrement push (quand prêt)
   useEffect(() => {
-    if (loading || versionLoading || !isDriverAuthenticated || !driver) return;
+    if (splashBlocking || versionLoading || !isDriverAuthenticated || !driver) return;
     const currentUserId = driver.id;
     if (pushInitForDriverRef.current === currentUserId) {
       return;
@@ -600,19 +601,19 @@ function RootNav() {
         pushInitForDriverRef.current = null;
       }
     };
-  }, [driver, isDriverAuthenticated, loading, versionLoading]);
+  }, [driver, isDriverAuthenticated, splashBlocking, versionLoading]);
 
   useEffect(() => {
-    if (loading || versionLoading) return;
+    if (splashBlocking || versionLoading) return;
     if (!isDriverAuthenticated) {
       pushInitForDriverRef.current = null;
     }
-  }, [loading, versionLoading, isDriverAuthenticated]);
+  }, [splashBlocking, versionLoading, isDriverAuthenticated]);
 
   // FCM: register foreground handler, deep link handlers, token refresh
   useEffect(() => {
     if (Platform.OS === "web") return;
-    if (loading || !isDriverAuthenticated || !driver) return;
+    if (splashBlocking || !isDriverAuthenticated || !driver) return;
 
     const currentUserId = driver?.id;
 
@@ -647,18 +648,18 @@ function RootNav() {
       unsubNotifee();
       unsubTokenRefresh();
     };
-  }, [driver, isDriverAuthenticated, loading]);
+  }, [driver, isDriverAuthenticated, splashBlocking]);
 
   // A1: Modal batterie désactivé — jugé inutile (réapparaissait à chaque démarrage malgré "Ne plus afficher").
   // Le guide reste disponible dans le code si besoin futur (BatteryOptimizationGuide, batteryOptimization).
 
   // ✅ Initialiser le token CSRF pour les entreprises
   useEffect(() => {
-    if (loading || !isEnterpriseAuthenticated) return;
+    if (splashBlocking || !isEnterpriseAuthenticated) return;
 
     // ✅ Initialiser le token CSRF au démarrage (pour les requêtes POST/PUT/DELETE/PATCH)
     initializeCSRFToken();
-  }, [isEnterpriseAuthenticated, loading]);
+  }, [isEnterpriseAuthenticated, splashBlocking]);
 
   // ✅ Deep link handling: listen for deep links when app is running
   useEffect(() => {
@@ -673,7 +674,7 @@ function RootNav() {
         log.info("initial deep link detected", { url });
         // Wait for auth to complete before handling
         setTimeout(() => {
-          if (isDriverAuthenticated && !loading) {
+          if (isDriverAuthenticated && !splashBlocking) {
             handleDeepLink(url);
           }
         }, 1000);
@@ -686,7 +687,7 @@ function RootNav() {
         return;
       }
       log.info("deep link received while app running", { url: event.url });
-      if (isDriverAuthenticated && !loading) {
+      if (isDriverAuthenticated && !splashBlocking) {
         handleDeepLink(event.url);
       }
     });
@@ -694,13 +695,13 @@ function RootNav() {
     return () => {
       subscription.remove();
     };
-  }, [isDriverAuthenticated, loading, handleDeepLink, isRuntimeInternalLink]);
+  }, [isDriverAuthenticated, splashBlocking, handleDeepLink, isRuntimeInternalLink]);
 
   // ✅ Plan 2G/3G : syncEngine démarre/arrête avec le driver
   // Important: ne pas lancer le tracking en mode entreprise (évite "no driver_id, skip enqueue"
   // et envoi de positions incorrectes quand l'utilisateur consulte le dashboard).
   useEffect(() => {
-    if (loading || versionLoading) return;
+    if (splashBlocking || versionLoading) return;
     if (mode !== "driver" || !isDriverAuthenticated || !driver) {
       // Anti-flap: pendant l'hydratation auth, éviter stop/start immédiat.
       if (syncEngineStopTimerRef.current) {
@@ -727,12 +728,12 @@ function RootNav() {
       getSyncEngine().start();
       syncEngineStartedRef.current = true;
     }
-  }, [driver?.id, isDriverAuthenticated, mode, loading, versionLoading]);
+  }, [driver?.id, isDriverAuthenticated, mode, splashBlocking, versionLoading]);
 
   // ✅ 4. Fréquence GPS Adaptative Mobile : Démarrer tracking adaptatif pour les drivers
   // Important: uniquement en mode driver (évite envoi de positions en mode entreprise).
   useEffect(() => {
-    if (loading || versionLoading) return;
+    if (splashBlocking || versionLoading) return;
     if (mode !== "driver" || !isDriverAuthenticated || !driver) {
       if (adaptiveTrackingStopTimerRef.current) {
         clearTimeout(adaptiveTrackingStopTimerRef.current);
@@ -769,7 +770,7 @@ function RootNav() {
         });
       }
     })();
-  }, [driver?.id, isDriverAuthenticated, mode, loading, versionLoading]);
+  }, [driver?.id, isDriverAuthenticated, mode, splashBlocking, versionLoading]);
 
   // ✅ Background GPS : réconciliation (mission-active only). Jamais de start au boot.
   // Règle B : réconciliation non-démarrante si pas de mission active.
@@ -790,8 +791,9 @@ function RootNav() {
         });
         return;
       }
-      // Quand l'utilisateur ouvre Google Maps (app en background),
-      // forcer une réconciliation immédiate pour garantir le démarrage du task natif.
+      // Réconciliation en arrière-plan : surtout pour arrêter le task si besoin.
+      // Sur Android, le démarrage du foreground service de localisation est reporté
+      // à app_resume (restriction OS) — voir ensureBackgroundTrackingStarted dans locationTracker.
       setTimeout(async () => {
         const inputs = await buildBgTrackingInputs({
           isAuthenticated: !!isDriverAuthenticated,
@@ -891,6 +893,7 @@ function RootNav() {
   useEffect(() => {
     log.debug("root nav loading state", {
       loading,
+      splashBlocking,
       versionLoading,
       isAuthenticated,
       isDriverAuthenticated,
@@ -900,6 +903,7 @@ function RootNav() {
     });
   }, [
     loading,
+    splashBlocking,
     versionLoading,
     isAuthenticated,
     isDriverAuthenticated,
@@ -907,7 +911,7 @@ function RootNav() {
     mode,
   ]);
 
-  if (loading || versionLoading) {
+  if (splashBlocking || versionLoading) {
     return <BrandedLoadingScreen />;
   }
 

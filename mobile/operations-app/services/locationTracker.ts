@@ -3,7 +3,7 @@
 // Plan 2G/3G Phase 4 : enqueue dans locationQueue au lieu d'envoi direct (offline-safe)
 // Background orchestrator : mission-active only, start/stop idempotent
 
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { getLogger } from "@/utils/logger";
@@ -23,6 +23,7 @@ import {
 } from "./missionBarAndroid";
 import { MissionStateManager } from "./missionState";
 import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
+import { resolveMissionContext } from "./locationMissionContext";
 
 // Constante locale pour éviter de charger locationTask en __DEV__ (boucle reload expo/expo#25325)
 const LOCATION_TASK_NAME = "background-location-task";
@@ -163,6 +164,18 @@ export async function ensureBackgroundTrackingStarted(
     log.debug("bg_tracking_start_skip", { reason, inputs_deny: true });
     return;
   }
+  // Android 10+ : un foreground service de localisation ne peut pas être démarré
+  // tant que l'app n'est pas en "active". Sinon Expo rejette avec
+  // "Foreground service cannot be started when the application is in the background"
+  // (cf. logcat LocationTaskConsumer + [Tracker] bg_tracking_start_error).
+  if (Platform.OS === "android" && AppState.currentState !== "active") {
+    log.debug("bg_tracking_start_deferred", {
+      reason,
+      app_state: AppState.currentState,
+      hint: "android_fgs_requires_foreground",
+    });
+    return;
+  }
   bgOperationInProgress = true;
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
@@ -205,6 +218,10 @@ export async function refreshBackgroundTrackingNotification(
 ): Promise<boolean> {
   if (Platform.OS === "web") return false;
   if (__DEV__) return false; // Workaround expo/expo#25325 : pas de task en __DEV__
+  // Ne pas stopper le task en cours si on ne peut pas le redémarrer (même contrainte FGS).
+  if (Platform.OS === "android" && AppState.currentState !== "active") {
+    return false;
+  }
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (!started) return false;
@@ -708,6 +725,7 @@ export class AdaptiveLocationTracker {
     }
 
     try {
+      const { missionId, mode } = resolveMissionContext();
       await enqueueLocation({
         latitude: Number(latitude),
         longitude: Number(longitude),
@@ -716,7 +734,8 @@ export class AdaptiveLocationTracker {
         accuracy: accuracy ? Number(accuracy) : 0,
         timestamp: location.timestamp || Date.now(),
         driver_id,
-        location_mode: getCurrentLocationMode(),
+        location_mode: mode,
+        mission_id: missionId,
         recorded_at: new Date(location.timestamp || Date.now()).toISOString(),
         sent_at: new Date().toISOString(),
         is_background: false,

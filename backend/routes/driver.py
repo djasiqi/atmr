@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import traceback
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -1068,10 +1069,15 @@ class DriverRoute(Resource):
 
         osrm_base = os.getenv("OSRM_BASE_URL", "http://osrm:5000") or "http://osrm:5000"
 
+        t0 = time.perf_counter()
         try:
             from ext import redis_client
             from services.geolocation.osrm import route_info
 
+            logger.info(
+                "[DriverRoute] OSRM route request start origin=(%.5f,%.5f) dest=(%.5f,%.5f)",
+                o_lat, o_lon, d_lat, d_lon,
+            )
             info = route_info(
                 origin=(o_lat, o_lon),
                 destination=(d_lat, d_lon),
@@ -1092,6 +1098,13 @@ class DriverRoute(Resource):
                 coords = geometry.get("coordinates", [])
                 coordinates = [{"lat": c[1], "lon": c[0]} for c in coords]
 
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            logger.info(
+                "[DriverRoute] OSRM route done in %.0fms dist=%dm dur=%ds",
+                elapsed_ms,
+                int(info.get("distance", 0)),
+                int(info.get("duration", 0)),
+            )
             resp = {
                 "polyline_encoded": polyline_encoded,
                 "distance_meters": int(info.get("distance", 0)),
@@ -1103,7 +1116,10 @@ class DriverRoute(Resource):
             return resp, 200
 
         except Exception as e:
-            logger.warning("[DriverRoute] OSRM error: %s", e)
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            logger.warning(
+                "[DriverRoute] OSRM error after %.0fms: %s", elapsed_ms, e
+            )
             return {"error": "Calcul d'itinéraire indisponible"}, 503
 
 

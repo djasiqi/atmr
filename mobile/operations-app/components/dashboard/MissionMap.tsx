@@ -3,6 +3,7 @@ import { View, Alert, Platform } from 'react-native';
 import MapView, { Marker, Polyline, LatLng, PROVIDER_GOOGLE } from 'react-native-maps';
 import MapViewDirections from 'react-native-maps-directions';
 import * as Location from 'expo-location';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from '@expo/vector-icons';
 import { GOOGLE_API_KEY } from '../../src/config/env';
 import { styles, LIRIE_MAP_STYLE, MAP_BRAND } from '@/styles/missionMapStyles';
@@ -12,9 +13,44 @@ import { decodePolyline } from "@/utils/polyline";
 
 const log = getLogger("MissionMap");
 
+/** STR-03 : cache polyline courte durée (retour onglet / cold start carte). */
+const ROUTE_POLY_CACHE_PREFIX = "mission_route_poly_v1_";
+const ROUTE_POLY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+type CachedRoutePayload = { exp: number; coords: LatLng[] };
+
+async function readRoutePolyCache(routeKey: string): Promise<LatLng[] | null> {
+  try {
+    const storageKey =
+      ROUTE_POLY_CACHE_PREFIX + encodeURIComponent(routeKey).slice(0, 220);
+    const raw = await AsyncStorage.getItem(storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedRoutePayload;
+    if (!parsed?.coords?.length || parsed.exp < Date.now()) return null;
+    return parsed.coords;
+  } catch {
+    return null;
+  }
+}
+
+async function writeRoutePolyCache(routeKey: string, coords: LatLng[]): Promise<void> {
+  try {
+    const storageKey =
+      ROUTE_POLY_CACHE_PREFIX + encodeURIComponent(routeKey).slice(0, 220);
+    const payload: CachedRoutePayload = {
+      exp: Date.now() + ROUTE_POLY_CACHE_TTL_MS,
+      coords,
+    };
+    await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
+
 type Props = {
   location: { coords: { latitude: number; longitude: number } };
-  destination: string;
+  /** Vide si carte « position seule » (STW-03). */
+  destination?: string;
   /** Coords backend (pickup_lat/lon, dropoff_lat/lon). Si fournies, aucun géocodage. */
   destinationCoords?: { latitude: number; longitude: number } | null;
   /** false par défaut. true seulement pour compatibilité legacy ou données incomplètes. */
@@ -30,13 +66,14 @@ const mask = (val: string | undefined) =>
 
 const MissionMap: React.FC<Props> = ({
   location,
-  destination,
+  destination = "",
   destinationCoords: destinationCoordsProp,
   allowGeocodeFallback = false,
   contentWidth,
   mapHeight,
 }) => {
   const mapRef = useRef<MapView | null>(null);
+  const mountTimeRef = useRef<number>(Date.now());
   const [destinationCoords, setDestinationCoords] = useState<LatLng | null>(null);
   const [routeCoords, setRouteCoords] = useState<LatLng[] | null>(null);
   const [useGoogleFallback, setUseGoogleFallback] = useState(false);
@@ -44,6 +81,7 @@ const MissionMap: React.FC<Props> = ({
   const lastRouteKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    log.info("MissionMap mounted", { hasDestCoordsProp: destinationCoordsProp != null });
     if (!DIRECTIONS_KEY) {
       log.warn("google api key missing", {});
     } else {
@@ -54,6 +92,8 @@ const MissionMap: React.FC<Props> = ({
   // 1. Si destinationCoords fournies -> utiliser directement, aucun géocodage
   useEffect(() => {
     if (destinationCoordsProp != null) {
+      const elapsed = Date.now() - mountTimeRef.current;
+      log.info("MissionMap destinationCoords ready (from backend)", { elapsedMs: elapsed });
       setDestinationCoords({
         latitude: destinationCoordsProp.latitude,
         longitude: destinationCoordsProp.longitude,
@@ -143,6 +183,8 @@ const MissionMap: React.FC<Props> = ({
     let cancelled = false;
 
     const fetchOsrmRoute = async () => {
+      const routeFetchStart = Date.now();
+      log.info("MissionMap OSRM route fetch start", { routeKey: routeKey?.slice(0, 40) });
       try {
         const res = await getDriverRoute(
           location.coords.latitude,
@@ -166,8 +208,11 @@ const MissionMap: React.FC<Props> = ({
         }
 
         if (coords.length > 0) {
+          const elapsed = Date.now() - routeFetchStart;
+          log.info("[PERF] mission_map_osrm_fetch_done", { elapsedMs: elapsed, points: coords.length });
           lastRouteKeyRef.current = routeKey;
           setRouteCoords(coords);
+          void writeRoutePolyCache(routeKey, coords);
           if (mapRef.current) {
             mapRef.current.fitToCoordinates(coords, {
               edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -179,7 +224,11 @@ const MissionMap: React.FC<Props> = ({
         }
       } catch (e) {
         if (!cancelled) {
-          log.warn("OSRM route failed, fallback to Google", { error: e });
+          const elapsed = Date.now() - routeFetchStart;
+          log.warn("[PERF] mission_map_osrm_failed_fallback_google", {
+            error: e,
+            elapsedMs: elapsed,
+          });
           setUseGoogleFallback(true);
         }
       }
@@ -261,9 +310,10 @@ const MissionMap: React.FC<Props> = ({
             strokeColor={MAP_BRAND.primary}
             optimizeWaypoints
             onReady={(result) => {
-              if (result.coordinates?.length) {
+              if (result.coordinates?.length && routeKey) {
                 lastRouteKeyRef.current = routeKey;
                 setRouteCoords(result.coordinates);
+                void writeRoutePolyCache(routeKey, result.coordinates);
                 if (mapRef.current) {
                   mapRef.current.fitToCoordinates(result.coordinates, {
                     edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },

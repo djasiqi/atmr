@@ -36,6 +36,7 @@ from application.invoices.generate_invoice_reminder import (
     GenerateInvoiceReminderInput,
 )
 from ext import limiter, role_required
+from infrastructure.invoices.invoice_calculator import round_to_5_cents
 from middleware.trace_id import get_trace_id
 from models import (
     Booking,
@@ -2989,7 +2990,8 @@ class InvoicePayments(Resource):
                     ):
                         subtotal = Decimal(str(invoice.subtotal_amount or 0))
                         late_fee = Decimal(str(invoice.late_fee_amount or 0))
-                        invoice.total_amount = subtotal + late_fee
+                        raw_total = (subtotal + late_fee).quantize(Decimal("0.01"))
+                        invoice.total_amount = round_to_5_cents(raw_total)
 
             # ✅ VENTILATION AUTOMATIQUE : Détecter si c'est un paiement pour un rappel consolidé
             from models import InvoiceReminder
@@ -3049,7 +3051,8 @@ class InvoicePayments(Resource):
             # ✅ Mettre à jour le montant payé de la facture (SEULEMENT le principal)
             # Les frais de rappel sont gérés séparément via le rappel
             invoice.amount_paid = current_paid + principal_payment_amount
-            invoice.balance_due = total_amount - invoice.amount_paid
+            effective_invoice_total = Decimal(str(invoice.total_amount or 0))
+            invoice.balance_due = effective_invoice_total - invoice.amount_paid
 
             # Mettre à jour le statut
             if invoice.balance_due <= BALANCE_DUE_ZERO:
