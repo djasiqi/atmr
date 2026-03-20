@@ -12,10 +12,52 @@ import {
   computeGlobalPercentDiscountOnSubtotal,
   directLineHasSuspectAmount,
   directSelectionMaySuggestLineLevelDiscount,
+  formatChfSwiss,
   getDisplayedLineAmount,
   parseGlobalDiscountPercentField,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
+
+/** Pied de page facturation directe : remise lisible, alignement type facture CH. */
+function DirectInvoiceTotalsBreakdown({ breakdown, totalsTotal, vatApplicable }) {
+  const pct = breakdown.globalDiscountPercent;
+  const note = (breakdown.globalDiscountNote || '').trim();
+  return (
+    <div className={styles.directFooterBreakdown}>
+      <div className={styles.directFooterBreakdownRow}>
+        <span className={styles.directFooterLabel}>Sous-total HT</span>
+        <span className={styles.directFooterAmount}>{formatChfSwiss(breakdown.subtotalBefore)}</span>
+      </div>
+      <div
+        className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownDiscount}`}
+      >
+        <span className={styles.directFooterLabel}>
+          {pct != null ? `Remise (${pct} %)` : 'Remise'}
+        </span>
+        <span className={styles.directFooterAmount}>
+          {breakdown.discountHt > 0 ? formatChfSwiss(breakdown.discountHt, { discount: true }) : '—'}
+        </span>
+      </div>
+      {note ? <p className={styles.directFooterDiscountNote}>{note}</p> : null}
+      <div
+        className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownSubtotalHt}`}
+      >
+        <span className={styles.directFooterLabel}>Total HT après remise</span>
+        <span className={styles.directFooterAmount}>{formatChfSwiss(breakdown.totalHtAfter)}</span>
+      </div>
+      {vatApplicable ? (
+        <div className={styles.directFooterBreakdownRow}>
+          <span className={styles.directFooterLabel}>TVA</span>
+          <span className={styles.directFooterAmount}>{formatChfSwiss(breakdown.vat)}</span>
+        </div>
+      ) : null}
+      <div className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownTotal}`}>
+        <span className={styles.directFooterLabel}>Total TTC</span>
+        <span className={styles.directFooterAmount}>{formatChfSwiss(totalsTotal)}</span>
+      </div>
+    </div>
+  );
+}
 
 const formatApiError = (err) => {
   const data = err?.response?.data ?? err?.data ?? err;
@@ -2462,14 +2504,19 @@ const NewInvoiceModal = ({
                         <div className={styles.directDiscountBarHeader}>
                           <strong>Remise globale</strong>
                           <span className={styles.directDiscountHint}>
-                            Appliquée en fin de facture sur le <strong>sous-total HT</strong> des lignes sélectionnées —
-                            sans modifier les montants des transports ligne par ligne.
+                            En fin de facture sur le sous-total HT sélectionné — sans changer les montants ligne par ligne.
                           </span>
                         </div>
                         {hasActiveGlobalDiscount && (
                           <p className={styles.directDiscountActiveBanner} role="status">
-                            Remise active : <strong>{parsedGlobalDiscountPct} %</strong>
-                            {trimmedGlobalDiscountNote ? ` — ${trimmedGlobalDiscountNote}` : ''}
+                            <span className={styles.directDiscountActiveLine}>
+                              Remise active : <strong>({parsedGlobalDiscountPct} %)</strong>
+                            </span>
+                            {trimmedGlobalDiscountNote ? (
+                              <span className={styles.directDiscountActiveNote}>
+                                {trimmedGlobalDiscountNote}
+                              </span>
+                            ) : null}
                           </p>
                         )}
                         <div className={styles.directDiscountRow}>
@@ -3826,46 +3873,11 @@ const NewInvoiceModal = ({
                             <div className={styles.directFooterTitle}>
                               Sélection partielle {directSelection.length}/{directSummary.count}
                             </div>
-                            <dl className={styles.directFooterBreakdown}>
-                              <div className={styles.directFooterBreakdownRow}>
-                                <dt>Sous-total HT (avant remise)</dt>
-                                <dd>{formatCurrency(directFinancialBreakdown.subtotalBefore)}</dd>
-                              </div>
-                              <div className={styles.directFooterBreakdownRow}>
-                                <dt>
-                                  {directFinancialBreakdown.globalDiscountPercent != null
-                                    ? `Remise commerciale ${directFinancialBreakdown.globalDiscountPercent} %`
-                                    : 'Remise commerciale'}
-                                </dt>
-                                <dd>
-                                  {directFinancialBreakdown.discountHt > 0
-                                    ? `− ${Number(directFinancialBreakdown.discountHt).toFixed(2)} CHF`
-                                    : '—'}
-                                </dd>
-                              </div>
-                              {directFinancialBreakdown.globalDiscountNote ? (
-                                <div
-                                  className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownNote}`}
-                                >
-                                  <dt>Note</dt>
-                                  <dd>{directFinancialBreakdown.globalDiscountNote}</dd>
-                                </div>
-                              ) : null}
-                              <div className={styles.directFooterBreakdownRow}>
-                                <dt>Total HT (après remise)</dt>
-                                <dd>{formatCurrency(directFinancialBreakdown.totalHtAfter)}</dd>
-                              </div>
-                              {vatConfig.applicable && (
-                                <div className={styles.directFooterBreakdownRow}>
-                                  <dt>TVA</dt>
-                                  <dd>{formatCurrency(directFinancialBreakdown.vat)}</dd>
-                                </div>
-                              )}
-                              <div className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownTotal}`}>
-                                <dt>Total TTC</dt>
-                                <dd>{formatCurrency(_directTotals.total)}</dd>
-                              </div>
-                            </dl>
+                            <DirectInvoiceTotalsBreakdown
+                              breakdown={directFinancialBreakdown}
+                              totalsTotal={_directTotals.total}
+                              vatApplicable={vatConfig.applicable}
+                            />
                           </div>
                         ) : (
                           <span className={styles.stickyFooterTotal}>
@@ -3882,46 +3894,11 @@ const NewInvoiceModal = ({
                           <div className={styles.directFooterTitle}>
                             1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''}
                           </div>
-                          <dl className={styles.directFooterBreakdown}>
-                            <div className={styles.directFooterBreakdownRow}>
-                              <dt>Sous-total HT (avant remise)</dt>
-                              <dd>{formatCurrency(directFinancialBreakdown.subtotalBefore)}</dd>
-                            </div>
-                            <div className={styles.directFooterBreakdownRow}>
-                              <dt>
-                                {directFinancialBreakdown.globalDiscountPercent != null
-                                  ? `Remise commerciale ${directFinancialBreakdown.globalDiscountPercent} %`
-                                  : 'Remise commerciale'}
-                              </dt>
-                              <dd>
-                                {directFinancialBreakdown.discountHt > 0
-                                  ? `− ${Number(directFinancialBreakdown.discountHt).toFixed(2)} CHF`
-                                  : '—'}
-                              </dd>
-                            </div>
-                            {directFinancialBreakdown.globalDiscountNote ? (
-                              <div
-                                className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownNote}`}
-                              >
-                                <dt>Note</dt>
-                                <dd>{directFinancialBreakdown.globalDiscountNote}</dd>
-                              </div>
-                            ) : null}
-                            <div className={styles.directFooterBreakdownRow}>
-                              <dt>Total HT (après remise)</dt>
-                              <dd>{formatCurrency(directFinancialBreakdown.totalHtAfter)}</dd>
-                            </div>
-                            {vatConfig.applicable && (
-                              <div className={styles.directFooterBreakdownRow}>
-                                <dt>TVA</dt>
-                                <dd>{formatCurrency(directFinancialBreakdown.vat)}</dd>
-                              </div>
-                            )}
-                            <div className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownTotal}`}>
-                              <dt>Total TTC</dt>
-                              <dd>{formatCurrency(_directTotals?.total ?? directFinancialBreakdown.totalTtc)}</dd>
-                            </div>
-                          </dl>
+                          <DirectInvoiceTotalsBreakdown
+                            breakdown={directFinancialBreakdown}
+                            totalsTotal={_directTotals?.total ?? directFinancialBreakdown.totalTtc}
+                            vatApplicable={vatConfig.applicable}
+                          />
                         </div>
                       )
                     ) : directSummary && directSummary.count === 0 ? (

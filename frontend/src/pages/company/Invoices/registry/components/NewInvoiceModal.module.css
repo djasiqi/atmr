@@ -868,6 +868,21 @@
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
   border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.directDiscountActiveLine {
+  display: block;
+}
+
+.directDiscountActiveNote {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: #047857;
+  line-height: 1.4;
 }
 
 .directDiscountRow {
@@ -1031,12 +1046,58 @@
 }
 
 .directFooterBreakdownRow {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 12px;
+  gap: 12px 20px;
+  width: 100%;
 }
 
+.directFooterLabel {
+  margin: 0;
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  font-size: 12px;
+  text-align: left;
+}
+
+.directFooterAmount {
+  margin: 0;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.directFooterBreakdownDiscount .directFooterLabel,
+.directFooterBreakdownDiscount .directFooterAmount {
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.directFooterBreakdownSubtotalHt .directFooterLabel {
+  font-weight: 600;
+  color: #374151;
+}
+
+.directFooterBreakdownSubtotalHt .directFooterAmount {
+  font-weight: 700;
+}
+
+.directFooterDiscountNote {
+  margin: 2px 0 4px;
+  padding: 0 0 0 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 400;
+  color: #6b7280;
+  width: 100%;
+  max-width: 420px;
+}
+
+/* Anciennes lignes dl/dt/dd (rétrocompat si ailleurs) */
 .directFooterBreakdownRow dt {
   margin: 0;
   font-weight: 500;
@@ -1066,11 +1127,12 @@
   max-width: 65%;
 }
 
-.directFooterBreakdownTotal dt,
-.directFooterBreakdownTotal dd {
+.directFooterBreakdownTotal .directFooterLabel,
+.directFooterBreakdownTotal .directFooterAmount {
   font-size: 14px;
+  font-weight: 700;
   color: #111827;
-  padding-top: 4px;
+  padding-top: 6px;
   border-top: 1px solid #e5e7eb;
 }
 

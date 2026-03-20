@@ -276,3 +276,26 @@ export function directSelectionMaySuggestLineLevelDiscount(reservations, overrid
   }
   return false;
 }
+
+/**
+ * Montant affiché type facture CH (apostrophe milliers, espace insécable après CHF).
+ * @param {unknown} value
+ * @param {{ discount?: boolean }} [opts] - si true : montant positif affiché comme remise (− CHF …)
+ * @returns {string}
+ */
+export function formatChfSwiss(value, opts = {}) {
+  const discount = Boolean(opts.discount);
+  let n = Number(value);
+  if (!Number.isFinite(n)) n = 0;
+  const abs = Math.abs(n);
+  const [intRaw, dec = '00'] = abs.toFixed(2).split('.');
+  const grouped = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+  const body = `CHF\u00a0${grouped}.${dec}`;
+  if (discount && abs > 0) {
+    return `\u2212\u00a0${body}`;
+  }
+  if (n < 0) {
+    return `\u2212\u00a0${body}`;
+  }
+  return body;
+}

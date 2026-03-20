@@ -1871,20 +1871,50 @@ def _invoice_is_s2_clinic_monthly(invoice: Invoice) -> bool:
         return False
 
 
-_GLOBAL_DISCOUNT_PDF_SCOPE_HINT = " — appliquée sur le sous-total HT des prestations"
+def _swiss_group_int_str(whole: int) -> str:
+    """Groupe milliers avec apostrophe (usage facture CH)."""
+    s = str(abs(int(whole)))
+    if s == "0":
+        return "0"
+    parts: list[str] = []
+    while len(s) > 3:
+        parts.insert(0, s[-3:])
+        s = s[:-3]
+    if s:
+        parts.insert(0, s)
+    return "'".join(parts)
 
 
-def _format_global_discount_pdf_label(pct_gd: float, note_gd: str, *, max_note: int) -> str:
-    """Libellé remise globale (PDF).
+def _format_chf_pdf(amount: float) -> str:
+    """Montant CHF pour PDF : espace insécable après CHF, apostrophe milliers."""
+    a = float(amount)
+    neg = a < 0
+    a = abs(a)
+    whole = int(a + 1e-9)
+    cents = int(round((a - whole) * 100 + 1e-9))
+    if cents >= 100:
+        whole += cents // 100
+        cents = cents % 100
+    ip = _swiss_group_int_str(whole)
+    core = f"CHF\xa0{ip}.{cents:02d}"
+    return f"\u2212\xa0{core}" if neg else core
 
-    Sans note utilisateur : uniquement le pourcentage (aucun texte additionnel).
-    Avec note : portée explicite + note tronquée.
-    """
-    note_gd = str(note_gd or "").strip()
-    base = f"Remise commerciale {pct_gd:g} %"
-    if not note_gd:
-        return base
-    return f"{base}{_GLOBAL_DISCOUNT_PDF_SCOPE_HINT} — {note_gd[:max_note]}"
+
+def _format_chf_discount_pdf(disc_ht: float) -> str:
+    """Ligne remise : montant positif, préfixe moins (aligné facture pro)."""
+    a = abs(float(disc_ht))
+    whole = int(a + 1e-9)
+    cents = int(round((a - whole) * 100 + 1e-9))
+    if cents >= 100:
+        whole += cents // 100
+        cents = cents % 100
+    ip = _swiss_group_int_str(whole)
+    return f"\u2212\xa0CHF\xa0{ip}.{cents:02d}"
+
+
+def _format_global_discount_pdf_label(pct_gd: float) -> str:
+    """Libellé court remise globale (PDF). La note utilisateur est sur une ligne séparée."""
+    return f"Remise ({pct_gd:g} %)"
 
 
 def _build_totals_table(
@@ -1905,6 +1935,7 @@ def _build_totals_table(
     En mode rappel : mini-table structurée
     « Montant facture initiale » + « Frais de rappel N°X » + « TOTAL À FACTURER ».
     """
+    from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.platypus import Table, TableStyle
 
@@ -1932,6 +1963,8 @@ def _build_totals_table(
         and not _invoice_is_s2_clinic_monthly(invoice)
     ):
         gd_meta = cast(dict[str, Any], invoice.meta["global_discount"])
+
+    totals_extra_style_rules: list[tuple[Any, ...]] = []
 
     is_reminder = reminder_level is not None and reminder_fee is not None
     if is_reminder and reminder_total_due is not None:
@@ -2002,46 +2035,55 @@ def _build_totals_table(
                 disc_ht = float(gd_meta.get("amount_ht", 0))
                 pct_gd = float(gd_meta.get("percent", 0))
                 note_gd = str(gd_meta.get("note") or "").strip()
-                disc_label = _format_global_discount_pdf_label(pct_gd, note_gd, max_note=70)
+                disc_label = _format_global_discount_pdf_label(pct_gd)
+                total_data = [
+                    ["", "", "", "Sous-total HT", _format_chf_pdf(gross_ht)],
+                    ["", "", "", disc_label, _format_chf_discount_pdf(disc_ht)],
+                ]
+                if note_gd:
+                    total_data.append(["", "", "", note_gd[:280], ""])
+                    totals_extra_style_rules.extend(
+                        [
+                            ("SPAN", (3, 2), (4, 2)),
+                            ("ALIGN", (3, 2), (4, 2), "LEFT"),
+                            ("FONTSIZE", (3, 2), (4, 2), 8),
+                            ("TEXTCOLOR", (3, 2), (4, 2), colors.HexColor("#4b5563")),
+                            ("FONTNAME", (3, 2), (4, 2), font_name),
+                        ]
+                    )
                 if vat_is_applicable:
-                    total_data = [
+                    total_data.extend(
                         [
-                            "",
-                            "",
-                            "",
-                            "Sous-total HT (avant remise) :",
-                            f"{gross_ht:.2f}",
-                        ],
-                        ["", "", "", disc_label, f"-{disc_ht:.2f}"],
-                        [
-                            "",
-                            "",
-                            "",
-                            "Total HT après remise :",
-                            f"{subtotal:.2f}",
-                        ],
-                        ["", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
-                        ["", "", "", total_label, total_amt],
-                    ]
+                            [
+                                "",
+                                "",
+                                "",
+                                "Total HT après remise",
+                                _format_chf_pdf(subtotal),
+                            ],
+                            [
+                                "",
+                                "",
+                                "",
+                                f"{vat_label_display} :",
+                                _format_chf_pdf(vat_total),
+                            ],
+                            ["", "", "", total_label, _format_chf_pdf(total)],
+                        ]
+                    )
                 else:
-                    total_data = [
+                    total_data.extend(
                         [
-                            "",
-                            "",
-                            "",
-                            "Sous-total HT (avant remise) :",
-                            f"{gross_ht:.2f}",
-                        ],
-                        ["", "", "", disc_label, f"-{disc_ht:.2f}"],
-                        [
-                            "",
-                            "",
-                            "",
-                            "Total HT après remise :",
-                            f"{subtotal:.2f}",
-                        ],
-                        ["", "", "", total_label, total_amt],
-                    ]
+                            [
+                                "",
+                                "",
+                                "",
+                                "Total HT après remise",
+                                _format_chf_pdf(subtotal),
+                            ],
+                            ["", "", "", total_label, _format_chf_pdf(total)],
+                        ]
+                    )
             elif vat_is_applicable:
                 total_data = [
                     ["", "", "", "Sous-total :", f"{subtotal:.2f}"],
@@ -2067,22 +2109,37 @@ def _build_totals_table(
             disc_ht = float(gd_meta.get("amount_ht", 0))
             pct_gd = float(gd_meta.get("percent", 0))
             note_gd = str(gd_meta.get("note") or "").strip()
-            disc_label = _format_global_discount_pdf_label(pct_gd, note_gd, max_note=70)
+            disc_label = _format_global_discount_pdf_label(pct_gd)
+            total_data = [
+                ["", "", "Sous-total HT", _format_chf_pdf(gross_ht)],
+                ["", "", disc_label, _format_chf_discount_pdf(disc_ht)],
+            ]
+            if note_gd:
+                total_data.append(["", "", note_gd[:280], ""])
+                totals_extra_style_rules.extend(
+                    [
+                        ("SPAN", (2, 2), (3, 2)),
+                        ("ALIGN", (2, 2), (3, 2), "LEFT"),
+                        ("FONTSIZE", (2, 2), (3, 2), 8),
+                        ("TEXTCOLOR", (2, 2), (3, 2), colors.HexColor("#4b5563")),
+                        ("FONTNAME", (2, 2), (3, 2), font_name),
+                    ]
+                )
             if vat_is_applicable:
-                total_data = [
-                    ["", "", "Sous-total HT (avant remise) :", f"{gross_ht:.2f}"],
-                    ["", "", disc_label, f"-{disc_ht:.2f}"],
-                    ["", "", "Total HT après remise :", f"{subtotal:.2f}"],
-                    ["", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
-                    ["", "", total_label, total_amt],
-                ]
+                total_data.extend(
+                    [
+                        ["", "", "Total HT après remise", _format_chf_pdf(subtotal)],
+                        ["", "", f"{vat_label_display} :", _format_chf_pdf(vat_total)],
+                        ["", "", total_label, _format_chf_pdf(total)],
+                    ]
+                )
             else:
-                total_data = [
-                    ["", "", "Sous-total HT (avant remise) :", f"{gross_ht:.2f}"],
-                    ["", "", disc_label, f"-{disc_ht:.2f}"],
-                    ["", "", "Total HT après remise :", f"{subtotal:.2f}"],
-                    ["", "", total_label, total_amt],
-                ]
+                total_data.extend(
+                    [
+                        ["", "", "Total HT après remise", _format_chf_pdf(subtotal)],
+                        ["", "", total_label, _format_chf_pdf(total)],
+                    ]
+                )
         elif vat_is_applicable:
             total_data = [
                 ["", "", "Sous-total :", f"{subtotal:.2f}"],
@@ -2112,8 +2169,9 @@ def _build_totals_table(
             amount_col_idx = 4
             style_rules = [
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
-                ("RIGHTPADDING", (3, 0), (3, -1), 14),
+                ("ALIGN", (3, 0), (3, -1), "LEFT"),
+                ("ALIGN", (4, 0), (4, -1), "RIGHT"),
+                ("RIGHTPADDING", (3, 0), (3, -1), 10),
                 ("LEFTPADDING", (4, 0), (4, -1), 16),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
             ]
@@ -2132,13 +2190,15 @@ def _build_totals_table(
         amount_col_idx = 3
         style_rules = [
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN", (2, 0), (3, -1), "RIGHT"),
-            ("RIGHTPADDING", (2, 0), (2, -1), 14),
+            ("ALIGN", (2, 0), (2, -1), "LEFT"),
+            ("ALIGN", (3, 0), (3, -1), "RIGHT"),
+            ("RIGHTPADDING", (2, 0), (2, -1), 10),
             ("LEFTPADDING", (3, 0), (3, -1), 16),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
         ]
+    style_rules.extend(totals_extra_style_rules)
     # Aligner strictement à droite la dernière ligne (TOTAL À FACTURER)
     # pour caler le dernier chiffre sur l'axe X de la colonne montant.
     if is_s2:
@@ -3767,6 +3827,7 @@ class PDFService:
         # === TOTAL SIMPLIFIÉ ===
         # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
         gd_min: dict[str, Any] | None = None
+        gd_min_style_extra: list[tuple[Any, ...]] = []
         if (
             is_reminder
             and reminder_ctx.get("reminder_fee") is not None
@@ -3796,37 +3857,53 @@ class PDFService:
                 disc_ht = float(gd_min.get("amount_ht", 0))
                 pct_gd = float(gd_min.get("percent", 0))
                 note_gd = str(gd_min.get("note") or "").strip()
-                disc_label = _format_global_discount_pdf_label(pct_gd, note_gd, max_note=60)
+                disc_label = _format_global_discount_pdf_label(pct_gd)
                 net_ht = float(invoice.subtotal_amount)
                 vat_min = float(invoice.vat_total_amount)
                 vat_appl_min = False
                 if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
                     vat_appl_min = bool(invoice.meta["vat"].get("applicable"))
+                total_data = [
+                    ["Sous-total HT", _format_chf_pdf(gross_ht)],
+                    [disc_label, _format_chf_discount_pdf(disc_ht)],
+                ]
+                if note_gd:
+                    total_data.append([note_gd[:280], ""])
+                    gd_min_style_extra.extend(
+                        [
+                            ("SPAN", (0, 2), (1, 2)),
+                            ("ALIGN", (0, 2), (1, 2), "LEFT"),
+                            ("FONTSIZE", (0, 2), (1, 2), 8),
+                            ("TEXTCOLOR", (0, 2), (1, 2), colors.HexColor("#4b5563")),
+                            ("FONTNAME", (0, 2), (1, 2), font_name),
+                        ]
+                    )
                 if vat_appl_min and vat_min > 0:
-                    total_data = [
-                        ["Sous-total HT (avant remise) :", f"{gross_ht:.2f} CHF"],
-                        [disc_label, f"-{disc_ht:.2f} CHF"],
-                        ["Total HT après remise :", f"{net_ht:.2f} CHF"],
-                        ["TVA :", f"{vat_min:.2f} CHF"],
-                        ["TOTAL :", f"{total_amount:.2f} CHF"],
-                    ]
+                    total_data.extend(
+                        [
+                            ["Total HT après remise", _format_chf_pdf(net_ht)],
+                            ["TVA :", _format_chf_pdf(vat_min)],
+                            ["TOTAL :", _format_chf_pdf(total_amount)],
+                        ]
+                    )
                 else:
-                    total_data = [
-                        ["Sous-total HT (avant remise) :", f"{gross_ht:.2f} CHF"],
-                        [disc_label, f"-{disc_ht:.2f} CHF"],
-                        ["Total HT après remise :", f"{net_ht:.2f} CHF"],
-                        ["TOTAL :", f"{total_amount:.2f} CHF"],
-                    ]
+                    total_data.extend(
+                        [
+                            ["Total HT après remise", _format_chf_pdf(net_ht)],
+                            ["TOTAL :", _format_chf_pdf(total_amount)],
+                        ]
+                    )
             else:
                 total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
         total_table = Table(total_data, colWidths=[5 * cm, 3.2 * cm])
         style_rules = [
-            ("ALIGN", (0, 0), (0, -1), "RIGHT"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-            ("RIGHTPADDING", (0, 0), (0, -1), 14),
-            ("LEFTPADDING", (1, 0), (1, -1), 16),
+            ("RIGHTPADDING", (0, 0), (0, -1), 8),
+            ("LEFTPADDING", (1, 0), (1, -1), 12),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
         ]
+        style_rules.extend(gd_min_style_extra)
         if is_reminder or gd_min is not None:
             style_rules.extend(
                 [
