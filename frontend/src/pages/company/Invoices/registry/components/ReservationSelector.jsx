@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { invoiceService } from '../../../../../services/invoiceService';
 import { BILLING_SOURCE } from '../../../../../utils/billingRecipient';
-import { getDirectLinePriceBadges, getDisplayedLineAmount } from '../../../../../utils/directInvoicePricing';
+import {
+  getDirectLinePriceBadges,
+  getDisplayedLineAmount,
+  roundTo005,
+} from '../../../../../utils/directInvoicePricing';
 import styles from './ReservationSelector.module.css';
 
 const ReservationSelector = ({
@@ -353,7 +357,7 @@ const ReservationSelector = ({
     if (Number.isNaN(numeric) || numeric < 0) {
       return { normalized: null, formatted: null, isValid: false };
     }
-    const rounded = Math.round(numeric * 100) / 100;
+    const rounded = roundTo005(numeric);
     return { normalized: rounded, formatted: rounded.toFixed(2), isValid: true };
   }, []);
 
@@ -367,16 +371,32 @@ const ReservationSelector = ({
   }, []);
 
   // ✅ Synchroniser avec le parent lors du blur (quand l'utilisateur quitte le champ)
-  const handleAmountBlur = useCallback((reservationId, value, originalAmount) => {
+  const amountInputDisplayValue = useCallback((reservationId) => {
+    if (localInputValues[reservationId] !== undefined) {
+      return localInputValues[reservationId];
+    }
+    const o = overrides?.[String(reservationId)] ?? overrides?.[reservationId];
+    if (
+      o?.amount !== undefined &&
+      o?.amount !== null &&
+      o?.amount !== '' &&
+      Number.isFinite(Number(o.amount))
+    ) {
+      return String(o.amount);
+    }
+    return '';
+  }, [localInputValues, overrides]);
+
+  const handleAmountBlur = useCallback((reservationId, value) => {
     if (!onOverrideChange) return;
     
     // Normaliser la valeur
     const result = normalizeAmount(value);
     
     if (!result.isValid) {
-      // Valeur non vide mais invalide : toast + réinitialiser à la valeur d'origine
-      toast.error('Montant invalide. Réinitialisation à la valeur d\'origine.');
-      onOverrideChange(reservationId, { amount: originalAmount !== undefined ? originalAmount : null });
+      // Valeur non vide mais invalide : toast + retirer l’override montant (retour tarif affiché)
+      toast.error('Montant invalide. Le tarif catalogue / affiché est rétabli.');
+      onOverrideChange(reservationId, { amount: null });
       // Nettoyer l'état local
       setLocalInputValues((prev) => {
         const next = { ...prev };
@@ -384,8 +404,8 @@ const ReservationSelector = ({
         return next;
       });
     } else if (result.normalized === null) {
-      // Valeur vide : reset à valeur d'origine SANS toast
-      onOverrideChange(reservationId, { amount: originalAmount !== undefined ? originalAmount : null });
+      // Valeur vide : pas d’override montant (même comportement que « Réinitialiser » sur le montant)
+      onOverrideChange(reservationId, { amount: null });
       // Nettoyer l'état local
       setLocalInputValues((prev) => {
         const next = { ...prev };
@@ -806,23 +826,17 @@ const ReservationSelector = ({
                                       delete amountInputRefs.current[reservation.id];
                                     }
                                   }}
-                                  type="number"
-                                  step="0.05"
-                                  min="0"
+                                  type="text"
+                                  inputMode="decimal"
+                                  autoComplete="off"
                                   className={styles.input}
-                                  value={
-                                    localInputValues[reservation.id] !== undefined
-                                      ? localInputValues[reservation.id]
-                                      : (overrides?.[String(reservation.id)] || overrides?.[reservation.id])?.amount !== undefined
-                                        ? (overrides[String(reservation.id)] || overrides[reservation.id]).amount
-                                        : ''
-                                  }
+                                  value={amountInputDisplayValue(reservation.id)}
                                   placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
                                   onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
                                   onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
                                   onBlur={(e) => {
                                     focusedAmountInputIdRef.current = null;
-                                    handleAmountBlur(reservation.id, e.target.value, reservation.amount);
+                                    handleAmountBlur(reservation.id, e.target.value);
                                   }}
                                   onKeyDown={handleAmountKeyDown}
                                   onClick={(e) => e.stopPropagation()}
@@ -991,23 +1005,17 @@ const ReservationSelector = ({
                                 delete amountInputRefs.current[reservation.id];
                               }
                             }}
-                            type="number"
-                            step="0.05"
-                            min="0"
+                            type="text"
+                            inputMode="decimal"
+                            autoComplete="off"
                             className={styles.adjustInput}
-                            value={
-                              localInputValues[reservation.id] !== undefined
-                                ? localInputValues[reservation.id]
-                                : (overrides?.[String(reservation.id)] || overrides?.[reservation.id])?.amount !== undefined
-                                  ? (overrides[String(reservation.id)] || overrides[reservation.id]).amount
-                                  : ''
-                            }
+                            value={amountInputDisplayValue(reservation.id)}
                             placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
                             onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
                             onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
                             onBlur={(e) => {
                               focusedAmountInputIdRef.current = null;
-                              handleAmountBlur(reservation.id, e.target.value, reservation.amount);
+                              handleAmountBlur(reservation.id, e.target.value);
                             }}
                             onKeyDown={handleAmountKeyDown}
                             onClick={(e) => e.stopPropagation()}

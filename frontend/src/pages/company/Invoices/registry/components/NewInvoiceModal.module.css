@@ -911,13 +911,25 @@
   border-radius: 6px;
 }
 
-.directDiscountRow .directDiscountApply,
-.directDiscountRow .directDiscountClear {
-  flex-shrink: 0;
+.directDiscountAutoHint {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #4b5563;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.directDiscountAutoHint strong {
+  color: #111827;
 }
 
 .directDiscountRow .directDiscountClear {
-  margin-left: 0;
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: flex-end;
 }
 
 .directDiscountBaseRow {
@@ -1045,10 +1057,10 @@
     max-width: none;
   }
 
-  .directDiscountRow .directDiscountApply,
   .directDiscountRow .directDiscountClear {
     margin-left: 0;
     width: 100%;
+    align-self: stretch;
   }
 }
 

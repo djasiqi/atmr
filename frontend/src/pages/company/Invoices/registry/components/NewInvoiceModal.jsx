@@ -13,6 +13,7 @@ import {
   directLineHasSuspectAmount,
   directSelectionMaySuggestLineLevelDiscount,
   getDisplayedLineAmount,
+  parseGlobalDiscountPercentField,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
 
@@ -170,9 +171,21 @@ const NewInvoiceModal = ({
   /** Remise globale (% sur tarif catalogue) — facturation directe */
   const [directGlobalDiscountPercent, setDirectGlobalDiscountPercent] = useState('');
   const [directGlobalDiscountNote, setDirectGlobalDiscountNote] = useState('');
-  /** Remise globale (% + libellé) — appliquée en synthèse uniquement, pas sur chaque ligne */
-  const [appliedDirectGlobalDiscount, setAppliedDirectGlobalDiscount] = useState(null);
+  /** Avertissement double remise : une fois par « session » de remise globale active */
+  const globalDiscountDoubleWarnedRef = useRef(false);
   const [preselectedReservations, setPreselectedReservations] = useState({});
+
+  const parsedGlobalDiscountPct = useMemo(
+    () => parseGlobalDiscountPercentField(directGlobalDiscountPercent),
+    [directGlobalDiscountPercent]
+  );
+  /** Note libre uniquement si saisie — rien n’est envoyé au PDF / API si vide (pas de libellé auto). */
+  const trimmedGlobalDiscountNote = useMemo(
+    () => directGlobalDiscountNote.trim(),
+    [directGlobalDiscountNote]
+  );
+  const hasActiveGlobalDiscount = parsedGlobalDiscountPct != null;
+
   useEffect(() => {
     if (!open) return;
 
@@ -226,7 +239,7 @@ const NewInvoiceModal = ({
       setSelectedReservations({});
       setDirectGlobalDiscountPercent('');
       setDirectGlobalDiscountNote('');
-      setAppliedDirectGlobalDiscount(null);
+      globalDiscountDoubleWarnedRef.current = false;
       setClientSearch('');
       const el0 = clientSearchInputRef.current;
       if (el0) el0.value = '';
@@ -246,7 +259,7 @@ const NewInvoiceModal = ({
     setOverrides({});
     setDirectGlobalDiscountPercent('');
     setDirectGlobalDiscountNote('');
-    setAppliedDirectGlobalDiscount(null);
+    globalDiscountDoubleWarnedRef.current = false;
     setSelectedReservations({});
     setPreselectedReservations({});
     setShowDirectTransports(false);
@@ -261,7 +274,7 @@ const NewInvoiceModal = ({
   useEffect(() => {
     setDirectGlobalDiscountPercent('');
     setDirectGlobalDiscountNote('');
-    setAppliedDirectGlobalDiscount(null);
+    globalDiscountDoubleWarnedRef.current = false;
   }, [formData.client_id]);
 
   useEffect(() => {
@@ -1366,15 +1379,12 @@ const NewInvoiceModal = ({
         }, 0)
       );
 
-      const hasGlobalDisc =
-        appliedDirectGlobalDiscount != null &&
-        Number.isFinite(Number(appliedDirectGlobalDiscount.percent)) &&
-        Number(appliedDirectGlobalDiscount.percent) > 0;
+      const hasGlobalDisc = parsedGlobalDiscountPct != null;
 
       if (hasGlobalDisc) {
         const netHt = computeGlobalPercentDiscountOnSubtotal(
           grossHt,
-          Number(appliedDirectGlobalDiscount.percent)
+          parsedGlobalDiscountPct
         ).netHtAfter;
         const defRate = vatConfig.applicable ? Number(vatConfig.defaultRate ?? 0) : 0;
         const sanitizedRate = Number.isNaN(defRate) ? 0 : defRate;
@@ -1410,7 +1420,7 @@ const NewInvoiceModal = ({
       );
       return { ...reduced, grossHt };
     },
-    [overrides, vatConfig, isMinimalReservation, appliedDirectGlobalDiscount]
+    [overrides, vatConfig, isMinimalReservation, parsedGlobalDiscountPct]
   );
 
   const activeClientId = formData.client_id ? parseInt(formData.client_id, 10) : null;
@@ -1438,6 +1448,23 @@ const NewInvoiceModal = ({
     if (!activeClientId) return [];
     return selectedReservations[activeClientId] || [];
   }, [activeClientId, selectedReservations]);
+
+  useEffect(() => {
+    if (parsedGlobalDiscountPct == null) {
+      globalDiscountDoubleWarnedRef.current = false;
+      return;
+    }
+    if (
+      !globalDiscountDoubleWarnedRef.current &&
+      directSelectionMaySuggestLineLevelDiscount(directSelection, overrides)
+    ) {
+      toast.warning(
+        'Certaines lignes portent une note ou une trace d’ancienne remise au niveau ligne. ' +
+          'Vérifiez qu’il n’y a pas de double remise avec la remise globale sur le sous-total.'
+      );
+      globalDiscountDoubleWarnedRef.current = true;
+    }
+  }, [parsedGlobalDiscountPct, directSelection, overrides]);
 
   /** Détail HT avant / après remise globale (synthèse) pour le footer facturation directe */
   const directFinancialBreakdown = useMemo(() => {
@@ -1477,13 +1504,11 @@ const NewInvoiceModal = ({
         subtotalBefore = roundTo005(directSummary.totalAmount);
       }
     }
-    const hasDisc =
-      appliedDirectGlobalDiscount != null &&
-      Number(appliedDirectGlobalDiscount.percent) > 0;
+    const hasDisc = parsedGlobalDiscountPct != null;
     const { discountAmountHt, netHtAfter } = hasDisc
       ? computeGlobalPercentDiscountOnSubtotal(
           subtotalBefore,
-          appliedDirectGlobalDiscount.percent
+          parsedGlobalDiscountPct
         )
       : { discountAmountHt: 0, netHtAfter: subtotalBefore };
     const defRate = vatConfig.applicable ? Number(vatConfig.defaultRate ?? 0) : 0;
@@ -1498,8 +1523,8 @@ const NewInvoiceModal = ({
       totalHtAfter: netHtAfter,
       vat,
       totalTtc,
-      globalDiscountPercent: hasDisc ? Number(appliedDirectGlobalDiscount.percent) : null,
-      globalDiscountNote: hasDisc ? (appliedDirectGlobalDiscount.note || '').trim() : '',
+      globalDiscountPercent: hasDisc ? parsedGlobalDiscountPct : null,
+      globalDiscountNote: hasDisc ? trimmedGlobalDiscountNote : '',
     };
   }, [
     directSelection,
@@ -1508,7 +1533,8 @@ const NewInvoiceModal = ({
     vatConfig.applicable,
     vatConfig.defaultRate,
     isMinimalReservation,
-    appliedDirectGlobalDiscount,
+    parsedGlobalDiscountPct,
+    trimmedGlobalDiscountNote,
   ]);
 
   const hasDirectSuspectAmounts = useMemo(() => {
@@ -1524,14 +1550,11 @@ const NewInvoiceModal = ({
   const _directTotals = useMemo(() => {
     const applyGlobalDiscountToGrossHt = (grossHt) => {
       const g = roundTo005(grossHt);
-      const hasDisc =
-        appliedDirectGlobalDiscount != null &&
-        Number.isFinite(Number(appliedDirectGlobalDiscount.percent)) &&
-        Number(appliedDirectGlobalDiscount.percent) > 0;
+      const hasDisc = parsedGlobalDiscountPct != null;
       const netHt = hasDisc
         ? computeGlobalPercentDiscountOnSubtotal(
             g,
-            Number(appliedDirectGlobalDiscount.percent)
+            parsedGlobalDiscountPct
           ).netHtAfter
         : g;
       const vat = vatConfig.applicable
@@ -1579,7 +1602,7 @@ const NewInvoiceModal = ({
     vatConfig,
     isMinimalReservation,
     overrides,
-    appliedDirectGlobalDiscount,
+    parsedGlobalDiscountPct,
   ]);
   
   // ✅ Détecter sélection partielle: selectedCount < directSummary.count
@@ -1649,44 +1672,10 @@ const NewInvoiceModal = ({
     [overrides]
   );
 
-  /**
-   * Remise globale : appliquée uniquement dans la synthèse (sous-total → remise → total).
-   * Les montants des lignes (tarif normal / corrections manuelles) ne sont pas modifiés.
-   */
-  const applyDirectGlobalDiscount = useCallback(() => {
-    const raw = String(directGlobalDiscountPercent).replace(',', '.').trim();
-    const pct = parseFloat(raw);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
-      toast.error('Indiquez un pourcentage de remise entre 0 et 100.');
-      return;
-    }
-    if (pct === 0) {
-      toast.message(
-        'Indiquez un pourcentage supérieur à 0, ou utilisez « Retirer la remise » si besoin.'
-      );
-      return;
-    }
-    if (directSelectionMaySuggestLineLevelDiscount(directSelection, overrides)) {
-      const proceed = window.confirm(
-        'Certaines lignes ont une note ou des traces d’ancienne remise au niveau ligne. ' +
-          'Une remise globale s’applique en synthèse sur tout le sous-total HT : vérifiez qu’il n’y a pas de double remise.\n\n' +
-          'Continuer ?'
-      );
-      if (!proceed) return;
-    }
-    const noteFromUser = directGlobalDiscountNote.trim();
-    const defaultNote = `Remise commerciale ${pct} %`;
-    setAppliedDirectGlobalDiscount({
-      percent: pct,
-      note: noteFromUser || defaultNote,
-    });
-    toast.success(
-      `Remise globale de ${pct} % enregistrée : elle s’appliquera sur le sous-total HT des lignes (tarifs affichés), pas sur chaque course individuellement.`
-    );
-  }, [directGlobalDiscountPercent, directGlobalDiscountNote, directSelection, overrides]);
-
   const clearDirectGlobalDiscount = useCallback(() => {
-    setAppliedDirectGlobalDiscount(null);
+    setDirectGlobalDiscountPercent('');
+    setDirectGlobalDiscountNote('');
+    globalDiscountDoubleWarnedRef.current = false;
     toast.message('Remise globale retirée.');
   }, []);
 
@@ -1731,6 +1720,19 @@ const NewInvoiceModal = ({
       }
     }
 
+    if (billingType === 'direct') {
+      const rawDisc = String(directGlobalDiscountPercent ?? '').trim();
+      if (rawDisc !== '' && parsedGlobalDiscountPct == null) {
+        setError(
+          'Pourcentage de remise invalide : indiquez un nombre entre 0 et 100 (ex. 25), ou videz le champ.'
+        );
+        toast.error(
+          'Pourcentage de remise invalide : utilisez un nombre entre 0 et 100 (ex. 25), ou videz le champ.'
+        );
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -1759,14 +1761,11 @@ const NewInvoiceModal = ({
           payload.overrides = overridePayload;
         }
 
-        if (
-          appliedDirectGlobalDiscount != null &&
-          Number.isFinite(Number(appliedDirectGlobalDiscount.percent)) &&
-          Number(appliedDirectGlobalDiscount.percent) > 0
-        ) {
-          payload.global_discount_percent = Number(appliedDirectGlobalDiscount.percent);
-          const gn = (appliedDirectGlobalDiscount.note || '').trim();
-          if (gn) payload.global_discount_note = gn;
+        if (parsedGlobalDiscountPct != null) {
+          payload.global_discount_percent = parsedGlobalDiscountPct;
+          if (trimmedGlobalDiscountNote) {
+            payload.global_discount_note = trimmedGlobalDiscountNote;
+          }
         }
 
         result = await generateInvoice(companyId, payload);
@@ -2468,13 +2467,10 @@ const NewInvoiceModal = ({
                             unitaire par ligne.
                           </span>
                         </div>
-                        {appliedDirectGlobalDiscount != null &&
-                          Number(appliedDirectGlobalDiscount.percent) > 0 && (
+                        {hasActiveGlobalDiscount && (
                           <p className={styles.directDiscountActiveBanner} role="status">
-                            Remise active : <strong>{appliedDirectGlobalDiscount.percent} %</strong>
-                            {appliedDirectGlobalDiscount.note
-                              ? ` — ${appliedDirectGlobalDiscount.note}`
-                              : ''}
+                            Remise active : <strong>{parsedGlobalDiscountPct} %</strong>
+                            {trimmedGlobalDiscountNote ? ` — ${trimmedGlobalDiscountNote}` : ''}
                           </p>
                         )}
                         <div className={styles.directDiscountRow}>
@@ -2492,24 +2488,16 @@ const NewInvoiceModal = ({
                             />
                           </label>
                           <label className={styles.directDiscountLabel} htmlFor="direct_global_discount_note">
-                            Note (facultatif, sur la ligne de remise)
+                            Note (facultatif)
                             <input
                               id="direct_global_discount_note"
                               type="text"
                               value={directGlobalDiscountNote}
                               onChange={(e) => setDirectGlobalDiscountNote(e.target.value)}
-                              placeholder="ex. Remise commerciale exceptionnelle"
+                              placeholder="Vide = aucun texte de note sur le PDF"
                               disabled={loading}
                             />
                           </label>
-                          <button
-                            type="button"
-                            className={`btn btn-secondary ${styles.directDiscountApply}`}
-                            onClick={applyDirectGlobalDiscount}
-                            disabled={loading || !formData.client_id}
-                          >
-                            Enregistrer la remise
-                          </button>
                           <button
                             type="button"
                             className={`btn btn-secondary ${styles.directDiscountClear}`}
@@ -2517,12 +2505,19 @@ const NewInvoiceModal = ({
                             disabled={
                               loading ||
                               !formData.client_id ||
-                              appliedDirectGlobalDiscount == null
+                              (!String(directGlobalDiscountPercent).trim() &&
+                                !String(directGlobalDiscountNote).trim())
                             }
                           >
                             Retirer la remise
                           </button>
                         </div>
+                        <p className={styles.directDiscountAutoHint}>
+                          Dès que le pourcentage est valide (ex. <strong>25</strong>), le{' '}
+                          <strong>sous-total</strong> et le <strong>total TTC</strong> se mettent à jour tout seuls — pas
+                          de bouton « Appliquer ». Les montants des courses ne changent pas ; la remise figure uniquement
+                          dans le récapitulatif et sur la facture PDF.
+                        </p>
                         {hasUnhydratedMinimals && (
                           <p className={styles.directDiscountWarn}>
                             Certaines lignes sont encore sans détail : le sous-total et la remise globale peuvent

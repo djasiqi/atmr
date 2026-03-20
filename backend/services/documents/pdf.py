@@ -1856,12 +1856,16 @@ _GLOBAL_DISCOUNT_PDF_SCOPE_HINT = " — appliquée sur le sous-total HT des pres
 
 
 def _format_global_discount_pdf_label(pct_gd: float, note_gd: str, *, max_note: int) -> str:
-    """Libellé remise globale (PDF) : % + portée explicite + note utilisateur tronquée."""
-    label = f"Remise commerciale {pct_gd:g} %{_GLOBAL_DISCOUNT_PDF_SCOPE_HINT}"
+    """Libellé remise globale (PDF).
+
+    Sans note utilisateur : uniquement le pourcentage (aucun texte additionnel).
+    Avec note : portée explicite + note tronquée.
+    """
     note_gd = str(note_gd or "").strip()
-    if note_gd:
-        label = f"{label} — {note_gd[:max_note]}"
-    return label
+    base = f"Remise commerciale {pct_gd:g} %"
+    if not note_gd:
+        return base
+    return f"{base}{_GLOBAL_DISCOUNT_PDF_SCOPE_HINT} — {note_gd[:max_note]}"
 
 
 def _build_totals_table(

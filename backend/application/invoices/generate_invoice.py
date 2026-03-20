@@ -900,12 +900,12 @@ class GenerateInvoiceUseCase:
                     discount_ht = gross_subtotal
                 net_ht = round_to_5_cents(gross_subtotal - discount_ht)
 
-                desc = (
-                    f"Remise commerciale {str(gd_pct_dec.normalize())} %"
-                    " — appliquée sur le sous-total HT des prestations"
-                )
+                desc = f"Remise commerciale {str(gd_pct_dec.normalize())} %"
                 if gd_note_stripped:
-                    desc = f"{desc} — {gd_note_stripped[:300]}"
+                    desc = (
+                        f"{desc} — appliquée sur le sous-total HT des prestations"
+                        f" — {gd_note_stripped[:300]}"
+                    )
                 self.invoice_line_repo.create(
                     {
                         "invoice_id": invoice.id,
@@ -965,8 +965,9 @@ class GenerateInvoiceUseCase:
                     "percent": float(gd_pct_dec),
                     "amount_ht": float(discount_ht),
                     "subtotal_before_ht": float(gross_subtotal),
-                    "note": gd_note_stripped,
                 }
+                if gd_note_stripped:
+                    global_discount_meta["note"] = gd_note_stripped
             else:
                 subtotal = gross_subtotal
                 vat_total = round_to_5_cents(vat_total)

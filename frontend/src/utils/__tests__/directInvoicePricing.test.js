@@ -3,6 +3,7 @@ import {
   isSameMoney,
   getDisplayedLineAmount,
   computeGlobalPercentDiscountOnSubtotal,
+  parseGlobalDiscountPercentField,
   lineOverrideMaySuggestPriorDiscount,
   directSelectionMaySuggestLineLevelDiscount,
   resolveDiscountBaseForLine,
@@ -33,6 +34,18 @@ describe('directInvoicePricing', () => {
       expect(getDisplayedLineAmount(r, { amount: 45 })).toBe(45);
       expect(getDisplayedLineAmount({ estimated_amount: 12 }, {})).toBe(12);
       expect(getDisplayedLineAmount({}, {})).toBe(0);
+    });
+  });
+
+  describe('parseGlobalDiscountPercentField', () => {
+    it('accepte 25, 25 %, 12,5 et refuse brouillon / hors plage', () => {
+      expect(parseGlobalDiscountPercentField('25')).toBe(25);
+      expect(parseGlobalDiscountPercentField('12,5')).toBe(12.5);
+      expect(parseGlobalDiscountPercentField('')).toBe(null);
+      expect(parseGlobalDiscountPercentField('25.')).toBe(null);
+      expect(parseGlobalDiscountPercentField('0')).toBe(null);
+      expect(parseGlobalDiscountPercentField('101')).toBe(null);
+      expect(parseGlobalDiscountPercentField('abc')).toBe(null);
     });
   });
 

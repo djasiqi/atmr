@@ -151,6 +151,25 @@ export function applyPercentDiscount(baseAmount, percent) {
  * @param {number} percent
  * @returns {{ discountAmountHt: number, netHtAfter: number }}
  */
+/**
+ * Interprète le champ « Remise % » pendant la saisie : null si vide, incomplet ou hors plage.
+ * Permet une mise à jour automatique des totaux sans bouton « Appliquer ».
+ *
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function parseGlobalDiscountPercentField(value) {
+  const s = String(value ?? '')
+    .replace(/,/g, '.')
+    .trim();
+  if (s === '' || s === '.') return null;
+  // Saisie en cours : « 25. » — on n’applique pas encore
+  if (/^\d+\.$/.test(s)) return null;
+  const p = parseFloat(s);
+  if (!Number.isFinite(p) || p <= 0 || p > 100) return null;
+  return p;
+}
+
 export function computeGlobalPercentDiscountOnSubtotal(subtotalHt, percent) {
   const sub = Number(subtotalHt);
   const p = Number(percent);
