@@ -1810,6 +1810,13 @@ def _build_s2_table(
                 InvoiceLineType.RIDE,
                 InvoiceLineType.MATERIAL_DELIVERY,
             ):
+                # Remise globale : ligne CUSTOM négative — déjà dans le bloc totaux, pas dans le tableau transports
+                if (
+                    line.type == InvoiceLineType.CUSTOM
+                    and line.line_total is not None
+                    and line.line_total <= 0
+                ):
+                    continue
                 amt = line.line_total if line.line_total is not None else Decimal("0")
                 amount = f"{Decimal(amt):.2f}"
                 table_data.append(["", "", line.description[:30], amount])
@@ -1850,6 +1857,18 @@ def _build_s2_table(
         style_rules.append(("LINEBELOW", (0, r), (-1, r), 0.15, colors.lightgrey))
     tbl.setStyle(TableStyle(style_rules))
     return (tbl, consolidated)
+
+
+def _invoice_is_s2_clinic_monthly(invoice: Invoice) -> bool:
+    """Vrai uniquement pour la facturation clinique mensuelle multi-patients (S2)."""
+    try:
+        bs = getattr(invoice, "billing_strategy", None)
+        if bs is None:
+            return False
+        val = bs.value if hasattr(bs, "value") else str(bs)
+        return val == "s2_clinic_monthly"
+    except Exception:
+        return False
 
 
 _GLOBAL_DISCOUNT_PDF_SCOPE_HINT = " — appliquée sur le sous-total HT des prestations"
@@ -1902,13 +1921,15 @@ def _build_totals_table(
     elif vat_total > 0:
         vat_is_applicable = True
 
-    # Remise globale facturation directe (lignes au tarif normal + synthèse)
+    # Remise globale facturation directe (lignes au tarif normal + synthèse).
+    # Ne pas confondre avec le paramètre is_s2 du tableau (format « TOTAL À FACTURER ») :
+    # on exclut seulement les vraies factures S2 clinique mensuelle.
     gd_meta: dict[str, Any] | None = None
     if (
         isinstance(invoice.meta, dict)
         and invoice.meta.get("global_discount")
         and not is_third_party
-        and not is_s2
+        and not _invoice_is_s2_clinic_monthly(invoice)
     ):
         gd_meta = cast(dict[str, Any], invoice.meta["global_discount"])
 
@@ -3481,7 +3502,7 @@ class PDFService:
         )
 
         def _minimal_date_cell(date_str: str, inv_line: Any) -> Any:
-            """Date brute ou Paragraph si note d’ajustement (ex. remise %)."""
+            """Date brute ou Paragraph si note d'ajustement (ex. remise %)."""
             raw = getattr(inv_line, "adjustment_note", None)
             note = str(raw).strip() if raw is not None else ""
             if not note:
@@ -3806,14 +3827,7 @@ class PDFService:
             ("LEFTPADDING", (1, 0), (1, -1), 16),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
         ]
-        if is_reminder:
-            style_rules.extend(
-                [
-                    ("FONTNAME", (0, 0), (-1, -2), font_name),
-                    ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-                ]
-            )
-        elif gd_min is not None and not is_reminder:
+        if is_reminder or gd_min is not None:
             style_rules.extend(
                 [
                     ("FONTNAME", (0, 0), (-1, -2), font_name),

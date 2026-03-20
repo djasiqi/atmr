@@ -139,6 +139,7 @@ const NewInvoiceModal = ({
   const [showS2Summary, setShowS2Summary] = useState(true); // Résumé (ouvert par défaut)
   const [showS2Exclusions, setShowS2Exclusions] = useState(false); // Exclusions (fermé par défaut)
   const [showDirectTransports, setShowDirectTransports] = useState(false); // Transports à facturer (fermé par défaut, comme S2)
+  const [showDirectDiscountAdvanced, setShowDirectDiscountAdvanced] = useState(false);
   const [showPartnerSummary, setShowPartnerSummary] = useState(true); // Facture partenaire (ouvert par défaut)
   const [partnerOverrides, setPartnerOverrides] = useState({}); // { transferId: { amount?, note? } }
   const [partnerSelectedTransfers, setPartnerSelectedTransfers] = useState([]); // Transferts sélectionnés pour la facture
@@ -2459,12 +2460,10 @@ const NewInvoiceModal = ({
                     <div className={`${styles.accordionContent} ${styles.accordionContentInfo}`}>
                       <div className={styles.directDiscountBar}>
                         <div className={styles.directDiscountBarHeader}>
-                          <strong>Remise globale (synthèse de facture)</strong>
+                          <strong>Remise globale</strong>
                           <span className={styles.directDiscountHint}>
-                            Les montants des courses restent les tarifs normaux (ou vos corrections manuelles). La
-                            remise s’applique sur le <strong>sous-total HT</strong> des lignes sélectionnées,
-                            avec arrondi 0,05 CHF, et apparaît dans le pied de facture / PDF — pas comme nouveau prix
-                            unitaire par ligne.
+                            Appliquée en fin de facture sur le <strong>sous-total HT</strong> des lignes sélectionnées —
+                            sans modifier les montants des transports ligne par ligne.
                           </span>
                         </div>
                         {hasActiveGlobalDiscount && (
@@ -2512,18 +2511,31 @@ const NewInvoiceModal = ({
                             Retirer la remise
                           </button>
                         </div>
-                        <p className={styles.directDiscountAutoHint}>
-                          Dès que le pourcentage est valide (ex. <strong>25</strong>), le{' '}
-                          <strong>sous-total</strong> et le <strong>total TTC</strong> se mettent à jour tout seuls — pas
-                          de bouton « Appliquer ». Les montants des courses ne changent pas ; la remise figure uniquement
-                          dans le récapitulatif et sur la facture PDF.
-                        </p>
-                        {hasUnhydratedMinimals && (
-                          <p className={styles.directDiscountWarn}>
-                            Certaines lignes sont encore sans détail : le sous-total et la remise globale peuvent
-                            s’appuyer sur le total éligible du client tant que la sélection est complète ; pour un
-                            détail ligne par ligne précis, laissez la liste se charger.
-                          </p>
+                        <button
+                          type="button"
+                          className={styles.directDiscountAdvancedToggle}
+                          onClick={() => setShowDirectDiscountAdvanced((v) => !v)}
+                          aria-expanded={showDirectDiscountAdvanced}
+                        >
+                          {showDirectDiscountAdvanced ? '▼ Options avancées' : '▶ Options avancées'}
+                        </button>
+                        {showDirectDiscountAdvanced && (
+                          <div className={styles.directDiscountAdvanced}>
+                            <p className={styles.directDiscountAutoHint}>
+                              Les montants des courses restent les tarifs normaux (ou vos corrections). La remise
+                              s’applique sur le sous-total HT avec arrondi 0,05 CHF et figure dans le pied de facture /
+                              PDF — pas comme prix unitaire par ligne. Dès que le pourcentage est valide (ex.{' '}
+                              <strong>25</strong>), sous-total et total TTC se mettent à jour automatiquement — pas de
+                              bouton « Appliquer ».
+                            </p>
+                            {hasUnhydratedMinimals && (
+                              <p className={styles.directDiscountWarn}>
+                                Certaines lignes sont encore sans détail : le sous-total et la remise globale peuvent
+                                s’appuyer sur le total éligible du client tant que la sélection est complète ; pour un
+                                détail ligne par ligne précis, laissez la liste se charger.
+                              </p>
+                            )}
+                          </div>
                         )}
                         {hasDirectSuspectAmounts && (
                           <p className={styles.directAmountSuspectBanner} role="status">

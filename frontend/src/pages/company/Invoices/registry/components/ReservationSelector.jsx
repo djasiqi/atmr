@@ -1,13 +1,23 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { invoiceService } from '../../../../../services/invoiceService';
 import { BILLING_SOURCE } from '../../../../../utils/billingRecipient';
 import {
+  directLineHasSuspectAmount,
   getDirectLinePriceBadges,
   getDisplayedLineAmount,
   roundTo005,
 } from '../../../../../utils/directInvoicePricing';
 import styles from './ReservationSelector.module.css';
+
+function isAdjustmentDraftDirty(draft) {
+  if (!draft) return false;
+  const a = String(draft.draftAmountStr ?? '').trim();
+  const b = String(draft.initialAmountStr ?? '').trim();
+  const n = String(draft.draftNote ?? '').trim();
+  const m = String(draft.initialNote ?? '').trim();
+  return a !== b || n !== m;
+}
 
 const ReservationSelector = ({
   companyId,
@@ -27,20 +37,33 @@ const ReservationSelector = ({
   const [reservations, setReservations] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [filter, setFilter] = useState('all');
+  /** Filtre client-side révision : all | needs_work | suspect_only | corrected */
+  const [reviewFilter, setReviewFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasAutoSelected, setHasAutoSelected] = useState(false);
   const [expandedReservations, setExpandedReservations] = useState(new Set());
   /** Un seul panneau d’ajustement ouvert à la fois → évite les sauts de scroll sur les longues listes */
   const [openAdjustmentId, setOpenAdjustmentId] = useState(null);
+  /** Brouillon panneau édition (un seul panneau ouvert) — pas d’écriture parent tant que non Enregistré */
+  const [adjustmentDraft, setAdjustmentDraft] = useState(null);
   const [allowManualOverride, setAllowManualOverride] = useState(false);
   const [loadingReservationDetails, setLoadingReservationDetails] = useState(new Set());
-  // ✅ État local pour les valeurs en cours de saisie (évite re-renders pendant la frappe)
-  const [localInputValues, setLocalInputValues] = useState({});
-  // ✅ Refs pour auto-focus sur les inputs "Montant HT" (un par réservation)
   const amountInputRefs = useRef({});
-  // ✅ Ne pas nettoyer localInputValues du champ en cours de saisie (évite de devoir recliquer pour continuer à taper)
   const focusedAmountInputIdRef = useRef(null);
+  const adjustmentDraftRef = useRef(null);
+  const saveToastDebounceRef = useRef(null);
+
+  useEffect(() => {
+    adjustmentDraftRef.current = adjustmentDraft;
+  }, [adjustmentDraft]);
+
+  useEffect(
+    () => () => {
+      if (saveToastDebounceRef.current) clearTimeout(saveToastDebounceRef.current);
+    },
+    []
+  );
   useEffect(() => {
     if (!reservations.length) return;
     if (!Array.isArray(preselectedIds) || preselectedIds.length === 0) return;
@@ -150,26 +173,12 @@ const ReservationSelector = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservations, billToType, hasAutoSelected, autoSelectHospitalized, overrides]);
 
-  // ✅ Nettoyer localInputValues pour les réservations désélectionnées ou démontées
   useEffect(() => {
-    // Nettoyer les valeurs locales pour les IDs qui ne sont plus sélectionnés ou qui n'existent plus
-    setLocalInputValues((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      
-      // Supprimer les valeurs pour les réservations qui ne sont plus dans la liste
-      const validIds = new Set(reservations.map((r) => r.id));
-      Object.keys(next).forEach((id) => {
-        const numId = Number(id);
-        if (!validIds.has(numId) || !selectedIds.includes(numId)) {
-          delete next[id];
-          changed = true;
-        }
-      });
-      
-      return changed ? next : prev;
-    });
-  }, [reservations, selectedIds]);
+    if (openAdjustmentId != null && !selectedIds.includes(openAdjustmentId)) {
+      setOpenAdjustmentId(null);
+      setAdjustmentDraft(null);
+    }
+  }, [selectedIds, openAdjustmentId]);
 
   // ✅ Guard pour éviter boucles/rerenders : comparer le payload avant d'appeler onSelectionChange
   const prevSelectionRef = useRef(null);
@@ -269,28 +278,164 @@ const ReservationSelector = ({
     }
   }, [companyId]);
 
-  const handleToggleAdjustments = async (reservationId, e) => {
-    e.stopPropagation();
-    
-    // Trouver la réservation dans l'état actuel
-    const reservation = reservations.find((r) => r.id === reservationId);
-    
-    // Si la réservation est minimale (uniquement { id }), charger les détails
-    if (reservation && isMinimalReservation(reservation)) {
-      const detailed = await loadReservationDetails(reservationId);
-      if (!detailed) {
-        // Erreur de chargement, ne pas ouvrir l'ajustement
+  const scheduleSaveToast = useCallback(() => {
+    if (saveToastDebounceRef.current) clearTimeout(saveToastDebounceRef.current);
+    saveToastDebounceRef.current = setTimeout(() => {
+      toast.success('Enregistré');
+      saveToastDebounceRef.current = null;
+    }, 450);
+  }, []);
+
+  const getOverrideForId = useCallback(
+    (reservationId) => overrides?.[String(reservationId)] || overrides?.[reservationId] || {},
+    [overrides]
+  );
+
+  const normalizeAmount = useCallback((value) => {
+    if (!value || value === '' || value === null || value === undefined) {
+      return { normalized: null, formatted: null, isValid: true };
+    }
+    const normalized = String(value).replace(/,/g, '.').trim().replace(/\s/g, '');
+    const numeric = parseFloat(normalized);
+    if (Number.isNaN(numeric) || numeric < 0) {
+      return { normalized: null, formatted: null, isValid: false };
+    }
+    const rounded = roundTo005(numeric);
+    return { normalized: rounded, formatted: rounded.toFixed(2), isValid: true };
+  }, []);
+
+  const openAdjustmentPanel = useCallback(
+    (reservationId, reservationRow) => {
+      const o = getOverrideForId(reservationId);
+      const refHt = getDisplayedLineAmount(reservationRow, o);
+      const hasOv =
+        o.amount !== undefined && o.amount !== null && o.amount !== '' && Number.isFinite(Number(o.amount));
+      const initialAmountStr = hasOv ? String(o.amount) : '';
+      const initialNote = o.note != null && String(o.note).trim() !== '' ? String(o.note) : '';
+      setAdjustmentDraft({
+        reservationId,
+        referenceHt: refHt,
+        initialAmountStr,
+        initialNote,
+        draftAmountStr: initialAmountStr,
+        draftNote: initialNote,
+      });
+      setOpenAdjustmentId(reservationId);
+    },
+    [getOverrideForId]
+  );
+
+  const handleAdjustmentButton = async (reservationId, e) => {
+    e?.stopPropagation?.();
+
+    if (openAdjustmentId === reservationId) {
+      if (isAdjustmentDraftDirty(adjustmentDraftRef.current)) {
+        toast.message('Enregistrez ou annulez avant de fermer.');
+        return;
+      }
+      setOpenAdjustmentId(null);
+      setAdjustmentDraft(null);
+      return;
+    }
+
+    if (openAdjustmentId != null && openAdjustmentId !== reservationId) {
+      if (isAdjustmentDraftDirty(adjustmentDraftRef.current)) {
+        toast.error(
+          'Enregistrez ou annulez les modifications en cours avant d’ouvrir une autre ligne.'
+        );
         return;
       }
     }
-    
-    // Si l'item n'est pas sélectionné, le sélectionner d'abord
+
+    let reservation = reservations.find((r) => r.id === reservationId);
+    if (reservation && isMinimalReservation(reservation)) {
+      const detailed = await loadReservationDetails(reservationId);
+      if (!detailed) return;
+      reservation = detailed;
+    } else if (!reservation) {
+      return;
+    }
+
     if (!selectedIds.includes(reservationId)) {
       setSelectedIds((prev) => [...prev, reservationId]);
     }
-    // Ouvrir / fermer (un seul panneau à la fois)
-    setOpenAdjustmentId((prev) => (prev === reservationId ? null : reservationId));
+
+    openAdjustmentPanel(reservationId, reservation);
   };
+
+  const handleSaveAdjustment = useCallback(
+    (reservationId, e) => {
+      e?.stopPropagation?.();
+      if (!onOverrideChange) return;
+      const draft = adjustmentDraftRef.current;
+      if (!draft || draft.reservationId !== reservationId) return;
+
+      const result = normalizeAmount(draft.draftAmountStr);
+      if (!result.isValid) {
+        toast.error('Montant invalide.');
+        return;
+      }
+      const noteVal =
+        draft.draftNote != null && String(draft.draftNote).trim() !== ''
+          ? String(draft.draftNote).trim()
+          : null;
+      if (result.normalized === null) {
+        onOverrideChange(reservationId, { amount: null, note: noteVal });
+      } else {
+        onOverrideChange(reservationId, { amount: result.normalized, note: noteVal });
+      }
+      setAdjustmentDraft(null);
+      setOpenAdjustmentId(null);
+      scheduleSaveToast();
+    },
+    [onOverrideChange, normalizeAmount, scheduleSaveToast]
+  );
+
+  const handleCancelAdjustment = useCallback((e) => {
+    e?.stopPropagation?.();
+    setAdjustmentDraft(null);
+    setOpenAdjustmentId(null);
+  }, []);
+
+  const handleRestoreCatalog = useCallback(
+    (reservationId, e) => {
+      e?.stopPropagation?.();
+      if (!onOverrideChange) return;
+      onOverrideChange(reservationId, { amount: null, note: null });
+      setAdjustmentDraft(null);
+      setOpenAdjustmentId(null);
+      scheduleSaveToast();
+    },
+    [onOverrideChange, scheduleSaveToast]
+  );
+
+  const handleDraftAmountChange = useCallback((reservationId, value) => {
+    setAdjustmentDraft((prev) => {
+      if (!prev || prev.reservationId !== reservationId) return prev;
+      return { ...prev, draftAmountStr: value };
+    });
+  }, []);
+
+  const handleDraftNoteChange = useCallback((reservationId, value) => {
+    setAdjustmentDraft((prev) => {
+      if (!prev || prev.reservationId !== reservationId) return prev;
+      return { ...prev, draftNote: value };
+    });
+  }, []);
+
+  const handleAdjustmentKeyDown = useCallback(
+    (reservationId, e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSaveAdjustment(reservationId, e);
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancelAdjustment(e);
+      }
+    },
+    [handleSaveAdjustment, handleCancelAdjustment]
+  );
 
   // Déterminer si un transport nécessite une vérification (ne doit pas être auto-sélectionné)
   // ⚠️ IMPORTANT: Défini AVANT isAutoSelected car utilisé dedans
@@ -348,127 +493,6 @@ const ReservationSelector = ({
     setSelectedIds([]);
   };
 
-  const normalizeAmount = useCallback((value) => {
-    if (!value || value === '' || value === null || value === undefined) {
-      return { normalized: null, formatted: null, isValid: true };
-    }
-    const normalized = String(value).replace(/,/g, '.').trim().replace(/\s/g, '');
-    const numeric = parseFloat(normalized);
-    if (Number.isNaN(numeric) || numeric < 0) {
-      return { normalized: null, formatted: null, isValid: false };
-    }
-    const rounded = roundTo005(numeric);
-    return { normalized: rounded, formatted: rounded.toFixed(2), isValid: true };
-  }, []);
-
-  // ✅ Mise à jour uniquement de l'état local pendant la saisie → saisie fluide (ex. "350")
-  // Le parent est mis à jour au blur ; le total TTC se met à jour à la sortie du champ.
-  const handleAmountChange = useCallback((reservationId, value) => {
-    setLocalInputValues((prev) => ({
-      ...prev,
-      [reservationId]: value,
-    }));
-  }, []);
-
-  // ✅ Synchroniser avec le parent lors du blur (quand l'utilisateur quitte le champ)
-  const amountInputDisplayValue = useCallback((reservationId) => {
-    if (localInputValues[reservationId] !== undefined) {
-      return localInputValues[reservationId];
-    }
-    const o = overrides?.[String(reservationId)] ?? overrides?.[reservationId];
-    if (
-      o?.amount !== undefined &&
-      o?.amount !== null &&
-      o?.amount !== '' &&
-      Number.isFinite(Number(o.amount))
-    ) {
-      return String(o.amount);
-    }
-    return '';
-  }, [localInputValues, overrides]);
-
-  const handleAmountBlur = useCallback((reservationId, value) => {
-    if (!onOverrideChange) return;
-    
-    // Normaliser la valeur
-    const result = normalizeAmount(value);
-    
-    if (!result.isValid) {
-      // Valeur non vide mais invalide : toast + retirer l’override montant (retour tarif affiché)
-      toast.error('Montant invalide. Le tarif catalogue / affiché est rétabli.');
-      onOverrideChange(reservationId, { amount: null });
-      // Nettoyer l'état local
-      setLocalInputValues((prev) => {
-        const next = { ...prev };
-        delete next[reservationId];
-        return next;
-      });
-    } else if (result.normalized === null) {
-      // Valeur vide : pas d’override montant (même comportement que « Réinitialiser » sur le montant)
-      onOverrideChange(reservationId, { amount: null });
-      // Nettoyer l'état local
-      setLocalInputValues((prev) => {
-        const next = { ...prev };
-        delete next[reservationId];
-        return next;
-      });
-    } else {
-      // Valeur valide : appliquer la valeur normalisée
-      onOverrideChange(reservationId, { amount: result.normalized });
-      // Afficher la valeur formatée dans l'input (ex: 45,5 -> 45.50)
-      // Le nettoyage se fera de manière déterministe via useEffect qui observe overrides
-      setLocalInputValues((prev) => ({
-        ...prev,
-        [reservationId]: result.formatted,
-      }));
-    }
-  }, [onOverrideChange, normalizeAmount]);
-
-  // ✅ Nettoyage déterministe : clear localInputValues quand la valeur parent correspond
-  // (sauf pour le champ actuellement focalisé, pour pouvoir taper "35" d'affilée sans recliquer)
-  useEffect(() => {
-    setLocalInputValues((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      const focusedId = focusedAmountInputIdRef.current;
-
-      Object.keys(next).forEach((idStr) => {
-        const id = Number(idStr);
-        if (id === focusedId) return; // ne pas toucher au champ en cours de saisie
-        const localValue = next[idStr];
-        
-        // Trouver la réservation correspondante
-        const reservation = reservations.find((r) => r.id === id);
-        if (!reservation) {
-          // Réservation n'existe plus, nettoyer
-          delete next[idStr];
-          changed = true;
-          return;
-        }
-
-        // Vérifier la valeur parent (override.amount ou reservation.amount)
-        const override = overrides?.[String(id)] || overrides?.[id] || {};
-        const parentAmount = override.amount !== undefined && override.amount !== null
-          ? override.amount
-          : reservation.amount;
-
-        // Si la valeur parent correspond à la valeur locale formatée (arrondie), nettoyer
-        if (parentAmount !== undefined && parentAmount !== null) {
-          const parentFormatted = Number(parentAmount.toFixed(2));
-          const localNumeric = parseFloat(localValue);
-          
-          if (!Number.isNaN(localNumeric) && Math.abs(parentFormatted - localNumeric) < 0.01) {
-            // Valeurs correspondent → nettoyer
-            delete next[idStr];
-            changed = true;
-          }
-        }
-      });
-
-      return changed ? next : prev;
-    });
-  }, [overrides, reservations]);
-
   // ✅ Auto-focus + garder la ligne visible dans la zone scrollable (évite les « sauts »)
   useEffect(() => {
     if (openAdjustmentId == null) return;
@@ -495,18 +519,6 @@ const ReservationSelector = ({
     return () => cancelAnimationFrame(raf);
   }, [openAdjustmentId, reservations]);
 
-  // ✅ Commit aussi sur Enter
-  const handleAmountKeyDown = useCallback((e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      e.currentTarget.blur(); // Déclenche handleAmountBlur
-    }
-  }, []);
-
-  const handleNoteChange = (reservationId, value) => {
-    if (!onOverrideChange) return;
-    onOverrideChange(reservationId, { note: value?.trim?.() ? value : null });
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
@@ -570,6 +582,79 @@ const ReservationSelector = ({
     [overrides, vatApplicable, defaultVatRate]
   );
 
+  const mergedReservationRows = useMemo(() => {
+    const loadedIds = new Set(reservations.map((r) => r.id));
+    const missingSelectedIds = selectedIds.filter((id) => !loadedIds.has(id));
+    return [...reservations, ...missingSelectedIds.map((id) => ({ id }))];
+  }, [reservations, selectedIds]);
+
+  const totalRowsInScope = mergedReservationRows.length;
+
+  const displayReservationRows = useMemo(() => {
+    const getO = (id) => overrides[String(id)] || overrides[id] || {};
+    const lineSuspect = (r) => {
+      if (isMinimalReservation(r)) return false;
+      return directLineHasSuspectAmount(r, getO(r.id));
+    };
+    const lineCorrected = (id) => {
+      const o = getO(id);
+      return o.amount !== undefined && o.amount !== null && o.amount !== '' && Number.isFinite(Number(o.amount));
+    };
+    const sortBucket = (r) => {
+      if (isMinimalReservation(r)) return 3;
+      if (lineSuspect(r)) return 0;
+      if (needsReview(r)) return 1;
+      if (lineCorrected(r.id)) return 2;
+      return 3;
+    };
+
+    let list = [...mergedReservationRows];
+    if (reviewFilter === 'needs_work') {
+      list = list.filter((r) => !isMinimalReservation(r) && (lineSuspect(r) || needsReview(r)));
+    } else if (reviewFilter === 'suspect_only') {
+      list = list.filter((r) => !isMinimalReservation(r) && lineSuspect(r));
+    } else if (reviewFilter === 'corrected') {
+      list = list.filter((r) => lineCorrected(r.id));
+    }
+
+    list.sort((a, b) => {
+      const ba = sortBucket(a);
+      const bb = sortBucket(b);
+      if (ba !== bb) return ba - bb;
+      const ta = isMinimalReservation(a) ? 0 : new Date(a.date || 0).getTime();
+      const tb = isMinimalReservation(b) ? 0 : new Date(b.date || 0).getTime();
+      return tb - ta;
+    });
+    return list;
+  }, [mergedReservationRows, overrides, reviewFilter, needsReview, isMinimalReservation]);
+
+  const selectionSummary = useMemo(() => {
+    const sel = reservations.filter((r) => selectedIds.includes(r.id));
+    let suspects = 0;
+    let corrected = 0;
+    let rawSubtotalHt = 0;
+    for (const r of sel) {
+      const o = getOverrideForId(r.id);
+      if (directLineHasSuspectAmount(r, o)) suspects += 1;
+      if (
+        o.amount !== undefined &&
+        o.amount !== null &&
+        o.amount !== '' &&
+        Number.isFinite(Number(o.amount))
+      ) {
+        corrected += 1;
+      }
+      rawSubtotalHt += getDisplayedLineAmount(r, o);
+    }
+    return {
+      selectedCount: selectedIds.length,
+      suspects,
+      corrected,
+      /** Même agrégation que le footer NewInvoiceModal (directFinancialBreakdown) */
+      subtotalHt: roundTo005(rawSubtotalHt),
+    };
+  }, [reservations, selectedIds, getOverrideForId]);
+
   const formatCurrency = (value) => `${Number(value || 0).toFixed(2)} CHF`;
 
   if (loading) {
@@ -594,48 +679,91 @@ const ReservationSelector = ({
 
   return (
     <div className={styles.container}>
-      {!hideClientName && (
-        <div className={styles.headerRow}>
-          <div className={styles.headerLeft}>
+      <div
+        className={`${styles.headerRow} ${hideClientName ? styles.headerRowFiltersOnly : ''}`}
+      >
+        <div className={styles.headerLeft}>
+          {!hideClientName && (
             <h4 className={styles.clientNameSmall}>{clientName}</h4>
-            <div className={styles.filterButtonsCompact}>
-              {shouldShowAllFilter && (
-                <button
-                  type="button"
-                  className={`${styles.filterBtnCompact} ${filter === 'all' ? styles.active : ''}`}
-                  onClick={() => setFilter('all')}
-                >
-                  Tous ({reservations.length})
-                </button>
-              )}
+          )}
+          <div className={styles.filterButtonsCompact}>
+            {shouldShowAllFilter && (
               <button
                 type="button"
-                className={`${styles.filterBtnCompact} ${filter === 'clinic' ? styles.active : ''}`}
-                onClick={() => setFilter('clinic')}
+                className={`${styles.filterBtnCompact} ${filter === 'all' ? styles.active : ''}`}
+                onClick={() => setFilter('all')}
               >
-                Clinique
+                Tous ({reservations.length})
               </button>
-              <button
-                type="button"
-                className={`${styles.filterBtnCompact} ${filter === 'patient' ? styles.active : ''}`}
-                onClick={() => setFilter('patient')}
-              >
-                Patient
-              </button>
-            </div>
+            )}
+            <button
+              type="button"
+              className={`${styles.filterBtnCompact} ${filter === 'clinic' ? styles.active : ''}`}
+              onClick={() => setFilter('clinic')}
+            >
+              Clinique
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterBtnCompact} ${filter === 'patient' ? styles.active : ''}`}
+              onClick={() => setFilter('patient')}
+            >
+              Patient
+            </button>
           </div>
-          {shouldShowActions && (
-            <div className={styles.actionsInline}>
-              <button type="button" onClick={handleSelectAll} className={styles.actionLink}>
-                Tout sélectionner
+          {!compactMode && reservations.length > 0 && (
+            <div
+              className={styles.reviewFiltersRow}
+              role="group"
+              aria-label="Filtres de révision"
+            >
+              <span className={styles.reviewFiltersLabel}>Révision</span>
+              <button
+                type="button"
+                className={`${styles.reviewFilterBtn} ${reviewFilter === 'all' ? styles.active : ''}`}
+                aria-pressed={reviewFilter === 'all'}
+                onClick={() => setReviewFilter('all')}
+              >
+                Toutes
               </button>
-              <button type="button" onClick={handleDeselectAll} className={styles.actionLink}>
-                Tout désélectionner
+              <button
+                type="button"
+                className={`${styles.reviewFilterBtn} ${reviewFilter === 'needs_work' ? styles.active : ''}`}
+                aria-pressed={reviewFilter === 'needs_work'}
+                onClick={() => setReviewFilter('needs_work')}
+              >
+                À corriger
+              </button>
+              <button
+                type="button"
+                className={`${styles.reviewFilterBtn} ${reviewFilter === 'suspect_only' ? styles.active : ''}`}
+                aria-pressed={reviewFilter === 'suspect_only'}
+                onClick={() => setReviewFilter('suspect_only')}
+              >
+                Montants suspects
+              </button>
+              <button
+                type="button"
+                className={`${styles.reviewFilterBtn} ${reviewFilter === 'corrected' ? styles.active : ''}`}
+                aria-pressed={reviewFilter === 'corrected'}
+                onClick={() => setReviewFilter('corrected')}
+              >
+                Corrigées
               </button>
             </div>
           )}
         </div>
-      )}
+        {shouldShowActions && (
+          <div className={styles.actionsInline}>
+            <button type="button" onClick={handleSelectAll} className={styles.actionLink}>
+              Tout sélectionner
+            </button>
+            <button type="button" onClick={handleDeselectAll} className={styles.actionLink}>
+              Tout désélectionner
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Message info et bouton "Modifier la sélection" pour mode auto-sélection */}
       {autoSelectHospitalized && hasAutoSelected && !allowManualOverride && 
@@ -654,18 +782,33 @@ const ReservationSelector = ({
         </div>
       )}
 
+      {!compactMode && reservations.length > 0 && (
+        <div className={styles.summaryControlBar} role="status">
+          <span>
+            <strong>{selectionSummary.selectedCount}</strong> sélectionné
+            {selectionSummary.selectedCount > 1 ? 's' : ''}
+          </span>
+          <span>
+            <strong>{selectionSummary.suspects}</strong> montant{selectionSummary.suspects > 1 ? 's' : ''}{' '}
+            suspect{selectionSummary.suspects > 1 ? 's' : ''}
+          </span>
+          <span>
+            <strong>{selectionSummary.corrected}</strong> corrigée{selectionSummary.corrected > 1 ? 's' : ''}
+          </span>
+          <span>
+            Sous-total HT <strong>{formatCurrency(selectionSummary.subtotalHt)}</strong>
+          </span>
+          {reviewFilter !== 'all' && (
+            <span className={styles.summaryViewHint}>
+              {displayReservationRows.length} affichée
+              {displayReservationRows.length > 1 ? 's' : ''} sur {totalRowsInScope}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className={`${styles.reservationsList} ${!compactMode ? styles.reservationsListDense : ''}`}>
-        {/* ✅ Afficher aussi les réservations sélectionnées qui ne sont pas encore dans la liste chargée (objets minimaux) */}
-        {(() => {
-          // Combiner les réservations chargées avec les IDs sélectionnés qui ne sont pas encore chargés
-          const loadedIds = new Set(reservations.map((r) => r.id));
-          const missingSelectedIds = selectedIds.filter((id) => !loadedIds.has(id));
-          const allReservations = [
-            ...reservations,
-            ...missingSelectedIds.map((id) => ({ id })), // Objets minimaux pour les IDs non chargés
-          ];
-          
-          return allReservations.map((reservation) => {
+        {displayReservationRows.map((reservation) => {
             const isSelected = selectedIds.includes(reservation.id);
             const isExpanded = expandedReservations.has(reservation.id);
             const showAdjust = openAdjustmentId === reservation.id;
@@ -686,6 +829,49 @@ const ReservationSelector = ({
             && Number.isFinite(Number(overrideAmount));
           const adjustment = hasOverrideAmount ? Number(overrideAmount) - baseAmount : 0;
           const overrideNote = override.note;
+          const rowSuspect = !isMinimal && directLineHasSuspectAmount(reservation, override);
+          const draft =
+            adjustmentDraft && adjustmentDraft.reservationId === reservation.id
+              ? adjustmentDraft
+              : null;
+          const catalogAmt = !isMinimal ? Number(reservation?.amount ?? 0) : 0;
+          const catalogWasLow =
+            Number.isFinite(catalogAmt) && catalogAmt > 0 && catalogAmt < 5;
+
+          const panelPreviewFigures =
+            draft && !isMinimal
+              ? (() => {
+                  const nr = normalizeAmount(draft.draftAmountStr);
+                  if (!nr.isValid) return figures;
+                  const noteVal =
+                    draft.draftNote != null && String(draft.draftNote).trim() !== ''
+                      ? String(draft.draftNote).trim()
+                      : null;
+                  const simOverride = { ...override, note: noteVal };
+                  if (nr.normalized !== null) {
+                    simOverride.amount = nr.normalized;
+                  } else {
+                    simOverride.amount = null;
+                  }
+                  const amount = getDisplayedLineAmount(reservation, simOverride);
+                  const vatRate = vatApplicable
+                    ? Number(reservation.vat_rate ?? reservation.default_vat_rate ?? defaultVatRate)
+                    : 0;
+                  const sanitizedAmount = Number.isNaN(amount) ? 0 : amount;
+                  const sanitizedVatRate = Number.isNaN(vatRate) ? 0 : vatRate;
+                  const vatValue = vatApplicable
+                    ? Number(((sanitizedAmount * sanitizedVatRate) / 100).toFixed(2))
+                    : 0;
+                  const total = Number((sanitizedAmount + vatValue).toFixed(2));
+                  return {
+                    amount: sanitizedAmount,
+                    vatRate: sanitizedVatRate,
+                    vatValue,
+                    total,
+                    note: noteVal || '',
+                  };
+                })()
+              : figures;
 
           // Mode compact: 1 ligne par défaut
           if (compactMode) {
@@ -693,6 +879,14 @@ const ReservationSelector = ({
             const billedToPatient = isBilledToPatient(reservation);
             const needsReviewCheck = needsReview(reservation);
             const checkboxDisabled = autoSelected && !allowManualOverride;
+            const showNeedsReviewBadge =
+              needsReviewCheck && !rowSuspect && !hasOverrideAmount;
+            const linePriceBadges = !isMinimal
+              ? getDirectLinePriceBadges(reservation, override)
+              : [];
+            const hasCorrectedBadge = linePriceBadges.some((b) => b.key === 'corrected');
+            const hadSuspectWithCorrected =
+              hasCorrectedBadge && linePriceBadges.some((b) => b.key === 'suspect_low');
 
             return (
               <div
@@ -721,7 +915,7 @@ const ReservationSelector = ({
                       : `${reservation.pickup_location} → ${reservation.dropoff_location}`
                     }
                   </span>
-                  {needsReviewCheck && (
+                  {showNeedsReviewBadge && (
                     <span className={styles.reviewBadge}>⚠️ À vérifier</span>
                   )}
                   {reservation.status === 'CANCELED' && (
@@ -750,19 +944,32 @@ const ReservationSelector = ({
                     </span>
                   )}
                   {!isMinimal &&
-                    getDirectLinePriceBadges(reservation, override).map((b) => (
-                      <span
-                        key={b.key}
-                        className={`${styles.badgeCompact} ${priceBadgeClassByKey[b.key] || ''}`}
-                        title={
-                          b.key === 'suspect_low'
-                            ? 'Montant HT affiché très bas — vérifiez la ligne'
-                            : undefined
-                        }
-                      >
-                        {b.label}
-                      </span>
-                    ))}
+                    linePriceBadges.map((b) => {
+                      const isSecondarySuspect = b.key === 'suspect_low' && hasCorrectedBadge;
+                      const badgeTitle =
+                        b.key === 'corrected' && hadSuspectWithCorrected
+                          ? 'Ligne corrigée — montant HT encore très bas (contrôle recommandé)'
+                          : b.key === 'corrected' && catalogWasLow
+                            ? 'Tarif catalogue initial très bas — ligne corrigée'
+                            : b.key === 'suspect_low' && isSecondarySuspect
+                              ? 'Montant HT affiché très bas — contrôle recommandé'
+                              : b.key === 'suspect_low'
+                                ? 'Montant HT affiché très bas — vérifiez la ligne'
+                                : undefined;
+                      return (
+                        <span
+                          key={b.key}
+                          className={`${styles.badgeCompact} ${
+                            isSecondarySuspect
+                              ? styles.priceBadgeSuspectSecondary
+                              : priceBadgeClassByKey[b.key] || ''
+                          }`}
+                          title={badgeTitle}
+                        >
+                          {b.label}
+                        </span>
+                      );
+                    })}
                   <span className={styles.amountCompact}>
                     {isMinimal ? '—' : formatCurrency(figures.total)}
                   </span>
@@ -798,15 +1005,27 @@ const ReservationSelector = ({
                     {isSelected && (
                       <div className={styles.adjustmentSection}>
                         {!showAdjust ? (
-                          <button
-                            type="button"
-                            className={styles.adjustLink}
-                            onClick={(e) => handleToggleAdjustments(reservation.id, e)}
-                            title={isMinimal ? 'Chargement des détails...' : 'Ajuster le montant'}
-                            disabled={isLoadingDetails}
-                          >
-                            {isLoadingDetails ? '⏳' : '✏️'}
-                          </button>
+                          <div className={styles.rowActionsDense}>
+                            {rowSuspect && !isMinimal && (
+                              <button
+                                type="button"
+                                className={styles.adjustCatalogQuickBtn}
+                                onClick={(e) => handleRestoreCatalog(reservation.id, e)}
+                                disabled={isLoadingDetails}
+                              >
+                                Rétablir le tarif catalogue
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={styles.adjustActionTextBtn}
+                              onClick={(e) => handleAdjustmentButton(reservation.id, e)}
+                              title={isMinimal ? 'Chargement des détails...' : undefined}
+                              disabled={isLoadingDetails}
+                            >
+                              {isLoadingDetails ? 'Chargement…' : hasOverrideAmount ? 'Modifier' : 'Corriger'}
+                            </button>
+                          </div>
                         ) : isMinimal && isLoadingDetails ? (
                           <div className={styles.adjustments}>
                             <div className={styles.adjustRow}>
@@ -814,10 +1033,22 @@ const ReservationSelector = ({
                             </div>
                           </div>
                         ) : (
-                          <div className={styles.adjustments}>
+                          <div
+                            className={styles.adjustments}
+                            role="form"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') handleCancelAdjustment(e);
+                            }}
+                          >
+                            <div className={styles.adjustRow}>
+                              <span className={styles.adjustLabel}>Montant de référence (HT)</span>
+                              <span className={styles.referenceAmountReadonly}>
+                                {isMinimal ? '—' : formatCurrency(draft?.referenceHt ?? figures.amount)}
+                              </span>
+                            </div>
                             <div className={styles.adjustGrid}>
                               <label className={styles.field}>
-                                <span>Montant HT</span>
+                                <span>Nouveau montant HT</span>
                                 <input
                                   ref={(el) => {
                                     if (el) {
@@ -830,43 +1061,79 @@ const ReservationSelector = ({
                                   inputMode="decimal"
                                   autoComplete="off"
                                   className={styles.input}
-                                  value={amountInputDisplayValue(reservation.id)}
-                                  placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
-                                  onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
-                                  onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
-                                  onBlur={(e) => {
-                                    focusedAmountInputIdRef.current = null;
-                                    handleAmountBlur(reservation.id, e.target.value);
+                                  value={draft?.draftAmountStr ?? ''}
+                                  placeholder={
+                                    isMinimal
+                                      ? '0.00'
+                                      : (draft?.referenceHt ?? figures.amount).toFixed(2)
+                                  }
+                                  onChange={(e) =>
+                                    handleDraftAmountChange(reservation.id, e.target.value)
+                                  }
+                                  onFocus={() => {
+                                    focusedAmountInputIdRef.current = reservation.id;
                                   }}
-                                  onKeyDown={handleAmountKeyDown}
+                                  onBlur={() => {
+                                    focusedAmountInputIdRef.current = null;
+                                  }}
+                                  onKeyDown={(e) => handleAdjustmentKeyDown(reservation.id, e)}
                                   onClick={(e) => e.stopPropagation()}
                                   disabled={isMinimal}
                                 />
                               </label>
                             </div>
                             <label className={styles.field}>
-                              <span>Note d'ajustement (facultatif)</span>
+                              <span>Motif / note (facultatif)</span>
                               <textarea
                                 rows={2}
                                 className={styles.noteInput}
-                                value={(overrides?.[String(reservation.id)] || overrides?.[reservation.id])?.note ?? ''}
-                                placeholder="Ex. Ajustement temps d'attente"
-                                onChange={(e) => handleNoteChange(reservation.id, e.target.value)}
+                                value={draft?.draftNote ?? ''}
+                                placeholder="Ex. Correction tarif transport"
+                                onChange={(e) =>
+                                  handleDraftNoteChange(reservation.id, e.target.value)
+                                }
+                                onKeyDown={(e) => handleAdjustmentKeyDown(reservation.id, e)}
                                 onClick={(e) => e.stopPropagation()}
                                 disabled={isMinimal}
                               />
                             </label>
+                            <div className={styles.adjustActions}>
+                              <button
+                                type="button"
+                                className={styles.adjustSecondaryBtn}
+                                onClick={(e) => handleCancelAdjustment(e)}
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.adjustTertiaryBtn}
+                                onClick={(e) => handleRestoreCatalog(reservation.id, e)}
+                                disabled={isMinimal}
+                              >
+                                Rétablir le tarif catalogue
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.adjustPrimaryBtn}
+                                onClick={(e) => handleSaveAdjustment(reservation.id, e)}
+                                disabled={isMinimal}
+                              >
+                                Enregistrer
+                              </button>
+                            </div>
                             <div className={styles.adjustSummary}>
                               <span>
-                                HT <strong>{isMinimal ? '—' : formatCurrency(figures.amount)}</strong>
+                                HT <strong>{isMinimal ? '—' : formatCurrency(panelPreviewFigures.amount)}</strong>
                               </span>
-                              {vatApplicable && !isMinimal && figures.vatValue > 0 && (
+                              {vatApplicable && !isMinimal && panelPreviewFigures.vatValue > 0 && (
                                 <span>
-                                  TVA <strong>{formatCurrency(figures.vatValue)}</strong>
+                                  TVA <strong>{formatCurrency(panelPreviewFigures.vatValue)}</strong>
                                 </span>
                               )}
                               <span>
-                                TTC <strong>{isMinimal ? '—' : formatCurrency(figures.total)}</strong>
+                                TTC{' '}
+                                <strong>{isMinimal ? '—' : formatCurrency(panelPreviewFigures.total)}</strong>
                               </span>
                             </div>
                           </div>
@@ -884,6 +1151,14 @@ const ReservationSelector = ({
           const billedToPatient = isBilledToPatient(reservation);
           const needsReviewCheck = needsReview(reservation);
           const checkboxDisabled = autoSelected && !allowManualOverride;
+          const showNeedsReviewBadge =
+            needsReviewCheck && !rowSuspect && !hasOverrideAmount;
+          const linePriceBadges = !isMinimal
+            ? getDirectLinePriceBadges(reservation, override)
+            : [];
+          const hasCorrectedBadge = linePriceBadges.some((b) => b.key === 'corrected');
+          const hadSuspectWithCorrected =
+            hasCorrectedBadge && linePriceBadges.some((b) => b.key === 'suspect_low');
           const routeLabel = `${reservation.pickup_location} → ${reservation.dropoff_location}`;
 
           return (
@@ -914,7 +1189,7 @@ const ReservationSelector = ({
                     }
                   </span>
                   <div className={styles.badgesInline}>
-                    {needsReviewCheck && (
+                    {showNeedsReviewBadge && (
                       <span className={`${styles.badgeCompact} ${styles.review}`}>À vérifier</span>
                     )}
                     {reservation.status === 'CANCELED' && (
@@ -947,48 +1222,79 @@ const ReservationSelector = ({
                         {getBillingTypeLabelShort(reservation.billed_to_type)}
                       </span>
                     ) : null}
-                    {reservation.is_return && <span className={styles.returnBadgeCompact}>Retour</span>}
-                    {reservation.is_urgent && <span className={styles.urgentBadgeCompact}>Urgent</span>}
-                    {reservation.medical_facility && (
-                      <span className={styles.medicalBadgeCompact} title={reservation.medical_facility}>
-                        {reservation.medical_facility}
-                      </span>
-                    )}
                     {!isMinimal &&
-                      getDirectLinePriceBadges(reservation, override).map((b) => (
-                        <span
-                          key={b.key}
-                          className={`${styles.badgeCompact} ${priceBadgeClassByKey[b.key] || ''}`}
-                          title={
-                            b.key === 'suspect_low'
-                              ? 'Montant HT affiché très bas — vérifiez la ligne'
-                              : undefined
-                          }
-                        >
-                          {b.label}
-                        </span>
-                      ))}
+                      linePriceBadges.map((b) => {
+                        const isSecondarySuspect = b.key === 'suspect_low' && hasCorrectedBadge;
+                        const badgeTitle =
+                          b.key === 'corrected' && hadSuspectWithCorrected
+                            ? 'Ligne corrigée — montant HT encore très bas (contrôle recommandé)'
+                            : b.key === 'corrected' && catalogWasLow
+                              ? 'Tarif catalogue initial très bas — ligne corrigée'
+                              : b.key === 'suspect_low' && isSecondarySuspect
+                                ? 'Montant HT affiché très bas — contrôle recommandé'
+                                : b.key === 'suspect_low'
+                                  ? 'Montant HT affiché très bas — vérifiez la ligne'
+                                  : undefined;
+                        return (
+                          <span
+                            key={b.key}
+                            className={`${styles.badgeCompact} ${
+                              isSecondarySuspect
+                                ? styles.priceBadgeSuspectSecondary
+                                : priceBadgeClassByKey[b.key] || ''
+                            }`}
+                            title={badgeTitle}
+                          >
+                            {b.label}
+                          </span>
+                        );
+                      })}
                   </div>
                   <span className={styles.amountHT}>
                     {isMinimal ? '—' : formatCurrency(figures.amount)}
                   </span>
                   {!showAdjust && (
-                    <button
-                      type="button"
-                      className={styles.adjustLink}
-                      onClick={(e) => handleToggleAdjustments(reservation.id, e)}
-                      title={isMinimal ? 'Chargement des détails...' : 'Ajuster le montant'}
-                      aria-expanded={showAdjust}
-                      aria-controls={`adjust-${reservation.id}`}
-                      disabled={isLoadingDetails}
+                    <div
+                      className={styles.rowActionsDense}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {isLoadingDetails ? '⏳' : '✏️'}
-                    </button>
+                      {rowSuspect && !isMinimal && (
+                        <button
+                          type="button"
+                          className={styles.adjustCatalogQuickBtn}
+                          onClick={(e) => handleRestoreCatalog(reservation.id, e)}
+                          disabled={isLoadingDetails}
+                        >
+                          Rétablir catalogue
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.adjustActionTextBtn}
+                        onClick={(e) => handleAdjustmentButton(reservation.id, e)}
+                        title={isMinimal ? 'Chargement des détails...' : undefined}
+                        aria-expanded={showAdjust}
+                        aria-controls={`adjust-${reservation.id}`}
+                        disabled={isLoadingDetails}
+                      >
+                        {isLoadingDetails ? 'Chargement…' : hasOverrideAmount ? 'Modifier' : 'Corriger'}
+                      </button>
+                    </div>
                   )}
                 </div>
 
                 {showAdjust && (
-                  <div className={styles.adjustInline} id={`adjust-${reservation.id}`}>
+                  <div
+                    className={styles.adjustInline}
+                    id={`adjust-${reservation.id}`}
+                    tabIndex={-1}
+                    role="form"
+                    aria-label="Révision du montant"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') handleCancelAdjustment(e);
+                    }}
+                  >
                     {isMinimal && isLoadingDetails ? (
                       <div className={styles.adjustRow}>
                         <span className={styles.adjustLabel}>Chargement des détails...</span>
@@ -996,7 +1302,13 @@ const ReservationSelector = ({
                     ) : (
                       <>
                         <div className={styles.adjustRow}>
-                          <span className={styles.adjustLabel}>Montant HT</span>
+                          <span className={styles.adjustLabel}>Montant de référence (HT)</span>
+                          <span className={styles.referenceAmountReadonly}>
+                            {isMinimal ? '—' : formatCurrency(draft?.referenceHt ?? figures.amount)}
+                          </span>
+                        </div>
+                        <div className={styles.adjustRow}>
+                          <span className={styles.adjustLabel}>Nouveau montant HT</span>
                           <input
                             ref={(el) => {
                               if (el) {
@@ -1009,63 +1321,70 @@ const ReservationSelector = ({
                             inputMode="decimal"
                             autoComplete="off"
                             className={styles.adjustInput}
-                            value={amountInputDisplayValue(reservation.id)}
-                            placeholder={isMinimal ? '0.00' : figures.amount.toFixed(2)}
-                            onChange={(e) => handleAmountChange(reservation.id, e.target.value)}
-                            onFocus={() => { focusedAmountInputIdRef.current = reservation.id; }}
-                            onBlur={(e) => {
-                              focusedAmountInputIdRef.current = null;
-                              handleAmountBlur(reservation.id, e.target.value);
+                            value={draft?.draftAmountStr ?? ''}
+                            placeholder={
+                              isMinimal
+                                ? '0.00'
+                                : (draft?.referenceHt ?? figures.amount).toFixed(2)
+                            }
+                            onChange={(e) => handleDraftAmountChange(reservation.id, e.target.value)}
+                            onFocus={() => {
+                              focusedAmountInputIdRef.current = reservation.id;
                             }}
-                            onKeyDown={handleAmountKeyDown}
+                            onBlur={() => {
+                              focusedAmountInputIdRef.current = null;
+                            }}
+                            onKeyDown={(e) => handleAdjustmentKeyDown(reservation.id, e)}
                             onClick={(e) => e.stopPropagation()}
                             disabled={isMinimal}
                           />
                           <span className={styles.adjustSuffix}>CHF</span>
                         </div>
                         <div className={styles.adjustRowNote}>
-                          <span className={styles.adjustLabel}>Note (optionnelle)</span>
+                          <span className={styles.adjustLabel}>Motif / note (facultatif)</span>
                           <input
                             type="text"
                             className={styles.adjustNoteInput}
-                            value={(overrides?.[String(reservation.id)] || overrides?.[reservation.id])?.note ?? ''}
-                            placeholder="Ex. Ajustement temps d'attente"
-                            onChange={(e) => handleNoteChange(reservation.id, e.target.value)}
+                            value={draft?.draftNote ?? ''}
+                            placeholder="Ex. Correction tarif transport"
+                            onChange={(e) => handleDraftNoteChange(reservation.id, e.target.value)}
+                            onKeyDown={(e) => handleAdjustmentKeyDown(reservation.id, e)}
                             onClick={(e) => e.stopPropagation()}
                             disabled={isMinimal}
                           />
                         </div>
                         <div className={styles.adjustSummaryLine}>
-                          HT <strong>{isMinimal ? '—' : formatCurrency(figures.amount)}</strong>
-                          {vatApplicable && !isMinimal && figures.vatValue > 0 && (
-                            <> • TVA <strong>{formatCurrency(figures.vatValue)}</strong></>
+                          HT <strong>{isMinimal ? '—' : formatCurrency(panelPreviewFigures.amount)}</strong>
+                          {vatApplicable && !isMinimal && panelPreviewFigures.vatValue > 0 && (
+                            <> • TVA <strong>{formatCurrency(panelPreviewFigures.vatValue)}</strong></>
                           )}
                           {' • '}
-                          TTC <strong>{isMinimal ? '—' : formatCurrency(figures.total)}</strong>
+                          TTC{' '}
+                          <strong>{isMinimal ? '—' : formatCurrency(panelPreviewFigures.total)}</strong>
                         </div>
                         <div className={styles.adjustActions}>
                           <button
                             type="button"
-                            className={styles.adjustResetBtn}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Réinitialiser: montant = valeur d'origine, note vide
-                              if (onOverrideChange) {
-                                onOverrideChange(reservation.id, { amount: null, note: null });
-                              }
-                            }}
-                            disabled={isMinimal}
+                            className={styles.adjustSecondaryBtn}
+                            onClick={(e) => handleCancelAdjustment(e)}
                           >
-                            Réinitialiser
+                            Annuler
                           </button>
                           <button
                             type="button"
-                            className={styles.adjustLink}
-                            onClick={(e) => handleToggleAdjustments(reservation.id, e)}
-                            aria-expanded={true}
-                            aria-controls={`adjust-${reservation.id}`}
+                            className={styles.adjustTertiaryBtn}
+                            onClick={(e) => handleRestoreCatalog(reservation.id, e)}
+                            disabled={isMinimal}
                           >
-                            Fermer
+                            Rétablir le tarif catalogue
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.adjustPrimaryBtn}
+                            onClick={(e) => handleSaveAdjustment(reservation.id, e)}
+                            disabled={isMinimal}
+                          >
+                            Enregistrer
                           </button>
                         </div>
                       </>
@@ -1075,8 +1394,7 @@ const ReservationSelector = ({
               </div>
             </label>
           );
-          });
-        })()}
+        })}
       </div>
 
       {!compactMode && (() => {

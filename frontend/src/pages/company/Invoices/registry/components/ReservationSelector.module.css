@@ -307,6 +307,187 @@
   opacity: 0.8;
 }
 
+/* Bouton texte principal Corriger / Modifier (lisible) */
+.adjustActionTextBtn {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--brand-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+  transition:
+    background var(--transition-base),
+    border-color var(--transition-base);
+  white-space: nowrap;
+}
+
+.adjustActionTextBtn:hover:not(:disabled) {
+  background: var(--brand-primary-soft, rgba(59, 130, 246, 0.08));
+  border-color: var(--brand-primary);
+}
+
+.adjustActionTextBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.adjustCatalogQuickBtn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adjustCatalogQuickBtn:hover:not(:disabled) {
+  color: var(--brand-primary);
+}
+
+.referenceAmountReadonly {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  padding: 4px 0;
+}
+
+.adjustPrimaryBtn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--brand-primary);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition-base);
+}
+
+.adjustPrimaryBtn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.adjustPrimaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adjustSecondaryBtn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.adjustSecondaryBtn:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.adjustTertiaryBtn {
+  padding: 6px 10px;
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.adjustTertiaryBtn:hover:not(:disabled) {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.reviewFiltersRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reviewFiltersLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+.reviewFilterBtn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.reviewFilterBtn:hover {
+  border-color: var(--border-hover);
+}
+
+.reviewFilterBtn.active {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-soft, rgba(59, 130, 246, 0.08));
+  color: var(--brand-primary);
+}
+
+.summaryControlBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.summaryControlBar strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryViewHint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.headerRowFiltersOnly {
+  margin-bottom: 8px;
+}
+
+.rowActionsDense {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
 .amountStack {
   display: flex;
   flex-direction: column;
@@ -551,6 +732,14 @@
   background: #f5f3ff;
   color: #5b21b6;
   border: 1px solid #c4b5fd;
+}
+
+.badgeCompact.priceBadgeSuspectSecondary {
+  font-size: 10px;
+  font-weight: 600;
+  color: #78716c;
+  background: #fafaf9;
+  border: 1px solid #e7e5e4;
 }
 
 .badgeCompact.priceBadgeSuspect {

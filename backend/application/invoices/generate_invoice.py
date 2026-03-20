@@ -48,6 +48,37 @@ PERIOD_MONTH_THRESHOLD = 12
 MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
 
 
+def _adjustment_note_looks_like_global_remise_legacy(note: Any) -> bool:
+    """Note d'ajustement typique quand l'UI avait appliqué la remise sur chaque ligne."""
+    if note is None:
+        return False
+    s = str(note).strip().lower()
+    if not s:
+        return False
+    return (
+        "remise commerciale" in s
+        or "remise globale" in s
+        or "rabais" in s
+        or s.startswith("remise ")
+    )
+
+
+def _override_amount_matches_discounted_catalog(
+    catalog_ht: Decimal,
+    override_ht: Decimal,
+    discount_percent: Decimal,
+    *,
+    tolerance: Decimal = Decimal("0.05"),
+) -> bool:
+    """Override ≈ catalogue × (1 − %/100) après arrondi 5 cts (anciens brouillons)."""
+    if catalog_ht <= 0 or discount_percent <= 0:
+        return False
+    expected = round_to_5_cents(
+        catalog_ht * (Decimal("100") - discount_percent) / Decimal("100")
+    )
+    return abs(override_ht - expected) <= tolerance
+
+
 @dataclass(frozen=True, slots=True)
 class GenerateInvoiceInput:
     """Input pour générer une facture.
@@ -703,6 +734,17 @@ class GenerateInvoiceUseCase:
             vat_breakdown: dict[str, dict[str, Decimal]] = {}
             ride_line_entries: list[tuple[InvoiceLine, Decimal, Decimal]] = []
 
+            # Remise globale : parser le % avant la boucle pour normaliser les overrides legacy
+            gd_pct_early: Decimal | None = None
+            _gd_raw_loop = getattr(input_data, "global_discount_percent", None)
+            if _gd_raw_loop is not None:
+                try:
+                    _pe = Decimal(str(_gd_raw_loop))
+                    if Decimal("0") < _pe <= Decimal("100"):
+                        gd_pct_early = _pe
+                except (InvalidOperation, ValueError, TypeError):
+                    gd_pct_early = None
+
             for reservation in reservations:
                 # ✅ Livraison matériel : utiliser prix fixe entreprise
                 mission_type = (
@@ -733,6 +775,9 @@ class GenerateInvoiceUseCase:
                     base_amount = Decimal(str(reservation.amount or 0)).quantize(
                         two_places
                     )
+                catalog_ht_patient = (
+                    base_amount if mission_type != "material_delivery" else None
+                )
                 override = overrides_map.get(reservation.id)
                 # Override montant : uniquement pour transport patient (pas livraison)
                 if (
@@ -772,15 +817,50 @@ class GenerateInvoiceUseCase:
 
                 # Annulation facturable : utiliser cancellation_fee_amount si disponible
                 booking_obj = bookings_by_id.get(reservation.id)
+                cancellation_fee_applied = False
                 if (
                     booking_obj
                     and str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
                     and getattr(booking_obj, "cancellation_fee_amount", None) is not None
                 ):
                     base_amount = Decimal(str(booking_obj.cancellation_fee_amount)).quantize(two_places)
+                    cancellation_fee_applied = True
 
                 # Arrondir base_amount à 5 centimes avant de calculer la TVA
                 base_amount = round_to_5_cents(base_amount)
+
+                line_adjustment_note = (
+                    str(override["note"])[:500]
+                    if override and override.get("note")
+                    else None
+                )
+                override_had_amount = (
+                    mission_type != "material_delivery"
+                    and override
+                    and "amount" in override
+                    and override.get("amount") is not None
+                )
+                # Remise globale en fin de facture : ne pas conserver montant déjà remisé + note par ligne
+                if (
+                    gd_pct_early is not None
+                    and not cancellation_fee_applied
+                    and mission_type != "material_delivery"
+                    and catalog_ht_patient is not None
+                    and catalog_ht_patient > 0
+                    and _override_amount_matches_discounted_catalog(
+                        catalog_ht_patient, base_amount, gd_pct_early
+                    )
+                    and (
+                        _adjustment_note_looks_like_global_remise_legacy(
+                            line_adjustment_note
+                        )
+                        or (
+                            override_had_amount and line_adjustment_note is None
+                        )
+                    )
+                ):
+                    base_amount = round_to_5_cents(catalog_ht_patient)
+                    line_adjustment_note = None
 
                 # Calculer TVA et total avec TVA
                 vat_amount, total_with_vat = self.invoice_calculator.calculate_vat(
@@ -832,11 +912,7 @@ class GenerateInvoiceUseCase:
                     "vat_rate": line_vat_rate if line_vat_rate > Decimal("0") else None,
                     "vat_amount": vat_amount,
                     "total_with_vat": total_with_vat,
-                    "adjustment_note": (
-                        str(override["note"])[:500]
-                        if override and override.get("note")
-                        else None
-                    ),
+                    "adjustment_note": line_adjustment_note,
                     "reservation_id": reservation.id,
                 }
                 line_dto = self.invoice_line_repo.create(line_data)
