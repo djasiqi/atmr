@@ -326,6 +326,7 @@ const ReservationSelector = ({
   );
 
   const handleAdjustmentButton = async (reservationId, e) => {
+    e?.preventDefault?.();
     e?.stopPropagation?.();
 
     if (openAdjustmentId === reservationId) {
@@ -399,6 +400,7 @@ const ReservationSelector = ({
 
   const handleRestoreCatalog = useCallback(
     (reservationId, e) => {
+      e?.preventDefault?.();
       e?.stopPropagation?.();
       if (!onOverrideChange) return;
       onOverrideChange(reservationId, { amount: null, note: null });
@@ -1162,7 +1164,7 @@ const ReservationSelector = ({
           const routeLabel = `${reservation.pickup_location} → ${reservation.dropoff_location}`;
 
           return (
-            <label
+            <div
               key={reservation.id}
               id={showAdjust ? `invoice-adjust-row-${reservation.id}` : undefined}
               className={`${styles.reservationItem} ${styles.reservationItemDense} ${isSelected ? styles.selected : ''} ${autoSelected ? styles.autoSelected : ''} ${showAdjust ? styles.rowAdjustOpen : ''}`}
@@ -1177,7 +1179,15 @@ const ReservationSelector = ({
               />
 
               <div className={`${styles.reservationContent} ${styles.reservationContentDense}`}>
-                <div className={styles.reservationSingleLine}>
+                <div
+                  className={styles.reservationSingleLine}
+                  onClick={(e) => {
+                    if (checkboxDisabled) return;
+                    const t = e.target;
+                    if (t instanceof Element && t.closest('button, input, textarea, a, select')) return;
+                    handleToggle(reservation.id);
+                  }}
+                >
                   <span className={styles.dateDense}>
                     {isMinimal ? '—' : formatDate(reservation.date)}
                   </span>
@@ -1392,7 +1402,7 @@ const ReservationSelector = ({
                   </div>
                 )}
               </div>
-            </label>
+            </div>
           );
         })}
       </div>
