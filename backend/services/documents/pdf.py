@@ -1913,6 +1913,36 @@ def _format_chf_discount_pdf(disc_ht: float) -> str:
     return f"- CHF {ip}.{cents:02d}"
 
 
+# Largeur cible colonne montants (Courier) : aligne les decimales a l'affichage.
+_PDF_CHF_MONO_CELL_WIDTH = 22
+# Tolérance comparaison montants float (ex. net HT vs total sans TVA).
+_PDF_CHF_AMOUNT_EQ_EPS = 0.005
+
+
+def _format_chf_pdf_mono(
+    amount: float, *, discount: bool = False, width: int = _PDF_CHF_MONO_CELL_WIDTH
+) -> str:
+    """Montant CHF pour colonne tableau en Courier : largeur fixe, décimales alignées."""
+    a = float(amount)
+    if discount:
+        a = abs(a)
+        neg = False
+    else:
+        neg = a < 0
+        a = abs(a)
+    whole = int(a + 1e-9)
+    cents = round((a - whole) * 100 + 1e-9)
+    if cents >= 100:
+        whole += cents // 100
+        cents = cents % 100
+    ip = _swiss_group_int_str(whole)
+    if discount or neg:
+        inner = f"CHF -{ip}.{cents:02d}"
+    else:
+        inner = f"CHF {ip}.{cents:02d}"
+    return inner.rjust(width)
+
+
 def _format_global_discount_pdf_label(pct_gd: float) -> str:
     """Libellé court remise globale (PDF). La note utilisateur est sur une ligne séparée."""
     return f"Remise ({pct_gd:g} %)"
@@ -3869,8 +3899,8 @@ class PDFService:
                 if isinstance(invoice.meta, dict) and "vat" in invoice.meta:
                     vat_appl_min = bool(invoice.meta["vat"].get("applicable"))
                 total_data = [
-                    ["Sous-total HT", _format_chf_pdf(gross_ht)],
-                    [disc_label, _format_chf_discount_pdf(disc_ht)],
+                    ["Sous-total HT", _format_chf_pdf_mono(gross_ht)],
+                    [disc_label, _format_chf_pdf_mono(disc_ht, discount=True)],
                 ]
                 if note_gd:
                     total_data.append([note_gd[:280], ""])
@@ -3886,16 +3916,19 @@ class PDFService:
                 if vat_appl_min and vat_min > 0:
                     total_data.extend(
                         [
-                            ["Total HT après remise", _format_chf_pdf(net_ht)],
-                            ["TVA :", _format_chf_pdf(vat_min)],
-                            ["TOTAL :", _format_chf_pdf(total_amount)],
+                            ["Total HT après remise", _format_chf_pdf_mono(net_ht)],
+                            ["TVA :", _format_chf_pdf_mono(vat_min)],
+                            ["TOTAL :", _format_chf_pdf_mono(total_amount)],
                         ]
                     )
+                elif abs(net_ht - total_amount) < _PDF_CHF_AMOUNT_EQ_EPS:
+                    # Sans TVA : net_ht et total_amount identiques -> une seule ligne finale.
+                    total_data.append(["TOTAL :", _format_chf_pdf_mono(total_amount)])
                 else:
                     total_data.extend(
                         [
-                            ["Total HT après remise", _format_chf_pdf(net_ht)],
-                            ["TOTAL :", _format_chf_pdf(total_amount)],
+                            ["Total HT après remise", _format_chf_pdf_mono(net_ht)],
+                            ["TOTAL :", _format_chf_pdf_mono(total_amount)],
                         ]
                     )
             else:
@@ -3932,6 +3965,16 @@ class PDFService:
             )
         else:
             style_rules.append(("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"))
+        # Remise globale (facture minimale) : montants en Courier + padding resserré + décimales alignées.
+        if gd_min is not None:
+            style_rules.extend(
+                [
+                    ("TOPPADDING", (0, 0), (-1, -1), 1),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+                    ("FONTNAME", (1, 0), (1, -2), "Courier"),
+                    ("FONTNAME", (1, -1), (1, -1), "Courier-Bold"),
+                ]
+            )
         total_table.setStyle(TableStyle(style_rules))
         story.append(total_table)
         story.append(Spacer(1, 20))
