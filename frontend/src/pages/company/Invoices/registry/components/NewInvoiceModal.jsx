@@ -8,6 +8,13 @@ import ReservationSelector from './ReservationSelector';
 import PartnerTransferSelector from './PartnerTransferSelector';
 import useUrlSearchSync from '../../../../../hooks/useUrlSearchSync';
 import useCompanyData from '../../../../../hooks/useCompanyData';
+import {
+  applyPercentDiscount,
+  directLineHasSuspectAmount,
+  getDisplayedLineAmount,
+  resolveDiscountBaseForLine,
+  roundTo005,
+} from '../../../../../utils/directInvoicePricing';
 
 const formatApiError = (err) => {
   const data = err?.response?.data ?? err?.data ?? err;
@@ -163,6 +170,8 @@ const NewInvoiceModal = ({
   /** Remise globale (% sur tarif catalogue) — facturation directe */
   const [directGlobalDiscountPercent, setDirectGlobalDiscountPercent] = useState('');
   const [directGlobalDiscountNote, setDirectGlobalDiscountNote] = useState('');
+  /** Base de la remise globale : montants affichés (recommandé) vs tarif réservation (expert) */
+  const [directDiscountBase, setDirectDiscountBase] = useState('adjusted');
   const [preselectedReservations, setPreselectedReservations] = useState({});
   useEffect(() => {
     if (!open) return;
@@ -217,6 +226,7 @@ const NewInvoiceModal = ({
       setSelectedReservations({});
       setDirectGlobalDiscountPercent('');
       setDirectGlobalDiscountNote('');
+      setDirectDiscountBase('adjusted');
       setClientSearch('');
       const el0 = clientSearchInputRef.current;
       if (el0) el0.value = '';
@@ -236,6 +246,7 @@ const NewInvoiceModal = ({
     setOverrides({});
     setDirectGlobalDiscountPercent('');
     setDirectGlobalDiscountNote('');
+    setDirectDiscountBase('adjusted');
     setSelectedReservations({});
     setPreselectedReservations({});
     setShowDirectTransports(false);
@@ -250,6 +261,7 @@ const NewInvoiceModal = ({
   useEffect(() => {
     setDirectGlobalDiscountPercent('');
     setDirectGlobalDiscountNote('');
+    setDirectDiscountBase('adjusted');
   }, [formData.client_id]);
 
   useEffect(() => {
@@ -1196,6 +1208,14 @@ const NewInvoiceModal = ({
       const current = prev[key] ? { ...prev[key] } : {};
       let changed = false;
 
+      // Édition manuelle du montant HT → invalider pricingMeta (évite bases fantômes / remise composée)
+      if (Object.prototype.hasOwnProperty.call(patch, 'amount')) {
+        if (current.pricingMeta) {
+          delete current.pricingMeta;
+          changed = true;
+        }
+      }
+
       Object.entries(patch).forEach(([field, value]) => {
         if (value === null || value === undefined || value === '') {
           if (field in current) {
@@ -1352,9 +1372,7 @@ const NewInvoiceModal = ({
       return validReservations.reduce(
         (acc, reservation) => {
           const override = overrides[String(reservation?.id)] || {};
-          const baseAmount = Number(
-            override.amount ?? reservation?.amount ?? reservation?.estimated_amount ?? 0
-          );
+          const baseAmount = getDisplayedLineAmount(reservation, override);
           const amount = Number.isNaN(baseAmount) ? 0 : baseAmount;
           const vatRate = vatConfig.applicable
             ? Number(
@@ -1403,6 +1421,54 @@ const NewInvoiceModal = ({
     if (!activeClientId) return [];
     return selectedReservations[activeClientId] || [];
   }, [activeClientId, selectedReservations]);
+
+  /** Détail HT avant / après remise pour le footer facturation directe */
+  const directFinancialBreakdown = useMemo(() => {
+    const list = directSelection.filter((r) => !isMinimalReservation(r));
+    if (list.length === 0) return null;
+    let subtotalBefore = 0;
+    let totalHtAfter = 0;
+    let vat = 0;
+    list.forEach((r) => {
+      const override = overrides[String(r.id)] || overrides[r.id] || {};
+      const meta = override.pricingMeta;
+      const b = meta?.baseBeforeDiscount;
+      if (b !== undefined && b !== null && Number.isFinite(Number(b))) {
+        subtotalBefore += Number(b);
+      } else {
+        subtotalBefore += getDisplayedLineAmount(r, override);
+      }
+      const displayed = getDisplayedLineAmount(r, override);
+      totalHtAfter += displayed;
+      const vatRate = vatConfig.applicable
+        ? Number(r?.vat_rate ?? r?.default_vat_rate ?? vatConfig.defaultRate ?? 0)
+        : 0;
+      const sanitizedRate = Number.isNaN(vatRate) ? 0 : vatRate;
+      vat += vatConfig.applicable
+        ? Number(((displayed * sanitizedRate) / 100).toFixed(2))
+        : 0;
+    });
+    let discountHt = subtotalBefore - totalHtAfter;
+    if (discountHt < 0 && Math.abs(discountHt) < 0.02) discountHt = 0;
+    if (discountHt < 0) discountHt = 0;
+    const totalTtc = Number((totalHtAfter + vat).toFixed(2));
+    return {
+      subtotalBefore,
+      discountHt,
+      totalHtAfter,
+      vat,
+      totalTtc,
+    };
+  }, [directSelection, overrides, vatConfig.applicable, vatConfig.defaultRate, isMinimalReservation]);
+
+  const hasDirectSuspectAmounts = useMemo(() => {
+    if (billingType !== 'direct' || !formData.client_id) return false;
+    return directSelection.some((r) => {
+      if (isMinimalReservation(r)) return false;
+      const o = overrides[String(r.id)] || overrides[r.id] || {};
+      return directLineHasSuspectAmount(r, o);
+    });
+  }, [billingType, formData.client_id, directSelection, overrides, isMinimalReservation]);
   
   // ✅ Calculer les totaux : utiliser directSummaryTTC si sélection complète sans overrides de montant
   const _directTotals = useMemo(() => {
@@ -1501,8 +1567,9 @@ const NewInvoiceModal = ({
         if (!reservation || reservation.id == null) return;
         const override = overrides[String(reservation.id)];
         if (!override) return;
+        /** API phase 1 : uniquement amount / note — jamais pricingMeta ni clés internes */
         const clean = {};
-        if (override.amount !== undefined) {
+        if (override.amount !== undefined && override.amount !== null && override.amount !== '') {
           const amount = Number(override.amount);
           if (!Number.isNaN(amount)) clean.amount = amount;
         }
@@ -1533,7 +1600,6 @@ const NewInvoiceModal = ({
       toast.message('Indiquez un pourcentage supérieur à 0, ou réinitialisez les lignes avec « Réinitialiser » sur chaque transport.');
       return;
     }
-    const factor = 1 - pct / 100;
     const list = directSelection.filter((r) => !isMinimalReservation(r));
     if (list.length === 0) {
       toast.error(
@@ -1544,18 +1610,29 @@ const NewInvoiceModal = ({
     const noteFromUser = directGlobalDiscountNote.trim();
     const defaultNote = `Remise ${pct}%`;
     const skipped = directSelection.length - list.length;
+    const mode = directDiscountBase === 'catalog' ? 'catalog' : 'adjusted';
     setOverrides((prev) => {
       const next = { ...prev };
       list.forEach((r) => {
-        const base = Number(r.amount ?? r.estimated_amount ?? 0);
-        if (!Number.isFinite(base) || base < 0) return;
-        const rawAmount = base * factor;
-        const newAmount = Math.round(rawAmount * 20) / 20;
         const key = String(r.id);
+        const prevOv = prev[key] || {};
+        const { chosenBaseAmount } = resolveDiscountBaseForLine({
+          reservation: r,
+          prevOverride: prevOv,
+          discountBaseMode: mode,
+        });
+        if (!Number.isFinite(chosenBaseAmount) || chosenBaseAmount < 0) return;
+        const newAmount = applyPercentDiscount(chosenBaseAmount, pct);
+        const baseStored = roundTo005(chosenBaseAmount);
         next[key] = {
-          ...(next[key] || {}),
+          ...prevOv,
           amount: newAmount,
           note: noteFromUser || defaultNote,
+          pricingMeta: {
+            baseBeforeDiscount: baseStored,
+            discountPercent: pct,
+            discountBaseMode: mode,
+          },
         };
       });
       return next;
@@ -1570,6 +1647,7 @@ const NewInvoiceModal = ({
   }, [
     directGlobalDiscountPercent,
     directGlobalDiscountNote,
+    directDiscountBase,
     directSelection,
     isMinimalReservation,
   ]);
@@ -2336,10 +2414,35 @@ const NewInvoiceModal = ({
                         <div className={styles.directDiscountBarHeader}>
                           <strong>Remise globale (sur lignes sélectionnées)</strong>
                           <span className={styles.directDiscountHint}>
-                            Applique un pourcentage sur le montant HT catalogue de chaque transport sélectionné
-                            (arrondi 0,05 CHF). Utile pour une remise forfaitaire sans modifier chaque ligne à la
-                            main ; vous pouvez toujours affiner avec ✏️ sur une ligne.
+                            Applique un pourcentage sur la base HT choisie ci-dessous (arrondi 0,05 CHF). En mode
+                            recommandé, les corrections manuelles et la base stable après remise sont respectées ;
+                            le mode catalogue recalcule depuis le tarif réservation (peut contredire une correction).
                           </span>
+                        </div>
+                        <div className={styles.directDiscountBaseRow} role="group" aria-label="Base de calcul de la remise">
+                          <span className={styles.directDiscountBaseLegend}>Base de la remise</span>
+                          <label className={styles.directDiscountRadio}>
+                            <input
+                              type="radio"
+                              name="direct_discount_base"
+                              value="adjusted"
+                              checked={directDiscountBase === 'adjusted'}
+                              onChange={() => setDirectDiscountBase('adjusted')}
+                              disabled={loading}
+                            />
+                            Montants affichés (recommandé)
+                          </label>
+                          <label className={styles.directDiscountRadio}>
+                            <input
+                              type="radio"
+                              name="direct_discount_base"
+                              value="catalog"
+                              checked={directDiscountBase === 'catalog'}
+                              onChange={() => setDirectDiscountBase('catalog')}
+                              disabled={loading}
+                            />
+                            Tarif catalogue (réservation) — mode expert
+                          </label>
                         </div>
                         <div className={styles.directDiscountRow}>
                           <label className={styles.directDiscountLabel} htmlFor="direct_global_discount_pct">
@@ -2380,6 +2483,12 @@ const NewInvoiceModal = ({
                             Certaines lignes sont encore sans détail : la remise ne s’applique qu’aux trajets
                             chargés ci-dessous. Laissez la liste se charger ou désélectionnez puis resélectionnez
                             après chargement.
+                          </p>
+                        )}
+                        {hasDirectSuspectAmounts && (
+                          <p className={styles.directAmountSuspectBanner} role="status">
+                            Au moins un montant HT semble anormalement bas (&lt; 5 CHF) : vérifiez les lignes
+                            marquées « Montant suspect » avant de générer la facture.
                           </p>
                         )}
                       </div>
@@ -3660,15 +3769,84 @@ const NewInvoiceModal = ({
                               (Détails requis pour calculer le total)
                             </span>
                           </span>
+                        ) : directFinancialBreakdown ? (
+                          <div className={styles.directFooterStack}>
+                            <div className={styles.directFooterTitle}>
+                              Sélection partielle {directSelection.length}/{directSummary.count}
+                            </div>
+                            <dl className={styles.directFooterBreakdown}>
+                              <div className={styles.directFooterBreakdownRow}>
+                                <dt>Sous-total HT (avant remise)</dt>
+                                <dd>{formatCurrency(directFinancialBreakdown.subtotalBefore)}</dd>
+                              </div>
+                              <div className={styles.directFooterBreakdownRow}>
+                                <dt>Remise commerciale</dt>
+                                <dd>
+                                  {directFinancialBreakdown.discountHt > 0
+                                    ? `− ${Number(directFinancialBreakdown.discountHt).toFixed(2)} CHF`
+                                    : '—'}
+                                </dd>
+                              </div>
+                              <div className={styles.directFooterBreakdownRow}>
+                                <dt>Total HT (après remise)</dt>
+                                <dd>{formatCurrency(directFinancialBreakdown.totalHtAfter)}</dd>
+                              </div>
+                              {vatConfig.applicable && (
+                                <div className={styles.directFooterBreakdownRow}>
+                                  <dt>TVA</dt>
+                                  <dd>{formatCurrency(directFinancialBreakdown.vat)}</dd>
+                                </div>
+                              )}
+                              <div className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownTotal}`}>
+                                <dt>Total TTC</dt>
+                                <dd>{formatCurrency(_directTotals.total)}</dd>
+                              </div>
+                            </dl>
+                          </div>
                         ) : (
                           <span className={styles.stickyFooterTotal}>
                             Sélection partielle {directSelection.length}/{directSummary.count} • TTC <strong>{formatCurrency(_directTotals.total)}</strong>
                           </span>
                         )
-                      ) : (
+                      ) : !directFinancialBreakdown || _directTotals == null ? (
                         <span className={styles.stickyFooterTotal}>
-                          1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''} • Total TTC <strong>{formatCurrency(_directTotals?.total ?? directSummaryTTC ?? 0)}</strong>
+                          1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''} • Total TTC{' '}
+                          <strong>{formatCurrency(_directTotals?.total ?? directSummaryTTC ?? 0)}</strong>
                         </span>
+                      ) : (
+                        <div className={styles.directFooterStack}>
+                          <div className={styles.directFooterTitle}>
+                            1 facture client • {directSummary.count} transport{directSummary.count > 1 ? 's' : ''}
+                          </div>
+                          <dl className={styles.directFooterBreakdown}>
+                            <div className={styles.directFooterBreakdownRow}>
+                              <dt>Sous-total HT (avant remise)</dt>
+                              <dd>{formatCurrency(directFinancialBreakdown.subtotalBefore)}</dd>
+                            </div>
+                            <div className={styles.directFooterBreakdownRow}>
+                              <dt>Remise commerciale</dt>
+                              <dd>
+                                {directFinancialBreakdown.discountHt > 0
+                                  ? `− ${Number(directFinancialBreakdown.discountHt).toFixed(2)} CHF`
+                                  : '—'}
+                              </dd>
+                            </div>
+                            <div className={styles.directFooterBreakdownRow}>
+                              <dt>Total HT (après remise)</dt>
+                              <dd>{formatCurrency(directFinancialBreakdown.totalHtAfter)}</dd>
+                            </div>
+                            {vatConfig.applicable && (
+                              <div className={styles.directFooterBreakdownRow}>
+                                <dt>TVA</dt>
+                                <dd>{formatCurrency(directFinancialBreakdown.vat)}</dd>
+                              </div>
+                            )}
+                            <div className={`${styles.directFooterBreakdownRow} ${styles.directFooterBreakdownTotal}`}>
+                              <dt>Total TTC</dt>
+                              <dd>{formatCurrency(_directTotals?.total ?? directFinancialBreakdown.totalTtc)}</dd>
+                            </div>
+                          </dl>
+                        </div>
                       )
                     ) : directSummary && directSummary.count === 0 ? (
                       <span className={styles.stickyFooterEmpty}>Aucun transport à facturer</span>

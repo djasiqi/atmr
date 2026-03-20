@@ -534,6 +534,31 @@
   border: 1px solid var(--warning-dark);
 }
 
+/* Source du montant HT (facturation directe) */
+.badgeCompact.priceBadgeCorrected {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.badgeCompact.priceBadgeCatalog {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
+}
+
+.badgeCompact.priceBadgeEstimate {
+  background: #f5f3ff;
+  color: #5b21b6;
+  border: 1px solid #c4b5fd;
+}
+
+.badgeCompact.priceBadgeSuspect {
+  background: var(--warning-bg);
+  color: var(--warning-dark);
+  border: 1px solid #fbbf24;
+}
+
 .cancellationBadge {
   padding: 2px 6px;
   border-radius: 4px;

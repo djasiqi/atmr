@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { invoiceService } from '../../../../../services/invoiceService';
 import { BILLING_SOURCE } from '../../../../../utils/billingRecipient';
+import { getDirectLinePriceBadges, getDisplayedLineAmount } from '../../../../../utils/directInvoicePricing';
 import styles from './ReservationSelector.module.css';
 
 const ReservationSelector = ({
@@ -516,11 +517,18 @@ const ReservationSelector = ({
 
   const getBillingTypeClass = (type) => type || 'patient';
 
+  const priceBadgeClassByKey = {
+    corrected: styles.priceBadgeCorrected,
+    catalog: styles.priceBadgeCatalog,
+    estimate: styles.priceBadgeEstimate,
+    suspect_low: styles.priceBadgeSuspect,
+  };
+
   const computeAmounts = useCallback(
     (reservation) => {
       // ✅ Cohérence avec NewInvoiceModal: utiliser String(id) comme clé pour les overrides
       const override = overrides?.[String(reservation.id)] || overrides?.[reservation.id] || {};
-      const amount = Number(override.amount ?? reservation.amount ?? 0);
+      const amount = getDisplayedLineAmount(reservation, override);
       const vatRate = vatApplicable
         ? Number(reservation.vat_rate ?? reservation.default_vat_rate ?? defaultVatRate)
         : 0;
@@ -721,6 +729,20 @@ const ReservationSelector = ({
                       👤 Patient
                     </span>
                   )}
+                  {!isMinimal &&
+                    getDirectLinePriceBadges(reservation, override).map((b) => (
+                      <span
+                        key={b.key}
+                        className={`${styles.badgeCompact} ${priceBadgeClassByKey[b.key] || ''}`}
+                        title={
+                          b.key === 'suspect_low'
+                            ? 'Montant HT affiché très bas — vérifiez la ligne'
+                            : undefined
+                        }
+                      >
+                        {b.label}
+                      </span>
+                    ))}
                   <span className={styles.amountCompact}>
                     {isMinimal ? '—' : formatCurrency(figures.total)}
                   </span>
@@ -918,6 +940,20 @@ const ReservationSelector = ({
                         {reservation.medical_facility}
                       </span>
                     )}
+                    {!isMinimal &&
+                      getDirectLinePriceBadges(reservation, override).map((b) => (
+                        <span
+                          key={b.key}
+                          className={`${styles.badgeCompact} ${priceBadgeClassByKey[b.key] || ''}`}
+                          title={
+                            b.key === 'suspect_low'
+                              ? 'Montant HT affiché très bas — vérifiez la ligne'
+                              : undefined
+                          }
+                        >
+                          {b.label}
+                        </span>
+                      ))}
                   </div>
                   <span className={styles.amountHT}>
                     {isMinimal ? '—' : formatCurrency(figures.amount)}
