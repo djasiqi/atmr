@@ -1896,8 +1896,9 @@ def _format_chf_pdf(amount: float) -> str:
         whole += cents // 100
         cents = cents % 100
     ip = _swiss_group_int_str(whole)
-    core = f"CHF\xa0{ip}.{cents:02d}"
-    return f"\u2212\xa0{core}" if neg else core
+    # Espace ASCII (pas insécable) : certains moteurs PDF fusionnent sinon les colonnes à l’affichage.
+    core = f"CHF {ip}.{cents:02d}"
+    return f"- {core}" if neg else core
 
 
 def _format_chf_discount_pdf(disc_ht: float) -> str:
@@ -1909,7 +1910,7 @@ def _format_chf_discount_pdf(disc_ht: float) -> str:
         whole += cents // 100
         cents = cents % 100
     ip = _swiss_group_int_str(whole)
-    return f"\u2212\xa0CHF\xa0{ip}.{cents:02d}"
+    return f"- CHF {ip}.{cents:02d}"
 
 
 def _format_global_discount_pdf_label(pct_gd: float) -> str:
@@ -2003,7 +2004,7 @@ def _build_totals_table(
                     ["", "", "", reminder_fee_label, reminder_fee_amt],
                     ["", "", "", total_label, total_amt],
                 ]
-                col_widths = [2.2 * cm, 3.7 * cm, 3.7 * cm, 2.7 * cm, 3.2 * cm]
+                col_widths = [2.0 * cm, 3.5 * cm, 3.5 * cm, 4.2 * cm, 3.4 * cm]
         elif is_third_party:
             total_data = [
                 ["", "", "", principal_label, principal_amt],
@@ -2017,7 +2018,7 @@ def _build_totals_table(
                 ["", "", reminder_fee_label, reminder_fee_amt],
                 ["", "", total_label, total_amt],
             ]
-            col_widths = [2.2 * cm, 5.3 * cm, 2.8 * cm, 3.2 * cm]
+            col_widths = [2.2 * cm, 4.6 * cm, 4.0 * cm, 3.5 * cm]
     elif template == "detailed":
         if is_third_party:
             if vat_is_applicable:
@@ -2092,7 +2093,7 @@ def _build_totals_table(
                 ]
             else:
                 total_data = [["", "", "", total_label, total_amt]]
-            col_widths = [2.2 * cm, 3.7 * cm, 3.7 * cm, 2.7 * cm, 3.2 * cm]
+            col_widths = [2.0 * cm, 3.5 * cm, 3.5 * cm, 4.2 * cm, 3.4 * cm]
     elif is_third_party:
         if vat_is_applicable:
             total_data = [
@@ -2148,7 +2149,7 @@ def _build_totals_table(
             ]
         else:
             total_data = [["", "", total_label, total_amt]]
-        col_widths = [2.2 * cm, 5.3 * cm, 2.8 * cm, 3.2 * cm]
+        col_widths = [2.2 * cm, 4.6 * cm, 4.0 * cm, 3.5 * cm]
 
     total_table = Table(total_data, colWidths=col_widths)
     # Aligner la table des totaux sur le bord droit du frame pour que
@@ -2171,8 +2172,11 @@ def _build_totals_table(
                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
                 ("ALIGN", (3, 0), (3, -1), "LEFT"),
                 ("ALIGN", (4, 0), (4, -1), "RIGHT"),
-                ("RIGHTPADDING", (3, 0), (3, -1), 10),
-                ("LEFTPADDING", (4, 0), (4, -1), 16),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("RIGHTPADDING", (3, 0), (3, -1), 14),
+                ("LEFTPADDING", (4, 0), (4, -1), 12),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
                 ("FONTSIZE", (0, 0), (-1, -1), 10),
             ]
     elif is_third_party:
@@ -2192,8 +2196,9 @@ def _build_totals_table(
             ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("ALIGN", (2, 0), (2, -1), "LEFT"),
             ("ALIGN", (3, 0), (3, -1), "RIGHT"),
-            ("RIGHTPADDING", (2, 0), (2, -1), 10),
-            ("LEFTPADDING", (3, 0), (3, -1), 16),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("RIGHTPADDING", (2, 0), (2, -1), 14),
+            ("LEFTPADDING", (3, 0), (3, -1), 12),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
@@ -3895,12 +3900,26 @@ class PDFService:
                     )
             else:
                 total_data = [["TOTAL :", f"{total_amount:.2f} CHF"]]
-        total_table = Table(total_data, colWidths=[5 * cm, 3.2 * cm])
+        # Tableau totaux : largeurs généreuses si plusieurs lignes (remise globale / rappel) pour éviter tout chevauchement.
+        _reminder_ok = (
+            is_reminder
+            and reminder_ctx.get("reminder_fee") is not None
+            and reminder_ctx.get("reminder_total_due") is not None
+            and reminder_ctx.get("reminder_principal") is not None
+        )
+        if _reminder_ok or gd_min is not None:
+            _tot_min_w = [10.5 * cm, 4.5 * cm]
+        else:
+            _tot_min_w = [5 * cm, 3.2 * cm]
+        total_table = Table(total_data, colWidths=_tot_min_w)
         style_rules = [
             ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-            ("RIGHTPADDING", (0, 0), (0, -1), 8),
-            ("LEFTPADDING", (1, 0), (1, -1), 12),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("RIGHTPADDING", (0, 0), (0, -1), 14),
+            ("LEFTPADDING", (1, 0), (1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
         ]
         style_rules.extend(gd_min_style_extra)
