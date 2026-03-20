@@ -2259,6 +2259,12 @@ class GenerateInvoice(Resource):
                             clinic_company_id=None,
                             reservation_ids=validated_data.get("reservation_ids"),
                             overrides=overrides,
+                            global_discount_percent=validated_data.get(
+                                "global_discount_percent"
+                            ),
+                            global_discount_note=validated_data.get(
+                                "global_discount_note"
+                            ),
                         )
                         invoice_result = uc.execute(input_data)
                         if not invoice_result.success:
@@ -2307,6 +2313,12 @@ class GenerateInvoice(Resource):
                         clinic_company_id=clinic_company_id,
                         reservation_ids=validated_data.get("reservation_ids"),
                         overrides=overrides,
+                        global_discount_percent=validated_data.get(
+                            "global_discount_percent"
+                        ),
+                        global_discount_note=validated_data.get(
+                            "global_discount_note"
+                        ),
                     )
                     invoice_result = uc.execute(input_data)
                     if not invoice_result.success:

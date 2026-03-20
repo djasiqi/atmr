@@ -859,6 +859,17 @@
   color: #6b7280;
 }
 
+.directDiscountActiveBanner {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+}
+
 .directDiscountRow {
   display: flex;
   flex-wrap: wrap;
@@ -900,9 +911,13 @@
   border-radius: 6px;
 }
 
-.directDiscountRow .directDiscountApply {
+.directDiscountRow .directDiscountApply,
+.directDiscountRow .directDiscountClear {
   flex-shrink: 0;
-  margin-left: auto;
+}
+
+.directDiscountRow .directDiscountClear {
+  margin-left: 0;
 }
 
 .directDiscountBaseRow {
@@ -1002,6 +1017,21 @@
   white-space: nowrap;
 }
 
+.directFooterBreakdownNote dt {
+  font-weight: 400;
+  font-style: italic;
+  color: #6b7280;
+}
+
+.directFooterBreakdownNote dd {
+  font-weight: 500;
+  font-size: 12px;
+  color: #374151;
+  white-space: normal;
+  text-align: right;
+  max-width: 65%;
+}
+
 .directFooterBreakdownTotal dt,
 .directFooterBreakdownTotal dd {
   font-size: 14px;
@@ -1015,7 +1045,8 @@
     max-width: none;
   }
 
-  .directDiscountRow .directDiscountApply {
+  .directDiscountRow .directDiscountApply,
+  .directDiscountRow .directDiscountClear {
     margin-left: 0;
     width: 100%;
   }

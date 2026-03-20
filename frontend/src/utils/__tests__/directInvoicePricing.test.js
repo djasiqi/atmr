@@ -2,6 +2,9 @@ import {
   roundTo005,
   isSameMoney,
   getDisplayedLineAmount,
+  computeGlobalPercentDiscountOnSubtotal,
+  lineOverrideMaySuggestPriorDiscount,
+  directSelectionMaySuggestLineLevelDiscount,
   resolveDiscountBaseForLine,
   applyPercentDiscount,
 } from '../directInvoicePricing';
@@ -33,23 +36,69 @@ describe('directInvoicePricing', () => {
     });
   });
 
-  describe('scénario bug historique + réapplication remise', () => {
-    it('correction manuelle 45 puis 25% → 33,75 (pas le catalogue 0,50)', () => {
-      const reservation = { id: 1, amount: 0.5, estimated_amount: 0.5 };
-      const prevOverride = { amount: 45 };
-      const pct = 25;
-      const { chosenBaseAmount } = resolveDiscountBaseForLine({
-        reservation,
-        prevOverride,
-        discountBaseMode: 'adjusted',
-      });
-      expect(chosenBaseAmount).toBe(45);
-      expect(applyPercentDiscount(chosenBaseAmount, pct)).toBe(33.75);
+  describe('computeGlobalPercentDiscountOnSubtotal', () => {
+    it('12 × 90 CHF, remise 25 % → sous-total 1080, remise 270, net 810', () => {
+      const sub = roundTo005(12 * 90);
+      expect(sub).toBe(1080);
+      const { discountAmountHt, netHtAfter } = computeGlobalPercentDiscountOnSubtotal(sub, 25);
+      expect(discountAmountHt).toBe(270);
+      expect(netHtAfter).toBe(810);
     });
 
-    it('double clic 25% ne compose pas : base stable via pricingMeta', () => {
+    it('sous-total 1093.00 CHF, remise 25 % → remise 273.25 (arrondi unique sur le montant de remise)', () => {
+      const sub = 1093;
+      const { discountAmountHt, netHtAfter } = computeGlobalPercentDiscountOnSubtotal(sub, 25);
+      expect(discountAmountHt).toBe(273.25);
+      expect(netHtAfter).toBe(roundTo005(sub - discountAmountHt));
+      expect(netHtAfter).toBe(819.75);
+    });
+
+    it('correction manuelle : ligne 45 CHF reste 45 ; remise globale sur sous-total', () => {
+      const r = { id: 1, amount: 90, estimated_amount: 90 };
+      const lineHt = getDisplayedLineAmount(r, { amount: 45 });
+      expect(lineHt).toBe(45);
+      const { discountAmountHt, netHtAfter } = computeGlobalPercentDiscountOnSubtotal(lineHt, 25);
+      expect(discountAmountHt).toBe(roundTo005(45 * 0.25));
+      expect(netHtAfter).toBe(roundTo005(45 - discountAmountHt));
+    });
+
+    it('panier mixte : 10×90 + 1×45 → sous-total 945, remise 25 % sur le tout', () => {
+      const sub = roundTo005(10 * 90 + 45);
+      expect(sub).toBe(945);
+      const { discountAmountHt, netHtAfter } = computeGlobalPercentDiscountOnSubtotal(sub, 25);
+      expect(discountAmountHt).toBe(236.25);
+      expect(netHtAfter).toBe(708.75);
+    });
+  });
+
+  describe('anti double remise (heuristique)', () => {
+    it('détecte une note contenant « remise »', () => {
+      expect(lineOverrideMaySuggestPriorDiscount({ note: 'Remise commerciale exceptionnelle' })).toBe(
+        true
+      );
+      expect(lineOverrideMaySuggestPriorDiscount({ note: 'Transport standard' })).toBe(false);
+    });
+
+    it('détecte pricingMeta legacy', () => {
+      expect(
+        lineOverrideMaySuggestPriorDiscount({
+          amount: 67.5,
+          pricingMeta: { baseBeforeDiscount: 90, discountPercent: 25 },
+        })
+      ).toBe(true);
+    });
+
+    it('directSelectionMaySuggestLineLevelDiscount parcourt les overrides', () => {
+      const res = [{ id: 1 }, { id: 2 }];
+      const ov = { 1: { note: 'ok' }, 2: { note: 'remise 10%' } };
+      expect(directSelectionMaySuggestLineLevelDiscount(res, ov)).toBe(true);
+      expect(directSelectionMaySuggestLineLevelDiscount(res, { 1: {}, 2: {} })).toBe(false);
+    });
+  });
+
+  describe('resolveDiscountBaseForLine (helpers hérités)', () => {
+    it('mode adjusted : base stable via pricingMeta.baseBeforeDiscount', () => {
       const reservation = { id: 1, amount: 0.5 };
-      const pct = 25;
       const prevOverride = {
         amount: 33.75,
         pricingMeta: {
@@ -64,12 +113,10 @@ describe('directInvoicePricing', () => {
         discountBaseMode: 'adjusted',
       });
       expect(chosenBaseAmount).toBe(45);
-      expect(applyPercentDiscount(chosenBaseAmount, pct)).toBe(33.75);
+      expect(applyPercentDiscount(chosenBaseAmount, 25)).toBe(33.75);
     });
-  });
 
-  describe('resolveDiscountBaseForLine mode catalog', () => {
-    it('ignore prev.amount et pricingMeta', () => {
+    it('mode catalog : ignore prev.amount et pricingMeta', () => {
       const reservation = { id: 1, amount: 10, estimated_amount: 99 };
       const prevOverride = {
         amount: 77,

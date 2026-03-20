@@ -25,7 +25,7 @@ from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
-from models import BillingParty, Booking, Invoice, InvoiceLineType, InvoiceStatus
+from models import BillingParty, Booking, Invoice, InvoiceLine, InvoiceLineType, InvoiceStatus
 from models.enums import InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -77,6 +77,8 @@ class GenerateInvoiceInput:
     clinic_company_id: int | None = None
     reservation_ids: list[int] | None = None
     overrides: dict[str, Any] | None = None
+    global_discount_percent: float | None = None
+    global_discount_note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -699,6 +701,7 @@ class GenerateInvoiceUseCase:
             subtotal = Decimal("0.00")
             vat_total = Decimal("0.00")
             vat_breakdown: dict[str, dict[str, Decimal]] = {}
+            ride_line_entries: list[tuple[InvoiceLine, Decimal, Decimal]] = []
 
             for reservation in reservations:
                 # ✅ Livraison matériel : utiliser prix fixe entreprise
@@ -838,6 +841,12 @@ class GenerateInvoiceUseCase:
                 }
                 line_dto = self.invoice_line_repo.create(line_data)
 
+                line_model = db.session.get(InvoiceLine, line_dto.id)
+                if line_model is not None:
+                    ride_line_entries.append(
+                        (line_model, base_amount, line_vat_rate)
+                    )
+
                 # Lier la réservation à la ligne de facture
                 reservation.invoice_line_id = line_dto.id
                 reservation.updated_at = datetime.now(UTC)
@@ -854,18 +863,117 @@ class GenerateInvoiceUseCase:
                 vat_breakdown[rate_key]["vat"] += vat_amount
 
             # 10. Mettre à jour les totaux de la facture
-            # Arrondir les totaux à 5 centimes pour éviter les montants
-            # comme 10.12 ou 11.13
-            # Arrondir le subtotal à 5 centimes
-            subtotal = round_to_5_cents(subtotal)
-            # Arrondir la TVA totale à 5 centimes
-            vat_total = round_to_5_cents(vat_total)
-            # Calculer le total et l'arrondir à 5 centimes
-            total = round_to_5_cents(subtotal + vat_total)
-            # Ajuster la TVA totale pour qu'elle corresponde au total arrondi
-            vat_total = total - subtotal
-            if vat_total < 0:
+            gross_subtotal = round_to_5_cents(subtotal)
+
+            gd_note_raw = getattr(input_data, "global_discount_note", None)
+            gd_note_stripped = (
+                str(gd_note_raw).strip()[:500]
+                if isinstance(gd_note_raw, str) and str(gd_note_raw).strip()
+                else None
+            )
+
+            gd_pct_dec: Decimal | None = None
+            gd_pct_raw = getattr(input_data, "global_discount_percent", None)
+            if gd_pct_raw is not None:
+                try:
+                    _p = Decimal(str(gd_pct_raw))
+                    if Decimal("0") < _p <= Decimal("100"):
+                        gd_pct_dec = _p
+                except (InvalidOperation, ValueError, TypeError):
+                    gd_pct_dec = None
+
+            apply_global_discount = (
+                gd_pct_dec is not None
+                and gross_subtotal > 0
+                and len(ride_line_entries) > 0
+            )
+
+            global_discount_meta: dict[str, Any] | None = None
+
+            if apply_global_discount:
+                assert gd_pct_dec is not None
+                # Remise globale : un seul arrondi 0,05 sur le montant (pas % ni ligne par ligne).
+                discount_ht = round_to_5_cents(
+                    gross_subtotal * gd_pct_dec / Decimal("100")
+                )
+                if discount_ht > gross_subtotal:
+                    discount_ht = gross_subtotal
+                net_ht = round_to_5_cents(gross_subtotal - discount_ht)
+
+                desc = (
+                    f"Remise commerciale {str(gd_pct_dec.normalize())} %"
+                    " — appliquée sur le sous-total HT des prestations"
+                )
+                if gd_note_stripped:
+                    desc = f"{desc} — {gd_note_stripped[:300]}"
+                self.invoice_line_repo.create(
+                    {
+                        "invoice_id": invoice.id,
+                        "type": InvoiceLineType.CUSTOM,
+                        "description": desc[:500],
+                        "qty": Decimal("1"),
+                        "unit_price": -discount_ht,
+                        "line_total": -discount_ht,
+                        "vat_rate": None,
+                        "vat_amount": Decimal("0.00"),
+                        "total_with_vat": -discount_ht,
+                        "adjustment_note": None,
+                        "reservation_id": None,
+                    }
+                )
+
+                vat_breakdown = {}
                 vat_total = Decimal("0.00")
+                if vat_applicable:
+                    running_net = Decimal("0.00")
+                    n_lines = len(ride_line_entries)
+                    for idx, (lm, base_amt, rate_line) in enumerate(ride_line_entries):
+                        if idx < n_lines - 1:
+                            net_i = round_to_5_cents(
+                                base_amt * net_ht / gross_subtotal
+                            )
+                        else:
+                            net_i = round_to_5_cents(net_ht - running_net)
+                        running_net += net_i
+                        vat_i, twv_i = self.invoice_calculator.calculate_vat(
+                            net_i, rate_line
+                        )
+                        lm.vat_amount = vat_i
+                        lm.total_with_vat = twv_i
+                        vat_total += vat_i
+                        rate_key = f"{rate_line.normalize()}"
+                        if rate_key not in vat_breakdown:
+                            vat_breakdown[rate_key] = {
+                                "base": Decimal("0.00"),
+                                "vat": Decimal("0.00"),
+                            }
+                        vat_breakdown[rate_key]["base"] += net_i
+                        vat_breakdown[rate_key]["vat"] += vat_i
+                else:
+                    for lm, _, _ in ride_line_entries:
+                        lm.vat_amount = Decimal("0.00")
+                        lm.total_with_vat = lm.line_total
+
+                subtotal = net_ht
+                vat_total = round_to_5_cents(vat_total)
+                total = round_to_5_cents(subtotal + vat_total)
+                vat_total = total - subtotal
+                if vat_total < 0:
+                    vat_total = Decimal("0.00")
+
+                global_discount_meta = {
+                    "percent": float(gd_pct_dec),
+                    "amount_ht": float(discount_ht),
+                    "subtotal_before_ht": float(gross_subtotal),
+                    "note": gd_note_stripped,
+                }
+            else:
+                subtotal = gross_subtotal
+                vat_total = round_to_5_cents(vat_total)
+                total = round_to_5_cents(subtotal + vat_total)
+                vat_total = total - subtotal
+                if vat_total < 0:
+                    vat_total = Decimal("0.00")
 
             invoice.subtotal_amount = subtotal
             invoice.vat_total_amount = vat_total
@@ -890,6 +998,8 @@ class GenerateInvoiceUseCase:
                 "label": vat_label,
                 "number": vat_number,
             }
+            if global_discount_meta is not None:
+                current_meta["global_discount"] = global_discount_meta
             invoice.meta = cast(Any, current_meta)
 
             # 11. Générer et sauvegarder la référence QR (si pas déjà présente)

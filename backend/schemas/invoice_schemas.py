@@ -131,3 +131,10 @@ class InvoiceGenerateSchema(Schema):
         values=fields.Dict(keys=fields.Str(), values=fields.Raw()),
         allow_none=True,
     )
+    # Remise globale HT (facturation directe) : appliquée en synthèse, pas sur chaque ligne
+    global_discount_percent = fields.Float(
+        validate=validate.Range(min=0, max=100),
+        allow_none=True,
+        load_default=None,
+    )
+    global_discount_note = fields.Str(validate=validate.Length(max=500), allow_none=True)

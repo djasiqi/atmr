@@ -140,6 +140,31 @@ export function applyPercentDiscount(baseAmount, percent) {
 }
 
 /**
+ * Remise globale sur le sous-total HT (lignes au tarif normal, pas par ligne).
+ *
+ * Arrondi CHF (0,05) : le **pourcentage n’est pas arrondi**. On calcule
+ * `subtotalHt × percent / 100`, puis **un seul** `roundTo005` sur le montant de remise.
+ * Le net HT est `subtotal − remise`, puis arrondi 0,05 (aligné backend `round_to_5_cents`).
+ * Aucun arrondi « par ligne » pour la remise globale.
+ *
+ * @param {number} subtotalHt
+ * @param {number} percent
+ * @returns {{ discountAmountHt: number, netHtAfter: number }}
+ */
+export function computeGlobalPercentDiscountOnSubtotal(subtotalHt, percent) {
+  const sub = Number(subtotalHt);
+  const p = Number(percent);
+  if (!Number.isFinite(sub) || sub <= 0 || !Number.isFinite(p) || p <= 0) {
+    return { discountAmountHt: 0, netHtAfter: roundTo005(sub) };
+  }
+  const rawDisc = sub * (p / 100);
+  const discountAmountHt = roundTo005(rawDisc);
+  let netHtAfter = roundTo005(sub - discountAmountHt);
+  if (netHtAfter < 0) netHtAfter = 0;
+  return { discountAmountHt, netHtAfter };
+}
+
+/**
  * Badges source prix (facturation directe).
  * @param {object} reservation
  * @param {object} [override]
@@ -188,4 +213,47 @@ export function getDirectLinePriceBadges(reservation, override = {}, opts = {}) 
 
 export function directLineHasSuspectAmount(reservation, override, opts) {
   return getDirectLinePriceBadges(reservation, override, opts).some((b) => b.key === 'suspect_low');
+}
+
+/**
+ * Ancienne remise au niveau ligne (metadata) ou note explicite : risque de double remise
+ * si l’utilisateur ajoute une remise globale en synthèse.
+ *
+ * @param {object} [override]
+ * @returns {boolean}
+ */
+export function lineOverrideMaySuggestPriorDiscount(override) {
+  if (!override || typeof override !== 'object') return false;
+  const meta = override.pricingMeta;
+  if (meta && typeof meta === 'object') {
+    if (meta.discountPercent != null && String(meta.discountPercent).trim() !== '') {
+      return true;
+    }
+    if (meta.baseBeforeDiscount != null && Number.isFinite(Number(meta.baseBeforeDiscount))) {
+      return true;
+    }
+  }
+  const note = String(override.note || '').toLowerCase();
+  if (!note) return false;
+  if (/\bremise\b/.test(note) || /\bremisé/.test(note) || /\bremises\b/.test(note)) {
+    return true;
+  }
+  if (/\b\d+\s*%/.test(note) && /\b(remise|rabais|ristourne)\b/.test(note)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {object[]} reservations
+ * @param {Record<string, object>} overrides
+ */
+export function directSelectionMaySuggestLineLevelDiscount(reservations, overrides) {
+  if (!Array.isArray(reservations) || !overrides) return false;
+  for (const r of reservations) {
+    if (!r || r.id == null) continue;
+    const o = overrides[String(r.id)] || overrides[r.id];
+    if (lineOverrideMaySuggestPriorDiscount(o)) return true;
+  }
+  return false;
 }
