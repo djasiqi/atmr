@@ -48,6 +48,8 @@ jobs:
     name: Build & Push Production Image
     runs-on: ubuntu-latest
     env:
+      # Opt-in explicite Node 24 pour les actions JS (docker/*, cache GHA) — évite l’avertissement dépréciation Node 20
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
       # TEMPORARY: Force tag v5 with Flask-Limiter 3.x correct API (pass URI directly)
       DOCKER_TAG: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || 'v5' }}
@@ -169,7 +171,7 @@ jobs:
           fi
 
       - name: Build & push backend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           file: ./backend/Dockerfile.production

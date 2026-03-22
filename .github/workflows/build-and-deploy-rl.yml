@@ -41,6 +41,10 @@ on:
 permissions:
     contents: read
 
+env:
+    # Opt-in Node 24 pour les actions JS (docker/*, cache GHA) — aligné sur deploy.yml
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
     build-rl-image:
         name: Build & Push RL Image
@@ -50,6 +54,7 @@ jobs:
         runs-on: ubuntu-latest
 
         env:
+            FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
             DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE || 'djasiqi/atmr-backend' }}
             DOCKER_TAG: ${{ github.event.inputs.tag || 'rl-latest' }}
             DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -126,7 +131,7 @@ jobs:
 
             - name: Build & push RL image
               timeout-minutes: 60
-              uses: docker/build-push-action@v5
+              uses: docker/build-push-action@v7
               with:
                   context: ./backend
                   file: ./backend/Dockerfile.rl
