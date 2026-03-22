@@ -25,6 +25,11 @@ from ext import db, role_required, socketio
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
+from services.geolocation.driver_location_http import (
+    check_http_driver_location_rate_limit,
+    get_idempotent_response,
+    store_idempotent_response,
+)
 from services.geolocation.presence import (
     compute_last_seen_seconds,
     compute_location_status,
@@ -1214,7 +1219,13 @@ class DriverLocation(Resource):
     @role_required(UserRole.driver)
     @driver_ns.expect(location_model, validate=False)
     def put(self):
-        """Tracking temps réel : enregistre la dernière position."""
+        """Tracking temps réel : enregistre la dernière position.
+
+        En-têtes optionnels :
+        - ``Idempotency-Key`` / ``X-Idempotency-Key`` : déduplication des retries HTTP (TTL 300 s par défaut).
+        Rate limit HTTP : par chauffeur, fenêtre configurable (``HTTP_DRIVER_LOCATION_*``), plus permissif que le socket mais borné.
+        Contrat par mode : voir ``backend/docs/DRIVER_LOCATION_CONTRACT.md``.
+        """
         driver, error_response, status_code = get_driver_from_token()
         if error_response:
             return error_response, status_code
@@ -1273,6 +1284,23 @@ class DriverLocation(Resource):
                             status_code = 400
 
                         if result is None:
+                            idem_hdr = request.headers.get("Idempotency-Key") or request.headers.get(
+                                "X-Idempotency-Key"
+                            )
+                            if idem_hdr:
+                                cached = get_idempotent_response(driver.id, idem_hdr)
+                                if cached is not None:
+                                    return cached, 200
+                            allowed_rl, retry_rl = check_http_driver_location_rate_limit(
+                                driver.id
+                            )
+                            if not allowed_rl:
+                                return {
+                                    "error": "rate_limit_exceeded",
+                                    "message": "Trop de mises à jour de position (HTTP). Réessayez plus tard.",
+                                    "retry_after_seconds": retry_rl,
+                                }, 429
+
                             speed = float(
                                 p.get("speed_mps", p.get("speed", 0.0)) or 0.0
                             )
@@ -1439,15 +1467,18 @@ class DriverLocation(Resource):
                                         str(fanout_err),
                                     )
 
-                            result = {
-                                "ok": True,
-                                "source": source,
-                                "message": "Location updated",
-                                "location_mode": location_mode,
-                                "accept_status": accept_status,
-                                "accept_reason": accept_reason,
-                                "received_at": received_at,
-                            }
+                            if result is None:
+                                result = {
+                                    "ok": True,
+                                    "source": source,
+                                    "message": "Location updated",
+                                    "location_mode": location_mode,
+                                    "accept_status": accept_status,
+                                    "accept_reason": accept_reason,
+                                    "received_at": received_at,
+                                }
+                                if idem_hdr:
+                                    store_idempotent_response(driver.id, idem_hdr, result)
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400

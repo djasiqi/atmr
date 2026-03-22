@@ -1718,6 +1718,11 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("driver_location")
     def handle_driver_location(data):  # noqa: PLR0911
         """Handler pour la réception de la localisation du chauffeur.
+
+        Contrat modes / transports : ``backend/docs/DRIVER_LOCATION_CONTRACT.md``.
+        ``availability_presence`` est refusé ici (HTTP uniquement) — erreur
+        ``availability_presence_socket_forbidden``.
+
         ✅ FIX: Accepte driver_id dans payload + fallback robuste par user_id.
 
         Policy ASSIGNED (P1): Les chauffeurs ASSIGNED peuvent envoyer des positions
@@ -2023,6 +2028,10 @@ def init_chat_socket(socketio: SocketIO):
     @socketio.on("driver_location_batch")
     def handle_driver_location_batch(data):  # noqa: PLR0911
         """Handler pour la réception de batch de localisations du chauffeur.
+
+        Contrat : ``backend/docs/DRIVER_LOCATION_CONTRACT.md``. Les entrées
+        ``availability_presence`` sont rejetées (``availability_presence_socket_forbidden``) ;
+        utiliser ``PUT /driver/me/location`` pour la présence.
         Traite chaque position du batch et les persiste.
         """
         # Variables pour logging d'erreur

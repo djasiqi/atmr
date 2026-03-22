@@ -45,12 +45,22 @@ DEFAULT_OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
 DEFAULT_DRIVER_LOC_TTL_SEC = int(os.getenv("DRIVER_LOC_TTL_SEC", "1200"))  # 20 min
 DEFAULT_MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))  # 5 points
 DEFAULT_GEOFENCE_RADIUS_M = 50.0  # 50m pour détection arrivée pickup/dropoff
-TRIP_TRACKING_MIN_INTERVAL_SEC = 30  # Minimum 30s entre logs pour performance
+def _trip_tracking_min_interval_sec() -> float:
+    """Intervalle minimal entre points `trip_tracking` (mission active). Défaut 15 s (alignement mobile)."""
+    return float(os.getenv("TRIP_TRACKING_MIN_INTERVAL_SEC", "15"))
+
+
 ARBITRATION_CLOSE_WINDOW_SEC = 3
 MISSION_TOO_OLD_SEC = 120
 AVAILABILITY_TOO_OLD_SEC = 600
 LOW_ACCURACY_THRESHOLD_M = 1500.0
 LOCATION_V21_ENABLED = os.getenv("DRIVER_LOCATION_V21_ENABLED", "true").lower() != "false"
+TRIP_HISTORY_REPLAY_ENABLED = (
+    os.getenv("TRIP_HISTORY_REPLAY_ENABLED", "true").lower() != "false"
+)
+TRIP_HISTORY_MAX_RECORDED_AGE_SEC = int(
+    os.getenv("TRIP_HISTORY_MAX_RECORDED_AGE_SEC", "172800")
+)  # 48 h — rejeu hors ligne pour historique analytique
 
 
 @dataclass
@@ -233,7 +243,7 @@ class LocationService:
                 driver_lon=snapped_lon,
             )
 
-        # 6. Log historique si en trajet
+        # 6. Log historique trajet : canon strict OU rejeu analytique (sans toucher au canon Redis)
         trip_logged = False
         if should_persist_db:
             trip_logged = self._log_trip_tracking(
@@ -245,6 +255,24 @@ class LocationService:
                 accuracy=accuracy,
                 timestamp=timestamp,
                 db_session=db_session,
+                history_replay=False,
+            )
+        elif self._should_append_trip_history(
+            location_mode=normalized_mode,
+            accept_status=accept_status,
+            accept_reason=accept_reason,
+            recorded_at=recorded_dt,
+        ):
+            trip_logged = self._log_trip_tracking(
+                driver_id=driver_id,
+                latitude=snapped_lat,
+                longitude=snapped_lon,
+                speed=speed,
+                heading=heading,
+                accuracy=accuracy,
+                timestamp=timestamp,
+                db_session=db_session,
+                history_replay=True,
             )
 
         # Event métier (consommable par d'autres services) - sans changer le comportement actuel
@@ -689,6 +717,26 @@ class LocationService:
                 return enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
         return LOCATION_V21_ENABLED
 
+    def _should_append_trip_history(
+        self,
+        *,
+        location_mode: str,
+        accept_status: str,
+        accept_reason: str,
+        recorded_at: datetime,
+    ) -> bool:
+        """Historique analytique : points rejetés du canon mais encore utiles en base (replay)."""
+        if not TRIP_HISTORY_REPLAY_ENABLED or location_mode != "mission_live":
+            return False
+        if accept_status != "accepted_observability_only":
+            return False
+        if accept_reason not in {"older_than_canonical", "too_old_for_mode"}:
+            return False
+        now = datetime.now(UTC)
+        ra = recorded_at if recorded_at.tzinfo else recorded_at.replace(tzinfo=UTC)
+        age_sec = max(0.0, (now - ra).total_seconds())
+        return age_sec <= float(TRIP_HISTORY_MAX_RECORDED_AGE_SEC)
+
     def _arbitrate_update(  # noqa: PLR0911
         self,
         *,
@@ -748,6 +796,8 @@ class LocationService:
         accuracy: float | None,
         timestamp: datetime,
         db_session: Session | None = None,
+        *,
+        history_replay: bool = False,
     ) -> bool:
         """Log position dans historique trajets si assignment IN_PROGRESS.
 
@@ -760,6 +810,8 @@ class LocationService:
             accuracy: Précision GPS (mètres)
             timestamp: Timestamp
             db_session: Session DB (optionnel)
+            history_replay: si True, autorise l'insertion de points plus vieux que le dernier
+                log (replay hors ordre) pour l'historique analytique uniquement.
 
         Returns:
             True si position loggée, False sinon
@@ -782,21 +834,31 @@ class LocationService:
             if not assignment:
                 return False
 
-            # Batch insert: ne logger que toutes les 30s max pour performance
-            # (vérifier dernière position loggée)
+            min_interval = _trip_tracking_min_interval_sec()
             last_log = (
                 TripTracking.query.filter_by(assignment_id=assignment.id)
                 .order_by(TripTracking.timestamp.desc())
                 .first()
             )
 
-            if last_log:
+            replay_older = bool(
+                history_replay and last_log and timestamp < last_log.timestamp
+            )
+            if not replay_older and last_log:
                 time_since_last = (timestamp - last_log.timestamp).total_seconds()
-                if time_since_last < TRIP_TRACKING_MIN_INTERVAL_SEC:
+                if time_since_last < min_interval:
                     return False
 
             # Logger position
             session = db_session or db.session
+            if (
+                TripTracking.query.filter_by(
+                    assignment_id=assignment.id,
+                    timestamp=timestamp,
+                ).first()
+                is not None
+            ):
+                return False
             # Créer instance TripTracking avec attributs
             trip_tracking = TripTracking()
             trip_tracking.assignment_id = assignment.id
@@ -813,20 +875,10 @@ class LocationService:
                 session.commit()
 
             return True
-        except (OperationalError, DBAPIError) as e:
-            # Erreurs DB attendues : connexion, timeout
+        except (OperationalError, DBAPIError, ValueError, TypeError, AttributeError) as e:
+            # DB (connexion, timeout) ou validation
             logger.debug(
-                "[LocationService] Trip tracking log failed (DB error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
-            if not db_session:
-                db.session.rollback()
-            return False
-        except (ValueError, TypeError, AttributeError) as e:
-            # Erreurs de validation attendues : données invalides
-            logger.debug(
-                "[LocationService] Trip tracking log failed (validation error: %s): %s",
+                "[LocationService] Trip tracking log failed (%s): %s",
                 type(e).__name__,
                 str(e),
             )
@@ -834,7 +886,6 @@ class LocationService:
                 db.session.rollback()
             return False
         except Exception:
-            # Erreur inattendue lors du log trip tracking
             logger.debug("[LocationService] Trip tracking log failed")
             if not db_session:
                 db.session.rollback()

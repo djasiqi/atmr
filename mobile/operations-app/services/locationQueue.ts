@@ -436,7 +436,11 @@ export async function flushLatestPositionViaHttp(): Promise<void> {
           latest.recorded_at || new Date(latest.timestamp || Date.now()).toISOString(),
         sent_at: new Date().toISOString(),
         is_background: true,
-        location_mode: normalizeMode(latest.location_mode),
+        // Contrat backend : mission explicite → mission_live (évite un défaut HTTP mission_live ambigu)
+        location_mode:
+          latest.mission_id != null
+            ? "mission_live"
+            : normalizeMode(latest.location_mode),
         mission_id: latest.mission_id ?? null,
       });
       const result = await Promise.race([
