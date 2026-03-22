@@ -1,4 +1,6 @@
 // services/locationTracker.ts
+// P1 — Exécuteur (start/stop natif, foreground) ; le mode métier est résolu par trackingPolicy.ts +
+// trackingReconcile.ts (ne pas réinférer la criticité ici — lire getLastResolvedTrackingPolicy côté sync).
 // Tracker GPS adaptatif avec fréquence variable selon mouvement
 // Plan 2G/3G Phase 4 : enqueue dans locationQueue au lieu d'envoi direct (offline-safe)
 // Background orchestrator : mission-active only, start/stop idempotent
@@ -21,14 +23,20 @@ import {
   getMissionNotificationContent,
   dismissMissionNotification,
 } from "./missionBarAndroid";
-import { MissionStateManager } from "./missionState";
+import { MissionStateManager, type MissionBarStatus } from "./missionState";
 import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
 import { resolveMissionContext } from "./locationMissionContext";
+import {
+  isMissionTrackingActiveStatus,
+  isMissionTrackingEligibleNow,
+} from "./missionTrackingPolicy";
+import { getLastResolvedTrackingPolicy } from "./trackingRuntime";
 
 // Constante locale pour éviter de charger locationTask en __DEV__ (boucle reload expo/expo#25325)
 const LOCATION_TASK_NAME = "background-location-task";
 
 const log = getLogger("Tracker");
+const trackLog = getLogger("TRACK");
 
 // ---------------------------------------------------------------------------
 // Background orchestrator — mission-active only
@@ -57,7 +65,69 @@ let lastStopReason: string | null = null;
 let lastReconciliationTrigger: string | null = null;
 let lastStateChangeTs = 0;
 let bgTrackingStartedCache = false;
-let currentLocationMode: LocationMode = "mission_live";
+/** P0 : défaut mémoire aligné sur présence (pas mission tant qu'aucune mission éligible). */
+let currentLocationMode: LocationMode = "availability_presence";
+
+/** Dernières permissions connues (mis à jour par buildBgTrackingInputs et initLocationModeRuntime). */
+let lastPermissionSnapshot: { fg: PermissionStatus; bg: PermissionStatus } | null = null;
+
+let lastLoggedPermissionKey = "";
+let lastLoggedMissionKey = "";
+let lastMissionEscalationEnabled: boolean | null = null;
+
+export type PendingBackgroundTrackingState = {
+  active: boolean;
+  reason?: string;
+  missionSnapshot?: { id: number | null; status: MissionBarStatus | null };
+  deferredAt?: number;
+};
+
+let pendingBackgroundTrackingStart: PendingBackgroundTrackingState = { active: false };
+
+export function getLastPermissionSnapshot(): {
+  fg: PermissionStatus;
+  bg: PermissionStatus;
+} | null {
+  return lastPermissionSnapshot;
+}
+
+export function getPendingBackgroundTrackingStart(): PendingBackgroundTrackingState {
+  return { ...pendingBackgroundTrackingStart };
+}
+
+function setPendingBackgroundTrackingStart(
+  reason: string,
+  missionSnapshot?: { id: number | null; status: MissionBarStatus | null }
+): void {
+  pendingBackgroundTrackingStart = {
+    active: true,
+    reason,
+    missionSnapshot,
+    deferredAt: Date.now(),
+  };
+}
+
+export function clearPendingBackgroundTrackingStart(clearReason: string): void {
+  if (!pendingBackgroundTrackingStart.active) return;
+  pendingBackgroundTrackingStart = { active: false };
+  trackLog.info("PENDING_BACKGROUND_TRACKING_CLEARED", { clearReason });
+}
+
+/** P1 — Natif : policy résolue si disponible ; __DEV__ : assert vs gating legacy. */
+function nativeBackgroundShouldRunFromPolicyOrLegacy(inputs: BgTrackingInputs): boolean {
+  const policy = getLastResolvedTrackingPolicy();
+  if (policy !== null) {
+    const legacy = shouldRunBackgroundTracking(inputs);
+    if (__DEV__ && legacy !== policy.shouldRunNativeBackgroundTracking) {
+      trackLog.warn("TRACKING_NATIVE_POLICY_SHADOW_MISMATCH", {
+        legacyShouldRun: legacy,
+        policyShouldRun: policy.shouldRunNativeBackgroundTracking,
+      });
+    }
+    return policy.shouldRunNativeBackgroundTracking;
+  }
+  return shouldRunBackgroundTracking(inputs);
+}
 
 /** Snapshot diagnostic lisible pour QA (@atmr:bg_tracking_diag). */
 async function persistDiagnostic(): Promise<void> {
@@ -125,6 +195,7 @@ export async function ensureBackgroundTrackingStopped(
   if (Platform.OS === "web") return;
   if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   if (bgOperationInProgress) return;
+  clearPendingBackgroundTrackingStart(`stop:${reason}`);
   const stopRequestedTs = Date.now();
   bgOperationInProgress = true;
   try {
@@ -160,8 +231,23 @@ export async function ensureBackgroundTrackingStarted(
   if (Platform.OS === "web") return;
   if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   if (bgOperationInProgress) return;
-  if (!shouldRunBackgroundTracking(inputs)) {
+
+  const ms = MissionStateManager.getState();
+  const missionSnapshot = {
+    id: ms.activeMission?.id ?? null,
+    status: ms.activeMission ? ms.currentStatus : null,
+  };
+
+  trackLog.info("BACKGROUND_TRACKING_START_REQUESTED", {
+    reason,
+    appState: AppState.currentState,
+    platform: Platform.OS,
+    missionSnapshot,
+  });
+
+  if (!nativeBackgroundShouldRunFromPolicyOrLegacy(inputs)) {
     log.debug("bg_tracking_start_skip", { reason, inputs_deny: true });
+    clearPendingBackgroundTrackingStart("should_not_run_inputs_deny");
     return;
   }
   // Android 10+ : un foreground service de localisation ne peut pas être démarré
@@ -169,9 +255,16 @@ export async function ensureBackgroundTrackingStarted(
   // "Foreground service cannot be started when the application is in the background"
   // (cf. logcat LocationTaskConsumer + [Tracker] bg_tracking_start_error).
   if (Platform.OS === "android" && AppState.currentState !== "active") {
+    setPendingBackgroundTrackingStart("android_fgs_requires_foreground", missionSnapshot);
     log.debug("bg_tracking_start_deferred", {
       reason,
       app_state: AppState.currentState,
+      hint: "android_fgs_requires_foreground",
+    });
+    trackLog.info("BACKGROUND_TRACKING_START_DEFERRED", {
+      reason,
+      appState: AppState.currentState,
+      missionSnapshot,
       hint: "android_fgs_requires_foreground",
     });
     return;
@@ -181,6 +274,12 @@ export async function ensureBackgroundTrackingStarted(
     const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (started) {
       log.info("bg_tracking_start_skip", { reason, already_started: true });
+      clearPendingBackgroundTrackingStart("already_started_native");
+      trackLog.info("BACKGROUND_TRACKING_STARTED", {
+        reason,
+        locationMode: inputs.locationMode,
+        already_started: true,
+      });
       return;
     }
     const isPresenceMode = inputs.locationMode === "availability_presence";
@@ -204,7 +303,13 @@ export async function ensureBackgroundTrackingStarted(
     await dismissMissionNotification();
     lastStateChangeTs = Date.now();
     await persistDiagnostic();
+    clearPendingBackgroundTrackingStart("native_started_ok");
     log.info("bg_tracking_started", { reason });
+    trackLog.info("BACKGROUND_TRACKING_STARTED", {
+      reason,
+      locationMode: inputs.locationMode,
+      already_started: false,
+    });
   } catch (e: any) {
     log.warn("bg_tracking_start_error", { reason, error: e?.message });
   } finally {
@@ -225,7 +330,7 @@ export async function refreshBackgroundTrackingNotification(
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (!started) return false;
-    if (!shouldRunBackgroundTracking(inputs)) return false;
+    if (!nativeBackgroundShouldRunFromPolicyOrLegacy(inputs)) return false;
   } catch {
     return false;
   }
@@ -241,7 +346,7 @@ export async function reconcileBackgroundTrackingState(
   if (Platform.OS === "web") return;
   if (__DEV__) return; // Workaround expo/expo#25325 : pas de task en __DEV__
   lastReconciliationTrigger = trigger;
-  const shouldRun = shouldRunBackgroundTracking(inputs);
+  const shouldRun = nativeBackgroundShouldRunFromPolicyOrLegacy(inputs);
   let started = false;
   try {
     started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
@@ -309,6 +414,46 @@ export async function getPermissionStatuses(): Promise<{
   }
 }
 
+/**
+ * Hydrate le mode mémoire et le snapshot permissions au démarrage session driver,
+ * avant syncEngine.start(), pour éviter un défaut mission_live incohérent.
+ */
+export async function initLocationModeRuntime(): Promise<void> {
+  await MissionStateManager.ensureHydrated({ skipNetwork: true });
+  try {
+    const perms = await getPermissionStatuses();
+    lastPermissionSnapshot = { fg: perms.fg, bg: perms.bg };
+    const permKey = `${perms.fg}:${perms.bg}`;
+    if (permKey !== lastLoggedPermissionKey) {
+      lastLoggedPermissionKey = permKey;
+      trackLog.info("PERMISSION_SNAPSHOT", {
+        fg: perms.fg,
+        bg: perms.bg,
+        platform: Platform.OS,
+        source: "init_runtime",
+      });
+    }
+  } catch {
+    // snapshot inchangé
+  }
+
+  const hasMission = MissionStateManager.isActive();
+  const eligible = isMissionTrackingEligibleNow();
+  const persisted = await getPersistedLocationMode(hasMission);
+  const nextMode: LocationMode = eligible ? "mission_live" : persisted;
+  const prevMode = currentLocationMode;
+  currentLocationMode = nextMode;
+  if (prevMode !== nextMode) {
+    trackLog.info("TRACKING_MODE_CHANGED", {
+      from: prevMode,
+      to: nextMode,
+      source: "init_runtime",
+      hasActiveMission: hasMission,
+      missionStatus: hasMission ? MissionStateManager.getState().currentStatus : null,
+    });
+  }
+}
+
 /** Construit les inputs pour le gating (appelé par le layout / mission listener). */
 export async function buildBgTrackingInputs(params: {
   isAuthenticated: boolean;
@@ -316,6 +461,18 @@ export async function buildBgTrackingInputs(params: {
   hasActiveMission: boolean;
 }): Promise<BgTrackingInputs> {
   const { fg, bg } = await getPermissionStatuses();
+  lastPermissionSnapshot = { fg, bg };
+  const permKey = `${fg}:${bg}`;
+  if (permKey !== lastLoggedPermissionKey) {
+    lastLoggedPermissionKey = permKey;
+    trackLog.info("PERMISSION_SNAPSHOT", {
+      fg,
+      bg,
+      platform: Platform.OS,
+      source: "build_inputs",
+    });
+  }
+
   const killSwitchEnabled = await isKillSwitchEnabled();
   const availabilityPresenceEnabled = await isAvailabilityPresenceEnabled();
   const persistedMode = await getPersistedLocationMode(params.hasActiveMission);
@@ -329,15 +486,55 @@ export async function buildBgTrackingInputs(params: {
     availabilityPresenceEnabled,
   });
   const fsmMode = resolveLocationModeFromState(fsmState);
-  const locationMode: LocationMode =
-    params.hasActiveMission || fsmMode === "mission_live" ? "mission_live" : persistedMode;
-  currentLocationMode = locationMode;
-  // En mission_live : tracking uniquement après EN_ROUTE (pas en ASSIGNED)
   const missionState = MissionStateManager.getState();
   const missionStatusEnabledForTracking =
     params.hasActiveMission &&
-    missionState.currentStatus !== "ASSIGNED" &&
-    (missionState.currentStatus === "EN_ROUTE" || missionState.currentStatus === "IN_PROGRESS");
+    isMissionTrackingActiveStatus(missionState.currentStatus);
+
+  const missionKey = `${missionState.activeMission?.id ?? "none"}:${missionState.currentStatus}:${missionStatusEnabledForTracking}`;
+  if (missionKey !== lastLoggedMissionKey) {
+    lastLoggedMissionKey = missionKey;
+    trackLog.info("MISSION_SNAPSHOT", {
+      missionId: missionState.activeMission?.id ?? null,
+      currentStatus: missionState.currentStatus,
+      hasActiveMission: params.hasActiveMission,
+      missionStatusEnabledForTracking,
+    });
+  }
+
+  const prevEsc = lastMissionEscalationEnabled;
+  const enabled = !!missionStatusEnabledForTracking;
+  if (prevEsc !== null && prevEsc !== enabled) {
+    if (enabled) {
+      trackLog.info("MISSION_TRACKING_ESCALATED", {
+        missionId: missionState.activeMission?.id ?? null,
+        currentStatus: missionState.currentStatus,
+        enabled: true,
+      });
+    } else {
+      trackLog.info("MISSION_TRACKING_DEESCALATED", {
+        missionId: missionState.activeMission?.id ?? null,
+        currentStatus: missionState.currentStatus,
+        enabled: false,
+      });
+    }
+  }
+  lastMissionEscalationEnabled = enabled;
+
+  const eligible = isMissionTrackingEligibleNow();
+  const prevMode = currentLocationMode;
+  const locationMode: LocationMode =
+    eligible || fsmMode === "mission_live" ? "mission_live" : persistedMode;
+  currentLocationMode = locationMode;
+  if (prevMode !== locationMode) {
+    trackLog.info("TRACKING_MODE_CHANGED", {
+      from: prevMode,
+      to: locationMode,
+      source: "build_inputs",
+      hasActiveMission: params.hasActiveMission,
+      missionStatus: missionState.activeMission ? missionState.currentStatus : null,
+    });
+  }
   return {
     ...params,
     platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web",

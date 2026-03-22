@@ -3,6 +3,9 @@ import { resolveLocationModeFromState, resolvePresenceState } from "./locationPr
 /**
  * Background tracking gating — Phase 1: mission active uniquement.
  *
+ * P1 : sous-règle d’exécution (shouldRunBackgroundTracking) consommée aussi par
+ * resolveTrackingPolicy() ; la source unique de modes métier reste trackingPolicy.ts.
+ *
  * Vérité métier purement dérivée. Aucune lecture de l'état natif.
  * Aucun effet de bord. Consommé par l'orchestrateur (locationTracker).
  */
@@ -176,7 +179,7 @@ export function shouldRunBackgroundTracking(inputs: BgTrackingInputs): boolean {
     return false;
   }
   if (inputs.locationMode === "mission_live" && !inputs.hasActiveMission) return false;
-  // En mission_live : tracking uniquement après EN_ROUTE (pas en ASSIGNED)
+  // En mission_live : aligné sur missionTrackingPolicy (ASSIGNED | EN_ROUTE | IN_PROGRESS)
   if (
     inputs.locationMode === "mission_live" &&
     inputs.missionStatusEnabledForTracking === false

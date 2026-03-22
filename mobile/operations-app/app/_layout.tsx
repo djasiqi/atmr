@@ -54,7 +54,10 @@ import {
   ensureBackgroundTrackingStopped,
   buildBgTrackingInputs,
   requestBackgroundPermissionIfNeeded,
+  initLocationModeRuntime,
+  getPendingBackgroundTrackingStart,
 } from "@/services/locationTracker";
+import { reconcileTrackingState } from "@/services/trackingReconcile";
 import { MissionStateManager } from "@/services/missionState";
 import { validateDeepLink } from "@/services/deepLinkHandler";
 import {
@@ -73,6 +76,7 @@ import { getLogger } from "@/utils/logger";
 import { getConnectionState, subscribeSocketStatus } from "@/services/socket";
 
 const log = getLogger("App");
+const trackLog = getLogger("TRACK");
 
 /** Délai avant stop sync engine à l'unmount — évite stop immédiat lors de remount StrictMode. */
 let pendingSyncEngineStopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -310,6 +314,7 @@ function RootNav() {
   const adaptiveTrackingStartedRef = useRef(false);
   const syncEngineStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adaptiveTrackingStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevAppStateRef = useRef<AppStateStatus | null>(null);
 
   // ✅ Phase 2 - Gestionnaire des actions de notifications
   useNotificationActions();
@@ -725,8 +730,29 @@ function RootNav() {
       syncEngineStopTimerRef.current = null;
     }
     if (!syncEngineStartedRef.current) {
-      getSyncEngine().start();
-      syncEngineStartedRef.current = true;
+      (async () => {
+        try {
+          await initLocationModeRuntime();
+        } catch (e: unknown) {
+          log.warn("initLocationModeRuntime failed", {
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        try {
+          const policyInputs = await buildBgTrackingInputs({
+            isAuthenticated: !!isDriverAuthenticated,
+            role: "driver",
+            hasActiveMission: MissionStateManager.isActive(),
+          });
+          await reconcileTrackingState("init_runtime", policyInputs);
+        } catch (e: unknown) {
+          log.warn("reconcileTrackingState init_runtime failed", {
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        getSyncEngine().start();
+        syncEngineStartedRef.current = true;
+      })();
     }
   }, [driver?.id, isDriverAuthenticated, mode, splashBlocking, versionLoading]);
 
@@ -778,6 +804,23 @@ function RootNav() {
     if (Platform.OS === "web") return;
     if (mode !== "driver") return;
     const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (prevAppStateRef.current !== state) {
+        trackLog.info("APPSTATE_SNAPSHOT", {
+          prevState: prevAppStateRef.current,
+          nextState: state,
+          missionActive: MissionStateManager.isActive(),
+          isAuthenticatedDriver: !!isDriverAuthenticated,
+        });
+        prevAppStateRef.current = state;
+      }
+      const pendingBg = getPendingBackgroundTrackingStart();
+      if (state === "active" && pendingBg.active) {
+        trackLog.info("BACKGROUND_TRACKING_PENDING_AT_FOREGROUND", {
+          pendingReason: pendingBg.reason,
+          missionSnapshot: pendingBg.missionSnapshot,
+          deferredAt: pendingBg.deferredAt,
+        });
+      }
       if (state === "active") {
         InteractionManager.runAfterInteractions(() => {
           setTimeout(async () => {
@@ -786,6 +829,7 @@ function RootNav() {
               role: "driver",
               hasActiveMission: MissionStateManager.isActive(),
             });
+            await reconcileTrackingState("app_resume", inputs);
             await reconcileBackgroundTrackingState("app_resume", inputs);
           }, 150);
         });
@@ -800,6 +844,7 @@ function RootNav() {
           role: "driver",
           hasActiveMission: MissionStateManager.isActive(),
         });
+        await reconcileTrackingState("app_background", inputs);
         await reconcileBackgroundTrackingState("app_background", inputs);
       }, 0);
     });
@@ -837,6 +882,7 @@ function RootNav() {
           role: "driver",
           hasActiveMission: MissionStateManager.isActive(),
         });
+        await reconcileTrackingState(event, inputs);
         await reconcileBackgroundTrackingState(event, inputs);
       })();
     });
@@ -853,6 +899,7 @@ function RootNav() {
         role: "driver",
         hasActiveMission: MissionStateManager.isActive(),
       });
+      await reconcileTrackingState("session_change", inputs);
       await reconcileBackgroundTrackingState("session_change", inputs);
     })();
   }, [driver?.id, isDriverAuthenticated, mode]);

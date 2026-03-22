@@ -1,3 +1,5 @@
+/** P1 : entrée du resolver (resolvePresenceState / resolveLocationModeFromState) dans trackingPolicy. */
+
 export type DriverPresenceState =
   | "LOGGED_OUT"
   | "NO_PERMISSION"

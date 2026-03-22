@@ -4,11 +4,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  buildBgTrackingInputs,
-  getTrackingRuntimeState,
-  type BgTrackingInputs,
-} from "@/services/locationTracker";
+import type { BgTrackingInputs } from "@/services/backgroundTrackingGating";
+import { buildBgTrackingInputs, getTrackingRuntimeState } from "@/services/locationTracker";
 import { MissionStateManager } from "@/services/missionState";
 
 export type TrackingDisplayState =
