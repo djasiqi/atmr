@@ -6,38 +6,9 @@ import {
   deleteDriver,
 } from '../services/companyService';
 import { getCompanySocket, joinCompanyRoom } from '../services/companySocket';
+import { mergeOrUpdateDriverInList } from '../utils/mergeDriverLiveUpdate';
 
 const POLL_INTERVAL_MS = 5000;
-
-const mergeDriverLiveUpdate = (driver, update, fromLiveState) => {
-  const latitude = update.lat ?? update.latitude ?? update.current_lat ?? driver.latitude;
-  const longitude =
-    update.lon ?? update.lng ?? update.longitude ?? update.current_lon ?? driver.longitude;
-  const locationStatus = fromLiveState
-    ? update.location_status ?? driver.location_status ?? null
-    : driver.location_status ?? update.location_status ?? null;
-  const presenceStatus = fromLiveState
-    ? update.presence_status ?? driver.presence_status ?? null
-    : driver.presence_status ?? update.presence_status ?? null;
-  const status = fromLiveState ? update.status ?? driver.status : driver.status ?? update.status;
-
-  return {
-    ...driver,
-    latitude,
-    longitude,
-    location_mode: update.location_mode ?? driver.location_mode ?? null,
-    last_seen_seconds: update.last_seen_seconds ?? driver.last_seen_seconds ?? null,
-    location_status: locationStatus,
-    presence_status: presenceStatus,
-    status,
-    mission_status: fromLiveState
-      ? update.mission_status ?? driver.mission_status ?? null
-      : driver.mission_status ?? update.mission_status ?? null,
-    recorded_at: update.recorded_at ?? update.timestamp ?? driver.recorded_at ?? null,
-    received_at: update.received_at ?? driver.received_at ?? null,
-    mission_id: update.mission_id ?? driver.mission_id ?? null,
-  };
-};
 
 const useDriver = () => {
   const [drivers, setDrivers] = useState([]);
@@ -94,15 +65,9 @@ const useDriver = () => {
     if (!socket) return;
 
     const applyDelta = (payload, fromLiveState = false) => {
-      const driverId = Number(payload?.driver_id ?? payload?.id);
-      if (!Number.isFinite(driverId)) return;
-      setDrivers((prev) => {
-        const index = prev.findIndex((d) => Number(d.id) === driverId);
-        if (index < 0) return prev;
-        const next = [...prev];
-        next[index] = mergeDriverLiveUpdate(next[index], payload, fromLiveState);
-        return next;
-      });
+      setDrivers((prev) =>
+        mergeOrUpdateDriverInList(prev, payload, fromLiveState, null)
+      );
     };
 
     const onLiveState = (payload) => applyDelta(payload, true);

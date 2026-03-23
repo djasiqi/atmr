@@ -381,12 +381,12 @@ export async function leaveCompanyRoom(companyId) {
   currentCompanyId = null;
 }
 
-// ✅ Écouter les mises à jour de localisation des chauffeurs
+// ✅ Écouter les mises à jour de localisation (fanout backend : driver_location_update)
 export async function onDriverLocationUpdate(callback) {
   const s = await ensureCompanySocket();
   if (!s) return;
   // Remplace l’éventuel listener existant pour éviter les doublons
-  const evt = 'driver_location';
+  const evt = 'driver_location_update';
   const prev = listeners.get(evt);
   if (prev) s.off(evt, prev);
   s.on(evt, callback);
@@ -397,7 +397,7 @@ export async function onDriverLocationUpdate(callback) {
 export async function offDriverLocationUpdate() {
   const s = await ensureCompanySocket();
   if (!s) return;
-  const evt = 'driver_location';
+  const evt = 'driver_location_update';
   const prev = listeners.get(evt);
   if (prev) {
     s.off(evt, prev);

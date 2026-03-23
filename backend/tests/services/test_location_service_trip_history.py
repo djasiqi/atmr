@@ -4,7 +4,19 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from services.geolocation.location import LocationService
+from models.enums import AssignmentStatus
+from services.geolocation.location import (
+    TRIP_TRACKING_ASSIGNMENT_STATUSES,
+    LocationService,
+)
+
+
+def test_trip_tracking_statuses_include_en_route_phases() -> None:
+    """Historique trajet doit couvrir toute la mission, pas seulement ONBOARD."""
+    assert AssignmentStatus.EN_ROUTE_DROPOFF in TRIP_TRACKING_ASSIGNMENT_STATUSES
+    assert AssignmentStatus.EN_ROUTE_PICKUP in TRIP_TRACKING_ASSIGNMENT_STATUSES
+    assert AssignmentStatus.ONBOARD in TRIP_TRACKING_ASSIGNMENT_STATUSES
+    assert AssignmentStatus.SCHEDULED not in TRIP_TRACKING_ASSIGNMENT_STATUSES
 
 
 def test_should_append_trip_history_true_for_older_than_canonical() -> None:

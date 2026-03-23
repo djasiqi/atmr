@@ -236,9 +236,12 @@ def fanout_driver_location_update(
     if not accept_status.strip():
         raise ValueError("accept_status is required for fanout_driver_location_update")
     if accept_status != "accepted_canonical":
+        drv = location_payload.get("driver_id") or live_state_payload.get("driver_id")
         app_logger.info(
-            "[socketio] fanout skipped non canonical accept_status=%s",
+            "[socketio] fanout skipped non canonical accept_status=%s driver_id=%s company_id=%s",
             accept_status,
+            drv,
+            company_id,
         )
         return
     payload_company = live_state_payload.get("company_id") or location_payload.get("company_id")

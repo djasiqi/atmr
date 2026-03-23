@@ -4,6 +4,8 @@ import {
   fetchCompanyDriversCanonical,
   fetchCompanyInfo,
 } from '../services/companyService';
+import { getCompanySocket, joinCompanyRoom } from '../services/companySocket';
+import { mergeOrUpdateDriverInList } from '../utils/mergeDriverLiveUpdate';
 import { getAccessToken } from './useAuthToken';
 
 const useCompanyData = ({ day } = {}) => {
@@ -111,6 +113,45 @@ const useCompanyData = ({ day } = {}) => {
     loadReservations();
     loadDriver();
   }, [loadCompany, loadReservations, loadDriver]);
+
+  // Room entreprise + positions temps réel (même logique que useDriver) pour la carte dashboard / dispatch
+  useEffect(() => {
+    const cid = company?.id;
+    if (cid && Number(cid) > 0) {
+      joinCompanyRoom(Number(cid)).catch(() => {});
+    }
+  }, [company?.id]);
+
+  useEffect(() => {
+    const socket = getCompanySocket();
+    if (!socket) return;
+
+    const applyDelta = (payload, fromLiveState = false) => {
+      setDriver((prev) =>
+        mergeOrUpdateDriverInList(prev, payload, fromLiveState, company?.id ?? null)
+      );
+    };
+
+    const onLiveState = (payload) => applyDelta(payload, true);
+    const onLocationUpdate = (payload) => applyDelta(payload, false);
+    const onReconnected = () => {
+      loadDriver().catch(() => {});
+    };
+
+    socket.on('driver_live_state_update', onLiveState);
+    socket.on('driver_location_update', onLocationUpdate);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('company_socket_reconnected', onReconnected);
+    }
+
+    return () => {
+      socket.off('driver_live_state_update', onLiveState);
+      socket.off('driver_location_update', onLocationUpdate);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('company_socket_reconnected', onReconnected);
+      }
+    };
+  }, [loadDriver, company?.id]);
 
   return {
     company,

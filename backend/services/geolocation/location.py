@@ -27,6 +27,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.orm import Session
 
 from application.events.event_bus import publish_event
+from domain.assignment_dto import AssignmentDTO
 from domain.events.events import DriverLocationUpdatedEvent
 from ext import db, redis_client
 from models import Assignment, AssignmentStatus, Driver, TripTracking
@@ -44,6 +45,18 @@ MIN_POINTS_FOR_MATCHING = 3  # Minimum de points pour map-matching
 DEFAULT_OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
 DEFAULT_DRIVER_LOC_TTL_SEC = int(os.getenv("DRIVER_LOC_TTL_SEC", "1200"))  # 20 min
 DEFAULT_MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))  # 5 points
+
+# Missions « en cours » : historique trajet pour tout le cycle actif, pas seulement ONBOARD
+# (sinon aucun point pendant EN_ROUTE_* alors que le transport est réel).
+TRIP_TRACKING_ASSIGNMENT_STATUSES: frozenset[AssignmentStatus] = frozenset(
+    {
+        AssignmentStatus.EN_ROUTE_PICKUP,
+        AssignmentStatus.ARRIVED_PICKUP,
+        AssignmentStatus.ONBOARD,
+        AssignmentStatus.EN_ROUTE_DROPOFF,
+        AssignmentStatus.ARRIVED_DROPOFF,
+    }
+)
 DEFAULT_GEOFENCE_RADIUS_M = 50.0  # 50m pour détection arrivée pickup/dropoff
 def _trip_tracking_min_interval_sec() -> float:
     """Intervalle minimal entre points `trip_tracking` (mission active). Défaut 15 s (alignement mobile)."""
@@ -786,7 +799,7 @@ class LocationService:
 
         return "accepted_observability_only", "older_than_canonical"
 
-    def _log_trip_tracking(
+    def _log_trip_tracking(  # noqa: PLR0911
         self,
         driver_id: int,
         latitude: float,
@@ -820,16 +833,22 @@ class LocationService:
             # ✅ Utilisation du repository pour découpler de SQLAlchemy
             assignment_repo = AssignmentRepository()
             assignment_dtos = assignment_repo.find_by_driver_id(driver_id)
-            # Filtrer par statut IN_PROGRESS en mémoire
-            in_progress_dtos = [
-                dto for dto in assignment_dtos if dto.status == AssignmentStatus.ONBOARD
+            active_dtos = [
+                dto
+                for dto in assignment_dtos
+                if dto.status in TRIP_TRACKING_ASSIGNMENT_STATUSES
             ]
-            # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
-            assignment = (
-                Assignment.query.get(in_progress_dtos[0].id)
-                if in_progress_dtos
-                else None
-            )
+            if not active_dtos:
+                return False
+
+            # Double mission / plusieurs courses : celle mise à jour la plus récemment
+            epoch = datetime(1970, 1, 1, tzinfo=UTC)
+
+            def _trip_tracking_sort_key(dto: AssignmentDTO) -> tuple[datetime, int]:
+                return (dto.updated_at or epoch, dto.id)
+
+            active_dtos.sort(key=_trip_tracking_sort_key, reverse=True)
+            assignment = Assignment.query.get(active_dtos[0].id)
 
             if not assignment:
                 return False

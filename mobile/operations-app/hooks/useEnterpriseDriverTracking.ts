@@ -26,6 +26,8 @@ type DriverLocationEvent = {
   lat?: number | string | null;
   longitude?: number | string | null;
   lon?: number | string | null;
+  /** Fanout backend driver_live_state_update */
+  lng?: number | string | null;
   timestamp?: string | null;
   ts?: string | null;
 };
@@ -48,6 +50,14 @@ const toNumber = (value: unknown): number | null => {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+/** Aligné sur le fanout backend : live_state utilise `lat` / `lng` (pas `lon`). */
+const toLatLng = (payload: DriverLocationEvent): { lat: number; lon: number } | null => {
+  const latitude = toNumber(payload.latitude ?? payload.lat);
+  const longitude = toNumber(payload.longitude ?? payload.lon ?? payload.lng);
+  if (latitude === null || longitude === null) return null;
+  return { lat: latitude, lon: longitude };
 };
 
 export const useEnterpriseDriverTracking = () => {
@@ -76,6 +86,7 @@ export const useEnterpriseDriverTracking = () => {
           lat?: number | null;
           longitude?: number | null;
           lon?: number | null;
+          lng?: number | null;
           timestamp?: string | null;
           ts?: string | null;
           status?: string | null;
@@ -89,7 +100,7 @@ export const useEnterpriseDriverTracking = () => {
         .map((item) => {
           // Compat lat/latitude, lon/longitude, timestamp/ts
           const latitude = toNumber(item.lat ?? item.latitude);
-          const longitude = toNumber(item.lon ?? item.longitude);
+          const longitude = toNumber(item.lon ?? item.longitude ?? item.lng);
           if (latitude === null || longitude === null) return null;
 
           const nameParts = [item.first_name, item.last_name]
@@ -176,9 +187,9 @@ export const useEnterpriseDriverTracking = () => {
       if (driverIdRaw === undefined || driverIdRaw === null) return;
       const driverId = String(driverIdRaw);
 
-      const latitude = toNumber(payload.latitude ?? payload.lat);
-      const longitude = toNumber(payload.longitude ?? payload.lon);
-      if (latitude === null || longitude === null) return;
+      const coords = toLatLng(payload);
+      if (!coords) return;
+      const { lat: latitude, lon: longitude } = coords;
 
       const nameParts = [payload.first_name, payload.last_name]
         .filter(Boolean)
@@ -211,9 +222,9 @@ export const useEnterpriseDriverTracking = () => {
       if (driverIdRaw === undefined || driverIdRaw === null) return;
       const driverId = String(driverIdRaw);
 
-      const latitude = toNumber(payload.latitude ?? payload.lat);
-      const longitude = toNumber(payload.longitude ?? payload.lon);
-      if (latitude === null || longitude === null) return;
+      const coords = toLatLng(payload);
+      if (!coords) return;
+      const { lat: latitude, lon: longitude } = coords;
 
       const nameParts = [payload.first_name, payload.last_name]
         .filter(Boolean)
