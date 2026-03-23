@@ -24,8 +24,7 @@ from flask_socketio import SocketIO, emit, join_room
 from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefusedError
 
 from ext import db, redis_client
-from models import Booking, Company, Driver, Message, SenderRole, User, UserRole
-from models.enums import BookingStatus
+from models import Company, Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.geolocation.presence import (
     compute_last_seen_seconds,
@@ -36,6 +35,10 @@ from services.geolocation.presence import (
 from services.geolocation.location import get_location_service
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
+from services.realtime.live_driver_status import (
+    resolve_driver_status_for_fanout as _resolve_driver_status,
+    resolve_mission_status_for_driver as _resolve_mission_status_for_driver,
+)
 
 # from services.notifications.push import send_push_message  # Unused, using fanout now
 from services.security.spam import can_send_message
@@ -169,54 +172,6 @@ def _parse_timestamp(timestamp_value: Any) -> datetime:
 
     # Fallback: utiliser maintenant
     return datetime.now(UTC)
-
-
-def _resolve_mission_status_for_driver(driver_id: int) -> str:
-    """Retourne le mission_status canonique pour un chauffeur."""
-    statuses = (
-        BookingStatus.ASSIGNED.value,
-        BookingStatus.EN_ROUTE.value,
-        BookingStatus.IN_PROGRESS.value,
-    )
-    rows = (
-        Booking.query.filter(
-            Booking.driver_id == driver_id,
-            Booking.status.in_(statuses),
-        )
-        .with_entities(Booking.status)
-        .all()
-    )
-    found: set[str] = set()
-    for row in rows:
-        raw = getattr(row, "status", None)
-        status_value = getattr(raw, "value", raw)
-        found.add(str(status_value or "").upper())
-    if BookingStatus.IN_PROGRESS.value in found:
-        return BookingStatus.IN_PROGRESS.value
-    if BookingStatus.EN_ROUTE.value in found:
-        return BookingStatus.EN_ROUTE.value
-    if BookingStatus.ASSIGNED.value in found:
-        return BookingStatus.ASSIGNED.value
-    return "NONE"
-
-
-def _resolve_driver_status(
-    *,
-    mission_status: str,
-    is_active: bool,
-    presence_status: str,
-) -> str:
-    if not is_active:
-        return "offline"
-    # Garde métier: ne jamais basculer "offline" pendant une mission active.
-    # Même si le signal est stale, on maintient un statut opérationnel.
-    if mission_status in {BookingStatus.EN_ROUTE.value, BookingStatus.IN_PROGRESS.value}:
-        return "busy"
-    if mission_status == BookingStatus.ASSIGNED.value:
-        return "assigned"
-    if presence_status == "offline":
-        return "offline"
-    return "available"
 
 
 def _parse_iso_utc(value: str | None) -> datetime | None:

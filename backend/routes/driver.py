@@ -35,6 +35,10 @@ from services.geolocation.presence import (
     compute_location_status,
     presence_status_from_location_status,
 )
+from services.realtime.live_driver_status import (
+    resolve_driver_status_for_fanout,
+    resolve_mission_status_for_driver,
+)
 from services.realtime.socketio import fanout_driver_location_update
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update
@@ -1413,6 +1417,14 @@ class DriverLocation(Resource):
                                     )
                                     if company_id_for_room is None:
                                         raise ValueError("driver.company_id is missing")
+                                    mission_status_resolved = resolve_mission_status_for_driver(
+                                        driver.id
+                                    )
+                                    driver_status_resolved = resolve_driver_status_for_fanout(
+                                        mission_status=mission_status_resolved,
+                                        is_active=bool(getattr(driver, "is_active", True)),
+                                        presence_status=presence_status,
+                                    )
                                     fanout_driver_location_update(
                                         company_id_for_room,
                                         {
@@ -1447,11 +1459,16 @@ class DriverLocation(Resource):
                                             "timestamp": recorded_at,
                                             "recorded_at": recorded_at,
                                             "received_at": received_at,
-                                            "status": "busy" if mission_id else "available",
-                                            "mission_status": None,
+                                            "status": driver_status_resolved,
+                                            "mission_status": (
+                                                mission_status_resolved
+                                                if mission_status_resolved != "NONE"
+                                                else None
+                                            ),
                                             "presence_status": presence_status,
                                             "location_status": location_status,
-                                            "is_available": not bool(mission_id),
+                                            "is_available": driver_status_resolved
+                                            == "available",
                                             "offline_reason": "",
                                             "last_seen_seconds": last_seen_seconds,
                                             "location_mode": location_mode,
