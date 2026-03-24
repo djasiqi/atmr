@@ -11,6 +11,27 @@ describe('mergeDriverLiveUpdate', () => {
     expect(out.latitude).toBe(46.3);
     expect(out.longitude).toBe(6.2);
   });
+
+  it('n’applique pas un point observabilité plus ancien que l’état courant', () => {
+    const driver = {
+      id: 1,
+      latitude: 46.2,
+      longitude: 6.1,
+      received_at: '2026-03-24T14:00:00.000Z',
+    };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        latitude: 46.0,
+        longitude: 6.0,
+        accept_status: 'accepted_observability_only',
+        received_at: '2026-03-24T13:00:00.000Z',
+      },
+      false
+    );
+    expect(out.latitude).toBe(46.2);
+    expect(out.longitude).toBe(6.1);
+  });
 });
 
 describe('hasExploitableCoords', () => {

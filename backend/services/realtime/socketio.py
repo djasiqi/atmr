@@ -226,9 +226,12 @@ def fanout_driver_location_update(
     accept_status: str,
     namespace: str = DEFAULT_NAMESPACE,
 ) -> None:
-    """P2: Fanout realtime unifié — émet driver_location_update + driver_live_state_update
-    vers la room entreprise. Utilisé par handle_driver_location, handle_driver_location_batch,
-    et get_driver_locations.
+    """P2: Fanout realtime — room entreprise.
+
+    - ``accepted_canonical`` : géométrie + état live (deux événements).
+    - ``accepted_observability_only`` : **géométrie seule** (``driver_location_update``).
+      On n’émet pas ``driver_live_state_update`` pour éviter de faire évoluer présence /
+      statut métier sur un point non retenu comme vérité canonique (contre-audit produit).
     """
     if company_id <= 0:
         app_logger.error("[socketio] invalid company_id in fanout_driver_location_update")
@@ -257,9 +260,10 @@ def fanout_driver_location_update(
         return
     room = get_company_room(company_id)
     loc_out = {**location_payload, "accept_status": accept_status}
-    live_out = {**live_state_payload, "accept_status": accept_status}
     _safe_emit("driver_location_update", loc_out, room=room, namespace=namespace)
-    _safe_emit("driver_live_state_update", live_out, room=room, namespace=namespace)
+    if accept_status == "accepted_canonical":
+        live_out = {**live_state_payload, "accept_status": accept_status}
+        _safe_emit("driver_live_state_update", live_out, room=room, namespace=namespace)
 
 
 def emit_date_event(

@@ -1,8 +1,27 @@
+/** @param {unknown} s */
+function parseIsoMs(s) {
+  if (s == null || s === '') return null;
+  const t = Date.parse(String(s));
+  return Number.isFinite(t) ? t : null;
+}
+
 /**
  * Fusionne un événement temps réel (driver_location_update / driver_live_state_update)
  * dans un objet chauffeur déjà chargé depuis l’API canonique.
  */
 export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
+  const acceptStatus = update?.accept_status;
+  const isObservabilityOnly = acceptStatus === 'accepted_observability_only';
+
+  // Points non canoniques : ne pas régresser la position si le serveur envoie un horodatage plus ancien.
+  if (isObservabilityOnly && !fromLiveState) {
+    const inc = parseIsoMs(update.received_at ?? update.recorded_at ?? update.timestamp);
+    const cur = parseIsoMs(driver.received_at ?? driver.recorded_at);
+    if (inc != null && cur != null && inc < cur) {
+      return { ...driver };
+    }
+  }
+
   const latitude = update.lat ?? update.latitude ?? update.current_lat ?? driver.latitude;
   const longitude =
     update.lon ?? update.lng ?? update.longitude ?? update.current_lon ?? driver.longitude;
