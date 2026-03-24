@@ -567,6 +567,10 @@ class LocationService:
                 )
                 self.redis_client.expire(raw_key, DEFAULT_DRIVER_LOC_TTL_SEC)
 
+                # Écriture canon : seuls les points ``accepted_canonical`` remplissent
+                # ``driver:{id}:loc:canonical`` et ``driver:{id}:loc`` (legacy).
+                # L'observabilité met à jour ``:last_raw`` mais pas ces hashes → snapshots
+                # REST (canon) peuvent diverger du dernier point brut si tout est observabilité.
                 if accept_status == "accepted_canonical":
                     canonical_mapping = {
                         "company_id": str(company_id) if company_id else "",

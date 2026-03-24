@@ -228,10 +228,15 @@ def fanout_driver_location_update(
 ) -> None:
     """P2: Fanout realtime — room entreprise.
 
-    - ``accepted_canonical`` : géométrie + état live (deux événements).
-    - ``accepted_observability_only`` : **géométrie seule** (``driver_location_update``).
-      On n’émet pas ``driver_live_state_update`` pour éviter de faire évoluer présence /
-      statut métier sur un point non retenu comme vérité canonique (contre-audit produit).
+    **Contrat produit (à ne pas « symétriser » sans revue)** :
+
+    - ``driver_location_update`` : position pour la carte (canon **ou** observabilité).
+    - ``driver_live_state_update`` : **canon uniquement** — jamais pour
+      ``accepted_observability_only``. Présence / statut métier suivent la vérité Redis
+      canonique, pas un point d'observation.
+
+    - ``accepted_canonical`` : les deux événements ci-dessus.
+    - ``accepted_observability_only`` : **uniquement** ``driver_location_update``.
     """
     if company_id <= 0:
         app_logger.error("[socketio] invalid company_id in fanout_driver_location_update")

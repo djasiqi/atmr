@@ -1,4 +1,5 @@
 import {
+  canonicalTimeMs,
   hasExploitableCoords,
   mergeDriverLiveUpdate,
   mergeOrUpdateDriverInList,
@@ -31,6 +32,61 @@ describe('mergeDriverLiveUpdate', () => {
     );
     expect(out.latitude).toBe(46.2);
     expect(out.longitude).toBe(6.1);
+  });
+
+  it('ignore observabilité arrivée après un canon plus récent déjà fusionné (race)', () => {
+    const driver = {
+      id: 1,
+      latitude: 46.2,
+      longitude: 6.1,
+      received_at: '2026-03-24T15:00:00.000Z',
+    };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        latitude: 46.0,
+        longitude: 6.0,
+        accept_status: 'accepted_observability_only',
+        received_at: '2026-03-24T14:30:00.000Z',
+      },
+      false
+    );
+    expect(out.latitude).toBe(46.2);
+    expect(out.received_at).toBe('2026-03-24T15:00:00.000Z');
+  });
+
+  it('accepte le premier point observabilité si le chauffeur n’a pas encore de canonical_time', () => {
+    const driver = { id: 1, latitude: 46.2, longitude: 6.1 };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        latitude: 46.25,
+        longitude: 6.11,
+        accept_status: 'accepted_observability_only',
+        received_at: '2026-03-24T14:00:00.000Z',
+      },
+      false
+    );
+    expect(out.latitude).toBe(46.25);
+    expect(out.longitude).toBe(6.11);
+  });
+});
+
+describe('canonicalTimeMs', () => {
+  it('priorise received_at > recorded_at > timestamp', () => {
+    expect(
+      canonicalTimeMs({
+        received_at: '2026-01-01T12:00:00.000Z',
+        recorded_at: '2026-01-01T11:00:00.000Z',
+        timestamp: '2026-01-01T10:00:00.000Z',
+      })
+    ).toBe(Date.parse('2026-01-01T12:00:00.000Z'));
+    expect(
+      canonicalTimeMs({
+        recorded_at: '2026-01-01T11:00:00.000Z',
+        timestamp: '2026-01-01T10:00:00.000Z',
+      })
+    ).toBe(Date.parse('2026-01-01T11:00:00.000Z'));
   });
 });
 

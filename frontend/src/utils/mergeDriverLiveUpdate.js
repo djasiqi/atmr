@@ -6,6 +6,17 @@ function parseIsoMs(s) {
 }
 
 /**
+ * Horodatage unique pour comparaisons (spec interne) — toujours la même chaîne :
+ * `received_at` > `recorded_at` > `timestamp` (évite de mélanger des champs non comparables).
+ * @param {Record<string, unknown> | null | undefined} o
+ * @returns {number | null} ms depuis epoch, ou null si non parsable
+ */
+export function canonicalTimeMs(o) {
+  if (!o || typeof o !== 'object') return null;
+  return parseIsoMs(o.received_at ?? o.recorded_at ?? o.timestamp);
+}
+
+/**
  * Fusionne un événement temps réel (driver_location_update / driver_live_state_update)
  * dans un objet chauffeur déjà chargé depuis l’API canonique.
  */
@@ -13,10 +24,11 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
   const acceptStatus = update?.accept_status;
   const isObservabilityOnly = acceptStatus === 'accepted_observability_only';
 
-  // Points non canoniques : ne pas régresser la position si le serveur envoie un horodatage plus ancien.
+  // Observabilité : ne pas régresser la position si canonical_time du point < celui déjà fusionné.
+  // Si le chauffeur n’a aucun canonical_time (premier rendu), on accepte le point.
   if (isObservabilityOnly && !fromLiveState) {
-    const inc = parseIsoMs(update.received_at ?? update.recorded_at ?? update.timestamp);
-    const cur = parseIsoMs(driver.received_at ?? driver.recorded_at);
+    const inc = canonicalTimeMs(update);
+    const cur = canonicalTimeMs(driver);
     if (inc != null && cur != null && inc < cur) {
       return { ...driver };
     }
