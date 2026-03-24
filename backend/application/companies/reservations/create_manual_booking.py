@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -310,16 +311,34 @@ class CreateManualBookingUseCase:
 
         pickup_coords = None
         dropoff_coords = None
-        if not validated_data.get("pickup_lat") or not validated_data.get("pickup_lon"):
-            pickup_coords = _geocode_with_nominatim(
-                validated_data["pickup_location"]
-            )
-        if not validated_data.get("dropoff_lat") or not validated_data.get(
+        need_pickup_geo = not validated_data.get("pickup_lat") or not validated_data.get(
+            "pickup_lon"
+        )
+        need_dropoff_geo = not validated_data.get("dropoff_lat") or not validated_data.get(
             "dropoff_lon"
-        ):
-            dropoff_coords = _geocode_with_nominatim(
-                validated_data["dropoff_location"]
-            )
+        )
+        # Nominatim en parallèle (sinon jusqu'à ~10 s séquentiel pour aller + retour sans coords).
+        if need_pickup_geo or need_dropoff_geo:
+            tasks: list[tuple[str, str]] = []
+            if need_pickup_geo:
+                tasks.append(("pickup", validated_data["pickup_location"]))
+            if need_dropoff_geo:
+                tasks.append(("dropoff", validated_data["dropoff_location"]))
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = {
+                    name: pool.submit(_geocode_with_nominatim, addr)
+                    for name, addr in tasks
+                }
+                for name, fut in futures.items():
+                    try:
+                        res = fut.result(timeout=6)
+                    except Exception as e:
+                        logger.warning("Geocode %s failed: %s", name, e)
+                        res = None
+                    if name == "pickup":
+                        pickup_coords = res
+                    else:
+                        dropoff_coords = res
 
         if validated_data.get("pickup_lat") and validated_data.get("pickup_lon"):
             final_pickup_coords = (

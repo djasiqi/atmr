@@ -87,6 +87,7 @@ const CompanyDashboard = () => {
     loadingDriver,
     reloadReservations,
     reloadDriver,
+    upsertReservation,
   } = useCompanyData({ day: dispatchDay });
 
   const socket = useCompanySocket();
@@ -500,10 +501,14 @@ const CompanyDashboard = () => {
   };
 
   const handleManualBookingSuccess = (resp) => {
-    const ymd = String(resp?.reservation?.scheduled_time || '').slice(0, 10);
+    const created = resp?.reservation ?? resp?.reservations?.[0];
+    if (created?.id != null) {
+      upsertReservation(created);
+    }
+    const ymd = String(created?.scheduled_time || resp?.reservation?.scheduled_time || '').slice(0, 10);
     if (ymd) setDispatchDay(ymd);
     startTransition(() => {
-      reloadReservations();
+      reloadReservations({ silent: true });
       queryClient.invalidateQueries(['reservations']);
     });
   };

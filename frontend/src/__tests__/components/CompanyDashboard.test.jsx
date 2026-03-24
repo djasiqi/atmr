@@ -152,6 +152,7 @@ describe('CompanyDashboard', () => {
       loadingDriver: false,
       reloadReservations: jest.fn(),
       reloadDriver: jest.fn(),
+      upsertReservation: jest.fn(),
     });
 
     useCompanySocket.mockReturnValue(mockSocket);
@@ -217,6 +218,7 @@ describe('CompanyDashboard', () => {
       loadingDriver: false,
       reloadReservations: jest.fn(),
       reloadDriver: jest.fn(),
+      upsertReservation: jest.fn(),
     });
 
     render(<CompanyDashboard />, { wrapper: createWrapper() });

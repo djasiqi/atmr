@@ -59,9 +59,12 @@ const useCompanyData = ({ day } = {}) => {
     }
   }, []);
 
-  const loadReservations = useCallback(async () => {
+  const loadReservations = useCallback(async (opts = {}) => {
+    const silent = Boolean(opts.silent);
     try {
-      setLoadingReservations(true);
+      if (!silent) {
+        setLoadingReservations(true);
+      }
       const data = await fetchCompanyReservations(day);
       // Le service renvoie déjà un ARRAY normalisé
       setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
@@ -79,9 +82,27 @@ const useCompanyData = ({ day } = {}) => {
         setError('Erreur lors du chargement des réservations.');
       }
     } finally {
-      setLoadingReservations(false);
+      if (!silent) {
+        setLoadingReservations(false);
+      }
     }
   }, [day]);
+
+  /** Affiche tout de suite une réservation créée (réponse POST) avant le GET /reservations. */
+  const upsertReservation = useCallback((booking) => {
+    if (!booking || booking.id == null) return;
+    setReservations((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      const id = Number(booking.id);
+      const idx = list.findIndex((r) => Number(r.id) === id);
+      if (idx >= 0) {
+        const next = [...list];
+        next[idx] = { ...next[idx], ...booking };
+        return next;
+      }
+      return [booking, ...list];
+    });
+  }, []);
 
   const loadDriver = useCallback(async () => {
     try {
@@ -164,6 +185,7 @@ const useCompanyData = ({ day } = {}) => {
     reloadCompany: loadCompany,
     reloadReservations: loadReservations,
     reloadDriver: loadDriver,
+    upsertReservation,
   };
 };
 
