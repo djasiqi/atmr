@@ -235,10 +235,13 @@ def fanout_driver_location_update(
         return
     if not accept_status.strip():
         raise ValueError("accept_status is required for fanout_driver_location_update")
-    if accept_status != "accepted_canonical":
+    # Canonique OU observabilité : les deux doivent pouvoir alimenter la carte entreprise.
+    # Avant : seul accepted_canonical fanoutait → la plupart des points (arbitrage, clé Redis
+    # legacy sans :canonical, précision GPS médiocre, etc.) n'atteignaient jamais le frontend.
+    if accept_status not in ("accepted_canonical", "accepted_observability_only"):
         drv = location_payload.get("driver_id") or live_state_payload.get("driver_id")
         app_logger.info(
-            "[socketio] fanout skipped non canonical accept_status=%s driver_id=%s company_id=%s",
+            "[socketio] fanout skipped accept_status=%s driver_id=%s company_id=%s",
             accept_status,
             drv,
             company_id,
@@ -253,10 +256,10 @@ def fanout_driver_location_update(
         )
         return
     room = get_company_room(company_id)
-    _safe_emit("driver_location_update", location_payload, room=room, namespace=namespace)
-    _safe_emit(
-        "driver_live_state_update", live_state_payload, room=room, namespace=namespace
-    )
+    loc_out = {**location_payload, "accept_status": accept_status}
+    live_out = {**live_state_payload, "accept_status": accept_status}
+    _safe_emit("driver_location_update", loc_out, room=room, namespace=namespace)
+    _safe_emit("driver_live_state_update", live_out, room=room, namespace=namespace)
 
 
 def emit_date_event(

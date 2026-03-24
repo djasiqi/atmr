@@ -26,13 +26,27 @@ def test_fanout_rejects_empty_accept_status() -> None:
         )
 
 
-def test_fanout_skips_non_canonical_status() -> None:
+def test_fanout_emits_for_observability_status() -> None:
+    """L'observabilité doit fanouter aussi (carte entreprise), pas seulement le canon Redis."""
     with patch("services.realtime.socketio._safe_emit") as safe_emit:
         fanout_driver_location_update(
             1,
             {"driver_id": 10, "company_id": 1},
             {"driver_id": 10, "company_id": 1},
             accept_status="accepted_observability_only",
+        )
+    assert safe_emit.call_count == 2
+    payloads = [c.args[1] for c in safe_emit.call_args_list]
+    assert all(p.get("accept_status") == "accepted_observability_only" for p in payloads)
+
+
+def test_fanout_skips_rejected_invalid() -> None:
+    with patch("services.realtime.socketio._safe_emit") as safe_emit:
+        fanout_driver_location_update(
+            1,
+            {"driver_id": 10, "company_id": 1},
+            {"driver_id": 10, "company_id": 1},
+            accept_status="rejected_invalid",
         )
     safe_emit.assert_not_called()
 
