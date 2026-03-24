@@ -886,6 +886,40 @@ def _ensure_demo_workspace_seeded(
     demo_request_id = getattr(demo_request, "id", None)
     company = getattr(demo_user, "company", None)
     institution = getattr(demo_user, "institution", None)
+    # SQLAlchemy peut laisser la relation non résolue alors que la FK est déjà posée
+    # (flush dans le même request) : le seed serait alors ignoré sans erreur.
+    if role == "company" and company is None and getattr(demo_user, "id", None):
+        logger.warning(
+            "[demo_seed_diag] company relationship empty, fallback query user_id=%s",
+            demo_user.id,
+        )
+        company = Company.query.filter_by(user_id=demo_user.id).first()
+    if role == "institution" and institution is None and getattr(
+        demo_user, "institution_id", None
+    ):
+        logger.warning(
+            (
+                "[demo_seed_diag] institution relationship empty before FK fallback "
+                "user_id=%s institution_id=%s"
+            ),
+            getattr(demo_user, "id", None),
+            demo_user.institution_id,
+        )
+        institution = db.session.get(Institution, demo_user.institution_id)
+    if role == "institution" and institution is not None:
+        logger.warning(
+            "[demo_seed_diag] institution ready for seed institution_id=%s",
+            institution.id,
+        )
+    elif role == "institution":
+        logger.error(
+            (
+                "[demo_seed_diag] institution still missing after fallback "
+                "user_id=%s institution_id=%s"
+            ),
+            getattr(demo_user, "id", None),
+            getattr(demo_user, "institution_id", None),
+        )
     company_id = getattr(company, "id", None)
     institution_id = getattr(institution, "id", None)
     user_id = getattr(demo_user, "id", None)
