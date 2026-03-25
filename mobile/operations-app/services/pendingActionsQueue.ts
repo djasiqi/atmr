@@ -130,11 +130,20 @@ export class PendingActionsQueue {
       operation_id: action.id,
     });
 
-    // Attempt immediate send (awaited, bypasses global cooldown)
+    // Envoi immédiat en arrière-plan : ne pas await flushBooking ici.
+    // Sinon MissionStateManager.requestTransition (ex. « Confirmer » fin de mission) reste
+    // bloqué jusqu'à ce que TOUTE la file pour ce booking soit flushée (plusieurs PUT si
+    // MUST_SEND_ALL_STEPS), ce qui peut prendre des dizaines de secondes ou sembler infini.
     try {
       const net = getNetworkStateSnapshot();
       if (net?.isConnected === true && net?.isInternetReachable !== false) {
-        await this.flushBooking(params.bookingId);
+        void this.flushBooking(params.bookingId).catch((e: unknown) => {
+          log.warn("flush after enqueue failed", {
+            event: "flush_after_enqueue",
+            booking_id: params.bookingId,
+            error: e,
+          });
+        });
       }
     } catch {
       // will be retried on network reconnect
