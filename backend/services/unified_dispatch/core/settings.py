@@ -241,6 +241,7 @@ class FeatureFlags:
     # Phase 0: Nouveaux flags pour sécurité
     enable_rl: bool = False  # Activer RL dans le pipeline
     enable_rl_apply: bool = False  # RL auto-apply (sinon suggest only)
+    enable_rl_postopt: bool = False  # Post-assignation RLDispatchOptimizer (désactivé par défaut)
     enable_clustering: bool = False  # Clustering géographique
     enable_parallel_heuristics: bool = False  # Parallélisation heuristiques
     # A1: Prévention des conflits temporels

@@ -271,7 +271,6 @@ jobs:
       # GRAFANA_OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_ID }}
       # GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.GRAFANA_OAUTH_GOOGLE_CLIENT_SECRET }}
       # GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS: ${{ secrets.GRAFANA_OAUTH_GOOGLE_ALLOWED_DOMAINS }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -402,7 +401,7 @@ jobs:
           username: ${{ env.SSH_USER }}
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
-          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh"
+          source: "scripts/smoke_tests.sh,scripts/deploy-production.sh,scripts/env.production.defaults.fragment"
           target: "/srv/atmr/"
 
       - name: Decode Firebase service account locally
@@ -470,7 +469,6 @@ jobs:
               "${{ secrets.GRAFANA_ADMIN_USER }}" \
               "${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
               "${{ secrets.GRAFANA_ROOT_URL }}" \
-              "${{ secrets.SLACK_WEBHOOK_URL }}" \
               "${{ secrets.SMTP_HOST }}" \
               "${{ secrets.SMTP_PORT }}" \
               "${{ secrets.SMTP_USERNAME }}" \

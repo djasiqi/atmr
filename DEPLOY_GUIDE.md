@@ -322,7 +322,7 @@ Backend: http://localhost:5000 (Traefik → https://www.lirie.ch)
 ### Moyen terme (cette semaine)
 
 1. ⏳ Ajouter tests d'intégration au workflow
-2. ⏳ Configurer Slack/Discord pour notifications de déploiement
+2. ⏳ Configurer les notifications de déploiement (email / monitoring)
 3. ⏳ Configurer rollback automatique en cas d'échec
 4. ⏳ Documenter la procédure de rollback manuel
 

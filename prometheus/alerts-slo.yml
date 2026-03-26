@@ -94,7 +94,7 @@ groups:
           severity: warning
           component: api
           slo_type: latency_absolute
-          notification: slack
+          notification: email
         annotations:
           summary: "Latence p95 > 2s détectée"
           description: "Latence p95 = {{ $value }}ms pour {{ $labels.endpoint }} → Performance dégradée"
@@ -134,7 +134,7 @@ groups:
           severity: warning
           component: dispatch
           slo_type: cumulative_breach
-          notification: slack
+          notification: email
         annotations:
           summary: "Plus de 10 breaches SLO Dispatch en 1h"
           description: "{{ $value }} breaches détectés sur la dernière heure → Performance dégradée"
@@ -178,7 +178,7 @@ groups:
           severity: warning
           component: global
           slo_type: summary
-          notification: slack
+          notification: email
         annotations:
           summary: "Taux de violations SLO global élevé (> 5/min)"
           description: "{{ $value }} violations/min détectées (API + Dispatch) → Dégradation système généralisée"

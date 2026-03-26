@@ -4,16 +4,17 @@
 # ruff: noqa: I001  # Imports organisés manuellement pour meilleure lisibilité
 import json
 import logging
+import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from flask import request  # pyright: ignore[reportMissingImports]
-from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
+from flask import request
+from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
 )
-from flask_restx import Resource  # pyright: ignore[reportMissingImports]
+from flask_restx import Resource
 from http import HTTPStatus
 
 from ext import db, redis_client, role_required
@@ -33,6 +34,11 @@ from routes.dispatch.dispatch_helpers import (
 )
 from shared.error_handlers import APIErrorHandler
 
+from routes.dispatch.rl_helpers import (
+    rl_suggestion_generator_status,
+    suggestions_observability_meta,
+)
+
 logger = logging.getLogger(__name__)
 
 # Initialisation des repositories
@@ -40,15 +46,6 @@ assignment_repo = AssignmentRepository()
 driver_repo = DriverRepository()
 rl_metric_repo = RLSuggestionMetricRepository()
 rl_feedback_repo = RLFeedbackRepository()
-
-# RL Dispatch (déploiement production)
-try:
-    from services.rl.rl_dispatch_manager import RLDispatchManager  # type: ignore[reportMissingImports]
-
-    RL_AVAILABLE = True
-except (ImportError, ModuleNotFoundError):
-    RL_AVAILABLE = False
-    RLDispatchManager = None
 
 # Constante
 TOTAL_FEEDBACKS_ZERO = 0
@@ -69,34 +66,26 @@ class RLDispatchStatus(Resource):
             - statistics: Statistiques d'utilisation
 
         """
-        if not RL_AVAILABLE:
-            return {
-                "available": False,
-                "message": "Module RL non disponible (dépendances manquantes)",
-            }, HTTPStatus.OK
-
         try:
-            # Initialiser manager RL
-            if RLDispatchManager is None:
+            st = rl_suggestion_generator_status()
+            if not st["available"]:
                 return {
                     "available": False,
-                    "message": "RLDispatchManager non disponible",
+                    "loaded": False,
+                    "message": st.get("message")
+                    or "Générateur de suggestions indisponible",
                 }, HTTPStatus.OK
-
-            rl_manager = RLDispatchManager()
-
-            stats = rl_manager.get_statistics()
 
             return {
                 "available": True,
-                "loaded": stats["is_loaded"],
-                "model_path": stats["model_path"],
+                "loaded": st["loaded"],
+                "model_path": st["model_path"],
                 "statistics": {
-                    "suggestions_total": stats["suggestions_count"],
-                    "errors": stats["errors_count"],
-                    "fallbacks": stats["fallback_count"],
-                    "success_rate": f"{stats['success_rate'] * 100:.1f}%",
-                    "fallback_rate": f"{stats['fallback_rate'] * 100:.1f}%",
+                    "suggestions_total": None,
+                    "errors": None,
+                    "fallbacks": None,
+                    "success_rate": None,
+                    "fallback_rate": None,
                 },
             }, HTTPStatus.OK
 
@@ -142,176 +131,183 @@ class RLDispatchSuggestions(Resource):
         result = None
         status_code = HTTPStatus.OK
 
-        if not RL_AVAILABLE:
-            result = {"suggestions": [], "message": "Module RL non disponible"}
-        else:
-            try:
-                company = _get_current_company()
-                for_date_str = request.args.get("for_date")
-                min_confidence = float(request.args.get("min_confidence", 0))
-                limit = int(request.args.get("limit", 20))
+        try:
+            company = _get_current_company()
+            for_date_str = request.args.get("for_date")
+            min_confidence = float(request.args.get("min_confidence", 0))
+            limit = int(request.args.get("limit", 20))
 
-                if not for_date_str:
-                    result = {"error": "for_date requis (YYYY-MM-DD)"}
-                    status_code = HTTPStatus.BAD_REQUEST
-                else:
-                    # ✅ Valider le format YYYY-MM-DD
-                    for_date_str = _validate_date_format(for_date_str)
+            if not for_date_str:
+                result = {"error": "for_date requis (YYYY-MM-DD)"}
+                status_code = HTTPStatus.BAD_REQUEST
+            else:
+                # ✅ Valider le format YYYY-MM-DD
+                for_date_str = _validate_date_format(for_date_str)
 
-                    # ✅ CACHE REDIS : Clé unique par company/date/params
-                    cache_key = (
-                        f"rl_suggestions:{company.id}:{for_date_str}:"
-                        f"{min_confidence}:{limit}"
+                # ✅ CACHE REDIS : Clé unique par company/date/params
+                cache_key = (
+                    f"rl_suggestions:{company.id}:{for_date_str}:"
+                    f"{min_confidence}:{limit}"
+                )
+
+                # Check cache
+                if redis_client:
+                    try:
+                        cached_bytes = redis_client.get(cache_key)
+                        if cached_bytes:
+                            logger.info("[RL] Cache hit for %s", cache_key)
+                            # Décoder bytes → str avant json.loads
+                            cached_str = cast(bytes, cached_bytes).decode("utf-8")
+                            suggestions_data = json.loads(cached_str)
+                            result = {
+                                "suggestions": suggestions_data,
+                                "total": len(suggestions_data),
+                                "date": for_date_str,
+                                "cached": True,
+                                "meta": {
+                                    "duration_ms": 0.0,
+                                    "model_source": "cache",
+                                    "fallback_reason": None,
+                                },
+                            }
+                    except Exception as e:
+                        logger.warning("[RL] Cache read error: %s", e)
+
+                if result is None:  # Pas de cache hit
+                    # Parse date
+                    for_date = datetime.strptime(for_date_str, "%Y-%m-%d").date()
+
+                    # Récupérer tous les assignments actifs pour cette date
+                    assignments = assignment_repo.find_models_by_company_and_date_with_status_eager_loading(
+                        company_id=company.id,
+                        for_date=for_date,
+                        statuses=[
+                            AssignmentStatus.SCHEDULED,
+                            AssignmentStatus.EN_ROUTE_PICKUP,
+                            AssignmentStatus.ARRIVED_PICKUP,
+                            AssignmentStatus.ONBOARD,
+                            AssignmentStatus.EN_ROUTE_DROPOFF,
+                        ],
                     )
 
-                    # Check cache
-                    if redis_client:
-                        try:
-                            cached_bytes = redis_client.get(cache_key)
-                            if cached_bytes:
-                                logger.info("[RL] Cache hit for %s", cache_key)
-                                # Décoder bytes → str avant json.loads
-                                cached_str = cast(bytes, cached_bytes).decode("utf-8")
-                                suggestions_data = json.loads(cached_str)
-                                result = {
-                                    "suggestions": suggestions_data,
-                                    "total": len(suggestions_data),
-                                    "date": for_date_str,
-                                    "cached": True,
-                                }
-                        except Exception as e:
-                            logger.warning("[RL] Cache read error: %s", e)
-
-                    if result is None:  # Pas de cache hit
-                        # Parse date
-                        for_date = datetime.strptime(for_date_str, "%Y-%m-%d").date()
-
-                        # Récupérer tous les assignments actifs pour cette date
-                        assignments = assignment_repo.find_models_by_company_and_date_with_status_eager_loading(
-                            company_id=company.id,
-                            for_date=for_date,
-                            statuses=[
-                                AssignmentStatus.SCHEDULED,
-                                AssignmentStatus.EN_ROUTE_PICKUP,
-                                AssignmentStatus.ARRIVED_PICKUP,
-                                AssignmentStatus.ONBOARD,
-                                AssignmentStatus.EN_ROUTE_DROPOFF,
-                            ],
+                    if not assignments:
+                        result = {
+                            "suggestions": [],
+                            "message": "Aucun assignment actif pour cette date",
+                        }
+                    else:
+                        # Récupérer tous les conducteurs disponibles
+                        drivers = driver_repo.find_models_by_company_available_with_user_eager_loading_limited(
+                            company_id=company.id, limit=10
                         )
 
-                        if not assignments:
+                        if not drivers:
                             result = {
                                 "suggestions": [],
-                                "message": "Aucun assignment actif pour cette date",
+                                "message": "Aucun conducteur disponible",
                             }
                         else:
-                            # Récupérer tous les conducteurs disponibles
-                            drivers = driver_repo.find_models_by_company_available_with_user_eager_loading_limited(
-                                company_id=company.id, limit=10
+                            # Utiliser le générateur RL pour créer des suggestions
+                            from services.ml.rl.suggestion_generator import (
+                                get_suggestion_generator,
                             )
 
-                            if not drivers:
-                                result = {
-                                    "suggestions": [],
-                                    "message": "Aucun conducteur disponible",
-                                }
-                            else:
-                                # Utiliser le générateur RL pour créer des suggestions
-                                from services.ml.rl.suggestion_generator import (
-                                    get_suggestion_generator,
+                            generator = get_suggestion_generator()
+                            t0 = time.perf_counter()
+                            all_suggestions = generator.generate_suggestions(
+                                company_id=int(company.id),
+                                assignments=assignments,
+                                drivers=drivers,
+                                for_date=for_date_str,
+                                min_confidence=min_confidence,
+                                max_suggestions=limit,
+                            )
+                            gen_ms = (time.perf_counter() - t0) * 1000.0
+
+                            # ✅ MÉTRIQUES : Logger les suggestions générées
+                            try:
+                                for suggestion in all_suggestions:
+                                    # Créer ID unique pour la suggestion
+                                    suggestion_id = (
+                                        f"{suggestion['assignment_id']}_"
+                                        f"{int(datetime.now(UTC).timestamp() * 1000)}"
+                                    )
+
+                                    metric = RLSuggestionMetric()
+                                    metric.company_id = int(company.id)
+                                    metric.suggestion_id = suggestion_id
+                                    metric.booking_id = suggestion["booking_id"]
+                                    metric.assignment_id = suggestion[
+                                        "assignment_id"
+                                    ]
+                                    metric.current_driver_id = suggestion[
+                                        "current_driver_id"
+                                    ]
+                                    metric.suggested_driver_id = suggestion[
+                                        "suggested_driver_id"
+                                    ]
+                                    metric.confidence = suggestion["confidence"]
+                                    metric.expected_gain_minutes = suggestion.get(
+                                        "expected_gain_minutes", 0
+                                    )
+                                    metric.q_value = suggestion.get("q_value")
+                                    metric.source = suggestion["source"]
+                                    metric.generated_at = datetime.now(UTC)
+                                    metric.additional_data = {
+                                        "message": suggestion.get("message"),
+                                        "for_date": for_date_str,
+                                        "min_confidence": min_confidence,
+                                    }
+                                    db.session.add(metric)
+
+                                    # Ajouter l'ID à la suggestion pour tracking frontend
+                                    suggestion["metric_id"] = suggestion_id
+
+                                db.session.commit()
+                                logger.info(
+                                    "[RL] Logged %s suggestion metrics",
+                                    len(all_suggestions),
+                                )
+                            except Exception as e:
+                                db.session.rollback()
+                                logger.warning(
+                                    "[RL] Failed to log metrics (non-critique): %s",
+                                    e,
                                 )
 
-                                generator = get_suggestion_generator()
-                                all_suggestions = generator.generate_suggestions(
-                                    company_id=int(company.id),
-                                    assignments=assignments,
-                                    drivers=drivers,
-                                    for_date=for_date_str,
-                                    min_confidence=min_confidence,
-                                    max_suggestions=limit,
-                                )
-
-                                # ✅ MÉTRIQUES : Logger les suggestions générées
+                            # ✅ CACHE REDIS : Stocker en cache (TTL 30s)
+                            if redis_client and all_suggestions:
                                 try:
-                                    for suggestion in all_suggestions:
-                                        # Créer ID unique pour la suggestion
-                                        suggestion_id = (
-                                            f"{suggestion['assignment_id']}_"
-                                            f"{int(datetime.now(UTC).timestamp() * 1000)}"
-                                        )
-
-                                        metric = RLSuggestionMetric()
-                                        metric.company_id = int(company.id)
-                                        metric.suggestion_id = suggestion_id
-                                        metric.booking_id = suggestion["booking_id"]
-                                        metric.assignment_id = suggestion[
-                                            "assignment_id"
-                                        ]
-                                        metric.current_driver_id = suggestion[
-                                            "current_driver_id"
-                                        ]
-                                        metric.suggested_driver_id = suggestion[
-                                            "suggested_driver_id"
-                                        ]
-                                        metric.confidence = suggestion["confidence"]
-                                        metric.expected_gain_minutes = suggestion.get(
-                                            "expected_gain_minutes", 0
-                                        )
-                                        metric.q_value = suggestion.get("q_value")
-                                        metric.source = suggestion["source"]
-                                        metric.generated_at = datetime.now(UTC)
-                                        metric.additional_data = {
-                                            "message": suggestion.get("message"),
-                                            "for_date": for_date_str,
-                                            "min_confidence": min_confidence,
-                                        }
-                                        db.session.add(metric)
-
-                                        # Ajouter l'ID à la suggestion pour tracking frontend
-                                        suggestion["metric_id"] = suggestion_id
-
-                                    db.session.commit()
+                                    redis_client.setex(
+                                        cache_key,
+                                        30,  # TTL 30 secondes
+                                        json.dumps(all_suggestions),
+                                    )
                                     logger.info(
-                                        "[RL] Logged %s suggestion metrics",
+                                        "[RL] Cached %s suggestions for %s",
                                         len(all_suggestions),
+                                        cache_key,
                                     )
                                 except Exception as e:
-                                    db.session.rollback()
-                                    logger.warning(
-                                        "[RL] Failed to log metrics (non-critique): %s",
-                                        e,
-                                    )
-
-                                # ✅ CACHE REDIS : Stocker en cache (TTL 30s)
-                                if redis_client and all_suggestions:
-                                    try:
-                                        redis_client.setex(
-                                            cache_key,
-                                            30,  # TTL 30 secondes
-                                            json.dumps(all_suggestions),
-                                        )
-                                        logger.info(
-                                            "[RL] Cached %s suggestions for %s",
-                                            len(all_suggestions),
-                                            cache_key,
-                                        )
-                                    except Exception as e:
-                                        logger.warning("[RL] Cache write error: %s", e)
+                                    logger.warning("[RL] Cache write error: %s", e)
 
                                 result = {
                                     "suggestions": all_suggestions,
                                     "total": len(all_suggestions),
                                     "date": for_date_str,
                                     "cached": False,
+                                    "meta": suggestions_observability_meta(
+                                        generator, gen_ms
+                                    ),
                                 }
 
-            except ValueError:
-                result = {"error": "Format date invalide (attendu: YYYY-MM-DD)"}
-                status_code = HTTPStatus.BAD_REQUEST
-            except Exception as e:
-                logger.exception("[RL] Failed to get RL suggestions")
-                result = {"error": f"Échec récupération suggestions RL: {e}"}
-                status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+        except ValueError:
+            result = {"error": "Format date invalide (attendu: YYYY-MM-DD)"}
+            status_code = HTTPStatus.BAD_REQUEST
+        except Exception as e:
+            logger.exception("[RL] Failed to get RL suggestions")
+            result = {"error": f"Échec récupération suggestions RL: {e}"}
+            status_code = HTTPStatus.INTERNAL_SERVER_ERROR
 
         return result, status_code
 

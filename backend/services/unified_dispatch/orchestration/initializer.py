@@ -265,6 +265,7 @@ class DispatchInitializer:
                 s.features = ud_settings.FeatureFlags()
             s.features.enable_solver = False
             s.features.enable_rl = False
+            s.features.enable_rl_postopt = False
             s.features.enable_parallel_heuristics = (
                 True  # Activer parallélisme pour vitesse
             )

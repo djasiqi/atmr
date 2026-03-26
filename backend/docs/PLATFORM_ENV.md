@@ -1,5 +1,22 @@
 # Variables d’environnement — Admin Ops / Platform
 
+## RL — chemins modèles (inférence vs entraînement)
+
+| Variable | Description |
+|----------|-------------|
+| `RL_INFERENCE_MODEL_PATH` | Fichier `.pth` lu par le générateur de suggestions (API semi-auto). Défaut : `data/ml/dqn_agent_best_v33.pth`. |
+| `RL_TRAINING_CHECKPOINT_PATH` | Checkpoint lu au **début** d’un `retrain_dqn_model_task` (Celery). Défaut : `data/rl/models/dqn_best.pth`. |
+| `RL_TRAINING_CHECKPOINT_DIR` | Répertoire où le retrain **écrit** les checkpoints `dqn_retrain_<timestamp>.pth` — **pas** le fichier d’inférence. Défaut : `data/rl/models/training`. |
+| `ENABLE_RL_POSTOPT` | Si `true`, autorise le post-opt `RLDispatchOptimizer` dans le pipeline (sinon log `RL_POSTOPT_SKIPPED`). Défaut : désactivé côté `FeatureFlags` ; peut être branché via overrides dispatch. |
+
+Le retrain **n’écrit jamais** vers `RL_INFERENCE_MODEL_PATH` : promotion manuelle / CI si besoin.
+
+**Validation staging (axe A)** : voir `docs/RL_STAGING_VALIDATION_CHECKLIST.md` (suggestions, `meta`, post-opt, retrain). Protocole S1–S4 : `docs/RL_STAGING_EXECUTION_PROTOCOL.md`. Smoke HTTP : `python scripts/smoke_rl_staging.py --help` (`--print-report-template` pour le tableau de compte-rendu).
+
+**Shadow mode (L12)** : limiter la cohorte via configuration applicative / `ShadowModeManager` (pas de variable globale obligatoire ici — voir code `shadow_mode/`).
+
+---
+
 | Variable | Description |
 |----------|-------------|
 | `PLATFORM_API_URL_PROD` | URL de base de l’API production **sans** `/api/v1` (ex. `https://api.lirie.ch`). Vide = prod non monitorée (`monitored: false`). |

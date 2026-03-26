@@ -22,6 +22,7 @@ export const useRLSuggestions = (date, options = {}) => {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [meta, setMeta] = useState(null);
 
   const loadSuggestions = useCallback(async () => {
     if (!date) return;
@@ -42,6 +43,7 @@ export const useRLSuggestions = (date, options = {}) => {
       );
 
       setSuggestions(sortedSuggestions);
+      setMeta(data.meta ?? null);
       setError(null);
     } catch (err) {
       // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
@@ -108,6 +110,7 @@ export const useRLSuggestions = (date, options = {}) => {
 
   return {
     suggestions,
+    meta,
     highConfidenceSuggestions,
     mediumConfidenceSuggestions,
     lowConfidenceSuggestions,

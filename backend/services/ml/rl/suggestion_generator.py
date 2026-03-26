@@ -58,6 +58,8 @@ from typing import Any, Dict, List
 
 import numpy as np
 
+from services.ml.rl.rl_paths import get_inference_model_path
+
 logger = logging.getLogger(__name__)
 
 # Lazy imports pour éviter les erreurs si RL non disponible
@@ -103,7 +105,7 @@ class RLSuggestionGenerator:
 
         """
         super().__init__()  # Explicitly call parent constructor
-        self.model_path = model_path or "data/ml/dqn_agent_best_v33.pth"
+        self.model_path = model_path or get_inference_model_path()
         self.agent = None
         self.env = None
         self._load_model()

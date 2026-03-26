@@ -1,31 +1,17 @@
 # alertmanager.yml
 # Configuration Alertmanager production pour ATMR
 # ⚠️ IMPORTANT: Les variables d'environnement doivent être définies dans .env.production
-# Si SMTP_HOST ou SLACK_WEBHOOK_URL sont vides, les notifications correspondantes seront désactivées
+# Si SMTP_HOST est vide ou incorrect, les notifications email peuvent échouer
 
 global:
   resolve_timeout: 5m
-  # ✅ Slack webhook - Configurer SLACK_WEBHOOK_URL dans .env.production
-  # Format: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
-  # Si vide, la ligne sera commentée par le script d'entrypoint
-  slack_api_url: '${SLACK_WEBHOOK_URL}'
-  
+
   # ✅ Email SMTP - Configurer les variables dans .env.production
-  # Format: ${SMTP_HOST}:${SMTP_PORT}
-  # Exemple Gmail: smtp.gmail.com:587
-  # Exemple SendGrid: smtp.sendgrid.net:587
-  # Exemple GoDaddy: smtpout.secureserver.net:465 (SSL)
-  # Les valeurs par défaut sont gérées par le script d'entrypoint
-  # ⚠️ Si SMTP_HOST n'est pas défini, utiliser localhost (emails ne fonctionneront pas mais Alertmanager démarrera)
   smtp_smarthost: '${SMTP_HOST}:${SMTP_PORT}'
   smtp_from: '${ALERTMANAGER_FROM_EMAIL}'
   smtp_auth_username: '${SMTP_USERNAME}'
   smtp_auth_password: '${SMTP_PASSWORD}'
-  # TLS requis selon le port (géré automatiquement par le script d'entrypoint)
-  # Port 465 = SSL implicite (non supporté, utiliser 587)
-  # Port 587 = STARTTLS (recommandé, TLS requis)
-  # Port 25 = Pas de TLS (non recommandé)
-  # ⚠️ La valeur sera remplacée par le script d'entrypoint selon SMTP_PORT
+  # STARTTLS (port 587) — aligné sur la prod
   smtp_require_tls: true
 
 # Templates pour notifications personnalisées
@@ -39,16 +25,16 @@ route:
   group_wait: 10s
   group_interval: 10s
   repeat_interval: 12h
-  
+
   routes:
-    # Alertes critiques → PagerDuty / Slack critical
+    # Alertes critiques
     - match:
         severity: critical
       receiver: 'critical-alerts'
       continue: true
       group_wait: 0s
       repeat_interval: 1h
-    
+
     # Alertes WebSocket critiques → Notification immédiate
     - match:
         component: websocket
@@ -56,7 +42,7 @@ route:
       receiver: 'websocket-critical'
       group_wait: 0s
       repeat_interval: 30m
-    
+
     # Alertes OSRM critiques → Notification immédiate
     - match:
         component: osrm
@@ -64,7 +50,7 @@ route:
       receiver: 'osrm-critical'
       group_wait: 0s
       repeat_interval: 1h
-    
+
     # Alertes Dispatch critiques → Notification immédiate
     - match:
         component: dispatch
@@ -72,7 +58,7 @@ route:
       receiver: 'dispatch-critical'
       group_wait: 0s
       repeat_interval: 1h
-    
+
     # Alertes infrastructure critiques → Notification immédiate
     - match:
         component: infrastructure
@@ -80,7 +66,7 @@ route:
       receiver: 'infrastructure-critical'
       group_wait: 0s
       repeat_interval: 1h
-    
+
     # Alertes database critiques → Notification immédiate
     - match:
         component: database
@@ -88,8 +74,8 @@ route:
       receiver: 'database-critical'
       group_wait: 0s
       repeat_interval: 1h
-    
-    # Alertes warning → Slack warning channel
+
+    # Alertes warning
     - match:
         severity: warning
       receiver: 'warning-alerts'
@@ -104,14 +90,14 @@ inhibit_rules:
     target_match:
       component: database
     equal: ['instance']
-  
+
   # Si Redis est down, supprimer les alertes de cache
   - source_match:
       alertname: RedisDown
     target_match:
       component: cache
     equal: ['instance']
-  
+
   # Si le backend est down, supprimer les alertes applicatives
   - source_match:
       alertname: BackendDown
@@ -119,17 +105,9 @@ inhibit_rules:
       service: atmr-backend
     equal: ['instance']
 
-# Receivers (destinations des alertes)
+# Receivers (destinations des alertes — email uniquement)
 receivers:
-  # Receiver par défaut → Slack + Email (alertes non critiques)
-  # ⚠️ Si SLACK_WEBHOOK_URL est vide, slack_configs sera ignoré
-  # ⚠️ Si SMTP_HOST est localhost ou ALERT_EMAIL_TO est vide, email ne fonctionnera pas
   - name: 'default-receiver'
-    slack_configs:
-      - channel: '#atmr-alerts'
-        title: '⚠️ ATMR Alert'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -137,19 +115,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # Alertes critiques → Slack + Email (notifications immédiates)
   - name: 'critical-alerts'
-    slack_configs:
-      - channel: '#atmr-alerts-critical'
-        title: '🚨 ATMR Critical Alert'
-        text: |
-          {{ range .Alerts }}
-          *Alert:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Labels:* {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
-          {{ end }}
-        send_resolved: true
-    
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -164,13 +130,7 @@ receivers:
           {{ end }}
         send_resolved: true
 
-  # WebSocket critiques
   - name: 'websocket-critical'
-    slack_configs:
-      - channel: '#atmr-websocket'
-        title: '🔌 WebSocket Critical'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -178,13 +138,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # OSRM critiques
   - name: 'osrm-critical'
-    slack_configs:
-      - channel: '#atmr-osrm'
-        title: '🗺️ OSRM Critical'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -192,13 +146,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # Dispatch critiques
   - name: 'dispatch-critical'
-    slack_configs:
-      - channel: '#atmr-dispatch'
-        title: '🚗 Dispatch Critical'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -206,13 +154,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # Infrastructure critiques
   - name: 'infrastructure-critical'
-    slack_configs:
-      - channel: '#atmr-infrastructure'
-        title: '🖥️ Infrastructure Critical'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -220,13 +162,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # Database critiques
   - name: 'database-critical'
-    slack_configs:
-      - channel: '#atmr-database'
-        title: '🗄️ Database Critical'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:
@@ -234,13 +170,7 @@ receivers:
         html: '{{ range .Alerts }}<h2>{{ .Annotations.summary }}</h2><p>{{ .Annotations.description }}</p>{{ end }}'
         send_resolved: true
 
-  # Alertes warning
   - name: 'warning-alerts'
-    slack_configs:
-      - channel: '#atmr-alerts-warning'
-        title: '⚠️ ATMR Warning'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
-        send_resolved: true
     email_configs:
       - to: ${ALERT_EMAIL_TO}
         headers:

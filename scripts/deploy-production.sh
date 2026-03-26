@@ -46,24 +46,23 @@ export DOCKER_TAG="${14}"
 export GRAFANA_ADMIN_USER="${15}"
 export GRAFANA_ADMIN_PASSWORD="${16}"
 export GRAFANA_ROOT_URL="${17}"
-export SLACK_WEBHOOK_URL="${18}"
-export SMTP_HOST="${19}"
-export SMTP_PORT="${20}"
-export SMTP_USERNAME="${21}"
-export SMTP_PASSWORD="${22}"
-export ALERTMANAGER_FROM_EMAIL="${23}"
-export ALERT_EMAIL_TO="${24}"
-export SOCKETIO_CORS_ORIGINS="${25}"
-export BREVO_API_KEY="${26}"
-export POSTGRES_HOST="${27:-postgres}"
-export FLASK_ENV="${28:-production}"
-export FLASK_CONFIG="${29:-production}"
-export ENVIRONMENT="${30:-production}"
+export SMTP_HOST="${18}"
+export SMTP_PORT="${19}"
+export SMTP_USERNAME="${20}"
+export SMTP_PASSWORD="${21}"
+export ALERTMANAGER_FROM_EMAIL="${22}"
+export ALERT_EMAIL_TO="${23}"
+export SOCKETIO_CORS_ORIGINS="${24}"
+export BREVO_API_KEY="${25}"
+export POSTGRES_HOST="${26:-postgres}"
+export FLASK_ENV="${27:-production}"
+export FLASK_CONFIG="${28:-production}"
+export ENVIRONMENT="${29:-production}"
 # Admin Ops / Platform (GET /api/v1/platform/status) — surcharges via GitHub Actions vars
-export PLATFORM_API_URL_PROD="${31:-}"
-export PLATFORM_LINK_PROMETHEUS="${32:-}"
-export PLATFORM_LINK_ALERTMANAGER="${33:-}"
-export PLATFORM_API_URL_DEMO="${34:-}"
+export PLATFORM_API_URL_PROD="${30:-}"
+export PLATFORM_LINK_PROMETHEUS="${31:-}"
+export PLATFORM_LINK_ALERTMANAGER="${32:-}"
+export PLATFORM_API_URL_DEMO="${33:-}"
 # Réglages mobile/token/websocket (optionnels, avec defaults robustes)
 export JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS="${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS:-259200}"
 export JWT_DECODE_LEEWAY_SECONDS="${JWT_DECODE_LEEWAY_SECONDS:-300}"
@@ -181,7 +180,6 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-}"
   echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-}"
   echo "GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL:-}"
-  echo "SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}"
   echo "SMTP_HOST=${SMTP_HOST:-}"
   echo "SMTP_PORT=${SMTP_PORT:-587}"
   echo "SMTP_USERNAME=${SMTP_USERNAME:-}"
@@ -220,6 +218,25 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   echo "PLATFORM_LINK_ALERTMANAGER=${PLATFORM_LINK_ALERTMANAGER:-https://alertmanager.lirie.ch}"
   echo "PLATFORM_API_URL_DEMO=${PLATFORM_API_URL_DEMO:-}"
 } > .env.production && chmod 600 .env.production
+
+# Complément prod (contact, cookies, perf, rate limit) — scripts/env.production.defaults.fragment
+if [ -f "scripts/env.production.defaults.fragment" ]; then
+  cat scripts/env.production.defaults.fragment >> .env.production
+fi
+# Celery : même broker que REDIS (URL déjà calculée dans ce shell)
+cat >> .env.production <<EOF
+CELERY_BROKER_URL=${REDIS_URL}
+CELERY_RESULT_BACKEND=${REDIS_URL}
+EOF
+# Surcharges uniquement sur le serveur (non versionné) — fusion en fin de fichier
+if [ -f ".env.production.local" ]; then
+  {
+    echo ""
+    echo "# --- Overrides .env.production.local (non commit)"
+    cat .env.production.local
+  } >> .env.production
+fi
+
 cp .env.production .env && chmod 600 .env
 
 mkdir -p data/rl/shadow_mode data/ml data/rl data/ml/models && chmod -R 755 data && chown -R 999:999 data 2>/dev/null || true

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple, cast
 
-from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
+from cachetools import LRUCache
 
 from models import Booking, BookingStatus, Driver
 from services.geolocation.core import get_geolocation_service
@@ -824,31 +824,23 @@ def _score_driver_for_booking(
         "coord_quality": coord_quality_factor,
     }
 
-    # Fusion avec score RL si activé
+    # Fusion heuristique + score RL : désactivée tant qu'aucun score RL réel
+    # n'est branché (V2 — évite le placeholder rl_score=0.5).
     if getattr(settings.features, "enable_rl", False) and getattr(
         settings.features, "enable_rl_apply", False
     ):
-        # Normaliser le score heuristique de 0-1 vers 0-100
-        heuristic_score_100 = heuristic_score * 100
-
-        # TODO: Récupérer le score RL (à implémenter avec le système RL)
-        rl_score = 0.5  # Placeholder: score RL par défaut
-        alpha = getattr(settings.rl, "alpha", 0.2)
-
-        from services.unified_dispatch.score_fusion import fuse_scores
-
-        final_score_100, fusion_breakdown = fuse_scores(
-            heuristic_score=heuristic_score_100, rl_score=rl_score, alpha=alpha
+        logger.warning(
+            "%s",
+            (
+                "[Heuristics] enable_rl + enable_rl_apply sont actifs mais la fusion "
+                "score RL n'est pas implémentée — score heuristique pur utilisé."
+            ),
         )
-
-        # Reconvertir en 0-1
-        total = final_score_100 / 100
-
-        # Ajouter le breakdown de fusion
-        breakdown["rl_fusion"] = fusion_breakdown
-        breakdown["heuristic_raw"] = heuristic_score
-    else:
-        total = heuristic_score
+        breakdown["rl_fusion"] = {
+            "disabled": True,
+            "reason": "rl_score_placeholder_removed_until_real_scoring",
+        }
+    total = heuristic_score
 
     # ✅ P1: Mettre en cache le résultat
     result = (total, breakdown, (est_start_min, est_finish_min))
@@ -2640,7 +2632,7 @@ def assign(
                         try:
                             is_testing = os.getenv("FLASK_CONFIG") == "testing"
                             try:
-                                from flask import (  # pyright: ignore[reportMissingImports]
+                                from flask import (
                                     current_app,
                                 )
 
@@ -2671,7 +2663,7 @@ def assign(
                     try:
                         is_testing = os.getenv("FLASK_CONFIG") == "testing"
                         try:
-                            from flask import (  # pyright: ignore[reportMissingImports]
+                            from flask import (
                                 current_app,
                             )
 
@@ -2698,7 +2690,7 @@ def assign(
                 is_testing = os.getenv("FLASK_CONFIG") == "testing"
                 # Si current_app est disponible, utiliser sa config (plus précis)
                 try:
-                    from flask import (  # pyright: ignore[reportMissingImports]
+                    from flask import (
                         current_app,
                     )
 
@@ -3291,7 +3283,7 @@ def closest_feasible(
     try:
         is_testing = os.getenv("FLASK_CONFIG") == "testing"
         try:
-            from flask import current_app  # pyright: ignore[reportMissingImports]
+            from flask import current_app
 
             is_testing = is_testing or current_app.config.get("TESTING", False)
         except RuntimeError:
@@ -3488,7 +3480,7 @@ def closest_feasible(
                     try:
                         is_testing_fb = os.getenv("FLASK_CONFIG") == "testing"
                         try:
-                            from flask import (  # pyright: ignore[reportMissingImports]
+                            from flask import (
                                 current_app,
                             )
 

@@ -1,7 +1,7 @@
 """✅ 3.6.2: Service d'alertes proactives.
 
 Détecte les problèmes avant impact utilisateur et envoie des alertes
-via webhook Slack/Email.
+via webhook HTTP (email / intégrations externes).
 """
 
 import logging
@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
-import requests  # pyright: ignore[reportMissingModuleSource]
-from requests import (  # pyright: ignore[reportMissingModuleSource]
+import requests
+from requests import (
     RequestException,
     Timeout,
 )
@@ -31,8 +31,7 @@ DISPATCH_DELAY_RATE_THRESHOLD = 0.15  # 15%
 OSRM_DOWN_THRESHOLD_SECONDS = 60  # 1 minute
 REDIS_DOWN_THRESHOLD_SECONDS = 30  # 30 secondes
 
-# Configuration webhooks
-SLACK_WEBHOOK_URL = os.getenv("ALERTING_SLACK_WEBHOOK_URL", default=None)
+# Configuration webhooks (optionnel)
 EMAIL_WEBHOOK_URL = os.getenv("ALERTING_EMAIL_WEBHOOK_URL", default=None)
 
 
@@ -62,53 +61,11 @@ class Alert:
             "metadata": self.metadata or {},
         }
 
-    def to_slack_message(self) -> Dict[str, Any]:
-        """Convertit en message Slack."""
-        color = "danger" if self.severity == "critical" else "warning"
-        return {
-            "attachments": [
-                {
-                    "color": color,
-                    "title": self.title,
-                    "text": self.message,
-                    "fields": [
-                        {
-                            "title": "Métrique",
-                            "value": self.metric_name,
-                            "short": True,
-                        },
-                        {
-                            "title": "Valeur actuelle",
-                            "value": f"{self.current_value:.2%}"
-                            if isinstance(self.current_value, float)
-                            else str(self.current_value),
-                            "short": True,
-                        },
-                        {
-                            "title": "Seuil",
-                            "value": f"{self.threshold:.2%}"
-                            if isinstance(self.threshold, float)
-                            else str(self.threshold),
-                            "short": True,
-                        },
-                        {
-                            "title": "Sévérité",
-                            "value": self.severity.upper(),
-                            "short": True,
-                        },
-                    ],
-                    "ts": int(self.timestamp.timestamp()),
-                }
-            ]
-        }
-
-
 class AlertingService:
     """Service d'alertes proactives."""
 
     def __init__(self) -> None:  # pyright: ignore[reportMissingSuperCall]
         """Initialise le service d'alertes."""
-        self.slack_webhook_url = SLACK_WEBHOOK_URL
         self.email_webhook_url = EMAIL_WEBHOOK_URL
         self._last_osrm_check: datetime | None = None
         self._last_redis_check: datetime | None = None
@@ -417,7 +374,7 @@ class AlertingService:
     def _check_osrm_health(self) -> Alert | None:
         """Vérifie la santé OSRM."""
         try:
-            import requests  # pyright: ignore[reportMissingModuleSource]
+            import requests
 
             osrm_url = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
             timeout = 2
@@ -542,36 +499,6 @@ class AlertingService:
             True si envoyé avec succès, False sinon
         """
         success = False
-
-        # Envoyer à Slack
-        if self.slack_webhook_url:
-            try:
-                message = alert.to_slack_message()
-                response = requests.post(
-                    self.slack_webhook_url,
-                    json=message,
-                    timeout=5,
-                )
-                response.raise_for_status()
-                logger.info("[AlertingService] Alert sent to Slack: %s", alert.title)
-                success = True
-            except (RequestException, Timeout, ConnectionError) as e:
-                # Erreurs réseau attendues : connexion HTTP, timeout
-                logger.error(
-                    "[AlertingService] Failed to send Slack alert (network error: %s): %s",
-                    type(e).__name__,
-                    e,
-                )
-            except (ValueError, TypeError, KeyError) as e:
-                # Erreurs de validation attendues : JSON invalide
-                logger.error(
-                    "[AlertingService] Failed to send Slack alert (validation error: %s): %s",
-                    type(e).__name__,
-                    e,
-                )
-            except Exception:
-                # Erreur inattendue : logger avec trace complète
-                logger.exception("[AlertingService] Failed to send Slack alert")
 
         # Envoyer à Email (via webhook)
         if self.email_webhook_url:

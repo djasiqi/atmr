@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, cast
 from zoneinfo import ZoneInfo
 
-from flask import current_app  # pyright: ignore[reportMissingImports]
+from flask import current_app
 
 from ext import db
 from models import Company
@@ -1466,7 +1466,7 @@ class AgentOrchestrator:
         """Génère un rapport périodique."""
         try:
             report = generate_daily_report(self.company_id)
-            # Envoyer via notification (Slack/Email)
+            # Envoyer via notification (email)
             company_email = (
                 getattr(self.company, "email", None) if self.company else None
             )

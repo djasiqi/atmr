@@ -441,63 +441,91 @@ class PipelineExecutor:
                         len(h_res.unassigned_booking_ids),
                     )
 
-                    # Optimisation RL (si disponible et pas en mode rapide)
+                    # Post-opt RL : logs skips explicites (agrégation / alerting)
+                    if mode == "auto" and len(final_assignments) > 0:
+                        if is_fast_mode:
+                            logger.info(
+                                "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=fast_mode"
+                            )
+                        elif not getattr(
+                            settings.features, "enable_rl_postopt", False
+                        ):
+                            logger.info(
+                                "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=feature_disabled (enable_rl_postopt=false)"
+                            )
+
+                    # Optimisation RL post-assignation (gelé par défaut — enable_rl_postopt)
                     if (
                         mode == "auto"
                         and not is_fast_mode
                         and len(final_assignments) > 0
                     ):
                         try:
-                            from services.unified_dispatch.rl_optimizer import (
-                                RLDispatchOptimizer,
-                            )
-
-                            logger.info(
-                                "[PipelineExecutor] 🧠 Tentative d'optimisation RL des assignations..."
-                            )
-
-                            optimizer = RLDispatchOptimizer(
-                                model_path="data/rl/models/dispatch_optimized_v2.pth",
-                                max_swaps=15,
-                                min_improvement=0.3,
-                                config_context="production",
-                            )
-
-                            if optimizer.is_available():
-                                initial = [
-                                    {
-                                        "booking_id": a.booking_id,
-                                        "driver_id": a.driver_id,
-                                    }
-                                    for a in final_assignments
-                                ]
-
-                                optimized = optimizer.optimize_assignments(
-                                    initial_assignments=initial,
-                                    bookings=bookings_list,
-                                    drivers=regs,
-                                    matrix_quality=prob_regs.get("matrix_quality"),
-                                    coord_quality=prob_regs.get("coord_quality"),
+                            if getattr(
+                                settings.features, "enable_rl_postopt", False
+                            ):
+                                from services.unified_dispatch.ml.rl_optimizer import (
+                                    RLDispatchOptimizer,
                                 )
 
-                                # Appliquer les changements
-                                for i, a in enumerate(final_assignments):
-                                    if i < len(optimized):
-                                        new_driver_id = optimized[i]["driver_id"]
-                                        if a.driver_id != new_driver_id:
-                                            logger.info(
-                                                "[PipelineExecutor] RL swap: Booking %d → Driver %d (was %d)",
-                                                a.booking_id,
-                                                new_driver_id,
-                                                a.driver_id,
-                                            )
-                                            a.driver_id = new_driver_id
+                                logger.info(
+                                    "[PipelineExecutor] 🧠 Tentative d'optimisation RL des assignations..."
+                                )
 
+                                optimizer = RLDispatchOptimizer(
+                                    model_path="data/rl/models/dispatch_optimized_v2.pth",
+                                    max_swaps=15,
+                                    min_improvement=0.3,
+                                    config_context="production",
+                                )
+
+                                if optimizer.is_available():
+                                    initial = [
+                                        {
+                                            "booking_id": a.booking_id,
+                                            "driver_id": a.driver_id,
+                                        }
+                                        for a in final_assignments
+                                    ]
+
+                                    optimized = optimizer.optimize_assignments(
+                                        initial_assignments=initial,
+                                        bookings=bookings_list,
+                                        drivers=regs,
+                                        matrix_quality=prob_regs.get("matrix_quality"),
+                                        coord_quality=prob_regs.get("coord_quality"),
+                                    )
+
+                                    # Appliquer les changements
+                                    for i, a in enumerate(final_assignments):
+                                        if i < len(optimized):
+                                            new_driver_id = optimized[i]["driver_id"]
+                                            if a.driver_id != new_driver_id:
+                                                logger.info(
+                                                    "[PipelineExecutor] RL swap: Booking %d → Driver %d (was %d)",
+                                                    a.booking_id,
+                                                    new_driver_id,
+                                                    a.driver_id,
+                                                )
+                                                a.driver_id = new_driver_id
+                                else:
+                                    logger.info(
+                                        "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=model_unavailable"
+                                    )
+
+                        except ImportError as e:
+                            logger.info(
+                                "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=import_error detail=%s",
+                                e,
+                            )
+                            logger.debug(
+                                "[PipelineExecutor] RL optimization import failed: %s",
+                                type(e).__name__,
+                            )
                         except (
                             ValueError,
                             TypeError,
                             AttributeError,
-                            ImportError,
                         ) as e:
                             # Erreurs attendues : validation, imports manquants
                             logger.debug(

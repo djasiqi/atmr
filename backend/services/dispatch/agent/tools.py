@@ -1218,8 +1218,8 @@ class AgentTools:
         """Envoie une notification.
 
         Args:
-            channel: Canal de notification ('email', 'slack', 'sms')
-            to: Destinataire (email, slack channel, phone)
+            channel: Canal de notification ('email', 'sms')
+            to: Destinataire (email, téléphone)
             template_id: ID du template de notification
             vars: Variables pour le template
 

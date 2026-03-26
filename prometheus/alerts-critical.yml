@@ -125,7 +125,7 @@ groups:
         labels:
           severity: warning
           component: workers
-          notification: slack
+          notification: email
         annotations:
           summary: "⚠️ Moins de 2 workers Celery actifs"
           description: "Seulement {{ $value }} worker(s) Celery actif(s). Risque de saturation des tâches."
@@ -201,7 +201,7 @@ groups:
         labels:
           severity: warning
           component: routing
-          notification: slack
+          notification: email
         annotations:
           summary: "⚠️ OSRM routing service DOWN"
           description: "Le service de routing OSRM est inaccessible depuis 5 minutes. Dispatch utilise fallback Haversine."
@@ -221,7 +221,7 @@ groups:
         labels:
           severity: warning
           component: routing
-          notification: slack
+          notification: email
         annotations:
           summary: "⚠️ OSRM latence élevée (p95 > 2s)"
           description: "OSRM répond en {{ $value }}s au p95. Performance dégradée."
@@ -267,7 +267,7 @@ groups:
         labels:
           severity: warning
           component: api
-          notification: slack
+          notification: email
         annotations:
           summary: "⚠️ Readiness check API échoue"
           description: "L'API n'est pas prête à recevoir du trafic. Kubernetes/load balancer pourrait retirer du pool."

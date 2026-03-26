@@ -294,19 +294,6 @@ jobs:
 
           echo "✅ Vérification modules critiques terminée"
 
-      # Upload Codecov désactivé jusqu'à configuration du token
-      # Pour activer : ajouter CODECOV_TOKEN dans GitHub Secrets et décommenter
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-      #   with:
-      #     file: ./backend/coverage.xml
-      #     flags: backend
-      #     name: backend-coverage
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     fail_ci_if_error: false
-      #   continue-on-error: true
-
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:

@@ -21,7 +21,7 @@ try:
 except ImportError:
     HVAC_AVAILABLE = False
 
-from celery import Task  # pyright: ignore[reportMissingImports]
+from celery import Task
 
 from celery_app import celery
 
@@ -728,7 +728,7 @@ def _notify_rotation_failure(results: dict[str, Any]) -> None:
         results: Dictionnaire des résultats de rotation
     """
     try:
-        import sentry_sdk  # pyright: ignore[reportMissingImports]
+        import sentry_sdk
 
         # Envoyer à Sentry si configuré
         failed_secrets = [
@@ -741,7 +741,7 @@ def _notify_rotation_failure(results: dict[str, Any]) -> None:
             )
             logger.error("[4.1 Vault Rotation] ❌ Échecs détectés: %s", failed_secrets)
 
-        # TODO: Ajouter notification email/Slack si configuré
+        # TODO: Ajouter notification email si configuré
         # Exemple:
         # if os.getenv("ROTATION_NOTIFICATION_EMAIL"):
         #     send_email(...)

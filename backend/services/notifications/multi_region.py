@@ -141,7 +141,7 @@ class RegionManager:
             Status de la région
         """
         try:
-            import redis  # pyright: ignore[reportMissingImports]
+            import redis
 
             logger.debug("[multi_region] Checking health of region %s", region)
 
@@ -228,7 +228,7 @@ class RegionManager:
             new_region,
         )
 
-        # TODO: Envoyer alerte Slack/PagerDuty
+        # TODO: Envoyer alerte (PagerDuty / email)
         self._send_failover_alert(old_region, new_region)
 
     def _send_failover_alert(self, old_region: str, new_region: str) -> None:
@@ -239,7 +239,7 @@ class RegionManager:
             new_region: Nouvelle région
         """
         try:
-            # TODO: Intégration Slack/PagerDuty
+            # TODO: Intégration PagerDuty / email
             logger.critical(
                 "[multi_region] 🚨 FAILOVER ALERT: Region switched from %s to %s",
                 old_region,

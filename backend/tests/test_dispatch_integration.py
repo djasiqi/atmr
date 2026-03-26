@@ -22,7 +22,7 @@ except ImportError:
     get_safety_guards = None
 
 try:
-    from services.unified_dispatch.rl_optimizer import RLDispatchOptimizer
+    from services.unified_dispatch.ml.rl_optimizer import RLDispatchOptimizer
 except ImportError:
     RLDispatchOptimizer = None
 
@@ -85,7 +85,7 @@ class TestDispatchSafetyIntegration:
 
         # Mock de l'optimiseur RL
         with patch(
-            "services.unified_dispatch.rl_optimizer.RLDispatchOptimizer"
+            "services.unified_dispatch.ml.rl_optimizer.RLDispatchOptimizer"
         ) as mock_optimizer_class:
             optimizer = Mock()
             optimizer.is_available.return_value = True
@@ -135,7 +135,7 @@ class TestDispatchSafetyIntegration:
 
         # Mock de l'optimiseur RL
         with patch(
-            "services.unified_dispatch.rl_optimizer.RLDispatchOptimizer"
+            "services.unified_dispatch.ml.rl_optimizer.RLDispatchOptimizer"
         ) as mock_optimizer_class:
             optimizer = Mock()
             optimizer.is_available.return_value = True

@@ -1,7 +1,14 @@
 # backend/tasks/rl_tasks.py
 # pyright: reportMissingImports=false
 
-# Constantes pour éviter les valeurs magiques
+"""Tâches Celery pour le système RL (Reinforcement Learning).
+
+Comprend :
+- Ré-entraînement périodique du modèle DQN
+- Nettoyage des anciennes métriques
+- Génération rapports performance
+"""
+
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -18,15 +25,6 @@ TOTAL_FEEDBACKS_ZERO = 0
 MIN_FEEDBACKS_FOR_TRAINING = 50
 MIN_TRAINING_SAMPLES = 30
 MAX_STEPS_PER_EPISODE = 200  # Nombre maximum de steps par épisode
-
-"""Tâches Celery pour le système RL (Reinforcement Learning).
-
-Comprend :
-- Ré-entraînement périodique du modèle DQN
-- Nettoyage des anciennes métriques
-- Génération rapports performance
-"""
-
 
 logger = logging.getLogger(__name__)
 
