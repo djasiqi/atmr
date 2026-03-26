@@ -59,6 +59,11 @@ export POSTGRES_HOST="${27:-postgres}"
 export FLASK_ENV="${28:-production}"
 export FLASK_CONFIG="${29:-production}"
 export ENVIRONMENT="${30:-production}"
+# Admin Ops / Platform (GET /api/v1/platform/status) — surcharges via GitHub Actions vars
+export PLATFORM_API_URL_PROD="${31:-}"
+export PLATFORM_LINK_PROMETHEUS="${32:-}"
+export PLATFORM_LINK_ALERTMANAGER="${33:-}"
+export PLATFORM_API_URL_DEMO="${34:-}"
 # Réglages mobile/token/websocket (optionnels, avec defaults robustes)
 export JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS="${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS:-259200}"
 export JWT_DECODE_LEEWAY_SECONDS="${JWT_DECODE_LEEWAY_SECONDS:-300}"
@@ -208,6 +213,12 @@ echo "✅ Conteneurs arrêtés (volumes de données préservés)"
   echo "GATEWAY_APP_ME_URL=http://backend:5000/api/v1/auth/me"
   echo "GATEWAY_DEMO_AUTH_URL=http://backend:5000/api/v1/auth/login"
   echo "GATEWAY_DEMO_ME_URL=http://backend:5000/api/v1/auth/me"
+  # Liens console Admin Ops (defaults = stack Traefik docker-compose.monitoring.yml)
+  echo "PLATFORM_LINK_GRAFANA=${GRAFANA_ROOT_URL:-}"
+  echo "PLATFORM_API_URL_PROD=${PLATFORM_API_URL_PROD:-https://api.lirie.ch}"
+  echo "PLATFORM_LINK_PROMETHEUS=${PLATFORM_LINK_PROMETHEUS:-https://prometheus.lirie.ch}"
+  echo "PLATFORM_LINK_ALERTMANAGER=${PLATFORM_LINK_ALERTMANAGER:-https://alertmanager.lirie.ch}"
+  echo "PLATFORM_API_URL_DEMO=${PLATFORM_API_URL_DEMO:-}"
 } > .env.production && chmod 600 .env.production
 cp .env.production .env && chmod 600 .env
 

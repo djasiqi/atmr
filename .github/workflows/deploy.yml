@@ -482,4 +482,8 @@ jobs:
               "${{ secrets.POSTGRES_HOST }}" \
               "${{ secrets.FLASK_ENV }}" \
               "${{ secrets.FLASK_CONFIG }}" \
-              "${{ secrets.ENVIRONMENT }}"
+              "${{ secrets.ENVIRONMENT }}" \
+              "${{ vars.PLATFORM_API_URL_PROD }}" \
+              "${{ vars.PLATFORM_LINK_PROMETHEUS }}" \
+              "${{ vars.PLATFORM_LINK_ALERTMANAGER }}" \
+              "${{ vars.PLATFORM_API_URL_DEMO }}"
