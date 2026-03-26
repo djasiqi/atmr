@@ -7,9 +7,24 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from services.platform_status_aggregator import (
+    _platform_setting,
     build_platform_status_payload,
     compute_overall_status,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_platform_env_for_tests(monkeypatch):
+    """Évite qu'un export shell local ne fausse les tests (priorité env dans l'agrégateur)."""
+    for k in (
+        "PLATFORM_API_URL_PROD",
+        "PLATFORM_API_URL_DEMO",
+        "PLATFORM_LINK_GRAFANA",
+        "PLATFORM_LINK_PROMETHEUS",
+        "PLATFORM_LINK_ALERTMANAGER",
+        "PLATFORM_STATUS_TIMEOUT_SECONDS",
+    ):
+        monkeypatch.delenv(k, raising=False)
 
 
 def test_compute_overall_status_demo_not_monitored():
@@ -63,6 +78,14 @@ def test_build_platform_status_payload_not_monitored():
     assert out["environments"]["prod"]["monitored"] is False
     assert out["environments"]["demo"]["monitored"] is False
     assert out["links"]["grafana"] is None
+
+
+def test_platform_setting_env_overrides_config(monkeypatch):
+    """Les variables PLATFORM_* dans l'environnement priment sur app.config."""
+    monkeypatch.setenv("PLATFORM_API_URL_PROD", "https://from-env.example")
+    cfg = MagicMock()
+    cfg.PLATFORM_API_URL_PROD = "http://ignored-from-config"
+    assert _platform_setting(cfg, "PLATFORM_API_URL_PROD") == "https://from-env.example"
 
 
 @patch("services.platform_status_aggregator._fetch_json")

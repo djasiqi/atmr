@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
@@ -218,6 +219,32 @@ def _build_env_block(
     }
 
 
+def _platform_setting(config: Any, key: str) -> str | None:
+    """Lit une variable Admin Ops / Platform.
+
+    Priorité à ``os.environ`` puis ``app.config`` : les attributs de classe
+    ``Config`` sont figés à l'import ; ``os.getenv`` au moment de la requête
+    reflète toujours l'environnement du conteneur (robuste avec Gunicorn ``--preload``).
+    """
+    raw = (os.getenv(key) or "").strip()
+    if raw:
+        return raw
+    cfg_val = getattr(config, key, None)
+    if cfg_val is not None and str(cfg_val).strip():
+        return str(cfg_val).strip()
+    return None
+
+
+def _platform_timeout_seconds(config: Any) -> float:
+    raw = (os.getenv("PLATFORM_STATUS_TIMEOUT_SECONDS") or "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    return float(getattr(config, "PLATFORM_STATUS_TIMEOUT_SECONDS", 2.5) or 2.5)
+
+
 def compute_overall_status(prod: dict[str, Any], demo: dict[str, Any]) -> str:
     """Règle documentée : prod prioritaire ; demo non suivie n'empêche pas ok si prod OK.
 
@@ -241,9 +268,9 @@ def compute_overall_status(prod: dict[str, Any], demo: dict[str, Any]) -> str:
 
 def build_platform_status_payload(config: Any) -> dict[str, Any]:
     """Construit le corps JSON pour GET /api/v1/platform/status."""
-    timeout = float(getattr(config, "PLATFORM_STATUS_TIMEOUT_SECONDS", 2.5) or 2.5)
-    prod_url = getattr(config, "PLATFORM_API_URL_PROD", None)
-    demo_url = getattr(config, "PLATFORM_API_URL_DEMO", None)
+    timeout = _platform_timeout_seconds(config)
+    prod_url = _platform_setting(config, "PLATFORM_API_URL_PROD")
+    demo_url = _platform_setting(config, "PLATFORM_API_URL_DEMO")
     prod_mon = bool(prod_url)
     demo_mon = bool(demo_url)
 
@@ -254,9 +281,9 @@ def build_platform_status_payload(config: Any) -> dict[str, Any]:
     overall = compute_overall_status(prod_block, demo_block)
 
     links = {
-        "grafana": getattr(config, "PLATFORM_LINK_GRAFANA", None),
-        "prometheus": getattr(config, "PLATFORM_LINK_PROMETHEUS", None),
-        "alertmanager": getattr(config, "PLATFORM_LINK_ALERTMANAGER", None),
+        "grafana": _platform_setting(config, "PLATFORM_LINK_GRAFANA"),
+        "prometheus": _platform_setting(config, "PLATFORM_LINK_PROMETHEUS"),
+        "alertmanager": _platform_setting(config, "PLATFORM_LINK_ALERTMANAGER"),
     }
 
     return {

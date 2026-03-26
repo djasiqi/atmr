@@ -143,7 +143,9 @@ const AdminPlatformOps = () => {
       const msg =
         e?.response?.status === 403
           ? 'Accès refusé (403). Vérifiez le rôle admin et la whitelist IP.'
-          : e?.response?.data?.message || e?.message || 'Erreur de chargement';
+          : e?.response?.status === 502
+            ? 'Passerelle 502 : l’API est injoignable ou redémarre (souvent variable SOCKETIO_CORS_ORIGINS manquante en prod — voir logs backend).'
+            : e?.response?.data?.message || e?.message || 'Erreur de chargement';
       setError(msg);
     } finally {
       setLoading(false);
