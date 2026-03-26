@@ -140,21 +140,24 @@ else
   echo "ℹ️  PostgreSQL non actif, pas de backup nécessaire (peut-être le premier déploiement)"
 fi
 
-# ✅ Nettoyage SÉCURISÉ : Arrêt des conteneurs SANS supprimer les volumes de données
-echo "🧹 Arrêt des conteneurs existants (conservation des données)..."
+# ✅ Nettoyage SÉCURISÉ : arrêt uniquement de la stack **production** (conservation des volumes)
+echo "🧹 Arrêt des conteneurs de la stack production (conservation des données)..."
 # ⚠️ IMPORTANT: Ne JAMAIS utiliser --volumes en production pour préserver les données
-# ✅ CORRECTION : Arrêter le monitoring AVANT la production pour éviter les dépendances
-docker compose -f docker-compose.monitoring.yml down --remove-orphans || true
+# Ne pas faire « docker compose … monitoring down » ici : cela coupait Grafana / Prometheus /
+# Alertmanager à chaque déploiement. Le monitoring est mis à jour plus bas via
+# « docker compose -f docker-compose.monitoring.yml up -d » sans arrêt préalable.
 docker compose -f docker-compose.production.yml down --remove-orphans || true
 
-# Supprimer les conteneurs orphelins manuellement (mais PAS les volumes)
-docker ps -a --filter "name=atmr-" --format "{{.ID}}" | xargs -r docker rm -f || true
+# Supprimer d'éventuels résidus **uniquement** pour les services prod (pas atmr-grafana, etc.)
+for _c in atmr-backend atmr-postgres atmr-redis atmr-osrm atmr-celery-worker atmr-celery-beat atmr-flower; do
+  docker rm -f "${_c}" 2>/dev/null || true
+done
 
 # ⚠️ DÉSACTIVÉ EN PRODUCTION: Ne JAMAIS nettoyer les volumes automatiquement
 # Les volumes contiennent les données PostgreSQL et ne doivent être supprimés que manuellement
 # echo "🧹 Nettoyage approfondi des volumes Docker..."
 # docker volume prune -a -f || true
-echo "✅ Conteneurs arrêtés (volumes de données préservés)"
+echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes préservés)"
 
 # Créer .env.production
 {
@@ -256,7 +259,8 @@ else
   fi
   
   echo "🔄 Démarrage des services de monitoring (Grafana, Prometheus, Alertmanager)..."
-  if ! docker compose -f docker-compose.monitoring.yml up -d --remove-orphans; then
+  # Pas de --remove-orphans (même risque de croisement avec d'autres stacks / projet par défaut)
+  if ! docker compose -f docker-compose.monitoring.yml up -d; then
     echo "❌ Échec du démarrage du monitoring"
     echo "📋 Logs du monitoring:"
     docker compose -f docker-compose.monitoring.yml logs --tail=50 || true
@@ -292,7 +296,9 @@ fi
 
 # Démarrer les services de production
 echo "🚀 Démarrage des services de production..."
-docker compose -f docker-compose.production.yml up -d --remove-orphans
+# Pas de --remove-orphans : avec le même répertoire projet, Compose traiterait Grafana /
+# Prometheus / Alertmanager comme « orphelins » (absents de ce fichier) et les supprimerait.
+docker compose -f docker-compose.production.yml up -d
 
 # Laisser le temps aux conteneurs de se stabiliser
 echo "⏳ Stabilisation des conteneurs (5 secondes)..."
