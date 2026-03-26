@@ -12,10 +12,6 @@ import apiClient from 'utils/apiClient';
 jest.mock('services/bookingService');
 jest.mock('services/clientService');
 jest.mock('utils/apiClient');
-jest.mock('hooks/useCompanyData', () => ({
-  __esModule: true,
-  default: () => ({ company: null }),
-}));
 
 // Mock layout components
 jest.mock('components/layout/Header/HeaderDashboard', () => {
@@ -61,7 +57,7 @@ describe('ReservationsPage', () => {
       id: 1,
       pickup_location: 'Genève',
       dropoff_location: 'Lausanne',
-      scheduled_time: '2025-10-20T10:00:00',
+      scheduled_time: '2030-12-20T10:00:00',
       status: 'pending',
       amount: 50,
       company_name: 'ATMR Transport',

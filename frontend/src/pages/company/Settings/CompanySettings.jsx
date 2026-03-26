@@ -24,7 +24,7 @@ import NotificationsTab from './tabs/NotificationsTab';
 import SecurityTab from './tabs/SecurityTab';
 import VehiclesTab from './tabs/VehiclesTab';
 
-import useCompanyData from '../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import { updateCompanyInfo, uploadCompanyLogo } from '../../../services/companyService';
 import { getFreshToken } from '../../../services/authService';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
@@ -58,7 +58,7 @@ function ibanChecksumIsValid(iban) {
 }
 
 export default function CompanySettings() {
-  const { company, error: loadError, loadingCompany, reloadCompany } = useCompanyData();
+  const { company, companyError: loadError, loadingCompany, reloadCompany } = useLirieCompany();
   const location = useLocation();
 
   // Onglet actif (détecte le hash dans l'URL)

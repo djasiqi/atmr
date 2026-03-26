@@ -11,6 +11,7 @@ import {
   FaChartLine,
   FaBars,
   FaTimes,
+  FaServer,
 } from 'react-icons/fa';
 import styles from './AdminSidebar.module.css';
 
@@ -93,6 +94,11 @@ const AdminSidebar = () => {
       icon: FaChartLine,
       label: 'Demandes demo',
       to: `/dashboard/admin/${adminId}/demo-requests`,
+    },
+    {
+      icon: FaServer,
+      label: 'Ops / Platform',
+      to: `/dashboard/admin/${adminId}/platform-ops`,
     },
     {
       icon: FaCog,

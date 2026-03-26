@@ -1,7 +1,17 @@
 import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { assignDriver, deleteReservation } from '../services/companyService';
+import { LIRIE_QK_PREFIX } from '../queryKeys/lirie';
 import { useOptimisticMutation } from './useOptimisticMutation';
+
+/** Préfixe TanStack pour toutes les queries `assigned-reservations` entreprise (voir `lirieKeys.assignedReservations(day)`). */
+const ASSIGNED_RESERVATIONS_QUERY_PREFIX = [LIRIE_QK_PREFIX, 'assigned-reservations'];
+
+/** Préfixe pour `lirieKeys.companyReservations(day, scopeHash)` — aligné avec useCompanyData (listScopeHash). */
+const COMPANY_RESERVATIONS_QUERY_PREFIX = [LIRIE_QK_PREFIX, 'company-reservations'];
+
+/** Filtre pour setQueriesData / matcher toutes les queries dont la clé commence par `prefix`. */
+const prefixFilter = (prefix) => ({ queryKey: prefix, exact: false });
 
 /**
  * Hook personnalisé pour gérer les actions d'assignation avec mise à jour optimiste
@@ -37,9 +47,9 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
     optimisticUpdate: (data, saveOriginal) => {
       const { reservationId, driverId } = data;
       
-      // Mise à jour optimiste via React Query
+      // Mise à jour optimiste via React Query (préfixes lirie — voir lirieKeys)
       queryClient.setQueriesData(
-        { queryKey: ['assigned-reservations'] },
+        prefixFilter(ASSIGNED_RESERVATIONS_QUERY_PREFIX),
         (oldData) => {
           if (!oldData) return oldData;
           
@@ -58,7 +68,7 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       );
       
       queryClient.setQueriesData(
-        { queryKey: ['reservations'] },
+        prefixFilter(COMPANY_RESERVATIONS_QUERY_PREFIX),
         (oldData) => {
           if (!oldData) return oldData;
           
@@ -81,22 +91,14 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       
       return { reservationId, driverId, status: 'assigned' };
     },
-    rollback: (originalState, data) => {
-      const { reservationId } = data;
-      
-      // Rollback via React Query
-      queryClient.setQueriesData(
-        { queryKey: ['assigned-reservations'] },
-        (oldData) => {
-          if (!oldData) return oldData;
-          // Restaurer l'état original (simplifié - invalidation forcera le refetch)
-          return oldData;
-        }
-      );
-      
-      // Callback legacy pour backward compatibility
+    rollback: (_originalState, variables) => {
+      // useOptimisticMutation invalide déjà queryKeys en cas d'erreur ; ici on force la cohérence cache
+      queryClient.invalidateQueries(prefixFilter(ASSIGNED_RESERVATIONS_QUERY_PREFIX));
+      queryClient.invalidateQueries(prefixFilter(COMPANY_RESERVATIONS_QUERY_PREFIX));
+
+      // Callback legacy pour backward compatibility (variables = payload mutate : { reservationId, driverId })
       if (onRollback) {
-        onRollback(reservationId);
+        onRollback(variables?.reservationId);
       }
     },
     onSuccess: (_result, _data) => {
@@ -106,9 +108,9 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       console.error('[useAssignmentActions] Error assigning driver:', error);
     },
     conflictResolution,
-    queryKeys: [['assigned-reservations'], ['reservations']],
+    queryKeys: [ASSIGNED_RESERVATIONS_QUERY_PREFIX, COMPANY_RESERVATIONS_QUERY_PREFIX],
     showToast: true,
-    retries: 3,
+    retries: 0,
   });
 
   // Mutation pour supprimer une réservation
@@ -121,7 +123,7 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       
       // Mise à jour optimiste via React Query
       queryClient.setQueriesData(
-        { queryKey: ['assigned-reservations'] },
+        prefixFilter(ASSIGNED_RESERVATIONS_QUERY_PREFIX),
         (oldData) => {
           if (!oldData) return oldData;
           
@@ -135,7 +137,7 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       );
       
       queryClient.setQueriesData(
-        { queryKey: ['reservations'] },
+        prefixFilter(COMPANY_RESERVATIONS_QUERY_PREFIX),
         (oldData) => {
           if (!oldData) return oldData;
           
@@ -157,9 +159,8 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
     rollback: (originalState, data) => {
       const { reservationId } = data;
       
-      // Rollback via React Query (invalidation forcera le refetch)
-      queryClient.invalidateQueries(['assigned-reservations']);
-      queryClient.invalidateQueries(['reservations']);
+      queryClient.invalidateQueries(prefixFilter(ASSIGNED_RESERVATIONS_QUERY_PREFIX));
+      queryClient.invalidateQueries(prefixFilter(COMPANY_RESERVATIONS_QUERY_PREFIX));
       
       // Callback legacy pour backward compatibility
       if (onRollback) {
@@ -173,9 +174,9 @@ export const useAssignmentActions = (onOptimisticUpdateOrOptions = null, onRollb
       console.error('[useAssignmentActions] Error deleting reservation:', error);
     },
     conflictResolution,
-    queryKeys: [['assigned-reservations'], ['reservations']],
+    queryKeys: [ASSIGNED_RESERVATIONS_QUERY_PREFIX, COMPANY_RESERVATIONS_QUERY_PREFIX],
     showToast: true,
-    retries: 3,
+    retries: 0,
   });
 
   const handleAssignDriver = useCallback(

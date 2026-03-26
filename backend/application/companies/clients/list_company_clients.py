@@ -11,6 +11,14 @@ class _ClientRepo(Protocol):
         self, company_id: int, search: str | None = None
     ) -> list[ClientDTO]: ...
 
+    def find_models_by_company_with_user_and_search_paginated(
+        self,
+        company_id: int,
+        search: str | None,
+        page: int,
+        per_page: int,
+    ) -> tuple[list[Any], int]: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ListCompanyClientsInput:
@@ -93,16 +101,14 @@ class ListCompanyClientsUseCase:
             per_page = max(input_data.per_page, 1)
 
             q = (input_data.search or "").strip()
-            # Utiliser find_models_by_company_with_user_and_search pour obtenir les modèles SQLAlchemy
-            # qui ont la méthode serialize avec toutes les relations (default_billing, etc.)
-            all_clients_models = self._client_repo.find_models_by_company_with_user_and_search(
-                input_data.company_id, q if q else None
+            page_clients, total = (
+                self._client_repo.find_models_by_company_with_user_and_search_paginated(
+                    input_data.company_id,
+                    q if q else None,
+                    page,
+                    per_page,
+                )
             )
-            total = len(all_clients_models)
-
-            start_idx = (page - 1) * per_page
-            end_idx = start_idx + per_page
-            page_clients = all_clients_models[start_idx:end_idx]
 
             # Utiliser serialize au lieu de to_dict() pour inclure default_billing et toutes les relations
             serialized: list[dict[str, Any]] = [c.serialize for c in page_clients]

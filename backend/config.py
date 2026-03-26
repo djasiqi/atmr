@@ -291,6 +291,20 @@ class Config:
     GATEWAY_DEMO_ME_URL = os.getenv(
         "GATEWAY_DEMO_ME_URL", "http://127.0.0.1:5000/api/v1/auth/me"
     )
+    # --- Admin Ops / Platform (GET /api/v1/platform/status) ---
+    # Base URL sans suffixe /api/v1 (ex. https://api.lirie.ch). Vide = non monitoré.
+    PLATFORM_API_URL_PROD = (os.getenv("PLATFORM_API_URL_PROD") or "").strip() or None
+    PLATFORM_API_URL_DEMO = (os.getenv("PLATFORM_API_URL_DEMO") or "").strip() or None
+    PLATFORM_LINK_GRAFANA = (os.getenv("PLATFORM_LINK_GRAFANA") or "").strip() or None
+    PLATFORM_LINK_PROMETHEUS = (os.getenv("PLATFORM_LINK_PROMETHEUS") or "").strip() or None
+    PLATFORM_LINK_ALERTMANAGER = (os.getenv("PLATFORM_LINK_ALERTMANAGER") or "").strip() or None
+    PLATFORM_STATUS_TIMEOUT_SECONDS = float(
+        os.getenv("PLATFORM_STATUS_TIMEOUT_SECONDS", "2.5")
+    )
+    # Si true en production : ADMIN_IP_WHITELIST doit être non vide (fail-closed pour platform/status).
+    ADMIN_IP_WHITELIST_REQUIRED: bool = os.getenv(
+        "ADMIN_IP_WHITELIST_REQUIRED", "false"
+    ).strip().lower() in ("true", "1", "yes")
     # Mode envoi email factures/rappels: brevo_api (URL logo) | brevo_smtp (CID MIME multipart/related)
     # SMTP: BREVO_SMTP_PASSWORD obligatoire (pas de fallback API_KEY). Port 587 sortant + DKIM/SPF.
     EMAIL_PROVIDER_MODE: str = (

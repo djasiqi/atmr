@@ -6,6 +6,8 @@ let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
 let currentCompanyId = null; // company to (re)join on connect/reconnect
+/** Évite les double émissions join_* pour le même id (réduit bruit serveur / logs). */
+let lastJoinCompanyEmitId = null;
 // ✅ Heartbeat géré nativement par Socket.IO (ping_interval=25s, ping_timeout=60s)
 // Suppression du heartbeat applicatif redondant
 let networkListenersSetup = false; // Track if network listeners are set up
@@ -362,6 +364,10 @@ export async function joinCompanyRoom(companyId) {
   const s = await ensureCompanySocket();
   if (!s) return;
   currentCompanyId = companyId;
+  if (lastJoinCompanyEmitId === companyId) {
+    return;
+  }
+  lastJoinCompanyEmitId = companyId;
   // Compat: certains backends écoutent join_company, d'autres join_company_room
   try {
     s.emit('join_company', { company_id: companyId });
@@ -379,6 +385,7 @@ export async function leaveCompanyRoom(companyId) {
     s.emit('leave_company_room', { company_id: companyId });
   } catch {}
   currentCompanyId = null;
+  lastJoinCompanyEmitId = null;
 }
 
 // ✅ Écouter les mises à jour de localisation (fanout backend : driver_location_update)

@@ -8,10 +8,8 @@ import apiClient from '../../../utils/apiClient';
 // ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF déplacée vers backend
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import Footer from '../../../components/layout/Footer/Footer';
-import useCompanyData from '../../../hooks/useCompanyData';
 
 const ReservationsPage = () => {
-  const { company: _company } = useCompanyData(); // Récupérer les données de l'entreprise
   const [bookings, setBookings] = useState([]);
   const [_clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);

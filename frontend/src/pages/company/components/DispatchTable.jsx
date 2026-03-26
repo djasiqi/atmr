@@ -25,6 +25,7 @@ import useDispatchStatus from '../../../hooks/useDispatchStatus';
 import { useHybridDataSync } from '../../../hooks/useHybridDataSync';
 import { useSocketInvalidation } from '../../../hooks/useSocketInvalidation';
 import { useQueryClient } from '@tanstack/react-query';
+import { lirieKeys } from '../../../queryKeys/lirie';
 import {
   runDispatchForDay,
   fetchDispatchRunById,
@@ -78,6 +79,10 @@ const DispatchTable = ({
   const [dispatchDay, setDispatchDay] = useState(initialDispatchDay || toYMD(new Date()));
   const [regularFirst, setRegularFirst] = useState(initialRegularFirst);
   const [allowEmergency, setAllowEmergency] = useState(initialAllowEmergency);
+
+  const useUnifiedDispatchWs =
+    process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === '1' ||
+    process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === 'true';
 
   const handleOptimizeDay = async () => {
     if (!dispatchDay) return;
@@ -219,9 +224,9 @@ const DispatchTable = ({
       if (data && (data.dispatch_run_id || data.date)) {
         handleDispatchCompleted(data);
         // ✅ Invalider React Query pour forcer le refetch des données
-        queryClient.invalidateQueries(['assigned-reservations', dispatchDay]);
-        queryClient.invalidateQueries(['dispatch-delays', dispatchDay]);
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({ queryKey: lirieKeys.assignedReservations(dispatchDay) });
+        queryClient.invalidateQueries({ queryKey: lirieKeys.dispatchDelays(dispatchDay) });
+        queryClient.invalidateQueries({ queryKey: ['reservations'] });
       } else {
         console.error("Structure d'événement dispatch_run_completed invalide:", data);
       }
@@ -359,10 +364,11 @@ const DispatchTable = ({
     };
 
     const onAssignmentUpdated = (data) => {
+      const patch = data.updates || data.fields || {};
       setRows((prev) =>
         prev.map((b) =>
           b.assignment && b.assignment.id === data.assignment_id
-            ? { ...b, assignment: { ...b.assignment, ...data.updates } }
+            ? { ...b, assignment: { ...b.assignment, ...patch } }
             : b
         )
       );
@@ -374,6 +380,24 @@ const DispatchTable = ({
         prev.map((b) => (b.id === data.booking_id ? { ...b, assignment: null } : b))
       );
       // Note: L'invalidation React Query est gérée par useSocketInvalidation
+    };
+
+    const onDispatchStatePatch = (data) => {
+      const op = data?.op;
+      if (op === 'assignment_created') {
+        onAssignmentCreated({
+          booking_id: data.reservation_id,
+          assignment_id: data.assignment_id,
+          driver_id: data.driver_id,
+        });
+      } else if (op === 'assignment_updated') {
+        onAssignmentUpdated({
+          assignment_id: data.assignment_id,
+          updates: data.fields || {},
+        });
+      } else if (op === 'assignment_cancelled') {
+        onAssignmentCancelled({ booking_id: data.reservation_id });
+      }
     };
 
     const onDelayDetected = (data) => {
@@ -444,18 +468,25 @@ const DispatchTable = ({
       }, 800);
     };
 
-    // ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec backend
-    socket.on('dispatch_assignment_created', onAssignmentCreated);
-    socket.on('dispatch_assignment_updated', onAssignmentUpdated);
-    socket.on('dispatch_assignment_cancelled', onAssignmentCancelled);
+    if (useUnifiedDispatchWs) {
+      socket.on('dispatch_state_patch', onDispatchStatePatch);
+    } else {
+      socket.on('dispatch_assignment_created', onAssignmentCreated);
+      socket.on('dispatch_assignment_updated', onAssignmentUpdated);
+      socket.on('dispatch_assignment_cancelled', onAssignmentCancelled);
+    }
     socket.on('dispatch_delay_detected', onDelayDetected);
     // booking_status_changed supprimé (jamais émis par backend, remplacé par booking_updated)
     socket.on('driver_location_update', onDriverLocationUpdated);
 
     return () => {
-      socket.off('dispatch_assignment_created', onAssignmentCreated);
-      socket.off('dispatch_assignment_updated', onAssignmentUpdated);
-      socket.off('dispatch_assignment_cancelled', onAssignmentCancelled);
+      if (useUnifiedDispatchWs) {
+        socket.off('dispatch_state_patch', onDispatchStatePatch);
+      } else {
+        socket.off('dispatch_assignment_created', onAssignmentCreated);
+        socket.off('dispatch_assignment_updated', onAssignmentUpdated);
+        socket.off('dispatch_assignment_cancelled', onAssignmentCancelled);
+      }
       socket.off('dispatch_delay_detected', onDelayDetected);
       socket.off('driver_location_update', onDriverLocationUpdated);
       if (locTimer) clearTimeout(locTimer);
@@ -463,35 +494,43 @@ const DispatchTable = ({
         socket.emit('unsubscribe:date', dispatchDay);
       } catch (_) {}
     };
-  }, [socket, dispatchDay]);
+  }, [socket, dispatchDay, useUnifiedDispatchWs]);
 
   // ✅ Utiliser le hook réutilisable pour invalider React Query sur événements Socket.IO
   useSocketInvalidation(
     socket,
     {
       'dispatch_run_completed': [
-        ['assigned-reservations', dispatchDay],
-        ['dispatch-delays', dispatchDay],
+        lirieKeys.assignedReservations(dispatchDay),
+        lirieKeys.dispatchDelays(dispatchDay),
         ['reservations'],
       ],
-      // ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence avec backend
-      'dispatch_assignment_created': [
-        ['assigned-reservations', dispatchDay],
-        ['reservations'],
-      ],
-      'dispatch_assignment_updated': [['assigned-reservations', dispatchDay]],
-      'dispatch_assignment_cancelled': [
-        ['assigned-reservations', dispatchDay],
-        ['reservations'],
-      ],
-      'dispatch_delay_detected': [['dispatch-delays', dispatchDay]],
+      ...(useUnifiedDispatchWs
+        ? {
+            dispatch_state_patch: [
+              lirieKeys.assignedReservations(dispatchDay),
+              ['reservations'],
+            ],
+          }
+        : {
+            dispatch_assignment_created: [
+              lirieKeys.assignedReservations(dispatchDay),
+              ['reservations'],
+            ],
+            dispatch_assignment_updated: [lirieKeys.assignedReservations(dispatchDay)],
+            dispatch_assignment_cancelled: [
+              lirieKeys.assignedReservations(dispatchDay),
+              ['reservations'],
+            ],
+          }),
+      'dispatch_delay_detected': [lirieKeys.dispatchDelays(dispatchDay)],
       // booking_status_changed supprimé (jamais émis, remplacé par booking_updated)
       'booking_updated': [
-        ['assigned-reservations', dispatchDay],
+        lirieKeys.assignedReservations(dispatchDay),
       ],
     },
     {
-      dependencies: [dispatchDay],
+      dependencies: [dispatchDay, useUnifiedDispatchWs],
     }
   );
 

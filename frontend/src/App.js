@@ -1,5 +1,6 @@
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import CompanyEnterpriseLayout from './components/layout/CompanyEnterpriseLayout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
 
@@ -26,6 +27,7 @@ const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminRes
 const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
+const AdminPlatformOps = lazy(() => import('./pages/admin/PlatformOps/AdminPlatformOps'));
 const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
 const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
@@ -403,6 +405,14 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/dashboard/admin/:public_id/platform-ops"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminPlatformOps />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/dashboard/client/:id"
@@ -474,213 +484,46 @@ const App = () => {
               path="/dashboard/company/:public_id"
               element={
                 <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDashboard />
+                  <CompanyEnterpriseLayout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/dashboard/company/:public_id/reservations"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyReservations />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/drivers"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDriver />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/planning"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyPlanning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/driver/planning"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDriverPlanning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/invoices"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/invoices/clients"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <ClientInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/clients"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyClients />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/settings"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanySettings />
-                </ProtectedRoute>
-              }
-            />
-            {/* Route principale Dispatch & Planification unifiée */}
-            <Route
-              path="/dashboard/company/:public_id/dispatch"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <UnifiedDispatch />
-                </ProtectedRoute>
-              }
-            />
-            {/* Route Dashboard Métriques RL */}
-            <Route
-              path="/dashboard/company/:public_id/dispatch/rl-metrics"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <RLMetricsDashboard />
-                </ProtectedRoute>
-              }
-            />
-            {/* Ancien monitoring - redirige vers la page unifiée */}
-            <Route
-              path="/dashboard/company/:public_id/analytics"
-              element={
-                <ProtectedRoute>
-                  <AnalyticsDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/company/:public_id/dispatch/monitor"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <UnifiedDispatch />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route index element={<CompanyDashboard />} />
+              <Route path="reservations" element={<CompanyReservations />} />
+              <Route path="drivers" element={<CompanyDriver />} />
+              <Route path="planning" element={<CompanyPlanning />} />
+              <Route path="driver/planning" element={<CompanyDriverPlanning />} />
+              <Route path="invoices" element={<CompanyInvoices />} />
+              <Route path="invoices/clients" element={<ClientInvoices />} />
+              <Route path="clients" element={<CompanyClients />} />
+              <Route path="settings" element={<CompanySettings />} />
+              <Route path="dispatch/rl-metrics" element={<RLMetricsDashboard />} />
+              <Route path="dispatch/monitor" element={<UnifiedDispatch />} />
+              <Route path="dispatch" element={<UnifiedDispatch />} />
+              <Route path="analytics" element={<AnalyticsDashboard />} />
+            </Route>
             <Route
               path="/demo/dashboard/company/:public_id"
               element={
                 <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDashboard />
+                  <CompanyEnterpriseLayout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/reservations"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyReservations />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/drivers"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDriver />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/planning"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyPlanning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/driver/planning"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyDriverPlanning />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/invoices"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/invoices/clients"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <ClientInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/clients"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanyClients />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/settings"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <CompanySettings />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/dispatch"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <UnifiedDispatch />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/dispatch/rl-metrics"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <RLMetricsDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/analytics"
-              element={
-                <ProtectedRoute>
-                  <AnalyticsDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/demo/dashboard/company/:public_id/dispatch/monitor"
-              element={
-                <ProtectedRoute allowedRoles={['company']}>
-                  <UnifiedDispatch />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route index element={<CompanyDashboard />} />
+              <Route path="reservations" element={<CompanyReservations />} />
+              <Route path="drivers" element={<CompanyDriver />} />
+              <Route path="planning" element={<CompanyPlanning />} />
+              <Route path="driver/planning" element={<CompanyDriverPlanning />} />
+              <Route path="invoices" element={<CompanyInvoices />} />
+              <Route path="invoices/clients" element={<ClientInvoices />} />
+              <Route path="clients" element={<CompanyClients />} />
+              <Route path="settings" element={<CompanySettings />} />
+              <Route path="dispatch/rl-metrics" element={<RLMetricsDashboard />} />
+              <Route path="dispatch/monitor" element={<UnifiedDispatch />} />
+              <Route path="dispatch" element={<UnifiedDispatch />} />
+              <Route path="analytics" element={<AnalyticsDashboard />} />
+            </Route>
 
             {/* ✅ ÉTAPE 6: Routes Institution (layout commun avec sidebar) */}
             <Route

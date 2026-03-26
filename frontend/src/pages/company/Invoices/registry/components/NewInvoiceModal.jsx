@@ -7,7 +7,7 @@ import { setBookingPayer } from '../../../../../services/billingReviewService';
 import ReservationSelector from './ReservationSelector';
 import PartnerTransferSelector from './PartnerTransferSelector';
 import useUrlSearchSync from '../../../../../hooks/useUrlSearchSync';
-import useCompanyData from '../../../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../../../hooks/useLirieCompany';
 import {
   computeGlobalPercentDiscountOnSubtotal,
   directLineHasSuspectAmount,
@@ -131,7 +131,7 @@ const NewInvoiceModal = ({
   refreshTrigger = 0,
 }) => {
   const navigate = useNavigate();
-  const { company } = useCompanyData();
+  const { company } = useLirieCompany();
   const [billingType, setBillingType] = useState('direct'); // 'direct', 'third_party' ou 'partner'
   const [formData, setFormData] = useState({
     client_id: '',

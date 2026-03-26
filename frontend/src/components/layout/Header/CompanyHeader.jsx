@@ -12,9 +12,11 @@ import { Link, useParams, useLocation } from 'react-router-dom';
 import { FiAlertTriangle, FiCalendar } from 'react-icons/fi';
 import styles from './CompanyHeader.module.css';
 
-import useCompanyData from '../../../hooks/useCompanyData';
+import { useQuery } from '@tanstack/react-query';
+import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
-import useDispatchDelays from '../../../hooks/useDispatchDelays';
+import { fetchDispatchDelays } from '../../../services/companyService';
+import { lirieKeys } from '../../../queryKeys/lirie';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 import SocketStatusBadge from '../../common/SocketStatusBadge';
 import CompanyNotificationBell from './CompanyNotificationBell';
@@ -32,6 +34,11 @@ function formatToday() {
   });
 }
 
+/** Clé jour dispatch (YYYY-MM-DD, UTC) — alignée sur les autres écrans entreprise. */
+function todayYmd() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const CompanyHeader = () => {
   const params = useParams();
   const location = useLocation();
@@ -47,8 +54,7 @@ const CompanyHeader = () => {
     (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
   const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
 
-  const companyData = useCompanyData() || {};
-  const company = companyData.company || null;
+  const { company } = useLirieCompany();
 
   const [logoError, setLogoError] = useState(false);
   const name = company?.name || 'Entreprise';
@@ -76,7 +82,25 @@ const CompanyHeader = () => {
     : `${dashboardRoot}/company`;
 
   const { isCompanyAuthReady } = useCompanyAuthToken();
-  const { delayCount, hasCriticalDelays } = useDispatchDelays(null, 120000, isCompanyAuthReady);
+  const todayKey = todayYmd();
+  const { data: headerDelays = [] } = useQuery({
+    queryKey: lirieKeys.dispatchDelays(todayKey),
+    queryFn: () => fetchDispatchDelays(todayKey),
+    staleTime: 20_000,
+    enabled: isCompanyAuthReady,
+  });
+  const delayCount = useMemo(() => {
+    const seen = new Set();
+    for (const row of headerDelays || []) {
+      if (!row?.booking_id || !(Number(row.delay_minutes) > 0)) continue;
+      seen.add(row.booking_id);
+    }
+    return seen.size;
+  }, [headerDelays]);
+  const hasCriticalDelays = useMemo(
+    () => (headerDelays || []).some((d) => Number(d?.delay_minutes || 0) >= 30),
+    [headerDelays]
+  );
 
   const todayLabel = useMemo(() => formatToday(), []);
 

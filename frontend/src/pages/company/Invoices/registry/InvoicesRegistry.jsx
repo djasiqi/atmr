@@ -29,7 +29,7 @@ import {
   cancelInvoice,
   duplicateInvoice,
 } from '../../../../services/invoiceService';
-import useCompanyData from '../../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import CommandBar from './components/CommandBar';
 import InvoiceRowActions from './components/InvoiceRowActions';
 import PaymentModal from './components/PaymentModal';
@@ -50,7 +50,7 @@ const extractApiError = (err, fallback = 'Erreur inconnue') => {
 };
 
 const InvoicesRegistry = () => {
-  const { company } = useCompanyData();
+  const { company } = useLirieCompany();
   const { public_id: routePublicId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

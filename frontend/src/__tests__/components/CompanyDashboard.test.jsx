@@ -1,19 +1,23 @@
 // frontend/tests/components/CompanyDashboard.test.jsx
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import CompanyDashboard from 'pages/company/Dashboard/CompanyDashboard';
 import useCompanyData from 'hooks/useCompanyData';
 import useCompanySocket from 'hooks/useCompanySocket';
 import useDispatchStatus from 'hooks/useDispatchStatus';
-import useDispatchDelays from 'hooks/useDispatchDelays';
+
+global.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 // Mocks
 jest.mock('hooks/useCompanyData');
 jest.mock('hooks/useCompanySocket');
 jest.mock('hooks/useDispatchStatus');
-jest.mock('hooks/useDispatchDelays');
 jest.mock('services/companyService');
 
 // Mock des composants enfants
@@ -54,8 +58,8 @@ jest.mock('pages/company/Dashboard/components/DriverLiveMap', () => {
 });
 
 jest.mock('pages/driver/components/Dashboard/DriverTable', () => {
-  return function MockDriverTable({ drivers }) {
-    return <div data-testid="driver-table">{drivers.length} chauffeurs</div>;
+  return function MockDriverTable({ driver = [] }) {
+    return <div data-testid="driver-table">{driver.length} chauffeurs</div>;
   };
 });
 
@@ -125,12 +129,14 @@ describe('CompanyDashboard', () => {
       id: 1,
       user: { first_name: 'Pierre', last_name: 'Martin' },
       is_available: true,
+      is_active: true,
       vehicle_type: 'berline',
     },
     {
       id: 2,
       user: { first_name: 'Marie', last_name: 'Dubois' },
       is_available: false,
+      is_active: true,
       vehicle_type: 'ambulance',
     },
   ];
@@ -163,11 +169,6 @@ describe('CompanyDashboard', () => {
       isRunning: false,
     });
 
-    useDispatchDelays.mockReturnValue({
-      delayCount: 0,
-      hasCriticalDelays: false,
-      hasDelays: false,
-    });
   });
 
   it('devrait afficher le dashboard avec les statistiques', async () => {
@@ -194,9 +195,9 @@ describe('CompanyDashboard', () => {
   it('devrait afficher le nombre correct de chauffeurs', async () => {
     render(<CompanyDashboard />, { wrapper: createWrapper() });
 
+    fireEvent.click(await screen.findByText('Performance & Flotte'));
     await waitFor(() => {
-      // Vérifier que la section chauffeurs est affichée
-      expect(screen.getByText(/Chauffeurs \(2\)/i)).toBeInTheDocument();
+      expect(screen.getByTestId('driver-table')).toHaveTextContent('2 chauffeurs');
     });
   });
 
@@ -228,8 +229,10 @@ describe('CompanyDashboard', () => {
       expect(reservationTable).toHaveTextContent('0 réservations');
     });
 
-    // Vérifier que la section chauffeurs affiche 0
-    expect(screen.getByText(/Chauffeurs \(0\)/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Performance & Flotte'));
+    await waitFor(() => {
+      expect(screen.getByTestId('driver-table')).toHaveTextContent('0 chauffeurs');
+    });
   });
 
   it('devrait se connecter aux WebSockets', () => {

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FiPlus, FiDownload, FiInbox, FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
-import useCompanyData from '../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../hooks/useLirieCompany';
 import useUrlSearchSync from '../../../hooks/useUrlSearchSync';
 import {
   fetchCompanyReservationsPaginated,
@@ -74,7 +74,7 @@ function PerPageChip({ value, onChange }) {
 }
 
 const CompanyReservations = () => {
-  const { company } = useCompanyData();
+  const { company } = useLirieCompany();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Data states
@@ -120,6 +120,11 @@ const CompanyReservations = () => {
 
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
+
+  const isSingleDay = useMemo(
+    () => Boolean(selectedDay && selectedDay !== 'all' && !selectedDay.includes(':')),
+    [selectedDay]
+  );
 
   // Force table mode for date ranges
   useEffect(() => {
@@ -214,7 +219,7 @@ const CompanyReservations = () => {
 
       if (data?.stats) {
         setStats(data.stats);
-      } else {
+      } else if (!isSingleDay) {
         calculateStats(reservationsData);
       }
 
@@ -233,6 +238,7 @@ const CompanyReservations = () => {
     searchTerm,
     sortOrder,
     activeTab,
+    isSingleDay,
   ]);
 
   useEffect(() => {

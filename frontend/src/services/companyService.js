@@ -42,10 +42,22 @@ const pickBestDateField = (r) => {
 
 /* -------------------------- RÉSERVATIONS ENTREPRISE -------------------------- */
 
+export const fetchCompanyReservationsSummary = async (date) => {
+  try {
+    const { data } = await apiClient.get('/companies/me/reservations/summary', {
+      params: { date },
+    });
+    return data || {};
+  } catch (e) {
+    console.error('fetchCompanyReservationsSummary failed:', e?.response?.data || e);
+    return {};
+  }
+};
+
 export const fetchCompanyReservations = async (date) => {
   try {
     const { data } = await apiClient.get('/companies/me/reservations', {
-      params: { flat: true, ...(date ? { date } : {}) },
+      params: { flat: true, include_stats: false, ...(date ? { date } : {}) },
       // Désactiver le cache pour forcer un rechargement
       headers: {
         'Cache-Control': 'no-cache',
@@ -82,6 +94,7 @@ export const fetchCompanyReservationsPaginated = async ({
   try {
     const params = {
       flat: true,
+      include_stats: false,
       page,
       per_page: perPage,
       sort_order: sortOrder,
@@ -257,7 +270,30 @@ export const fetchCompanyDriverLocations = async () => {
   }
 };
 
+const isDriversLiveApiEnabled = () =>
+  typeof process !== 'undefined' &&
+  (process.env.REACT_APP_DRIVERS_LIVE_API === 'true' ||
+    process.env.REACT_APP_DRIVERS_LIVE_API === '1');
+
+/** GET fusionné liste + live (1 RTT) si REACT_APP_DRIVERS_LIVE_API est actif. */
+export const fetchCompanyDriversLive = async () => {
+  try {
+    const { data } = await apiClient.get('/companies/me/drivers/live');
+    if (Array.isArray(data?.drivers)) return data.drivers;
+    return [];
+  } catch (e) {
+    const status = e?.response?.status;
+    if (status !== 403 && status !== 404) {
+      console.error('fetchCompanyDriversLive failed:', e?.response?.data || e);
+    }
+    return [];
+  }
+};
+
 export const fetchCompanyDriversCanonical = async () => {
+  if (isDriversLiveApiEnabled()) {
+    return fetchCompanyDriversLive();
+  }
   const [drivers, locations] = await Promise.all([
     fetchCompanyDriver(),
     fetchCompanyDriverLocations(),

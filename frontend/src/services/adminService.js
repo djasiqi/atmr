@@ -322,3 +322,22 @@ export const trainModelWithOptimalParams = async (config = {}) => {
     throw error;
   }
 };
+
+/**
+ * Agrégat plateforme (Admin Ops) — lecture seule.
+ * GET /platform/status
+ */
+export const fetchPlatformStatus = async () => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/platform/status', { headers });
+    return response.data;
+  } catch (error) {
+    console.error(
+      'Erreur chargement platform/status :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};

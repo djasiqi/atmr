@@ -798,6 +798,9 @@ def _execute_assignment_action(
         booking.scheduled_time.isoformat() if booking.scheduled_time else None
     )
     diff = assign_result.get("diff", {})
+    from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+    invalidate_summary_cache_for_booking(company_id, booking)
     return {
         "ride_id": str(booking_id),
         "grouped": is_grouped,

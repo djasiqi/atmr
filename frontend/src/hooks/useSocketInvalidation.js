@@ -67,7 +67,7 @@ export function useSocketInvalidation(socket, eventMap, options = {}) {
       keysToInvalidate.forEach((serializedKey) => {
         try {
           const queryKey = JSON.parse(serializedKey);
-          queryClient.invalidateQueries(queryKey);
+          queryClient.invalidateQueries({ queryKey });
         } catch (error) {
           console.warn(
             `[useSocketInvalidation] Failed to parse query key: ${serializedKey}`,

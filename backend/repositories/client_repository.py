@@ -331,6 +331,67 @@ class ClientRepository:
 
         return query.all()
 
+    def find_models_by_company_with_user_and_search_paginated(
+        self,
+        company_id: int,
+        search: str | None,
+        page: int,
+        per_page: int,
+    ) -> tuple[list[Client], int]:
+        """Liste paginée en SQL (OFFSET/LIMIT) + total, sans charger toute la table."""
+        from sqlalchemy import String, cast, func, or_
+        from sqlalchemy.orm import joinedload
+
+        from models import ClientType
+
+        query = Client.query.options(
+            joinedload(Client.user),
+            joinedload(Client.default_billed_to_company),
+        ).filter(
+            Client.company_id == company_id,
+            Client.client_type != ClientType.SELF_SERVICE,
+        )
+
+        patterns = _build_search_patterns(search or "")
+        if patterns:
+            user_fields = [
+                User.first_name,
+                User.last_name,
+                User.email,
+                User.phone,
+                User.username,
+                cast(User.birth_date, String),
+                func.concat(
+                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                ),
+                func.concat(
+                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                ),
+            ]
+            client_fields = [
+                Client.contact_email,
+                Client.contact_phone,
+                Client.domicile_address,
+                Client.domicile_zip,
+                Client.domicile_city,
+                Client.residence_facility,
+                Client.institution_name,
+                Client.billing_address,
+            ]
+            conditions = []
+            for pattern in patterns:
+                for field in user_fields:
+                    conditions.append(Client.user.has(field.ilike(pattern)))
+                for field in client_fields:
+                    conditions.append(field.ilike(pattern))
+            query = query.filter(or_(*conditions))
+
+        query = query.order_by(Client.id.asc())
+        total = query.order_by(None).count()
+        offset = max(page - 1, 0) * per_page
+        page_clients = query.offset(offset).limit(per_page).all()
+        return page_clients, total
+
     def find_models_by_company_and_institution_status(
         self, company_id: int, is_institution: bool = True, is_active: bool = True
     ) -> list[Client]:

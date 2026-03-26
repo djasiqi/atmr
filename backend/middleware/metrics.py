@@ -3,19 +3,22 @@
 Instrumente toutes les requêtes HTTP pour exposer:
 - Latence p50/p95/p99 via histogram
 - Compteurs de requêtes par méthode/endpoint/status
+- Optionnel : nombre de requêtes SQL par requête HTTP (METRICS_SQL_PER_REQUEST=true)
 """
 
+import os
 import time
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from flask import Flask, request  # pyright: ignore[reportMissingImports]
+from flask import Flask, g, has_request_context, request
 
 if TYPE_CHECKING:
-    from flask import Response  # pyright: ignore[reportMissingImports]
+    from flask import Response
 
 # Import optionnel prometheus_client (peut ne pas être installé en dev)
 try:
-    from prometheus_client import (  # pyright: ignore[reportMissingImports]
+    from prometheus_client import (
         Counter,
         Gauge,
         Histogram,
@@ -57,10 +60,46 @@ if (
         "Nombre de requêtes en cours",
         ["method", "endpoint"],
     )
+
+    HTTP_REQUEST_DB_QUERIES = Histogram(
+        "http_request_db_queries",
+        "Nombre de requêtes SQL exécutées pendant une requête HTTP",
+        ["method", "endpoint"],
+        buckets=(0, 1, 2, 3, 5, 10, 20, 50, 100, 200, 500),
+    )
 else:
     REQUEST_LATENCY = None
     REQUEST_COUNT = None
     REQUEST_IN_PROGRESS = None
+    HTTP_REQUEST_DB_QUERIES = None
+
+
+_sql_metrics_state = {"listener_registered": False}
+
+
+def _register_sql_per_request_counter(app: Flask) -> None:
+    """Compte les SQLAlchemy cursor executes par requête HTTP (best-effort)."""
+    if _sql_metrics_state["listener_registered"]:
+        return
+    try:
+        from sqlalchemy import event as sqlalchemy_event
+        from sqlalchemy.engine import Engine
+
+        @sqlalchemy_event.listens_for(Engine, "before_cursor_execute")
+        def _count_sql(  # pyright: ignore[reportUnusedFunction]
+            _conn, _cursor, _statement, _parameters, _context, _executemany
+        ):
+            if not has_request_context():
+                return
+            if not getattr(g, "_metrics_sql_track", False):
+                return
+            with suppress(Exception):
+                g._metrics_sql_count = int(getattr(g, "_metrics_sql_count", 0)) + 1
+
+        _sql_metrics_state["listener_registered"] = True
+        app.logger.info("[Prometheus] Compteur SQL par requête HTTP activé")
+    except Exception as e:
+        app.logger.warning("[Prometheus] SQL per request non disponible: %s", e)
 
 
 def prom_middleware(app: Flask) -> Flask:
@@ -83,10 +122,16 @@ def prom_middleware(app: Flask) -> Flask:
 
     app.logger.info("[Prometheus] Middleware métriques HTTP activé")
 
+    if os.getenv("METRICS_SQL_PER_REQUEST", "false").lower() in ("1", "true", "yes"):
+        _register_sql_per_request_counter(app)
+
     @app.before_request
     def _start_timer():  # pyright: ignore[reportUnusedFunction]
         """Marque le début de la requête."""
         request._prom_start_time = time.time()
+        if os.getenv("METRICS_SQL_PER_REQUEST", "false").lower() in ("1", "true", "yes"):
+            g._metrics_sql_track = True
+            g._metrics_sql_count = 0
 
         # Incrémenter compteur requêtes en cours
         if REQUEST_IN_PROGRESS:
@@ -122,6 +167,16 @@ def prom_middleware(app: Flask) -> Flask:
                 method=request.method, endpoint=endpoint, status=resp.status_code
             ).inc()
 
+        if (
+            HTTP_REQUEST_DB_QUERIES
+            and getattr(g, "_metrics_sql_track", False)
+            and hasattr(g, "_metrics_sql_count")
+        ):
+            with suppress(Exception):
+                HTTP_REQUEST_DB_QUERIES.labels(
+                    method=request.method, endpoint=endpoint
+                ).observe(float(g._metrics_sql_count))
+
         # ✅ SLO: Enregistrer métriques SLO pour routes critiques
         try:
             from services.monitoring.slo import record_slo_metric
@@ -146,7 +201,7 @@ def prom_middleware(app: Flask) -> Flask:
     def metrics_http():  # pyright: ignore[reportUnusedFunction]
         """Exporte les métriques HTTP au format Prometheus."""
         if not PROMETHEUS_AVAILABLE or generate_latest is None:
-            from flask import jsonify  # pyright: ignore[reportMissingImports]
+            from flask import jsonify
 
             return jsonify(
                 {
@@ -155,7 +210,7 @@ def prom_middleware(app: Flask) -> Flask:
                 }
             ), 503
 
-        from flask import Response  # pyright: ignore[reportMissingImports]
+        from flask import Response
 
         return Response(
             generate_latest(), mimetype="text/plain; version=0.0.4; charset=utf-8"

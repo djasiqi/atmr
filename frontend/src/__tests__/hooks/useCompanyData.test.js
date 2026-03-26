@@ -1,9 +1,11 @@
 // frontend/tests/hooks/useCompanyData.test.js
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import useCompanyData from 'hooks/useCompanyData';
 import {
   fetchCompanyReservations,
-  fetchCompanyDriver,
+  fetchCompanyDriversCanonical,
   fetchCompanyInfo,
 } from 'services/companyService';
 import { getAccessToken } from 'hooks/useAuthToken';
@@ -11,6 +13,20 @@ import { getAccessToken } from 'hooks/useAuthToken';
 // Mocks
 jest.mock('services/companyService');
 jest.mock('hooks/useAuthToken');
+jest.mock('services/companySocket', () => ({
+  getCompanySocket: jest.fn(() => null),
+  joinCompanyRoom: jest.fn(),
+}));
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  function Wrapper({ children }) {
+    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+  }
+  return Wrapper;
+}
 
 describe('useCompanyData', () => {
   const mockCompany = {
@@ -56,11 +72,13 @@ describe('useCompanyData', () => {
     getAccessToken.mockReturnValue('fake-token');
     fetchCompanyInfo.mockResolvedValue(mockCompany);
     fetchCompanyReservations.mockResolvedValue(mockReservations);
-    fetchCompanyDriver.mockResolvedValue(mockDrivers);
+    fetchCompanyDriversCanonical.mockResolvedValue(mockDrivers);
   });
 
   it("devrait charger les données de l'entreprise", async () => {
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.company).toEqual(mockCompany);
@@ -70,7 +88,9 @@ describe('useCompanyData', () => {
   });
 
   it('devrait charger les réservations pour un jour spécifique', async () => {
-    const { result } = renderHook(() => useCompanyData({ day: '2025-10-16' }));
+    const { result } = renderHook(() => useCompanyData({ day: '2025-10-16' }), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingReservations).toBe(false);
@@ -81,36 +101,40 @@ describe('useCompanyData', () => {
   });
 
   it('devrait charger les chauffeurs', async () => {
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingDriver).toBe(false);
     });
 
     expect(result.current.driver).toEqual(mockDrivers);
-    expect(fetchCompanyDriver).toHaveBeenCalled();
+    expect(fetchCompanyDriversCanonical).toHaveBeenCalled();
   });
 
   it('devrait gérer les erreurs de chargement', async () => {
     fetchCompanyReservations.mockRejectedValue(new Error('Network error'));
 
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingReservations).toBe(false);
     });
 
-    // Le hook peut setter error ou non selon l'ordre d'exécution
-    // Vérifions juste que le chargement est terminé et console.error appelé
-    expect(console.error).toHaveBeenCalled();
+    expect(result.current.error).toMatch(/réservations/i);
   });
 
   it('devrait gérer les erreurs de timeout', async () => {
     const timeoutError = new Error('timeout of 5000ms exceeded');
     timeoutError.code = 'ECONNABORTED';
-    fetchCompanyDriver.mockRejectedValue(timeoutError);
+    fetchCompanyDriversCanonical.mockRejectedValue(timeoutError);
 
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.error).toBe(
@@ -120,13 +144,14 @@ describe('useCompanyData', () => {
   });
 
   it('devrait permettre de recharger les données', async () => {
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingReservations).toBe(false);
     });
 
-    // Recharger les réservations
     result.current.reloadReservations();
 
     await waitFor(() => {
@@ -136,23 +161,29 @@ describe('useCompanyData', () => {
 
   it('ne devrait pas charger company si pas de token', async () => {
     getAccessToken.mockReturnValue(null);
+    const ls = window.localStorage;
+    const origGet = ls.getItem.bind(ls);
+    ls.getItem = jest.fn(() => null);
 
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingReservations).toBe(false);
     });
 
-    // Si pas de token, fetchCompanyInfo est appelé mais retourne early
     expect(result.current.company).toBeNull();
+    ls.getItem = origGet;
   });
 
   it('devrait gérer les formats de réponse alternatifs', async () => {
-    // Format avec wrapper
     fetchCompanyReservations.mockResolvedValue({ reservations: mockReservations });
-    fetchCompanyDriver.mockResolvedValue({ driver: mockDrivers });
+    fetchCompanyDriversCanonical.mockResolvedValue({ driver: mockDrivers });
 
-    const { result } = renderHook(() => useCompanyData());
+    const { result } = renderHook(() => useCompanyData(), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
       expect(result.current.loadingReservations).toBe(false);

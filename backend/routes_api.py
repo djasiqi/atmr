@@ -224,6 +224,7 @@ def init_namespaces(app):
     from routes.transport_vouchers import (  # ✅ P3: Bons de transport
         transport_vouchers_ns,
     )
+    from routes.platform_ops import platform_ops_ns
     from routes.public_stats import public_stats_ns
     from routes.utils import utils_ns
 
@@ -266,6 +267,7 @@ def init_namespaces(app):
     api_v1.add_namespace(
         security_monitoring_ns, path="/security-monitoring"
     )  # ✅ S3: Monitoring sécurité
+    api_v1.add_namespace(platform_ops_ns, path="/platform")
 
     # Routes companies
     api_v1.add_namespace(companies_ns, path="/companies")
@@ -386,6 +388,7 @@ def init_namespaces(app):
         api_legacy.add_namespace(auth_ns, path="/auth")
         api_legacy.add_namespace(clients_ns, path="/clients")
         api_legacy.add_namespace(admin_ns, path="/admin")
+        api_legacy.add_namespace(platform_ops_ns, path="/platform")
         api_legacy.add_namespace(companies_ns, path="/companies")
         api_legacy.add_namespace(partnerships_ns, path="/partnerships")
         api_legacy.add_namespace(driver_ns, path="/driver")

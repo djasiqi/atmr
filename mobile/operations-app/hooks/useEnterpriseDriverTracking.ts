@@ -9,6 +9,20 @@ import { isAuthNotReadyError } from "@/services/authGuards";
 
 const log = getLogger("EntTracking");
 
+/** Polling HTTP seulement si WS muet > seuil (ms). Config: EXPO_PUBLIC_MAP_SILENCE_RESYNC_MS */
+const MAP_SILENCE_RESYNC_MS = (() => {
+  const raw = process.env.EXPO_PUBLIC_MAP_SILENCE_RESYNC_MS;
+  const n = raw ? Number.parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 120_000;
+})();
+
+const HTTP_POLL_TICK_MS = 30_000;
+
+const useDriversLiveApi = () => {
+  const raw = process.env.EXPO_PUBLIC_DRIVERS_LIVE_API;
+  return raw === "true" || raw === "1";
+};
+
 type DriverMarker = {
   id: string;
   name: string;
@@ -67,37 +81,45 @@ export const useEnterpriseDriverTracking = () => {
   const httpPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastHttpFetchAtRef = useRef(0);
   const lastLiveStateRef = useRef<Record<string, { status?: string }>>({});
+  /** Dernier événement socket pertinent (carte) — évite poll parallèle si flux OK */
+  const lastRelevantEventAtRef = useRef(0);
 
   const fetchLocationsViaHTTP = useCallback(async () => {
     const token = enterpriseSession?.token;
     if (!token) return;
 
     try {
-      const url = "/companies/me/drivers/locations";
+      const live = useDriversLiveApi();
+      const url = live ? "/companies/me/drivers/live" : "/companies/me/drivers/locations";
       log.info("fetching live locations", { url });
       lastHttpFetchAtRef.current = Date.now();
 
+      type LocRow = {
+        driver_id?: number;
+        id?: number;
+        first_name?: string | null;
+        last_name?: string | null;
+        latitude?: number | null;
+        lat?: number | null;
+        longitude?: number | null;
+        lon?: number | null;
+        lng?: number | null;
+        timestamp?: string | null;
+        ts?: string | null;
+        status?: string | null;
+      };
       const response = await enterpriseStandardApi.get<{
-        locations: Array<{
-          driver_id: number;
-          first_name?: string | null;
-          last_name?: string | null;
-          latitude?: number | null;
-          lat?: number | null;
-          longitude?: number | null;
-          lon?: number | null;
-          lng?: number | null;
-          timestamp?: string | null;
-          ts?: string | null;
-          status?: string | null;
-        }>;
+        drivers?: LocRow[];
+        locations?: LocRow[];
       }>(url);
 
       log.info("live locations response received", { status: response.status });
-      const items = response.data?.locations || [];
+      const items = live
+        ? response.data?.drivers ?? []
+        : response.data?.locations ?? [];
       log.info("live locations items count", { count: items.length });
       const newMarkers: DriverMarker[] = items
-        .map((item) => {
+        .map((item: LocRow) => {
           // Compat lat/latitude, lon/longitude, timestamp/ts
           const latitude = toNumber(item.lat ?? item.latitude);
           const longitude = toNumber(item.lon ?? item.longitude ?? item.lng);
@@ -106,13 +128,14 @@ export const useEnterpriseDriverTracking = () => {
           const nameParts = [item.first_name, item.last_name]
             .filter(Boolean)
             .map((part) => String(part));
+          const did = item.driver_id ?? item.id;
           const markerName =
             nameParts.length > 0
               ? nameParts.join(" ")
-              : `Chauffeur ${item.driver_id}`;
+              : `Chauffeur ${did ?? "?"}`;
 
           return {
-            id: String(item.driver_id),
+            id: String(did),
             name: markerName,
             latitude,
             longitude,
@@ -181,6 +204,10 @@ export const useEnterpriseDriverTracking = () => {
     let isActive = true;
     let socketInstance: Socket | null = null;
 
+    const bumpRelevantEvent = () => {
+      lastRelevantEventAtRef.current = Date.now();
+    };
+
     const updateDriverFromLiveState = (payload: DriverLiveStateEvent) => {
       if (!isActive || !payload) return;
       const driverIdRaw = payload.driver_id;
@@ -214,10 +241,12 @@ export const useEnterpriseDriverTracking = () => {
           },
         ];
       });
+      bumpRelevantEvent();
     };
 
     const updateDriverPosition = (payload: DriverLocationEvent) => {
       if (!isActive || !payload) return;
+      bumpRelevantEvent();
       const driverIdRaw = payload.driver_id;
       if (driverIdRaw === undefined || driverIdRaw === null) return;
       const driverId = String(driverIdRaw);
@@ -288,11 +317,21 @@ export const useEnterpriseDriverTracking = () => {
         s.off("driver_location_update", handleLocationUpdate);
         s.on("driver_live_state_update", handleLiveStateUpdate);
         s.on("driver_location_update", handleLocationUpdate);
+        bumpRelevantEvent();
         s.emit("get_driver_locations");
 
         httpPollIntervalRef.current = setInterval(() => {
-          if (isActive) fetchLocationsViaHTTPWithThrottle(25000);
-        }, 30000);
+          if (!isActive) return;
+          const sock = socketRef.current;
+          const connected = sock?.connected === true;
+          if (connected) {
+            const silenceMs = Date.now() - lastRelevantEventAtRef.current;
+            if (silenceMs < MAP_SILENCE_RESYNC_MS) {
+              return;
+            }
+          }
+          fetchLocationsViaHTTPWithThrottle(25000);
+        }, HTTP_POLL_TICK_MS);
       } catch (error) {
         log.warn("enterprise socket connection failed", { error });
         if (!isActive) return;

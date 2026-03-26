@@ -115,8 +115,9 @@ export function useOptimisticMutation({
           }
           
           // Invalider les queries pour forcer un refetch
-          queryKeys.forEach(key => {
-            queryClient.invalidateQueries(Array.isArray(key) ? key : [key]);
+          queryKeys.forEach((key) => {
+            const qk = Array.isArray(key) ? key : [key];
+            queryClient.invalidateQueries({ queryKey: qk });
           });
           
           // Seulement logger/afficher un toast si la stratégie nécessite une attention utilisateur
@@ -159,8 +160,9 @@ export function useOptimisticMutation({
       }
 
       // 4. Invalider les queries React Query
-      queryKeys.forEach(key => {
-        queryClient.invalidateQueries(Array.isArray(key) ? key : [key]);
+      queryKeys.forEach((key) => {
+        const qk = Array.isArray(key) ? key : [key];
+        queryClient.invalidateQueries({ queryKey: qk });
       });
 
       // 5. Callback de succès
@@ -200,8 +202,9 @@ export function useOptimisticMutation({
       }
 
       // Invalider les queries pour forcer un refetch
-      queryKeys.forEach(key => {
-        queryClient.invalidateQueries(Array.isArray(key) ? key : [key]);
+      queryKeys.forEach((key) => {
+        const qk = Array.isArray(key) ? key : [key];
+        queryClient.invalidateQueries({ queryKey: qk });
       });
 
       // Callback d'erreur

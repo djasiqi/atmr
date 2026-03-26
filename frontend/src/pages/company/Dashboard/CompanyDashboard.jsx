@@ -35,8 +35,6 @@ import {
   rejectRequestOffer,
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
-import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
-import useDispatchDelays from '../../../hooks/useDispatchDelays';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
 import { useDispatchMode } from '../../../hooks/useDispatchMode';
 import styles from './CompanyDashboard.module.css';
@@ -48,6 +46,7 @@ import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { Toaster, toast } from 'sonner';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
+import { lirieKeys } from '../../../queryKeys/lirie';
 
 function makeToday() {
   const d = new Date();
@@ -93,11 +92,6 @@ const CompanyDashboard = () => {
   const socket = useCompanySocket();
   useDispatchStatus(socket);
 
-  const { user, isCompanyAuthReady } = useCompanyAuthToken();
-  const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
-
-  const { delayCount, hasCriticalDelays, hasDelays } = useDispatchDelays(dispatchDay, 120000, isCompanyAuthReady && !!isCompanyOrAdmin);
-
   const { dispatchMode } = useDispatchMode();
 
   const isManualMode = dispatchMode === 'manual';
@@ -127,6 +121,12 @@ const CompanyDashboard = () => {
   } = useRealtimeDashboard(dispatchDay, 120000);
 
   const queryClient = useQueryClient();
+  const useUnifiedDispatchWs =
+    process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === '1' ||
+    process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === 'true';
+  const useDispatchDashboardWs =
+    process.env.REACT_APP_DISPATCH_DASHBOARD_WS === '1' ||
+    process.env.REACT_APP_DISPATCH_DASHBOARD_WS === 'true';
   const [, startTransition] = useTransition();
   const [showEditModal, setShowEditModal] = useState(false);
   const [driverToEdit, setDriverToEdit] = useState(null);
@@ -210,7 +210,10 @@ const CompanyDashboard = () => {
       await dispatchNowForReservation(id, 15);
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
       });
       toast.success('Dispatch urgent déclenché avec succès');
     } catch (e) {
@@ -250,7 +253,7 @@ const CompanyDashboard = () => {
   };
 
   const { data: dispatchedReservations = [], refetch: refetchAssigned } = useQuery({
-    queryKey: ['assigned-reservations', dispatchDay],
+    queryKey: lirieKeys.assignedReservations(dispatchDay),
     queryFn: () => fetchAssignedReservations(dispatchDay),
     staleTime: 30_000,
     enabled: !!company?.id,
@@ -261,7 +264,7 @@ const CompanyDashboard = () => {
     refetch: refetchDelays,
     isFetching: fetchingDelays,
   } = useQuery({
-    queryKey: ['dispatch-delays', dispatchDay],
+    queryKey: lirieKeys.dispatchDelays(dispatchDay),
     queryFn: () => fetchDispatchDelays(dispatchDay),
     initialData: [],
     staleTime: 20_000,
@@ -273,7 +276,7 @@ const CompanyDashboard = () => {
     refetch: refetchInstitutionOffers,
     isLoading: loadingInstitutionOffers,
   } = useQuery({
-    queryKey: ['institution-offers'],
+    queryKey: lirieKeys.institutionOffers(),
     queryFn: () => fetchRequestOffers('PENDING'),
     staleTime: 15_000,
     refetchInterval: 30_000,
@@ -295,11 +298,20 @@ const CompanyDashboard = () => {
         refetchAssigned?.();
         reloadReservations?.();
         refetchDelays?.();
+        queryClient.invalidateQueries({
+          queryKey: lirieKeys.companyReservationsSummary(dispatchDay),
+        });
       });
     };
     const onAssignCreated = () => refetchAll();
     const onAssignUpdated = () => refetchAll();
     const onAssignDeleted = () => refetchAll();
+    const onDispatchStatePatch = () => refetchAll();
+    const onDispatchDashboardSnapshot = () => {
+      queryClient.invalidateQueries({
+        queryKey: lirieKeys.dispatchRealtimeDashboard(dispatchDay),
+      });
+    };
     const onDispatchProgress = (_p) => {};
     const onDispatchError = (err) => {
       console.error('dispatch_error:', err);
@@ -321,9 +333,16 @@ const CompanyDashboard = () => {
       console.log('Course mise à jour:', data);
       refetchAll();
     };
-    socket.on('dispatch_assignment_created', onAssignCreated);
-    socket.on('dispatch_assignment_updated', onAssignUpdated);
-    socket.on('dispatch_assignment_cancelled', onAssignDeleted);
+    if (useUnifiedDispatchWs) {
+      socket.on('dispatch_state_patch', onDispatchStatePatch);
+    } else {
+      socket.on('dispatch_assignment_created', onAssignCreated);
+      socket.on('dispatch_assignment_updated', onAssignUpdated);
+      socket.on('dispatch_assignment_cancelled', onAssignDeleted);
+    }
+    if (useDispatchDashboardWs) {
+      socket.on('dispatch_dashboard_snapshot', onDispatchDashboardSnapshot);
+    }
     socket.on('dispatch_progress', onDispatchProgress);
     socket.on('dispatch_error', onDispatchError);
     socket.on('dispatch_run_completed', onDispatchRunCompleted);
@@ -331,9 +350,16 @@ const CompanyDashboard = () => {
     socket.on('transfer_proposed', onTransferProposed);
     socket.on('booking_updated', onBookingUpdated);
     return () => {
-      socket.off('dispatch_assignment_created', onAssignCreated);
-      socket.off('dispatch_assignment_updated', onAssignUpdated);
-      socket.off('dispatch_assignment_cancelled', onAssignDeleted);
+      if (useUnifiedDispatchWs) {
+        socket.off('dispatch_state_patch', onDispatchStatePatch);
+      } else {
+        socket.off('dispatch_assignment_created', onAssignCreated);
+        socket.off('dispatch_assignment_updated', onAssignUpdated);
+        socket.off('dispatch_assignment_cancelled', onAssignDeleted);
+      }
+      if (useDispatchDashboardWs) {
+        socket.off('dispatch_dashboard_snapshot', onDispatchDashboardSnapshot);
+      }
       socket.off('dispatch_progress', onDispatchProgress);
       socket.off('dispatch_error', onDispatchError);
       socket.off('dispatch_run_completed', onDispatchRunCompleted);
@@ -341,7 +367,16 @@ const CompanyDashboard = () => {
       socket.off('transfer_proposed', onTransferProposed);
       socket.off('booking_updated', onBookingUpdated);
     };
-  }, [socket, refetchAssigned, reloadReservations, refetchDelays]);
+  }, [
+    socket,
+    refetchAssigned,
+    reloadReservations,
+    refetchDelays,
+    queryClient,
+    dispatchDay,
+    useUnifiedDispatchWs,
+    useDispatchDashboardWs,
+  ]);
 
   const handleAccept = async (id) => {
     try {
@@ -375,7 +410,10 @@ const CompanyDashboard = () => {
       startTransition(() => {
         refetchInstitutionOffers();
         reloadReservations();
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
       });
       return result;
     } catch (err) {
@@ -473,7 +511,10 @@ const CompanyDashboard = () => {
       setScheduleModalReservation(null);
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
       });
     } catch (err) {
       console.error('Retour :', err);
@@ -509,7 +550,10 @@ const CompanyDashboard = () => {
     if (ymd) setDispatchDay(ymd);
     startTransition(() => {
       reloadReservations({ silent: true });
-      queryClient.invalidateQueries(['reservations']);
+      queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
     });
   };
 
@@ -553,7 +597,10 @@ const CompanyDashboard = () => {
 
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
       });
 
       toast.success(`Réservation #${id} supprimée avec succès`);
@@ -623,6 +670,13 @@ const CompanyDashboard = () => {
     if (!delaysByBooking || typeof delaysByBooking !== 'object' || Array.isArray(delaysByBooking)) return 0;
     return Object.values(delaysByBooking).filter((d) => d?.delay_minutes > 0).length;
   }, [delaysByBooking]);
+
+  /** Aligné sur GET /company_dispatch/delays (plus d’appel parallèle à /delays/live sur ce même écran). */
+  const hasCriticalDelays = useMemo(
+    () =>
+      Object.values(delaysByBooking || {}).some((d) => Number(d?.delay_minutes || 0) >= 30),
+    [delaysByBooking]
+  );
 
   const filterBySearch = useCallback(
     (list) => {
@@ -758,7 +812,10 @@ const CompanyDashboard = () => {
         reloadReservations();
         refetchAssigned?.();
         refetchDelays?.();
-        queryClient.invalidateQueries(['reservations']);
+        queryClient.invalidateQueries({
+          queryKey: ['lirie', 'company-reservations'],
+          exact: false,
+        });
       });
       toast.success('Assignation confirmée');
       setQuickAssignOpen(false);
@@ -792,9 +849,9 @@ const CompanyDashboard = () => {
                   value={dispatchDay}
                   onChange={(iso) => setDispatchDay(iso)}
                 />
-                {hasDelays && (
+                {activeDelayCount > 0 && (
                   <span className={styles.delayHeaderBadge}>
-                    {delayCount} retard{delayCount !== 1 ? 's' : ''} actif{delayCount !== 1 ? 's' : ''}
+                    {activeDelayCount} retard{activeDelayCount !== 1 ? 's' : ''} actif{activeDelayCount !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
@@ -827,7 +884,7 @@ const CompanyDashboard = () => {
             assignedReservations={assignedReservations}
             driver={driver}
             day={dispatchDay}
-            delayCount={delayCount || 0}
+            delayCount={activeDelayCount || 0}
             hasCriticalDelays={!!hasCriticalDelays}
           />
 

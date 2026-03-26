@@ -199,6 +199,27 @@ def validate_required_env_vars(config_name: str) -> None:
                 + f"Valeur actuelle: {pdf_base_url}"
             )
 
+        # Admin Ops : GET /api/v1/platform/status — whitelist IP obligatoire si demandé
+        wl_required = os.getenv("ADMIN_IP_WHITELIST_REQUIRED", "false").strip().lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        wl_raw = (os.getenv("ADMIN_IP_WHITELIST") or "").strip()
+        if wl_required and not wl_raw:
+            import logging
+
+            _wl_log = logging.getLogger(__name__)
+            _wl_log.error(
+                "Sécurité : ADMIN_IP_WHITELIST_REQUIRED=true mais "
+                + "ADMIN_IP_WHITELIST est vide. Définissez au moins une IP ou un "
+                + "CIDR autorisé pour GET /api/v1/platform/status (console Admin Ops)."
+            )
+            raise RuntimeError(
+                "Sécurité : en production, ADMIN_IP_WHITELIST_REQUIRED=true exige "
+                + "ADMIN_IP_WHITELIST non vide (accès /api/v1/platform/status)."
+            )
+
         # SENTRY_DSN est optionnel mais recommandé
         recommended_vars = {
             "SENTRY_DSN",

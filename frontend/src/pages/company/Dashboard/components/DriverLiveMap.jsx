@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { GoogleMap } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
-import useCompanyData from '../../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../components/common/MapPlaceholder';
 import {
@@ -86,7 +86,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const [mapDebugInfo] = useState(null);
   const [showNoGpsBanner, setShowNoGpsBanner] = useState(false);
   const [locatedCount, setLocatedCount] = useState(0);
-  const { company } = useCompanyData();
+  const { company } = useLirieCompany();
 
   const allDrivers = Array.isArray(propDrivers) ? propDrivers : [];
   const drivers = searchQuery

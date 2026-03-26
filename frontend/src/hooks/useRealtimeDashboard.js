@@ -1,85 +1,72 @@
 // frontend/src/hooks/useRealtimeDashboard.js
 /**
- * ✅ 3.4.2: Hook pour récupérer les données du dashboard temps réel dispatch
- * Utilise la nouvelle route /api/v1/dispatch/dashboard/realtime
+ * Données dashboard dispatch temps réel (GET /company_dispatch/dashboard/realtime).
+ * Source HTTP unique : TanStack Query + lirieKeys.dispatchRealtimeDashboard(day).
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import apiClient, { getCurrentAuthEnv } from '../utils/apiClient';
+import { lirieKeys } from '../queryKeys/lirie';
 
 const hasCompanyToken = () =>
   getCurrentAuthEnv() === 'demo'
     ? !!localStorage.getItem('demo_access_token')
     : !!(
-      localStorage.getItem('company_access_token') ||
-      localStorage.getItem('company_authToken') ||
-      localStorage.getItem('app_access_token')
-    );
+        localStorage.getItem('company_access_token') ||
+        localStorage.getItem('company_authToken') ||
+        localStorage.getItem('app_access_token')
+      );
 
 /**
- * Hook pour récupérer les données du dashboard temps réel dispatch
- *
- * @param {string} date - Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
- * @param {number} refreshInterval - Intervalle de refresh en ms (0 = pas d'auto-refresh)
- * @returns {object} { data, loading, error, refresh }
+ * @param {string | null} date - YYYY-MM-DD (doit être le même que dispatchDay sur CompanyDashboard)
+ * @param {number} refreshInterval - ms ; 0 = pas d’intervalle (pas de polling périodique via refetchInterval)
  */
 export const useRealtimeDashboard = (date = null, refreshInterval = 0) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Obtenir la date (aujourd'hui par défaut)
-  const getDate = useCallback(() => {
-    return date || new Date().toISOString().split('T')[0];
+  const dayKey = useMemo(() => {
+    if (date && String(date).trim()) {
+      return String(date).trim().slice(0, 10);
+    }
+    return new Date().toISOString().split('T')[0];
   }, [date]);
 
-  // Fonction de refresh
-  const refresh = useCallback(async () => {
-    if (!hasCompanyToken()) {
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    try {
-      setLoading(true);
-      setError(null);
+  const tokenReady = hasCompanyToken();
 
-      const currentDate = getDate();
+  const {
+    data = null,
+    isLoading,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    queryKey: lirieKeys.dispatchRealtimeDashboard(dayKey),
+    queryFn: async () => {
       const response = await apiClient.get('/company_dispatch/dashboard/realtime', {
-        params: { date: currentDate },
+        params: { date: dayKey },
       });
+      return response.data ?? null;
+    },
+    enabled: tokenReady,
+    staleTime: 20_000,
+    refetchInterval: refreshInterval > 0 ? refreshInterval : false,
+  });
 
-      setData(response.data || null);
-    } catch (err) {
-      console.error('[useRealtimeDashboard] Error:', err);
-      setError(err.response?.data?.error || err.message || 'Erreur lors du chargement du dashboard');
-    } finally {
-      setLoading(false);
-    }
-  }, [getDate]);
+  const errorMessage = useMemo(() => {
+    if (!queryError) return null;
+    return (
+      queryError.response?.data?.error ||
+      queryError.message ||
+      'Erreur lors du chargement du dashboard'
+    );
+  }, [queryError]);
 
-  // Charger les données initiales
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Auto-refresh si intervalle défini
-  useEffect(() => {
-    if (refreshInterval > 0) {
-      const interval = setInterval(() => {
-        refresh();
-      }, refreshInterval);
-
-      return () => clearInterval(interval);
-    }
-  }, [refreshInterval, refresh]);
+  const loading = !tokenReady ? false : isLoading || isFetching;
 
   return {
     data,
     loading,
-    error,
-    refresh,
-    // Helpers pour accéder facilement aux données
+    error: errorMessage,
+    refresh: refetch,
     qualityMetrics: data?.quality_metrics || null,
     currentDelays: data?.current_delays || [],
     opportunities: data?.opportunities || [],
@@ -89,4 +76,3 @@ export const useRealtimeDashboard = (date = null, refreshInterval = 0) => {
 };
 
 export default useRealtimeDashboard;
-

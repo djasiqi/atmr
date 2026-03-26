@@ -1,178 +1,91 @@
-import { useState, useCallback, useEffect } from 'react';
-import {
-  fetchCompanyReservations,
-  fetchCompanyDriversCanonical,
-  fetchCompanyInfo,
-} from '../services/companyService';
-import { getCompanySocket, joinCompanyRoom } from '../services/companySocket';
-import { mergeOrUpdateDriverInList } from '../utils/mergeDriverLiveUpdate';
-import { getAccessToken } from './useAuthToken';
+import { useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchCompanyReservations, fetchCompanyDriversCanonical } from '../services/companyService';
+import { useLirieCompany } from './useLirieCompany';
+import { lirieKeys, listScopeHash } from '../queryKeys/lirie';
+import { useCompanyDriversLiveOverlay } from './enterprise/useCompanyDriversLiveOverlay';
+
+const RESERVATIONS_LIST_SCOPE_HASH = listScopeHash({ flat: true, include_stats: false });
 
 const useCompanyData = ({ day } = {}) => {
-  const [reservations, setReservations] = useState([]);
-  const [driver, setDriver] = useState([]);
-  const [loadingReservations, setLoadingReservations] = useState(true);
-  const [loadingDriver, setLoadingDriver] = useState(true);
-  const [loadingCompany, setLoadingCompany] = useState(true);
-  const [error, setError] = useState(null);
-  const [company, setCompany] = useState(null);
+  const queryClient = useQueryClient();
+  const { company, loadingCompany, companyError, reloadCompany } = useLirieCompany();
 
-  const loadCompany = useCallback(async () => {
-    try {
-      setLoadingCompany(true);
-      setError(null);
-      
-      // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies httpOnly)
-      // Si on utilise des cookies httpOnly, le token n'est pas dans localStorage, mais les infos utilisateur sont stockées
-      // Dans ce cas, on peut quand même faire la requête car les cookies seront envoyés automatiquement avec withCredentials: true
-      const token = getAccessToken();
-      const hasToken = !!token;
-      const hasUser = !!localStorage.getItem('user');
-      
-      if (!hasToken && !hasUser) {
-        setError("Authentification manquante. Veuillez vous reconnecter.");
-        setLoadingCompany(false);
-        return;
-      }
-      
-      // Si on a un token OU des infos utilisateur, on peut faire la requête
-      // (les cookies httpOnly seront envoyés automatiquement si pas de token)
-      const data = await fetchCompanyInfo();
-      
-      // Vérifier si fetchCompanyInfo a retourné un objet d'erreur
-      if (data?.error === true) {
-        setError("Erreur lors du chargement de l'entreprise.");
-        setCompany(null);
-      } else {
-        setCompany(data);
-      }
-    } catch (err) {
-      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques (permissions manquantes ou company non trouvée)
-      const status = err?.response?.status;
-      if (status !== 403 && status !== 404 && status !== 401) {
-        console.error("❌ Erreur lors du chargement de l'entreprise :", err);
-      }
-      setError("Erreur lors du chargement de l'entreprise.");
-      setCompany(null);
-    } finally {
-      setLoadingCompany(false);
-    }
-  }, []);
+  const reservationDayKey = day ?? '__all__';
 
-  const loadReservations = useCallback(async (opts = {}) => {
-    const silent = Boolean(opts.silent);
-    try {
-      if (!silent) {
-        setLoadingReservations(true);
-      }
+  const {
+    data: reservations = [],
+    isLoading: loadingReservations,
+    refetch: refetchReservations,
+    error: reservationsQueryError,
+  } = useQuery({
+    queryKey: lirieKeys.companyReservations(reservationDayKey, RESERVATIONS_LIST_SCOPE_HASH),
+    queryFn: async () => {
       const data = await fetchCompanyReservations(day);
-      // Le service renvoie déjà un ARRAY normalisé
-      setReservations(Array.isArray(data) ? data : (data?.reservations ?? []));
-      setError(null); // Réinitialiser l'erreur en cas de succès
-    } catch (err) {
-      // Gérer spécifiquement les erreurs de timeout
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError('La récupération des réservations a pris trop de temps. Veuillez réessayer.');
-      } else {
-        // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
-        const status = err?.response?.status;
-        if (status !== 403 && status !== 404 && status !== 401) {
-          console.error('❌ Erreur lors du chargement des réservations :', err);
-        }
-        setError('Erreur lors du chargement des réservations.');
-      }
-    } finally {
-      if (!silent) {
-        setLoadingReservations(false);
-      }
-    }
-  }, [day]);
+      return Array.isArray(data) ? data : (data?.reservations ?? []);
+    },
+    staleTime: 30_000,
+  });
 
-  /** Affiche tout de suite une réservation créée (réponse POST) avant le GET /reservations. */
-  const upsertReservation = useCallback((booking) => {
-    if (!booking || booking.id == null) return;
-    setReservations((prev) => {
-      const list = Array.isArray(prev) ? prev : [];
-      const id = Number(booking.id);
-      const idx = list.findIndex((r) => Number(r.id) === id);
-      if (idx >= 0) {
-        const next = [...list];
-        next[idx] = { ...next[idx], ...booking };
-        return next;
-      }
-      return [booking, ...list];
-    });
-  }, []);
-
-  const loadDriver = useCallback(async () => {
-    try {
-      setLoadingDriver(true);
+  const {
+    data: driver = [],
+    isLoading: loadingDriver,
+    refetch: refetchDriver,
+    error: driversQueryError,
+  } = useQuery({
+    queryKey: lirieKeys.companyDrivers(),
+    queryFn: async () => {
       const data = await fetchCompanyDriversCanonical();
-      // Le service renvoie déjà un ARRAY normalisé
-      setDriver(Array.isArray(data) ? data : (data?.driver ?? []));
-      setError(null); // Réinitialiser l'erreur en cas de succès
-    } catch (err) {
-      // Gérer spécifiquement les erreurs de timeout
-      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-        setError('La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.');
-      } else {
-        // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
-        const status = err?.response?.status;
-        if (status !== 403 && status !== 404 && status !== 401) {
-          console.error('❌ Erreur lors du chargement des chauffeurs :', err);
+      return Array.isArray(data) ? data : data?.driver ?? [];
+    },
+    staleTime: 30_000,
+  });
+
+  useCompanyDriversLiveOverlay(company?.id);
+
+  const combinedError = useMemo(() => {
+    if (companyError) return companyError;
+    const re = reservationsQueryError;
+    const de = driversQueryError;
+    if (re?.code === 'ECONNABORTED' || re?.message?.includes?.('timeout')) {
+      return 'La récupération des réservations a pris trop de temps. Veuillez réessayer.';
+    }
+    if (de?.code === 'ECONNABORTED' || de?.message?.includes?.('timeout')) {
+      return 'La récupération des chauffeurs a pris trop de temps. Veuillez réessayer.';
+    }
+    if (re && re?.response?.status !== 403 && re?.response?.status !== 404 && re?.response?.status !== 401) {
+      return 'Erreur lors du chargement des réservations.';
+    }
+    if (de && de?.response?.status !== 403 && de?.response?.status !== 404 && de?.response?.status !== 401) {
+      return 'Erreur lors du chargement des chauffeurs.';
+    }
+    return null;
+  }, [companyError, reservationsQueryError, driversQueryError]);
+
+  const reloadReservations = useCallback(async () => {
+    await refetchReservations();
+  }, [refetchReservations]);
+
+  const reloadDriver = useCallback(() => refetchDriver(), [refetchDriver]);
+
+  const upsertReservation = useCallback(
+    (booking) => {
+      if (!booking || booking.id == null) return;
+      const key = lirieKeys.companyReservations(reservationDayKey, RESERVATIONS_LIST_SCOPE_HASH);
+      queryClient.setQueryData(key, (prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const id = Number(booking.id);
+        const idx = list.findIndex((r) => Number(r.id) === id);
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = { ...next[idx], ...booking };
+          return next;
         }
-        setError('Erreur lors du chargement des chauffeurs.');
-      }
-    } finally {
-      setLoadingDriver(false);
-    }
-  }, []);
-
-  // Chargement initial de toutes les données
-  useEffect(() => {
-    loadCompany();
-    loadReservations();
-    loadDriver();
-  }, [loadCompany, loadReservations, loadDriver]);
-
-  // Room entreprise + positions temps réel (même logique que useDriver) pour la carte dashboard / dispatch
-  useEffect(() => {
-    const cid = company?.id;
-    if (cid && Number(cid) > 0) {
-      joinCompanyRoom(Number(cid)).catch(() => {});
-    }
-  }, [company?.id]);
-
-  useEffect(() => {
-    const socket = getCompanySocket();
-    if (!socket) return;
-
-    const applyDelta = (payload, fromLiveState = false) => {
-      setDriver((prev) =>
-        mergeOrUpdateDriverInList(prev, payload, fromLiveState, company?.id ?? null)
-      );
-    };
-
-    const onLiveState = (payload) => applyDelta(payload, true);
-    const onLocationUpdate = (payload) => applyDelta(payload, false);
-    const onReconnected = () => {
-      loadDriver().catch(() => {});
-    };
-
-    socket.on('driver_live_state_update', onLiveState);
-    socket.on('driver_location_update', onLocationUpdate);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('company_socket_reconnected', onReconnected);
-    }
-
-    return () => {
-      socket.off('driver_live_state_update', onLiveState);
-      socket.off('driver_location_update', onLocationUpdate);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('company_socket_reconnected', onReconnected);
-      }
-    };
-  }, [loadDriver, company?.id]);
+        return [booking, ...list];
+      });
+    },
+    [queryClient, reservationDayKey]
+  );
 
   return {
     company,
@@ -181,10 +94,10 @@ const useCompanyData = ({ day } = {}) => {
     loadingCompany,
     loadingReservations,
     loadingDriver,
-    error,
-    reloadCompany: loadCompany,
-    reloadReservations: loadReservations,
-    reloadDriver: loadDriver,
+    error: combinedError,
+    reloadCompany,
+    reloadReservations,
+    reloadDriver,
     upsertReservation,
   };
 };

@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
+import time
+import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Dict, cast
 
 from sqlalchemy.exc import DBAPIError, OperationalError
@@ -20,6 +24,56 @@ from repositories.driver_repository import DriverRepository
 # Constantes simples
 # ---------------------------------------------------------------------------
 DEFAULT_NAMESPACE = "/"
+
+# Annexe F — alias optionnels lirie.* (double emit si LIRIE_WS_V2_ALIASES=1)
+_LIRIE_WS_V2_ALIASES = os.getenv("LIRIE_WS_V2_ALIASES", "").lower() in ("1", "true", "yes")
+_LIRIE_EVENT_ALIASES: dict[str, str] = {
+    "driver_location_update": "lirie.driver.map.updated",
+    "driver_live_state_update": "lirie.driver.state.updated",
+    "booking_updated": "lirie.reservation.updated",
+    "dispatch_delay_detected": "lirie.dispatch.delay.updated",
+    "dispatch_assignment": "lirie.dispatch.assignment.updated",
+}
+
+_LIRIE_DISPATCH_WS_UNIFIED = os.getenv("LIRIE_DISPATCH_WS_UNIFIED", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+_LIRIE_DISPATCH_DASHBOARD_WS = os.getenv("LIRIE_DISPATCH_DASHBOARD_WS", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+_DISPATCH_DB_THROTTLE_LAST: dict[int, float] = {}
+_DISPATCH_DB_THROTTLE_SEC = 2.0
+
+
+def _emit_alias_no_metrics(
+    event: str,
+    payload: dict[str, Any],
+    *,
+    room: str,
+    namespace: str,
+) -> None:
+    """Émet un alias lirie.* sans compter deux fois les métriques Prometheus."""
+    try:
+        from services.monitoring.lirie_prometheus import inc_socketio_alias_emit
+
+        inc_socketio_alias_emit(event)
+    except Exception:
+        pass
+    try:
+        kwargs: dict[str, Any] = {"namespace": namespace, "to": room}
+        cast("Any", socketio).emit(event, payload, **kwargs)
+    except TypeError:
+        try:
+            kwargs = {"namespace": namespace, "room": room}
+            cast("Any", socketio).emit(event, payload, **kwargs)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -113,16 +167,19 @@ def _safe_emit(
         )
         return
 
+    emitted_ok = False
     try:
         # Flask-SocketIO >= 5 utilise 'to=' ; on passe par **kwargs pour éviter
         # l'analyse statique de Pylance sur des kwargs non déclarés dans les stubs.
         kwargs: dict[str, Any] = {"namespace": namespace, "to": room}
         cast("Any", socketio).emit(event, payload, **kwargs)
+        emitted_ok = True
     except TypeError:
         # Compat < 5.x : fallback avec 'room='
         try:
             kwargs = {"namespace": namespace, "room": room}
             cast("Any", socketio).emit(event, payload, **kwargs)
+            emitted_ok = True
         except (ConnectionError, OSError) as e:
             # Erreurs réseau attendues : Socket.IO indisponible
             app_logger.error(
@@ -149,6 +206,18 @@ def _safe_emit(
     except Exception:
         # Erreur inattendue : logger avec trace complète
         app_logger.exception("[socketio] emit failed event=%s room=%s", event, room)
+
+    if emitted_ok:
+        try:
+            from services.monitoring.lirie_prometheus import inc_socketio_event
+
+            inc_socketio_event(event)
+        except Exception:
+            pass
+        if _LIRIE_WS_V2_ALIASES:
+            alias = _LIRIE_EVENT_ALIASES.get(event)
+            if alias:
+                _emit_alias_no_metrics(alias, payload, room=room, namespace=namespace)
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +284,65 @@ def emit_company_event(
     enriched_payload = _enrich_payload_if_needed(payload, event)
     _safe_emit(
         event, enriched_payload, room=get_company_room(company_id), namespace=namespace
+    )
+
+
+def _emit_dispatch_state_patch_if_enabled(
+    *,
+    company_id: int,
+    op: str,
+    reservation_id: int,
+    driver_id: int,
+    assignment_id: str,
+    namespace: str,
+    fields: dict[str, Any] | None = None,
+) -> None:
+    """Événement unifié V2 (dispatch assignment uniquement) — idempotence : correlation_id + occurred_at."""
+    if not _LIRIE_DISPATCH_WS_UNIFIED:
+        return
+    occurred_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    correlation_id = str(uuid.uuid4())
+    payload: dict[str, Any] = {
+        "v": 1,
+        "kind": "dispatch",
+        "op": op,
+        "company_id": company_id,
+        "reservation_id": reservation_id,
+        "driver_id": driver_id,
+        "assignment_id": assignment_id,
+        "correlation_id": correlation_id,
+        "occurred_at": occurred_at,
+    }
+    if fields is not None:
+        payload["fields"] = fields
+    emit_company_event(
+        company_id, "dispatch_state_patch", payload, namespace=namespace
+    )
+
+
+def _maybe_emit_dispatch_dashboard_snapshot(
+    company_id: int, *, namespace: str = DEFAULT_NAMESPACE
+) -> None:
+    """Hint throttlé (max ~1 / 2s / company) pour invalider le GET dashboard realtime côté client."""
+    if not _LIRIE_DISPATCH_DASHBOARD_WS:
+        return
+    if company_id <= 0:
+        return
+    now = time.monotonic()
+    last = _DISPATCH_DB_THROTTLE_LAST.get(company_id, 0.0)
+    if now - last < _DISPATCH_DB_THROTTLE_SEC:
+        return
+    _DISPATCH_DB_THROTTLE_LAST[company_id] = now
+    emit_company_event(
+        company_id,
+        "dispatch_dashboard_snapshot",
+        {
+            "v": 1,
+            "kind": "dispatch_dashboard",
+            "correlation_id": str(uuid.uuid4()),
+            "occurred_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        },
+        namespace=namespace,
     )
 
 
@@ -372,6 +500,15 @@ def emit_assignment_created(
     emit_company_event(
         company_id, "dispatch_assignment_created", company_payload, namespace=namespace
     )
+    _emit_dispatch_state_patch_if_enabled(
+        company_id=company_id,
+        op="assignment_created",
+        reservation_id=booking_id,
+        driver_id=driver_id,
+        assignment_id=assignment_id,
+        namespace=namespace,
+    )
+    _maybe_emit_dispatch_dashboard_snapshot(company_id, namespace=namespace)
 
     driver_payload = {
         "assignment_id": assignment_id,
@@ -401,6 +538,16 @@ def emit_assignment_updated(
     emit_company_event(
         company_id, "dispatch_assignment_updated", payload, namespace=namespace
     )
+    _emit_dispatch_state_patch_if_enabled(
+        company_id=company_id,
+        op="assignment_updated",
+        reservation_id=booking_id,
+        driver_id=driver_id,
+        assignment_id=assignment_id,
+        namespace=namespace,
+        fields=fields,
+    )
+    _maybe_emit_dispatch_dashboard_snapshot(company_id, namespace=namespace)
     emit_driver_event(
         driver_id, "driver_assignment_updated", payload, namespace=namespace
     )
@@ -423,6 +570,15 @@ def emit_assignment_cancelled(
     emit_company_event(
         company_id, "dispatch_assignment_cancelled", payload, namespace=namespace
     )
+    _emit_dispatch_state_patch_if_enabled(
+        company_id=company_id,
+        op="assignment_cancelled",
+        reservation_id=booking_id,
+        driver_id=driver_id,
+        assignment_id=assignment_id,
+        namespace=namespace,
+    )
+    _maybe_emit_dispatch_dashboard_snapshot(company_id, namespace=namespace)
     emit_driver_event(
         driver_id, "driver_assignment_cancelled", payload, namespace=namespace
     )

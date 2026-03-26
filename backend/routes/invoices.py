@@ -382,17 +382,6 @@ class InvoicesList(Resource):
 
         invoice_repo = InvoiceRepository()
 
-        query = invoice_repo.find_models_by_company_with_filters_query(
-            company_id=company_id,
-            status=status_enum,
-            client_id=client_id,
-            year=year,
-            month=month,
-            with_balance=with_balance,
-            with_reminders=with_reminders,
-            search_query=q if q else None,
-        )
-
         # Calculer les stats sur TOUTES les factures filtrées AVANT le tri et
         # la pagination
         from sqlalchemy import desc, func
@@ -525,40 +514,21 @@ class InvoicesList(Resource):
                 )
             )
 
-        # Créer une sous-requête pour obtenir TOUS les IDs (sans doublons)
-        # On charge toutes les factures normales pour les fusionner avec les
-        # factures partenaires, puis paginer sur la liste combinée (cohérence
-        # 20/50/100 par page).
-        ids_subquery = (
+        # Métadonnées factures normales (sans charger lines/payments) — hydrate page seulement
+        regular_rows = (
             pagination_query.with_entities(Invoice.id, Invoice.issued_at)
             .distinct()
             .order_by(desc(Invoice.issued_at).nulls_last())
-            .subquery()
-        )
-        all_regular_id_rows = (
-            db.session.query(ids_subquery.c.id)
-            .order_by(desc(ids_subquery.c.issued_at).nulls_last())
             .all()
         )
-        all_regular_ids = [row[0] for row in all_regular_id_rows]
-
-        # Charger les objets complets avec les relations pour TOUS les IDs
-        if all_regular_ids:
-            from sqlalchemy.orm import subqueryload
-
-            query = (
-                Invoice.query.options(
-                    joinedload(Invoice.client).joinedload(Client.user),
-                    joinedload(Invoice.bill_to_client).joinedload(Client.user),
-                    subqueryload(Invoice.lines),
-                    subqueryload(Invoice.payments),
-                )
-                .filter(Invoice.id.in_(all_regular_ids))
-                .order_by(desc(Invoice.issued_at).nulls_last())
+        regular_metas = [
+            (
+                (row[1] or datetime.min.replace(tzinfo=UTC)),
+                "regular",
+                row[0],
             )
-            items = query.all()
-        else:
-            items = []
+            for row in regular_rows
+        ]
 
         # Créer un objet de pagination manuel pour compatibilité avec le reste du code
         class PaginationObject:
@@ -575,8 +545,6 @@ class InvoicesList(Resource):
                 self.has_prev = page > 1
                 self.next_num = page + 1 if self.has_next else None
                 self.prev_num = page - 1 if self.has_prev else None
-
-        result_invoices = [inv.to_dict() for inv in items]
 
         # ✅ Inclure les factures partenaires (PartnerInvoice)
         # Une facture partenaire appartient à l'entreprise si :
@@ -788,26 +756,57 @@ class InvoicesList(Resource):
                 }
             )
 
-        # Combiner les factures normales et partenaires
-        all_invoices = result_invoices + partner_invoices_dict
-
-        # Trier par issued_at (les plus récentes en premier)
-        all_invoices.sort(
-            key=lambda x: (
-                datetime.fromisoformat(x["issued_at"].replace("Z", "+00:00"))
-                if x.get("issued_at")
+        # Combiner métadonnées puis hydrater uniquement la page courante (factures normales)
+        partner_metas = []
+        for p in partner_invoices_dict:
+            dt = (
+                datetime.fromisoformat(p["issued_at"].replace("Z", "+00:00"))
+                if p.get("issued_at")
                 else datetime.min.replace(tzinfo=UTC)
-            ),
+            )
+            partner_metas.append((dt, "partner", p["id"]))
+
+        combined = sorted(
+            regular_metas + partner_metas,
+            key=lambda x: x[0],
             reverse=True,
         )
-
-        # Paginer manuellement sur toutes les factures (normales + partenaires)
-        total_count_with_partners = len(all_invoices)
+        total_count_with_partners = len(combined)
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
-        paginated_invoices = all_invoices[start_idx:end_idx]
+        page_slice = combined[start_idx:end_idx]
 
-        # Calculer le total pour la pagination
+        reg_ids = [x[2] for x in page_slice if x[1] == "regular"]
+        partner_map = {p["id"]: p for p in partner_invoices_dict}
+
+        if reg_ids:
+            from sqlalchemy.orm import subqueryload
+
+            loaded = (
+                Invoice.query.options(
+                    joinedload(Invoice.client).joinedload(Client.user),
+                    joinedload(Invoice.bill_to_client).joinedload(Client.user),
+                    subqueryload(Invoice.lines),
+                    subqueryload(Invoice.payments),
+                )
+                .filter(Invoice.id.in_(reg_ids))
+                .all()
+            )
+            reg_by_id = {inv.id: inv for inv in loaded}
+        else:
+            reg_by_id = {}
+
+        paginated_invoices = []
+        for _, kind, eid in page_slice:
+            if kind == "regular":
+                inv = reg_by_id.get(eid)
+                if inv is not None:
+                    paginated_invoices.append(inv.to_dict())
+            else:
+                row = partner_map.get(eid)
+                if row is not None:
+                    paginated_invoices.append(row)
+
         total_count = total_count_with_partners
 
         pagination = PaginationObject(paginated_invoices, total_count, page, per_page)

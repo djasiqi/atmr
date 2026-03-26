@@ -1,7 +1,9 @@
 # pyright: reportArgumentType=false
+import json
 import logging
 from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
+from os import getenv
 from pathlib import Path
 from typing import Any, cast
 
@@ -25,7 +27,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import HTTPException
 
-from ext import db, limiter, role_required
+from ext import db, limiter, redis_client, role_required
 
 # Enums - à conserver
 from models.enums import BookingStatus, ClientType, PartnershipStatus, UserRole
@@ -44,10 +46,6 @@ from routes.api_error_models import (
 from routes.api_error_utils import create_error_response
 from routes.db_error_utils import format_integrity_error
 from services.partnerships.exceptions import StatsComputationError
-from services.geolocation.presence import (
-    compute_location_status,
-    presence_status_from_location_status,
-)
 from services.security.idempotency import IdempotencyService
 from infrastructure.dispatch import queue_adapter as queue
 from shared.error_handlers import APIErrorHandler
@@ -1393,6 +1391,206 @@ class CompanyPartnershipsStats(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+def _reservations_base_query_for_company_day(company_id: int, day_str: str):
+    """Base query réservations entreprise pour un jour (aligné sur GET /me/reservations)."""
+    from repositories.booking_repository import BookingRepository
+    from sqlalchemy import or_
+
+    from models import Booking
+    from shared.time_utils import day_local_bounds
+
+    booking_repo = BookingRepository()
+    visibility_filter = booking_repo._company_visibility_filter(company_id)
+    base_query = Booking.query.filter(visibility_filter)
+
+    start_local, end_local = day_local_bounds(day_str)
+    outbound_ids = (
+        Booking.query.filter(
+            visibility_filter,
+            Booking.scheduled_time >= start_local,
+            Booking.scheduled_time < end_local,
+            ~Booking.is_return,
+        )
+        .with_entities(Booking.id)
+        .all()
+    )
+    outbound_ids = [b_id for (b_id,) in outbound_ids]
+    if outbound_ids:
+        base_query = base_query.filter(
+            or_(
+                (Booking.scheduled_time >= start_local)
+                & (Booking.scheduled_time < end_local),
+                Booking.is_return
+                & or_(
+                    Booking.scheduled_time.is_(None),
+                    ~Booking.time_confirmed,
+                )
+                & (Booking.parent_booking_id.in_(outbound_ids)),
+            )
+        )
+    else:
+        base_query = base_query.filter(
+            (Booking.scheduled_time >= start_local)
+            & (Booking.scheduled_time < end_local)
+        )
+    return base_query
+
+
+def _booking_stats_from_base_query(base_query):
+    """Agrégats stats dashboard pour la base_query (sans filtres onglet/recherche)."""
+    from sqlalchemy import case, func
+
+    from models import Booking
+    from models.enums import BookingStatus
+
+    try:
+        stats_row = base_query.with_entities(
+            func.count(Booking.id),
+            func.sum(case((Booking.status == BookingStatus.PENDING, 1), else_=0)),
+            func.sum(
+                case(
+                    (
+                        Booking.status.in_(
+                            [
+                                BookingStatus.ACCEPTED,
+                                BookingStatus.ASSIGNED,
+                                BookingStatus.EN_ROUTE,
+                                BookingStatus.IN_PROGRESS,
+                            ]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            func.sum(
+                case(
+                    (
+                        Booking.status.in_(
+                            [
+                                BookingStatus.COMPLETED,
+                                BookingStatus.RETURN_COMPLETED,
+                            ]
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            func.sum(case((Booking.status == BookingStatus.CANCELED, 1), else_=0)),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Booking.status.in_(
+                                [
+                                    BookingStatus.COMPLETED,
+                                    BookingStatus.RETURN_COMPLETED,
+                                ]
+                            ),
+                            Booking.amount,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        ).first()
+        if stats_row is None:
+            return {
+                "total": 0,
+                "pending": 0,
+                "inProgress": 0,
+                "completed": 0,
+                "canceled": 0,
+                "revenue": 0.0,
+            }
+        return {
+            "total": stats_row[0] or 0,
+            "pending": stats_row[1] or 0,
+            "inProgress": stats_row[2] or 0,
+            "completed": stats_row[3] or 0,
+            "canceled": stats_row[4] or 0,
+            "revenue": float(stats_row[5] or 0),
+        }
+    except Exception:
+        logger.exception("Erreur calcul stats reservations")
+        return {
+            "total": 0,
+            "pending": 0,
+            "inProgress": 0,
+            "completed": 0,
+            "canceled": 0,
+            "revenue": 0,
+        }
+
+
+@companies_ns.route("/me/reservations/summary", strict_slashes=False)
+class CompanyReservationsSummary(Resource):
+    """GET agrégats du jour uniquement (sans liste paginée)."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+
+        company_id_obj = getattr(company, "id", None)
+        try:
+            company_id = int(company_id_obj) if company_id_obj is not None else None
+        except Exception:
+            company_id = None
+        if company_id is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        day_str = (request.args.get("date") or "").strip()
+        if not day_str:
+            return APIErrorHandler.handle_validation_error(
+                "Le paramètre date (YYYY-MM-DD) est obligatoire",
+                field="date",
+                logger_instance=logger,
+            )
+        from shared.time_utils import day_local_bounds
+
+        try:
+            day_local_bounds(day_str)
+        except ValueError:
+            return APIErrorHandler.handle_validation_error(
+                "Format de date invalide. Utilisez YYYY-MM-DD",
+                field="date",
+                logger_instance=logger,
+            )
+
+        cache_ttl = int(getenv("LIRIE_RESERVATIONS_SUMMARY_CACHE_TTL_SECONDS", "0") or "0")
+        cache_key = f"summary:reservations:{company_id}:{day_str}"
+        if redis_client is not None and cache_ttl > 0:
+            with suppress(Exception):
+                raw = redis_client.get(cache_key)
+                if raw:
+                    decoded = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+                    return json.loads(decoded), 200
+
+        base_query = _reservations_base_query_for_company_day(company_id, day_str)
+        stats = _booking_stats_from_base_query(base_query)
+        payload = {
+            "date": day_str,
+            "stats": stats,
+            "generated_at": datetime.now(UTC).isoformat(),
+        }
+        if redis_client is not None and cache_ttl > 0:
+            with suppress(Exception):
+                redis_client.setex(
+                    cache_key,
+                    cache_ttl,
+                    json.dumps(payload).encode("utf-8"),
+                )
+        return payload, 200
+
+
 @companies_ns.route("/me/reservations", strict_slashes=False)
 class CompanyReservations(Resource):
     @jwt_required()
@@ -1436,6 +1634,8 @@ class CompanyReservations(Resource):
         per_page = int(request.args.get("per_page", 100))
         # Limiter à 500 résultats maximum par page
         per_page = min(per_page, 500)
+
+        include_stats = request.args.get("include_stats", "true").lower() != "false"
 
         status_filter = request.args.get("status")
 
@@ -1551,88 +1751,9 @@ class CompanyReservations(Resource):
             if end_local is not None:
                 base_query = base_query.filter(Booking.scheduled_time < end_local)
 
-        # Statistiques globales (sans recherche ni filtres status)
-        try:
-            stats_row = base_query.with_entities(
-                func.count(Booking.id),
-                func.sum(case((Booking.status == BookingStatus.PENDING, 1), else_=0)),
-                func.sum(
-                    case(
-                        (
-                            Booking.status.in_(
-                                [
-                                    BookingStatus.ACCEPTED,
-                                    BookingStatus.ASSIGNED,
-                                    BookingStatus.EN_ROUTE,
-                                    BookingStatus.IN_PROGRESS,
-                                ]
-                            ),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                func.sum(
-                    case(
-                        (
-                            Booking.status.in_(
-                                [
-                                    BookingStatus.COMPLETED,
-                                    BookingStatus.RETURN_COMPLETED,
-                                ]
-                            ),
-                            1,
-                        ),
-                        else_=0,
-                    )
-                ),
-                func.sum(case((Booking.status == BookingStatus.CANCELED, 1), else_=0)),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                Booking.status.in_(
-                                    [
-                                        BookingStatus.COMPLETED,
-                                        BookingStatus.RETURN_COMPLETED,
-                                    ]
-                                ),
-                                Booking.amount,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-            ).first()
-            if stats_row is None:
-                stats = {
-                    "total": 0,
-                    "pending": 0,
-                    "inProgress": 0,
-                    "completed": 0,
-                    "canceled": 0,
-                    "revenue": 0.0,
-                }
-            else:
-                stats = {
-                    "total": stats_row[0] or 0,
-                    "pending": stats_row[1] or 0,
-                    "inProgress": stats_row[2] or 0,
-                    "completed": stats_row[3] or 0,
-                    "canceled": stats_row[4] or 0,
-                    "revenue": float(stats_row[5] or 0),
-                }
-        except Exception:
-            logger.exception("Erreur calcul stats reservations")
-            stats = {
-                "total": 0,
-                "pending": 0,
-                "inProgress": 0,
-                "completed": 0,
-                "canceled": 0,
-                "revenue": 0,
-            }
+        stats = None
+        if include_stats:
+            stats = _booking_stats_from_base_query(base_query)
 
         query = base_query
 
@@ -1822,8 +1943,19 @@ class CompanyReservations(Resource):
             "page": page,
             "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page if total > 0 else 0,
-            "stats": stats,
         }
+        if include_stats and stats is not None:
+            response_data["stats"] = stats
+        try:
+            from services.monitoring.lirie_prometheus import (
+                observe_reservations_payload_size,
+            )
+
+            observe_reservations_payload_size(
+                len(json.dumps(response_data, default=str))
+            )
+        except Exception:
+            pass
         if flat:
             return response_data, 200
         return response_data, 200
@@ -2008,6 +2140,11 @@ class AcceptReservation(Resource):
                     )
                     db.session.commit()
                     _maybe_trigger_dispatch(company_id, "update")
+                    from services.reservations_summary_cache import (
+                        invalidate_summary_cache_for_booking,
+                    )
+
+                    invalidate_summary_cache_for_booking(company_id, booking)
                     return {
                         "message": "Transfert accepté et réservation acceptée",
                         "reservation": cast("Any", booking).serialize,
@@ -2048,8 +2185,13 @@ class AcceptReservation(Resource):
         try:
             db.session.commit()
             _maybe_trigger_dispatch(company_id, "update")
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking,
+            )
+
+            invalidate_summary_cache_for_booking(company_id, booking)
             return {
-                "message": "...",
+                "message": "Réservation acceptée avec succès.",
                 "reservation": cast("Any", booking).serialize,
             }, 200
         except Exception as e:
@@ -2115,6 +2257,11 @@ class RejectReservation(Resource):
 
         try:
             db.session.commit()
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking,
+            )
+
+            invalidate_summary_cache_for_booking(company_id, booking)
             return {
                 "message": "Reservation rejected successfully",
                 "reservation": booking.serialize,
@@ -2306,6 +2453,9 @@ class AssignDriver(Resource):
 
             notify_driver_new_booking(driver.id, booking)
         _maybe_trigger_dispatch(company_id, "update")
+        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+        invalidate_summary_cache_for_booking(company_id, booking)
         return {
             "message": "Driver assigned successfully",
             "reservation": booking.serialize,
@@ -2371,6 +2521,11 @@ class CompleteReservation(Resource):
 
         try:
             db.session.commit()
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking,
+            )
+
+            invalidate_summary_cache_for_booking(company_id, booking)
             # ✅ 3.5.1: Résoudre retards lors complétion
             DelayEvent.resolve_delays_for_booking(booking.id, booking.completed_at)
             # ✅ Clean Architecture: Publier événement au lieu d'appel direct
@@ -2413,11 +2568,6 @@ class CompleteReservation(Resource):
 # ======================================================
 
 
-# Throttle log "no driver loc in Redis" : 1 fois / 10 min par company
-_NO_DRIVER_LOC_LOG_LAST: dict[int, float] = {}
-_NO_DRIVER_LOC_LOG_INTERVAL_SEC = 600
-
-
 @companies_ns.route("/me/drivers/locations")
 class CompanyDriversLocations(Resource):
     """Positions GPS des chauffeurs (Redis pipeline + DB fallback). Pour la carte live."""
@@ -2425,11 +2575,7 @@ class CompanyDriversLocations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
-        from datetime import UTC, datetime
-
-        from models import Driver
-        from ext import redis_client
+        from services.company_driver_locations import build_company_driver_locations_items
 
         company, err, code = _get_current_company_via_use_case()
         if err:
@@ -2446,293 +2592,84 @@ class CompanyDriversLocations(Resource):
             )
         company_contact_email = str(getattr(company, "contact_email", "") or "").lower()
         is_demo_company = company_contact_email.endswith("@demo.local")
-        drivers = Driver.query.filter_by(company_id=cid).all()
-        if not drivers:
-            return {"locations": []}, 200
 
-        # Paramètres optionnels viewport bbox (standard Leaflet/Mapbox/Google)
         bbox_ne_lat = request.args.get("bbox_ne_lat", type=float)
         bbox_ne_lng = request.args.get("bbox_ne_lng", type=float)
         bbox_sw_lat = request.args.get("bbox_sw_lat", type=float)
         bbox_sw_lng = request.args.get("bbox_sw_lng", type=float)
-        use_bbox = (
-            bbox_ne_lat is not None
-            and bbox_ne_lng is not None
-            and bbox_sw_lat is not None
-            and bbox_sw_lng is not None
-            and LAT_MIN <= bbox_sw_lat <= LAT_MAX
-            and LAT_MIN <= bbox_ne_lat <= LAT_MAX
-            and LON_MIN <= bbox_sw_lng <= LON_MAX
-            and LON_MIN <= bbox_ne_lng <= LON_MAX
+
+        locations = build_company_driver_locations_items(
+            cid,
+            is_demo_company=is_demo_company,
+            bbox_ne_lat=bbox_ne_lat,
+            bbox_ne_lng=bbox_ne_lng,
+            bbox_sw_lat=bbox_sw_lat,
+            bbox_sw_lng=bbox_sw_lng,
+        )
+        return {"locations": locations}, 200
+
+
+@companies_ns.route("/me/drivers/live")
+class CompanyDriversLive(Resource):
+    """Liste chauffeurs + état live fusionné (1 RTT). Projection carte / ops — ne remplace pas /me/drivers métier."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    def get(self):
+        # ruff: noqa: I001
+        from datetime import UTC, datetime
+
+        from application.companies.drivers.list_company_drivers import (
+            ListCompanyDriversUseCase,
+        )
+        from repositories.driver_repository import DriverRepository
+        from services.company_driver_locations import (
+            build_company_driver_locations_items,
+            merge_drivers_with_locations,
         )
 
-        # 1) Pipeline Redis (batch) - évite N round-trips
-        redis_results = []
-        redis_ok = False
-        if redis_client:
-            try:
-                pipe = redis_client.pipeline()
-                for driver in drivers:
-                    canonical_key = f"driver:{driver.id}:loc:canonical"
-                    legacy_key = f"driver:{driver.id}:loc"
-                    # Compat migration: canonique puis legacy.
-                    pipe.hgetall(canonical_key)
-                    pipe.hgetall(legacy_key)
-                redis_results = pipe.execute()
-                redis_ok = True
-            except (ConnectionError, OSError, TimeoutError) as e:
-                logger.debug(
-                    "[drivers/locations] Redis pipeline failed: %s",
-                    type(e).__name__,
-                )
-                redis_results = [None] * len(drivers)
-            except Exception:
-                redis_results = [None] * len(drivers)
-
-        # 2) Batch query: bookings actifs par driver (ASSIGNED/EN_ROUTE/IN_PROGRESS) - pas de N+1
-        # Exclure les bookings "obsolètes" : EN_ROUTE/IN_PROGRESS avec scheduled_time > 24h dans le passé
-        # (course jamais terminée dans l'app → chauffeur affiché à tort comme "en course")
-        from models import Booking
-        from models.base import _as_bool
-
-        driver_ids = [d.id for d in drivers]
-        active_bookings_map: dict[int, dict[str, Any]] = {}
-        if driver_ids:
-            active_statuses = (
-                BookingStatus.ASSIGNED.value,
-                BookingStatus.EN_ROUTE.value,
-                BookingStatus.IN_PROGRESS.value,
-            )
-            cutoff = datetime.now(UTC) - timedelta(hours=24)
-            active_bookings = (
-                Booking.query.filter(
-                    Booking.driver_id.in_(driver_ids),
-                    Booking.status.in_(active_statuses),
-                    or_(
-                        Booking.scheduled_time.is_(None),
-                        Booking.scheduled_time >= cutoff,
-                    ),
-                )
-                .with_entities(
-                    Booking.driver_id,
-                    Booking.id,
-                    Booking.status,
-                    Booking.pickup_location,
-                    Booking.dropoff_location,
-                )
-                .order_by(Booking.updated_at.desc())
-                .all()
-            )
-            _MAX_LOCATION_STR_LEN = 30
-            for b in active_bookings:
-                driver_id_val = getattr(b, "driver_id", None)
-                if driver_id_val and driver_id_val not in active_bookings_map:
-                    pickup = getattr(b, "pickup_location", None) or ""
-                    dropoff = getattr(b, "dropoff_location", None) or ""
-                    pickup_str = str(pickup)
-                    dropoff_str = str(dropoff)
-                    client_short = (
-                        (pickup[:_MAX_LOCATION_STR_LEN] + "…")
-                        if len(pickup_str) > _MAX_LOCATION_STR_LEN
-                        else pickup
-                    )
-                    raw_status = getattr(b, "status", None)
-                    mission_status_val = (
-                        getattr(raw_status, "value", None) or str(raw_status or "")
-                    )
-                    active_bookings_map[driver_id_val] = {
-                        "current_booking_id": getattr(b, "id", None),
-                        "client_short": client_short
-                        or (
-                            dropoff[:_MAX_LOCATION_STR_LEN] + "…"
-                            if len(dropoff_str) > _MAX_LOCATION_STR_LEN
-                            else dropoff
-                        ),
-                        "mission_status": mission_status_val,
-                    }
-
-        now = datetime.now(UTC)
-        locations = []
-        for i, driver in enumerate(drivers):
-            lat, lon, ts = None, None, None
-            used_db_fallback = False
-            loc_data: dict[str, Any] = {}
-            canonical_idx = i * 2
-            legacy_idx = canonical_idx + 1
-            h = redis_results[canonical_idx] if canonical_idx < len(redis_results) else None
-            if not h:
-                h = redis_results[legacy_idx] if legacy_idx < len(redis_results) else None
-            if h:
-                for k, v in h.items():
-                    try:
-                        loc_data[k.decode()] = v.decode()
-                    except Exception:
-                        loc_data[k.decode()] = v
-                for kf in ("lat", "lon", "speed", "heading", "accuracy"):
-                    if kf in loc_data:
-                        with suppress(Exception):
-                            loc_data[kf] = float(loc_data[kf])
-                lat = loc_data.get("lat")
-                lon = loc_data.get("lon")
-                ts = loc_data.get("ts")
-
-            # Fallback DB si Redis vide
-            if lat is None and getattr(driver, "latitude", None) is not None:
-                lat = float(driver.latitude)
-                lon = float(driver.longitude)
-                ts = None
-                used_db_fallback = True
-
-            if lat is None or lon is None:
-                continue
-
-            # last_seen_seconds + freshness backend-driven
-            last_seen_seconds = None
-            is_stale = True
-            if ts:
-                try:
-                    ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    delta = (now - ts_dt).total_seconds()
-                    last_seen_seconds = int(delta)
-                except Exception:
-                    pass
-            elif used_db_fallback:
-                driver_email = str(
-                    getattr(getattr(driver, "user", None), "email", "") or ""
-                ).lower()
-                # En démo, les coordonnées DB servent de GPS de référence: on les traite
-                # comme fraîches pour garantir la visualisation des chauffeurs sur la carte.
-                if is_demo_company or driver_email.endswith("@demo.local"):
-                    last_seen_seconds = 0
-
-            # status: available | assigned | busy | offline (backend = source de vérité)
-            is_active = _as_bool(getattr(driver, "is_active", True))
-            active_booking = active_bookings_map.get(driver.id, {})
-            has_active_booking = bool(active_booking.get("current_booking_id"))
-            mission_status = active_booking.get("mission_status")
-            location_mode_raw = loc_data.get("location_mode", "availability_presence")
-            expected_mode = (
-                "mission_live"
-                if mission_status
-                in (
-                    BookingStatus.ASSIGNED.value,
-                    BookingStatus.EN_ROUTE.value,
-                    BookingStatus.IN_PROGRESS.value,
-                )
-                else "availability_presence"
-            )
-            location_mode = location_mode_raw or expected_mode
-            location_status = compute_location_status(
-                mode=location_mode, last_seen_seconds=last_seen_seconds
-            )
-            presence_status = presence_status_from_location_status(location_status)
-            is_stale = location_status in {"stale", "offline"}
-
-            if not is_active:
-                status = "offline"
-            elif mission_status in (
-                BookingStatus.EN_ROUTE.value,
-                BookingStatus.IN_PROGRESS.value,
-            ):
-                status = "busy"
-            elif mission_status == BookingStatus.ASSIGNED.value:
-                status = "assigned"
-            else:
-                status = "available"
-
-            if not is_active:
-                presence_status = "offline"
-                location_status = "offline"
-            offline_reason = (
-                "no_signal"
-                if location_status == "offline"
-                else ("location_stale" if presence_status == "degraded" else "")
-            )
-            is_available = status == "available"
-
-            first_name = getattr(getattr(driver, "user", None), "first_name", None)
-            loc_item = {
-                "driver_id": driver.id,
-                "id": driver.id,
-                "latitude": float(lat),
-                "longitude": float(lon),
-                "lat": float(lat),
-                "lon": float(lon),
-                "first_name": first_name,
-                "timestamp": ts,
-                "recorded_at": loc_data.get("recorded_at") or ts,
-                "received_at": loc_data.get("received_at"),
-                "last_seen_seconds": last_seen_seconds,
-                "is_stale": is_stale,
-                "status": status,
-                "mission_status": mission_status,
-                "presence_status": presence_status,
-                "location_status": location_status,
-                "location_mode": location_mode,
-                "is_available": is_available,
-                "offline_reason": offline_reason,
-            }
-            if has_active_booking:
-                loc_item["current_booking_id"] = active_booking.get(
-                    "current_booking_id"
-                )
-                loc_item["client_short"] = active_booking.get("client_short", "")
-                if status == "busy":
-                    logger.debug(
-                        "[drivers/locations] Chauffeur en course: driver_id=%s booking_id=%s mission_status=%s client=%s",
-                        driver.id,
-                        active_booking.get("current_booking_id"),
-                        mission_status,
-                        active_booking.get("client_short", "")[:50],
-                    )
-            locations.append(loc_item)
-
-        # Métriques drivers_status_total (snapshot)
-        status_counts = {"available": 0, "assigned": 0, "busy": 0, "offline": 0}
-        for loc in locations:
-            s = loc.get("status")
-            if s in status_counts:
-                status_counts[s] += 1
+        company, err, code = _get_current_company_via_use_case()
+        if err:
+            return err, code
+        cid_obj = getattr(company, "id", None)
         try:
-            from services.monitoring.websocket_metrics import ws_metrics
-
-            ws_metrics.set_drivers_status_total(
-                available=status_counts["available"],
-                assigned=status_counts["assigned"],
-                busy=status_counts["busy"],
-                offline=status_counts["offline"],
-            )
+            cid = int(cid_obj) if cid_obj is not None else None
         except Exception:
-            pass
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+        company_contact_email = str(getattr(company, "contact_email", "") or "").lower()
+        is_demo_company = company_contact_email.endswith("@demo.local")
 
-        # Filtrage optionnel par viewport bbox
-        if use_bbox:
-            lat_min = min(bbox_sw_lat, bbox_ne_lat)
-            lat_max = max(bbox_sw_lat, bbox_ne_lat)
-            lng_min = min(bbox_sw_lng, bbox_ne_lng)
-            lng_max = max(bbox_sw_lng, bbox_ne_lng)
-            locations = [
-                loc
-                for loc in locations
-                if lat_min <= loc["latitude"] <= lat_max
-                and lng_min <= loc["longitude"] <= lng_max
-            ]
+        bbox_ne_lat = request.args.get("bbox_ne_lat", type=float)
+        bbox_ne_lng = request.args.get("bbox_ne_lng", type=float)
+        bbox_sw_lat = request.args.get("bbox_sw_lat", type=float)
+        bbox_sw_lng = request.args.get("bbox_sw_lng", type=float)
 
-        # Log WARN 1 fois / 10 min si Redis OK mais 0 loc pour tous les chauffeurs
-        if redis_ok and cid and len(drivers) > 0 and len(locations) == 0:
-            import time as _time
+        driver_repo = DriverRepository()
+        uc = ListCompanyDriversUseCase(driver_repo=driver_repo)
+        result = uc.execute(company_id=cid)
+        drivers_list = list(result.payload.get("drivers") or [])
 
-            now_ts = _time.monotonic()
-            last = _NO_DRIVER_LOC_LOG_LAST.get(cid, 0)
-            if now_ts - last >= _NO_DRIVER_LOC_LOG_INTERVAL_SEC:
-                _NO_DRIVER_LOC_LOG_LAST[cid] = now_ts
-                logger.warning(
-                    "No driver loc in Redis for company_id=%s (drivers_count=%d)",
-                    cid,
-                    len(drivers),
-                )
-
-        return {"locations": locations}, 200
+        locations = build_company_driver_locations_items(
+            cid,
+            is_demo_company=is_demo_company,
+            bbox_ne_lat=bbox_ne_lat,
+            bbox_ne_lng=bbox_ne_lng,
+            bbox_sw_lat=bbox_sw_lat,
+            bbox_sw_lng=bbox_sw_lng,
+        )
+        merged = merge_drivers_with_locations(drivers_list, locations)
+        generated_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        return {
+            "schema_version": 1,
+            "generated_at": generated_at,
+            "drivers": merged,
+            "total": len(merged),
+        }, 200
 
 
 @companies_ns.route("/me/drivers")
@@ -3416,6 +3353,11 @@ class CreateManualReservation(Resource):
         # ---------- 5) Déclencher la queue si dispatch actif ----------
         _maybe_trigger_dispatch(cid, "create")
 
+        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+        for b in list(created_outbounds or []) + list(created_returns or []):
+            invalidate_summary_cache_for_booking(cid, b)
+
         # ---------- 6) Réponse ----------
         resp = {
             "message": f"{len(created_outbounds)} réservation(s) créée(s) avec succès.",
@@ -3625,6 +3567,10 @@ class TriggerReturnBooking(Resource):
         db.session.add(booking)
         db.session.commit()
         _maybe_trigger_dispatch(cid, "return_request")
+        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+        invalidate_summary_cache_for_booking(cid, booking)
+        invalidate_summary_cache_for_booking(cid, return_booking)
 
         return {
             "message": f"Réservation retour {action} avec succès.",
@@ -4548,6 +4494,9 @@ class SingleReservation(Resource):
         from application.companies.reservations.update_reservation import (
             UpdateCompanyReservationUseCase,
         )
+        from services.reservations_summary_cache import summary_day_for_booking
+
+        previous_summary_day = summary_day_for_booking(booking)
 
         uc = UpdateCompanyReservationUseCase()
         uc_result = uc.execute(booking, validated_data=validated_data)
@@ -4566,6 +4515,13 @@ class SingleReservation(Resource):
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking_after_day_change,
+            )
+
+            invalidate_summary_cache_for_booking_after_day_change(
+                cid, booking, previous_summary_day
+            )
             return {
                 "message": "Réservation mise à jour avec succès",
                 "reservation": booking.serialize,
@@ -4690,6 +4646,10 @@ class SingleReservation(Resource):
                     (uc_result.error or {}).get("error", "Forbidden"),
                     logger_instance=logger,
                 )
+
+            from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+            invalidate_summary_cache_for_booking(cid, booking)
 
             if uc_result.action == "delete":
                 # ✅ FIX CRITIQUE: Expunger tous les objets Assignment de la session AVANT
@@ -5212,6 +5172,9 @@ class UpdateReservation(Resource):
         from application.companies.reservations.update_reservation import (
             UpdateCompanyReservationUseCase,
         )
+        from services.reservations_summary_cache import summary_day_for_booking
+
+        previous_summary_day = summary_day_for_booking(booking)
 
         uc = UpdateCompanyReservationUseCase()
         uc_result = uc.execute(booking, validated_data=validated_data)
@@ -5230,6 +5193,13 @@ class UpdateReservation(Resource):
             )
             # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking_after_day_change,
+            )
+
+            invalidate_summary_cache_for_booking_after_day_change(
+                cid, booking, previous_summary_day
+            )
             return {
                 "message": "Réservation mise à jour avec succès",
                 "reservation": booking.serialize,
@@ -5366,6 +5336,10 @@ class ScheduleReservation(Resource):
         # Déclenche la réoptimisation si activé
         if bool(getattr(company, "dispatch_enabled", True)):
             _maybe_trigger_dispatch(cid, "update")
+
+        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+        invalidate_summary_cache_for_booking(cid, booking)
 
         return {
             "message": "Heure planifiée mise à jour.",
@@ -5508,6 +5482,10 @@ class DispatchNowReservation(Resource):
 
         # Rafraîchir pour obtenir les données à jour (notamment driver si assigné)
         db.session.refresh(booking)
+
+        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+
+        invalidate_summary_cache_for_booking(cid, booking)
 
         response_data = {
             "message": "Dispatch urgent déclenché.",

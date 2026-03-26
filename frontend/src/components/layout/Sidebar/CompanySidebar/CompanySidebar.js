@@ -23,7 +23,7 @@ import {
   HiOutlineCog,
 } from 'react-icons/hi';
 import { FaSignOutAlt, FaChevronDown } from 'react-icons/fa';
-import useCompanyData from '../../../../hooks/useCompanyData';
+import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { logoutUser } from '../../../../utils/apiClient';
 import styles from './CompanySidebar.module.css';
 
@@ -52,8 +52,7 @@ const CompanySidebar = () => {
       return match?.[1] || null;
     })();
 
-  const companyData = useCompanyData() || {};
-  const company = companyData.company || null;
+  const { company } = useLirieCompany();
   const companyName = company?.name || 'Entreprise';
 
   // User dropdown
