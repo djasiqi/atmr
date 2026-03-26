@@ -103,6 +103,8 @@ class Booking(db.Model):
         # Optimise les requêtes qui filtrent par client_id et trient par scheduled_time
         # Note: DESC sera géré par la migration (SQLAlchemy Index ne supporte pas directement DESC)
         Index("ix_booking_client_time", "client_id", "scheduled_time"),
+        # Agrégations / filtres admin (tendances par mois sur created_at)
+        Index("ix_booking_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -60,6 +60,33 @@ function EnvCard({ title, env }) {
   );
 }
 
+/**
+ * Affiche pourquoi l’état reste « Inconnu » : ce n’est pas un bug front — l’API
+ * n’agrège des checks que si PLATFORM_API_URL_* est défini côté serveur.
+ */
+function ConfigHint({ data }) {
+  if (!data) return null;
+  const prod = data.environments?.prod;
+  const demo = data.environments?.demo;
+  const links = data.links || {};
+  const needProd = !prod?.monitored;
+  const needDemo = !demo?.monitored;
+  const needObs =
+    !links.grafana && !links.prometheus && !links.alertmanager;
+  if (!needProd && !needDemo && !needObs) return null;
+  return (
+    <div className={styles.configHint} role="note">
+      <strong>Pourquoi peu de données ?</strong> Cette page appelle le backend ; les checks
+      (ready, base, Redis, WebSocket) ne s’affichent que si les URLs cibles sont configurées sur
+      le <strong>serveur API</strong> (pas le navigateur). Définir au minimum{' '}
+      <code>PLATFORM_API_URL_PROD</code> (et optionnellement <code>PLATFORM_API_URL_DEMO</code>),
+      puis <code>PLATFORM_LINK_GRAFANA</code> / <code>PLATFORM_LINK_PROMETHEUS</code> /{' '}
+      <code>PLATFORM_LINK_ALERTMANAGER</code> pour les boutons. Voir{' '}
+      <code>backend/env.example</code> — redémarrer l’API après modification.
+    </div>
+  );
+}
+
 function ObservabilityLinks({ links }) {
   const items = [
     { key: 'grafana', label: 'Grafana' },
@@ -183,6 +210,8 @@ const AdminPlatformOps = () => {
 
           {data && (
             <>
+              <ConfigHint data={data} />
+
               <div className={styles.summaryStrip}>
                 <span className={styles.summaryLabel}>État global</span>
                 <StatusBadge status={data.overall_status} />

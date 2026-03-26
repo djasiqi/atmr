@@ -1222,9 +1222,63 @@ class BookingRepository:
         Returns:
             Nombre de bookings dans la plage
         """
-        return Booking.query.filter(
-            Booking.created_at >= start_date, Booking.created_at <= end_date
-        ).count()
+        from sqlalchemy import func
+
+        from ext import db
+
+        result = (
+            db.session.query(func.count(Booking.id))
+            .filter(
+                Booking.created_at >= start_date,
+                Booking.created_at <= end_date,
+            )
+            .scalar()
+        )
+        return int(result or 0)
+
+    def get_monthly_booking_counts(
+        self, start_date: Any, end_date: Any
+    ) -> dict[str, int]:
+        """Compte les bookings par mois calendaire (created_at) en une requête.
+
+        Utilise ``date_trunc`` (PostgreSQL). Les clés sont au format ``YYYY-MM``.
+
+        Args:
+            start_date: Borne inférieure inclusive sur ``created_at``
+            end_date: Borne supérieure inclusive sur ``created_at``
+
+        Returns:
+            Dictionnaire mois -> nombre de bookings
+        """
+        from sqlalchemy import func
+
+        from ext import db
+
+        month_expr = func.date_trunc("month", Booking.created_at)
+
+        rows = (
+            db.session.query(
+                month_expr.label("month"),
+                func.count(Booking.id).label("count"),
+            )
+            .filter(
+                Booking.created_at >= start_date,
+                Booking.created_at <= end_date,
+            )
+            .group_by(month_expr)
+            .order_by(month_expr)
+            .all()
+        )
+
+        out: dict[str, int] = {}
+        for row in rows:
+            if row.month is None:
+                continue
+            month_key = row.month.strftime("%Y-%m")
+            # row.count est la méthode Row.count(), pas la colonne agrégée label("count")
+            cnt = row._mapping["count"]
+            out[month_key] = int(cnt or 0)
+        return out
 
     def find_recent_with_client_and_user(self, limit: int = 5) -> list[Booking]:
         """Trouve les bookings récents avec eager loading de client et user.

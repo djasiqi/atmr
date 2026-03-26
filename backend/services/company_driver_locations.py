@@ -8,11 +8,15 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_
+from sqlalchemy.orm import selectinload
 
 from ext import redis_client
 from models import Booking, Driver
 from models.base import _as_bool
 from models.enums import BookingStatus
+from services.company_driver_location_freshness import (
+    last_seen_seconds_from_location_fields,
+)
 from services.geolocation.presence import (
     compute_location_status,
     presence_status_from_location_status,
@@ -38,7 +42,12 @@ def build_company_driver_locations_items(
     bbox_sw_lng: float | None = None,
 ) -> list[dict[str, Any]]:
     """Construit la liste `locations` (même sémantique que l'ancien handler Flask)."""
-    drivers = Driver.query.filter_by(company_id=cid).all()
+    # selectinload(user) : évite N+1 sur driver.user (first_name, email demo) dans la boucle ci-dessous
+    drivers = (
+        Driver.query.options(selectinload(Driver.user))
+        .filter_by(company_id=cid)
+        .all()
+    )
     if not drivers:
         return []
 
@@ -166,13 +175,8 @@ def build_company_driver_locations_items(
 
         last_seen_seconds = None
         is_stale = True
-        if ts:
-            try:
-                ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                delta = (now - ts_dt).total_seconds()
-                last_seen_seconds = int(delta)
-            except Exception:
-                pass
+        if loc_data:
+            last_seen_seconds = last_seen_seconds_from_location_fields(loc_data, now=now)
         elif used_db_fallback:
             driver_email = str(
                 getattr(getattr(driver, "user", None), "email", "") or ""

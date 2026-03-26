@@ -15,7 +15,7 @@ from flask_restx import (
 )
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
-from sqlalchemy.orm import aliased, joinedload
+from sqlalchemy.orm import aliased, joinedload, selectinload
 
 # ✅ DDD: Utilise use cases au lieu d'adapters
 from application.invoices import (
@@ -786,6 +786,9 @@ class InvoicesList(Resource):
                 Invoice.query.options(
                     joinedload(Invoice.client).joinedload(Client.user),
                     joinedload(Invoice.bill_to_client).joinedload(Client.user),
+                    joinedload(Invoice.billing_party),
+                    joinedload(Invoice.billed_to_company),
+                    selectinload(Invoice.reminders),
                     subqueryload(Invoice.lines),
                     subqueryload(Invoice.payments),
                 )
@@ -801,6 +804,7 @@ class InvoicesList(Resource):
             if kind == "regular":
                 inv = reg_by_id.get(eid)
                 if inv is not None:
+                    # reminders préchargés (selectinload) : pas de N+1, JSON inchangé pour le front
                     paginated_invoices.append(inv.to_dict())
             else:
                 row = partner_map.get(eid)

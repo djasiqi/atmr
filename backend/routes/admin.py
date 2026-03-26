@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 import sentry_sdk
+from dateutil.relativedelta import relativedelta
 from flask import request
 from flask_jwt_extended import (
     get_jwt_identity,
@@ -141,46 +142,25 @@ class AdminStats(Resource):
 
             total_revenue = db.session.execute(stmt).scalar_one()
 
-            # ✅ Calculer les tendances des réservations par mois (12 derniers mois)
-            from datetime import timedelta
+            # Tendances sur 12 mois (created_at) : une requête agrégée + remplissage des mois à 0
+            current_month_start = now.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            window_start = current_month_start - relativedelta(months=11)
+            counts_by_month = booking_repo.get_monthly_booking_counts(
+                window_start, now
+            )
 
             trends = []
-            current_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-            for i in range(11, -1, -1):  # De 11 mois en arrière jusqu'à maintenant
-                # Calculer le début du mois
-                target_year = current_date.year
-                target_month = current_date.month - i
-                # Gérer le débordement d'année
-                while target_month <= 0:
-                    target_month += 12
-                    target_year -= 1
-                month_start = datetime(target_year, target_month, 1, 0, 0, 0, 0, UTC)
-
-                # Calculer la fin du mois
-                if i == 0:
-                    # Pour le mois actuel, utiliser la date actuelle
-                    month_end = now
-                else:
-                    # Pour les mois précédents, calculer la fin du mois
-                    if target_month == MONTH_THRESHOLD:
-                        next_year = target_year + 1
-                        next_month = 1
-                    else:
-                        next_year = target_year
-                        next_month = target_month + 1
-                    next_month_start = datetime(
-                        next_year, next_month, 1, 0, 0, 0, 0, UTC
-                    )
-                    month_end = next_month_start - timedelta(microseconds=1)
-
-                # Compter les réservations pour ce mois
-                month_count = booking_repo.count_by_date_range(month_start, month_end)
-
-                # Format du mois pour l'affichage
+            for i in range(11, -1, -1):
+                month_start = current_month_start - relativedelta(months=i)
                 month_label = month_start.strftime("%Y-%m")
-
-                trends.append({"month": month_label, "bookings": month_count})
+                trends.append(
+                    {
+                        "month": month_label,
+                        "bookings": counts_by_month.get(month_label, 0),
+                    }
+                )
 
             stats_msg = (
                 f"📊 Stats: {total_bookings} bookings, {total_users} users, "

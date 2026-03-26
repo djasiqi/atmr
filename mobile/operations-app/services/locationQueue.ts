@@ -2,6 +2,7 @@
 // ✅ P2-1: Mode Offline Mobile - Persister queue GPS + resync au reconnect
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Crypto from "expo-crypto";
 import { getLogger } from "@/utils/logger";
 import { updateDriverLocation } from "./api";
 import { getSocket, getSocketRole } from "./socket";
@@ -86,6 +87,7 @@ function emitIndividualFallback(socket: any, payload: any): void {
       is_background: pos.is_background ?? false,
       mission_id: pos.mission_id ?? null,
       driver_id: driverId,
+      location_event_id: pos.location_event_id,
     });
   }
   log.info("individual fallback sent", { count: positions.length });
@@ -135,6 +137,7 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
         sent_at: pos.sent_at || new Date().toISOString(),
         is_background: pos.is_background ?? false,
         mission_id: pos.mission_id ?? null,
+        location_event_id: pos.location_event_id,
       };
     });
 
@@ -223,6 +226,8 @@ export interface QueuedLocation {
   sent_at?: string;
   is_background?: boolean;
   mission_id?: number | null;
+  /** Identité stable du point (corrélation backend / retries) */
+  location_event_id?: string;
 }
 
 function normalizeMode(
@@ -232,6 +237,20 @@ function normalizeMode(
     return mode;
   }
   return "availability_presence";
+}
+
+const _UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function ensureLocationEventId(loc: QueuedLocation): string {
+  const id = loc.location_event_id?.trim();
+  if (id && _UUID_RE.test(id)) {
+    return id;
+  }
+  if (typeof Crypto.randomUUID === "function") {
+    return Crypto.randomUUID();
+  }
+  return `loc-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 function applyQueueRetention(queue: QueuedLocation[]): QueuedLocation[] {
@@ -286,6 +305,7 @@ export async function enqueueLocation(
       recorded_at:
         location.recorded_at || new Date(location.timestamp || Date.now()).toISOString(),
       sent_at: location.sent_at || new Date().toISOString(),
+      location_event_id: ensureLocationEventId(location),
     };
     validQueue.push(normalized);
 
@@ -324,6 +344,7 @@ export async function enqueueLocationBatch(
       location_mode: normalizeMode(loc.location_mode),
       recorded_at: loc.recorded_at || new Date(loc.timestamp || Date.now()).toISOString(),
       sent_at: loc.sent_at || new Date().toISOString(),
+      location_event_id: ensureLocationEventId(loc),
     }));
     const retained = applyQueueRetention(merged);
 
@@ -511,6 +532,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
           is_background: true,
           location_mode: "availability_presence",
           mission_id: null,
+          location_event_id: loc.location_event_id,
         });
         if (presResult?.ok === false) {
           log.warn("presence location rejected", { message: presResult.message, driver_id: loc.driver_id });
@@ -557,6 +579,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
               sent_at: loc.sent_at || new Date().toISOString(),
               is_background: loc.is_background ?? false,
               mission_id: loc.mission_id ?? null,
+              location_event_id: loc.location_event_id,
             };
           }),
           driver_id: driverId,

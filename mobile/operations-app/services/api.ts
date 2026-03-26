@@ -1451,6 +1451,8 @@ export interface DriverLocationPayload {
   sent_at?: string;
   is_background?: boolean;
   mission_id?: number | null;
+  /** Identité logique du point (queue) — retry HTTP réutilise le même id */
+  location_event_id?: string;
   device_status?: {
     battery_level?: number;
     low_power_mode?: boolean;
@@ -1499,6 +1501,16 @@ export const updateDriverLocation = async (
   if (payload.device_status) {
     body.device_status = payload.device_status;
   }
+  if (payload.location_event_id) {
+    body.location_event_id = payload.location_event_id;
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (payload.location_event_id) {
+    headers["X-Location-Event-Id"] = payload.location_event_id;
+  }
 
   try {
     // ✅ FIX invalid_json: sérialiser explicitement pour éviter body vide/malformé
@@ -1507,9 +1519,7 @@ export const updateDriverLocation = async (
       "/driver/me/location",
       JSON.stringify(body),
       {
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
       }
     );
     return response.data ?? {};

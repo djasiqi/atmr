@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 
 import { getLogger } from "@/utils/logger";
+import {
+  shouldIgnoreObservabilityRegression,
+} from "@/utils/driverLiveMerge";
 import { connectSocket } from "@/services/socket";
 import { useAuth } from "@/hooks/useAuth";
 import { enterpriseStandardApi } from "@/services/enterpriseStandardApi";
@@ -30,6 +33,9 @@ type DriverMarker = {
   longitude: number;
   status?: string;
   updatedAt?: string;
+  /** Pour comparaison canonicalTimeMs (fanout) */
+  receivedAt?: string;
+  recordedAt?: string;
 };
 
 type DriverLocationEvent = {
@@ -44,6 +50,9 @@ type DriverLocationEvent = {
   lng?: number | string | null;
   timestamp?: string | null;
   ts?: string | null;
+  recorded_at?: string | null;
+  received_at?: string | null;
+  accept_status?: string | null;
 };
 
 /** Payload canonique : driver_live_state_update (source principale) */
@@ -227,6 +236,9 @@ export const useEnterpriseDriverTracking = () => {
       const status = payload.status ?? undefined;
       lastLiveStateRef.current[driverId] = { status };
 
+      const recAt = payload.recorded_at ?? undefined;
+      const rcvAt = payload.received_at ?? undefined;
+      const updAt = payload.timestamp ?? payload.ts ?? undefined;
       setMarkers((prev) => {
         const others = prev.filter((marker) => marker.id !== driverId);
         return [
@@ -237,7 +249,9 @@ export const useEnterpriseDriverTracking = () => {
             latitude,
             longitude,
             status,
-            updatedAt: payload.timestamp ?? payload.ts ?? undefined,
+            updatedAt: updAt,
+            recordedAt: recAt,
+            receivedAt: rcvAt,
           },
         ];
       });
@@ -263,6 +277,22 @@ export const useEnterpriseDriverTracking = () => {
 
       setMarkers((prev) => {
         const existing = prev.find((m) => m.id === driverId);
+        const existingForCompare: Record<string, unknown> | null = existing
+          ? {
+              received_at: existing.receivedAt,
+              recorded_at: existing.recordedAt,
+              timestamp: existing.updatedAt,
+              ts: existing.updatedAt,
+            }
+          : null;
+        if (
+          shouldIgnoreObservabilityRegression(
+            payload as Record<string, unknown>,
+            existingForCompare
+          )
+        ) {
+          return prev;
+        }
         const status = existing?.status ?? lastLiveStateRef.current[driverId]?.status;
         const others = prev.filter((marker) => marker.id !== driverId);
         return [
@@ -274,6 +304,8 @@ export const useEnterpriseDriverTracking = () => {
             longitude,
             status,
             updatedAt: payload.timestamp ?? payload.ts ?? undefined,
+            recordedAt: payload.recorded_at ?? existing?.recordedAt,
+            receivedAt: payload.received_at ?? existing?.receivedAt,
           },
         ];
       });

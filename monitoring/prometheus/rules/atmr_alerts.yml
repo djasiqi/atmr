@@ -334,7 +334,7 @@ groups:
           component: invoice_pdf
         annotations:
           summary: "Taux de warnings PDF > 0.2/min"
-          description: "{{ $value }} warnings/seconde (≈ {{ $value | multiply 60 }} warnings/min) pour pdf_kind={{ $labels.pdf_kind }}, billing_type={{ $labels.billing_type }}"
+          description: "{{ $value }} warnings/s pour pdf_kind={{ $labels.pdf_kind }}, billing_type={{ $labels.billing_type }} (seuil rate 10m > ~0,0033/s ≈ 0,2/min)"
           action: |
             1. Vérifier les logs PDF pour identifier les factures problématiques
             2. Analyser les raisons (rows/time) via la métrique invoice_pdf_warning_total{reason=...}

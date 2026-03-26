@@ -7,6 +7,30 @@ import pytest
 from services.realtime.socketio import fanout_driver_location_update
 
 
+@patch("services.realtime.socketio.inc_fanout")
+def test_fanout_increments_metrics(mock_fanout) -> None:
+    with patch("services.realtime.socketio._safe_emit"):
+        fanout_driver_location_update(
+            1,
+            {"driver_id": 10, "company_id": 1},
+            {"driver_id": 10, "company_id": 1},
+            accept_status="accepted_observability_only",
+        )
+    assert mock_fanout.call_count == 1
+
+
+@patch("services.realtime.socketio.inc_fanout")
+def test_fanout_metrics_two_emits_for_canonical(mock_fanout) -> None:
+    with patch("services.realtime.socketio._safe_emit"):
+        fanout_driver_location_update(
+            1,
+            {"driver_id": 10, "company_id": 1},
+            {"driver_id": 10, "company_id": 1},
+            accept_status="accepted_canonical",
+        )
+    assert mock_fanout.call_count == 2
+
+
 def test_fanout_requires_explicit_accept_status_keyword() -> None:
     with pytest.raises(TypeError):
         fanout_driver_location_update(  # type: ignore[call-arg]

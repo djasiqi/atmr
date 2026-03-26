@@ -10,6 +10,10 @@ MISSION_LIVE_THRESHOLDS = (20, 90, 300)  # live, recent, stale upper bounds
 AVAILABILITY_THRESHOLDS = (90, 300, 900)
 
 
+# Fraîcheur REST (last_seen) : ``resolve_location_freshness_timestamp`` dans
+# ``services.company_driver_location_freshness`` (priorité recorded_at > received_at > ts).
+
+
 def normalize_location_mode(mode: str | None) -> LocationMode:
     if mode in {"mission_live", "availability_presence", "passive_last_known"}:
         return mode

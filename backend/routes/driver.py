@@ -25,13 +25,15 @@ from ext import db, role_required, socketio
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
+from services.company_driver_location_freshness import (
+    last_seen_seconds_from_location_fields,
+)
 from services.geolocation.driver_location_http import (
     check_http_driver_location_rate_limit,
     get_idempotent_response,
     store_idempotent_response,
 )
 from services.geolocation.presence import (
-    compute_last_seen_seconds,
     compute_location_status,
     presence_status_from_location_status,
 )
@@ -1321,6 +1323,13 @@ class DriverLocation(Resource):
                             location_mode = p.get("location_mode") or "mission_live"
                             is_background = bool(p.get("is_background", False))
                             mission_id = p.get("mission_id")
+                            loc_event_id_raw = request.headers.get(
+                                "X-Location-Event-Id"
+                            ) or request.headers.get("x-location-event-id")
+                            if isinstance(p, dict):
+                                loc_event_id_raw = loc_event_id_raw or p.get(
+                                    "location_event_id"
+                                )
 
                             from application.drivers.update_driver_location import (
                                 UpdateDriverLocationCommand,
@@ -1329,6 +1338,24 @@ class DriverLocation(Resource):
                             from drivers.infrastructure.adapters.location_adapter import (
                                 create_location_update_fn,
                             )
+                            from services.geolocation.location import (
+                                get_location_service,
+                            )
+                            from services.monitoring.driver_location_metrics import (
+                                inc_received,
+                            )
+                            from services.monitoring.location_correlation_log import (
+                                log_driver_location_processed,
+                            )
+
+                            loc_svc = get_location_service()
+                            driver_company_id: int | None = cast(
+                                int | None, driver.company_id
+                            )
+                            norm_mode_http = loc_svc.resolve_normalized_location_mode(
+                                driver_company_id, str(location_mode or "mission_live")
+                            )
+                            inc_received(transport="http", location_mode=norm_mode_http)
 
                             source = "raw"
                             accept_status = "accepted_observability_only"
@@ -1353,6 +1380,7 @@ class DriverLocation(Resource):
                                         location_mode=location_mode,
                                         is_background=is_background,
                                         mission_id=mission_id,
+                                        metrics_transport="http",
                                     )
                                 )
 
@@ -1363,6 +1391,20 @@ class DriverLocation(Resource):
                                 received_at = uc_result.received_at or received_at
                                 accept_status = uc_result.accept_status
                                 accept_reason = uc_result.accept_reason
+
+                                log_driver_location_processed(
+                                    driver_id=driver.id,
+                                    company_id=driver_company_id,
+                                    transport="http",
+                                    location_mode=norm_mode_http,
+                                    accept_status=accept_status,
+                                    accept_reason=accept_reason,
+                                    location_event_id=(
+                                        str(loc_event_id_raw)
+                                        if loc_event_id_raw
+                                        else None
+                                    ),
+                                )
 
                                 # Émettre events geofencing si détectés
                                 for event in uc_result.geofence_events:
@@ -1401,7 +1443,13 @@ class DriverLocation(Resource):
                                         last_name = getattr(driver.user, "last_name", None)
 
                                     # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
-                                    last_seen_seconds = compute_last_seen_seconds(recorded_at)
+                                    last_seen_seconds = last_seen_seconds_from_location_fields(
+                                        {
+                                            "recorded_at": recorded_at,
+                                            "received_at": received_at,
+                                            "ts": p.get("ts") if isinstance(p, dict) else None,
+                                        }
+                                    )
                                     location_status = compute_location_status(
                                         mode=location_mode, last_seen_seconds=last_seen_seconds
                                     )

@@ -20,7 +20,7 @@ Exemple :
 .. code-block:: bash
 
    set RL_STAGING_BASE_URL=https://api.staging.example.com
-   set RL_STAGING_JWT=eyJ...
+   set RL_STAGING_JWT=<coller le jeton Bearer depuis la session company>
    python scripts/smoke_rl_staging.py --for-date 2025-03-26
 
 Les logs ``RL_POSTOPT_SKIPPED`` et le panneau semi-auto restent manuels (voir message en fin d'exécution).

@@ -5,7 +5,7 @@ import hashlib
 import logging
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 from ext import db
 from models import Assignment, Booking, BookingStatus, DispatchRun, Driver
@@ -368,11 +368,24 @@ class DispatchMetricsCollector:
         pooled = 0
         driver_times: Dict[int, List[datetime]] = {}
 
+        booking_ids = list(
+            {
+                int(a.booking_id)  # type: ignore[reportArgumentType]
+                for a in assignments
+                if getattr(a, "booking_id", None) is not None
+            }
+        )
+        bookings_map: Dict[int, Booking] = {}
+        if booking_ids:
+            for b in Booking.query.filter(Booking.id.in_(booking_ids)).all():
+                bookings_map[b.id] = b
+
         for assignment in assignments:
             # Récupérer l'ID du chauffeur
             driver_id = int(assignment.driver_id)  # type: ignore[reportArgumentType]
 
-            booking = db.session.get(Booking, assignment.booking_id)
+            bid = getattr(assignment, "booking_id", None)
+            booking = bookings_map.get(int(bid)) if bid is not None else None
             if not booking:
                 continue
 
@@ -547,6 +560,18 @@ class DispatchMetricsCollector:
         # ✅ PERF: Utiliser all_bookings déjà fourni au lieu de db.session.get()
         bookings_map = {b.id: b for b in all_bookings}
 
+        driver_ids = list(
+            {
+                int(a.driver_id)  # type: ignore[reportArgumentType]
+                for a in assignments
+                if getattr(a, "driver_id", None) is not None
+            }
+        )
+        drivers_map: Dict[int, Driver] = {}
+        if driver_ids:
+            for d in Driver.query.filter(Driver.id.in_(driver_ids)).all():
+                drivers_map[d.id] = d
+
         for assignment in assignments:
             booking = bookings_map.get(int(assignment.booking_id))  # type: ignore[reportArgumentType]
             if booking:
@@ -555,10 +580,18 @@ class DispatchMetricsCollector:
                 total_distance += distance_m / 1000
 
                 # Chauffeurs d'urgence
-                driver_id = assignment.driver_id
-                driver = db.session.get(Driver, driver_id)
-                if driver and getattr(driver, "is_emergency", False):
-                    emergency_drivers.add(driver_id)
+                raw_driver_id = cast(int | None, assignment.driver_id)
+                driver = (
+                    drivers_map.get(int(raw_driver_id))
+                    if raw_driver_id is not None
+                    else None
+                )
+                if (
+                    driver
+                    and getattr(driver, "is_emergency", False)
+                    and raw_driver_id is not None
+                ):
+                    emergency_drivers.add(raw_driver_id)
                     emergency_bookings_count += 1
 
         avg_distance = total_distance / max(1, len(assignments))

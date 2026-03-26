@@ -14,7 +14,7 @@ import time
 import traceback
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, cast
 from typing import cast as tcast
 
 import jwt.exceptions as jwt_exceptions
@@ -26,6 +26,9 @@ from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefuse
 from ext import db, redis_client
 from models import Company, Driver, Message, SenderRole, User, UserRole
 from schemas.socket_events import EVENT_VERSION, SocketEvent
+from services.company_driver_location_freshness import (
+    last_seen_seconds_from_location_fields,
+)
 from services.geolocation.presence import (
     compute_last_seen_seconds,
     compute_location_status,
@@ -33,6 +36,8 @@ from services.geolocation.presence import (
     presence_status_from_location_status,
 )
 from services.geolocation.location import get_location_service
+from services.monitoring.driver_location_metrics import inc_received
+from services.monitoring.location_correlation_log import log_driver_location_processed
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
 from services.realtime.live_driver_status import (
@@ -185,25 +190,23 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
 def _compute_presence_from_signals(
     *,
     location_mode: str | None,
-    loc_ts: str | None,
+    loc_data: Mapping[str, Any],
     last_seen_ts: str | None,
-) -> tuple[str, str, str]:
-    """Retourne (presence_status, location_status, offline_reason)."""
+) -> tuple[str, str, str, int | None]:
+    """Retourne (presence_status, location_status, offline_reason, last_seen_seconds)."""
     normalized_mode = normalize_location_mode(location_mode)
-    loc_age_sec = compute_last_seen_seconds(loc_ts)
-    heartbeat_age_sec = compute_last_seen_seconds(last_seen_ts)
-    age = loc_age_sec
+    age = last_seen_seconds_from_location_fields(loc_data)
     if age is None:
-        age = heartbeat_age_sec
+        age = compute_last_seen_seconds(last_seen_ts)
     location_status = compute_location_status(
         mode=normalized_mode, last_seen_seconds=age
     )
     presence_status = presence_status_from_location_status(location_status)
     if presence_status == "offline":
-        return (presence_status, location_status, "no_signal")
+        return (presence_status, location_status, "no_signal", age)
     if presence_status == "degraded":
-        return (presence_status, location_status, "location_stale")
-    return (presence_status, location_status, "")
+        return (presence_status, location_status, "location_stale", age)
+    return (presence_status, location_status, "", age)
 
 
 def _get_sid(fallback_request=None) -> str:
@@ -1840,6 +1843,15 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 return
 
+            from services.monitoring.driver_location_metrics import inc_received
+
+            raw_mode_sock = str(data.get("location_mode") or "mission_live")
+            loc_svc_sock = get_location_service()
+            norm_mode_sock = loc_svc_sock.resolve_normalized_location_mode(
+                company_id_val, raw_mode_sock
+            )
+            inc_received(transport="socket", location_mode=norm_mode_sock)
+
             snapped_lat, snapped_lon = latitude, longitude
             accept_status = "accepted_observability_only"
             received_at = datetime.now(UTC).isoformat()
@@ -1859,6 +1871,7 @@ def init_chat_socket(socketio: SocketIO):
                     sent_at=sent_at_dt,
                     is_background=is_background,
                     mission_id=mission_id if isinstance(mission_id, int) else None,
+                    transport="socket",
                 )
 
                 # Utiliser position snapée
@@ -1866,6 +1879,17 @@ def init_chat_socket(socketio: SocketIO):
                 snapped_lon = result.snapped_lon
                 accept_status = result.accept_status
                 received_at = result.received_at or received_at
+
+                leid = data.get("location_event_id")
+                log_driver_location_processed(
+                    driver_id=driver.id,
+                    company_id=company_id_val,
+                    transport="socket",
+                    location_mode=norm_mode_sock,
+                    accept_status=accept_status,
+                    accept_reason=result.accept_reason,
+                    location_event_id=str(leid) if leid else None,
+                )
 
                 # Émettre events geofencing si détectés
                 for event in result.geofence_events:
@@ -1893,8 +1917,12 @@ def init_chat_socket(socketio: SocketIO):
 
             # 7. P2: Fanout realtime unifié
             now_iso = datetime.now(UTC).isoformat()
-            last_seen_seconds = compute_last_seen_seconds(
-                recorded_at_dt.isoformat() if recorded_at_dt else now_iso
+            last_seen_seconds = last_seen_seconds_from_location_fields(
+                {
+                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else None,
+                    "received_at": received_at,
+                    "ts": timestamp.isoformat() if timestamp else None,
+                }
             )
             location_status = compute_location_status(
                 mode=location_mode, last_seen_seconds=last_seen_seconds
@@ -2217,6 +2245,13 @@ def init_chat_socket(socketio: SocketIO):
                         )
                         continue
 
+                    raw_mode_batch = str(pos.get("location_mode") or "mission_live")
+                    loc_svc_batch = get_location_service()
+                    norm_mode_batch = loc_svc_batch.resolve_normalized_location_mode(
+                        company_id_val, raw_mode_batch
+                    )
+                    inc_received(transport="socket_batch", location_mode=norm_mode_batch)
+
                     snapped_lat, snapped_lon = latitude, longitude
                     accept_status = "accepted_observability_only"
                     received_at = datetime.now(UTC).isoformat()
@@ -2236,6 +2271,7 @@ def init_chat_socket(socketio: SocketIO):
                             sent_at=sent_at_dt,
                             is_background=is_background,
                             mission_id=mission_id if isinstance(mission_id, int) else None,
+                            transport="socket_batch",
                         )
 
                         # Utiliser position snapée
@@ -2243,6 +2279,17 @@ def init_chat_socket(socketio: SocketIO):
                         snapped_lon = result.snapped_lon
                         accept_status = result.accept_status
                         received_at = result.received_at or received_at
+
+                        leid_b = pos.get("location_event_id")
+                        log_driver_location_processed(
+                            driver_id=driver.id,
+                            company_id=company_id_val,
+                            transport="socket_batch",
+                            location_mode=norm_mode_batch,
+                            accept_status=accept_status,
+                            accept_reason=result.accept_reason,
+                            location_event_id=str(leid_b) if leid_b else None,
+                        )
 
                         # Émettre events geofencing si détectés (seulement pour dernière position)
                         if pos == positions[-1]:
@@ -2266,8 +2313,14 @@ def init_chat_socket(socketio: SocketIO):
 
                     # P2: Fanout realtime unifié
                     mission_status = _resolve_mission_status_for_driver(driver.id)
-                    last_seen_seconds = compute_last_seen_seconds(
-                        recorded_at_dt.isoformat() if recorded_at_dt else now_iso
+                    last_seen_seconds = last_seen_seconds_from_location_fields(
+                        {
+                            "recorded_at": recorded_at_dt.isoformat()
+                            if recorded_at_dt
+                            else None,
+                            "received_at": received_at,
+                            "ts": timestamp.isoformat() if timestamp else None,
+                        }
                     )
                     location_status = compute_location_status(
                         mode=location_mode, last_seen_seconds=last_seen_seconds
@@ -2653,14 +2706,17 @@ def init_chat_socket(socketio: SocketIO):
                         elif isinstance(last_seen_raw, str):
                             last_seen_str = last_seen_raw
                         mission_status = _resolve_mission_status_for_driver(driver.id)
-                        presence_status, location_status, offline_reason = (
-                            _compute_presence_from_signals(
-                                location_mode=tcast(
-                                    "str | None", loc_data.get("location_mode")
-                                ),
-                                loc_ts=tcast("str | None", loc_data.get("ts")),
-                                last_seen_ts=last_seen_str,
-                            )
+                        (
+                            presence_status,
+                            location_status,
+                            offline_reason,
+                            last_seen_seconds_redis,
+                        ) = _compute_presence_from_signals(
+                            location_mode=tcast(
+                                "str | None", loc_data.get("location_mode")
+                            ),
+                            loc_data=loc_data,
+                            last_seen_ts=last_seen_str,
                         )
                         status = _resolve_driver_status(
                             mission_status=mission_status,
@@ -2687,6 +2743,7 @@ def init_chat_socket(socketio: SocketIO):
                                 "longitude": loc_data.get("lon"),
                                 "timestamp": ts_val,
                                 "received_at": loc_data.get("received_at"),
+                                "last_seen_seconds": last_seen_seconds_redis,
                             },
                             {
                                 "driver_id": driver.id,
@@ -2701,6 +2758,7 @@ def init_chat_socket(socketio: SocketIO):
                                 "is_available": status == "available",
                                 "offline_reason": offline_reason,
                                 "received_at": loc_data.get("received_at"),
+                                "last_seen_seconds": last_seen_seconds_redis,
                             },
                             accept_status=fanout_accept_status,
                         )

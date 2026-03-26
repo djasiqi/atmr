@@ -1,10 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   enqueueLocation,
+  enqueueLocationBatch,
   getLocationQueue,
   clearLocationQueue,
   type QueuedLocation,
 } from "../locationQueue";
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(() => "aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee"),
+}));
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
   getItem: jest.fn(),
@@ -44,6 +49,27 @@ function mkLoc(
 }
 
 describe("locationQueue v2.1 retention", () => {
+  it("enqueueLocationBatch assigns location_event_id like enqueueLocation", async () => {
+    await clearLocationQueue();
+    const ts = Date.now();
+    await enqueueLocationBatch([
+      {
+        latitude: 46.2,
+        longitude: 6.1,
+        speed: 1,
+        heading: 0,
+        accuracy: 10,
+        timestamp: ts,
+        driver_id: 99,
+        location_mode: "mission_live",
+      },
+    ]);
+    const queue = await getLocationQueue();
+    expect(queue.length).toBeGreaterThan(0);
+    const last = queue[queue.length - 1];
+    expect(last.location_event_id).toBe("aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee");
+  });
+
   it("keeps only latest availability_presence per driver", async () => {
     await clearLocationQueue();
     const first = mkLoc(1, "availability_presence");

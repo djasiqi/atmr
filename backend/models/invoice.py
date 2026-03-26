@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -278,12 +279,13 @@ class Invoice(db.Model):
         self.cancelled_at = datetime.now(UTC)
         self.updated_at = datetime.now(UTC)
 
-    def _serialize_client(self) -> dict | None:
+    def _serialize_client(self) -> dict[str, Any] | None:
         """Sérialise le client, avec override patient pour institution + S1_PATIENT."""
         client = self.client
         if not client and self.client_id:
-            from models.client import Client as ClientModel
             from sqlalchemy.orm import joinedload as _jl
+
+            from models.client import Client as ClientModel
 
             client = (
                 ClientModel.query
@@ -341,8 +343,24 @@ class Invoice(db.Model):
             "patient_display_name": patient_display_name,
         }
 
-    def to_dict(self):
-        """Sérialise la facture en dictionnaire."""
+    def to_dict(self, *, include_reminder_rows: bool = True):
+        """Sérialise la facture en dictionnaire.
+
+        Args:
+            include_reminder_rows: Si False, ne charge pas la relation ``reminders``
+                (évite N+1 sur les listes ; ``reminder_level`` / ``last_reminder_at``
+                restent sur la facture).
+        """
+        reminder_payload: list[dict[str, Any]]
+        if include_reminder_rows:
+            reminder_payload = (
+                [reminder.to_dict() for reminder in self.reminders]
+                if hasattr(self, "reminders")
+                else []
+            )
+        else:
+            reminder_payload = []
+
         return {
             "id": self.id,
             "company_id": self.company_id,
@@ -427,9 +445,7 @@ class Invoice(db.Model):
             "payments": [payment.to_dict() for payment in self.payments]
             if hasattr(self, "payments")
             else [],
-            "reminders": [reminder.to_dict() for reminder in self.reminders]
-            if hasattr(self, "reminders")
-            else [],
+            "reminders": reminder_payload,
         }
 
 

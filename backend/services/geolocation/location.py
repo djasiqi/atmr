@@ -35,6 +35,7 @@ from repositories.assignment_repository import AssignmentRepository
 from repositories.driver_repository import DriverRepository
 from services.geolocation.geofencing import get_geofencing_service
 from services.geolocation.presence import normalize_location_mode
+from services.monitoring.driver_location_metrics import inc_processed
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,13 @@ class LocationService:
         self.match_window = match_window
         self.geofence_radius_m = geofence_radius_m
 
+    def resolve_normalized_location_mode(
+        self, company_id: int | None, location_mode: str
+    ) -> str:
+        """Mode normalisé identique à ``update_driver_location`` (métriques PR1 / logs)."""
+        v21_enabled = self._is_v21_enabled_for_company(company_id)
+        return normalize_location_mode(location_mode) if v21_enabled else "mission_live"
+
     def update_driver_location(
         self,
         driver_id: int,
@@ -136,6 +144,7 @@ class LocationService:
         is_background: bool = False,
         mission_id: int | None = None,
         db_session: Session | None = None,
+        transport: str = "http",
     ) -> LocationUpdateResult:
         """Met à jour la position d'un chauffeur (snap OSRM + map-matching + stockage).
 
@@ -305,6 +314,13 @@ class LocationService:
             # Erreur inattendue lors de la publication d'événement
             # Ne pas faire échouer l'endpoint de localisation pour un event
             logger.debug("[LocationService] Event publish failed (ignored)")
+
+        inc_processed(
+            accept_status=accept_status,
+            accept_reason=accept_reason,
+            location_mode=normalized_mode,
+            transport=transport,
+        )
 
         return LocationUpdateResult(
             success=True,

@@ -22,6 +22,7 @@ class UpdateDriverLocationCommand:
     sent_at: str | None = None
     is_background: bool = False
     mission_id: int | None = None
+    metrics_transport: str = "http"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +76,7 @@ class UpdateDriverLocationUseCase:
             sent_at=self._parse_ts(cmd.sent_at) if cmd.sent_at else self._now_utc(),
             is_background=bool(cmd.is_background),
             mission_id=cmd.mission_id,
+            transport=cmd.metrics_transport,
         )
 
         snapped_lat = getattr(res, "snapped_lat", cmd.latitude)

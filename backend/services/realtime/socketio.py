@@ -13,6 +13,7 @@ from sqlalchemy.orm import joinedload
 
 from ext import app_logger, socketio
 from schemas.socket_events import EVENT_VERSION, SocketEvent
+from services.monitoring.driver_location_metrics import inc_fanout
 
 if TYPE_CHECKING:
     from models import Booking
@@ -394,9 +395,11 @@ def fanout_driver_location_update(
     room = get_company_room(company_id)
     loc_out = {**location_payload, "accept_status": accept_status}
     _safe_emit("driver_location_update", loc_out, room=room, namespace=namespace)
+    inc_fanout(event="driver_location_update", accept_status=accept_status)
     if accept_status == "accepted_canonical":
         live_out = {**live_state_payload, "accept_status": accept_status}
         _safe_emit("driver_live_state_update", live_out, room=room, namespace=namespace)
+        inc_fanout(event="driver_live_state_update", accept_status=accept_status)
 
 
 def emit_date_event(
