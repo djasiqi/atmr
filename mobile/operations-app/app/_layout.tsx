@@ -732,6 +732,13 @@ function RootNav() {
     if (!syncEngineStartedRef.current) {
       (async () => {
         try {
+          await MissionStateManager.syncActiveMissionFromServerIfMissing();
+        } catch (e: unknown) {
+          log.warn("syncActiveMissionFromServerIfMissing failed", {
+            message: e instanceof Error ? e.message : String(e),
+          });
+        }
+        try {
           await initLocationModeRuntime();
         } catch (e: unknown) {
           log.warn("initLocationModeRuntime failed", {
@@ -824,6 +831,13 @@ function RootNav() {
       if (state === "active") {
         InteractionManager.runAfterInteractions(() => {
           setTimeout(async () => {
+            try {
+              await MissionStateManager.syncActiveMissionFromServerIfMissing();
+            } catch (e: unknown) {
+              log.warn("syncActiveMissionFromServerIfMissing (app_resume) failed", {
+                message: e instanceof Error ? e.message : String(e),
+              });
+            }
             const inputs = await buildBgTrackingInputs({
               isAuthenticated: !!isDriverAuthenticated,
               role: "driver",
@@ -894,6 +908,13 @@ function RootNav() {
     if (Platform.OS === "web") return;
     if (!isDriverAuthenticated || !driver || mode !== "driver") return;
     (async () => {
+      try {
+        await MissionStateManager.syncActiveMissionFromServerIfMissing();
+      } catch (e: unknown) {
+        log.warn("syncActiveMissionFromServerIfMissing (session_change) failed", {
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
       const inputs = await buildBgTrackingInputs({
         isAuthenticated: true,
         role: "driver",

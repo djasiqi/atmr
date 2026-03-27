@@ -1012,6 +1012,11 @@ export function getAdaptiveLocationTracker(): AdaptiveLocationTracker {
  * Démarrer le tracking adaptatif (helper).
  */
 export async function startAdaptiveLocationTracking(): Promise<void> {
+  try {
+    await MissionStateManager.syncActiveMissionFromServerIfMissing();
+  } catch {
+    // best-effort : le tracking reste utilisable en availability_presence
+  }
   const tracker = getAdaptiveLocationTracker();
   await tracker.startTracking();
 }

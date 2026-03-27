@@ -103,6 +103,10 @@ class MissionStateManagerImpl {
   private lastNavigatedTarget: string | null = null;
   private static RECONCILIATION_COOLDOWN_MS = 20_000;
   private static MAPS_DEBOUNCE_MS = 3_000;
+  /** Après une tentative réseau réussie (mission trouvée ou liste vide), évite de rappeler l’API trop souvent. */
+  private static NETWORK_ACTIVE_MISSION_MIN_INTERVAL_MS = 90_000;
+  private lastSuccessfulNetworkActiveMissionSyncAt = 0;
+  private networkActiveMissionSyncInFlight: Promise<boolean> | null = null;
 
   // -- State helpers -------------------------------------------------------
 
@@ -266,6 +270,60 @@ class MissionStateManagerImpl {
       }
     }
     return false;
+  }
+
+  /**
+   * Aligne `activeMission` sur le serveur lorsque le manager n’a pas encore de mission locale.
+   * Ordre : hydratation disque (`ensureHydrated` sans réseau), puis `getAssignedTrips()` si toujours vide.
+   * Throttle ~90s après une réponse serveur (mission ou liste vide) ; échec réseau → pas de throttle (retry au prochain déclencheur).
+   */
+  async syncActiveMissionFromServerIfMissing(): Promise<boolean> {
+    await this.ensureHydrated({ skipNetwork: true });
+    if (this.state.activeMission) {
+      return true;
+    }
+
+    const now = Date.now();
+    if (
+      now - this.lastSuccessfulNetworkActiveMissionSyncAt <
+      MissionStateManagerImpl.NETWORK_ACTIVE_MISSION_MIN_INTERVAL_MS
+    ) {
+      return false;
+    }
+
+    if (this.networkActiveMissionSyncInFlight) {
+      return this.networkActiveMissionSyncInFlight;
+    }
+
+    this.networkActiveMissionSyncInFlight = (async () => {
+      try {
+        const bookings = await getAssignedTrips();
+        const active = bookings.find((m) => {
+          const s = normalizeBookingStatus(m.status);
+          return s === "ASSIGNED" || s === "EN_ROUTE" || s === "IN_PROGRESS";
+        });
+        if (active) {
+          this.applyHydration({
+            activeMission: active,
+            currentStatus: normalizeBookingStatus(active.status) as MissionBarStatus,
+          });
+          await this.persist();
+          this.lastSuccessfulNetworkActiveMissionSyncAt = Date.now();
+          log.info("active mission synced from server", { bookingId: active.id });
+          this.emit("reconciliation");
+          return true;
+        }
+        this.lastSuccessfulNetworkActiveMissionSyncAt = Date.now();
+        return false;
+      } catch (e) {
+        log.warn("syncActiveMissionFromServerIfMissing failed", { error: e });
+        return false;
+      } finally {
+        this.networkActiveMissionSyncInFlight = null;
+      }
+    })();
+
+    return this.networkActiveMissionSyncInFlight;
   }
 
   private applyHydration(saved: Partial<{
@@ -447,6 +505,7 @@ class MissionStateManagerImpl {
     this.stopReconciliationTimer();
     this.lastNavigatedTarget = null;
     this.lastMapsOpenAt = 0;
+    this.lastSuccessfulNetworkActiveMissionSyncAt = 0;
     this.state = this.emptyState();
     this.hydrated = false;
     await this.clearPersistence();
