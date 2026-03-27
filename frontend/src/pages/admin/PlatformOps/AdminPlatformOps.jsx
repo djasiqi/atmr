@@ -18,9 +18,19 @@ function formatTime(iso) {
   }
 }
 
-function EnvCard({ title, env }) {
+function EnvCard({ title, env, demoOptional }) {
   if (!env) return null;
   const { monitored, status, latency_ms: latencyMs, checks = {}, errors = [] } = env;
+  const isOptionalDemo = Boolean(demoOptional && !monitored);
+  const badgeTitle = monitored
+    ? 'Statut agrégé'
+    : isOptionalDemo
+      ? 'Aucune URL démo publique (PLATFORM_API_URL_DEMO) — optionnel si vous n’exposez pas d’API démo'
+      : 'Environnement non suivi';
+  const showFriendlyDemoCallout =
+    isOptionalDemo &&
+    errors.some((e) => e.type === 'not_monitored' || /PLATFORM_API_URL_DEMO/i.test(String(e.message || '')));
+
   return (
     <div className={styles.card}>
       <h2 className={styles.cardTitle}>
@@ -30,12 +40,16 @@ function EnvCard({ title, env }) {
       <div className={styles.cardMeta}>
         <StatusBadge
           status={status}
-          title={monitored ? 'Statut agrégé' : 'Environnement non suivi'}
+          title={badgeTitle}
+          labelOverride={isOptionalDemo ? 'Non configuré' : undefined}
         />
         {monitored && latencyMs != null && (
           <span>· dernière mesure ~ {Math.round(latencyMs)} ms</span>
         )}
-        {!monitored && <span>· collecte désactivée (config)</span>}
+        {!monitored && !isOptionalDemo && <span>· collecte désactivée (config)</span>}
+        {isOptionalDemo && (
+          <span>· optionnel — pas d’URL démo publique configurée sur l’API</span>
+        )}
       </div>
       {monitored && (
         <ul className={styles.checks}>
@@ -46,7 +60,7 @@ function EnvCard({ title, env }) {
           ))}
         </ul>
       )}
-      {errors.length > 0 && (
+      {errors.length > 0 && !showFriendlyDemoCallout && (
         <div className={styles.callout}>
           {errors.map((e, i) => (
             <div key={i}>
@@ -54,6 +68,14 @@ function EnvCard({ title, env }) {
               {e.message}
             </div>
           ))}
+        </div>
+      )}
+      {showFriendlyDemoCallout && (
+        <div className={`${styles.callout} ${styles.calloutNeutral}`} role="note">
+          Comportement attendu en production si vous n’avez pas d’API démo dédiée. Pour activer les
+          checks démo, définir <code className={styles.inlineCode}>PLATFORM_API_URL_DEMO</code> sur
+          le serveur (URL de base sans <code className={styles.inlineCode}>/api/v1</code>), puis
+          redémarrer l’API.
         </div>
       )}
     </div>
@@ -225,14 +247,18 @@ const AdminPlatformOps = () => {
               <p className={styles.sectionLabel}>Environnements</p>
               <div className={styles.grid}>
                 <EnvCard title="ATMR Production" env={data.environments?.prod} />
-                <EnvCard title="ATMR Demo" env={data.environments?.demo} />
+                <EnvCard title="ATMR Demo" env={data.environments?.demo} demoOptional />
               </div>
 
               <ObservabilityLinks links={data.links} />
 
               <div className={`${styles.card} ${styles.mutedCard} ${styles.cardSpacedTop}`}>
                 <h2 className={styles.cardTitle}>Données techniques</h2>
-                <p className={styles.cardMeta}>Version / commit / uptime — non exposés (MVP)</p>
+                <p className={styles.cardMeta}>
+                  Version d’image, commit Git et uptime ne sont pas inclus dans{' '}
+                  <code className={styles.inlineCode}>GET /api/v1/platform/status</code> pour
+                  l’instant (hors périmètre MVP — pas une erreur de collecte).
+                </p>
               </div>
             </>
           )}

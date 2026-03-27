@@ -163,6 +163,13 @@
   color: var(--text-primary);
 }
 
+/* Encadré secondaire (ex. démo optionnelle) — moins « alarmant » que l’encadré prod */
+.configHintSubtle {
+  margin-top: var(--spacing-sm);
+  border-left: 3px solid rgba(0, 121, 107, 0.35);
+  background: var(--brand-primary-lightest, rgba(0, 121, 107, 0.06));
+}
+
 .configHint code {
   font-family: var(--font-family-mono);
   font-size: var(--font-xs);
@@ -280,6 +287,16 @@
   font-size: var(--font-xs);
   color: var(--text-secondary);
   line-height: var(--line-height-relaxed);
+}
+
+.calloutNeutral {
+  border-color: rgba(0, 121, 107, 0.25);
+  background: var(--brand-primary-lightest, rgba(0, 121, 107, 0.05));
+}
+
+.calloutNeutral code {
+  font-family: var(--font-family-mono);
+  font-size: 0.78em;
 }
 
 .linksRow {

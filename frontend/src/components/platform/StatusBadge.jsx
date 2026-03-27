@@ -10,10 +10,11 @@ const LABELS = {
 
 /**
  * Badge normalisé pour statuts plateforme (ok / degraded / unavailable / unknown).
+ * @param {string} [labelOverride] — libellé affiché à la place du libellé par défaut (ex. démo non configurée).
  */
-export default function StatusBadge({ status, title }) {
+export default function StatusBadge({ status, title, labelOverride }) {
   const key = String(status || 'unknown').toLowerCase();
-  const label = LABELS[key] || LABELS.unknown;
+  const label = labelOverride || LABELS[key] || LABELS.unknown;
   const cls = styles[key] || styles.unknown;
 
   return (
