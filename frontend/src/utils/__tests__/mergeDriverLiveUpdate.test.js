@@ -55,6 +55,27 @@ describe('mergeDriverLiveUpdate', () => {
     expect(out.received_at).toBe('2026-03-24T15:00:00.000Z');
   });
 
+  it('applique toujours les coords d’un point accepted_canonical (pas de garde temporelle observabilité)', () => {
+    const driver = {
+      id: 1,
+      latitude: 46.2,
+      longitude: 6.1,
+      received_at: '2026-03-24T14:00:00.000Z',
+    };
+    const out = mergeDriverLiveUpdate(
+      driver,
+      {
+        latitude: 46.5,
+        longitude: 6.5,
+        accept_status: 'accepted_canonical',
+        received_at: '2026-03-24T13:00:00.000Z',
+      },
+      false
+    );
+    expect(out.latitude).toBe(46.5);
+    expect(out.longitude).toBe(6.5);
+  });
+
   it('accepte le premier point observabilité si le chauffeur n’a pas encore de canonical_time', () => {
     const driver = { id: 1, latitude: 46.2, longitude: 6.1 };
     const out = mergeDriverLiveUpdate(

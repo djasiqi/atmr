@@ -207,30 +207,36 @@ groups:
           description: "Le dispatch semble bloqué"
 
   # ==================== Location Alerts ====================
+  # Métriques alignées sur services/monitoring/driver_location_metrics.py (PR1) et
+  # websocket_metrics.driver_location_latency_seconds — pas location_positions_total
+  # (jamais incrémenté dans le code).
   - name: location
     interval: 1m
     rules:
       - alert: LocationLowUpdateRate
         expr: |
-          rate(location_positions_total[5m]) < 0.1
+          sum(rate(driver_location_processed_total[5m])) < 0.1
         for: 10m
         labels:
           severity: warning
           component: location
         annotations:
           summary: "Taux de mises à jour position très faible"
-          description: "{{ $value }} positions/seconde (attendu: > 1/s)"
+          description: "{{ $value }} positions traitées/s (agrégat driver_location_processed_total ; attendu: > 0.1/s si chauffeurs actifs)"
 
       - alert: LocationHighProcessingLatency
         expr: |
-          histogram_quantile(0.95, rate(location_processing_latency_seconds_bucket[5m])) > 1.0
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_location_latency_seconds_bucket[5m])) by (le)
+          ) > 1.0
         for: 5m
         labels:
           severity: warning
           component: location
         annotations:
           summary: "Latence traitement position élevée (p95 > 1s)"
-          description: "Latence p95: {{ $value }}s"
+          description: "Latence p95 socket driver_location → fanout: {{ $value }}s (driver_location_latency_seconds)"
 
   # ==================== Push Notifications Alerts ====================
   - name: push_notifications

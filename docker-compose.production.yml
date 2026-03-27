@@ -368,10 +368,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G # Option A : marge pour concurrency=4 + calibration worker_max_memory_per_child (D2)
           cpus: "1.0"
         reservations:
-          memory: 512M
+          memory: 1G
           cpus: "0.5"
 
   # Beat Celery (planificateur)
@@ -461,7 +461,15 @@ services:
     # Charger les variables depuis .env.production (créé par le workflow GitHub Actions)
     env_file:
       - .env.production
-    command: celery -A celery_app.celery flower --port=5555
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery",
+        "flower",
+        "--port=5555",
+        "--max_tasks=10000",
+      ]
     healthcheck:
       test:
         [
@@ -497,8 +505,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
           cpus: "0.25"
+        reservations:
+          memory: 256M
+          cpus: "0.1"
 
   # Nginx (reverse proxy) - Optionnel
   # DÉSACTIVÉ : nécessite nginx/nginx.conf sur le serveur

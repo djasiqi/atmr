@@ -1,4 +1,9 @@
-"""Liste positions chauffeurs (Redis + DB). Partagé par GET /me/drivers/locations et /me/drivers/live."""
+"""Liste positions chauffeurs (Redis + DB). Partagé par GET /me/drivers/locations et /me/drivers/live.
+
+Modèle A (défaut produit) : vérité « officielle » = canon Redis (cf. ``driver:{id}:loc:canonical``).
+Option D (cible structurelle future) : aligner la projection REST sur la même vérité affichable
+que le fanout — évolution coordonnée, pas un changement local isolé.
+"""
 from __future__ import annotations
 
 import logging

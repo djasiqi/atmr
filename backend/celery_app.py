@@ -117,6 +117,15 @@ else:
     _max_tasks_int = int(_max_tasks_env)
     _max_tasks = None if _max_tasks_int == 0 else _max_tasks_int
 
+# Plafond RSS par processus enfant (prefork) — unité : kilooctets (Ko), Billiard/Celery.
+# 0 ou absent : pas de limite mémoire par enfant (recyclage uniquement via max_tasks_per_child).
+_max_mem_env = os.getenv("CELERY_WORKER_MAX_MEMORY_PER_CHILD")
+if _max_mem_env is None:
+    _max_mem: int | None = None
+else:
+    _max_mem_int = int(_max_mem_env)
+    _max_mem = None if _max_mem_int == 0 else _max_mem_int
+
 # Configure Celery
 celery.conf.update(
     broker_transport="redis",  # ✅ Forcer explicitement le transport Redis
@@ -133,6 +142,7 @@ celery.conf.update(
     task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
     # - corrigé de 0.540
     worker_max_tasks_per_child=_max_tasks,  # None ou int > 0 (0 converti en None)
+    worker_max_memory_per_child=_max_mem,  # None ou Ko > 0 (0 = désactivé)
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies

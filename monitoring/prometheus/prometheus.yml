@@ -62,6 +62,10 @@ scrape_configs:
         target_label: "metric_type"
         replacement: "location"
       - source_labels: [__name__]
+        regex: "driver_location_.*"
+        target_label: "metric_type"
+        replacement: "location"
+      - source_labels: [__name__]
         regex: "http_.*"
         target_label: "metric_type"
         replacement: "http"

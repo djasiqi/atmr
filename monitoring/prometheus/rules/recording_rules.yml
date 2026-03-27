@@ -94,18 +94,43 @@ groups:
           metric_type: osrm
 
   # ==================== Location Recording Rules ====================
+  # Aligné PR1 : driver_location_processed_total / driver_location_latency_seconds
   - name: location_recording
     interval: 1m
     rules:
-      # Taux de positions GPS (5m)
+      # Taux de positions traitées (5m)
       - record: location:positions_rate_5m
-        expr: rate(location_positions_total[5m])
+        expr: sum(rate(driver_location_processed_total[5m]))
         labels:
           metric_type: location
 
-      # Latence traitement position p95 (5m)
+      # Latence p95 socket driver_location → fanout (5m)
       - record: location:processing_latency_p95_5m
-        expr: histogram_quantile(0.95, rate(location_processing_latency_seconds_bucket[5m]))
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_location_latency_seconds_bucket[5m])) by (le)
+          )
+        labels:
+          metric_type: location
+          quantile: "0.95"
+
+      # Part accepted_canonical sur positions traitées (5m) — runbook incident localisation
+      - record: location:canonical_share_5m
+        expr: |
+          sum(rate(driver_location_processed_total{accept_status="accepted_canonical"}[5m]))
+          /
+          sum(rate(driver_location_processed_total[5m]))
+        labels:
+          metric_type: location
+
+      # Skew horloge p95 (recorded_at vs réception backend)
+      - record: location:clock_skew_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(driver_location_clock_skew_seconds_bucket[5m])) by (le)
+          )
         labels:
           metric_type: location
           quantile: "0.95"

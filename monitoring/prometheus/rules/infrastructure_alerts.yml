@@ -181,7 +181,7 @@ groups:
     rules:
       - alert: ContainerHighCPU
         expr: |
-          rate(container_cpu_usage_seconds_total[5m]) > 0.85
+          rate(container_cpu_usage_seconds_total{name=~"atmr-.*"}[5m]) > 0.85
         for: 5m
         labels:
           severity: warning
@@ -192,18 +192,41 @@ groups:
 
       - alert: ContainerHighMemory
         expr: |
-          (container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.90)
+          (
+            container_memory_usage_bytes{name=~"atmr-.*"}
+            /
+            container_spec_memory_limit_bytes{name=~"atmr-.*"}
+          > 0.90)
           AND
-          (container_spec_memory_limit_bytes > 0)
+          (container_spec_memory_limit_bytes{name=~"atmr-.*"} > 0)
           AND
-          (container_spec_memory_limit_bytes != +Inf)
+          (container_spec_memory_limit_bytes{name=~"atmr-.*"} != +Inf)
         for: 5m
         labels:
           severity: warning
           component: containers
         annotations:
-          summary: "Container {{ $labels.name }} utilise > 90% mémoire"
+          summary: "Container {{ $labels.name }} utilise > 90% mémoire (usage/cgroup)"
           description: "Mémoire: {{ $value | humanizePercentage }}"
+
+      - alert: ContainerHighMemoryWorkingSet
+        expr: |
+          (
+            container_memory_working_set_bytes{name=~"atmr-.*"}
+            /
+            container_spec_memory_limit_bytes{name=~"atmr-.*"}
+          > 0.90)
+          AND
+          (container_spec_memory_limit_bytes{name=~"atmr-.*"} > 0)
+          AND
+          (container_spec_memory_limit_bytes{name=~"atmr-.*"} != +Inf)
+        for: 5m
+        labels:
+          severity: warning
+          component: containers
+        annotations:
+          summary: "Container {{ $labels.name }} utilise > 90% mémoire (working set/cgroup)"
+          description: "Working set: {{ $value | humanizePercentage }}"
 
       - alert: ContainerRestartLoop
         expr: |

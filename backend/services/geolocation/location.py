@@ -68,6 +68,7 @@ ARBITRATION_CLOSE_WINDOW_SEC = 3
 MISSION_TOO_OLD_SEC = 120
 AVAILABILITY_TOO_OLD_SEC = 600
 LOW_ACCURACY_THRESHOLD_M = 1500.0
+# v21 : normalisation ``location_mode`` ; sans v21 le backend force ``mission_live`` (arbitrage plus dur).
 LOCATION_V21_ENABLED = os.getenv("DRIVER_LOCATION_V21_ENABLED", "true").lower() != "false"
 TRIP_HISTORY_REPLAY_ENABLED = (
     os.getenv("TRIP_HISTORY_REPLAY_ENABLED", "true").lower() != "false"
@@ -506,7 +507,22 @@ class LocationService:
         ts_iso = timestamp.isoformat()
         recorded_iso = recorded_at.isoformat()
         sent_iso = sent_at.isoformat()
-        received_iso = datetime.now(UTC).isoformat()
+        received_dt = datetime.now(UTC)
+        received_iso = received_dt.isoformat()
+        try:
+            from services.monitoring.driver_location_metrics import (
+                MAX_CLOCK_SKEW_RECORD_SEC,
+                observe_clock_skew_seconds,
+            )
+
+            ra = recorded_at if recorded_at.tzinfo else recorded_at.replace(tzinfo=UTC)
+            skew_sec = abs((received_dt - ra).total_seconds())
+            if skew_sec <= MAX_CLOCK_SKEW_RECORD_SEC:
+                observe_clock_skew_seconds(
+                    location_mode=location_mode, skew_seconds=skew_sec
+                )
+        except Exception:
+            pass
         accept_status = "accepted_canonical"
         accept_reason = ""
         if not self.redis_client:

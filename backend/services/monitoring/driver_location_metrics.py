@@ -40,6 +40,10 @@ def _norm_reason(reason: str | None) -> str:
     return "_unknown"
 
 
+# Plafond enregistrement skew (mobile vs backend) — au-delà : données suspectes / horloge cassée.
+MAX_CLOCK_SKEW_RECORD_SEC = 172800.0  # 48 h
+
+
 def _norm_mode(mode: str | None) -> str:
     """Aligné sur ``normalize_location_mode`` (valeurs invalides → ``mission_live``)."""
     m = (mode or "").strip()
@@ -49,13 +53,15 @@ def _norm_mode(mode: str | None) -> str:
 
 
 try:
-    from prometheus_client import Counter
+    from prometheus_client import Counter, Histogram
 except ImportError:
     Counter = None
+    Histogram = None
 
 _RECEIVED = None
 _PROCESSED = None
 _FANOUT = None
+_CLOCK_SKEW = None
 
 if Counter is not None:
     _RECEIVED = Counter(
@@ -74,6 +80,14 @@ if Counter is not None:
         ["event", "accept_status"],
     )
 
+if Histogram is not None:
+    _CLOCK_SKEW = Histogram(
+        "driver_location_clock_skew_seconds",
+        "Écart absolu recorded_at (payload) vs réception backend (_store_location)",
+        ["location_mode"],
+        buckets=[0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600, 1800, 3600],
+    )
+
 
 def inc_received(*, transport: str, location_mode: str) -> None:
     if not _metrics_enabled() or _RECEIVED is None:
@@ -81,6 +95,16 @@ def inc_received(*, transport: str, location_mode: str) -> None:
     lm = _norm_mode(location_mode)
     t = transport if transport in ("http", "socket", "socket_batch") else "http"
     _RECEIVED.labels(transport=t, location_mode=lm).inc()
+    # Pont vers le compteur historique services/monitoring/prometheus.py (legacy dashboards)
+    try:
+        from services.monitoring.prometheus import track_location_position
+
+        src = {"http": "http", "socket": "socketio", "socket_batch": "batch"}.get(
+            t, "http"
+        )
+        track_location_position(src)
+    except Exception:
+        pass
 
 
 def inc_processed(
@@ -117,3 +141,17 @@ def inc_fanout(*, event: str, accept_status: str) -> None:
         "accepted_observability_only",
     ) else "_unknown"
     _FANOUT.labels(event=ev, accept_status=st).inc()
+
+
+def observe_clock_skew_seconds(*, location_mode: str, skew_seconds: float) -> None:
+    """Horloge mobile vs backend — utile runbook skew (Prometheus / Grafana)."""
+    if not _metrics_enabled() or _CLOCK_SKEW is None:
+        return
+    lm = _norm_mode(location_mode)
+    try:
+        s = float(skew_seconds)
+    except (TypeError, ValueError):
+        return
+    if s < 0 or s > MAX_CLOCK_SKEW_RECORD_SEC:
+        return
+    _CLOCK_SKEW.labels(location_mode=lm).observe(s)
