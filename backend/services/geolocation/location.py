@@ -806,6 +806,15 @@ class LocationService:
         if recorded_at > current_dt:
             return "accepted_canonical", ""
 
+        # Même seconde (quantification GPS / batch) : ne pas laisser la priorité
+        # mission_live > availability_presence bloquer le rafraîchissement du canon
+        # quand le chauffeur envoie de la disponibilité après une mission.
+        if recorded_at == current_dt and location_mode in (
+            "mission_live",
+            "availability_presence",
+        ):
+            return "accepted_canonical", ""
+
         delta = abs((recorded_at - current_dt).total_seconds())
         if delta <= ARBITRATION_CLOSE_WINDOW_SEC:
             priorities = {
