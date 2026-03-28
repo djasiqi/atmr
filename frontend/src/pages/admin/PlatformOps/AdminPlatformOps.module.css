@@ -278,6 +278,118 @@
   font-weight: var(--font-weight-medium);
 }
 
+.checkMeta {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+.checkDetail {
+  color: var(--text-tertiary);
+  font-size: var(--font-xs);
+}
+
+.configDetails {
+  margin-bottom: var(--spacing-lg);
+}
+
+.configSummary {
+  cursor: pointer;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  padding: var(--spacing-sm) 0;
+}
+
+.configSummary:hover {
+  color: var(--text-primary);
+}
+
+.refreshRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.refreshLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+}
+
+.refreshSelect {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-primary);
+  padding: 0.35rem 0.5rem;
+  font-size: var(--font-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.pauseBtn {
+  border-radius: 10px;
+  padding: 0.45rem 0.85rem;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.pauseBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.incidentBanner {
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+}
+
+.incidentTitle {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.incidentList {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.incidentList li {
+  margin-bottom: 0.35rem;
+}
+
+.noIncident {
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  margin: 0 0 var(--spacing-md);
+}
+
+.summaryMetaInline {
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.techList {
+  margin: 0 0 var(--spacing-sm);
+  padding-left: 1.25rem;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.techList li {
+  margin-bottom: 0.35rem;
+}
+
 .callout {
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -353,6 +465,155 @@
 
 .cardSpacedTop {
   margin-top: var(--spacing-md);
+}
+
+/* —— Runtime (/platform/runtime) : carte séparée, chargement manuel —— */
+.runtimeCard {
+  margin-bottom: var(--spacing-lg);
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg-tertiary) 100%);
+  border: 2px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.runtimeCardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.runtimeCardIntro {
+  margin: 0.25rem 0 0;
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  max-width: 40rem;
+  line-height: var(--line-height-relaxed);
+}
+
+.runtimeLoadBtn {
+  border-radius: 10px;
+  padding: 0.45rem 1rem;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.runtimeLoadBtn:hover:not(:disabled) {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.runtimeLoadBtn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.runtimeLoadBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.runtimeError {
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.runtimeGenerated {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
+
+.runtimeSection {
+  padding: var(--spacing-sm) 0;
+  border-top: 1px solid var(--border-primary);
+}
+
+.runtimeSection:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.runtimeSectionSubtle {
+  padding: var(--spacing-sm) 0;
+  border-top: 1px solid var(--border-primary);
+  opacity: 0.88;
+}
+
+.runtimeSectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: 0.35rem;
+}
+
+.runtimeSectionTitle {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.runtimeReason {
+  margin: 0.25rem 0;
+  font-size: var(--font-xs);
+  font-family: var(--font-family-mono);
+  color: var(--text-secondary);
+}
+
+.runtimeReasonMuted {
+  margin: 0.25rem 0;
+  font-size: var(--font-xs);
+  font-family: var(--font-family-mono);
+  color: var(--text-tertiary);
+}
+
+.runtimeChecked {
+  margin: 0 0 0.35rem;
+  font-size: var(--font-xs);
+  color: var(--text-tertiary);
+}
+
+.runtimeDataList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-sm);
+}
+
+.runtimeDataList li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
+}
+
+.runtimeDataList li:last-child {
+  border-bottom: none;
+}
+
+.runtimeDataLabel {
+  color: var(--text-tertiary);
+  min-width: 8rem;
+}
+
+.runtimeDataValue {
+  color: var(--text-secondary);
+  word-break: break-word;
 }
 
 @media (max-width: 768px) {

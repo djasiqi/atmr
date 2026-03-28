@@ -1,13 +1,21 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { FaHeartbeat, FaServer } from 'react-icons/fa';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FaHeartbeat, FaMicrochip, FaServer } from 'react-icons/fa';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import StatusBadge from '../../../components/platform/StatusBadge';
-import { fetchPlatformStatus } from '../../../services/adminService';
+import { fetchPlatformRuntime, fetchPlatformStatus } from '../../../services/adminService';
 import styles from './AdminPlatformOps.module.css';
 
-const POLL_MS_VISIBLE = 30000;
-const POLL_MS_HIDDEN = 120000;
+const CRITICALITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+const CHECK_ORDER = ['ready', 'database', 'redis', 'websocket'];
+
+const REFRESH_OPTIONS = [
+  { value: 0, label: 'OFF' },
+  { value: 10000, label: '10 s' },
+  { value: 30000, label: '30 s' },
+  { value: 60000, label: '60 s' },
+  { value: 300000, label: '5 min' },
+];
 
 function formatTime(iso) {
   if (!iso) return '—';
@@ -18,7 +26,238 @@ function formatTime(iso) {
   }
 }
 
-function EnvCard({ title, env, demoOptional }) {
+function formatRelativeAge(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    const sec = Math.round((Date.now() - d.getTime()) / 1000);
+    if (sec < 5) return 'à l’instant';
+    if (sec < 60) return `il y a ${sec} s`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `il y a ${min} min`;
+    const h = Math.floor(min / 60);
+    return `il y a ${h} h`;
+  } catch {
+    return '—';
+  }
+}
+
+function globalStatus(data) {
+  return data?.global_status ?? data?.overall_status ?? 'unknown';
+}
+
+function maxLatencyMs(data) {
+  let max = null;
+  const envs = data?.environments || {};
+  for (const env of Object.values(envs)) {
+    if (!env?.monitored) continue;
+    const checks = env.checks || {};
+    for (const c of Object.values(checks)) {
+      if (c && typeof c.latency_ms === 'number') {
+        const v = c.latency_ms;
+        max = max == null ? v : Math.max(max, v);
+      }
+    }
+    if (env.latency_ms != null) {
+      const v = env.latency_ms;
+      max = max == null ? v : Math.max(max, v);
+    }
+  }
+  return max;
+}
+
+/**
+ * Incidents dérivés (V1) — plan §8 : critical/high unknown, tout down.
+ */
+function deriveIncidents(data) {
+  const out = [];
+  if (!data?.environments) return out;
+  for (const [envKey, env] of Object.entries(data.environments)) {
+    if (!env.monitored) continue;
+    const checks = env.checks || {};
+    for (const [name, c] of Object.entries(checks)) {
+      if (!c || typeof c !== 'object') continue;
+      const st = String(c.status || '').toLowerCase();
+      const crit = String(c.criticality || 'medium').toLowerCase();
+      if (st === 'down') {
+        out.push({
+          id: `${envKey}:${name}:down`,
+          severity: crit === 'critical' ? 'critical' : 'high',
+          status: 'open',
+          component: name,
+          environment: envKey,
+          summary: `${name} (${envKey}) : indisponible`,
+          started_at: null,
+          recommended_action: null,
+        });
+      } else if (st === 'unknown' && (crit === 'critical' || crit === 'high')) {
+        out.push({
+          id: `${envKey}:${name}:unknown`,
+          severity: crit === 'critical' ? 'critical' : 'high',
+          status: 'open',
+          component: name,
+          environment: envKey,
+          summary: `${name} (${envKey}) : état inconnu`,
+          started_at: null,
+          recommended_action: null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function sortedCheckEntries(checks) {
+  const entries = Object.entries(checks || {});
+  entries.sort((a, b) => {
+    const ca = CRITICALITY_ORDER[a[1]?.criticality] ?? 99;
+    const cb = CRITICALITY_ORDER[b[1]?.criticality] ?? 99;
+    if (ca !== cb) return ca - cb;
+    const ia = CHECK_ORDER.indexOf(a[0]);
+    const ib = CHECK_ORDER.indexOf(b[0]);
+    if (ia === -1 && ib === -1) return a[0].localeCompare(b[0]);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return entries;
+}
+
+const RUNTIME_SECTION_ORDER = [
+  'process',
+  'redis',
+  'celery',
+  'websocket',
+  'dispatch',
+  'gps_pipeline',
+];
+
+const RUNTIME_SECTION_LABELS = {
+  process: 'Processus',
+  redis: 'Redis',
+  celery: 'Celery',
+  websocket: 'WebSocket',
+  dispatch: 'Dispatch',
+  gps_pipeline: 'Pipeline GPS',
+};
+
+const RUNTIME_DATA_KEY_PRIORITY = {
+  process: ['pid', 'python_version'],
+  redis: [
+    'ping_ok',
+    'used_memory_human',
+    'used_memory_bytes',
+    'connected_clients',
+    'uptime_in_seconds',
+    'evicted_keys',
+    'keyspace_hits',
+    'keyspace_misses',
+    'available',
+  ],
+  celery: ['inspect_ok', 'workers_count', 'workers', 'broker_transport', 'available'],
+  websocket: [],
+  dispatch: [],
+  gps_pipeline: [],
+};
+
+const RUNTIME_FIELD_LABELS = {
+  pid: 'PID',
+  python_version: 'Python',
+  used_memory_human: 'Mémoire',
+  used_memory_bytes: 'Mémoire (octets)',
+  connected_clients: 'Clients connectés',
+  uptime_in_seconds: 'Uptime (s)',
+  evicted_keys: 'Clés évincées',
+  keyspace_hits: 'Hits clé',
+  keyspace_misses: 'Misses clé',
+  available: 'Disponible',
+  ping_ok: 'Ping OK',
+  inspect_ok: 'Inspect OK',
+  workers_count: 'Nombre de workers',
+  workers: 'Workers',
+  broker_transport: 'Broker',
+};
+
+function formatRuntimeValue(key, value) {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    const head = value.slice(0, 5).join(', ');
+    return value.length > 5 ? `${head}…` : head;
+  }
+  if (typeof value === 'boolean') return value ? 'oui' : 'non';
+  if (typeof value === 'object') return null;
+  return String(value);
+}
+
+function buildRuntimeDataRows(sectionKey, data, max = 6) {
+  if (!data || typeof data !== 'object') return [];
+  const priority = RUNTIME_DATA_KEY_PRIORITY[sectionKey] || [];
+  const rows = [];
+  const used = new Set();
+  for (const k of priority) {
+    if (rows.length >= max) break;
+    if (!(k in data)) continue;
+    const v = formatRuntimeValue(k, data[k]);
+    if (v === null) continue;
+    used.add(k);
+    rows.push({
+      key: k,
+      label: RUNTIME_FIELD_LABELS[k] || k,
+      value: v,
+    });
+  }
+  for (const k of Object.keys(data)) {
+    if (rows.length >= max) break;
+    if (used.has(k)) continue;
+    const v = formatRuntimeValue(k, data[k]);
+    if (v === null) continue;
+    rows.push({
+      key: k,
+      label: RUNTIME_FIELD_LABELS[k] || k,
+      value: v,
+    });
+  }
+  return rows;
+}
+
+function RuntimeSectionBlock({ sectionKey, section }) {
+  const title = RUNTIME_SECTION_LABELS[sectionKey] || sectionKey;
+  const st = String(section?.status ?? 'unknown').toLowerCase();
+  const subtle = st === 'not_implemented';
+  const rows = buildRuntimeDataRows(sectionKey, section?.data, 6);
+  const showReason = st !== 'ok' && section?.reason;
+
+  return (
+    <div className={subtle ? styles.runtimeSectionSubtle : styles.runtimeSection}>
+      <div className={styles.runtimeSectionHead}>
+        <span className={styles.runtimeSectionTitle}>{title}</span>
+        <StatusBadge status={section?.status} />
+      </div>
+      {showReason && (
+        <p
+          className={subtle ? styles.runtimeReasonMuted : styles.runtimeReason}
+          role="status"
+        >
+          {section.reason}
+        </p>
+      )}
+      <p className={styles.runtimeChecked}>Mesure : {formatTime(section?.checked_at)}</p>
+      {rows.length > 0 && (
+        <ul className={styles.runtimeDataList}>
+          {rows.map((r) => (
+            <li key={r.key}>
+              <span className={styles.runtimeDataLabel}>{r.label}</span>
+              <span className={styles.runtimeDataValue}>{r.value}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EnvCard({ env, demoOptional }) {
   if (!env) return null;
   const { monitored, status, latency_ms: latencyMs, checks = {}, errors = [] } = env;
   const isOptionalDemo = Boolean(demoOptional && !monitored);
@@ -30,6 +269,8 @@ function EnvCard({ title, env, demoOptional }) {
   const showFriendlyDemoCallout =
     isOptionalDemo &&
     errors.some((e) => e.type === 'not_monitored' || /PLATFORM_API_URL_DEMO/i.test(String(e.message || '')));
+
+  const title = env.name || (demoOptional ? 'ATMR Demo' : 'ATMR Production');
 
   return (
     <div className={styles.card}>
@@ -53,9 +294,18 @@ function EnvCard({ title, env, demoOptional }) {
       </div>
       {monitored && (
         <ul className={styles.checks}>
-          {Object.entries(checks).map(([k, v]) => (
+          {sortedCheckEntries(checks).map(([k, v]) => (
             <li key={k}>
               <strong>{k}</strong> : <StatusBadge status={v?.status} />
+              {v?.latency_ms != null && (
+                <span className={styles.checkMeta}> · {Math.round(v.latency_ms)} ms</span>
+              )}
+              {v?.detail && (
+                <span className={styles.checkDetail} title={v.detail}>
+                  {' '}
+                  · {v.detail}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -72,20 +322,16 @@ function EnvCard({ title, env, demoOptional }) {
       )}
       {showFriendlyDemoCallout && (
         <div className={`${styles.callout} ${styles.calloutNeutral}`} role="note">
-          Comportement attendu en production si vous n’avez pas d’API démo dédiée. Pour activer les
-          checks démo, définir <code className={styles.inlineCode}>PLATFORM_API_URL_DEMO</code> sur
-          le serveur (URL de base sans <code className={styles.inlineCode}>/api/v1</code>), puis
-          redémarrer l’API.
+          Démo non configurée. Comportement attendu si aucune API démo publique n’est exposée. Pour
+          activer les checks, définir{' '}
+          <code className={styles.inlineCode}>PLATFORM_API_URL_DEMO</code> sur le serveur (URL de base
+          sans <code className={styles.inlineCode}>/api/v1</code>), puis redémarrer l’API.
         </div>
       )}
     </div>
   );
 }
 
-/**
- * Affiche pourquoi l’état reste « Inconnu » : ce n’est pas un bug front — l’API
- * n’agrège des checks que si PLATFORM_API_URL_* est défini côté serveur.
- */
 function ConfigHint({ data }) {
   if (!data) return null;
   const prod = data.environments?.prod;
@@ -93,19 +339,20 @@ function ConfigHint({ data }) {
   const links = data.links || {};
   const needProd = !prod?.monitored;
   const needDemo = !demo?.monitored;
-  const needObs =
-    !links.grafana && !links.prometheus && !links.alertmanager;
+  const needObs = !links.grafana && !links.prometheus && !links.alertmanager;
   if (!needProd && !needDemo && !needObs) return null;
   return (
-    <div className={styles.configHint} role="note">
-      <strong>Pourquoi peu de données ?</strong> Cette page appelle le backend ; les checks
-      (ready, base, Redis, WebSocket) ne s’affichent que si les URLs cibles sont configurées sur
-      le <strong>serveur API</strong> (pas le navigateur). Définir au minimum{' '}
-      <code>PLATFORM_API_URL_PROD</code> (et optionnellement <code>PLATFORM_API_URL_DEMO</code>),
-      puis <code>PLATFORM_LINK_GRAFANA</code> / <code>PLATFORM_LINK_PROMETHEUS</code> /{' '}
-      <code>PLATFORM_LINK_ALERTMANAGER</code> pour les boutons. Voir{' '}
-      <code>backend/env.example</code> — redémarrer l’API après modification.
-    </div>
+    <details className={styles.configDetails}>
+      <summary className={styles.configSummary}>
+        Certains checks peuvent être absents — configuration serveur
+      </summary>
+      <div className={styles.configHint} role="note">
+        Les checks d’environnement s’affichent uniquement si les URLs cibles sont configurées sur le{' '}
+        <strong>serveur API</strong>. Définir au minimum <code>PLATFORM_API_URL_PROD</code>, puis
+        redémarrer l’API. Voir <code>backend/env.example</code> et{' '}
+        <code>backend/docs/PLATFORM_ENV.md</code>.
+      </div>
+    </details>
   );
 }
 
@@ -146,21 +393,34 @@ function ObservabilityLinks({ links }) {
   );
 }
 
-/**
- * Console Admin Ops / Platform — lecture seule (agrégateur backend).
- */
 const AdminPlatformOps = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastOk, setLastOk] = useState(null);
+  const [pollIntervalMs, setPollIntervalMs] = useState(30000);
+  const [pollPaused, setPollPaused] = useState(false);
+  const [visibilityTick, setVisibilityTick] = useState(0);
+  const [tabHidden, setTabHidden] = useState(false);
+  const [lastStateChangeAt, setLastStateChangeAt] = useState(null);
+  const prevGlobalRef = useRef(null);
+
+  const [runtime, setRuntime] = useState(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeError, setRuntimeError] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const json = await fetchPlatformStatus();
       setData(json);
-      setLastOk(new Date().toISOString());
+      const nowIso = new Date().toISOString();
+      setLastOk(nowIso);
+      const g = globalStatus(json);
+      if (prevGlobalRef.current !== null && prevGlobalRef.current !== g) {
+        setLastStateChangeAt(nowIso);
+      }
+      prevGlobalRef.current = g;
     } catch (e) {
       const msg =
         e?.response?.status === 403
@@ -174,25 +434,58 @@ const AdminPlatformOps = () => {
     }
   }, []);
 
+  const loadRuntime = useCallback(async () => {
+    setRuntimeError(null);
+    setRuntimeLoading(true);
+    try {
+      const json = await fetchPlatformRuntime();
+      setRuntime(json);
+    } catch (e) {
+      const msg =
+        e?.response?.status === 403
+          ? 'Accès refusé (403). Vérifiez le rôle admin et la whitelist IP.'
+          : e?.response?.data?.message || e?.message || 'Données runtime indisponibles';
+      setRuntimeError(msg);
+    } finally {
+      setRuntimeLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let intervalId;
-    const reschedule = () => {
-      clearInterval(intervalId);
-      const ms = document.hidden ? POLL_MS_HIDDEN : POLL_MS_VISIBLE;
-      intervalId = setInterval(load, ms);
+    const syncHidden = () => {
+      if (typeof document === 'undefined') return;
+      setTabHidden(document.hidden);
     };
-    load();
-    reschedule();
+    syncHidden();
     const onVis = () => {
-      reschedule();
-      if (!document.hidden) load();
+      syncHidden();
+      setVisibilityTick((t) => t + 1);
+      if (typeof document !== 'undefined' && !document.hidden) {
+        load();
+      }
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => {
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVis);
-    };
+    return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (pollPaused || pollIntervalMs === 0 || tabHidden) return undefined;
+    const id = setInterval(load, pollIntervalMs);
+    return () => clearInterval(id);
+  }, [load, pollIntervalMs, pollPaused, visibilityTick, tabHidden]);
+
+  const incidents = useMemo(() => (data ? deriveIncidents(data) : []), [data]);
+  const summary = data?.summary;
+  const gs = data ? globalStatus(data) : null;
+  const worstLat = data ? maxLatencyMs(data) : null;
+
+  const monitoredEnvCount = data
+    ? [data.environments?.prod, data.environments?.demo].filter((e) => e?.monitored).length
+    : 0;
 
   return (
     <div className={styles.adminContainer}>
@@ -209,17 +502,51 @@ const AdminPlatformOps = () => {
                 Admin Ops / Platform
               </h1>
               <p className={styles.pageSubtitle}>
-                Source unique :{' '}
+                Vue de supervision basée sur{' '}
                 <code className={styles.inlineCode}>GET /api/v1/platform/status</code>
                 <span className={styles.subtle}> — lecture seule</span>
               </p>
             </div>
             <div className={styles.headerActions}>
-              <button type="button" className={styles.refreshBtn} onClick={load}>
-                Actualiser
-              </button>
+              <div className={styles.refreshRow}>
+                <label htmlFor="platform-poll-interval" className={styles.refreshLabel}>
+                  Auto-refresh
+                </label>
+                <select
+                  id="platform-poll-interval"
+                  className={styles.refreshSelect}
+                  value={pollIntervalMs}
+                  onChange={(e) => setPollIntervalMs(Number(e.target.value))}
+                >
+                  {REFRESH_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className={styles.pauseBtn}
+                  onClick={() => setPollPaused((p) => !p)}
+                  aria-pressed={pollPaused}
+                >
+                  {pollPaused ? 'Reprendre' : 'Pause'}
+                </button>
+                <button type="button" className={styles.refreshBtn} onClick={load}>
+                  Actualiser
+                </button>
+              </div>
               <span className={styles.metaLine}>
                 Dernière mise à jour : {lastOk ? formatTime(lastOk) : '—'}
+                {pollIntervalMs > 0 && !pollPaused && !tabHidden && (
+                  <span className={styles.subtle}> · intervalle {pollIntervalMs / 1000} s</span>
+                )}
+                {(pollPaused || pollIntervalMs === 0 || tabHidden) && (
+                  <span className={styles.subtle}>
+                    {' '}
+                    · {pollPaused ? 'pause' : pollIntervalMs === 0 ? 'OFF' : 'onglet inactif'}
+                  </span>
+                )}
               </span>
             </div>
           </header>
@@ -236,28 +563,168 @@ const AdminPlatformOps = () => {
             <>
               <ConfigHint data={data} />
 
+              {incidents.length > 0 && (
+                <section className={styles.incidentBanner} aria-label="Incidents en cours">
+                  <h2 className={styles.incidentTitle}>Incidents en cours</h2>
+                  <ul className={styles.incidentList}>
+                    {incidents.map((inc) => (
+                      <li key={inc.id}>{inc.summary}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {incidents.length === 0 && (
+                <p className={styles.noIncident} role="status">
+                  Aucun incident actif (vue instantanée dérivée du statut).
+                </p>
+              )}
+
               <div className={styles.summaryStrip}>
                 <span className={styles.summaryLabel}>État global</span>
-                <StatusBadge status={data.overall_status} />
+                <StatusBadge status={gs} />
+                <span className={styles.summaryMetaInline}>
+                  {monitoredEnvCount} env. surveillé{monitoredEnvCount > 1 ? 's' : ''}
+                </span>
+                {summary && (
+                  <span className={styles.summaryMetaInline}>
+                    Checks : {summary.ok_checks ?? 0}/{summary.total_checks ?? 0} OK
+                    {summary.degraded_checks > 0 && ` · ${summary.degraded_checks} dégradés`}
+                    {summary.down_checks > 0 && ` · ${summary.down_checks} hors service`}
+                    {summary.unknown_checks > 0 && ` · ${summary.unknown_checks} inconnus`}
+                  </span>
+                )}
+                {worstLat != null && (
+                  <span className={styles.summaryMetaInline}>Latence max : {Math.round(worstLat)} ms</span>
+                )}
+                <span className={styles.summaryMetaInline}>
+                  Données : {formatRelativeAge(data.generated_at || lastOk)}
+                </span>
+                {lastStateChangeAt && (
+                  <span className={styles.summaryMetaInline}>
+                    Dernier changement d’état : {formatTime(lastStateChangeAt)}
+                  </span>
+                )}
                 <span className={styles.summaryMeta}>
                   généré {formatTime(data.generated_at)}
                 </span>
               </div>
 
+              <section className={styles.runtimeCard} aria-labelledby="runtime-heading">
+                <div className={styles.runtimeCardHeader}>
+                  <div>
+                    <h2 id="runtime-heading" className={styles.cardTitle}>
+                      <FaMicrochip className={styles.cardIcon} aria-hidden />
+                      Runtime
+                    </h2>
+                    <p className={styles.runtimeCardIntro}>
+                      Données d’exploitation enrichies via{' '}
+                      <code className={styles.inlineCode}>GET /api/v1/platform/runtime</code> — chargement
+                      <strong> manuel uniquement</strong> (aucun impact sur l’auto-refresh du statut
+                      ci-dessus).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.runtimeLoadBtn}
+                    onClick={loadRuntime}
+                    disabled={runtimeLoading}
+                  >
+                    {runtimeLoading ? 'Chargement…' : runtime ? 'Actualiser le runtime' : 'Charger le runtime'}
+                  </button>
+                </div>
+                {runtimeError && (
+                  <div className={styles.runtimeError} role="alert">
+                    Runtime indisponible — {runtimeError}
+                  </div>
+                )}
+                {runtime && !runtimeLoading && (
+                  <>
+                    <p className={styles.runtimeGenerated}>
+                      Généré {formatTime(runtime.generated_at)} · âge relatif{' '}
+                      {formatRelativeAge(runtime.generated_at)}
+                    </p>
+                    {RUNTIME_SECTION_ORDER.map((key) => (
+                      <RuntimeSectionBlock
+                        key={key}
+                        sectionKey={key}
+                        section={
+                          runtime.sections?.[key] ?? {
+                            status: 'unknown',
+                            reason: null,
+                            checked_at: null,
+                            data: null,
+                          }
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+                {!runtime && !runtimeLoading && !runtimeError && (
+                  <p className={styles.cardMeta} role="status">
+                    Aucune donnée runtime chargée. Utilisez le bouton pour interroger l’API sans
+                    ralentir la vue statut.
+                  </p>
+                )}
+              </section>
+
               <p className={styles.sectionLabel}>Environnements</p>
               <div className={styles.grid}>
-                <EnvCard title="ATMR Production" env={data.environments?.prod} />
-                <EnvCard title="ATMR Demo" env={data.environments?.demo} demoOptional />
+                <EnvCard env={data.environments?.prod} />
+                <EnvCard env={data.environments?.demo} demoOptional />
               </div>
 
-              <ObservabilityLinks links={data.links} />
+              <ObservabilityLinks
+                links={data.deep_links?.observability || data.links}
+              />
 
               <div className={`${styles.card} ${styles.mutedCard} ${styles.cardSpacedTop}`}>
                 <h2 className={styles.cardTitle}>Données techniques</h2>
+                {data.metadata?.status === 'ok' && data.metadata?.data && (
+                  <ul className={styles.techList}>
+                    {data.metadata.data.app_version && (
+                      <li>
+                        <strong>Version applicative</strong> : {data.metadata.data.app_version}
+                      </li>
+                    )}
+                    {data.metadata.data.git_commit && (
+                      <li>
+                        <strong>Commit Git</strong> :{' '}
+                        <code className={styles.inlineCode}>{data.metadata.data.git_commit}</code>
+                      </li>
+                    )}
+                    {data.metadata.data.process_uptime_seconds != null && (
+                      <li>
+                        <strong>Uptime process</strong> : {data.metadata.data.process_uptime_seconds}{' '}
+                        s
+                      </li>
+                    )}
+                  </ul>
+                )}
+                {data.metadata?.status === 'not_configured' && (
+                  <p className={styles.cardMeta} role="status">
+                    Métadonnées non renseignées ({data.metadata.reason || '—'}). Définir{' '}
+                    <code className={styles.inlineCode}>PLATFORM_METADATA_GIT_COMMIT</code> et/ou{' '}
+                    <code className={styles.inlineCode}>PLATFORM_METADATA_APP_VERSION</code> sur le
+                    serveur API si besoin.
+                  </p>
+                )}
+                {data.metadata?.status === 'not_implemented' && (
+                  <ul className={styles.techList}>
+                    <li>
+                      <strong>Image Docker</strong> : non exposée
+                    </li>
+                    <li>
+                      <strong>Commit Git</strong> : non exposé
+                    </li>
+                    <li>
+                      <strong>Uptime process</strong> : non exposé
+                    </li>
+                  </ul>
+                )}
                 <p className={styles.cardMeta}>
-                  Version d’image, commit Git et uptime ne sont pas inclus dans{' '}
-                  <code className={styles.inlineCode}>GET /api/v1/platform/status</code> pour
-                  l’instant (hors périmètre MVP — pas une erreur de collecte).
+                  Source : champ <code className={styles.inlineCode}>metadata</code> de{' '}
+                  <code className={styles.inlineCode}>GET /api/v1/platform/status</code>.
                 </p>
               </div>
             </>

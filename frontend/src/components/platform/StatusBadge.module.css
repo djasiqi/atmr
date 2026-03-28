@@ -23,6 +23,21 @@
   color: #991b1b;
 }
 
+.down {
+  background: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+}
+
+.not_configured {
+  background: rgba(100, 116, 139, 0.2);
+  color: #334155;
+}
+
+.not_implemented {
+  background: rgba(148, 163, 184, 0.25);
+  color: #475569;
+}
+
 .unknown {
   background: rgba(107, 114, 128, 0.2);
   color: #374151;

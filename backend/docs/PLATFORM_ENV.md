@@ -24,7 +24,11 @@ Le retrain **n’écrit jamais** vers `RL_INFERENCE_MODEL_PATH` : promotion manu
 | `PLATFORM_LINK_GRAFANA` | URL Grafana ; toujours renvoyée dans `links`, ou `null` si absent. |
 | `PLATFORM_LINK_PROMETHEUS` | Idem Prometheus. |
 | `PLATFORM_LINK_ALERTMANAGER` | Idem Alertmanager. |
+| `PLATFORM_METADATA_GIT_COMMIT` | Commit Git affiché dans `metadata` de `GET /api/v1/platform/status` (priorité à `GIT_COMMIT_SHA` / `GIT_COMMIT` si non défini). |
+| `PLATFORM_METADATA_APP_VERSION` | Version applicative dans `metadata` (sinon `APP_VERSION`). |
 | `PLATFORM_STATUS_TIMEOUT_SECONDS` | Timeout HTTP par requête health (défaut `2.5`). |
+| `PLATFORM_RUNTIME_REDIS_INFO_TIMEOUT_SECONDS` | Timeout socket pour la collecte **Redis INFO** dans `GET /api/v1/platform/runtime` (défaut `1.5`). Ne modifie pas les timeouts globaux `REDIS_SOCKET_*` du processus. |
+| `PLATFORM_RUNTIME_CELERY_INSPECT_TIMEOUT_SECONDS` | Timeout **inspect** Celery (`ping` / `stats`) pour `GET /api/v1/platform/runtime` (défaut `1.5`). |
 | `ADMIN_IP_WHITELIST_REQUIRED` | `false` (défaut) ou `true`. En **production** (`FLASK_CONFIG=production`), si `true`, `ADMIN_IP_WHITELIST` doit être **non vide** sinon le backend refuse de démarrer (fail-closed pour la console Admin Ops / `platform/status`). En développement, laisser `false` si la whitelist n’est pas configurée. |
 
 **Sécurité — `GET /api/v1/platform/status`**

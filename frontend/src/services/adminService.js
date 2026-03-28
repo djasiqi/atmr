@@ -341,3 +341,22 @@ export const fetchPlatformStatus = async () => {
     throw error;
   }
 };
+
+/**
+ * Métriques runtime (hors hot path) — lecture seule.
+ * GET /platform/runtime — pas de polling automatique côté UI par défaut.
+ */
+export const fetchPlatformRuntime = async () => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/platform/runtime', { headers });
+    return response.data;
+  } catch (error) {
+    console.error(
+      'Erreur chargement platform/runtime :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
