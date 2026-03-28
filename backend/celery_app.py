@@ -199,7 +199,7 @@ celery.conf.beat_schedule = {
     },
     # Planning scans (daily at ~04:15, seconds granularity acceptable in dev)
     "planning-compliance-scan": {
-        "task": "planning.compliance_scan",
+        "task": "planning.compliance_scan_all",
         "schedule": 24 * 3600,
         "options": {
             "expires": 6 * 3600,

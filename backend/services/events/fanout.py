@@ -15,6 +15,9 @@ from typing import Any, Dict
 from ext import app_logger
 from schemas.socket_events import EVENT_VERSION, SocketEvent
 from services.events.night_mode import should_send_night_notification
+from services.notifications.device_token_lifecycle import (
+    is_push_device_token_lifecycle_enabled,
+)
 from services.notifications.push import send_push_message
 from services.notifications.push_message_builder import (
     CHANGE_TYPE_ADDRESS_CHANGE,
@@ -388,6 +391,7 @@ def _send_push_to_driver(
                     bypass_rate_limit=bypass_rate_limit,
                     provider=getattr(device_token, "provider", None),
                     platform=getattr(device_token, "platform", None),
+                    device_token_id=device_token.id,
                 )
 
                 if result.get("ok"):
@@ -406,17 +410,12 @@ def _send_push_to_driver(
                         error_msg,
                     )
 
-                    # Push token invalidation: DeviceToken.is_active is the source of truth.
-                    # (No legacy driver.push_token invalidation — see push.py docstring.)
                     if result.get("token_invalid"):
-                        device_token.is_active = False
-                        db.session.commit()
                         app_logger.info(
-                            "[event_fanout] Token invalidé pour driver %s (device %s)",
+                            "[event_fanout] Token invalidé (lifecycle) pour driver %s (device %s)",
                             driver_id,
                             device_token.id,
                         )
-                        # ✅ INSTRUMENTATION: Métrique Prometheus pour token invalide
                         try:
                             from services.monitoring.prometheus import (
                                 track_push_token_invalidated,
@@ -425,6 +424,13 @@ def _send_push_to_driver(
                             track_push_token_invalidated(reason="device_not_registered")
                         except ImportError:
                             pass  # Prometheus non disponible
+                        if not is_push_device_token_lifecycle_enabled():
+                            device_token.is_active = False
+
+            try:
+                db.session.commit()
+            except Exception:
+                app_logger.exception("[event_fanout] commit after push lifecycle")
 
             success = success_count > 0
             if success:
@@ -1367,11 +1373,20 @@ def send_silent_data_update(
 
             if dt_provider == "fcm":
                 from services.notifications.firebase_push import send_fcm_silent
+
                 result = send_fcm_silent(
                     token=device_token.token,
                     data=push_data,
                     platform=dt_platform or "android",
                 )
+                try:
+                    from services.notifications.device_token_lifecycle import (
+                        apply_push_result_to_device_token,
+                    )
+
+                    apply_push_result_to_device_token(device_token.id, result)
+                except Exception:
+                    pass
             else:
                 result = send_push_message(
                     token=device_token.token,
@@ -1382,16 +1397,20 @@ def send_silent_data_update(
                     use_retry=False,
                     driver_id=driver_id,
                     bypass_rate_limit=False,
+                    device_token_id=device_token.id,
                 )
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid"):
-                # Invalider ce token spécifique
-                from ext import db
-
+            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
                 device_token.is_active = False
-                db.session.commit()
+
+        try:
+            from ext import db
+
+            db.session.commit()
+        except Exception:
+            app_logger.exception("[silent_update] commit after push lifecycle")
 
         success = success_count > 0
 
@@ -1590,14 +1609,18 @@ def send_critical_alert_ios(
                 bypass_rate_limit=True,
                 provider=getattr(device_token, "provider", None),
                 platform=getattr(device_token, "platform", None),
+                device_token_id=device_token.id,
             )
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid"):
-                # Invalider ce token spécifique
+            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
                 device_token.is_active = False
-                db.session.commit()
+
+        try:
+            db.session.commit()
+        except Exception:
+            app_logger.exception("[critical_alert] commit after push lifecycle")
 
         success = success_count > 0
 

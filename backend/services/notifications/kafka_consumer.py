@@ -160,6 +160,9 @@ class KafkaConsumer:
         """
         from ext import db
         from models import Driver
+        from services.notifications.device_token_lifecycle import (
+            is_push_device_token_lifecycle_enabled,
+        )
         from services.notifications.push import send_push_message
 
         driver_id = message["driver_id"]
@@ -202,17 +205,21 @@ class KafkaConsumer:
                 data=data,
                 driver_id=driver_id,
                 bypass_rate_limit=message.get("bypass_rate_limit", False),
+                provider=getattr(device_token, "provider", None),
+                platform=getattr(device_token, "platform", None),
+                device_token_id=device_token.id,
             )
             last_result = result  # Garder le dernier résultat pour logging
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid"):
-                # Invalider ce token spécifique
-                from ext import db
-
+            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
                 device_token.is_active = False
-                db.session.commit()
+
+        try:
+            db.session.commit()
+        except Exception:
+            logger.exception("[kafka_consumer] commit after push lifecycle")
 
         if success_count == 0:
             logger.warning(

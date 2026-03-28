@@ -192,8 +192,13 @@ def send_push_notification_task(  # noqa: PLR0911
 
                 # Envoyer à tous les devices actifs
                 # ✅ FIX: Utiliser les données extraites (pas les objets ORM)
+                from services.notifications.device_token_lifecycle import (
+                    is_push_device_token_lifecycle_enabled,
+                )
+
                 success_count = 0
-                invalid_token_ids = []
+                token_invalid_count = 0
+                invalid_token_ids_flag_off: list[int] = []
                 last_result: Dict[str, Any] | None = None
                 for device_token in device_tokens_data:
                     result = send_push_message(
@@ -205,6 +210,7 @@ def send_push_notification_task(  # noqa: PLR0911
                         bypass_rate_limit=bypass_rate_limit,
                         provider=device_token.get("provider"),
                         platform=device_token.get("platform"),
+                        device_token_id=device_token["id"],
                     )
                     last_result = (
                         result  # Garder le dernier résultat pour logging/retry
@@ -226,29 +232,29 @@ def send_push_notification_task(  # noqa: PLR0911
                             error,
                         )
 
-                        # Si token invalide, marquer pour invalidation
                         if result.get("token_invalid"):
-                            invalid_token_ids.append(device_token["id"])
+                            token_invalid_count += 1
+                            if not is_push_device_token_lifecycle_enabled():
+                                invalid_token_ids_flag_off.append(device_token["id"])
 
-                # ✅ FIX: Invalider les tokens invalides avec une nouvelle requête DB
-                # (la connexion précédente peut être stale après les opérations longues)
-                if invalid_token_ids:
+                if invalid_token_ids_flag_off:
                     try:
                         DeviceToken.query.filter(
-                            DeviceToken.id.in_(invalid_token_ids)
+                            DeviceToken.id.in_(invalid_token_ids_flag_off)
                         ).update({"is_active": False}, synchronize_session=False)
-                        db.session.commit()
-                        logger.warning(
-                            "[notification_task] %d tokens invalidés pour driver %s",
-                            len(invalid_token_ids),
-                            driver_id,
-                        )
                     except Exception as e:
                         logger.warning(
-                            "[notification_task] Failed to invalidate tokens (stale connection?): %s",
+                            "[notification_task] bulk invalidate (flag off): %s",
                             str(e)[:200],
                         )
-                        # Ne pas échouer la tâche pour ça, les tokens seront invalidés au prochain essai
+
+                try:
+                    db.session.commit()
+                except Exception as e:
+                    logger.warning(
+                        "[notification_task] commit after lifecycle: %s",
+                        str(e)[:200],
+                    )
 
                 # Si au moins un envoi a réussi, considérer comme succès
                 if success_count > 0:
@@ -268,7 +274,7 @@ def send_push_notification_task(  # noqa: PLR0911
 
                 # Tous les envois ont échoué
                 # Si tous les tokens sont invalides, passer directement au fallback
-                if len(invalid_token_ids) == len(device_tokens_data):
+                if token_invalid_count == len(device_tokens_data):
                     logger.warning(
                         "[notification_task] Tous les tokens invalides pour driver %s, skip retry",
                         driver_id,

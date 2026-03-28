@@ -155,8 +155,8 @@ class InstitutionMetricsService:
 
             # 3. Offres créées et expirées
             offers_query = RequestOffer.query.filter(
-                RequestOffer.created_at >= period_start,
-                RequestOffer.created_at <= now,
+                RequestOffer.sent_at >= period_start,
+                RequestOffer.sent_at <= now,
             )
             if institution_id:
                 offers_query = offers_query.join(TransportRequest).filter(
@@ -173,8 +173,8 @@ class InstitutionMetricsService:
             # 4. Escalades (offres en mode SEQUENTIAL avec order > 0)
             # Une escalade = une offre séquentielle créée après la première (order > 0)
             escalations_query = RequestOffer.query.filter(
-                RequestOffer.created_at >= period_start,
-                RequestOffer.created_at <= now,
+                RequestOffer.sent_at >= period_start,
+                RequestOffer.sent_at <= now,
                 RequestOffer.mode == OfferMode.SEQUENTIAL.value,
                 RequestOffer.order > 0,  # Escalade = pas la première préférence
             )
@@ -189,8 +189,8 @@ class InstitutionMetricsService:
             fallback_query = (
                 db.session.query(func.count(func.distinct(RequestOffer.transport_request_id)))
                 .filter(
-                    RequestOffer.created_at >= period_start,
-                    RequestOffer.created_at <= now,
+                    RequestOffer.sent_at >= period_start,
+                    RequestOffer.sent_at <= now,
                     RequestOffer.mode == OfferMode.BROADCAST.value,
                 )
             )

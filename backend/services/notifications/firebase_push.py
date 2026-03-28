@@ -17,6 +17,30 @@ from ext import app_logger
 _firebase_initialized = False
 
 
+def _fcm_generic_error_result(exc: BaseException) -> dict[str, Any]:
+    """Erreur FCM non typée : enrichit pour lifecycle / observabilité (PR3/PR4)."""
+    name = type(exc).__name__
+    msg = str(exc)[:500]
+    out: dict[str, Any] = {
+        "ok": False,
+        "error": "fcm_send_error",
+        "error_class": name,
+        "error_message": msg,
+    }
+    low = msg.lower()
+    if any(
+        x in low
+        for x in (
+            "registration",
+            "not a valid fcm",
+            "invalid-argument",
+            "requested entity was not found",
+        )
+    ):
+        out["token_invalid"] = True
+    return out
+
+
 def _init_firebase() -> bool:
     """Lazy-init Firebase Admin SDK.
 
@@ -113,9 +137,9 @@ def send_fcm_android(
     except messaging.QuotaExceededError:
         app_logger.warning("[fcm] FCM quota exceeded")
         return {"ok": False, "error": "quota_exceeded"}
-    except Exception:
+    except Exception as e:
         app_logger.exception("[fcm] Android push failed")
-        return {"ok": False, "error": "fcm_send_error"}
+        return _fcm_generic_error_result(e)
 
 
 def send_fcm_ios(
@@ -156,9 +180,9 @@ def send_fcm_ios(
     except messaging.QuotaExceededError:
         app_logger.warning("[fcm] FCM quota exceeded")
         return {"ok": False, "error": "quota_exceeded"}
-    except Exception:
+    except Exception as e:
         app_logger.exception("[fcm] iOS push failed")
-        return {"ok": False, "error": "fcm_send_error"}
+        return _fcm_generic_error_result(e)
 
 
 def send_fcm_silent(
@@ -204,6 +228,12 @@ def send_fcm_silent(
     except messaging.UnregisteredError:
         app_logger.warning("[fcm] Silent push token unregistered: %s...", token[:20])
         return {"ok": False, "error": "token_unregistered", "token_invalid": True}
-    except Exception:
+    except messaging.SenderIdMismatchError:
+        app_logger.warning("[fcm] Silent push sender ID mismatch: %s...", token[:20])
+        return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
+    except messaging.QuotaExceededError:
+        app_logger.warning("[fcm] Silent push quota exceeded")
+        return {"ok": False, "error": "quota_exceeded"}
+    except Exception as e:
         app_logger.exception("[fcm] Silent push failed (%s)", platform)
-        return {"ok": False, "error": "fcm_send_error"}
+        return _fcm_generic_error_result(e)

@@ -693,6 +693,9 @@ def emit_delay_detected(
         try:
             from ext import db
             from models import DeviceToken
+            from services.notifications.device_token_lifecycle import (
+                is_push_device_token_lifecycle_enabled,
+            )
             from services.notifications.push import send_push_message
 
             device_tokens = DeviceToken.query.filter_by(
@@ -722,15 +725,21 @@ def emit_delay_detected(
                         timeout=5,
                         driver_id=driver.id,
                         bypass_rate_limit=False,  # Les delays ne sont pas critiques, respecter le rate limit
+                        provider=getattr(device_token, "provider", None),
+                        platform=getattr(device_token, "platform", None),
+                        device_token_id=device_token.id,
                     )
                     last_result = result  # Garder le dernier résultat pour logging
 
                     if result.get("ok"):
                         success_count += 1
-                    elif result.get("token_invalid"):
-                        # Invalider ce token spécifique
+                    elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
                         device_token.is_active = False
-                        db.session.commit()
+
+                try:
+                    db.session.commit()
+                except Exception:
+                    app_logger.exception("[socketio] commit after delay push lifecycle")
 
                 if success_count > 0:
                     app_logger.info(

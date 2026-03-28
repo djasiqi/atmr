@@ -46,6 +46,18 @@ class DeviceToken(db.Model):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # Santé push (lifecycle FCM — mis à jour par apply_push_result_to_device_token)
+    last_push_success_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_push_failure_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    consecutive_push_failures: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    last_push_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     __table_args__ = (
         Index("ix_device_tokens_driver_id", "driver_id"),
         Index("ix_device_tokens_token", "token"),

@@ -239,6 +239,7 @@ def send_push_message(
     correlation_id: str | None = None,
     provider: str | None = None,
     platform: str | None = None,
+    device_token_id: int | None = None,
 ) -> Dict[str, Any]:
     """Envoie une notification push (FCM natif ou Expo Push fallback).
 
@@ -265,8 +266,22 @@ def send_push_message(
             extra={"correlation_id": correlation_id},
         )
         if platform == "ios":
-            return send_fcm_ios(token, title, body, data)
-        return send_fcm_android(token, title, body, data)
+            result = send_fcm_ios(token, title, body, data)
+        else:
+            result = send_fcm_android(token, title, body, data)
+        if device_token_id is not None:
+            try:
+                from services.notifications.device_token_lifecycle import (
+                    apply_push_result_to_device_token,
+                )
+
+                apply_push_result_to_device_token(device_token_id, result)
+            except Exception as e:
+                app_logger.warning(
+                    "[push] device_token lifecycle update failed (ignored): %s",
+                    str(e)[:200],
+                )
+        return result
 
     # Expo Push API path (legacy fallback)
     notification_type = data.get("type") if data else None
@@ -311,6 +326,9 @@ def send_push_message(
             driver_id=driver_id,
             bypass_rate_limit=bypass_rate_limit,
             correlation_id=correlation_id,
+            provider=provider,
+            platform=platform,
+            device_token_id=device_token_id,
         )
 
     # Priorité haute par défaut pour que FCM livre immédiatement (Doze bypass).
@@ -513,6 +531,9 @@ def send_push_message_with_retry(
     driver_id: int | None = None,
     bypass_rate_limit: bool = False,
     correlation_id: str | None = None,
+    provider: str | None = None,
+    platform: str | None = None,
+    device_token_id: int | None = None,
 ) -> Dict[str, Any]:
     """Envoie une notification push avec retry automatique.
 
@@ -526,6 +547,7 @@ def send_push_message_with_retry(
         retry_on_network_error: Si True, retry sur erreurs réseau uniquement (défaut: True)
         driver_id: ID du chauffeur pour rate limiting (optionnel)
         bypass_rate_limit: Si True, contourne le rate limiting (pour alertes urgentes)
+        provider/platform/device_token_id: alignés sur ``send_push_message`` (lifecycle Expo)
 
     Returns:
         Dict avec "ok" (bool), "error" (str) ou "data", et "attempts" (int)
@@ -582,6 +604,11 @@ def send_push_message_with_retry(
             timeout=timeout,
             correlation_id=correlation_id,
             use_retry=False,  # ✅ Éviter la récursion infinie
+            driver_id=driver_id,
+            bypass_rate_limit=bypass_rate_limit,
+            provider=provider,
+            platform=platform,
+            device_token_id=device_token_id,
         )
 
         if result.get("ok"):
