@@ -345,19 +345,9 @@ services:
     # Note: redis est dans docker-compose.production.yml (conteneur atmr-redis)
     # La communication se fait via le réseau externe atmr-network
     # depends_on supprimé car le service n'est pas dans ce fichier
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9121/metrics",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # Pas de healthcheck Docker : l'image oliver006/redis_exporter est distroless
+    # (aucun wget/curl/shell). L'ancien test wget provoquait un état unhealthy permanent.
+    # La disponibilité se vérifie via le scrape Prometheus sur :9121/metrics.
     deploy:
       resources:
         limits:
