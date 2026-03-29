@@ -148,6 +148,9 @@ from .message import Message
 from .ml_prediction import MLPrediction
 from .partner_invoice import PartnerInvoice
 from .partnership import Partnership
+from .platform_admin_permission_grant import PlatformAdminPermissionGrant
+from .platform_change_request import PlatformChangeRequest
+from .platform_runbook_execution import PlatformRunbookExecution
 from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
@@ -256,6 +259,9 @@ __all__ = [
     "Message",
     "PartnerInvoice",
     "Partnership",
+    "PlatformAdminPermissionGrant",
+    "PlatformChangeRequest",
+    "PlatformRunbookExecution",
     "PartnershipStatus",
     "PasswordHistory",  # ✅ S3: Historique mots de passe
     "Payment",

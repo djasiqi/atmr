@@ -616,6 +616,99 @@
   word-break: break-word;
 }
 
+/* Gouvernance tenant V1 */
+.govPanel {
+  margin-top: var(--spacing-lg);
+}
+
+.govRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+  margin-bottom: var(--spacing-md);
+}
+
+.govLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.govInput {
+  min-width: 8rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-primary);
+  font-size: var(--font-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.govTextarea {
+  width: 100%;
+  min-height: 4rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-primary);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.govActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.govBtn {
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+
+.govBtn:hover {
+  background: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.govBtnPrimary {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+}
+
+.govBtnPrimary:hover {
+  filter: brightness(1.05);
+}
+
+.govPre {
+  margin: 0;
+  padding: var(--spacing-sm);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-primary);
+  font-size: var(--font-xs);
+  font-family: var(--font-family-mono);
+  overflow-x: auto;
+  max-height: 22rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.govError {
+  color: var(--color-danger, #b91c1c);
+  font-size: var(--font-sm);
+  margin: var(--spacing-sm) 0 0;
+}
+
 @media (max-width: 768px) {
   .content {
     margin: var(--spacing-sm);

@@ -3,7 +3,20 @@ import { FaHeartbeat, FaMicrochip, FaServer } from 'react-icons/fa';
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import StatusBadge from '../../../components/platform/StatusBadge';
-import { fetchPlatformRuntime, fetchPlatformStatus } from '../../../services/adminService';
+import {
+  fetchPlatformAuditEvents,
+  fetchPlatformAuditReplay,
+  fetchPlatformReconciliation,
+  fetchPlatformRuntime,
+  fetchPlatformStatus,
+  fetchPlatformTenant,
+  postPlatformPoliciesEvaluate,
+  postPlatformRunbookExecution,
+  postPlatformRunbookRollback,
+  postPlatformSearch,
+  postPlatformTenantSuspend,
+  postPlatformTenantSuspendPreview,
+} from '../../../services/adminService';
 import styles from './AdminPlatformOps.module.css';
 
 const CRITICALITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -409,6 +422,26 @@ const AdminPlatformOps = () => {
   const [runtimeLoading, setRuntimeLoading] = useState(false);
   const [runtimeError, setRuntimeError] = useState(null);
 
+  const [govTenantId, setGovTenantId] = useState('');
+  const [govJustification, setGovJustification] = useState('');
+  const [govTenantDetail, setGovTenantDetail] = useState(null);
+  const [govPreview, setGovPreview] = useState(null);
+  const [govSuspendResult, setGovSuspendResult] = useState(null);
+  const [govPolicyResult, setGovPolicyResult] = useState(null);
+  const [govError, setGovError] = useState(null);
+  const [govBusy, setGovBusy] = useState(false);
+  const [govSearchQuery, setGovSearchQuery] = useState('');
+  const [govSearchResult, setGovSearchResult] = useState(null);
+  const [govReconResult, setGovReconResult] = useState(null);
+  const [govAuditSample, setGovAuditSample] = useState(null);
+  const [govReplayCid, setGovReplayCid] = useState('');
+  const [govReplayResult, setGovReplayResult] = useState(null);
+
+  const govTenantIdParsed = useMemo(() => {
+    const n = Number.parseInt(String(govTenantId).trim(), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [govTenantId]);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -433,6 +466,204 @@ const AdminPlatformOps = () => {
       setLoading(false);
     }
   }, []);
+
+  const loadGovTenant = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('Indiquez un identifiant tenant (entreprise) numérique valide.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await fetchPlatformTenant(tid);
+      setGovTenantDetail(json);
+    } catch (e) {
+      setGovTenantDetail(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Chargement tenant impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const runGovPreview = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('ID tenant invalide.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformTenantSuspendPreview(tid, {});
+      setGovPreview(json);
+    } catch (e) {
+      setGovPreview(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Preview impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const runGovPolicyEvaluate = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('ID tenant invalide.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformPoliciesEvaluate({
+        action_type: 'governance.tenant.suspend',
+        scope_type: 'tenant',
+        scope_id: String(tid),
+      });
+      setGovPolicyResult(json);
+    } catch (e) {
+      setGovPolicyResult(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Évaluation policy impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const runGovSuspend = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('ID tenant invalide.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformTenantSuspend(tid, { justification: govJustification });
+      setGovSuspendResult(json);
+      if (json?.tenant) {
+        setGovTenantDetail(json.tenant);
+      }
+    } catch (e) {
+      setGovSuspendResult(e?.response?.data || null);
+      setGovError(e?.response?.data?.message || e?.message || 'Suspension impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed, govJustification]);
+
+  const runPostSuspendVerify = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('ID tenant invalide.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformRunbookExecution('tenant_post_suspend_verify', { tenant_id: tid });
+      setGovSuspendResult((prev) => ({ ...(prev || {}), runbook_verify: json }));
+    } catch (e) {
+      setGovError(e?.response?.data?.message || e?.message || 'Runbook impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const runGovSearch = useCallback(async () => {
+    const q = govSearchQuery.trim();
+    if (!q) {
+      setGovError('Saisissez une requête (ID tenant, booking, ou UUID utilisateur).');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformSearch({ query: q });
+      setGovSearchResult(json);
+    } catch (e) {
+      setGovSearchResult(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Recherche impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govSearchQuery]);
+
+  const runGovReconciliation = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    if (!tid) {
+      setGovError('ID tenant requis pour la réconciliation.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await fetchPlatformReconciliation(tid);
+      setGovReconResult(json);
+    } catch (e) {
+      setGovReconResult(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Réconciliation impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const loadGovAuditSample = useCallback(async () => {
+    const tid = govTenantIdParsed;
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await fetchPlatformAuditEvents({
+        per_page: 15,
+        page: 1,
+        ...(tid ? { company_id: tid } : {}),
+        action_category: 'platform_ops',
+      });
+      setGovAuditSample(json);
+    } catch (e) {
+      setGovAuditSample(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Audit impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govTenantIdParsed]);
+
+  const loadGovReplay = useCallback(async () => {
+    const cid = govReplayCid.trim();
+    if (!cid) {
+      setGovError('Indiquez un correlation_id pour le replay.');
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await fetchPlatformAuditReplay(cid);
+      setGovReplayResult(json);
+    } catch (e) {
+      setGovReplayResult(null);
+      setGovError(e?.response?.data?.message || e?.message || 'Replay impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govReplayCid]);
+
+  const runGovRollbackLastRunbook = useCallback(async () => {
+    const exId = govSuspendResult?.runbook_verify?.id;
+    if (!exId) {
+      setGovError(
+        'Aucun execution_id : lancez d’abord « Runbook : vérif post-suspension » (réponse JSON ci-dessous).'
+      );
+      return;
+    }
+    setGovError(null);
+    setGovBusy(true);
+    try {
+      const json = await postPlatformRunbookRollback(exId);
+      setGovSuspendResult((prev) => ({ ...(prev || {}), runbook_rollback: json }));
+    } catch (e) {
+      setGovError(e?.response?.data?.message || e?.message || 'Rollback impossible');
+    } finally {
+      setGovBusy(false);
+    }
+  }, [govSuspendResult]);
 
   const loadRuntime = useCallback(async () => {
     setRuntimeError(null);
@@ -609,6 +840,213 @@ const AdminPlatformOps = () => {
                   généré {formatTime(data.generated_at)}
                 </span>
               </div>
+
+              <section
+                className={`${styles.card} ${styles.cardSpacedTop} ${styles.govPanel}`}
+                aria-labelledby="gov-tenant-heading"
+              >
+                <h2 id="gov-tenant-heading" className={styles.cardTitle}>
+                  Gouvernance tenant (slice V1)
+                </h2>
+                <p className={styles.cardMeta}>
+                  Tenant = entreprise (<code className={styles.inlineCode}>company.id</code>). Affiche{' '}
+                  <code className={styles.inlineCode}>desired_state</code>,{' '}
+                  <code className={styles.inlineCode}>observed_state</code>,{' '}
+                  <code className={styles.inlineCode}>effective_state</code> et{' '}
+                  <code className={styles.inlineCode}>reconciliation_status</code> — voir{' '}
+                  <code className={styles.inlineCode}>docs/platform/spec-normative-v1.md</code>.
+                </p>
+                <div className={styles.govRow}>
+                  <label className={styles.govLabel} htmlFor="gov-tenant-id">
+                    ID tenant
+                    <input
+                      id="gov-tenant-id"
+                      className={styles.govInput}
+                      type="number"
+                      min={1}
+                      value={govTenantId}
+                      onChange={(e) => setGovTenantId(e.target.value)}
+                      placeholder="ex. 12"
+                    />
+                  </label>
+                  <div className={styles.govActions}>
+                    <button
+                      type="button"
+                      className={styles.govBtn}
+                      onClick={loadGovTenant}
+                      disabled={govBusy}
+                    >
+                      Charger l’état
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.govBtn}
+                      onClick={runGovPolicyEvaluate}
+                      disabled={govBusy}
+                    >
+                      Évaluer policy (suspend)
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.govBtn}
+                      onClick={runGovPreview}
+                      disabled={govBusy}
+                    >
+                      Prévisualiser impact
+                    </button>
+                  </div>
+                </div>
+                <label className={styles.govLabel} htmlFor="gov-justification">
+                  Justification (obligatoire pour suspendre)
+                  <textarea
+                    id="gov-justification"
+                    className={styles.govTextarea}
+                    value={govJustification}
+                    onChange={(e) => setGovJustification(e.target.value)}
+                    placeholder="Motif opérationnel (≥ 3 caractères)"
+                  />
+                </label>
+                <div className={styles.govActions}>
+                  <button
+                    type="button"
+                    className={`${styles.govBtn} ${styles.govBtnPrimary}`}
+                    onClick={runGovSuspend}
+                    disabled={govBusy}
+                  >
+                    Suspendre le tenant
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={runPostSuspendVerify}
+                    disabled={govBusy}
+                  >
+                    Runbook : vérif post-suspension
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={runGovReconciliation}
+                    disabled={govBusy}
+                  >
+                    Drift / réconciliation
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={loadGovAuditSample}
+                    disabled={govBusy}
+                  >
+                    Échantillon audit (ops)
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={runGovRollbackLastRunbook}
+                    disabled={govBusy}
+                  >
+                    Rollback dernière exécution runbook
+                  </button>
+                </div>
+                <p className={styles.sectionLabel}>Replay audit (correlation_id)</p>
+                <p className={styles.cardMeta}>
+                  Affiche la réponse API telle quelle (pas de recalcul côté navigateur).
+                </p>
+                <div className={styles.govRow}>
+                  <label className={styles.govLabel} htmlFor="gov-replay-cid">
+                    correlation_id
+                    <input
+                      id="gov-replay-cid"
+                      className={styles.govInput}
+                      value={govReplayCid}
+                      onChange={(e) => setGovReplayCid(e.target.value)}
+                      placeholder="ex. depuis X-Correlation-Id ou réponse suspend"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={loadGovReplay}
+                    disabled={govBusy}
+                  >
+                    Charger le replay
+                  </button>
+                </div>
+                <p className={styles.sectionLabel}>Investigation (IDs)</p>
+                <div className={styles.govRow}>
+                  <label className={styles.govLabel} htmlFor="gov-search-q">
+                    Recherche plateforme
+                    <input
+                      id="gov-search-q"
+                      className={styles.govInput}
+                      value={govSearchQuery}
+                      onChange={(e) => setGovSearchQuery(e.target.value)}
+                      placeholder="tenant, booking ou UUID user"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className={styles.govBtn}
+                    onClick={runGovSearch}
+                    disabled={govBusy}
+                  >
+                    Rechercher
+                  </button>
+                </div>
+                {govError && (
+                  <p className={styles.govError} role="alert">
+                    {govError}
+                  </p>
+                )}
+                {govTenantDetail && (
+                  <div>
+                    <p className={styles.sectionLabel}>État tenant</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govTenantDetail, null, 2)}</pre>
+                  </div>
+                )}
+                {govPolicyResult && (
+                  <div>
+                    <p className={styles.sectionLabel}>Policy evaluate</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govPolicyResult, null, 2)}</pre>
+                  </div>
+                )}
+                {govPreview && (
+                  <div>
+                    <p className={styles.sectionLabel}>Preview blast radius</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govPreview, null, 2)}</pre>
+                  </div>
+                )}
+                {govSuspendResult && (
+                  <div>
+                    <p className={styles.sectionLabel}>Dernière action (suspend / runbook)</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govSuspendResult, null, 2)}</pre>
+                  </div>
+                )}
+                {govSearchResult && (
+                  <div>
+                    <p className={styles.sectionLabel}>Résultat recherche</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govSearchResult, null, 2)}</pre>
+                  </div>
+                )}
+                {govReconResult && (
+                  <div>
+                    <p className={styles.sectionLabel}>Réconciliation / drift</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govReconResult, null, 2)}</pre>
+                  </div>
+                )}
+                {govAuditSample && (
+                  <div>
+                    <p className={styles.sectionLabel}>Audit (échantillon)</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govAuditSample, null, 2)}</pre>
+                  </div>
+                )}
+                {govReplayResult && (
+                  <div>
+                    <p className={styles.sectionLabel}>Replay (API)</p>
+                    <pre className={styles.govPre}>{JSON.stringify(govReplayResult, null, 2)}</pre>
+                  </div>
+                )}
+              </section>
 
               <section className={styles.runtimeCard} aria-labelledby="runtime-heading">
                 <div className={styles.runtimeCardHeader}>

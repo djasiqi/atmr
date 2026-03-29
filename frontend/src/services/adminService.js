@@ -360,3 +360,112 @@ export const fetchPlatformRuntime = async () => {
     throw error;
   }
 };
+
+const platformHeaders = () => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+/** GET /platform/me */
+export const fetchPlatformMe = async () => {
+  const response = await apiClient.get('/platform/me', { headers: platformHeaders() });
+  return response.data;
+};
+
+/** POST /platform/policies/evaluate */
+export const postPlatformPoliciesEvaluate = async (body) => {
+  const response = await apiClient.post('/platform/policies/evaluate', body, {
+    headers: platformHeaders(),
+  });
+  return response.data;
+};
+
+/** GET /platform/tenants */
+export const fetchPlatformTenants = async (params = {}) => {
+  const response = await apiClient.get('/platform/tenants', {
+    headers: platformHeaders(),
+    params,
+  });
+  return response.data;
+};
+
+/** GET /platform/tenants/:id */
+export const fetchPlatformTenant = async (tenantId) => {
+  const response = await apiClient.get(`/platform/tenants/${tenantId}`, {
+    headers: platformHeaders(),
+  });
+  return response.data;
+};
+
+/** POST /platform/tenants/:id/suspend/preview */
+export const postPlatformTenantSuspendPreview = async (tenantId, body = {}) => {
+  const response = await apiClient.post(`/platform/tenants/${tenantId}/suspend/preview`, body, {
+    headers: platformHeaders(),
+  });
+  return response.data;
+};
+
+/** POST /platform/tenants/:id/suspend */
+export const postPlatformTenantSuspend = async (tenantId, body) => {
+  const response = await apiClient.post(`/platform/tenants/${tenantId}/suspend`, body, {
+    headers: platformHeaders(),
+  });
+  return response.data;
+};
+
+/** GET /platform/runbooks */
+export const fetchPlatformRunbooks = async () => {
+  const response = await apiClient.get('/platform/runbooks', { headers: platformHeaders() });
+  return response.data;
+};
+
+/** POST /platform/runbooks/:id/executions */
+export const postPlatformRunbookExecution = async (runbookId, body) => {
+  const response = await apiClient.post(`/platform/runbooks/${runbookId}/executions`, body, {
+    headers: platformHeaders(),
+  });
+  return response.data;
+};
+
+/** POST /platform/search */
+export const postPlatformSearch = async (body) => {
+  const response = await apiClient.post('/platform/search', body, { headers: platformHeaders() });
+  return response.data;
+};
+
+/** GET /platform/reconciliation */
+export const fetchPlatformReconciliation = async (tenantId) => {
+  const response = await apiClient.get('/platform/reconciliation', {
+    headers: platformHeaders(),
+    params: { tenant_id: tenantId },
+  });
+  return response.data;
+};
+
+/** GET /platform/audit-events */
+export const fetchPlatformAuditEvents = async (params = {}) => {
+  const response = await apiClient.get('/platform/audit-events', {
+    headers: platformHeaders(),
+    params,
+  });
+  return response.data;
+};
+
+/** GET /platform/audit-events/replay — timeline ordonnée (réponse API telle quelle) */
+export const fetchPlatformAuditReplay = async (correlationId) => {
+  const response = await apiClient.get('/platform/audit-events/replay', {
+    headers: platformHeaders(),
+    params: { correlation_id: correlationId },
+  });
+  return response.data;
+};
+
+/** POST /platform/runbooks/executions/:executionId/rollback */
+export const postPlatformRunbookRollback = async (executionId) => {
+  const response = await apiClient.post(
+    `/platform/runbooks/executions/${executionId}/rollback`,
+    {},
+    { headers: platformHeaders() }
+  );
+  return response.data;
+};

@@ -20,6 +20,7 @@ from schemas.booking_schemas import BookingCreateSchema
 from services.geo.geo_resolver import resolve_pickup_admin
 from shared.geo_utils import GeoValidator
 from shared.time_utils import parse_local_naive
+from services.platform_tenant_gates import assert_company_not_platform_suspended
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,8 @@ class CreateBookingUseCase:
         company_id = int(getattr(client_dto, "company_id", 0) or 0)
         if company_id <= 0:
             raise ValueError("Client invalide (company_id manquant)")
+
+        assert_company_not_platform_suspended(company_id)
 
         pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss = (
             self._geocode_booking_addresses(validated_data, company_id)

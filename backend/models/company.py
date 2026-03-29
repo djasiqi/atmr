@@ -136,6 +136,14 @@ class Company(db.Model):
         Text, nullable=True, comment="JSON: require_2fa_roles, password_expiry_days, max_session_days, enforcement_mode"
     )
 
+    # Plateforme : suspension gouvernance (tenant = Company en V1 — voir docs/platform/DECISIONS.md)
+    platform_suspended: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        comment="Intention persistée : tenant suspendu au sens plateforme",
+    )
+
     # Relations
     user = relationship("User", back_populates="company", passive_deletes=True)
     clients = relationship(

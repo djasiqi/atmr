@@ -32,6 +32,8 @@ from routes.api_error_models import (
 )
 from schemas.booking_schemas import BookingCreateSchema
 from schemas.validation_utils import handle_validation_error, validate_request
+from services.platform_exceptions import PlatformTenantSuspended
+from services.platform_governance_constants import ERROR_TENANT_PLATFORM_SUSPENDED
 from services.security.idempotency import IdempotencyService
 from shared.constants import PaginationConstants
 from shared.error_handlers import APIErrorHandler
@@ -498,6 +500,16 @@ class CreateBooking(Resource):
                     str(e),
                     logger_instance=logger,
                 )
+            except PlatformTenantSuspended as e:
+                trace_id = get_trace_id()
+                return {
+                    "error": e.message,
+                    "error_code": ERROR_TENANT_PLATFORM_SUSPENDED,
+                    "reason_code": ERROR_TENANT_PLATFORM_SUSPENDED,
+                    "human_reason": e.message,
+                    "retryable": False,
+                    "trace_id": trace_id,
+                }, 403
             except RuntimeError as e:
                 # Erreur de géocodage (adresse invalide, service indisponible, etc.)
                 return _handle_geocoding_error(e)

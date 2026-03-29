@@ -354,6 +354,273 @@ class UserSchema(Schema):
 # ========================
 # 1. Connexion / Login
 # ========================
+def _login_post_body():
+    """Corps du POST /login (hors gestionnaire d'erreur global)."""
+    try:
+        data = request.get_json() or {}
+    except Exception as json_error:
+        # Gérer spécifiquement les erreurs de parsing JSON (BadRequest 400)
+        # pour éviter qu'elles soient transformées en 500 par le gestionnaire global
+        from werkzeug.exceptions import (
+            BadRequest,
+        )
+
+        if isinstance(json_error, BadRequest):
+            logger.warning("Erreur parsing JSON dans login: %s", json_error)
+            return APIErrorHandler.handle_validation_error(
+                "Format JSON invalide dans la requête",
+                logger_instance=logger,
+            )
+        # Si ce n'est pas une BadRequest, laisser le gestionnaire global la gérer
+        raise
+
+    # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
+    try:
+        validated_data = validate_request(LoginSchema(), data)
+    except ValidationError as e:
+        return handle_validation_error(e)
+
+    email = validated_data["email"]
+    password = validated_data["password"]
+
+    # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
+    uc = AuthenticateUserUseCase()
+    input_data = AuthenticateUserInput(email=email, password=password)
+    auth_result = uc.execute(input_data)
+
+    user = None if not auth_result.success else auth_result.user
+
+    if not user:
+        err_code = (auth_result.error or {}).get("error", "invalid_credentials")
+        # ✅ Priorité 7: Audit logging pour login échoué
+        try:
+            AuditLogger.log_action(
+                action_type="login_failed",
+                action_category="security",
+                user_type="unknown",
+                result_status="failure",
+                result_message="Email ou mot de passe invalide",
+                action_details={
+                    "email": mask_email(email),
+                    "reason": err_code,
+                },
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get("User-Agent"),
+            )
+            # ✅ Priorité 7: Métriques Prometheus pour login échoué
+            security_login_attempts_total.labels(type="failed").inc()
+            security_login_failures_total.inc()
+        except Exception as audit_error:
+            # Ne pas bloquer la réponse si l'audit logging échoue
+            logger.warning("Échec audit logging login_failed: %s", audit_error)
+
+        # ✅ S3: Enregistrer tentative échouée pour détection d'alertes
+        try:
+            from security.security_alerts import SecurityAlertService
+
+            SecurityAlertService.record_login_failure(
+                ip_address=request.remote_addr or "unknown", email=email
+            )
+        except Exception as alert_error:
+            logger.debug(
+                "[SecurityAlerts] Failed to record login failure: %s",
+                alert_error,
+            )
+
+        # ✅ P0: Ajouter trace_id dans l'erreur
+        trace_id = get_trace_id()
+        logger.warning(
+            "Login failed - email: %s, reason: %s, trace_id: %s",
+            mask_email(email),
+            err_code,
+            trace_id,
+        )
+        # Messages génériques côté API ; le mobile affiche des messages clairs
+        auth_code = (
+            AuthErrorCodes.EMAIL_NOT_FOUND
+            if err_code == AuthErrorCodes.EMAIL_NOT_FOUND
+            else AuthErrorCodes.INVALID_PASSWORD
+            if err_code == AuthErrorCodes.INVALID_PASSWORD
+            else AuthErrorCodes.INVALID_CREDENTIALS
+        )
+        return auth_error(
+            auth_code,
+            "Identifiants incorrects",
+            401,
+            details={"trace_id": trace_id},
+        )
+
+    is_active, error_message = _check_user_profile_active(user)
+    if not is_active:
+        trace_id = get_trace_id()
+        logger.warning(
+            "Login rejected (inactive profile) - email: %s, reason: %s, trace_id: %s",
+            mask_email(email),
+            error_message,
+            trace_id,
+        )
+        return {
+            "error": error_message or "Compte désactivé",
+            "reason": "account_disabled",
+            "trace_id": trace_id,
+        }, 403
+
+    is_mobile_request = _is_mobile_request()
+
+    # Création du token avec le rôle dans additional_claims
+    # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
+    claims = {
+        "role": user.role.value,
+        "company_id": _resolve_company_id(user),
+        "driver_id": getattr(user, "driver_id", None),
+        "institution_id": getattr(user, "institution_id", None),
+        "institution_role": getattr(user, "institution_role", None),
+        "aud": "atmr-api",  # Audience claim pour sécurité
+    }
+    access_token = create_access_token(
+        identity=str(user.public_id),
+        # ⚠️ ID numérique attendu par dispatch_routes
+        additional_claims=claims,
+        expires_delta=_resolve_access_token_expires(is_mobile_request),
+        fresh=True,  # ✅ Token fresh lors de la connexion initiale
+    )
+
+    # Création du refresh token
+    # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
+    # ✅ SECURITY: Ajouter la claim 'aud' et 'pwd_hash' pour invalidation après changement de mot de passe
+    pwd_hash_version = _get_password_hash_version(user)
+    refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+    refresh_token = create_refresh_token(
+        identity=str(user.public_id),
+        additional_claims={
+            "aud": "atmr-api",  # Audience claim pour sécurité
+            "pwd_hash": pwd_hash_version,  # Hash pour invalider après changement de mot de passe
+        },
+        expires_delta=refresh_expires_delta,
+    )
+
+    # ✅ PHASE 2: Stocker le refresh token dans Redis et DB
+    try:
+        # Stocker dans Redis pour rotation et limitation
+        token_service = RefreshTokenService()
+        token_service.store_token(user.id, refresh_token)
+
+        # Stocker aussi dans la DB pour compatibilité et audit
+        refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
+        store_refresh_token(
+            token=refresh_token,
+            user_id=user.id,
+            expires_at=refresh_expires_at,
+            device_id=request.headers.get("X-Device-ID"),
+            device_name=request.headers.get("X-Device-Name"),
+        )
+
+        # Limite de tokens actifs : plus haute pour les drivers (multi-device, reinstall)
+        is_driver = user.role == UserRole.driver
+        max_active_tokens = int(os.getenv(
+            "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
+            "15" if is_driver else "5",
+        ))
+        token_service.limit_active_tokens(user.id, max_active_tokens)
+    except Exception as store_error:
+        logger.warning(
+            "Échec stockage refresh token: %s - %s",
+            type(store_error).__name__,
+            str(store_error),
+        )
+        # Le token sera toujours retourné au client, mais ne sera pas révocable
+
+    # ✅ Priorité 7: Audit logging pour login réussi
+    try:
+        AuditLogger.log_action(
+            action_type="login_success",
+            action_category="security",
+            user_id=user.id,
+            user_type=user.role.value if user.role else "unknown",
+            result_status="success",
+            action_details={
+                "email": mask_email(email),
+                "username": user.username,
+                "role": user.role.value if user.role else None,
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get("User-Agent"),
+        )
+        # ✅ Priorité 7: Métrique Prometheus pour login réussi
+        security_login_attempts_total.labels(type="success").inc()
+    except Exception as audit_error:
+        # Ne pas bloquer le login si l'audit logging échoue
+        logger.warning("Échec audit logging login_success: %s", audit_error)
+
+    # ✅ Migration localStorage → cookies httpOnly
+    # ✅ P0: Ajouter trace_id dans la réponse
+    trace_id = get_trace_id()
+    logger.info(
+        "Login success",
+        extra={
+            "trace_id": trace_id,
+            "user_id": user.id,
+            "email": mask_email(email),
+        },
+    )
+
+    # Créer la réponse JSON
+    response_data = {
+        "message": "Connexion réussie",
+        "user": {
+            "id": user.id,
+            "public_id": user.public_id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role.value,
+            "force_password_change": user.force_password_change,
+        },
+        "trace_id": trace_id,
+    }
+
+    # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
+    # Toujours retourner les tokens dans le JSON pour les applications mobiles
+    # Le header X-Requested-With: Expo est optionnel mais recommandé pour identifier les requêtes mobiles
+    # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
+    response_data["token"] = access_token
+    response_data["refresh_token"] = refresh_token
+
+    # Créer la réponse avec make_response pour pouvoir définir les cookies
+    response = make_response(response_data, 200)
+
+    # ✅ Définir cookies httpOnly pour web (pas pour mobile)
+    if not is_mobile_request:
+        # Cookie access_token
+        response.set_cookie(
+            current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+            access_token,
+            httponly=current_app.config["COOKIE_HTTP_ONLY"],
+            secure=current_app.config["COOKIE_SECURE"],
+            samesite=current_app.config["COOKIE_SAME_SITE"],
+            max_age=int(
+                current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
+            ),
+            path=current_app.config["COOKIE_PATH"],
+            domain=current_app.config["COOKIE_DOMAIN"],
+        )
+
+        # Cookie refresh_token
+        response.set_cookie(
+            current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
+            refresh_token,
+            httponly=current_app.config["COOKIE_HTTP_ONLY"],
+            secure=current_app.config["COOKIE_SECURE"],
+            samesite=current_app.config["COOKIE_SAME_SITE"],
+            max_age=int(
+                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+            ),
+            path=current_app.config["COOKIE_PATH"],
+            domain=current_app.config["COOKIE_DOMAIN"],
+        )
+
+    return response
+
+
 @auth_ns.route("/login")
 class Login(Resource):
     @auth_ns.expect(login_model)
@@ -368,270 +635,7 @@ class Login(Resource):
     def post(self):
         """Authentifie un utilisateur et renvoie un token d'accès."""
         try:
-            try:
-                data = request.get_json() or {}
-            except Exception as json_error:
-                # Gérer spécifiquement les erreurs de parsing JSON (BadRequest 400)
-                # pour éviter qu'elles soient transformées en 500 par le gestionnaire global
-                from werkzeug.exceptions import (
-                    BadRequest,
-                )
-
-                if isinstance(json_error, BadRequest):
-                    logger.warning("Erreur parsing JSON dans login: %s", json_error)
-                    return APIErrorHandler.handle_validation_error(
-                        "Format JSON invalide dans la requête",
-                        logger_instance=logger,
-                    )
-                # Si ce n'est pas une BadRequest, laisser le gestionnaire global la gérer
-                raise
-
-            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            try:
-                validated_data = validate_request(LoginSchema(), data)
-            except ValidationError as e:
-                return handle_validation_error(e)
-
-            email = validated_data["email"]
-            password = validated_data["password"]
-
-            # ✅ DDD: Utiliser le use case pour authentifier l'utilisateur
-            uc = AuthenticateUserUseCase()
-            input_data = AuthenticateUserInput(email=email, password=password)
-            auth_result = uc.execute(input_data)
-
-            user = None if not auth_result.success else auth_result.user
-
-            if not user:
-                err_code = (auth_result.error or {}).get("error", "invalid_credentials")
-                # ✅ Priorité 7: Audit logging pour login échoué
-                try:
-                    AuditLogger.log_action(
-                        action_type="login_failed",
-                        action_category="security",
-                        user_type="unknown",
-                        result_status="failure",
-                        result_message="Email ou mot de passe invalide",
-                        action_details={
-                            "email": mask_email(email),
-                            "reason": err_code,
-                        },
-                        ip_address=request.remote_addr,
-                        user_agent=request.headers.get("User-Agent"),
-                    )
-                    # ✅ Priorité 7: Métriques Prometheus pour login échoué
-                    security_login_attempts_total.labels(type="failed").inc()
-                    security_login_failures_total.inc()
-                except Exception as audit_error:
-                    # Ne pas bloquer la réponse si l'audit logging échoue
-                    logger.warning("Échec audit logging login_failed: %s", audit_error)
-
-                # ✅ S3: Enregistrer tentative échouée pour détection d'alertes
-                try:
-                    from security.security_alerts import SecurityAlertService
-
-                    SecurityAlertService.record_login_failure(
-                        ip_address=request.remote_addr or "unknown", email=email
-                    )
-                except Exception as alert_error:
-                    logger.debug(
-                        "[SecurityAlerts] Failed to record login failure: %s",
-                        alert_error,
-                    )
-
-                # ✅ P0: Ajouter trace_id dans l'erreur
-                trace_id = get_trace_id()
-                logger.warning(
-                    "Login failed - email: %s, reason: %s, trace_id: %s",
-                    mask_email(email),
-                    err_code,
-                    trace_id,
-                )
-                # Messages génériques côté API ; le mobile affiche des messages clairs
-                auth_code = (
-                    AuthErrorCodes.EMAIL_NOT_FOUND
-                    if err_code == AuthErrorCodes.EMAIL_NOT_FOUND
-                    else AuthErrorCodes.INVALID_PASSWORD
-                    if err_code == AuthErrorCodes.INVALID_PASSWORD
-                    else AuthErrorCodes.INVALID_CREDENTIALS
-                )
-                return auth_error(
-                    auth_code,
-                    "Identifiants incorrects",
-                    401,
-                    details={"trace_id": trace_id},
-                )
-
-            is_active, error_message = _check_user_profile_active(user)
-            if not is_active:
-                trace_id = get_trace_id()
-                logger.warning(
-                    "Login rejected (inactive profile) - email: %s, reason: %s, trace_id: %s",
-                    mask_email(email),
-                    error_message,
-                    trace_id,
-                )
-                return {
-                    "error": error_message or "Compte désactivé",
-                    "reason": "account_disabled",
-                    "trace_id": trace_id,
-                }, 403
-
-            is_mobile_request = _is_mobile_request()
-
-            # Création du token avec le rôle dans additional_claims
-            # ✅ SECURITY: Ajout claim 'aud' (audience) pour prévenir token replay
-            claims = {
-                "role": user.role.value,
-                "company_id": _resolve_company_id(user),
-                "driver_id": getattr(user, "driver_id", None),
-                "institution_id": getattr(user, "institution_id", None),
-                "institution_role": getattr(user, "institution_role", None),
-                "aud": "atmr-api",  # Audience claim pour sécurité
-            }
-            access_token = create_access_token(
-                identity=str(user.public_id),
-                # ⚠️ ID numérique attendu par dispatch_routes
-                additional_claims=claims,
-                expires_delta=_resolve_access_token_expires(is_mobile_request),
-                fresh=True,  # ✅ Token fresh lors de la connexion initiale
-            )
-
-            # Création du refresh token
-            # (durée configurée dans JWT_REFRESH_TOKEN_EXPIRES)
-            # ✅ SECURITY: Ajouter la claim 'aud' et 'pwd_hash' pour invalidation après changement de mot de passe
-            pwd_hash_version = _get_password_hash_version(user)
-            refresh_expires_delta = current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
-            refresh_token = create_refresh_token(
-                identity=str(user.public_id),
-                additional_claims={
-                    "aud": "atmr-api",  # Audience claim pour sécurité
-                    "pwd_hash": pwd_hash_version,  # Hash pour invalider après changement de mot de passe
-                },
-                expires_delta=refresh_expires_delta,
-            )
-
-            # ✅ PHASE 2: Stocker le refresh token dans Redis et DB
-            try:
-                # Stocker dans Redis pour rotation et limitation
-                token_service = RefreshTokenService()
-                token_service.store_token(user.id, refresh_token)
-
-                # Stocker aussi dans la DB pour compatibilité et audit
-                refresh_expires_at = datetime.now(UTC) + refresh_expires_delta
-                store_refresh_token(
-                    token=refresh_token,
-                    user_id=user.id,
-                    expires_at=refresh_expires_at,
-                    device_id=request.headers.get("X-Device-ID"),
-                    device_name=request.headers.get("X-Device-Name"),
-                )
-
-                # Limite de tokens actifs : plus haute pour les drivers (multi-device, reinstall)
-                is_driver = user.role == UserRole.driver
-                max_active_tokens = int(os.getenv(
-                    "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
-                    "15" if is_driver else "5",
-                ))
-                token_service.limit_active_tokens(user.id, max_active_tokens)
-            except Exception as store_error:
-                logger.warning(
-                    "Échec stockage refresh token: %s - %s",
-                    type(store_error).__name__,
-                    str(store_error),
-                )
-                # Le token sera toujours retourné au client, mais ne sera pas révocable
-
-            # ✅ Priorité 7: Audit logging pour login réussi
-            try:
-                AuditLogger.log_action(
-                    action_type="login_success",
-                    action_category="security",
-                    user_id=user.id,
-                    user_type=user.role.value if user.role else "unknown",
-                    result_status="success",
-                    action_details={
-                        "email": mask_email(email),
-                        "username": user.username,
-                        "role": user.role.value if user.role else None,
-                    },
-                    ip_address=request.remote_addr,
-                    user_agent=request.headers.get("User-Agent"),
-                )
-                # ✅ Priorité 7: Métrique Prometheus pour login réussi
-                security_login_attempts_total.labels(type="success").inc()
-            except Exception as audit_error:
-                # Ne pas bloquer le login si l'audit logging échoue
-                logger.warning("Échec audit logging login_success: %s", audit_error)
-
-            # ✅ Migration localStorage → cookies httpOnly
-            # ✅ P0: Ajouter trace_id dans la réponse
-            trace_id = get_trace_id()
-            logger.info(
-                "Login success",
-                extra={
-                    "trace_id": trace_id,
-                    "user_id": user.id,
-                    "email": mask_email(email),
-                },
-            )
-
-            # Créer la réponse JSON
-            response_data = {
-                "message": "Connexion réussie",
-                "user": {
-                    "id": user.id,
-                    "public_id": user.public_id,
-                    "username": user.username,
-                    "email": user.email,
-                    "role": user.role.value,
-                    "force_password_change": user.force_password_change,
-                },
-                "trace_id": trace_id,
-            }
-
-            # ✅ Compatibilité mobile : retourner tokens en JSON (même modèle que company_mobile)
-            # Toujours retourner les tokens dans le JSON pour les applications mobiles
-            # Le header X-Requested-With: Expo est optionnel mais recommandé pour identifier les requêtes mobiles
-            # ✅ Même modèle que company_mobile : toujours retourner les tokens dans le JSON
-            response_data["token"] = access_token
-            response_data["refresh_token"] = refresh_token
-
-            # Créer la réponse avec make_response pour pouvoir définir les cookies
-            response = make_response(response_data, 200)
-
-            # ✅ Définir cookies httpOnly pour web (pas pour mobile)
-            if not is_mobile_request:
-                # Cookie access_token
-                response.set_cookie(
-                    current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
-                    access_token,
-                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
-                    secure=current_app.config["COOKIE_SECURE"],
-                    samesite=current_app.config["COOKIE_SAME_SITE"],
-                    max_age=int(
-                        current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
-                    ),
-                    path=current_app.config["COOKIE_PATH"],
-                    domain=current_app.config["COOKIE_DOMAIN"],
-                )
-
-                # Cookie refresh_token
-                response.set_cookie(
-                    current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
-                    refresh_token,
-                    httponly=current_app.config["COOKIE_HTTP_ONLY"],
-                    secure=current_app.config["COOKIE_SECURE"],
-                    samesite=current_app.config["COOKIE_SAME_SITE"],
-                    max_age=int(
-                        current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
-                    ),
-                    path=current_app.config["COOKIE_PATH"],
-                    domain=current_app.config["COOKIE_DOMAIN"],
-                )
-
-            return response
-
+            return _login_post_body()
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.error("❌ ERREUR login: %s - %s", type(e).__name__, str(e))
@@ -658,6 +662,8 @@ class Login(Resource):
                 Exception("Erreur lors de la connexion"),
                 logger,
             )
+
+
 
 
 # ========================
