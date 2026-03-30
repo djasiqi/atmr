@@ -141,9 +141,20 @@ export default function QuickActionScreen() {
   const handleTransition = useCallback(
     async (targetStatus: MissionBarStatus) => {
       setPhase("confirming");
-      const ok = await MissionStateManager.requestTransition(targetStatus);
-      if (!ok) {
-        setError("Transition invalide");
+      const res = await MissionStateManager.requestTransition(targetStatus);
+      if (!res.ok) {
+        if (res.reason === "network_unavailable") {
+          setError(
+            "Impossible de confirmer que cette course vous est toujours assignée. Veuillez actualiser."
+          );
+        } else if (
+          res.reason === "invalidated_reassigned" ||
+          res.reason === "not_assigned_to_driver"
+        ) {
+          setError("Cette course a été réassignée ou n'est plus la vôtre.");
+        } else {
+          setError("Transition invalide");
+        }
         setPhase("error");
         return;
       }

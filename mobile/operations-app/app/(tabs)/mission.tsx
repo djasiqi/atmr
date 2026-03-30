@@ -336,15 +336,12 @@ export default function MissionScreen() {
 
     // ✅ Mission réassignée à un autre chauffeur → rafraîchir la liste + notifier
     const onReassigned = async (payload: any) => {
-      try {
-        const bookingId = payload?.booking_id ?? payload?.id ?? null;
-        log.info("booking reassigned", { bookingId });
-        appAlert.showAlert(
-          "Mission réassignée",
-          "Vos courses seront mises à jour."
-        );
-      } catch { }
-      // Refresh silencieux pour être sûr de ne plus voir la mission
+      const bookingId = payload?.booking_id ?? payload?.id ?? null;
+      log.info("booking reassigned", { bookingId });
+      appAlert.showAlert(
+        "Mission réassignée",
+        "Cette course a été assignée à un autre chauffeur. Vos courses sont mises à jour."
+      );
       loadMissions(true);
     };
 
@@ -357,8 +354,15 @@ export default function MissionScreen() {
     // Gestion de la reconnexion WebSocket
     const onReconnect = () => {
       log.info("socket reconnected, reloading missions", {});
-      // Recharger les missions après reconnexion
-      loadMissions(true); // Refresh silencieux
+      loadMissions(true);
+      void (async () => {
+        try {
+          const fresh = await getAssignedTrips();
+          await MissionStateManager.updateFromServer(fresh);
+        } catch {
+          /* best-effort */
+        }
+      })();
     };
 
     socket.on("new_booking", onNew);
@@ -480,9 +484,29 @@ export default function MissionScreen() {
       log.info("updating status to completed", { bookingId: mission.id });
 
       if (Platform.OS !== "web" && MissionStateManager.isActive()) {
-        const ok = await MissionStateManager.requestTransition("COMPLETED");
-        if (!ok) {
-          throw new Error("Transition COMPLETED refusée par le state manager");
+        const res = await MissionStateManager.requestTransition("COMPLETED");
+        if (!res.ok) {
+          if (res.reason === "network_unavailable") {
+            appAlert.showAlert(
+              "Connexion",
+              "Impossible de confirmer que cette course vous est toujours assignée. Veuillez actualiser."
+            );
+          } else if (
+            res.reason === "invalidated_reassigned" ||
+            res.reason === "not_assigned_to_driver"
+          ) {
+            appAlert.showAlert(
+              "Mission réassignée",
+              "Cette course n'est plus assignée à vous."
+            );
+          } else {
+            appAlert.showAlert(
+              "Action impossible",
+              "La mise à jour du statut a été refusée. Actualisez la liste des missions."
+            );
+          }
+          setIsSubmitting(false);
+          return;
         }
         await MissionStateManager.stopMission();
         await dismissMissionNotification();

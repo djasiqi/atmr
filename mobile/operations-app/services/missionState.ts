@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Booking } from "./api";
-import { getAssignedTrips } from "./api";
+import { getAssignedTrips, getTripDetails } from "./api";
 import type { BookingStatus } from "@/utils/bookingStatus";
 import { normalizeBookingStatus } from "@/utils/bookingStatus";
 import {
@@ -9,6 +9,7 @@ import {
 } from "./pendingActionsQueue";
 import { getLogger } from "@/utils/logger";
 import { buildQuickActionLink, safeOpenURL, openNavigation } from "./deepLinks";
+import { BOOKING_ASSIGNED_TO_OTHER_DRIVER } from "@/constants/driverApiErrors";
 
 const log = getLogger("MissionState");
 
@@ -52,7 +53,26 @@ type MissionEventType =
   | "transition_requested"
   | "transition_confirmed"
   | "transition_failed"
-  | "reconciliation";
+  | "reconciliation"
+  | "mission_invalidated_reassigned";
+
+/** Cycle de vie mission (réassignation, etc.) — voir plan convergence. */
+export type MissionLifecycleState =
+  | "none"
+  | "active"
+  | "invalidated_reassigned";
+
+export type RequestTransitionResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason:
+        | "no_mission"
+        | "invalid_transition"
+        | "invalidated_reassigned"
+        | "network_unavailable"
+        | "not_assigned_to_driver";
+    };
 
 type MissionEventListener = (event: MissionEventType, state: MissionState) => void;
 
@@ -107,6 +127,8 @@ class MissionStateManagerImpl {
   private static NETWORK_ACTIVE_MISSION_MIN_INTERVAL_MS = 90_000;
   private lastSuccessfulNetworkActiveMissionSyncAt = 0;
   private networkActiveMissionSyncInFlight: Promise<boolean> | null = null;
+  /** Réassignation connue : bloquer mutations jusqu'à purge explicite. */
+  private invalidatedReassigned = false;
 
   // -- State helpers -------------------------------------------------------
 
@@ -138,6 +160,89 @@ class MissionStateManagerImpl {
     const m = this.state.activeMission;
     if (!m) return null;
     return m.client?.contact_phone ?? m.client?.phone ?? m.client_phone ?? null;
+  }
+
+  getMissionLifecycleState(): MissionLifecycleState {
+    if (!this.state.activeMission) return "none";
+    if (this.invalidatedReassigned) return "invalidated_reassigned";
+    return "active";
+  }
+
+  /**
+   * Réassignation socket / convergence : marque invalidation, purge file, stop mission.
+   */
+  async onBookingReassigned(bookingId: number): Promise<void> {
+    if (this.state.activeMission?.id !== bookingId) return;
+    this.invalidatedReassigned = true;
+    this.emit("mission_invalidated_reassigned");
+    try {
+      await this.queue.purge(String(bookingId));
+    } catch (e) {
+      log.warn("onBookingReassigned purge queue", { error: e });
+    }
+    await this.stopMission();
+  }
+
+  /**
+   * Appelé par PendingActionsQueue sur 403 métier (ex. course plus assignée).
+   */
+  onForbiddenBookingStatus(
+    _action: PendingAction,
+    status: number,
+    body: unknown
+  ): void {
+    if (status !== 403) return;
+    const code =
+      typeof body === "object" &&
+      body !== null &&
+      "code" in body &&
+      typeof (body as { code: unknown }).code === "string"
+        ? (body as { code: string }).code
+        : null;
+    if (code !== BOOKING_ASSIGNED_TO_OTHER_DRIVER) return;
+    const id = Number(_action.bookingId);
+    if (!Number.isFinite(id) || this.state.activeMission?.id !== id) return;
+    void this.onBookingReassigned(id);
+  }
+
+  /**
+   * Garde active : vérifie encore assigné (GET détail). 404 → purge locale.
+   */
+  private async verifyMissionAssignable(): Promise<
+    "ok" | "network_error" | "not_assigned" | "invalidated"
+  > {
+    if (this.invalidatedReassigned) return "invalidated";
+    const id = this.state.activeMission?.id;
+    if (!id) return "not_assigned";
+    try {
+      await getTripDetails(id);
+      return "ok";
+    } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        try {
+          await this.queue.purge(String(id));
+        } catch {
+          // ignore
+        }
+        await this.stopMission();
+        return "not_assigned";
+      }
+      return "network_error";
+    }
+  }
+
+  /**
+   * Réconciliation passive : la mission active doit encore exister dans la liste assignée.
+   */
+  async reconcileActiveMissionWithServerList(): Promise<void> {
+    if (!this.state.activeMission) return;
+    try {
+      const bookings = await getAssignedTrips();
+      await this.updateFromServer(bookings);
+    } catch (e) {
+      log.warn("reconcileActiveMissionWithServerList failed", { error: e });
+    }
   }
 
   // -- Event bus -----------------------------------------------------------
@@ -353,6 +458,7 @@ class MissionStateManagerImpl {
   // -- Public API ----------------------------------------------------------
 
   async startMission(mission: Booking, destination?: string): Promise<void> {
+    this.invalidatedReassigned = false;
     const missionStatus = normalizeBookingStatus(mission.status) as MissionBarStatus;
     // Ne pas régresser : si on a déjà EN_ROUTE/IN_PROGRESS (ex. transition optimiste),
     // garder le statut le plus avancé pour éviter de désactiver le tracking mission-critical.
@@ -377,16 +483,22 @@ class MissionStateManagerImpl {
     this.emit("mission_started");
   }
 
-  async requestTransition(targetStatus: MissionBarStatus): Promise<boolean> {
+  async requestTransition(
+    targetStatus: MissionBarStatus
+  ): Promise<RequestTransitionResult> {
     await this.ensureHydrated();
     const bookingId = this.state.activeMission?.id;
     if (!bookingId) {
       log.warn("request transition no active mission", { event: "request_transition", result: "no_active_mission", status: targetStatus });
-      return false;
+      return { ok: false, reason: "no_mission" };
+    }
+
+    if (this.invalidatedReassigned) {
+      return { ok: false, reason: "invalidated_reassigned" };
     }
 
     if (this.state.currentStatus === targetStatus) {
-      return true;
+      return { ok: true };
     }
 
     if (!this.state.allowedTransitions.includes(targetStatus)) {
@@ -397,7 +509,18 @@ class MissionStateManagerImpl {
         result: "invalid",
         current: this.state.currentStatus,
       });
-      return false;
+      return { ok: false, reason: "invalid_transition" };
+    }
+
+    const gate = await this.verifyMissionAssignable();
+    if (gate === "invalidated") {
+      return { ok: false, reason: "invalidated_reassigned" };
+    }
+    if (gate === "network_error") {
+      return { ok: false, reason: "network_unavailable" };
+    }
+    if (gate === "not_assigned") {
+      return { ok: false, reason: "not_assigned_to_driver" };
     }
 
     log.info("request transition", {
@@ -417,7 +540,7 @@ class MissionStateManagerImpl {
       targetStatus,
     });
 
-    return true;
+    return { ok: true };
   }
 
   /**
@@ -468,7 +591,14 @@ class MissionStateManagerImpl {
     if (!this.state.activeMission) return;
 
     const serverMission = bookings.find((b) => b.id === this.state.activeMission!.id);
-    if (!serverMission) return;
+    if (!serverMission) {
+      // Plus dans la liste assignée (réassignation, annulation côté serveur, etc.)
+      this.state.isNavigating = false;
+      await this.queue.purge(String(this.state.activeMission.id));
+      await this.stopMission();
+      this.emit("reconciliation");
+      return;
+    }
 
     const serverStatus = normalizeBookingStatus(serverMission.status);
 
@@ -502,6 +632,7 @@ class MissionStateManagerImpl {
   }
 
   async stopMission(): Promise<void> {
+    this.invalidatedReassigned = false;
     this.stopReconciliationTimer();
     this.lastNavigatedTarget = null;
     this.lastMapsOpenAt = 0;

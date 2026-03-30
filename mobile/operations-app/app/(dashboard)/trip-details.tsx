@@ -116,9 +116,16 @@ export default function TripDetailsScreen() {
         MissionStateManager.getState().activeMission?.id === trip.id;
 
       if (isManagedByMission) {
-        const ok = await MissionStateManager.requestTransition(targetStatus);
-        if (!ok) {
-          Alert.alert("Erreur", "Transition de statut non autorisée.");
+        const res = await MissionStateManager.requestTransition(targetStatus);
+        if (!res.ok) {
+          const msg =
+            res.reason === "network_unavailable"
+              ? "Impossible de confirmer que cette course vous est toujours assignée. Veuillez actualiser."
+              : res.reason === "invalidated_reassigned" ||
+                  res.reason === "not_assigned_to_driver"
+                ? "Cette course n'est plus assignée à vous."
+                : "Transition de statut non autorisée.";
+          Alert.alert("Erreur", msg);
           return;
         }
         if (Platform.OS !== "web") {

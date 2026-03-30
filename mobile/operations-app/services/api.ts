@@ -1574,6 +1574,8 @@ export const getDriverRoute = async (
 // ========== Bookings ==========
 export type Booking = {
   id: number;
+  /** Chauffeur assigné (si présent dans la réponse API). */
+  driver_id?: number;
   pickup_location: string;
   dropoff_location: string;
   scheduled_time: string;

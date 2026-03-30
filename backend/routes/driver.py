@@ -21,6 +21,10 @@ from flask_restx import (
 )
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
+from constants.driver_api_errors import (
+    BOOKING_ASSIGNED_TO_OTHER_DRIVER,
+    BOOKING_COMPANY_FORBIDDEN,
+)
 from ext import db, role_required, socketio
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
@@ -36,6 +40,9 @@ from services.geolocation.driver_location_http import (
 from services.geolocation.presence import (
     compute_location_status,
     presence_status_from_location_status,
+)
+from services.monitoring.driver_booking_metrics import (
+    inc_driver_booking_status_forbidden,
 )
 from services.realtime.live_driver_status import (
     resolve_driver_status_for_fanout,
@@ -1962,9 +1969,11 @@ class UpdateBookingStatus(Resource):
                             executing_company_id,
                         )
                         result = {
-                            "error": "Ce chauffeur n'appartient pas à l'entreprise qui exécute cette course"
+                            "error": "Ce chauffeur n'appartient pas à l'entreprise qui exécute cette course",
+                            "code": BOOKING_COMPANY_FORBIDDEN,
                         }
                         status_code = 403
+                        inc_driver_booking_status_forbidden(BOOKING_COMPANY_FORBIDDEN)
                     elif (
                         not has_executing_company
                         and driver_company_id != booking_company_id
@@ -1975,9 +1984,11 @@ class UpdateBookingStatus(Resource):
                             booking_company_id,
                         )
                         result = {
-                            "error": "Ce chauffeur n'appartient pas à l'entreprise de cette course"
+                            "error": "Ce chauffeur n'appartient pas à l'entreprise de cette course",
+                            "code": BOOKING_COMPANY_FORBIDDEN,
                         }
                         status_code = 403
+                        inc_driver_booking_status_forbidden(BOOKING_COMPANY_FORBIDDEN)
                     elif (
                         booking.driver_id is None
                         and booking.status == BookingStatus.PENDING
@@ -1991,9 +2002,23 @@ class UpdateBookingStatus(Resource):
                             booking.driver_id,
                         )
                         result = {
-                            "error": "Cette course est assignée à un autre chauffeur"
+                            "error": "Cette course est assignée à un autre chauffeur",
+                            "code": BOOKING_ASSIGNED_TO_OTHER_DRIVER,
                         }
                         status_code = 403
+                        inc_driver_booking_status_forbidden(
+                            BOOKING_ASSIGNED_TO_OTHER_DRIVER
+                        )
+                        logger.info(
+                            (
+                                "driver_booking_status_forbidden booking_id=%s driver_id=%s "
+                                "assigned_driver_id=%s code=%s"
+                            ),
+                            booking_id,
+                            driver.id,
+                            booking.driver_id,
+                            BOOKING_ASSIGNED_TO_OTHER_DRIVER,
+                        )
                     elif not data:
                         result = {"error": "Missing JSON payload"}
                         status_code = 400

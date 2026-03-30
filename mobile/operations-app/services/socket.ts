@@ -559,6 +559,9 @@ export async function connectSocket(
         new_driver_id: (data as any)?.new_driver_id,
         event_id: eventId,
       });
+      void import("./missionReassignConvergence").then((m) =>
+        m.handleBookingReassignedEvent(data)
+      );
       bookingEmitter.emit("booking_reassigned", data);
     });
 

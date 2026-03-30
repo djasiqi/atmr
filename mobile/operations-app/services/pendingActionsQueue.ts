@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLogger } from "@/utils/logger";
 import { getNetworkStateSnapshot } from "./networkState";
 import { api } from "./api";
+import { BOOKING_ASSIGNED_TO_OTHER_DRIVER } from "@/constants/driverApiErrors";
 import type { MissionBarStatus } from "./missionState";
 
 const log = getLogger("ActionQueue");
@@ -22,6 +23,11 @@ export interface PendingAction {
 interface MissionStateManagerLike {
   onTransitionConfirmed(action: PendingAction): void;
   onTransitionFailed(action: PendingAction, reason: "conflict" | "error" | "stale"): void;
+  onForbiddenBookingStatus?(
+    action: PendingAction,
+    status: number,
+    body: unknown
+  ): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +239,26 @@ export class PendingActionsQueue {
           this.removeAction(action.id);
           await this.save();
           break;
+        }
+
+        if (result.status === 403) {
+          const code =
+            result.data &&
+            typeof result.data === "object" &&
+            "code" in result.data
+              ? (result.data as { code?: string }).code
+              : undefined;
+          if (code === BOOKING_ASSIGNED_TO_OTHER_DRIVER) {
+            log.warn("flush forbidden wrong driver", {
+              event: "flush_forbidden_reassign",
+              booking_id: action.bookingId,
+              operation_id: action.id,
+            });
+            this.manager.onForbiddenBookingStatus?.(action, 403, result.data);
+            this.removeAction(action.id);
+            await this.save();
+            break;
+          }
         }
 
         if (result.status === 200 || result.status === 201) {

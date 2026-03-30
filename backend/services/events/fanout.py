@@ -1011,6 +1011,14 @@ def fanout_driver_booking_reassigned(
             "booking_reassigned",
         )
         emit_driver_event(old_driver_id, "booking_reassigned", payload)
+        try:
+            from services.monitoring.driver_booking_metrics import (
+                inc_booking_reassigned_fanout,
+            )
+
+            inc_booking_reassigned_fanout()
+        except Exception:
+            pass
     except Exception:
         app_logger.exception(
             "[event_fanout] Socket.IO failed for booking_reassigned (old_driver %s)",

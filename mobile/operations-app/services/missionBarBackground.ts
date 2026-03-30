@@ -70,14 +70,14 @@ async function handleBackgroundEventInner({ type, detail }: Event): Promise<void
         status: targetStatus,
         source: "headless",
       });
-      const ok = await MissionStateManager.requestTransition(targetStatus);
+      const res = await MissionStateManager.requestTransition(targetStatus);
       log.info("action result", {
         event: "action_result",
         booking_id: bookingId,
         status: targetStatus,
-        result: ok ? "queued" : "failed",
+        result: res.ok ? "queued" : "failed",
       });
-      if (ok) {
+      if (res.ok) {
         await showMissionNotification(MissionStateManager.getState());
       }
       if (targetStatus === "COMPLETED") {
