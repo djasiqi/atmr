@@ -1,11 +1,12 @@
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import CompanyEnterpriseLayout from './components/layout/CompanyEnterpriseLayout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
 
 import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
+import PlatformSegmentGuard from './pages/admin/PlatformOps/PlatformSegmentGuard';
 import GoogleMapsProvider from './components/common/GoogleMapsProvider';
 
 // ✅ PERF: Pages critiques (eager loading - chargées immédiatement)
@@ -24,10 +25,19 @@ import NotFound from './pages/Error/NotFound';
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard/AdminDashboard'));
 const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
+const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
 const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
-const AdminPlatformOps = lazy(() => import('./pages/admin/PlatformOps/AdminPlatformOps'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const PlatformLayout = lazy(() => import('./pages/admin/PlatformOps/PlatformLayout'));
+const PlatformOverviewPage = lazy(() => import('./pages/admin/PlatformOps/PlatformOverviewPage'));
+const PlatformTenantsPage = lazy(() => import('./pages/admin/PlatformOps/PlatformTenantsPage'));
+const PlatformRunbooksPage = lazy(() => import('./pages/admin/PlatformOps/PlatformRunbooksPage'));
+const PlatformAuditPage = lazy(() => import('./pages/admin/PlatformOps/PlatformAuditPage'));
+const PlatformRuntimePage = lazy(() => import('./pages/admin/PlatformOps/PlatformRuntimePage'));
+const PlatformReconciliationPage = lazy(() => import('./pages/admin/PlatformOps/PlatformReconciliationPage'));
+const PlatformInvestigationPage = lazy(() => import('./pages/admin/PlatformOps/PlatformInvestigationPage'));
 const ShadowModeDashboard = lazy(() => import('./pages/admin/ShadowMode/ShadowModeDashboard'));
 const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
@@ -345,74 +355,79 @@ const App = () => {
               path="/dashboard/admin/:public_id"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminDashboard />
+                  <AdminLayout />
                 </ProtectedRoute>
               }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/reservations"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminReservations />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/users"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminUsers />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/shadow-mode"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <ShadowModeDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/optuna"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminOptuna />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/invoices"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminInvoices />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/settings"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminSettings />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/demo-requests"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminDemoRequests />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard/admin/:public_id/platform-ops"
-              element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminPlatformOps />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route index element={<AdminDashboard />} />
+              <Route path="reservations/:bookingId" element={<AdminBookingDetail />} />
+              <Route path="reservations" element={<AdminReservations />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="shadow-mode" element={<ShadowModeDashboard />} />
+              <Route path="optuna" element={<AdminOptuna />} />
+              <Route path="invoices" element={<AdminInvoices />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="demo-requests" element={<AdminDemoRequests />} />
+              <Route path="platform-ops" element={<PlatformLayout />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route
+                  path="overview"
+                  element={
+                    <PlatformSegmentGuard segment="overview">
+                      <PlatformOverviewPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="tenants"
+                  element={
+                    <PlatformSegmentGuard segment="tenants">
+                      <PlatformTenantsPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="runbooks"
+                  element={
+                    <PlatformSegmentGuard segment="runbooks">
+                      <PlatformRunbooksPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="audit"
+                  element={
+                    <PlatformSegmentGuard segment="audit">
+                      <PlatformAuditPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="runtime"
+                  element={
+                    <PlatformSegmentGuard segment="runtime">
+                      <PlatformRuntimePage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="reconciliation"
+                  element={
+                    <PlatformSegmentGuard segment="reconciliation">
+                      <PlatformReconciliationPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+                <Route
+                  path="investigation"
+                  element={
+                    <PlatformSegmentGuard segment="investigation">
+                      <PlatformInvestigationPage />
+                    </PlatformSegmentGuard>
+                  }
+                />
+              </Route>
+            </Route>
 
             <Route
               path="/dashboard/client/:id"

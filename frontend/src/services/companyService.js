@@ -270,6 +270,7 @@ export const fetchCompanyDriverLocations = async () => {
   }
 };
 
+/** Voir `frontend/env.example` — réduit le volume GET (1 RTT vs 2) lorsque l’API live est validée en prod. */
 const isDriversLiveApiEnabled = () =>
   typeof process !== 'undefined' &&
   (process.env.REACT_APP_DRIVERS_LIVE_API === 'true' ||

@@ -1,6 +1,6 @@
 // src/components/layout/Sidebar/AdminSidebar/AdminSidebar.js
-import React, { useState, useEffect } from 'react';
-import { NavLink, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { NavLink, useLocation, useParams } from 'react-router-dom';
 import {
   FaHome,
   FaUser,
@@ -13,11 +13,19 @@ import {
   FaTimes,
   FaServer,
 } from 'react-icons/fa';
+import { usePlatformCapabilities, PLATFORM_SEGMENTS } from '../../../../hooks/usePlatformCapabilities';
 import styles from './AdminSidebar.module.css';
 
 const AdminSidebar = () => {
   const { public_id } = useParams();
+  const location = useLocation();
   const adminId = public_id ?? '';
+  const { canAccess, isLoading: platformLoading } = usePlatformCapabilities();
+
+  const showPlatformNav = useMemo(() => {
+    if (platformLoading) return true;
+    return PLATFORM_SEGMENTS.some((s) => canAccess(s));
+  }, [platformLoading, canAccess]);
 
   // État du toggle (sauvegardé dans localStorage)
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -58,54 +66,48 @@ const AdminSidebar = () => {
     setIsExpanded(!isExpanded);
   };
 
-  const menuItems = [
+  const base = `/dashboard/admin/${adminId}`;
+
+  const sections = [
     {
-      icon: FaHome,
-      label: 'Tableau de bord',
-      to: `/dashboard/admin/${adminId}`,
-      end: true,
+      title: 'Exploitation métier',
+      items: [
+        { icon: FaHome, label: 'Tableau de bord', to: base, end: true, isPlatform: false },
+        { icon: FaCar, label: 'Réservations', to: `${base}/reservations`, isPlatform: false },
+        { icon: FaFileInvoice, label: 'Factures', to: `${base}/invoices`, isPlatform: false },
+        { icon: FaChartLine, label: 'Demandes demo', to: `${base}/demo-requests`, isPlatform: false },
+      ],
     },
     {
-      icon: FaCar,
-      label: 'Réservations',
-      to: `/dashboard/admin/${adminId}/reservations`,
+      title: 'Administration applicative',
+      items: [
+        { icon: FaUser, label: 'Utilisateurs', to: `${base}/users`, isPlatform: false },
+        { icon: FaCog, label: 'Paramètres', to: `${base}/settings`, isPlatform: false },
+      ],
     },
     {
-      icon: FaUser,
-      label: 'Utilisateurs',
-      to: `/dashboard/admin/${adminId}/users`,
-    },
-    {
-      icon: FaRobot,
-      label: 'Shadow Mode MDI',
-      to: `/dashboard/admin/${adminId}/shadow-mode`,
-    },
-    {
-      icon: FaChartLine,
-      label: 'Optimisation Optuna',
-      to: `/dashboard/admin/${adminId}/optuna`,
-    },
-    {
-      icon: FaFileInvoice,
-      label: 'Factures',
-      to: `/dashboard/admin/${adminId}/invoices`,
-    },
-    {
-      icon: FaChartLine,
-      label: 'Demandes demo',
-      to: `/dashboard/admin/${adminId}/demo-requests`,
-    },
-    {
-      icon: FaServer,
-      label: 'Ops / Platform',
-      to: `/dashboard/admin/${adminId}/platform-ops`,
-    },
-    {
-      icon: FaCog,
-      label: 'Paramètres',
-      to: `/dashboard/admin/${adminId}/settings`,
+      title: 'Intelligence / optimisation',
+      items: [
+        { icon: FaRobot, label: 'Shadow Mode MDI', to: `${base}/shadow-mode`, isPlatform: false },
+        { icon: FaChartLine, label: 'Optimisation Optuna', to: `${base}/optuna`, isPlatform: false },
+      ],
     },
   ];
+
+  if (showPlatformNav) {
+    sections.push({
+      title: 'Plateforme',
+      items: [
+        {
+          icon: FaServer,
+          label: 'Ops / Platform',
+          to: `${base}/platform-ops/overview`,
+          end: false,
+          isPlatform: true,
+        },
+      ],
+    });
+  }
 
   return (
     <nav className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed}`}>
@@ -120,26 +122,35 @@ const AdminSidebar = () => {
         {isExpanded ? <FaTimes /> : <FaBars />}
       </button>
 
-      {/* Liste des liens */}
       <ul className={styles.menuList}>
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <li key={item.to} className={styles.menuItem}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `${styles.menuLink} ${isActive ? styles.active : ''}`
-                }
-                title={!isExpanded ? item.label : undefined}
-              >
-                <Icon className={styles.icon} />
-                {isExpanded && <span className={styles.label}>{item.label}</span>}
-              </NavLink>
+        {sections.map((section) => (
+          <React.Fragment key={section.title}>
+            <li className={styles.sectionLabelItem} aria-hidden={!isExpanded}>
+              <span className={styles.sectionLabel}>{isExpanded ? section.title : '·'}</span>
             </li>
-          );
-        })}
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.to} className={styles.menuItem}>
+                  <NavLink
+                    to={item.to}
+                    end={item.end ?? false}
+                    className={({ isActive }) => {
+                      const active = item.isPlatform
+                        ? location.pathname.includes('/platform-ops')
+                        : isActive;
+                      return `${styles.menuLink} ${active ? styles.active : ''}`;
+                    }}
+                    title={!isExpanded ? item.label : undefined}
+                  >
+                    <Icon className={styles.icon} />
+                    {isExpanded && <span className={styles.label}>{item.label}</span>}
+                  </NavLink>
+                </li>
+              );
+            })}
+          </React.Fragment>
+        ))}
       </ul>
     </nav>
   );

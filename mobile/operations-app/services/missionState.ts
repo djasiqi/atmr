@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Booking } from "./api";
-import { getAssignedTrips, getTripDetails } from "./api";
+import { getTripDetails } from "./api";
+import { requestMissionSync } from "./missionSyncOrchestrator";
 import type { BookingStatus } from "@/utils/bookingStatus";
 import { normalizeBookingStatus } from "@/utils/bookingStatus";
 import {
@@ -238,7 +239,7 @@ class MissionStateManagerImpl {
   async reconcileActiveMissionWithServerList(): Promise<void> {
     if (!this.state.activeMission) return;
     try {
-      const bookings = await getAssignedTrips();
+      const bookings = await requestMissionSync("reconcile_active");
       await this.updateFromServer(bookings);
     } catch (e) {
       log.warn("reconcileActiveMissionWithServerList failed", { error: e });
@@ -346,7 +347,7 @@ class MissionStateManagerImpl {
     // Step 3: fetch from API — skipped in background/headless to avoid ANR
     if (!skipNetwork) {
       try {
-        const bookings = await getAssignedTrips();
+        const bookings = await requestMissionSync("hydrate_empty");
         const active = bookings.find((m) => {
           const s = normalizeBookingStatus(m.status);
           return s === "ASSIGNED" || s === "EN_ROUTE" || s === "IN_PROGRESS";
@@ -379,7 +380,7 @@ class MissionStateManagerImpl {
 
   /**
    * Aligne `activeMission` sur le serveur lorsque le manager n’a pas encore de mission locale.
-   * Ordre : hydratation disque (`ensureHydrated` sans réseau), puis `getAssignedTrips()` si toujours vide.
+   * Ordre : hydratation disque (`ensureHydrated` sans réseau), puis `requestMissionSync("hydrate_empty")` si toujours vide.
    * Throttle ~90s après une réponse serveur (mission ou liste vide) ; échec réseau → pas de throttle (retry au prochain déclencheur).
    */
   async syncActiveMissionFromServerIfMissing(): Promise<boolean> {
@@ -402,7 +403,7 @@ class MissionStateManagerImpl {
 
     this.networkActiveMissionSyncInFlight = (async () => {
       try {
-        const bookings = await getAssignedTrips();
+        const bookings = await requestMissionSync("manual_screen");
         const active = bookings.find((m) => {
           const s = normalizeBookingStatus(m.status);
           return s === "ASSIGNED" || s === "EN_ROUTE" || s === "IN_PROGRESS";
@@ -710,7 +711,7 @@ class MissionStateManagerImpl {
     this.reconciliationInProgress = true;
     this.lastReconciliationAt = now;
     try {
-      const bookings = await getAssignedTrips();
+      const bookings = await requestMissionSync("reconcile_now");
       await this.updateFromServer(bookings);
       await this.queue.flush();
     } catch {

@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { View, FlatList, RefreshControl, Alert } from "react-native";
 import { useAuth } from "@/hooks/useAuth";
-import { getAssignedTrips, Booking } from "@/services/api";
+import { Booking } from "@/services/api";
+import { requestMissionSync } from "@/services/missionSyncOrchestrator";
 import { Loader } from "@/components/ui/Loader";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -19,7 +20,7 @@ export default function ScheduleScreen() {
   const loadSchedule = async () => {
     setLoading(true);
     try {
-      const data = await getAssignedTrips();
+      const data = await requestMissionSync("manual_screen");
       setSchedule(data);
     } catch {
       Alert.alert("Erreur", "Impossible de charger votre planning.");

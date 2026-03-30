@@ -43,6 +43,8 @@ from services.geolocation.presence import (
 )
 from services.monitoring.driver_booking_metrics import (
     inc_driver_booking_status_forbidden,
+    normalize_bookings_since_trigger,
+    observe_driver_bookings_since_request,
 )
 from services.realtime.live_driver_status import (
     resolve_driver_status_for_fanout,
@@ -781,93 +783,103 @@ class DriverBookingsSince(Resource):
             return error_response, status_code
         driver = cast("Driver", driver)
 
-        from application.drivers.get_driver_upcoming_bookings import (
-            GetDriverUpcomingBookingsUseCase,
+        trigger = normalize_bookings_since_trigger(
+            request.headers.get("X-LIRIE-Sync-Trigger")
         )
-        from repositories.booking_repository import BookingRepository
-        from shared.time_utils import day_local_bounds, now_local
+        t0 = time.perf_counter()
+        try:
+            from application.drivers.get_driver_upcoming_bookings import (
+                GetDriverUpcomingBookingsUseCase,
+            )
+            from repositories.booking_repository import BookingRepository
+            from shared.time_utils import day_local_bounds, now_local
 
-        # Récupérer le paramètre since (optionnel)
-        since_str = request.args.get("since")
+            # Récupérer le paramètre since (optionnel)
+            since_str = request.args.get("since")
 
-        if since_str:
-            # Parser le timestamp ISO
-            try:
-                # Gérer les formats avec et sans Z
-                if since_str.endswith("Z"):
-                    since_str = since_str.replace("Z", "+00:00")
-                since_dt = datetime.fromisoformat(since_str)
-                # S'assurer que c'est en UTC
-                if since_dt.tzinfo is None:
-                    since_dt = since_dt.replace(tzinfo=UTC)
-                else:
-                    since_dt = since_dt.astimezone(UTC)
-            except (ValueError, AttributeError) as e:
-                logger.warning(
-                    "Invalid 'since' timestamp format: %s, error: %s", since_str, e
-                )
-                return APIErrorHandler.handle_error(
-                    f"Format de timestamp invalide: {since_str}. Utilisez le format ISO 8601.",
-                    400,
-                )
-
-            # Filtrer par updated_at >= since ET statuts appropriés
-            from models.booking import Booking
-            from models.enums import BookingStatus
-
-            bookings = (
-                Booking.query.filter(Booking.driver_id == driver.id)
-                .filter(Booking.updated_at >= since_dt)
-                .filter(
-                    Booking.status.in_(
-                        [
-                            BookingStatus.ASSIGNED,
-                            BookingStatus.EN_ROUTE,
-                            BookingStatus.IN_PROGRESS,
-                        ]
+            if since_str:
+                # Parser le timestamp ISO
+                try:
+                    # Gérer les formats avec et sans Z
+                    if since_str.endswith("Z"):
+                        since_str = since_str.replace("Z", "+00:00")
+                    since_dt = datetime.fromisoformat(since_str)
+                    # S'assurer que c'est en UTC
+                    if since_dt.tzinfo is None:
+                        since_dt = since_dt.replace(tzinfo=UTC)
+                    else:
+                        since_dt = since_dt.astimezone(UTC)
+                except (ValueError, AttributeError) as e:
+                    logger.warning(
+                        "Invalid 'since' timestamp format: %s, error: %s", since_str, e
                     )
-                )
-                .order_by(Booking.updated_at.asc())
-                .all()
-            )
+                    return APIErrorHandler.handle_error(
+                        f"Format de timestamp invalide: {since_str}. Utilisez le format ISO 8601.",
+                        400,
+                    )
 
-            logger.info(
-                "📱 [Driver Bookings Since] Driver %s (ID: %s) - Found %s bookings since %s",
-                driver.id,
-                driver.id,
-                len(bookings),
-                since_dt.isoformat(),
-            )
-        else:
-            # Pas de filtre since : utiliser le use case existant (comportement par défaut)
-            # today_fn=now_local().date pour cohérence Europe/Zurich (éviter décalage si serveur en UTC)
-            uc = GetDriverUpcomingBookingsUseCase(
-                booking_repo=BookingRepository(),
-                day_local_bounds_fn=day_local_bounds,
-                now_local_fn=now_local,
-                today_fn=lambda: now_local().date(),
-            )
-            bookings = uc.execute(driver_id=driver.id).bookings
+                # Filtrer par updated_at >= since ET statuts appropriés
+                from models.booking import Booking
+                from models.enums import BookingStatus
 
-            today_local = now_local().date()
-            logger.info(
-                "📱 [Driver Bookings Since] Driver %s (ID: %s) - No 'since' param, today_local=%s, returning %s upcoming bookings",
-                driver.id,
-                driver.id,
-                today_local.isoformat(),
-                len(bookings),
-            )
-            # 🔍 LOG DÉTAILLÉ : Afficher chaque booking trouvé
-            for b in bookings:
-                logger.warning(
-                    "   - Booking #%s: driver_id=%s, status=%s, scheduled_time=%s",
-                    b.id,
-                    b.driver_id,
-                    b.status,
-                    b.scheduled_time,
+                bookings = (
+                    Booking.query.filter(Booking.driver_id == driver.id)
+                    .filter(Booking.updated_at >= since_dt)
+                    .filter(
+                        Booking.status.in_(
+                            [
+                                BookingStatus.ASSIGNED,
+                                BookingStatus.EN_ROUTE,
+                                BookingStatus.IN_PROGRESS,
+                            ]
+                        )
+                    )
+                    .order_by(Booking.updated_at.asc())
+                    .all()
                 )
 
-        return [b.serialize for b in bookings], 200
+                logger.info(
+                    "📱 [Driver Bookings Since] Driver %s (ID: %s) - Found %s bookings since %s",
+                    driver.id,
+                    driver.id,
+                    len(bookings),
+                    since_dt.isoformat(),
+                )
+            else:
+                # Pas de filtre since : utiliser le use case existant (comportement par défaut)
+                # today_fn=now_local().date pour cohérence Europe/Zurich (éviter décalage si serveur en UTC)
+                uc = GetDriverUpcomingBookingsUseCase(
+                    booking_repo=BookingRepository(),
+                    day_local_bounds_fn=day_local_bounds,
+                    now_local_fn=now_local,
+                    today_fn=lambda: now_local().date(),
+                )
+                bookings = uc.execute(driver_id=driver.id).bookings
+
+                today_local = now_local().date()
+                logger.info(
+                    "📱 [Driver Bookings Since] Driver %s (ID: %s) - No 'since' param, today_local=%s, returning %s upcoming bookings",
+                    driver.id,
+                    driver.id,
+                    today_local.isoformat(),
+                    len(bookings),
+                )
+                # 🔍 LOG DÉTAILLÉ : Afficher chaque booking trouvé
+                for b in bookings:
+                    logger.warning(
+                        "   - Booking #%s: driver_id=%s, status=%s, scheduled_time=%s",
+                        b.id,
+                        b.driver_id,
+                        b.status,
+                        b.scheduled_time,
+                    )
+
+            return [b.serialize for b in bookings], 200
+        finally:
+            observe_driver_bookings_since_request(
+                trigger_reason=trigger,
+                duration_seconds=time.perf_counter() - t0,
+            )
 
 
 @driver_ns.route("/me/mobile/snapshot")
@@ -1314,6 +1326,15 @@ class DriverLocation(Resource):
                                     "retry_after_seconds": retry_rl,
                                 }, 429
 
+                            if (
+                                request.headers.get("X-ATMR-Location-Fallback") or ""
+                            ).strip().lower() == "socket-stale":
+                                from services.monitoring.driver_location_metrics import (
+                                    inc_socket_stale_fallback,
+                                )
+
+                                inc_socket_stale_fallback()
+
                             speed = float(
                                 p.get("speed_mps", p.get("speed", 0.0)) or 0.0
                             )
@@ -1362,7 +1383,6 @@ class DriverLocation(Resource):
                             norm_mode_http = loc_svc.resolve_normalized_location_mode(
                                 driver_company_id, str(location_mode or "mission_live")
                             )
-                            inc_received(transport="http", location_mode=norm_mode_http)
 
                             source = "raw"
                             accept_status = "accepted_observability_only"
@@ -1372,6 +1392,11 @@ class DriverLocation(Resource):
                                 # ✅ DDD: Utilise adapter au lieu de service directement
                                 uc = UpdateDriverLocationUseCase(
                                     update_location_fn=create_location_update_fn()
+                                )
+                                loc_ev_str = (
+                                    str(loc_event_id_raw).strip()
+                                    if loc_event_id_raw
+                                    else None
                                 )
                                 uc_result = uc.execute(
                                     UpdateDriverLocationCommand(
@@ -1388,45 +1413,60 @@ class DriverLocation(Resource):
                                         is_background=is_background,
                                         mission_id=mission_id,
                                         metrics_transport="http",
+                                        location_event_id=loc_ev_str,
                                     )
                                 )
 
-                                # Utiliser position snapée
-                                lat = uc_result.snapped_lat
-                                lon = uc_result.snapped_lon
-                                source = uc_result.source
-                                received_at = uc_result.received_at or received_at
-                                accept_status = uc_result.accept_status
-                                accept_reason = uc_result.accept_reason
+                                if getattr(uc_result, "dedup_skipped", False):
+                                    result = {
+                                        "ok": True,
+                                        "skipped": True,
+                                        "reason": uc_result.dedup_reason
+                                        or uc_result.accept_reason,
+                                        "accept_status": uc_result.accept_status,
+                                        "accept_reason": uc_result.accept_reason,
+                                    }
+                                else:
+                                    inc_received(
+                                        transport="http", location_mode=norm_mode_http
+                                    )
 
-                                log_driver_location_processed(
-                                    driver_id=driver.id,
-                                    company_id=driver_company_id,
-                                    transport="http",
-                                    location_mode=norm_mode_http,
-                                    accept_status=accept_status,
-                                    accept_reason=accept_reason,
-                                    location_event_id=(
-                                        str(loc_event_id_raw)
-                                        if loc_event_id_raw
-                                        else None
-                                    ),
-                                )
+                                    # Utiliser position snapée
+                                    lat = uc_result.snapped_lat
+                                    lon = uc_result.snapped_lon
+                                    source = uc_result.source
+                                    received_at = uc_result.received_at or received_at
+                                    accept_status = uc_result.accept_status
+                                    accept_reason = uc_result.accept_reason
 
-                                # Émettre events geofencing si détectés
-                                for event in uc_result.geofence_events:
-                                    if event == "arrived_at_pickup":
-                                        socketio.emit(
-                                            "driver:arrived_at_pickup",
-                                            {"driver_id": driver.id},
-                                            to=f"company_{driver.company_id}",
-                                        )
-                                    elif event == "arrived_at_dropoff":
-                                        socketio.emit(
-                                            "driver:arrived_at_dropoff",
-                                            {"driver_id": driver.id},
-                                            to=f"company_{driver.company_id}",
-                                        )
+                                    log_driver_location_processed(
+                                        driver_id=driver.id,
+                                        company_id=driver_company_id,
+                                        transport="http",
+                                        location_mode=norm_mode_http,
+                                        accept_status=accept_status,
+                                        accept_reason=accept_reason,
+                                        location_event_id=(
+                                            str(loc_event_id_raw)
+                                            if loc_event_id_raw
+                                            else None
+                                        ),
+                                    )
+
+                                    # Émettre events geofencing si détectés
+                                    for event in uc_result.geofence_events:
+                                        if event == "arrived_at_pickup":
+                                            socketio.emit(
+                                                "driver:arrived_at_pickup",
+                                                {"driver_id": driver.id},
+                                                to=f"company_{driver.company_id}",
+                                            )
+                                        elif event == "arrived_at_dropoff":
+                                            socketio.emit(
+                                                "driver:arrived_at_dropoff",
+                                                {"driver_id": driver.id},
+                                                to=f"company_{driver.company_id}",
+                                            )
 
                             except Exception as e_loc:
                                 logger.exception(

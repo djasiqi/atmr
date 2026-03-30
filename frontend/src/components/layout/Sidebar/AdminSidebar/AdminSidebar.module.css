@@ -68,6 +68,26 @@
   overflow-x: hidden;
 }
 
+.sectionLabelItem {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sectionLabel {
+  display: block;
+  margin: var(--spacing-md) var(--spacing-sm) var(--spacing-xs);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.collapsed .sectionLabel {
+  display: none;
+}
+
 /* Scrollbar personnalisée */
 .menuList::-webkit-scrollbar {
   width: 4px;

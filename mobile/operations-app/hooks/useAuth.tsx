@@ -17,9 +17,14 @@ import {
   AuthResponse,
   Driver,
   fetchDriverProfile,
+  fetchUserInfo,
   loginDriver,
   invalidateInterceptorCache,
 } from "@/services/api";
+import {
+  invalidateDriverProfileCacheIfUserMismatch,
+  purgeDriverProfileCache,
+} from "@/services/driverProfileCache";
 import {
   secureStorage,
   asyncStorage,
@@ -383,6 +388,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           await secureStorage.clearDriverAuthOnly();
         }
         invalidateInterceptorCache();
+        await purgeDriverProfileCache();
         disconnectSocket();
         setDriver(null);
         setDriverToken(null);
@@ -453,7 +459,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             // eslint-disable-next-line no-await-in-loop
-            profile = await fetchDriverProfile();
+            profile = await fetchDriverProfile({ force: true });
             break;
           } catch (e) {
             if (!isAuthNotReadyError(e)) {
@@ -631,7 +637,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   });
                   setDriverLoading(false);
                 }
-                const profile = await fetchDriverProfile();
+                const profile = await fetchDriverProfile({ force: false });
                 if (isMounted) {
                   await asyncStorage.setDriverId(profile.id);
                   setDriver(profile);
@@ -674,7 +680,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await storeMode("driver");
 
                 // Charger le profil driver
-                const profile = await fetchDriverProfile();
+                const profile = await fetchDriverProfile({ force: false });
                 if (isMounted) {
                   await asyncStorage.setDriverId(profile.id);
                   setDriver(profile);
@@ -725,7 +731,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         });
                         setDriverLoading(false);
                       }
-                      const profile = await fetchDriverProfile();
+                      const profile = await fetchDriverProfile({ force: false });
                       if (isMounted) {
                         setDriver(profile);
                         await setActiveAuthNamespace({
@@ -790,7 +796,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     });
                     setDriverLoading(false);
                   }
-                  const profile = await fetchDriverProfile();
+                  const profile = await fetchDriverProfile({ force: false });
                   if (isMounted) {
                     await asyncStorage.setDriverId(profile.id);
                     setDriver(profile);
@@ -1207,7 +1213,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [driverToken, mode, forceLogoutDriverInternal]);
 
   // ✅ PHASE 3 + P0.4 : Refresh et FOREGROUND_RESYNC au retour au premier plan
-  // 1) recharger tokens si besoin 2) ping /driver/me avec retry court 3) reconnect socket
+  // 1) recharger tokens si besoin 2) ping /auth/me (session) + invalidation cache profil si mismatch 3) reconnect socket
   // Jamais de déconnexion après 30–60 min en arrière-plan
   useEffect(() => {
     if (!driverToken || mode !== "driver") return;
@@ -1251,12 +1257,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
 
-          // 2) Ping /driver/me avec retry court (2 tentatives)
+          // 2) Ping session léger (/auth/me) — pas GET profil (P2 cache)
           const tokenForPing = await secureStorage.getAccessToken();
           if (tokenForPing) {
             for (let attempt = 1; attempt <= 2; attempt++) {
               try {
-                await fetchDriverProfile();
+                const me = await fetchUserInfo();
+                await invalidateDriverProfileCacheIfUserMismatch(me.id);
                 break;
               } catch (e) {
                 if (attempt === 2) {
@@ -1586,9 +1593,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (accessToken) {
         setDriverToken(accessToken);
 
-        // Charger le profil driver pour mettre à jour le contexte
+        // Charger le profil driver pour mettre à jour le contexte (cache si valide)
         try {
-          const profile = await fetchDriverProfile();
+          const profile = await fetchDriverProfile({ force: false });
           await asyncStorage.setDriverId(profile.id);
           setDriver(profile);
           await setActiveAuthNamespace({
@@ -1639,7 +1646,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setDriverLoading(true);
     try {
-      const profile = await fetchDriverProfile();
+      const profile = await fetchDriverProfile({ force: true });
       await asyncStorage.setDriverId(profile.id);
       setDriver(profile);
       await setActiveAuthNamespace({
@@ -1658,7 +1665,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const newToken = await refreshDriverTokenOrchestrated("profile_refresh");
           setDriverToken(newToken);
           invalidateInterceptorCache();
-          const profile = await fetchDriverProfile();
+          const profile = await fetchDriverProfile({ force: true });
           await asyncStorage.setDriverId(profile.id);
           setDriver(profile);
           await setActiveAuthNamespace({

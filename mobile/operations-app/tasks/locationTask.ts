@@ -4,7 +4,16 @@
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getLogger } from "@/utils/logger";
-import { enqueueLocationBatch, type QueuedLocation } from "../services/locationQueue";
+import { DEFAULT_LOCATION_FLUSH_INTERVAL_MS } from "../services/gpsCadence";
+import {
+  enqueueLocationBatch,
+  getLastDriverLocationBatchAckSuccessAtMs,
+  isLocationSocketOperational,
+  isSocketStaleHttpFallback,
+  shouldSendHttpForBackgroundLocation,
+  SOCKET_STALE_MS,
+  type QueuedLocation,
+} from "../services/locationQueue";
 import { MissionStateManager } from "../services/missionState";
 import { resolveMissionContext } from "../services/locationMissionContext";
 
@@ -46,7 +55,7 @@ let positionBuffer: Array<{
 }> = [];
 
 const BATCH_SIZE = 3;
-const BATCH_INTERVAL_MS = 15000; // 15 secondes
+const BATCH_INTERVAL_MS = DEFAULT_LOCATION_FLUSH_INTERVAL_MS;
 let flushInterval: ReturnType<typeof setInterval> | null = null;
 
 // Envoyer le batch de positions
@@ -108,7 +117,15 @@ async function flushPositionBatch() {
     log.info("positions enqueued", { count: queued.length, driverId });
 
     const latest = queued[queued.length - 1];
-    if (latest) {
+    const batchPipelineHealthy =
+      !!latest &&
+      isLocationSocketOperational() &&
+      (() => {
+        const ackAt = getLastDriverLocationBatchAckSuccessAtMs();
+        return ackAt != null && Date.now() - ackAt <= SOCKET_STALE_MS;
+      })();
+    // PUT de fond uniquement si fallback nécessaire (socket/ACK stale) — aligné shouldSendHttp + garde explicite.
+    if (latest && !batchPipelineHealthy && shouldSendHttpForBackgroundLocation()) {
       (async () => {
         try {
           const { updateDriverLocation } = await import("../services/api");
@@ -126,6 +143,9 @@ async function flushPositionBatch() {
               is_background: true,
               location_mode: latest.location_mode,
               mission_id: latest.mission_id ?? null,
+              transport_fallback: isSocketStaleHttpFallback()
+                ? "socket-stale"
+                : undefined,
             }),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error("timeout")), 5000)

@@ -18,6 +18,7 @@ const FullyAutoPanel = ({
   dispatches = [],
   delays = [],
   optimizerStatus,
+  loadOptimizerStatus,
   loading,
   error,
   onStartOptimizer,
@@ -200,7 +201,11 @@ const FullyAutoPanel = ({
             let currentOptimizerStatus = optimizerStatus;
             if (!currentOptimizerStatus) {
               console.log("[FullyAuto] 🔍 Chargement du statut de l'optimiseur...");
-              currentOptimizerStatus = await getOptimizerStatus();
+              if (loadOptimizerStatus) {
+                currentOptimizerStatus = await loadOptimizerStatus();
+              } else {
+                currentOptimizerStatus = await getOptimizerStatus();
+              }
             }
 
             if (!currentOptimizerStatus || !currentOptimizerStatus.running) {

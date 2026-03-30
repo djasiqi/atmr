@@ -25,7 +25,7 @@ import {
   asyncStorage,
   setActiveAuthNamespace,
 } from "@/services/storage";
-import { fetchDriverProfile, invalidateInterceptorCache } from "@/services/api";
+import { invalidateInterceptorCache } from "@/services/api";
 import { notifyAuthReady } from "@/services/authSync";
 import { sendIngestEvent } from "@/src/config/telemetry";
 import { getLogger } from "@/utils/logger";

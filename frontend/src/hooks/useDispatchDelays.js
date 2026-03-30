@@ -5,11 +5,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getLiveDelays, getOptimizerStatus } from '../services/dispatchMonitoringService';
+import { getLiveDelays } from '../services/dispatchMonitoringService';
+import { useOptimizerStatus } from './useOptimizerStatus';
 
 /**
  * Hook pour récupérer et gérer les retards de dispatch
  * Appelle GET /company_dispatch/delays/live — réservé COMPANY/ADMIN. Ne pas appeler avec un token DRIVER.
+ *
+ * P4 : le statut optimiseur est géré par useOptimizerStatus (polling adaptatif dédié), pas sur le même timer que delays.
  *
  * @param {string} date - Date au format YYYY-MM-DD (optionnel, défaut: aujourd'hui)
  * @param {number} refreshInterval - Intervalle de refresh en ms (0 = pas d'auto-refresh)
@@ -21,7 +24,8 @@ export const useDispatchDelays = (date = null, refreshInterval = 0, enabled = tr
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [optimizerStatus, setOptimizerStatus] = useState(null);
+
+  const { optimizerStatus } = useOptimizerStatus({ enabled });
 
   // Obtenir la date (aujourd'hui par défaut)
   const getDate = useCallback(() => {
@@ -51,47 +55,22 @@ export const useDispatchDelays = (date = null, refreshInterval = 0, enabled = tr
     }
   }, [getDate]);
 
-  // Récupérer le statut de l'optimizer
-  const fetchOptimizerStatus = useCallback(async () => {
-    // ✅ En développement, ne pas appeler l'optimizer (évite les erreurs 500)
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    if (isDevelopment) {
-      setOptimizerStatus(null);
-      return;
-    }
-    
-    try {
-      const status = await getOptimizerStatus();
-      setOptimizerStatus(status);
-    } catch (err) {
-      // Ne pas logger les erreurs 403/404/401 comme des erreurs critiques
-      const status = err?.response?.status;
-      const isExpectedError = status === 403 || status === 404 || status === 401;
-      
-      if (!isExpectedError) {
-        console.error('[useDispatchDelays] Error fetching optimizer status:', err);
-      }
-    }
-  }, []);
-
   // Charger les données initiales uniquement si autorisé (rôle company/admin)
   useEffect(() => {
     if (!enabled) return;
     refresh();
-    fetchOptimizerStatus();
-  }, [enabled, refresh, fetchOptimizerStatus]);
+  }, [enabled, refresh]);
 
-  // Auto-refresh si activé et autorisé
+  // Auto-refresh delays uniquement (P4 : pas de fetch optimizer sur ce timer)
   useEffect(() => {
     if (!enabled || refreshInterval <= 0) return;
 
     const intervalId = setInterval(() => {
       refresh();
-      fetchOptimizerStatus();
     }, refreshInterval);
 
     return () => clearInterval(intervalId);
-  }, [enabled, refreshInterval, refresh, fetchOptimizerStatus]);
+  }, [enabled, refreshInterval, refresh]);
 
   // Compteurs utiles
   const delayCount = summary?.late || 0;

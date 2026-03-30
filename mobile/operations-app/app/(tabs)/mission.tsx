@@ -17,10 +17,10 @@ import ConfirmCompletionModal from "@/components/dashboard/ConfirmCompletionModa
 import { Loader } from "@/components/ui/Loader";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
-  getAssignedTrips,
   Booking,
   BookingStatus,
 } from "@/services/api";
+import { requestMissionSync } from "@/services/missionSyncOrchestrator";
 import { MissionStateManager, type MissionBarStatus } from "@/services/missionState";
 import { showMissionNotification, dismissMissionNotification } from "@/services/missionBarAndroid";
 import { openNavigation as openNavigationApp } from "@/services/deepLinks";
@@ -209,7 +209,7 @@ export default function MissionScreen() {
       setIsLoading(true);
     }
     try {
-      const assigned = await getAssignedTrips();
+      const assigned = await requestMissionSync("manual_screen");
 
       // 🔒 SÉCURITÉ : Utiliser UNIQUEMENT les données du backend
       // Ne pas merger avec le cache pour éviter de voir les missions d'autres chauffeurs
@@ -357,7 +357,7 @@ export default function MissionScreen() {
       loadMissions(true);
       void (async () => {
         try {
-          const fresh = await getAssignedTrips();
+          const fresh = await requestMissionSync("socket_connect");
           await MissionStateManager.updateFromServer(fresh);
         } catch {
           /* best-effort */
@@ -408,7 +408,7 @@ export default function MissionScreen() {
         InteractionManager.runAfterInteractions(async () => {
           await MissionStateManager.syncPendingActions();
           try {
-            const fresh = await getAssignedTrips();
+            const fresh = await requestMissionSync("foreground");
             await MissionStateManager.updateFromServer(fresh);
             if (MissionStateManager.isActive()) {
               const inputs = await buildBgTrackingInputs({

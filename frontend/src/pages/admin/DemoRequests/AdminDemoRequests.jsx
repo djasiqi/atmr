@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
+import { useSearchParams } from 'react-router-dom';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import {
   fetchAdminDemoRequests,
@@ -128,12 +127,22 @@ const defaultProvisionFromRequest = (item) => {
 };
 
 const AdminDemoRequests = () => {
+  const [searchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || 'all';
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [items, setItems] = useState([]);
   const [busyKey, setBusyKey] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [provisionForm, setProvisionForm] = useState(null);
+
+  const displayItems = useMemo(() => {
+    if (statusFilter === 'new') {
+      return items.filter((i) => i.status === 'new');
+    }
+    return items;
+  }, [items, statusFilter]);
 
   const load = async (showLoading = true) => {
     if (showLoading) {
@@ -287,11 +296,8 @@ const AdminDemoRequests = () => {
   };
 
   return (
-    <div className={styles.adminContainer}>
-      <HeaderDashboard />
-      <div className={styles.dashboard}>
-        <AdminSidebar />
-        <main className={styles.content}>
+    <>
+      <main className={styles.content}>
           <header className={styles.pageHeader}>
             <div>
               <h1>Demandes de demonstration</h1>
@@ -345,6 +351,11 @@ const AdminDemoRequests = () => {
                   <h2>Aucune demande</h2>
                   <p>Aucune demande de demonstration n est disponible pour le moment.</p>
                 </div>
+              ) : displayItems.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <h2>Aucune demande dans ce filtre</h2>
+                  <p>Aucune demande ne correspond au filtre actuel (statut).</p>
+                </div>
               ) : (
                 <table className={styles.table}>
                   <thead>
@@ -359,7 +370,7 @@ const AdminDemoRequests = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => {
+                    {displayItems.map((item) => {
                       const access = item.latest_access;
                       const accessStatus = access?.status || 'pending';
                       const hasActiveAccess = accessStatus === 'active';
@@ -436,7 +447,6 @@ const AdminDemoRequests = () => {
             </div>
           )}
         </main>
-      </div>
 
       {selectedRequest && provisionForm && (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
@@ -672,7 +682,7 @@ const AdminDemoRequests = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

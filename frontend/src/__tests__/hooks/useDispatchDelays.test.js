@@ -1,10 +1,21 @@
 // frontend/tests/hooks/useDispatchDelays.test.js
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDispatchDelays } from 'hooks/useDispatchDelays';
-import { getLiveDelays, getOptimizerStatus } from 'services/dispatchMonitoringService';
+import { getLiveDelays } from 'services/dispatchMonitoringService';
 
 // Mocks
 jest.mock('services/dispatchMonitoringService');
+
+jest.mock('hooks/useOptimizerStatus', () => ({
+  useOptimizerStatus: () => ({
+    optimizerStatus: {
+      running: true,
+      interval: 120,
+      last_run: '2025-10-16T10:00:00',
+    },
+    loadOptimizerStatus: jest.fn(),
+  }),
+}));
 
 // Mock timers
 jest.useFakeTimers();
@@ -62,7 +73,6 @@ describe('useDispatchDelays', () => {
       summary: mockSummary,
     });
 
-    getOptimizerStatus.mockResolvedValue(mockOptimizerStatus);
   });
 
   afterEach(() => {
@@ -125,7 +135,7 @@ describe('useDispatchDelays', () => {
       expect(result.current.optimizerStatus).toEqual(mockOptimizerStatus);
     });
 
-    expect(getOptimizerStatus).toHaveBeenCalled();
+    expect(result.current.optimizerStatus?.running).toBe(true);
   });
 
   it('devrait rafraîchir automatiquement avec interval', async () => {

@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/hooks/useAuth";
-import { getCompletedTrips, getAssignedTrips, getCompanyTodayTrips, Booking } from "@/services/api";
+import { getCompletedTrips, getCompanyTodayTrips, Booking } from "@/services/api";
+import { requestMissionSync } from "@/services/missionSyncOrchestrator";
 import { isCompletedStatus, isCanceledStatus } from "@/utils/bookingStatus";
 import { formatTimeLocal } from "@/utils/formatTimeLocal";
 import { Loader } from "@/components/ui/Loader";
@@ -110,7 +111,7 @@ export default function TripsScreen() {
     try {
       setLoading(true);
       const [completed, assigned, company] = await Promise.all([
-        getCompletedTrips(driver.id), getAssignedTrips(), getCompanyTodayTrips(),
+        getCompletedTrips(driver.id), requestMissionSync("manual_screen"), getCompanyTodayTrips(),
       ]);
       const today = new Date().toDateString();
       setCompletedTrips(completed.filter((t) => new Date(t.scheduled_time).toDateString() === today));

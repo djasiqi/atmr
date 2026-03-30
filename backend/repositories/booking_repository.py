@@ -979,6 +979,7 @@ class BookingRepository:
                 selectinload(Booking.driver).selectinload(Driver.user),
                 selectinload(Booking.client).selectinload(Client.user),
                 selectinload(Booking.company),
+                selectinload(Booking.executing_company),
             )
             .first()
         )

@@ -20,6 +20,7 @@ import useCompanyAuthToken from '../../../hooks/useCompanyAuthToken';
 // Hooks personnalisés
 import { useDispatchData } from '../../../hooks/useDispatchData';
 import { useLiveDelays } from '../../../hooks/useLiveDelays';
+import { useOptimizerStatus } from '../../../hooks/useOptimizerStatus';
 import { useDispatchMode } from '../../../hooks/useDispatchMode';
 import { useAssignmentActions } from '../../../hooks/useAssignmentActions';
 
@@ -33,7 +34,6 @@ import {
   updateReservation,
 } from '../../../services/companyService';
 import {
-  getOptimizerStatus,
   startRealTimeOptimizer,
   stopRealTimeOptimizer,
   applySuggestion,
@@ -162,6 +162,9 @@ const UnifiedDispatchRefactored = () => {
   const { user, isCompanyAuthReady } = useCompanyAuthToken();
   const isCompanyOrAdmin = user && (user.isCompany || String(user.role || '').toLowerCase() === 'admin');
 
+  /** P3 : socket avant useLiveDelays pour écouter delay_live_invalidate */
+  const socket = useCompanySocket();
+
   // Hooks personnalisés
   const { dispatchMode, loadDispatchMode } = useDispatchMode();
   const {
@@ -171,7 +174,11 @@ const UnifiedDispatchRefactored = () => {
     loadDispatches,
     setDispatches, // CT2: destructure pour optimistic update V13
   } = useDispatchData(date, dispatchMode);
-  const { delays, summary: _summary, loadDelays } = useLiveDelays(date, isCompanyAuthReady && !!isCompanyOrAdmin);
+  const { delays, summary: _summary, loadDelays, scheduleLoadDelays } = useLiveDelays(
+    date,
+    isCompanyAuthReady && !!isCompanyOrAdmin,
+    { socket }
+  );
 
   // 🆕 Ref pour compter les assignations réelles (mis à jour après chargement)
   // Utiliser une ref plutôt qu'un état pour éviter les re-renders inutiles
@@ -267,50 +274,19 @@ const UnifiedDispatchRefactored = () => {
     [handleAssignDriver, driversWithLoad, setDispatches, getDispatchKey]
   );
 
-  // États pour l'optimiseur
-  const [optimizerStatus, setOptimizerStatus] = useState(null);
+  // P4 — statut optimiseur : polling adaptatif dédié + single-flight (useOptimizerStatus)
+  const { optimizerStatus, loadOptimizerStatus } = useOptimizerStatus({
+    enabled: isCompanyAuthReady && !!isCompanyOrAdmin,
+  });
 
   // ✅ Styles dynamiques selon le mode actif (avec fallback si mode pas encore chargé)
   const styles = getModeStyles(dispatchMode || 'manual');
 
-  // WebSocket pour temps réel
-  const socket = useCompanySocket();
   const {
     label: dispatchLabel,
     progress: dispatchProgress,
     isRunning: isDispatching,
   } = useDispatchStatus(socket);
-
-  // Charger le statut de l'optimiseur
-  const loadOptimizerStatus = useCallback(async () => {
-    // ✅ En développement, ne pas appeler l'optimizer (évite les erreurs 500)
-    const isDevelopment = process.env.NODE_ENV === 'development';
-    if (isDevelopment) {
-      setOptimizerStatus(null);
-      return;
-    }
-    
-    try {
-      const status = await getOptimizerStatus();
-      if (status) {
-        setOptimizerStatus(status);
-      }
-      // Si status est null (401 avec refresh réussi), ne pas définir d'erreur
-    } catch (err) {
-      // ⚡ Ignorer les erreurs 401 si le refresh est en cours ou réussi
-      if (err?.response?.status === 401 && err?.config?._retryAfterRefresh) {
-        // Refresh réussi, ne pas logger l'erreur
-        return;
-      }
-
-      // Ne logger que les vraies erreurs (pas les 401 en cours de refresh)
-      if (err?.response?.status !== 401) {
-        console.error('[UnifiedDispatch] Error loading optimizer:', err);
-      } else {
-        console.debug('[UnifiedDispatch] 401 error, refresh token will be attempted');
-      }
-    }
-  }, []);
 
   // Gérer la suppression d'une réservation (fonction interne)
   const _handleDeleteReservation = async (reservationIdOrObject) => {
@@ -968,25 +944,34 @@ const UnifiedDispatchRefactored = () => {
   useEffect(() => {
     loadDispatches();
     loadDelays();
-    loadOptimizerStatus();
     loadDispatchMode();
-  }, [loadDispatches, loadDelays, loadOptimizerStatus, loadDispatchMode]);
+  }, [loadDispatches, loadDelays, loadDispatchMode]);
 
-  // Auto-refresh (désactivé en mode fully_auto - l'agent gère tout automatiquement)
+  // P3 : pas de polling 30s si socket connecté (delay_live_invalidate + scheduleLoadDelays).
+  // Socket absent : fallback 3 min. Socket présent mais déconnecté / reconnexion : 2 min.
+  const P3_DELAYS_FALLBACK_NO_SOCKET_MS = 180000;
+  const P3_DELAYS_FALLBACK_RECONNECTING_MS = 120000;
+
   useEffect(() => {
-    // ✅ En mode fully_auto, ne pas rafraîchir automatiquement
-    // L'agent gère les assignations automatiquement et les mises à jour arrivent via WebSocket
     if (dispatchMode === 'fully_auto') {
-      return; // Pas de rafraîchissement automatique en fully_auto
+      return undefined;
     }
-
-    if (!autoRefresh) return;
+    if (!autoRefresh) {
+      return undefined;
+    }
+    const socketOk = Boolean(socket && socket.connected);
+    if (socketOk) {
+      return undefined;
+    }
+    const fallbackMs =
+      socket && !socket.connected
+        ? P3_DELAYS_FALLBACK_RECONNECTING_MS
+        : P3_DELAYS_FALLBACK_NO_SOCKET_MS;
     const interval = setInterval(() => {
       loadDelays();
-      loadOptimizerStatus();
-    }, 30000);
+    }, fallbackMs);
     return () => clearInterval(interval);
-  }, [autoRefresh, loadDelays, loadOptimizerStatus, dispatchMode]);
+  }, [autoRefresh, loadDelays, dispatchMode, socket]);
 
   // Écoute WebSocket
   useEffect(() => {
@@ -1088,7 +1073,7 @@ const UnifiedDispatchRefactored = () => {
         return;
       }
       loadDispatches();
-      loadDelays();
+      scheduleLoadDelays();
     };
 
     socket.on('dispatch_run_started', handleDispatchStarted);
@@ -1103,7 +1088,7 @@ const UnifiedDispatchRefactored = () => {
       socket.off('booking_updated', handleBookingUpdated);
       socket.off('new_booking', handleBookingUpdated);
     };
-  }, [socket, loadDispatches, loadDelays, date, dispatchMode]);
+  }, [socket, loadDispatches, loadDelays, scheduleLoadDelays, date, dispatchMode]);
 
   // Rendu du panneau selon le mode
   const renderModePanel = () => {
@@ -1158,6 +1143,7 @@ const UnifiedDispatchRefactored = () => {
           <FullyAutoPanel
             {...commonProps}
             optimizerStatus={optimizerStatus}
+            loadOptimizerStatus={loadOptimizerStatus}
             onStartOptimizer={onStartOptimizer}
             onStopOptimizer={onStopOptimizer}
             autoRefresh={autoRefresh}

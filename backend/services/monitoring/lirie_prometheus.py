@@ -17,6 +17,15 @@ except ImportError:
     Histogram = None
 
 if _PROM and Counter is not None:
+    DELAY_LIVE_INVALIDATE_EMITTED_TOTAL = Counter(
+        "delay_live_invalidate_emitted_total",
+        "Émissions delay_live_invalidate (après throttle P3). Corréler avec Traefik sur GET /company_dispatch/delays/live.",
+    )
+    DELAY_LIVE_INVALIDATE_SKIPPED_TOTAL = Counter(
+        "delay_live_invalidate_skipped_total",
+        "Invalidations live delays ignorées (ex. throttle P3). Ratio emitted/skipped utile avec le volume HTTP ci-dessus.",
+        ["reason"],
+    )
     SOCKETIO_EVENTS_TOTAL = Counter(
         "socketio_events_total",
         "Événements Socket.IO émis via _safe_emit",
@@ -28,6 +37,8 @@ if _PROM and Counter is not None:
         ["alias"],
     )
 else:
+    DELAY_LIVE_INVALIDATE_EMITTED_TOTAL = None
+    DELAY_LIVE_INVALIDATE_SKIPPED_TOTAL = None
     SOCKETIO_EVENTS_TOTAL = None
     SOCKETIO_ALIAS_EMITS_TOTAL = None
 
@@ -60,6 +71,16 @@ def observe_reservations_payload_size(num_bytes: int) -> None:
         return
     if COMPANY_RESERVATIONS_RESPONSE_BYTES is not None:
         COMPANY_RESERVATIONS_RESPONSE_BYTES.observe(max(0, float(num_bytes)))
+
+
+def inc_delay_live_invalidate_emitted() -> None:
+    if DELAY_LIVE_INVALIDATE_EMITTED_TOTAL is not None:
+        DELAY_LIVE_INVALIDATE_EMITTED_TOTAL.inc()
+
+
+def inc_delay_live_invalidate_skipped(reason: str) -> None:
+    if DELAY_LIVE_INVALIDATE_SKIPPED_TOTAL is not None:
+        DELAY_LIVE_INVALIDATE_SKIPPED_TOTAL.labels(reason=reason).inc()
 
 
 def inc_socketio_event(event_name: str) -> None:

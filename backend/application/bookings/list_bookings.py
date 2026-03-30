@@ -203,11 +203,11 @@ class ListBookingsUseCase:
                 logger.warning(
                     "ListBookingsUseCase: rôle non supporté: %s", input_data.user_role
                 )
-            return ListBookingsOutput(
-                success=False,
-                error={"error": "Rôle non supporté"},
-                status_code=400,
-            )
+                return ListBookingsOutput(
+                    success=False,
+                    error={"error": "Rôle non supporté"},
+                    status_code=400,
+                )
 
             pagination = query.paginate(
                 page=input_data.page, per_page=input_data.per_page, error_out=False

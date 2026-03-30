@@ -13,6 +13,7 @@ import {
 import { resolveLocationModeFromState, resolvePresenceState } from "./locationPresenceFsm";
 import { isMissionTrackingActiveStatus } from "./missionTrackingPolicy";
 import type { MissionBarStatus } from "./missionState";
+import { DEFAULT_LOCATION_FLUSH_INTERVAL_MS } from "./gpsCadence";
 
 // ---------------------------------------------------------------------------
 // Types (contrat figé P1)
@@ -95,7 +96,7 @@ export function getTrackingCadenceForMode(mode: TrackingMode): {
 } {
   const fastMs = parseInt(process.env.EXPO_PUBLIC_GPS_FAST_MS ?? "5000", 10) || 5000;
   const slowMs = parseInt(process.env.EXPO_PUBLIC_GPS_SLOW_MS ?? "60000", 10) || 60000;
-  const flushMs = 15000;
+  const flushMs = DEFAULT_LOCATION_FLUSH_INTERVAL_MS;
 
   switch (mode) {
     case "OFF":

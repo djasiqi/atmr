@@ -1,6 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import {
   createAdminPricingZoneSet,
   fetchServiceAreaZones,
@@ -461,11 +459,7 @@ const AdminSettings = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <HeaderDashboard />
-      <div className={styles.body}>
-        <AdminSidebar />
-        <main className={styles.content}>
+    <main className={styles.content}>
           <section className={styles.hero}>
             <h1>Paramètres administrateur</h1>
             <p>
@@ -827,9 +821,7 @@ const AdminSettings = () => {
               </div>
             </section>
           )}
-        </main>
-      </div>
-    </div>
+    </main>
   );
 };
 

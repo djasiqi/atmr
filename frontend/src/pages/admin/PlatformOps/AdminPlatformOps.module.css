@@ -92,6 +92,13 @@
   gap: var(--spacing-xs);
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 .metaLine {
   font-size: var(--font-xs);
   color: var(--text-tertiary);
@@ -185,11 +192,11 @@
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
-  background: linear-gradient(180deg, #ffffff 0%, var(--brand-primary-lightest) 100%);
-  border: 2px solid var(--border-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
-  border-left: 4px solid var(--brand-primary);
-  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--brand-primary);
+  box-shadow: var(--shadow-xs);
 }
 
 .summaryLabel {
@@ -221,11 +228,11 @@
 }
 
 .card {
-  background: linear-gradient(180deg, #ffffff 0%, var(--bg-tertiary) 100%);
-  border: 2px solid var(--border-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md) var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
   transition:
     border-color var(--transition-base),
     box-shadow var(--transition-base);
@@ -470,11 +477,11 @@
 /* —— Runtime (/platform/runtime) : carte séparée, chargement manuel —— */
 .runtimeCard {
   margin-bottom: var(--spacing-lg);
-  background: linear-gradient(180deg, #ffffff 0%, var(--bg-tertiary) 100%);
-  border: 2px solid var(--border-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-md) var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
 }
 
 .runtimeCardHeader {
@@ -616,9 +623,158 @@
   word-break: break-word;
 }
 
+/* Navigation par onglets */
+.tabBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.tabButton,
+.tabButtonActive {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.tabButton:hover {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+
+.tabButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.tabButtonActive {
+  color: var(--brand-primary);
+  background: var(--brand-primary-lightest, rgba(0, 121, 107, 0.08));
+  border-color: rgba(0, 121, 107, 0.35);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tabPanel {
+  animation: tabFadeIn 0.2s ease-out;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0.85;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.tabPanelHint {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  line-height: var(--line-height-relaxed);
+  max-width: 44rem;
+}
+
+.overviewFoot {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+}
+
+@media (min-width: 960px) {
+  .overviewFoot {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
 /* Gouvernance tenant V1 */
 .govPanel {
-  margin-top: var(--spacing-lg);
+  margin-top: 0;
+}
+
+.govGroup {
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px dashed var(--border-primary);
+}
+
+.govGroup:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.govGroupTitle {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.govAlert {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+}
+
+.jsonDetails {
+  margin-bottom: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.jsonSummary {
+  cursor: pointer;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  list-style: none;
+}
+
+.jsonSummary::-webkit-details-marker {
+  display: none;
+}
+
+.jsonSummary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 0.35rem;
+  transition: transform 0.15s ease;
+  color: var(--text-tertiary);
+}
+
+.jsonDetails[open] .jsonSummary::before {
+  transform: rotate(90deg);
+}
+
+.jsonDetails .govPre {
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--border-primary);
+  border-radius: 0;
+  max-height: 18rem;
 }
 
 .govRow {
@@ -727,8 +883,20 @@
     align-items: stretch;
   }
 
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .refreshBtn {
     width: 100%;
+  }
+
+  .tabBar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--spacing-sm);
   }
 
   .summaryStrip {

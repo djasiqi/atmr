@@ -1,3 +1,15 @@
+/**
+ * P5 — Audit fusion socket vs GET canonique (avant staleTime Infinity sur companyDrivers).
+ *
+ * Couvert par `mergeDriverLiveUpdate` / `mergeOrUpdateDriverInList` :
+ * coords (lat/lon), `location_mode`, `last_seen_seconds`, `location_status`, `presence_status`,
+ * `status`, `mission_status`, `recorded_at` / `received_at`, `mission_id`, champs upsert minimal
+ * (`first_name`, `last_name`, `company_id`, `is_active`) si ligne créée depuis le socket seul.
+ *
+ * Non couverts (restent sur snapshot HTTP ou invalidations métier ailleurs) : objet `user` imbriqué,
+ * véhicule, préférences, disponibilité métier hors événements live, etc.
+ */
+
 /** @param {unknown} s */
 function parseIsoMs(s) {
   if (s == null || s === '') return null;

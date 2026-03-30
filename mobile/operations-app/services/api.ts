@@ -28,6 +28,14 @@ import {
 } from "@/services/sessionJournal";
 import { sendIngestEvent } from "@/src/config/telemetry";
 import { buildAuthNamespace } from "@/services/storage/keys";
+import {
+  readDriverProfileCache,
+  writeDriverProfileCache,
+} from "@/services/driverProfileCache";
+import {
+  SYNC_TRIGGER_HEADER,
+  type MissionSyncTrigger,
+} from "@/services/missionSyncTypes";
 
 // Helper pour les logs de debug (dev uniquement, ingest désactivable via EXPO_PUBLIC_DISABLE_INGEST)
 const debugLog = (data: Record<string, unknown>) => {
@@ -1317,9 +1325,33 @@ export const refreshAccessToken = async (
 };
 
 // ========== Driver ==========
-export const fetchDriverProfile = async (): Promise<Driver> => {
+export type FetchDriverProfileOptions = {
+  force?: boolean;
+  /** Retourne le cache même périmé (affichage immédiat) ; GET réseau inchangé si force. */
+  allowStale?: boolean;
+};
+
+export const fetchDriverProfile = async (
+  options?: FetchDriverProfileOptions
+): Promise<Driver> => {
+  const force = options?.force === true;
+  const allowStale = options?.allowStale === true;
+
+  if (!force) {
+    const cached = await readDriverProfileCache({ allowStale });
+    if (
+      cached.profile &&
+      (cached.status === "hit" ||
+        (allowStale && cached.status === "expired"))
+    ) {
+      return cached.profile;
+    }
+  }
+
   const res = await api.get<{ profile: Driver }>("/driver/me/profile");
-  return res.data.profile;
+  const profile = res.data.profile;
+  await writeDriverProfileCache(profile);
+  return profile;
 };
 
 export interface DriverProfilePayload {
@@ -1347,6 +1379,7 @@ export const updateDriverPhoto = async (
   const response = await api.put<UpdatePhotoResponse>("/driver/me/photo", {
     photo,
   });
+  await writeDriverProfileCache(response.data.profile);
   return response.data;
 };
 
@@ -1453,6 +1486,8 @@ export interface DriverLocationPayload {
   mission_id?: number | null;
   /** Identité logique du point (queue) — retry HTTP réutilise le même id */
   location_event_id?: string;
+  /** Repli HTTP : socket connecté mais pipeline sans ACK récent (métrique serveur). */
+  transport_fallback?: "socket-stale";
   device_status?: {
     battery_level?: number;
     low_power_mode?: boolean;
@@ -1510,6 +1545,9 @@ export const updateDriverLocation = async (
   };
   if (payload.location_event_id) {
     headers["X-Location-Event-Id"] = payload.location_event_id;
+  }
+  if (payload.transport_fallback === "socket-stale") {
+    headers["X-ATMR-Location-Fallback"] = "socket-stale";
   }
 
   try {
@@ -1645,10 +1683,27 @@ export type Booking = {
   [key: string]: any;
 };
 
-export const getAssignedTrips = async (options?: { since?: string }): Promise<Booking[]> => {
+export type GetAssignedTripsOptions = {
+  since?: string;
+  /** Renseigné par missionSyncOrchestrator — enum fermé, jamais libre. */
+  syncTrigger?: MissionSyncTrigger;
+};
+
+/**
+ * Transport HTTP uniquement pour GET /driver/me/bookings/since.
+ * Préférer `requestMissionSync` depuis les appels métier (orchestrateur).
+ */
+export const getAssignedTrips = async (options?: GetAssignedTripsOptions): Promise<Booking[]> => {
   try {
     const params = options?.since ? { since: options.since } : {};
-    const response = await api.get<Booking[]>("/driver/me/bookings/since", { params });
+    const headers: Record<string, string> = {};
+    if (options?.syncTrigger) {
+      headers[SYNC_TRIGGER_HEADER] = options.syncTrigger;
+    }
+    const response = await api.get<Booking[]>("/driver/me/bookings/since", {
+      params,
+      headers: Object.keys(headers).length ? headers : undefined,
+    });
     return response.data;
   } catch (error: any) {
     // Supprimer les erreurs 401/403/404 car elles sont attendues si l'utilisateur n'est pas un chauffeur

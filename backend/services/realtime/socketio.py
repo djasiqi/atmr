@@ -288,6 +288,75 @@ def emit_company_event(
     )
 
 
+# P3 — invalidation snapshot GET /delays/live (throttle par entreprise + date locale)
+_DELAY_LIVE_INVALIDATE_THROTTLE_SEC = 25.0
+_DELAY_LIVE_LAST_EMIT: dict[tuple[int, str], float] = {}
+
+
+def _booking_date_str_for_dispatch(booking_id: int) -> str | None:
+    """Date locale YYYY-MM-DD pour le throttle P3 (dispatch jour)."""
+    try:
+        from models import Booking
+
+        b = Booking.query.filter_by(id=booking_id).first()
+        if not b or not b.scheduled_time:
+            return None
+        dt = b.scheduled_time
+        return dt.strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def emit_delay_live_invalidate(
+    company_id: int,
+    date_str: str,
+    reason: str,
+    *,
+    namespace: str = DEFAULT_NAMESPACE,
+) -> None:
+    """Pousse delay_live_invalidate vers company_{id} ; throttle 25s par (company_id, date)."""
+    key = (company_id, date_str)
+    now = time.monotonic()
+    last = _DELAY_LIVE_LAST_EMIT.get(key, 0.0)
+    if now - last < _DELAY_LIVE_INVALIDATE_THROTTLE_SEC:
+        try:
+            from services.monitoring.lirie_prometheus import (
+                inc_delay_live_invalidate_skipped,
+            )
+
+            inc_delay_live_invalidate_skipped("throttled")
+        except Exception:
+            pass
+        return
+    _DELAY_LIVE_LAST_EMIT[key] = now
+    payload: dict[str, Any] = {"date": date_str, "reason": reason}
+    emit_company_event(
+        company_id, "delay_live_invalidate", payload, namespace=namespace
+    )
+    try:
+        from services.monitoring.lirie_prometheus import (
+            inc_delay_live_invalidate_emitted,
+        )
+
+        inc_delay_live_invalidate_emitted()
+    except Exception:
+        pass
+
+
+def emit_delay_live_invalidate_for_booking(
+    company_id: int,
+    booking_id: int,
+    reason: str,
+    *,
+    namespace: str = DEFAULT_NAMESPACE,
+) -> None:
+    """Résout la date depuis la réservation puis invalide le live delays."""
+    ds = _booking_date_str_for_dispatch(booking_id)
+    if not ds:
+        return
+    emit_delay_live_invalidate(company_id, ds, reason, namespace=namespace)
+
+
 def _emit_dispatch_state_patch_if_enabled(
     *,
     company_id: int,
@@ -441,6 +510,9 @@ def emit_dispatch_run_started(
         {"dispatch_run_id": dispatch_run_id, "date": date_str},
         namespace=namespace,
     )
+    emit_delay_live_invalidate(
+        company_id, date_str, "dispatch_run_started", namespace=namespace
+    )
 
 
 def emit_dispatch_run_completed(
@@ -461,6 +533,9 @@ def emit_dispatch_run_completed(
         company_id, "dispatch_run_completed", payload, namespace=namespace
     )
     emit_date_event(date_str, "dispatch_run_completed", payload, namespace=namespace)
+    emit_delay_live_invalidate(
+        company_id, date_str, "dispatch_run_completed", namespace=namespace
+    )
 
 
 def emit_dispatch_run_failed(
@@ -479,6 +554,9 @@ def emit_dispatch_run_failed(
     # ✅ FIX: Standardiser avec '_' au lieu de ':' pour cohérence
     emit_company_event(company_id, "dispatch_run_failed", payload, namespace=namespace)
     emit_date_event(date_str, "dispatch_run_failed", payload, namespace=namespace)
+    emit_delay_live_invalidate(
+        company_id, date_str, "dispatch_run_failed", namespace=namespace
+    )
 
 
 def emit_assignment_created(
@@ -553,6 +631,9 @@ def emit_assignment_updated(
     _maybe_emit_dispatch_dashboard_snapshot(company_id, namespace=namespace)
     emit_driver_event(
         driver_id, "driver_assignment_updated", payload, namespace=namespace
+    )
+    emit_delay_live_invalidate_for_booking(
+        company_id, booking_id, "assignment_updated", namespace=namespace
     )
 
 
@@ -775,6 +856,15 @@ def emit_delay_detected(
         except Exception:
             app_logger.exception("[socketio] Push notification failed")
 
+    try:
+        emit_delay_live_invalidate_for_booking(
+            company_id, booking_id, "delay_detected", namespace=namespace
+        )
+    except Exception:
+        app_logger.exception(
+            "[socketio] emit_delay_live_invalidate_for_booking after delay_detected"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers pour joindre/quitter des rooms côté serveur (utilisable hors handler)
@@ -889,6 +979,8 @@ __all__ = [
     "emit_company_event",
     "emit_date_event",
     "emit_delay_detected",
+    "emit_delay_live_invalidate",
+    "emit_delay_live_invalidate_for_booking",
     "emit_dispatch_run_completed",
     "emit_dispatch_run_failed",
     "emit_dispatch_run_started",

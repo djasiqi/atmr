@@ -36,7 +36,11 @@ from services.geolocation.presence import (
     presence_status_from_location_status,
 )
 from services.geolocation.location import get_location_service
-from services.monitoring.driver_location_metrics import inc_received
+from services.monitoring.driver_location_metrics import (
+    inc_batch_fallback_individual,
+    inc_received,
+    observe_driver_location_batch_ingest_size,
+)
 from services.monitoring.location_correlation_log import log_driver_location_processed
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
@@ -1702,6 +1706,9 @@ def init_chat_socket(socketio: SocketIO):
             current_sid_log = current_sid
             logger.info("📍 driver_location reçu, SID=%s, data=%s", current_sid, data)
 
+            if isinstance(data, dict) and data.get("batch_fallback") is True:
+                inc_batch_fallback_individual()
+
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
             sid_info = _SID_INDEX.get(current_sid, {})
             user_public_id = sid_info.get("user_public_id")
@@ -1789,6 +1796,9 @@ def init_chat_socket(socketio: SocketIO):
             longitude = data.get("longitude")
 
             # ✅ Validation stricte lat/lon
+            if latitude is None or longitude is None:
+                emit("error", {"error": "Latitude et longitude requises."})
+                return
             try:
                 lat = float(latitude)
                 lon = float(longitude)
@@ -1843,13 +1853,31 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 return
 
-            from services.monitoring.driver_location_metrics import inc_received
-
             raw_mode_sock = str(data.get("location_mode") or "mission_live")
             loc_svc_sock = get_location_service()
             norm_mode_sock = loc_svc_sock.resolve_normalized_location_mode(
                 company_id_val, raw_mode_sock
             )
+            leid_sock = data.get("location_event_id")
+            from services.geolocation.driver_location_dedup import should_skip_location_ingest
+            from services.monitoring.driver_location_metrics import inc_dedup_skipped, inc_received
+
+            skip_ingest_sock, skip_reason_sock = should_skip_location_ingest(
+                driver.id,
+                latitude,
+                longitude,
+                recorded_at_dt,
+                location_mode,
+                str(leid_sock) if leid_sock else None,
+            )
+            if skip_ingest_sock and skip_reason_sock:
+                inc_dedup_skipped(
+                    reason=skip_reason_sock,
+                    location_mode=norm_mode_sock,
+                    transport="socket",
+                )
+                return
+
             inc_received(transport="socket", location_mode=norm_mode_sock)
 
             snapped_lat, snapped_lon = latitude, longitude
@@ -1880,7 +1908,6 @@ def init_chat_socket(socketio: SocketIO):
                 accept_status = result.accept_status
                 received_at = result.received_at or received_at
 
-                leid = data.get("location_event_id")
                 log_driver_location_processed(
                     driver_id=driver.id,
                     company_id=company_id_val,
@@ -1888,7 +1915,7 @@ def init_chat_socket(socketio: SocketIO):
                     location_mode=norm_mode_sock,
                     accept_status=accept_status,
                     accept_reason=result.accept_reason,
-                    location_event_id=str(leid) if leid else None,
+                    location_event_id=str(leid_sock) if leid_sock else None,
                 )
 
                 # Émettre events geofencing si détectés
@@ -1971,6 +1998,21 @@ def init_chat_socket(socketio: SocketIO):
                 },
                 accept_status=accept_status,
             )
+            if accept_status == "accepted_canonical":
+                from services.geolocation.driver_eta_socket_fanout import (
+                    maybe_emit_eta_changed_after_driver_location,
+                )
+                from services.monitoring.driver_eta_socket_metrics import (
+                    inc_driver_location_ingested_for_eta_ratio,
+                )
+
+                inc_driver_location_ingested_for_eta_ratio()
+                maybe_emit_eta_changed_after_driver_location(
+                    driver_id=driver.id,
+                    driver_lat=float(snapped_lat),
+                    driver_lon=float(snapped_lon),
+                    accept_status=accept_status,
+                )
             elapsed = time.perf_counter() - t0
             ws_metrics.on_driver_location_latency(elapsed)
             logger.info(
@@ -2123,9 +2165,20 @@ def init_chat_socket(socketio: SocketIO):
                 logger.warning("⚠️ driver_location_batch vide")
                 return {"success": False, "error": "Batch vide"}
 
+            from services.geolocation.driver_location_pipeline import (
+                process_driver_location_points,
+            )
+
+            positions = process_driver_location_points(list(positions))
+            if not positions:
+                logger.warning("⚠️ driver_location_batch vide après filtre")
+                return {"success": False, "error": "Batch vide"}
+
+            observe_driver_location_batch_ingest_size(size=len(positions))
+
             # Instrumentation: tracer les clés reçues pour diagnostiquer payload cassé
             first_pos = positions[0] if positions else {}
-            pos_keys = list(first_pos.keys()) if isinstance(first_pos, dict) else []
+            pos_keys = list(first_pos.keys())
             has_loc_mode = "location_mode" in first_pos and first_pos.get("location_mode") is not None
             has_rec_at = "recorded_at" in first_pos and first_pos.get("recorded_at") is not None
             if not has_loc_mode or not has_rec_at:
@@ -2250,6 +2303,31 @@ def init_chat_socket(socketio: SocketIO):
                     norm_mode_batch = loc_svc_batch.resolve_normalized_location_mode(
                         company_id_val, raw_mode_batch
                     )
+                    leid_b = pos.get("location_event_id")
+                    from services.geolocation.driver_location_dedup import (
+                        should_skip_location_ingest,
+                    )
+                    from services.monitoring.driver_location_metrics import (
+                        inc_dedup_skipped,
+                    )
+
+                    skip_ingest, skip_r = should_skip_location_ingest(
+                        driver.id,
+                        latitude,
+                        longitude,
+                        recorded_at_dt,
+                        location_mode,
+                        str(leid_b) if leid_b else None,
+                    )
+                    if skip_ingest and skip_r:
+                        inc_dedup_skipped(
+                            reason=skip_r,
+                            location_mode=norm_mode_batch,
+                            transport="socket_batch",
+                        )
+                        processed_count += 1
+                        continue
+
                     inc_received(transport="socket_batch", location_mode=norm_mode_batch)
 
                     snapped_lat, snapped_lon = latitude, longitude
@@ -2280,7 +2358,6 @@ def init_chat_socket(socketio: SocketIO):
                         accept_status = result.accept_status
                         received_at = result.received_at or received_at
 
-                        leid_b = pos.get("location_event_id")
                         log_driver_location_processed(
                             driver_id=driver.id,
                             company_id=company_id_val,

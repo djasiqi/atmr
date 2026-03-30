@@ -1,15 +1,9 @@
 import React from 'react';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminInvoices.module.css';
 
 const AdminInvoices = () => {
   return (
-    <div className={styles.container}>
-      <HeaderDashboard />
-      <div className={styles.body}>
-        <AdminSidebar />
-        <main className={styles.content}>
+    <main className={styles.content}>
           <section className={styles.hero}>
             <h1>Facturation</h1>
             <p>
@@ -29,9 +23,7 @@ const AdminInvoices = () => {
               ou les routes entreprises.
             </p>
           </section>
-        </main>
-      </div>
-    </div>
+    </main>
   );
 };
 

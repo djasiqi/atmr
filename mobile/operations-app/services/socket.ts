@@ -5,7 +5,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
-import { baseURL, getAssignedTrips, getCompanyMessages, type Booking, type Message } from "./api";
+import { baseURL, getCompanyMessages, type Booking, type Message } from "./api";
+import { requestMissionSync } from "./missionSyncOrchestrator";
 import { resolveBookingConflicts, resolveMessageConflicts, type Conflict } from "./conflictResolution";
 import { getSessionDiagHeaderValue, pushSessionEvent, setConnectionStateSuffix } from "./sessionJournal";
 import type { SessionEvent } from "./sessionJournal";
@@ -380,6 +381,23 @@ let lastHeartbeatTimeoutWarningAt = 0;
 let networkUnsubscribe: (() => void) | null = null; // networkState unsubscribe
 let offlineDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** P1: garde monotonic pour replay `booking_updated` sans `event_id` — reset à chaque connexion driver. */
+let lastBookingSocketEventMs = 0;
+
+function bookingPayloadEventTimeMs(data: Record<string, unknown>): number {
+  const t =
+    data.event_timestamp ??
+    data.timestamp ??
+    data.updated_at ??
+    data.created_at;
+  if (typeof t === "number" && Number.isFinite(t)) return t;
+  if (typeof t === "string") {
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+
 const IS_DEV = __DEV__;
 
 /** R1: payload auth socket pour corrélation backend (device_id, session_diag). */
@@ -528,7 +546,20 @@ export async function connectSocket(
       if (!checkAndAddEventId(eventId, "booking_updated")) {
         return; // Doublon, ignorer
       }
-      
+      const raw = data as unknown as Record<string, unknown>;
+      const tsMs = bookingPayloadEventTimeMs(raw);
+      if (!eventId && Number.isFinite(tsMs) && tsMs < lastBookingSocketEventMs) {
+        log.debug("booking_updated ignored (monotonic, no event_id)", {
+          booking_id: data?.id,
+          tsMs,
+          last: lastBookingSocketEventMs,
+        });
+        return;
+      }
+      if (Number.isFinite(tsMs)) {
+        lastBookingSocketEventMs = Math.max(lastBookingSocketEventMs, tsMs);
+      }
+
       log.info("booking updated received", { booking_id: data?.id, status: data?.status, event_id: eventId });
       bookingEmitter.emit("booking_updated", data);
     });
@@ -676,6 +707,7 @@ export async function connectSocket(
         log.info("connected", { socket_id: socket?.id, user_type: socketRole || "unknown" });
         
         if (socketRole === "driver") {
+          lastBookingSocketEventMs = 0;
           await joinDriverRoom().catch(() => {});  // ✅ Corrigé : enlever le + (syntaxe incorrecte)
           
           // ✅ Setup centralized booking event listeners
@@ -703,7 +735,7 @@ export async function connectSocket(
               
               try {
                 // ✅ Charger les données serveur avec filtre "since" pour resync incrémental
-                const serverBookings = await getAssignedTrips({ since });
+                const serverBookings = await requestMissionSync("socket_connect", { since });
                 
                 // ✅ Charger les données locales depuis le cache
                 const MISSIONS_CACHE_KEY = "missions_cache_v2";
@@ -734,7 +766,7 @@ export async function connectSocket(
                       local_count: localBookings.length,
                     });
                   } else {
-                    const fullBookings = await getAssignedTrips();
+                    const fullBookings = await requestMissionSync("socket_connect", {});
                     finalResolved = fullBookings;
                     log.info("resync incremental empty server, full fetch", {
                       full_count: fullBookings.length,
@@ -1538,7 +1570,8 @@ export async function triggerMissionResync(forceResync = false): Promise<void> {
     if (!shouldResync) return;
 
     const since = lastSync && !forceResync ? new Date(Number(lastSync)).toISOString() : undefined;
-    const serverBookings = await getAssignedTrips({ since });
+    const syncTrigger = forceResync ? "degraded_interval" : "foreground";
+    const serverBookings = await requestMissionSync(syncTrigger, { since });
 
     const MISSIONS_CACHE_KEY = "missions_cache_v2";
     const localBookingsRaw = await AsyncStorage.getItem(MISSIONS_CACHE_KEY);
@@ -1560,7 +1593,7 @@ export async function triggerMissionResync(forceResync = false): Promise<void> {
           local_count: localBookings.length,
         });
       } else {
-        const fullBookings = await getAssignedTrips();
+        const fullBookings = await requestMissionSync(syncTrigger, {});
         finalResolved = fullBookings;
         log.info("triggerMissionResync incremental empty server, full fetch", {
           full_count: fullBookings.length,

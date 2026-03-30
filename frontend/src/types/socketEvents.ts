@@ -113,6 +113,17 @@ export interface JoinedCompanyPayload {
   room: string;
 }
 
+/** P3 — invalide le snapshot GET /company_dispatch/delays/live (debounce côté client). */
+export interface DelayLiveInvalidatePayload {
+  date: string;
+  reason: string;
+  scope?: string;
+  event_id?: string;
+  event_type?: string;
+  version?: string;
+  timestamp?: string;
+}
+
 export interface DriverLocationUpdatePayload {
   driver_id: number;
   company_id?: number;

@@ -4,6 +4,13 @@ import { fetchCompanyReservations, fetchCompanyDriversCanonical } from '../servi
 import { useLirieCompany } from './useLirieCompany';
 import { lirieKeys, listScopeHash } from '../queryKeys/lirie';
 import { useCompanyDriversLiveOverlay } from './enterprise/useCompanyDriversLiveOverlay';
+import { useSocketConnected } from './useCompanySocket';
+
+/** Mode « socket sain » : overlay actif (entreprise connue) + WS connecté — HTTP = snapshot + resync ciblé. */
+function useCompanyDriversLiveQueryPolicy(companyId) {
+  const socketConnected = useSocketConnected();
+  return Boolean(companyId != null && socketConnected);
+}
 
 const RESERVATIONS_LIST_SCOPE_HASH = listScopeHash({ flat: true, include_stats: false });
 
@@ -12,6 +19,24 @@ const useCompanyData = ({ day } = {}) => {
   const { company, loadingCompany, companyError, reloadCompany } = useLirieCompany();
 
   const reservationDayKey = day ?? '__all__';
+
+  const driversLiveHealthy = useCompanyDriversLiveQueryPolicy(company?.id);
+
+  const companyDriversQueryOptions = useMemo(() => {
+    if (driversLiveHealthy) {
+      return {
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+        /** Resync reconnect : `useCompanyDriversLiveOverlay` + `company_socket_reconnected` → invalidateQueries (éviter doublon avec refetch online). */
+        refetchOnReconnect: false,
+      };
+    }
+    return {
+      staleTime: 45_000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+    };
+  }, [driversLiveHealthy]);
 
   const {
     data: reservations = [],
@@ -38,7 +63,7 @@ const useCompanyData = ({ day } = {}) => {
       const data = await fetchCompanyDriversCanonical();
       return Array.isArray(data) ? data : data?.driver ?? [];
     },
-    staleTime: 30_000,
+    ...companyDriversQueryOptions,
   });
 
   useCompanyDriversLiveOverlay(company?.id);

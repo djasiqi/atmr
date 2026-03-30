@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { useLiveDelays } from '../useLiveDelays';
 import * as dispatchMonitoringService from '../../services/dispatchMonitoringService';
 
@@ -80,6 +80,130 @@ describe('useLiveDelays', () => {
 
     await waitFor(() => {
       expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledWith('2024-01-16');
+    });
+  });
+
+  it('coalesces scheduleLoadDelays within MIN interval after a successful GET (P3)', async () => {
+    dispatchMonitoringService.getLiveDelays.mockResolvedValue({
+      delays: [],
+      summary: null,
+    });
+    const mockSocket = { on: jest.fn(), off: jest.fn() };
+
+    jest.useFakeTimers();
+    const { result } = renderHook(() =>
+      useLiveDelays('2024-01-15', true, { socket: mockSocket })
+    );
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalled();
+    });
+    expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledTimes(1);
+
+    dispatchMonitoringService.getLiveDelays.mockClear();
+
+    act(() => {
+      result.current.scheduleLoadDelays();
+    });
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).not.toHaveBeenCalled();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(15000);
+    });
+    act(() => {
+      result.current.scheduleLoadDelays();
+    });
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledTimes(1);
+    });
+
+    jest.useRealTimers();
+  });
+
+  it('debounces scheduleLoadDelays into a single GET (P3)', async () => {
+    dispatchMonitoringService.getLiveDelays.mockResolvedValue({
+      delays: [],
+      summary: null,
+    });
+    const mockSocket = { on: jest.fn(), off: jest.fn() };
+
+    jest.useFakeTimers();
+    const { result } = renderHook(() =>
+      useLiveDelays('2024-01-15', true, { socket: mockSocket })
+    );
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalled();
+    });
+
+    dispatchMonitoringService.getLiveDelays.mockClear();
+
+    // Hors fenêtre de coalescing (MIN_GET_INTERVAL_MS), sinon scheduleLoadDelays est ignoré.
+    act(() => {
+      jest.advanceTimersByTime(15000);
+    });
+
+    act(() => {
+      result.current.scheduleLoadDelays();
+      result.current.scheduleLoadDelays();
+      result.current.scheduleLoadDelays();
+    });
+
+    act(() => {
+      jest.advanceTimersByTime(399);
+    });
+    expect(dispatchMonitoringService.getLiveDelays).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+
+    jest.useRealTimers();
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledTimes(1);
+    });
+    expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledWith('2024-01-15');
+  });
+
+  it('serializes overlapping loadDelays (single-flight + pending refresh, P3)', async () => {
+    let resolveFirst;
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    dispatchMonitoringService.getLiveDelays
+      .mockImplementationOnce(() => firstPromise)
+      .mockResolvedValue({ delays: [], summary: null });
+
+    const { result } = renderHook(() => useLiveDelays('2024-01-15', false));
+
+    let p1;
+    let p2;
+    await act(async () => {
+      p1 = result.current.loadDelays();
+      p2 = result.current.loadDelays();
+    });
+
+    expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ delays: [], summary: null });
+      await p1;
+      await p2;
+    });
+
+    await waitFor(() => {
+      expect(dispatchMonitoringService.getLiveDelays).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -1,0 +1,502 @@
+[
+  {
+    "method_key": "PUT /api/v1/driver/me/location",
+    "count": 5489,
+    "mean_ms": 108.81,
+    "p50_ms": 111.0,
+    "p95_ms": 169.0,
+    "p99_ms": 337.36,
+    "sum_ms": 597276,
+    "priority_score": 927641.0
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/profile",
+    "count": 563,
+    "mean_ms": 643.47,
+    "p50_ms": 648.0,
+    "p95_ms": 1327.8,
+    "p99_ms": 1592.28,
+    "sum_ms": 362273,
+    "priority_score": 747551.4
+  },
+  {
+    "method_key": "GET /api/v1/companies/me/reservations",
+    "count": 374,
+    "mean_ms": 730.32,
+    "p50_ms": 598.5,
+    "p95_ms": 1249.7,
+    "p99_ms": 1357.13,
+    "sum_ms": 273140,
+    "priority_score": 467387.8
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/bookings/since",
+    "count": 1378,
+    "mean_ms": 843.44,
+    "p50_ms": 104.0,
+    "p95_ms": 206.0,
+    "p99_ms": 307.76,
+    "sum_ms": 1162265,
+    "priority_score": 283868.0
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/bookings/eta",
+    "count": 1763,
+    "mean_ms": 66.26,
+    "p50_ms": 52.0,
+    "p95_ms": 158.0,
+    "p99_ms": 229.0,
+    "sum_ms": 116811,
+    "priority_score": 278554.0
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/dispatch/v1/rides",
+    "count": 649,
+    "mean_ms": 160.17,
+    "p50_ms": 86.0,
+    "p95_ms": 389.6,
+    "p99_ms": 491.0,
+    "sum_ms": 103949,
+    "priority_score": 252850.4
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/delays/live",
+    "count": 947,
+    "mean_ms": 125.61,
+    "p50_ms": 122.0,
+    "p95_ms": 205.0,
+    "p99_ms": 237.0,
+    "sum_ms": 118949,
+    "priority_score": 194135.0
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/bookings/all",
+    "count": 33,
+    "mean_ms": 3823.03,
+    "p50_ms": 3023.0,
+    "p95_ms": 5757.8,
+    "p99_ms": 22147.96,
+    "sum_ms": 126160,
+    "priority_score": 190007.4
+  },
+  {
+    "method_key": "POST /api/v1/companies/me/reservations/manual",
+    "count": 17,
+    "mean_ms": 3794.88,
+    "p50_ms": 2880.0,
+    "p95_ms": 9542.0,
+    "p99_ms": 10076.4,
+    "sum_ms": 64513,
+    "priority_score": 162214.0
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/dispatch/v1/dashboard/realtime",
+    "count": 206,
+    "mean_ms": 342.5,
+    "p50_ms": 326.5,
+    "p95_ms": 546.75,
+    "p99_ms": 972.85,
+    "sum_ms": 70555,
+    "priority_score": 112630.5
+  },
+  {
+    "method_key": "GET /api/v1/geocode/autocomplete",
+    "count": 120,
+    "mean_ms": 380.43,
+    "p50_ms": 367.5,
+    "p95_ms": 492.35,
+    "p99_ms": 971.78,
+    "sum_ms": 45651,
+    "priority_score": 59082.0
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/dashboard/realtime",
+    "count": 157,
+    "mean_ms": 138.15,
+    "p50_ms": 95.0,
+    "p95_ms": 364.0,
+    "p99_ms": 426.2,
+    "sum_ms": 21689,
+    "priority_score": 57148.0
+  },
+  {
+    "method_key": "GET /api/v1/companies/me/clients",
+    "count": 159,
+    "mean_ms": 157.8,
+    "p50_ms": 105.0,
+    "p95_ms": 278.7,
+    "p99_ms": 720.86,
+    "sum_ms": 25090,
+    "priority_score": 44313.3
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/optimizer/status",
+    "count": 868,
+    "mean_ms": 27.85,
+    "p50_ms": 24.0,
+    "p95_ms": 46.3,
+    "p99_ms": 84.98,
+    "sum_ms": 24171,
+    "priority_score": 40188.4
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/dispatch/v1/addresses/search",
+    "count": 23,
+    "mean_ms": 1161.48,
+    "p50_ms": 1094.0,
+    "p95_ms": 1685.5,
+    "p99_ms": 1822.72,
+    "sum_ms": 26714,
+    "priority_score": 38766.5
+  },
+  {
+    "method_key": "GET /api/v1/companies/notifications",
+    "count": 842,
+    "mean_ms": 28.76,
+    "p50_ms": 27.0,
+    "p95_ms": 43.0,
+    "p99_ms": 67.59,
+    "sum_ms": 24214,
+    "priority_score": 36206.0
+  },
+  {
+    "method_key": "POST /api/v1/app/version-check",
+    "count": 166,
+    "mean_ms": 49.26,
+    "p50_ms": 22.0,
+    "p95_ms": 194.5,
+    "p99_ms": 228.35,
+    "sum_ms": 8177,
+    "priority_score": 32287.0
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/company-bookings/today",
+    "count": 33,
+    "mean_ms": 848.94,
+    "p50_ms": 590.0,
+    "p95_ms": 904.0,
+    "p99_ms": 6632.64,
+    "sum_ms": 28015,
+    "priority_score": 29832.0
+  },
+  {
+    "method_key": "PUT /api/v1/driver/me/bookings/{id}/status",
+    "count": 147,
+    "mean_ms": 90.4,
+    "p50_ms": 80.0,
+    "p95_ms": 201.6,
+    "p99_ms": 277.7,
+    "sum_ms": 13289,
+    "priority_score": 29635.2
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/dispatch/v1/status",
+    "count": 206,
+    "mean_ms": 77.44,
+    "p50_ms": 69.0,
+    "p95_ms": 135.5,
+    "p99_ms": 200.5,
+    "sum_ms": 15952,
+    "priority_score": 27913.0
+  },
+  {
+    "method_key": "GET /api/v1/invoices/companies/{id}/invoices",
+    "count": 56,
+    "mean_ms": 207.41,
+    "p50_ms": 163.0,
+    "p95_ms": 384.0,
+    "p99_ms": 699.5,
+    "sum_ms": 11615,
+    "priority_score": 21504.0
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/assignments",
+    "count": 100,
+    "mean_ms": 110.37,
+    "p50_ms": 79.0,
+    "p95_ms": 185.25,
+    "p99_ms": 800.08,
+    "sum_ms": 11037,
+    "priority_score": 18525.0
+  },
+  {
+    "method_key": "GET /api/v1/companies/me/drivers/locations",
+    "count": 272,
+    "mean_ms": 43.39,
+    "p50_ms": 41.0,
+    "p95_ms": 67.8,
+    "p99_ms": 97.45,
+    "sum_ms": 11802,
+    "priority_score": 18441.6
+  },
+  {
+    "method_key": "POST /api/ds/query",
+    "count": 39,
+    "mean_ms": 94.44,
+    "p50_ms": 75.0,
+    "p95_ms": 302.5,
+    "p99_ms": 311.34,
+    "sum_ms": 3683,
+    "priority_score": 11797.5
+  },
+  {
+    "method_key": "POST /api/v1/driver/save-push-token",
+    "count": 143,
+    "mean_ms": 41.49,
+    "p50_ms": 34.0,
+    "p95_ms": 77.9,
+    "p99_ms": 102.74,
+    "sum_ms": 5933,
+    "priority_score": 11139.7
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/partnerships/transfers",
+    "count": 204,
+    "mean_ms": 33.39,
+    "p50_ms": 31.0,
+    "p95_ms": 51.0,
+    "p99_ms": 78.55,
+    "sum_ms": 6811,
+    "priority_score": 10404.0
+  },
+  {
+    "method_key": "GET /api/v1/companies/me/drivers",
+    "count": 80,
+    "mean_ms": 68.47,
+    "p50_ms": 54.5,
+    "p95_ms": 121.15,
+    "p99_ms": 152.45,
+    "sum_ms": 5478,
+    "priority_score": 9692.0
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/delays",
+    "count": 134,
+    "mean_ms": 41.9,
+    "p50_ms": 40.0,
+    "p95_ms": 65.7,
+    "p99_ms": 94.02,
+    "sum_ms": 5614,
+    "priority_score": 8803.8
+  },
+  {
+    "method_key": "GET /api/v1/company/request-offers",
+    "count": 154,
+    "mean_ms": 27.22,
+    "p50_ms": 25.0,
+    "p95_ms": 48.4,
+    "p99_ms": 75.17,
+    "sum_ms": 4192,
+    "priority_score": 7453.6
+  },
+  {
+    "method_key": "POST /api/v1/companies/me/reservations/{id}/assign",
+    "count": 36,
+    "mean_ms": 126.61,
+    "p50_ms": 124.0,
+    "p95_ms": 181.0,
+    "p99_ms": 193.5,
+    "sum_ms": 4558,
+    "priority_score": 6516.0
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/mode",
+    "count": 140,
+    "mean_ms": 27.61,
+    "p50_ms": 24.5,
+    "p95_ms": 44.25,
+    "p99_ms": 70.44,
+    "sum_ms": 3866,
+    "priority_score": 6195.0
+  },
+  {
+    "method_key": "GET /api/v1/geocode/place-details",
+    "count": 24,
+    "mean_ms": 169.83,
+    "p50_ms": 180.5,
+    "p95_ms": 235.55,
+    "p99_ms": 330.71,
+    "sum_ms": 4076,
+    "priority_score": 5653.2
+  },
+  {
+    "method_key": "GET /api/v1/companies/me",
+    "count": 93,
+    "mean_ms": 29.9,
+    "p50_ms": 28.0,
+    "p95_ms": 51.8,
+    "p99_ms": 64.48,
+    "sum_ms": 2781,
+    "priority_score": 4817.4
+  },
+  {
+    "method_key": "POST /api/v1/auth/refresh-token",
+    "count": 21,
+    "mean_ms": 127.71,
+    "p50_ms": 121.0,
+    "p95_ms": 214.0,
+    "p99_ms": 278.8,
+    "sum_ms": 2682,
+    "priority_score": 4494.0
+  },
+  {
+    "method_key": "POST /api/v1/company_mobile/dispatch/v1/rides/{id}/reassign",
+    "count": 11,
+    "mean_ms": 200.82,
+    "p50_ms": 191.0,
+    "p95_ms": 273.5,
+    "p99_ms": 307.5,
+    "sum_ms": 2209,
+    "priority_score": 3008.5
+  },
+  {
+    "method_key": "POST /api/gateway/auth/login",
+    "count": 9,
+    "mean_ms": 298.33,
+    "p50_ms": 294.0,
+    "p95_ms": 325.0,
+    "p99_ms": 329.8,
+    "sum_ms": 2685,
+    "priority_score": 2925.0
+  },
+  {
+    "method_key": "GET /api/v1/company-settings/billing",
+    "count": 29,
+    "mean_ms": 58.21,
+    "p50_ms": 54.0,
+    "p95_ms": 96.4,
+    "p99_ms": 105.2,
+    "sum_ms": 1688,
+    "priority_score": 2795.6
+  },
+  {
+    "method_key": "GET /api/v1/platform/status",
+    "count": 8,
+    "mean_ms": 257.38,
+    "p50_ms": 253.5,
+    "p95_ms": 310.35,
+    "p99_ms": 315.67,
+    "sum_ms": 2059,
+    "priority_score": 2482.8
+  },
+  {
+    "method_key": "POST /api/v1/company_mobile/dispatch/v1/rides/{id}/assign",
+    "count": 9,
+    "mean_ms": 197,
+    "p50_ms": 194.0,
+    "p95_ms": 273.6,
+    "p99_ms": 289.92,
+    "sum_ms": 1773,
+    "priority_score": 2462.4
+  },
+  {
+    "method_key": "POST /api/v1/pricing/simulate",
+    "count": 41,
+    "mean_ms": 56.66,
+    "p50_ms": 41.0,
+    "p95_ms": 58.0,
+    "p99_ms": 422.0,
+    "sum_ms": 2323,
+    "priority_score": 2378.0
+  },
+  {
+    "method_key": "GET /api/v1/company_dispatch/advanced_settings",
+    "count": 35,
+    "mean_ms": 30.31,
+    "p50_ms": 27.0,
+    "p95_ms": 60.2,
+    "p99_ms": 67.62,
+    "sum_ms": 1061,
+    "priority_score": 2107.0
+  },
+  {
+    "method_key": "GET /api/v1/auth/csrf-token",
+    "count": 105,
+    "mean_ms": 10.69,
+    "p50_ms": 10.0,
+    "p95_ms": 16.8,
+    "p99_ms": 25.84,
+    "sum_ms": 1122,
+    "priority_score": 1764.0
+  },
+  {
+    "method_key": "GET /api/v1/clients/{id}/active-stay",
+    "count": 20,
+    "mean_ms": 62.95,
+    "p50_ms": 41.5,
+    "p95_ms": 82.25,
+    "p99_ms": 390.05,
+    "sum_ms": 1259,
+    "priority_score": 1645.0
+  },
+  {
+    "method_key": "GET /api/v1/driver/me/bookings/{id}",
+    "count": 31,
+    "mean_ms": 36.48,
+    "p50_ms": 35.0,
+    "p95_ms": 51.0,
+    "p99_ms": 53.4,
+    "sum_ms": 1131,
+    "priority_score": 1581.0
+  },
+  {
+    "method_key": "POST /api/v1/companies/me/clients",
+    "count": 5,
+    "mean_ms": 258.4,
+    "p50_ms": 254.0,
+    "p95_ms": 302.0,
+    "p99_ms": 310.0,
+    "sum_ms": 1292,
+    "priority_score": 1510.0
+  },
+  {
+    "method_key": "GET /api/v1/company_mobile/auth/session",
+    "count": 32,
+    "mean_ms": 26.44,
+    "p50_ms": 24.5,
+    "p95_ms": 46.4,
+    "p99_ms": 56.45,
+    "sum_ms": 846,
+    "priority_score": 1484.8
+  },
+  {
+    "method_key": "POST /api/v1/invoices/companies/{id}/invoices/generate",
+    "count": 1,
+    "mean_ms": 1470,
+    "p50_ms": 1470.0,
+    "p95_ms": 1470.0,
+    "p99_ms": 1470.0,
+    "sum_ms": 1470,
+    "priority_score": 1470.0
+  },
+  {
+    "method_key": "GET /api/v1/public/platform-stats",
+    "count": 22,
+    "mean_ms": 32.59,
+    "p50_ms": 32.5,
+    "p95_ms": 64.8,
+    "p99_ms": 73.11,
+    "sum_ms": 717,
+    "priority_score": 1425.6
+  },
+  {
+    "method_key": "PUT /api/v1/companies/me/reservations/{id}",
+    "count": 8,
+    "mean_ms": 133.25,
+    "p50_ms": 132.0,
+    "p95_ms": 165.2,
+    "p99_ms": 167.44,
+    "sum_ms": 1066,
+    "priority_score": 1321.6
+  },
+  {
+    "method_key": "GET /api/v1/osrm/route",
+    "count": 23,
+    "mean_ms": 56.09,
+    "p50_ms": 41.0,
+    "p95_ms": 56.7,
+    "p99_ms": 361.2,
+    "sum_ms": 1290,
+    "priority_score": 1304.1
+  }
+]

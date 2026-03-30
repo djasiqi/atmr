@@ -4,6 +4,9 @@ import { getCompanySocket } from '../../services/companySocket';
 import { mergeOrUpdateDriverInList } from '../../utils/mergeDriverLiveUpdate';
 import { lirieKeys } from '../../queryKeys/lirie';
 
+/** Si le snapshot TanStack est encore frais, pas d’invalidate complet (réduit pics en flapping WS). */
+const RECONNECT_MIN_FULL_REFETCH_MS = 60000;
+
 /**
  * Fusionne les événements Socket chauffeurs dans le cache TanStack `lirieKeys.companyDrivers()`.
  */
@@ -22,7 +25,16 @@ export function useCompanyDriversLiveOverlay(companyId) {
 
     const onLiveState = (payload) => applyDelta(payload, true);
     const onLocationUpdate = (payload) => applyDelta(payload, false);
+    /** Reconnect : invalider seulement si pas de données récentes (overlay socket a déjà mis à jour le cache). */
     const onReconnected = () => {
+      const state = queryClient.getQueryState(lirieKeys.companyDrivers());
+      const updatedAt = state?.dataUpdatedAt ?? 0;
+      if (
+        updatedAt > 0 &&
+        Date.now() - updatedAt < RECONNECT_MIN_FULL_REFETCH_MS
+      ) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: lirieKeys.companyDrivers() });
     };
 

@@ -2,8 +2,6 @@ import React from 'react';
 import { FaCheckCircle, FaExclamationTriangle, FaChartLine, FaRobot } from 'react-icons/fa';
 import useShadowMode from '../../../hooks/useShadowMode';
 import styles from './ShadowModeDashboard.module.css';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 
 /**
  * Dashboard Admin pour monitorer le Shadow Mode MDI.
@@ -34,81 +32,63 @@ const ShadowModeDashboard = () => {
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <HeaderDashboard />
-        <div className={styles.layout}>
-          <AdminSidebar />
-          <main className={styles.main}>
-            <div className={styles.loadingContainer}>
-              <div className={styles.spinner}></div>
-              <p>Chargement des données Shadow Mode...</p>
-            </div>
-          </main>
+      <main className={styles.main}>
+        <div className={styles.loadingContainer}>
+          <div className={styles.spinner}></div>
+          <p>Chargement des données Shadow Mode...</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (error) {
     return (
-      <div className={styles.container}>
-        <HeaderDashboard />
-        <div className={styles.layout}>
-          <AdminSidebar />
-          <main className={styles.main}>
-            <div className={styles.errorContainer}>
-              <FaExclamationTriangle className={styles.errorIcon} />
-              <h2>Erreur de chargement</h2>
-              <p>{error}</p>
-              <button onClick={reload} className={styles.retryButton}>
-                🔄 Réessayer
-              </button>
-            </div>
-          </main>
+      <main className={styles.main}>
+        <div className={styles.errorContainer}>
+          <FaExclamationTriangle className={styles.errorIcon} />
+          <h2>Erreur de chargement</h2>
+          <p>{error}</p>
+          <button onClick={reload} className={styles.retryButton}>
+            🔄 Réessayer
+          </button>
         </div>
-      </div>
+      </main>
     );
   }
 
   // Si Shadow Mode pas actif
   if (!isActive) {
     return (
-      <div className={styles.container}>
-        <HeaderDashboard />
-        <div className={styles.layout}>
-          <AdminSidebar />
-          <main className={styles.main}>
-            <div className={styles.header}>
-              <h1>
-                <FaRobot /> Shadow Mode MDI
-              </h1>
-              <p className={styles.subtitle}>
-                Monitoring et validation du système de Reinforcement Learning
-              </p>
-            </div>
-
-            <div className={styles.inactiveWarning}>
-              <FaExclamationTriangle className={styles.warningIcon} />
-              <div>
-                <h3>🔍 Shadow Mode Inactif</h3>
-                <p>
-                  Le Shadow Mode n'est pas actuellement actif. Le système MDI doit être activé en
-                  mode surveillance pour commencer la validation.
-                </p>
-                <div className={styles.inactiveActions}>
-                  <h4>Actions recommandées :</h4>
-                  <ol>
-                    <li>Vérifier que le backend MDI est déployé</li>
-                    <li>Activer les routes Shadow Mode (/api/shadow-mode/*)</li>
-                    <li>Effectuer des assignations réelles pour générer des comparaisons</li>
-                    <li>Attendre 1-2 semaines de données (objectif: &gt;1000 comparaisons)</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-          </main>
+      <main className={styles.main}>
+        <div className={styles.header}>
+          <h1>
+            <FaRobot /> Shadow Mode MDI
+          </h1>
+          <p className={styles.subtitle}>
+            Monitoring et validation du système de Reinforcement Learning
+          </p>
         </div>
-      </div>
+
+        <div className={styles.inactiveWarning}>
+          <FaExclamationTriangle className={styles.warningIcon} />
+          <div>
+            <h3>🔍 Shadow Mode Inactif</h3>
+            <p>
+              Le Shadow Mode n'est pas actuellement actif. Le système MDI doit être activé en mode
+              surveillance pour commencer la validation.
+            </p>
+            <div className={styles.inactiveActions}>
+              <h4>Actions recommandées :</h4>
+              <ol>
+                <li>Vérifier que le backend MDI est déployé</li>
+                <li>Activer les routes Shadow Mode (/api/shadow-mode/*)</li>
+                <li>Effectuer des assignations réelles pour générer des comparaisons</li>
+                <li>Attendre 1-2 semaines de données (objectif: &gt;1000 comparaisons)</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 
@@ -129,11 +109,7 @@ const ShadowModeDashboard = () => {
       : 0;
 
   return (
-    <div className={styles.container}>
-      <HeaderDashboard />
-      <div className={styles.layout}>
-        <AdminSidebar />
-        <main className={styles.main}>
+    <main className={styles.main}>
           {/* Header */}
           <div className={styles.header}>
             <div>
@@ -440,9 +416,7 @@ const ShadowModeDashboard = () => {
               )}
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </main>
   );
 };
 

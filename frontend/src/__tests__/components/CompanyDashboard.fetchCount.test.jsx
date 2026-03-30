@@ -6,6 +6,8 @@
  * - hors navigation interne, hors reconnexion socket, hors refetchInterval (pas de fake timers longs) ;
  * - header / sidebar mockés (stubs) pour isoler le périmètre « page dashboard » ;
  * - QueryClient de test : refetchOnWindowFocus désactivé (évite flakes CI).
+ * - P5 : `useSocketConnected` mocké à false (mode dégradé) — le budget cold mount reste valide ;
+ *   en prod socket connecté + entreprise, companyDrivers utilise staleTime Infinity (pas de refetch focus).
  *
  * Budget à ajuster uniquement si le contrat d’appels change volontairement (PR documentée).
  */
@@ -15,10 +17,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import CompanyDashboard from 'pages/company/Dashboard/CompanyDashboard';
 import apiClient from 'utils/apiClient';
-import useCompanySocket from 'hooks/useCompanySocket';
+import useCompanySocket, { useSocketConnected } from 'hooks/useCompanySocket';
 import useDispatchStatus from 'hooks/useDispatchStatus';
 
-jest.mock('hooks/useCompanySocket');
+jest.mock('hooks/useCompanySocket', () => ({
+  __esModule: true,
+  default: jest.fn(() => ({ on: jest.fn(), off: jest.fn(), emit: jest.fn() })),
+  useSocketConnected: jest.fn(() => false),
+}));
 jest.mock('hooks/useDispatchStatus');
 jest.mock('hooks/useCompanyAuthToken', () => ({
   __esModule: true,
@@ -224,6 +230,7 @@ describe('CompanyDashboard — budget GET (apiClient)', () => {
     localStorage.setItem('user', JSON.stringify({ id: 1, role: 'company' }));
     localStorage.setItem('company_access_token', fakeCompanyJwt());
     useCompanySocket.mockReturnValue(mockSocket);
+    useSocketConnected.mockReturnValue(false);
     useDispatchStatus.mockReturnValue({ label: 'Idle', progress: 0, isRunning: false });
   });
 

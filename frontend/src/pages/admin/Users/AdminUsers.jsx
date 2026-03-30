@@ -8,8 +8,6 @@ import {
   fetchCompanies,
   fetchInstitutions,
 } from '../../../services/adminService';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminUsers.module.css';
 
 const ROLE_LABELS = {
@@ -234,11 +232,8 @@ const AdminUsers = () => {
   };
 
   return (
-    <div className={styles.adminContainer}>
-      <HeaderDashboard />
-      <div className={styles.dashboard}>
-        <AdminSidebar />
-        <main className={styles.content}>
+    <>
+      <main className={styles.content}>
           <header className={styles.pageHeader}>
             <h1>Gestion des utilisateurs</h1>
             <p className={styles.subtext}>
@@ -445,7 +440,6 @@ const AdminUsers = () => {
             </div>
           </div>
         </main>
-      </div>
       {showCompanyDropdown && (
         <div className={styles.modal}>
           <div className={styles.modalContent}>
@@ -599,7 +593,7 @@ const AdminUsers = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

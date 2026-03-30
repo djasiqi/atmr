@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Callable
 
+from services.geolocation.driver_location_dedup import should_skip_location_ingest
+from services.monitoring.driver_location_metrics import inc_dedup_skipped
+
 LAT_THRESHOLD = 90.0
 LON_THRESHOLD = 180.0
 
@@ -23,6 +26,7 @@ class UpdateDriverLocationCommand:
     is_background: bool = False
     mission_id: int | None = None
     metrics_transport: str = "http"
+    location_event_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +38,8 @@ class UpdateDriverLocationResult:
     accept_status: str
     accept_reason: str
     received_at: str | None
+    dedup_skipped: bool = False
+    dedup_reason: str | None = None
 
 
 class UpdateDriverLocationUseCase:
@@ -60,6 +66,33 @@ class UpdateDriverLocationUseCase:
             raise ValueError("Coordinates out of valid range")
 
         timestamp = self._parse_ts(cmd.ts)
+        recorded_dt = self._parse_ts(cmd.recorded_at) if cmd.recorded_at else timestamp
+
+        skip, skip_reason = should_skip_location_ingest(
+            cmd.driver_id,
+            cmd.latitude,
+            cmd.longitude,
+            recorded_dt,
+            cmd.location_mode or "mission_live",
+            cmd.location_event_id,
+        )
+        if skip and skip_reason:
+            inc_dedup_skipped(
+                reason=skip_reason,
+                location_mode=cmd.location_mode or "mission_live",
+                transport=cmd.metrics_transport,
+            )
+            return UpdateDriverLocationResult(
+                snapped_lat=cmd.latitude,
+                snapped_lon=cmd.longitude,
+                source="raw",
+                geofence_events=[],
+                accept_status="skipped",
+                accept_reason=skip_reason,
+                received_at=None,
+                dedup_skipped=True,
+                dedup_reason=skip_reason,
+            )
 
         # On garde la signature la plus permissive possible (typage runtime via attrs).
         res = self._update_location(
@@ -96,6 +129,8 @@ class UpdateDriverLocationUseCase:
             accept_status=accept_status,
             accept_reason=accept_reason,
             received_at=received_at_str,
+            dedup_skipped=False,
+            dedup_reason=None,
         )
 
     def _parse_ts(self, ts: str | None) -> datetime:

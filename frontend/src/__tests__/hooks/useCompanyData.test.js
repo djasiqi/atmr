@@ -17,6 +17,10 @@ jest.mock('services/companySocket', () => ({
   getCompanySocket: jest.fn(() => null),
   joinCompanyRoom: jest.fn(),
 }));
+jest.mock('hooks/useCompanySocket', () => ({
+  __esModule: true,
+  useSocketConnected: jest.fn(() => false),
+}));
 
 function createWrapper() {
   const queryClient = new QueryClient({

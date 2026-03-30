@@ -154,3 +154,64 @@ class TestSocketDriverLocation:
         payload = error_events[0].get("args", [{}])[0]
         assert payload.get("reason") == "availability_presence_socket_forbidden"
         mock_location_service.update_driver_location.assert_not_called()
+
+    def test_socket_single_dedup_skip_skips_inc_received_and_location_service(
+        self, app, db, test_driver
+    ):
+        """Patch C : dédup → pas inc_received ni LocationService."""
+        from flask_jwt_extended import create_access_token
+
+        if not test_driver or not test_driver.user:
+            pytest.skip("test_driver fixture required")
+        user = test_driver.user
+        driver = test_driver
+        db.session.refresh(driver)
+        db.session.refresh(user)
+
+        with app.app_context():
+            token = create_access_token(
+                identity=str(user.public_id),
+                additional_claims={"role": "driver", "aud": "atmr-api"},
+                expires_delta=timedelta(hours=1),
+            )
+            client = socketio.test_client(
+                app,
+                auth={"token": token},
+                flask_test_client=app.test_client(),
+            )
+
+        if not client.is_connected():
+            pytest.skip("Socket client could not connect")
+
+        mock_location_service = MagicMock()
+        mock_location_service.resolve_normalized_location_mode.return_value = "mission_live"
+        with (
+            patch(
+                "sockets.chat.get_location_service",
+                return_value=mock_location_service,
+            ),
+            patch(
+                "services.geolocation.driver_location_dedup.should_skip_location_ingest",
+                return_value=(True, "duplicate_event_id"),
+            ),
+            patch(
+                "services.monitoring.driver_location_metrics.inc_received",
+            ) as mock_inc_received,
+            patch(
+                "services.monitoring.driver_location_metrics.inc_dedup_skipped",
+            ) as mock_inc_dedup,
+        ):
+            client.emit(
+                "driver_location",
+                {
+                    "latitude": 46.2044,
+                    "longitude": 6.1432,
+                    "location_mode": "mission_live",
+                    "recorded_at": "2026-03-18T10:00:00Z",
+                    "location_event_id": "e0e0e0e0-e0e0-e0e0-e0e0-e0e0e0e0e0e0",
+                },
+            )
+
+        mock_inc_received.assert_not_called()
+        mock_location_service.update_driver_location.assert_not_called()
+        mock_inc_dedup.assert_called_once()

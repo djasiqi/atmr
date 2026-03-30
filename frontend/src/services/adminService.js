@@ -27,6 +27,24 @@ export const fetchAdminStats = async () => {
 };
 
 /**
+ * Agrégat léger pour le tableau de bord admin (priorités, KPI, santé plateforme, tendances, activité).
+ */
+export const fetchAdminDashboardSummary = async () => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/dashboard-summary', { headers });
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur chargement résumé dashboard admin :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
  * Récupère les réservations récentes.
  */
 export const fetchRecentBookings = async () => {
@@ -43,6 +61,76 @@ export const fetchRecentBookings = async () => {
     );
     throw error;
   }
+};
+
+/**
+ * Liste paginée réservations admin plateforme (filtres, synthèse).
+ * @param {Record<string, string|number|boolean|undefined>} params query string params
+ */
+export const fetchAdminBookings = async (params = {}) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get('/admin/bookings', {
+      headers,
+      params,
+      // Liste admin : synthèse + pagination ; éviter timeout si la base est volumineuse
+      timeout: 90000,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur chargement réservations admin :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Détail réservation admin (timeline, liens).
+ */
+export const fetchAdminBookingDetail = async (bookingId) => {
+  try {
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await apiClient.get(`/admin/bookings/${bookingId}`, { headers });
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur détail réservation admin :',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+/**
+ * Télécharge l'export CSV (mêmes filtres que la liste).
+ */
+export const downloadAdminBookingsExport = async (params = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/admin/bookings/export', {
+    headers,
+    params,
+    responseType: 'blob',
+    timeout: 120000,
+  });
+  const disposition = response.headers['content-disposition'];
+  let filename = 'bookings_export.csv';
+  if (disposition && disposition.includes('filename=')) {
+    const m = disposition.match(/filename="?([^";]+)"?/);
+    if (m && m[1]) filename = m[1];
+  }
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 };
 
 /**

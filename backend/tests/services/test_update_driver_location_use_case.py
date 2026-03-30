@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import patch
 
 from application.drivers.update_driver_location import (
     UpdateDriverLocationCommand,
@@ -28,10 +29,14 @@ def test_update_driver_location_use_case_returns_snapped_and_events() -> None:
             geofence_events=["arrived_at_pickup"],
         )
 
-    uc = UpdateDriverLocationUseCase(update_location_fn=fake_update_location)
-    res = uc.execute(
-        UpdateDriverLocationCommand(driver_id=1, latitude=1.0, longitude=2.0)
-    )
+    with patch(
+        "application.drivers.update_driver_location.should_skip_location_ingest",
+        return_value=(False, None),
+    ):
+        uc = UpdateDriverLocationUseCase(update_location_fn=fake_update_location)
+        res = uc.execute(
+            UpdateDriverLocationCommand(driver_id=1, latitude=1.0, longitude=2.0)
+        )
     assert res.snapped_lat == 1.1
     assert res.snapped_lon == 2.2
     assert res.source == "osrm_nearest"

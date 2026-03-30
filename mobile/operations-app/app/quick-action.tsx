@@ -23,7 +23,8 @@ import {
   refreshBackgroundTrackingNotification,
 } from "@/services/locationTracker";
 import { openNavigation, safeCall } from "@/services/deepLinks";
-import { getAssignedTrips, type Booking } from "@/services/api";
+import type { Booking } from "@/services/api";
+import { requestMissionSync } from "@/services/missionSyncOrchestrator";
 import { normalizeBookingStatus } from "@/utils/bookingStatus";
 import { getCallablePhone } from "@/utils/phone";
 import { formatTimeLocal } from "@/utils/formatTimeLocal";
@@ -102,7 +103,7 @@ export default function QuickActionScreen() {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 1500);
-        const bookings = await getAssignedTrips();
+        const bookings = await requestMissionSync("manual_screen");
         clearTimeout(timeout);
         if (cancelled) return;
         const active = bookings.find((m) => {

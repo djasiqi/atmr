@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import sentry_sdk
 from dateutil.relativedelta import relativedelta
-from flask import request
+from flask import Response, request
 from flask_jwt_extended import (
     get_jwt_identity,
     jwt_required,
@@ -29,6 +29,13 @@ from repositories.company_repository import CompanyRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
 from security.ip_whitelist import ip_whitelist_required
+from services.admin_dashboard_summary import build_admin_dashboard_summary
+from services.admin_platform_bookings import (
+    build_admin_booking_detail,
+    export_admin_bookings_csv,
+    list_admin_platform_bookings,
+    parse_admin_booking_request_args,
+)
 from services.monitoring.websocket_metrics import ws_metrics
 from shared.error_handlers import APIErrorHandler
 from shared.infrastructure.adapters.auth_adapter import (
@@ -181,6 +188,27 @@ class AdminStats(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+@admin_ns.route("/dashboard-summary")
+class AdminDashboardSummary(Resource):
+    """GET /admin/dashboard-summary — agrégat léger pour le tableau de bord admin (orientation)."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        try:
+            return build_admin_dashboard_summary(), 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR get_admin_dashboard_summary: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+# Alias (même handler) : certains proxies / anciennes intégrations utilisaient un chemin à deux segments.
+admin_ns.add_resource(AdminDashboardSummary, "/dashboard/summary")
+
+
 @admin_ns.route("/recent-bookings")
 class RecentBookings(Resource):
     @jwt_required()
@@ -195,6 +223,90 @@ class RecentBookings(Resource):
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_recent_bookings: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/bookings")
+class AdminPlatformBookingsList(Resource):
+    """GET /admin/bookings — supervision plateforme (filtres, pagination, synthèse)."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        try:
+            params = parse_admin_booking_request_args(request.args)
+            page = params.pop("page", 1)
+            per_page = params.pop("per_page", 25)
+            sort = params.pop("sort", "scheduled_time")
+            order = params.pop("order", "desc")
+            payload = list_admin_platform_bookings(
+                page=page,
+                per_page=per_page,
+                sort=sort,
+                order=order,
+                **params,
+            )
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR get_admin_platform_bookings: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/bookings/export")
+class AdminPlatformBookingsExport(Resource):
+    """GET /admin/bookings/export — CSV (cap lignes)."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("20 per hour")
+    def get(self):
+        try:
+            params = parse_admin_booking_request_args(request.args)
+            params.pop("page", None)
+            params.pop("per_page", None)
+            params.pop("sort", None)
+            params.pop("order", None)
+            data, filename = export_admin_bookings_csv(**params)
+            return Response(
+                data,
+                mimetype="text/csv; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR export_admin_bookings: %s", e)
+            admin_ns.abort(500, "Une erreur interne est survenue.")
+
+
+@admin_ns.route("/bookings/<int:booking_id>")
+class AdminPlatformBookingDetail(Resource):
+    """GET /admin/bookings/:id — détail + timeline."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("300 per hour")
+    def get(self, booking_id: int):
+        try:
+            booking = booking_repo.find_model_by_id_with_eager_loading(booking_id)
+            if booking is None:
+                admin_ns.abort(404, "Réservation introuvable.")
+            assert booking is not None  # narrow pour le typage (abort ne retourne pas)
+            identity = get_jwt_identity()
+            admin_public_id = identity if isinstance(identity, str) else str(identity)
+            payload = build_admin_booking_detail(
+                booking, admin_public_id=admin_public_id
+            )
+            return payload, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR get_admin_platform_booking_detail: %s", e)
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 

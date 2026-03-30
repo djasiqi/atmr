@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import type { Socket } from "socket.io-client";
 import { api } from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { isAuthReadySync } from "@/services/authSync";
 import { isAuthNotReadyError } from "@/services/authGuards";
 import { getLogger } from "@/utils/logger";
+import { getSocket, subscribeSocketStatus } from "@/services/socket";
 
 const log = getLogger("ETA");
 
+/** P1: secours HTTP long (socket `eta_changed` = source chaude). */
+const HTTP_ETA_FALLBACK_MS = 90_000;
+
 /**
- * ETA chauffeur : l'app chauffeur utilise UNIQUEMENT GET /driver/me/bookings/eta
- * pour les ETA et le retard estimé. GET company_dispatch/delays/live est réservé
- * au dashboard company (vue globale). Ne pas appeler company_dispatch depuis l'app chauffeur.
+ * ETA chauffeur : GET /driver/me/bookings/eta en secours + événement socket `eta_changed`
+ * (même forme que le GET). Ne pas appeler company_dispatch depuis l'app chauffeur.
  */
 
 export interface BookingETA {
@@ -23,27 +27,48 @@ export interface BookingETA {
   estimated_arrival_dropoff: string | null;
 }
 
+/** GET + socket `eta_changed` ; le backend enrichit souvent avec `timestamp` / `event_id` (SocketEvent). */
 export interface ETAResponse {
   has_gps: boolean;
   driver_position?: { lat: number; lon: number };
   bookings: BookingETA[];
+  timestamp?: string;
+  event_id?: string;
+  event_type?: string;
 }
 
-/**
- * Hook qui récupère les ETAs dynamiques basés sur la position GPS du chauffeur.
- * Mise à jour automatique toutes les 15 secondes.
- * Source : GET /driver/me/bookings/eta uniquement (pas company_dispatch/delays/live).
- */
 export function useDynamicETA(enabled: boolean = true) {
   const { driver, mode } = useAuth();
   const [etas, setEtas] = useState<Map<number, BookingETA>>(new Map());
   const [hasGPS, setHasGPS] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Vérifier que l'utilisateur est bien un chauffeur avant d'appeler l'API
   const isDriverMode = mode === "driver" && !!driver;
 
   const fetchInFlight = useRef(false);
+  /** Dernier `timestamp` serveur (ISO) appliqué pour un `eta_changed` — évite d'appliquer un event plus ancien hors ordre. */
+  const lastEtaSocketServerTsRef = useRef(0);
+
+  useEffect(() => {
+    if (!isDriverMode) {
+      lastEtaSocketServerTsRef.current = 0;
+    }
+  }, [isDriverMode]);
+
+  const applyEtaPayload = useCallback((data: ETAResponse, source: "http" | "socket") => {
+    setHasGPS(data.has_gps);
+    const etaMap = new Map<number, BookingETA>();
+    data.bookings.forEach((booking) => {
+      etaMap.set(booking.id, booking);
+    });
+    setEtas(etaMap);
+    log.info("etas updated", {
+      source,
+      has_gps: data.has_gps,
+      count: data.bookings.length,
+      driver_pos: data.driver_position,
+    });
+  }, []);
 
   const fetchETAs = useCallback(async () => {
     if (!enabled || !isDriverMode) return;
@@ -55,22 +80,7 @@ export function useDynamicETA(enabled: boolean = true) {
       setIsLoading(true);
 
       const response = await api.get<ETAResponse>("/driver/me/bookings/eta");
-      const data = response.data;
-
-      setHasGPS(data.has_gps);
-
-      const etaMap = new Map<number, BookingETA>();
-      data.bookings.forEach((booking) => {
-        etaMap.set(booking.id, booking);
-      });
-
-      setEtas(etaMap);
-
-      log.info("etas updated", {
-        has_gps: data.has_gps,
-        count: data.bookings.length,
-        driver_pos: data.driver_position,
-      });
+      applyEtaPayload(response.data, "http");
     } catch (error: any) {
       if (isAuthNotReadyError(error)) return;
       const status = error?.response?.status;
@@ -83,28 +93,68 @@ export function useDynamicETA(enabled: boolean = true) {
       setIsLoading(false);
       fetchInFlight.current = false;
     }
-  }, [enabled, isDriverMode]);
+  }, [enabled, isDriverMode, applyEtaPayload]);
 
-  // Charger au montage
   useEffect(() => {
     if (enabled && isDriverMode) {
       fetchETAs();
     }
   }, [enabled, isDriverMode, fetchETAs]);
 
-  // Recharger toutes les 15 secondes
+  /** P1: `eta_changed` — même contrat que GET. */
+  useEffect(() => {
+    if (!enabled || !isDriverMode) return;
+
+    const onEtaChanged = (data: ETAResponse) => {
+      const tsRaw = data.timestamp;
+      const tsMs = tsRaw ? Date.parse(tsRaw) : NaN;
+      if (Number.isFinite(tsMs) && tsMs < lastEtaSocketServerTsRef.current) {
+        log.debug("eta_changed ignored (stale socket order)", {
+          tsMs,
+          last: lastEtaSocketServerTsRef.current,
+          event_id: data.event_id,
+        });
+        return;
+      }
+      if (Number.isFinite(tsMs)) {
+        lastEtaSocketServerTsRef.current = Math.max(
+          lastEtaSocketServerTsRef.current,
+          tsMs
+        );
+      }
+      applyEtaPayload(data, "socket");
+    };
+
+    const attach = (sock: Socket | null) => {
+      if (!sock) return;
+      sock.off("eta_changed", onEtaChanged);
+      sock.on("eta_changed", onEtaChanged);
+    };
+
+    attach(getSocket());
+    const unsub = subscribeSocketStatus(() => {
+      attach(getSocket());
+    });
+
+    return () => {
+      unsub();
+      const s = getSocket();
+      s?.off("eta_changed", onEtaChanged);
+    };
+  }, [enabled, isDriverMode, applyEtaPayload]);
+
+  /** Secours HTTP long (pas de polling 15 s). */
   useEffect(() => {
     if (!enabled || !isDriverMode) return;
 
     const interval = setInterval(() => {
       fetchETAs();
-    }, 15000); // 15 secondes
+    }, HTTP_ETA_FALLBACK_MS);
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, isDriverMode]); // Ne pas inclure fetchETAs pour éviter les re-renders infinis
+  }, [enabled, isDriverMode]);
 
-  /** Heure d'arrivée estimée au point de prise en charge (pickup). */
   const getEstimatedArrival = useCallback(
     (bookingId: number): Date | null => {
       const raw = etas.get(bookingId)?.estimated_arrival;
@@ -115,11 +165,6 @@ export function useDynamicETA(enabled: boolean = true) {
     [etas]
   );
 
-  /**
-   * Retard estimé en minutes : ETA pickup vs scheduled_time.
-   * Retourne null si pas d'ETA ou pas de scheduled_time.
-   * Valeur >= 0 = retard en minutes ; on peut afficher "en avance" si < 0.
-   */
   const getDelayMinutes = useCallback(
     (bookingId: number, scheduledTime: string): number | null => {
       const etaDate = getEstimatedArrival(bookingId);
@@ -132,7 +177,6 @@ export function useDynamicETA(enabled: boolean = true) {
     [getEstimatedArrival]
   );
 
-  /** Heure d'arrivée estimée à destination (après pickup, client à bord). */
   const getEstimatedArrivalDropoff = useCallback(
     (bookingId: number): Date | null => {
       const raw = etas.get(bookingId)?.estimated_arrival_dropoff;

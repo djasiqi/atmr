@@ -13,7 +13,14 @@ import {
   type NetworkMode,
 } from "./connectivityPolicy";
 import { subscribeToNetworkState, getNetworkStateSnapshot } from "./networkState";
-import { addSocketConnectListener, getSocket, getSocketRole, sendDriverHeartbeat, triggerMissionResync } from "./socket";
+import {
+  addSocketConnectListener,
+  getConnectionState,
+  getSocket,
+  getSocketRole,
+  sendDriverHeartbeat,
+  triggerMissionResync,
+} from "./socket";
 import { MissionStateManager } from "./missionState";
 import { syncLocationQueue, flushLatestPositionViaHttp } from "./locationQueue";
 import {
@@ -27,6 +34,11 @@ import {
   isMissionTrackingEligibleNow,
 } from "./missionTrackingPolicy";
 import { getLastResolvedTrackingPolicy } from "./trackingRuntime";
+import {
+  DEFAULT_LOCATION_FLUSH_INTERVAL_MS,
+  DEFAULT_MISSION_HEARTBEAT_MS,
+  DEFAULT_PRESENCE_HEARTBEAT_MS,
+} from "./gpsCadence";
 
 const log = getLogger("SyncEngine");
 const trackLog = getLogger("TRACK");
@@ -168,9 +180,7 @@ function isPresencePresenceModeFromPolicyOrLegacy(): boolean {
   return isAvailabilityPresenceMode();
 }
 
-const DEFAULT_FLUSH_INTERVAL_MS = 15000;
-const DEFAULT_MISSION_HEARTBEAT_MS = 60000;
-const DEFAULT_PRESENCE_HEARTBEAT_MS = 180000;
+const DEFAULT_FLUSH_INTERVAL_MS = DEFAULT_LOCATION_FLUSH_INTERVAL_MS;
 
 function runMissionHeartbeatTick(): void {
   if (AppState.currentState !== "active" && !isMissionCriticalTrackingMode()) return;
@@ -398,6 +408,13 @@ class SyncEngineImpl {
           setTimeout(() => {
             triggerPendingActionsFlush();
             triggerLocationFlush();
+            // P1: rattrapage HTTP si silence prolongé (last_sync > 5 min) — pas de force
+            if (getSocketRole() === "driver") {
+              triggerMissionResync(false).catch((e: unknown) => {
+                const err = e as { message?: string };
+                log.warn("triggerMissionResync foreground", { message: err?.message ?? String(e) });
+              });
+            }
           }, 150);
         });
       }
@@ -420,15 +437,22 @@ class SyncEngineImpl {
       });
     }, 3 * 60 * 1000);
 
+    /** P1: pas de polling `bookings/since` quand le socket driver est ONLINE et connecté. */
+    const MISSION_FALLBACK_MS_WHEN_DEGRADED = 2 * 60 * 1000;
     missionFallbackInterval = setInterval(() => {
       if (AppState.currentState !== "active" && !isMissionCriticalTrackingMode()) return;
-      if (getSocketRole() === "driver") {
-        triggerMissionResync(true).catch((e: unknown) => {
-          const err = e as { message?: string };
-          log.warn("triggerMissionResync error", { message: err?.message ?? String(e) });
-        });
+      if (getSocketRole() !== "driver") return;
+      const s = getSocket();
+      const socketHealthy =
+        getConnectionState() === "ONLINE" && s !== null && s.connected === true;
+      if (socketHealthy) {
+        return;
       }
-    }, 60000);
+      triggerMissionResync(true).catch((e: unknown) => {
+        const err = e as { message?: string };
+        log.warn("triggerMissionResync error", { message: err?.message ?? String(e) });
+      });
+    }, MISSION_FALLBACK_MS_WHEN_DEGRADED);
 
     this.started = true;
     log.success("syncEngine started");

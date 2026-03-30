@@ -28,10 +28,10 @@ import { useSocket } from '@/hooks/useSocket';
 import { useLocation } from '@/hooks/useLocation';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
-  getAssignedTrips,
   updateDriverAvailability,
   Booking,
 } from '@/services/api';
+import { requestMissionSync } from '@/services/missionSyncOrchestrator';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Loader } from '@/components/ui/Loader';
@@ -57,7 +57,7 @@ export default function DashboardScreen() {
   const loadTrips = async () => {
     setIsLoading(true);
     try {
-      const assignedTrips = await getAssignedTrips();
+      const assignedTrips = await requestMissionSync('manual_screen');
       setTrips(assignedTrips);
       setCurrentMission(assignedTrips.length > 0 ? assignedTrips[0] : null);
     } catch (error) {

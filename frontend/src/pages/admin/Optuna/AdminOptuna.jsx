@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaRobot, FaPlay, FaSpinner, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { runOptunaOptimization, fetchCompanies, trainModelWithOptimalParams } from '../../../services/adminService';
-import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
-import AdminSidebar from '../../../components/layout/Sidebar/AdminSidebar/AdminSidebar';
 import styles from './AdminOptuna.module.css';
 
 const AdminOptuna = () => {
@@ -171,11 +169,7 @@ const AdminOptuna = () => {
   };
 
   return (
-    <div className={styles.container}>
-      <HeaderDashboard />
-      <div className={styles.layout}>
-        <AdminSidebar />
-        <main className={styles.main}>
+    <main className={styles.main}>
           <div className={styles.header}>
             <h1>
               <FaRobot /> Optimisation Optuna
@@ -505,8 +499,6 @@ const AdminOptuna = () => {
             </ul>
           </div>
         </main>
-      </div>
-    </div>
   );
 };
 

@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Crypto from "expo-crypto";
 import { getLogger } from "@/utils/logger";
 import { updateDriverLocation } from "./api";
+import { getNetworkStateSnapshot } from "./networkState";
 import { getSocket, getSocketRole } from "./socket";
 
 const log = getLogger("LocationQ");
@@ -24,6 +25,72 @@ const MAX_BATCH_FAILURES_BEFORE_FALLBACK = 3;
 
 let resyncInFlight: Promise<void> | null = null;
 let nextAllowedEmitAt = 0; // timestamp (ms)
+
+/** Dernier succès pipeline socket (ACK `driver_location_batch`), pas simple emit. */
+let lastDriverLocationBatchAckSuccessAtMs: number | null = null;
+
+/** Exporté pour garde HTTP dans `locationTask` (aligné ACK batch). */
+export const SOCKET_STALE_MS = (() => {
+  const raw = process.env.EXPO_PUBLIC_LOCATION_SOCKET_STALE_MS;
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 75_000;
+})();
+
+/**
+ * Socket « réellement opérationnel » pour la queue GPS : driver, connecté, token, réseau.
+ */
+export function isLocationSocketOperational(): boolean {
+  if (getSocketRole() !== "driver") {
+    return false;
+  }
+  const s = getSocket();
+  if (!s?.connected) {
+    return false;
+  }
+  const auth = s.auth as Record<string, unknown> | undefined;
+  const tok = auth?.token;
+  if (typeof tok !== "string" || !tok.trim()) {
+    return false;
+  }
+  const net = getNetworkStateSnapshot();
+  if (net?.isConnected === false) {
+    return false;
+  }
+  if (net?.isInternetReachable === false) {
+    return false;
+  }
+  return true;
+}
+
+export function recordDriverLocationBatchAckSuccess(): void {
+  lastDriverLocationBatchAckSuccessAtMs = Date.now();
+}
+
+export function getLastDriverLocationBatchAckSuccessAtMs(): number | null {
+  return lastDriverLocationBatchAckSuccessAtMs;
+}
+
+/**
+ * Utiliser HTTP après enqueue background si pas de socket fiable ou pipeline stale (pas d’ACK récent).
+ */
+export function shouldSendHttpForBackgroundLocation(): boolean {
+  if (!isLocationSocketOperational()) {
+    return true;
+  }
+  const last = lastDriverLocationBatchAckSuccessAtMs;
+  if (last == null) {
+    return true;
+  }
+  if (Date.now() - last > SOCKET_STALE_MS) {
+    return true;
+  }
+  return false;
+}
+
+/** HTTP de repli alors que le socket semble connecté mais sans ACK pipeline récent. */
+export function isSocketStaleHttpFallback(): boolean {
+  return shouldSendHttpForBackgroundLocation() && isLocationSocketOperational();
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -67,12 +134,20 @@ function resolveSocket(socketParam: any): any {
  * ✅ Fallback: envoyer les positions une par une via driver_location (sans ACK)
  * quand le batch avec callback échoue systématiquement.
  */
+const MAX_INDIVIDUAL_FALLBACK_EMITS = 30;
+
 function emitIndividualFallback(socket: any, payload: any): void {
   const positions = (payload.positions || []).filter(
     (pos: any) => normalizeMode(pos.location_mode) !== "availability_presence"
   );
+  const capped = positions.slice(0, MAX_INDIVIDUAL_FALLBACK_EMITS);
+  if (positions.length > capped.length) {
+    log.warn("individual fallback capped", {
+      dropped: positions.length - capped.length,
+    });
+  }
   const driverId = payload.driver_id;
-  for (const pos of positions) {
+  for (const pos of capped) {
     const timestampIso = new Date(pos.timestamp || Date.now()).toISOString();
     socket.emit("driver_location", {
       latitude: pos.latitude,
@@ -88,6 +163,7 @@ function emitIndividualFallback(socket: any, payload: any): void {
       mission_id: pos.mission_id ?? null,
       driver_id: driverId,
       location_event_id: pos.location_event_id,
+      batch_fallback: true,
     });
   }
   log.info("individual fallback sent", { count: positions.length });
@@ -197,6 +273,7 @@ async function emitBatchWithAck(socketParam: any, payload: any): Promise<void> {
           return;
         }
         consecutiveBatchFailures = 0; // Reset sur succès
+        recordDriverLocationBatchAckSuccess();
         resolve();
       } else {
         consecutiveBatchFailures++;
@@ -237,6 +314,17 @@ function normalizeMode(
     return mode;
   }
   return "availability_presence";
+}
+
+/**
+ * PUT depuis flush « dernier point » : inutile si le pipeline batch mission est sain.
+ * `availability_presence` reste en HTTP : driver_location_batch exclut ce mode (voir emitBatchWithAck).
+ */
+function shouldSkipHttpFlushForLatest(latest: QueuedLocation): boolean {
+  if (normalizeMode(latest.location_mode) === "availability_presence") {
+    return false;
+  }
+  return !shouldSendHttpForBackgroundLocation();
 }
 
 const _UUID_RE =
@@ -446,7 +534,12 @@ export async function flushLatestPositionViaHttp(): Promise<void> {
       const queue = await getLocationQueue();
       if (queue.length === 0) return;
       const latest = queue[queue.length - 1];
-      const { updateDriverLocation } = await import("./api");
+      if (shouldSkipHttpFlushForLatest(latest)) {
+        log.debug("flushLatestPositionViaHttp skipped (batch pipeline healthy)", {
+          location_mode: normalizeMode(latest.location_mode),
+        });
+        return;
+      }
       const httpPromise = updateDriverLocation({
         lat: latest.latitude,
         lon: latest.longitude,
@@ -463,6 +556,7 @@ export async function flushLatestPositionViaHttp(): Promise<void> {
             ? "mission_live"
             : normalizeMode(latest.location_mode),
         mission_id: latest.mission_id ?? null,
+        transport_fallback: isSocketStaleHttpFallback() ? "socket-stale" : undefined,
       });
       const result = await Promise.race([
         httpPromise,
@@ -511,6 +605,8 @@ export async function syncLocationQueue(socket: any): Promise<void> {
     // être ajoutées (ex: task background) → la queue peut rester non vide, c'est normal.
     log.info("resync snapshot", { count: queue.length });
 
+    // Présence : HTTP obligatoire ici — driver_location_batch filtre availability_presence ;
+    // un seul point par driver_id (latestByDriver).
     const presenceOnly = queue.filter(
       (loc) => normalizeMode(loc.location_mode) === "availability_presence"
     );
@@ -521,6 +617,7 @@ export async function syncLocationQueue(socket: any): Promise<void> {
       }
       let presenceAccepted = true;
       for (const loc of latestByDriver.values()) {
+        log.debug("http_put presence_queue_resync", { driver_id: loc.driver_id });
         const presResult = await updateDriverLocation({
           lat: loc.latitude,
           lon: loc.longitude,

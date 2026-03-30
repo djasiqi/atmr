@@ -44,6 +44,9 @@ const EVENT_COLORS = {
   new_request: '#d97706',
 };
 
+/** Resync HTTP périodique long (pas de GET sur chaque event socket). */
+const NOTIFICATIONS_RESYNC_INTERVAL_MS = 10 * 60 * 1000;
+
 function timeAgo(dateString) {
   if (!dateString) return '';
   const now = new Date();
@@ -74,22 +77,65 @@ const CompanyNotificationBell = () => {
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
+  /** IDs déjà présents (GET + socket) — dédup stricte. */
+  const seenNotificationIdsRef = useRef(new Set());
+  /** Max created_at (ms) des entrées fusionnées (stats / cohérence). */
+  const lastSeenNotificationTsRef = useRef(0);
 
   const loadNotifications = useCallback(async () => {
     if (!hasCompanyToken()) {
       setNotifications([]);
       setUnreadCount(0);
+      seenNotificationIdsRef.current = new Set();
+      lastSeenNotificationTsRef.current = 0;
       return;
     }
     try {
       setIsLoading(true);
       const data = await fetchCompanyNotifications({ limit: 30 });
-      setNotifications(data.notifications || []);
+      const list = data.notifications || [];
+      setNotifications(list);
       setUnreadCount(data.unread_count || 0);
+      const seen = new Set();
+      let maxTs = 0;
+      for (const n of list) {
+        if (n.id != null) seen.add(n.id);
+        if (n.created_at) {
+          const t = new Date(n.created_at).getTime();
+          if (Number.isFinite(t)) maxTs = Math.max(maxTs, t);
+        }
+      }
+      seenNotificationIdsRef.current = seen;
+      lastSeenNotificationTsRef.current = maxTs;
     } catch (err) {
       console.error('[CompanyNotificationBell] Load error:', err);
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const mergeIncomingNotification = useCallback((raw) => {
+    if (!raw || raw.id == null) return;
+    const id = raw.id;
+    if (seenNotificationIdsRef.current.has(id)) return;
+
+    const createdMs = raw.created_at ? new Date(raw.created_at).getTime() : Date.now();
+    if (!Number.isFinite(createdMs)) return;
+
+    seenNotificationIdsRef.current.add(id);
+    lastSeenNotificationTsRef.current = Math.max(lastSeenNotificationTsRef.current, createdMs);
+
+    const incoming = {
+      ...raw,
+      metadata: raw.metadata != null ? raw.metadata : {},
+    };
+
+    setNotifications((prev) => {
+      if (prev.some((n) => n.id === id)) return prev;
+      return [incoming, ...prev].slice(0, 30);
+    });
+    if (!incoming.is_read) {
+      setUnreadCount((c) => c + 1);
     }
   }, []);
 
@@ -98,25 +144,25 @@ const CompanyNotificationBell = () => {
     loadNotifications();
   }, [loadNotifications]);
 
-  // Polling every 60s
+  // Resync long (pas de refetch à chaque event socket)
   useEffect(() => {
-    const interval = setInterval(loadNotifications, 60000);
+    const interval = setInterval(loadNotifications, NOTIFICATIONS_RESYNC_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [loadNotifications]);
 
-  // Socket real-time
+  // Socket temps réel — merge local sans GET
   useEffect(() => {
     if (!socket) return;
 
-    const handler = () => {
-      loadNotifications();
+    const handler = (payload) => {
+      mergeIncomingNotification(payload);
     };
 
     socket.on('new_company_notification', handler);
     return () => {
       socket.off('new_company_notification', handler);
     };
-  }, [socket, loadNotifications]);
+  }, [socket, mergeIncomingNotification]);
 
   // Close on click outside
   useEffect(() => {
