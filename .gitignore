@@ -78,6 +78,7 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 **/.env.production.local
+!frontend/.env.production.example
 
 # ===== Mobile / Android / iOS =====
 **/android/.gradle/
