@@ -1176,6 +1176,13 @@ class CompanyBillingSettingsResource(Resource):
             if "vat_number" in validated_data:
                 billing_settings.vat_number = validated_data.get("vat_number")
 
+            if "iban" in validated_data or "qr_iban" in validated_data:
+                from services.billing.banking_identifiers_sync import (
+                    sync_banking_identifiers,
+                )
+
+                sync_banking_identifiers(company, source="billing_settings")
+
             logger.info("Paramètres mis à jour avec succès")
             db.session.commit()
             return success_response(data=billing_settings.to_dict())

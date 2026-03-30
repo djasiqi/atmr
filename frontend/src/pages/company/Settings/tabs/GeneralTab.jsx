@@ -4,11 +4,6 @@ import { FiUpload, FiLink, FiTrash2, FiChevronDown, FiChevronUp, FiImage, FiMapP
 import styles from '../CompanySettings.module.css';
 import AddressAutocomplete from '../../../../components/common/AddressAutocomplete';
 
-const formatIbanPretty = (value = '') => {
-  const v = value.replace(/\s+/g, '').toUpperCase();
-  return v.replace(/(.{4})/g, '$1 ').trim();
-};
-
 const ReadonlyField = ({ label, value }) => (
   <div className={styles.fieldRow}>
     <span className={styles.labelMuted}>{label}</span>
@@ -248,10 +243,6 @@ const GeneralTab = ({
               </div>
             </div>
             <div className={styles.fieldGrid}>
-              <ReadonlyField
-                label="IBAN"
-                value={company.iban ? formatIbanPretty(company.iban) : ''}
-              />
               <ReadonlyField label="IDE / UID" value={company.uid_ide} />
               <ReadonlyField label="Email de facturation" value={company.billing_email} />
               {company.preferential_rate && (
@@ -350,18 +341,6 @@ const GeneralTab = ({
               </div>
             </div>
             <div className={styles.settingsForm}>
-              <div className={styles.formGroup}>
-                <label htmlFor="iban">IBAN</label>
-                <input
-                  id="iban"
-                  name="iban"
-                  value={form.iban}
-                  onChange={handleChange}
-                  placeholder="CH93 0076 2011 6238 5295 7"
-                />
-                {fieldErrors.iban && <small className={styles.fieldError}>{fieldErrors.iban}</small>}
-              </div>
-
               <div className={styles.formGroup}>
                 <label htmlFor="uid_ide">IDE / UID</label>
                 <input

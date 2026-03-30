@@ -1317,6 +1317,12 @@ class BillingSettings(Resource):
                     flag_modified(billing, "_iban_raw")
                     flag_modified(billing, "_qr_iban_raw")
 
+            # ✅ Aligner company.iban + CompanyBillingProfile (QR) sur les paramètres billing
+            if "iban" in data or "qr_iban" in data:
+                from services.billing.banking_identifiers_sync import sync_banking_identifiers
+
+                sync_banking_identifiers(company, source="billing_settings")
+
             db.session.commit()
             db.session.refresh(billing)
 

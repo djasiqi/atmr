@@ -94,6 +94,12 @@ class UpdateCompanyProfileUseCase:
             if k in self._ALLOWED_FIELDS:
                 setattr(company, k, v)
 
+        # ✅ IBAN : aligner company_billing_settings + CompanyBillingProfile (QR-facture)
+        if "iban" in validated_data:
+            from services.billing.banking_identifiers_sync import sync_banking_identifiers
+
+            sync_banking_identifiers(company, source="company")
+
         # ✅ Synchroniser CompanyBillingProfile si champs domicile_* modifiés
         billing_profile_synced = False
         if domicile_fields_modified:

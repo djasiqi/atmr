@@ -34,29 +34,6 @@ const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRx = /^\+?[0-9\s\-()]{7,20}$/;
 const uidRx = /^(CHE[- ]?\d{3}\.\d{3}\.\d{3}(\s*TVA)?)$|^(CHE[- ]?\d{9}(\s*TVA)?)$/i;
 
-function normalizeIban(value = '') {
-  return value.replace(/\s+/g, '').toUpperCase();
-}
-
-function formatIbanPretty(value = '') {
-  const v = normalizeIban(value);
-  return v.replace(/(.{4})/g, '$1 ').trim();
-}
-
-function ibanChecksumIsValid(iban) {
-  const v = normalizeIban(iban);
-  if (!v) return true;
-  if (v.length < 15 || v.length > 34) return false;
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(v)) return false;
-  const rearranged = v.slice(4) + v.slice(0, 4);
-  const expanded = rearranged.replace(/[A-Z]/g, (ch) => (ch.charCodeAt(0) - 55).toString());
-  let remainder = 0;
-  for (let i = 0; i < expanded.length; i += 7) {
-    remainder = parseInt(String(remainder) + expanded.slice(i, i + 7), 10) % 97;
-  }
-  return remainder === 1;
-}
-
 export default function CompanySettings() {
   const { company, companyError: loadError, loadingCompany, reloadCompany } = useLirieCompany();
   const location = useLocation();
@@ -125,7 +102,6 @@ export default function CompanySettings() {
     longitude: null,
     contact_email: '',
     contact_phone: '',
-    iban: '',
     uid_ide: '',
     billing_email: '',
     billing_notes: '',
@@ -146,7 +122,6 @@ export default function CompanySettings() {
       longitude: company.longitude || null,
       contact_email: company.contact_email || company.email || '',
       contact_phone: company.contact_phone || company.phone || '',
-      iban: company.iban ? formatIbanPretty(company.iban) : '',
       uid_ide: company.uid_ide || '',
       billing_email: company.billing_email || '',
       billing_notes: company.billing_notes || '',
@@ -171,7 +146,6 @@ export default function CompanySettings() {
       errs.contact_phone = 'Téléphone invalide.';
     if (form.uid_ide && !uidRx.test(form.uid_ide.trim()))
       errs.uid_ide = 'IDE/UID invalide (ex: CHE-123.456.789).';
-    if (form.iban && !ibanChecksumIsValid(form.iban)) errs.iban = 'IBAN invalide (checksum).';
     if (!form.name?.trim()) errs.name = "Le nom de l'entreprise est requis.";
     return errs;
   }, [form, isEditing]);
@@ -181,7 +155,7 @@ export default function CompanySettings() {
     const { name, value } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name]: name === 'iban' ? formatIbanPretty(value) : value,
+      [name]: value,
     }));
   };
 
@@ -232,7 +206,6 @@ export default function CompanySettings() {
         longitude: company.longitude || null,
         contact_email: company.contact_email || company.email || '',
         contact_phone: company.contact_phone || company.phone || '',
-        iban: company.iban ? formatIbanPretty(company.iban) : '',
         uid_ide: company.uid_ide || '',
         billing_email: company.billing_email || '',
         billing_notes: company.billing_notes || '',
@@ -277,7 +250,6 @@ export default function CompanySettings() {
         contact_phone: form.contact_phone || undefined,
         billing_email: form.billing_email || undefined,
         billing_notes: form.billing_notes || undefined,
-        iban: normalizeIban(form.iban) || undefined,
         uid_ide: form.uid_ide || undefined,
         domicile_address_line1: form.domicile_address_line1 || undefined,
         domicile_address_line2: form.domicile_address_line2 || undefined,
@@ -330,7 +302,6 @@ export default function CompanySettings() {
       await reloadCompany?.();
       setForm((prev) => ({
         ...prev,
-        iban: updated?.iban ? formatIbanPretty(updated.iban) : prev.iban,
         uid_ide: updated?.uid_ide ?? prev.uid_ide,
       }));
 
@@ -364,7 +335,6 @@ export default function CompanySettings() {
           contact_phone: form.contact_phone || undefined,
           billing_email: form.billing_email || undefined,
           billing_notes: form.billing_notes || undefined,
-          iban: normalizeIban(form.iban) || undefined,
           uid_ide: form.uid_ide || undefined,
           domicile_address_line1: form.domicile_address_line1 || undefined,
           domicile_address_line2: form.domicile_address_line2 || undefined,
@@ -407,7 +377,6 @@ export default function CompanySettings() {
         await reloadCompany?.();
         setForm((prev) => ({
           ...prev,
-          iban: updated?.iban ? formatIbanPretty(updated.iban) : prev.iban,
           uid_ide: updated?.uid_ide ?? prev.uid_ide,
         }));
         setPendingPayload(null);
