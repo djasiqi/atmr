@@ -73,12 +73,17 @@ pnpm-debug.log*
 *.env
 .env.*
 backend/.env
-backend/env.example
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 **/.env.production.local
-!frontend/.env.production.example
+
+# Gabarits / fragments env — non versionnés (copie locale uniquement)
+**/env.example
+**/.env.example
+**/.env.production.example
+**/env.production.example
+**/demo.env.example
 
 # ===== Mobile / Android / iOS =====
 **/android/.gradle/
