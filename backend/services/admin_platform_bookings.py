@@ -17,6 +17,7 @@ from models import Booking, BookingStatus, Client, Company, Institution
 from models.booking_transfer import BookingTransfer
 from models.enums import TransferStatus
 from security.audit_log import AuditLog
+from services.admin_booking_billing_kernel import build_pilotage_payload_for_booking
 from services.admin_booking_labels import booking_status_label_fr
 
 logger = logging.getLogger(__name__)
@@ -165,8 +166,14 @@ def build_admin_bookings_query(
     unassigned: bool | None = None,
     incomplete_data: bool | None = None,
     needs_investigation: bool | None = None,
+    company_scope: str | None = None,
 ) -> Any:
-    """Construit la requête SQLAlchemy filtrée (sans tri ni pagination)."""
+    """Construit la requête SQLAlchemy filtrée (sans tri ni pagination).
+
+    company_scope:
+      - None ou \"default\" : filtre entreprise = porteur OU exécutant (comportement historique).
+      - \"carrier_only\" : uniquement Booking.company_id (pilotage billing plateforme).
+    """
     query = Booking.query
 
     if q and str(q).strip():
@@ -201,12 +208,15 @@ def build_admin_bookings_query(
         )
 
     if company_id is not None:
-        query = query.filter(
-            or_(
-                Booking.company_id == company_id,
-                Booking.executing_company_id == company_id,
+        if company_scope == "carrier_only":
+            query = query.filter(Booking.company_id == company_id)
+        else:
+            query = query.filter(
+                or_(
+                    Booking.company_id == company_id,
+                    Booking.executing_company_id == company_id,
+                )
             )
-        )
 
     if institution_q and str(institution_q).strip():
         iq = f"%{str(institution_q).strip()}%"
@@ -424,6 +434,15 @@ def admin_booking_list_item_fixed(
     base = admin_booking_list_item(booking, has_transfer=has_transfer)
     base["needs_investigation"] = _compute_needs_investigation_booking(
         booking, has_pending_transfer=has_pending_transfer
+    )
+    ht = (
+        bool(booking._is_transferred()) if has_transfer is None else has_transfer
+    )
+    hp = has_pending_transfer
+    if hp is None:
+        hp = _batch_list_transfer_flags([booking]).get(booking.id, (False, False))[1]
+    base["pilotage"] = build_pilotage_payload_for_booking(
+        booking, has_transfer=ht, has_pending_transfer=bool(hp)
     )
     return base
 
@@ -694,6 +713,9 @@ def export_admin_bookings_csv(**filter_kwargs: Any) -> tuple[bytes, str]:
             "institution_name",
             "current_company_name",
             "amount_chf",
+            "pilotage_source_code",
+            "pilotage_qualification_state",
+            "observed_transport_amount",
         ]
     )
     for b in rows:
@@ -702,6 +724,9 @@ def export_admin_bookings_csv(**filter_kwargs: Any) -> tuple[bytes, str]:
             has_transfer=export_flags[b.id][0],
             has_pending_transfer=export_flags[b.id][1],
         )
+        pl = item.get("pilotage") or {}
+        qual = pl.get("qualification") or {}
+        ota = pl.get("observed_transport_amount")
         w.writerow(
             [
                 item["id"],
@@ -713,6 +738,9 @@ def export_admin_bookings_csv(**filter_kwargs: Any) -> tuple[bytes, str]:
                 item["institution_name"] or "",
                 item["current_company_name"] or "",
                 item["amount_chf"] if item["amount_chf"] is not None else "",
+                pl.get("source_code") or "",
+                qual.get("state") or "",
+                ota if ota is not None else "",
             ]
         )
     return buf.getvalue().encode("utf-8-sig"), f"bookings_export_{datetime.now(UTC).date()}.csv"

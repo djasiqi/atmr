@@ -1,39 +1,4 @@
-/* Shadow Mode Dashboard - Design moderne et professionnel */
-
-.container {
-  min-height: 100vh;
-  background: var(--bg-secondary, #f5f7fa);
-}
-
-.layout {
-  display: flex;
-  min-height: calc(100vh - 60px);
-}
-
-.main {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--spacing-lg);
-  width: 100%; /* Prendre toute la largeur disponible */
-  
-  /* S'adapte à la largeur de la sidebar (72px ou 240px) */
-  margin: var(--spacing-lg);
-  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
-  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-  
-  overflow-x: hidden;
-  overflow-y: auto;
-  position: relative;
-  z-index: var(--z-base);
-  box-sizing: border-box;
-  background-color: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  transition:
-    margin-left var(--transition-base),
-    max-width var(--transition-base);
-}
+/* Shadow Mode — shell : AdminLayout + adminShell.module.css (.content) */
 
 /* S'assurer que toutes les sections prennent 100% de la largeur */
 .header,
@@ -620,7 +585,7 @@
   .main {
     padding: var(--spacing-md);
     margin: var(--spacing-sm);
-    margin-top: calc(80px + var(--spacing-sm));
+    margin-top: calc(var(--header-height) + var(--spacing-sm));
     margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
     max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
     width: 100%;

@@ -5,6 +5,7 @@ import styles from './Reservations.module.css';
 import { FaMapMarkerAlt, FaCalendarAlt, FaMoneyBillWave, FaFilePdf } from 'react-icons/fa';
 
 import apiClient from '../../../utils/apiClient';
+import { startWorldlineHostedCheckout } from '../../../services/clientWorldlinePaymentService';
 // ✅ SUPPRIMÉ: mergeInvoiceAndQRBill - Génération PDF déplacée vers backend
 import HeaderDashboard from '../../../components/layout/Header/HeaderDashboard';
 import Footer from '../../../components/layout/Footer/Footer';
@@ -18,6 +19,7 @@ const ReservationsPage = () => {
   const [filter, setFilter] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [payingBookingId, setPayingBookingId] = useState(null);
 
   useEffect(() => {
     loadClientData(); // D'abord récupérer le public_id du client
@@ -50,6 +52,32 @@ const ReservationsPage = () => {
   };
 
   // 🎯 Annuler une réservation
+  const worldlinePaymentCompleted = (booking) => {
+    const st = (booking.worldline_payment?.status || '').toLowerCase();
+    return st === 'completed';
+  };
+
+  const canPayWithWorldline = (booking) => {
+    const status = (booking.status || '').toLowerCase();
+    if (status === 'canceled') return false;
+    if (status !== 'pending') return false;
+    if (worldlinePaymentCompleted(booking)) return false;
+    return true;
+  };
+
+  const handlePayWorldline = async (bookingId) => {
+    setPayingBookingId(bookingId);
+    try {
+      await startWorldlineHostedCheckout(bookingId);
+    } catch (e) {
+      alert(
+        e?.message ||
+          "Le paiement en ligne n'est pas disponible pour le moment."
+      );
+      setPayingBookingId(null);
+    }
+  };
+
   const handleCancelBooking = async (bookingId) => {
     if (!window.confirm('Voulez-vous vraiment annuler cette réservation ?')) return;
 
@@ -61,7 +89,8 @@ const ReservationsPage = () => {
       const response = await apiClient.delete(`/bookings/${bookingId}`);
 
       if (response.status === 200) {
-        const updatedBookings = await fetchBookings();
+        const publicId = localStorage.getItem('public_id');
+        const updatedBookings = publicId ? await fetchBookings(publicId) : [];
         setBookings(updatedBookings.map((b) => ({ ...b, isCancelling: false })));
         alert('Réservation annulée avec succès !');
       } else {
@@ -249,13 +278,28 @@ const ReservationsPage = () => {
                     </span>
                   </p>
                   {status !== 'canceled' && (
-                    <button
-                      className={styles.cancelBtn}
-                      onClick={() => handleCancelBooking(booking.id)}
-                      disabled={booking.isCancelling}
-                    >
-                      {booking.isCancelling ? 'Annulation...' : 'Annuler'}
-                    </button>
+                    <div className={styles.bookingActions}>
+                      {canPayWithWorldline(booking) && (
+                        <button
+                          type="button"
+                          className={styles.payBtn}
+                          onClick={() => handlePayWorldline(booking.id)}
+                          disabled={payingBookingId === booking.id}
+                        >
+                          {payingBookingId === booking.id
+                            ? 'Redirection…'
+                            : 'Payer en ligne (Worldline)'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.cancelBtn}
+                        onClick={() => handleCancelBooking(booking.id)}
+                        disabled={booking.isCancelling}
+                      >
+                        {booking.isCancelling ? 'Annulation...' : 'Annuler'}
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -308,6 +352,20 @@ const ReservationsPage = () => {
                           : '🔄 En attente'}
                   </span>
                 </p>
+                {canPayWithWorldline(booking) && (
+                  <div className={styles.bookingActions}>
+                    <button
+                      type="button"
+                      className={styles.payBtn}
+                      onClick={() => handlePayWorldline(booking.id)}
+                      disabled={payingBookingId === booking.id}
+                    >
+                      {payingBookingId === booking.id
+                        ? 'Redirection…'
+                        : 'Payer en ligne (Worldline)'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           ) : (

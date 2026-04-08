@@ -1,39 +1,4 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background: #f6f8fb;
-}
-
-.body {
-  display: flex;
-  flex: 1;
-}
-
-.content {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--spacing-lg);
-  width: 100%; /* Prendre toute la largeur disponible */
-  
-  /* S'adapte à la largeur de la sidebar (72px ou 240px) */
-  margin: var(--spacing-lg);
-  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
-  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-  
-  overflow-x: hidden;
-  overflow-y: auto;
-  position: relative;
-  z-index: var(--z-base);
-  box-sizing: border-box;
-  background-color: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  transition:
-    margin-left var(--transition-base),
-    max-width var(--transition-base);
-}
+/* Panneau principal : adminShell.module.css (.content) */
 
 .hero {
   width: 100%;
@@ -42,16 +7,19 @@
   box-sizing: border-box;
 }
 
-.hero h1 {
+.hero h1,
+.hero h2.pageHeading {
   margin: 0;
-  font-size: 2rem;
-  color: #1f2937;
-  text-align: left; /* Aligner à gauche */
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  text-align: left;
+  letter-spacing: -0.02em;
 }
 
 .hero p {
-  margin-top: 0.5rem;
-  color: #4b5563;
+  margin-top: var(--spacing-sm);
+  color: var(--text-secondary);
   max-width: 100%; /* Prendre toute la largeur disponible */
   text-align: left; /* Aligner à gauche */
 }
@@ -83,11 +51,251 @@
   line-height: 1.5;
 }
 
+.subtitle {
+  color: var(--text-secondary);
+  font-size: var(--font-sm, 0.95rem);
+  max-width: 52rem;
+  line-height: 1.5;
+}
+
+.filters {
+  margin: 1.5rem 0;
+}
+
+.filterRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.filterRow label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.filterRow input[type='date'] {
+  padding: 0.4rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.btnSecondary {
+  padding: 0.45rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background: var(--surface-secondary, #f9fafb);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btnSecondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+.errorBanner {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+  margin-bottom: 1rem;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.kpiCard {
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(255, 255, 255, 0.9));
+}
+
+.kpiLabel {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.kpiValue {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+  color: var(--text-primary);
+}
+
+.kpiSecondary {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+}
+
+.anomalySection {
+  margin: 1.5rem 0;
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+  margin: 0 0 0.75rem;
+  color: var(--text-primary);
+}
+
+.anomalyGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.anomalyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 0.85rem;
+}
+
+.anomalyLabel {
+  text-transform: capitalize;
+  color: var(--text-secondary);
+}
+
+.anomalyCount {
+  font-weight: 600;
+}
+
+.tableSection {
+  margin: 2rem 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-color, #e5e7eb);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.table th,
+.table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.table th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.badgeWarn {
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.linkDetail {
+  color: #4f46e5;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.linkDetail:hover {
+  text-decoration: underline;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.metaFooter {
+  margin-top: 2rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.breadcrumb {
+  margin-bottom: 1rem;
+}
+
+.breadcrumb a {
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.detailCard {
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.detailCard h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.detailList {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.codeBlock {
+  font-size: 0.8rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #e5e7eb;
+  overflow-x: auto;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .content {
     margin: var(--spacing-sm);
-    margin-top: calc(80px + var(--spacing-sm));
+    margin-top: calc(var(--header-height) + var(--spacing-sm));
     margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
     max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
     width: 100%;
@@ -95,6 +303,7 @@
   }
 
   .hero h1,
+  .hero h2.pageHeading,
   .hero p {
     text-align: left;
   }

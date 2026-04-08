@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
+import { GoogleMap, Polyline } from '@react-google-maps/api';
 import { useGoogleMapsLoaded } from '../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../components/common/MapPlaceholder';
+import GoogleMapsAdvancedMarker from '../../components/common/GoogleMapsAdvancedMarker';
 import {
   PUBLIC_MAP_OPTIONS,
   MAP_COLORS,
@@ -213,7 +214,7 @@ export default function Home() {
                     />
                   )}
                   {pickupCoord && (
-                    <Marker
+                    <GoogleMapsAdvancedMarker
                       position={{ lat: pickupCoord.lat, lng: pickupCoord.lon }}
                       icon={{
                         url: makePinMarkerIcon('pickup'),
@@ -225,7 +226,7 @@ export default function Home() {
                     />
                   )}
                   {dropoffCoord && (
-                    <Marker
+                    <GoogleMapsAdvancedMarker
                       position={{ lat: dropoffCoord.lat, lng: dropoffCoord.lon }}
                       icon={{
                         url: makePinMarkerIcon('dropoff'),

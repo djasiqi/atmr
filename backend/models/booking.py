@@ -605,7 +605,32 @@ class Booking(db.Model):
             "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
             # ✅ Timeline institution (si booking issu d'une demande institution)
             "institution_timeline": self._get_institution_timeline(),
+            "worldline_payment": self._worldline_client_payment_brief(),
         }
+
+    def _worldline_client_payment_brief(self):
+        """Résumé du dernier paiement Worldline pour le portail client."""
+        try:
+            from sqlalchemy import desc
+
+            from models.payment import Payment
+
+            row = (
+                Payment.query.filter_by(booking_id=self.id, payment_provider="worldline")
+                .order_by(desc(Payment.id))
+                .first()
+            )
+            if not row:
+                return None
+            st = row.status.value if hasattr(row.status, "value") else str(row.status)
+            return {
+                "payment_id": row.id,
+                "status": st.lower(),
+                "hosted_checkout_id": row.worldline_hosted_checkout_id,
+                "worldline_payment_id": row.worldline_payment_id,
+            }
+        except Exception:
+            return None
 
     def _get_institution_timeline(self):
         """Retourne les dates cles de la demande institution source, si elle existe.

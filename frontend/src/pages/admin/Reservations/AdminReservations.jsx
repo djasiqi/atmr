@@ -1,7 +1,72 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { FiChevronDown, FiDownload, FiRotateCcw, FiSearch, FiTag, FiX } from 'react-icons/fi';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { fetchAdminBookings, downloadAdminBookingsExport } from '../../../services/adminService';
+import rfChipStyles from '../../company/Reservations/components/ReservationFilters.module.css';
 import styles from './AdminReservations.module.css';
+import shell from '../adminShell.module.css';
+
+/** Même composant que ReservationFilters (entreprise) — styles partagés via rfChipStyles */
+function ChipDropdown({ icon, value, options, onChange, activeWhen }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) close();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') close();
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, close]);
+
+  const selected = options.find((o) => o.value === value);
+  const isActive = activeWhen ? activeWhen(value) : value !== options[0]?.value;
+
+  return (
+    <div className={rfChipStyles.chipDrop} ref={ref}>
+      <button
+        type="button"
+        className={`${rfChipStyles.chipBtn} ${isActive ? rfChipStyles.chipBtnActive : ''}`}
+        onClick={() => setOpen((p) => !p)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+      >
+        {icon}
+        <span className={rfChipStyles.chipText}>{selected?.label || '—'}</span>
+        <FiChevronDown size={11} className={`${rfChipStyles.chipArrow} ${open ? rfChipStyles.chipArrowOpen : ''}`} />
+      </button>
+      {open && (
+        <div className={rfChipStyles.chipMenu} role="listbox">
+          {options.map((o) => (
+            <button
+              key={`${o.label}-${String(o.value)}`}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              className={`${rfChipStyles.chipOption} ${o.value === value ? rfChipStyles.chipOptionActive : ''}`}
+              onClick={() => {
+                onChange(o.value);
+                close();
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const DEFAULT_PER_PAGE = 25;
 
@@ -121,84 +186,122 @@ const AdminReservations = () => {
     statusParam &&
     (statusParam.includes(',') || !BOOKING_STATUS_SINGLE.has(statusParam));
 
+  const statusChipOptions = useMemo(() => {
+    return [
+      { value: '', label: 'Tous les statuts' },
+      ...(statusCustomUrl
+        ? [{ value: statusParam, label: `Filtre actuel (${statusParam})` }]
+        : []),
+      ...BOOKING_STATUS_OPTIONS.map(({ value, label }) => ({
+        value,
+        label: `${label} (${value})`,
+      })),
+    ];
+  }, [statusParam, statusCustomUrl]);
+
+  const qFromUrl = searchParams.get('q') || '';
+  const [qDraft, setQDraft] = useState(qFromUrl);
+  useEffect(() => {
+    setQDraft(qFromUrl);
+  }, [qFromUrl]);
+
   const base = `/dashboard/admin/${adminId}`;
 
   return (
-    <main className={styles.content}>
-      <header className={styles.header}>
-        <h1>Réservations — supervision plateforme</h1>
-        <p>
-          Recherche, filtres et synthèse sur le jeu de résultats serveur. Les libellés de statut
-          proviennent de l&apos;API.
-        </p>
+    <main className={shell.content}>
+      <header className={styles.pageHeader}>
+        <div className={styles.pageHeaderLeft}>
+          <span className={styles.pageEyebrow}>Supervision plateforme</span>
+          <h1 className={styles.pageTitle}>Réservations</h1>
+          <p className={styles.pageLead}>
+            Recherche, filtres et synthèse côté serveur. Les libellés de statut proviennent de
+            l&apos;API.
+          </p>
+        </div>
       </header>
 
-      <section className={styles.toolbar} aria-label="Filtres">
+      <section className={styles.toolbarCard} aria-labelledby="admin-res-filters-title">
+        <div className={styles.toolbarHead}>
+          <h2 id="admin-res-filters-title" className={styles.toolbarTitle}>
+            Filtres
+          </h2>
+        </div>
+
         <div className={styles.toolbarRow}>
-          <label className={styles.field}>
+          <div className={`${styles.field} ${styles.fieldSearch}`}>
             <span>Recherche</span>
-            <input
-              type="search"
-              placeholder="ID, nom, lieu…"
-              defaultValue={searchParams.get('q') || ''}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  setFacet({ q: e.target.value.trim() });
-                }
-              }}
-            />
-          </label>
-          <label className={styles.field}>
-            <span>Statut</span>
-            <select
-              className={styles.fieldSelect}
-              value={statusParam}
-              onChange={(e) => setFacet({ status: e.target.value })}
-              aria-label="Filtrer par statut de réservation"
-            >
-              <option value="">Tous les statuts</option>
-              {statusCustomUrl ? (
-                <option value={statusParam}>Filtre actuel ({statusParam})</option>
+            <div className={rfChipStyles.searchWrap}>
+              <FiSearch className={rfChipStyles.searchIcon} size={14} aria-hidden />
+              <input
+                type="text"
+                className={rfChipStyles.searchInput}
+                placeholder="ID, nom, lieu…"
+                value={qDraft}
+                onChange={(e) => setQDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setFacet({ q: qDraft.trim() });
+                  }
+                }}
+                aria-label="Recherche (Entrée pour filtrer)"
+              />
+              {qDraft ? (
+                <button
+                  type="button"
+                  className={rfChipStyles.clearBtn}
+                  onClick={() => {
+                    setQDraft('');
+                    setFacet({ q: '' });
+                  }}
+                  title="Effacer"
+                  aria-label="Effacer la recherche"
+                >
+                  <FiX size={12} />
+                </button>
               ) : null}
-              {BOOKING_STATUS_OPTIONS.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label} ({value})
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.field}>
+            </div>
+          </div>
+          <div className={styles.field}>
+            <span>Statut</span>
+            <ChipDropdown
+              icon={<FiTag size={12} aria-hidden />}
+              value={statusParam}
+              options={statusChipOptions}
+              onChange={(v) => setFacet({ status: v })}
+              activeWhen={(v) => v !== ''}
+            />
+          </div>
+          <label className={`${styles.field} ${styles.fieldDate}`}>
             <span>Création du</span>
-            <input
-              type="date"
-              defaultValue={searchParams.get('created_from') || ''}
-              onChange={(e) => setFacet({ created_from: e.target.value })}
+            <InlineDatePicker
+              value={searchParams.get('created_from') || ''}
+              onChange={(iso) => setFacet({ created_from: iso })}
             />
           </label>
-          <label className={styles.field}>
+          <label className={`${styles.field} ${styles.fieldDate}`}>
             <span>Création au</span>
-            <input
-              type="date"
-              defaultValue={searchParams.get('created_to') || ''}
-              onChange={(e) => setFacet({ created_to: e.target.value })}
+            <InlineDatePicker
+              value={searchParams.get('created_to') || ''}
+              onChange={(iso) => setFacet({ created_to: iso })}
             />
           </label>
         </div>
+
+        <div className={styles.toolbarDivider} aria-hidden />
+
         <div className={styles.toolbarRow}>
-          <label className={styles.field}>
+          <label className={`${styles.field} ${styles.fieldDate}`}>
             <span>Transport du</span>
-            <input
-              type="date"
-              defaultValue={searchParams.get('scheduled_from') || ''}
-              onChange={(e) => setFacet({ scheduled_from: e.target.value })}
+            <InlineDatePicker
+              value={searchParams.get('scheduled_from') || ''}
+              onChange={(iso) => setFacet({ scheduled_from: iso })}
             />
           </label>
-          <label className={styles.field}>
+          <label className={`${styles.field} ${styles.fieldDate}`}>
             <span>Transport au</span>
-            <input
-              type="date"
-              defaultValue={searchParams.get('scheduled_to') || ''}
-              onChange={(e) => setFacet({ scheduled_to: e.target.value })}
+            <InlineDatePicker
+              value={searchParams.get('scheduled_to') || ''}
+              onChange={(iso) => setFacet({ scheduled_to: iso })}
             />
           </label>
           <label className={styles.field}>
@@ -238,13 +341,15 @@ const AdminReservations = () => {
             />
           </label>
         </div>
+
         <div className={styles.toolbarActions}>
-          <button type="button" className={styles.btnGhost} onClick={resetFilters}>
-            Réinitialiser les filtres
+          <button type="button" className={styles.btnReset} onClick={resetFilters}>
+            <FiRotateCcw size={15} aria-hidden />
+            Réinitialiser
           </button>
           <button
             type="button"
-            className={styles.btnGhost}
+            className={styles.btnExport}
             disabled={exporting}
             onClick={async () => {
               setExporting(true);
@@ -257,13 +362,18 @@ const AdminReservations = () => {
               }
             }}
           >
+            <FiDownload size={15} aria-hidden />
             {exporting ? 'Export…' : 'Export CSV'}
           </button>
         </div>
       </section>
 
       {summary ? (
-        <section className={styles.metricsRow} aria-label="Synthèse filtrée">
+        <section className={styles.metricsBlock} aria-labelledby="admin-res-metrics-title">
+          <h2 id="admin-res-metrics-title" className={styles.metricsBlockTitle}>
+            Synthèse filtrée
+          </h2>
+          <div className={styles.metricsRow} aria-label="Indicateurs sur le jeu filtré">
           <button
             type="button"
             className={styles.metricCard}
@@ -313,17 +423,18 @@ const AdminReservations = () => {
             <span>À investiguer</span>
             <strong>{summary.needs_investigation}</strong>
           </button>
+          </div>
         </section>
       ) : null}
 
       {loading && (
-        <div className={styles.feedbackCard}>
-          <p>Chargement…</p>
+        <div className={styles.feedbackCard} role="status" aria-live="polite">
+          <p className={styles.feedbackText}>Chargement…</p>
         </div>
       )}
       {error && (
-        <div className={styles.feedbackCard}>
-          <p className={styles.error}>Erreur : {error}</p>
+        <div className={styles.feedbackCardError} role="alert">
+          <p className={styles.error}>{error}</p>
         </div>
       )}
 
@@ -392,16 +503,19 @@ const AdminReservations = () => {
         <nav className={styles.pagination} aria-label="Pagination">
           <button
             type="button"
+            className={styles.paginationBtn}
             disabled={pagination.page <= 1}
             onClick={() => goPage(pagination.page - 1)}
           >
             Précédent
           </button>
-          <span>
-            Page {pagination.page} / {pagination.total_pages} ({pagination.total_items} résultats)
+          <span className={styles.paginationMeta}>
+            Page {pagination.page} / {pagination.total_pages}
+            <span className={styles.paginationCount}>({pagination.total_items} résultats)</span>
           </span>
           <button
             type="button"
+            className={styles.paginationBtn}
             disabled={pagination.page >= pagination.total_pages}
             onClick={() => goPage(pagination.page + 1)}
           >

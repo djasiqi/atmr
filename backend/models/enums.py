@@ -367,6 +367,31 @@ class DispatchMode(str, PyEnum):
     FULLY_AUTO = "fully_auto"
 
 
+class PlatformBillingPeriodStatus(str, PyEnum):
+    """Période de facturation plateforme LIRIE (brouillon / figée)."""
+
+    DRAFT = "draft"
+    LOCKED = "locked"
+
+
+class PlatformBillingLineType(str, PyEnum):
+    """Lignes de relevé plateforme (distinct de InvoiceLineType transporteur→client)."""
+
+    SUBSCRIPTION = "subscription"
+    INSTITUTION_COMMISSION = "institution_commission"
+    SUPPORT_TIME = "support_time"
+    ADJUSTMENT = "adjustment"
+
+
+class PlatformSupportEntryCategory(str, PyEnum):
+    """Catégorie d’entrée support facturable plateforme."""
+
+    SUPPORT = "support"
+    TRAINING = "training"
+    CONFIGURATION = "configuration"
+    OTHER = "other"
+
+
 class TransferModel(str, PyEnum):
     """Modèles de transfert de courses entre entreprises.
     - SUBCONTRACT: A facture client, B facture A (sous-traitance classique)

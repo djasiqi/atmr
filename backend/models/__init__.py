@@ -80,6 +80,9 @@ from .enums import (
     OfferMode,  # ✅ ÉTAPE 4: Mode d'offre
     OfferStatus,  # ✅ ÉTAPE 4: Statut offre
     PartnershipStatus,
+    PlatformBillingLineType,
+    PlatformBillingPeriodStatus,
+    PlatformSupportEntryCategory,
     PaymentMethod,
     PaymentStatus,
     PricingModelType,
@@ -151,8 +154,17 @@ from .partnership import Partnership
 from .platform_admin_permission_grant import PlatformAdminPermissionGrant
 from .platform_change_request import PlatformChangeRequest
 from .platform_runbook_execution import PlatformRunbookExecution
+from .platform_billing import (
+    CompanyPlatformBillingConfig,
+    PlatformBillingPeriod,
+    PlatformInvoice,
+    PlatformInvoiceLine,
+    PlatformSubscriptionPricing,
+    PlatformSupportEntry,
+)
 from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
+from .worldline_webhook_event import WorldlineWebhookEvent
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
 from .rl_feedback import RLFeedback
@@ -260,8 +272,17 @@ __all__ = [
     "PartnerInvoice",
     "Partnership",
     "PlatformAdminPermissionGrant",
+    "PlatformBillingLineType",
+    "PlatformBillingPeriod",
+    "PlatformBillingPeriodStatus",
     "PlatformChangeRequest",
+    "CompanyPlatformBillingConfig",
+    "PlatformInvoice",
+    "PlatformInvoiceLine",
     "PlatformRunbookExecution",
+    "PlatformSubscriptionPricing",
+    "PlatformSupportEntry",
+    "PlatformSupportEntryCategory",
     "PartnershipStatus",
     "PasswordHistory",  # ✅ S3: Historique mots de passe
     "Payment",

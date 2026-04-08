@@ -105,6 +105,9 @@ celery: Celery = Celery(
         "tasks.patient_sync_tasks",  # ✅ Curatelle: sync patient cross-plateforme
         "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
         "tasks.demo_access_tasks",  # ✅ Demo 24h: expiration automatique des acces demo
+        "tasks.platform_billing_tasks",  # Facturation plateforme LIRIE V1
+        "tasks.worldline_webhook_tasks",  # Webhooks Worldline (mode async optionnel)
+        "tasks.worldline_reconciliation_tasks",  # PENDING Worldline stagnants (beat)
     ],
 )
 
@@ -291,6 +294,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 3600,  # Expire après 1h
             "jitter": 300,  # Jitter jusqu'à 5 min
+        },
+    },
+    # Worldline: PENDING avec hosted checkout non finalisés depuis 30+ min (logs / alerting)
+    "worldline-stale-pending-scan": {
+        "task": "worldline.reconcile_stale_pending",
+        "schedule": 3600.0,
+        "options": {
+            "expires": 1800,
+            "jitter": 120,
         },
     },
     # ✅ 3.3: Purge automatique données RGPD (hebdomadaire)

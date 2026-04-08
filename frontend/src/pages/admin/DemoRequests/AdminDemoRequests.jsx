@@ -9,6 +9,7 @@ import {
   updateDemoRequestStatus,
 } from '../../../services/adminDemoService';
 import styles from './AdminDemoRequests.module.css';
+import shell from '../adminShell.module.css';
 
 const REQUEST_STATUS_META = {
   new: { label: 'Nouvelle', tone: 'neutral' },
@@ -297,7 +298,7 @@ const AdminDemoRequests = () => {
 
   return (
     <>
-      <main className={styles.content}>
+      <main className={shell.content}>
           <header className={styles.pageHeader}>
             <div>
               <h1>Demandes de demonstration</h1>

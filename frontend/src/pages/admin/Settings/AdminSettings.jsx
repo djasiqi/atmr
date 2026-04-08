@@ -7,6 +7,7 @@ import {
   updateAdminPricingZoneSet,
 } from '../../../services/settingsService';
 import styles from './AdminSettings.module.css';
+import shell from '../adminShell.module.css';
 
 const CANTON_OPTIONS = [
   { value: 'GE', label: 'Genève (GE)' },
@@ -459,7 +460,7 @@ const AdminSettings = () => {
   };
 
   return (
-    <main className={styles.content}>
+    <main className={shell.content}>
           <section className={styles.hero}>
             <h1>Paramètres administrateur</h1>
             <p>

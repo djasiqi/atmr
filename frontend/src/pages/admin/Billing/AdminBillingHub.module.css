@@ -1,0 +1,56 @@
+.hubHeader {
+  margin-bottom: var(--spacing-lg);
+}
+
+.hubTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-xs);
+  color: var(--text-primary);
+}
+
+.hubSubtitle {
+  margin: 0 0 var(--spacing-md);
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  max-width: 52rem;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  border-bottom: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.08));
+  padding-bottom: var(--spacing-sm);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.tab:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+  color: var(--text-primary);
+}
+
+.tabActive {
+  color: var(--text-primary);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.06));
+  border-color: var(--border-subtle, rgba(0, 0, 0, 0.1));
+}
+
+.outlet {
+  padding-top: var(--spacing-md);
+}

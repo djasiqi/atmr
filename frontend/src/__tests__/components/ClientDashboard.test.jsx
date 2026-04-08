@@ -13,8 +13,13 @@ jest.mock('utils/apiClient');
 jest.mock('@react-google-maps/api', () => ({
   GoogleMap: ({ children }) => <div data-testid="map-container">{children}</div>,
   Polyline: () => null,
-  Marker: () => null,
+  useGoogleMap: () => ({}),
   InfoWindow: () => null,
+}));
+
+jest.mock('components/common/GoogleMapsAdvancedMarker', () => ({
+  __esModule: true,
+  default: () => null,
 }));
 
 // Mock GoogleMapsProvider

@@ -10,7 +10,7 @@ import styles from './Dashboard/AdminDashboard.module.css';
  */
 const AdminLayout = () => (
   <div className={styles.adminContainer}>
-    <HeaderDashboard />
+    <HeaderDashboard variant="admin" />
     <div className={styles.dashboard}>
       <AdminSidebar />
       <Outlet />

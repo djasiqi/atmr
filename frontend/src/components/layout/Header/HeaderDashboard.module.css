@@ -1,5 +1,5 @@
-/* HeaderDashboard.module.css */
-/* src/components/layout/HeaderDashboard.module.css */
+/* HeaderDashboard — pleine largeur (client / chauffeur) ou aligné sidebar (admin) */
+
 .header {
   position: fixed;
   top: 0;
@@ -10,9 +10,163 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background-color: var(--bg-primary);
-  box-shadow: var(--shadow-sm);
+  padding: 0 var(--spacing-lg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  box-sizing: border-box;
+}
+
+/* Admin : même logique que CompanyHeader — barre uniquement au-dessus du contenu, pas au-dessus de la sidebar */
+.headerAdmin {
+  height: var(--header-height);
+  left: 0;
+  right: auto;
+  margin-left: var(--sidebar-w, 72px);
+  width: calc(100% - var(--sidebar-w, 72px));
+  padding: 0 var(--spacing-lg);
+  gap: var(--spacing-md);
+  justify-content: space-between;
+  transition:
+    margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Identité header admin — aligné CompanyHeader (logoWrap + titre espace) */
+.logoWrap {
+  height: 36px;
+  width: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-tertiary, #f9fafb);
+  border: 1px solid var(--border-primary);
+}
+
+.logoImg {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.adminWorkspaceTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(280px, 42vw);
+  line-height: 1.3;
+}
+
+/* Pilule date — alignée CompanyHeader .indicator */
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--bg-tertiary, #f9fafb);
+  border: 1px solid var(--border-primary);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.indicatorIcon {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.indicatorText {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+/* Aligné CompanyHeader — séparation marque / zone actions (variante default / legacy) */
+.headerDivider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-primary);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  min-width: 0;
+  transition: opacity 0.15s ease;
+}
+
+.brand:hover {
+  opacity: 0.9;
+  text-decoration: none;
+}
+
+.logoMark {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--brand-primary-lightest);
+  border: 1px solid rgba(0, 121, 107, 0.2);
+  color: var(--brand-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brandName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.brandTagline {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
 }
 
 .logo {
@@ -53,21 +207,25 @@
 }
 
 .userButton {
-  background-color: var(--gray-200);
+  background-color: var(--bg-tertiary);
   color: var(--text-primary);
   padding: var(--spacing-xs) var(--spacing-md);
   border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   transition:
     background-color var(--transition-base),
-    color var(--transition-base);
+    border-color var(--transition-base);
+  font-size: var(--font-sm);
+  font-family: inherit;
 }
 
 .userButton:hover {
-  background-color: var(--gray-300);
+  background-color: var(--bg-hover);
+  border-color: var(--border-secondary);
 }
 
 .arrow {
@@ -77,13 +235,15 @@
 
 .dropdownMenu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 6px);
   right: 0;
   background: var(--bg-primary);
   width: 250px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  z-index: var(--z-dropdown);
+  border: 1px solid var(--border-primary);
+  /* Au-dessus de la sidebar (1010) : --z-dropdown seul passait dessous */
+  z-index: var(--z-popover, 1060);
   overflow: hidden;
 }
 
@@ -138,4 +298,44 @@
 
 .logoutButton:hover {
   background: var(--danger-hover);
+}
+
+@media (max-width: 768px) {
+  .headerAdmin {
+    margin-left: var(--sidebar-w, 60px);
+    width: calc(100% - var(--sidebar-w, 60px));
+    padding: 0 var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+
+  .headerDivider {
+    display: none;
+  }
+
+  .adminWorkspaceTitle {
+    display: none;
+  }
+
+  .indicator {
+    display: none;
+  }
+
+  .logoWrap {
+    height: 32px;
+    width: 32px;
+  }
+
+  .brandName {
+    max-width: 140px;
+  }
+
+  .brandTagline {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .headerAdmin {
+    transition: none;
+  }
 }

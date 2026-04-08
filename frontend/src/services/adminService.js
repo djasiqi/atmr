@@ -134,6 +134,76 @@ export const downloadAdminBookingsExport = async (params = {}) => {
 };
 
 /**
+ * Pilotage billing plateforme — synthèse KPIs.
+ */
+export const fetchBillingPilotageSummary = async (params = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/admin/billing/pilotage/summary', {
+    headers,
+    params,
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/**
+ * Pilotage billing — tableau entreprises.
+ */
+export const fetchBillingPilotageCompanies = async (params = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/admin/billing/pilotage/companies', {
+    headers,
+    params,
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/**
+ * Pilotage billing — détail entreprise.
+ */
+export const fetchBillingPilotageCompanyDetail = async (companyId, params = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get(`/admin/billing/pilotage/companies/${companyId}`, {
+    headers,
+    params,
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/**
+ * Export CSV pilotage billing.
+ */
+export const downloadBillingPilotageExport = async (params = {}) => {
+  const token = getAuthToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const response = await apiClient.get('/admin/billing/pilotage/export', {
+    headers,
+    params,
+    responseType: 'blob',
+    timeout: 120000,
+  });
+  const disposition = response.headers['content-disposition'];
+  let filename = 'pilotage_export.csv';
+  if (disposition && disposition.includes('filename=')) {
+    const m = disposition.match(/filename="?([^";]+)"?/);
+    if (m && m[1]) filename = m[1];
+  }
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/**
  * Récupère les utilisateurs récents.
  */
 export const fetchRecentUsers = async () => {
@@ -554,6 +624,122 @@ export const postPlatformRunbookRollback = async (executionId) => {
     `/platform/runbooks/executions/${executionId}/rollback`,
     {},
     { headers: platformHeaders() }
+  );
+  return response.data;
+};
+
+// ─── Facturation plateforme LIRIE — GET/POST /admin/platform-billing/* ───
+
+const _adminAuthHeaders = () => {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+/** Liste des périodes de facturation plateforme. */
+export const fetchPlatformBillingPeriods = async () => {
+  const response = await apiClient.get('/admin/platform-billing/periods', {
+    headers: _adminAuthHeaders(),
+    timeout: 60000,
+  });
+  return response.data;
+};
+
+/** Crée ou récupère une période (draft). */
+export const createPlatformBillingPeriod = async (billingYear, billingMonth) => {
+  const response = await apiClient.post(
+    '/admin/platform-billing/periods',
+    { billing_year: billingYear, billing_month: billingMonth },
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Recalcule les brouillons pour une période draft. */
+export const recalculatePlatformBillingPeriod = async (periodId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/periods/${periodId}/recalculate`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Verrouille une période. */
+export const lockPlatformBillingPeriod = async (periodId) => {
+  const response = await apiClient.post(
+    `/admin/platform-billing/periods/${periodId}/lock`,
+    {},
+    { headers: _adminAuthHeaders() }
+  );
+  return response.data;
+};
+
+/** Relevés pour une période. */
+export const fetchPlatformBillingPeriodInvoices = async (periodId) => {
+  const response = await apiClient.get(`/admin/platform-billing/periods/${periodId}/invoices`, {
+    headers: _adminAuthHeaders(),
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/** Détail d'un relevé + lignes. */
+export const fetchPlatformBillingInvoice = async (invoiceId) => {
+  const response = await apiClient.get(`/admin/platform-billing/invoices/${invoiceId}`, {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+/** Export CSV UTF-8 d'une période. */
+export const downloadPlatformBillingPeriodExport = async (periodId) => {
+  const response = await apiClient.get(`/admin/platform-billing/periods/${periodId}/export`, {
+    headers: _adminAuthHeaders(),
+    responseType: 'blob',
+    timeout: 120000,
+  });
+  const disposition = response.headers['content-disposition'];
+  let filename = `platform-billing-period-${periodId}.csv`;
+  if (disposition && disposition.includes('filename=')) {
+    const m = disposition.match(/filename="?([^";]+)"?/);
+    if (m && m[1]) filename = m[1];
+  }
+  const url = window.URL.createObjectURL(
+    new Blob([response.data], { type: 'text/csv;charset=utf-8' })
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+/** Liste entreprises + dernière config facturation plateforme (paramètres transporteurs). */
+export const fetchPlatformBillingCompaniesConfig = async (params = {}) => {
+  const response = await apiClient.get('/admin/platform-billing/companies/config', {
+    headers: _adminAuthHeaders(),
+    params,
+    timeout: 60000,
+  });
+  return response.data;
+};
+
+/** Grille d'abonnement globale (lecture). */
+export const fetchPlatformSubscriptionPricing = async () => {
+  const response = await apiClient.get('/admin/platform-billing/subscription-pricing', {
+    headers: _adminAuthHeaders(),
+  });
+  return response.data;
+};
+
+/** PUT config facturation plateforme pour une entreprise. */
+export const putPlatformBillingCompanyConfig = async (companyId, payload) => {
+  const response = await apiClient.put(
+    `/admin/platform-billing/companies/${companyId}/config`,
+    payload,
+    { headers: _adminAuthHeaders() }
   );
   return response.data;
 };

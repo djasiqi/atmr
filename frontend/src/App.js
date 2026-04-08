@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import CompanyEnterpriseLayout from './components/layout/CompanyEnterpriseLayout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
@@ -27,6 +27,25 @@ const AdminUsers = lazy(() => import('./pages/admin/Users/AdminUsers'));
 const AdminReservations = lazy(() => import('./pages/admin/Reservations/AdminReservations'));
 const AdminBookingDetail = lazy(() => import('./pages/admin/Reservations/AdminBookingDetail'));
 const AdminInvoices = lazy(() => import('./pages/admin/Invoices/AdminInvoices'));
+const AdminPlatformBilling = lazy(() => import('./pages/admin/PlatformBilling/AdminPlatformBilling'));
+const AdminBillingHub = lazy(() => import('./pages/admin/Billing/AdminBillingHub'));
+const AdminBillingTransportConfig = lazy(() =>
+  import('./pages/admin/Billing/AdminBillingTransportConfig')
+);
+const AdminPilotageCompanyDetail = lazy(() =>
+  import('./pages/admin/Invoices/AdminPilotageCompanyDetail')
+);
+
+/** Ancienne URL détail pilotage → hub Facturation. */
+function RedirectToBillingPilotageCompany() {
+  const { public_id, companyId } = useParams();
+  return (
+    <Navigate
+      to={`/dashboard/admin/${public_id}/billing/pilotage/companies/${companyId}`}
+      replace
+    />
+  );
+}
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -43,6 +62,9 @@ const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
 const ReservationsPage = lazy(() => import('./pages/client/Reservations/ReservationsPage'));
+const ClientWorldlinePaymentReturn = lazy(() =>
+  import('./pages/client/Payment/ClientWorldlinePaymentReturn')
+);
 const DriverDashboard = lazy(() => import('./pages/driver/Dashboard/DriverDashboard'));
 const DriverSchedulePage = lazy(() => import('./pages/driver/DriverSchedulePage'));
 const DriverMapPage = lazy(() => import('./pages/driver/Map/DriverMapPage'));
@@ -365,7 +387,22 @@ const App = () => {
               <Route path="users" element={<AdminUsers />} />
               <Route path="shadow-mode" element={<ShadowModeDashboard />} />
               <Route path="optuna" element={<AdminOptuna />} />
-              <Route path="invoices" element={<AdminInvoices />} />
+              <Route path="billing" element={<AdminBillingHub />}>
+                <Route index element={<Navigate to="pilotage" replace />} />
+                <Route path="pilotage" element={<AdminInvoices />} />
+                <Route
+                  path="pilotage/companies/:companyId"
+                  element={<AdminPilotageCompanyDetail />}
+                />
+                <Route path="releves" element={<AdminPlatformBilling />} />
+                <Route path="config" element={<AdminBillingTransportConfig />} />
+              </Route>
+              <Route path="invoices" element={<Navigate to="../billing/pilotage" replace />} />
+              <Route
+                path="invoices/pilotage/companies/:companyId"
+                element={<RedirectToBillingPilotageCompany />}
+              />
+              <Route path="platform-billing" element={<Navigate to="../billing/releves" replace />} />
               <Route path="settings" element={<AdminSettings />} />
               <Route path="demo-requests" element={<AdminDemoRequests />} />
               <Route path="platform-ops" element={<PlatformLayout />}>
@@ -450,6 +487,16 @@ const App = () => {
               element={
                 <ProtectedRoute allowedRoles={['client']}>
                   <ReservationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/client/payment/worldline/return"
+              element={
+                <ProtectedRoute allowedRoles={['client']}>
+                  <Suspense fallback={null}>
+                    <ClientWorldlinePaymentReturn />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />

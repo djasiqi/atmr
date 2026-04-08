@@ -2000,4 +2000,8 @@ def create_app(config_name: str | None = None):
 
     # Note: handler disconnect géré dans sockets/chat.py (pas de doublon)
 
+    from cli.platform_billing_cli import register_platform_billing_cli
+
+    register_platform_billing_cli(app)
+
     return app

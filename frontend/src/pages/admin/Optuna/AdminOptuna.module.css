@@ -1,28 +1,4 @@
-.container {
-  min-height: 100vh;
-  background: #f8fafc;
-}
-
-.layout {
-  display: flex;
-}
-
-.main {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: 100%;
-  padding: 24px;
-  margin: 24px;
-  margin-top: 96px;
-  margin-left: calc(var(--sidebar-w, 72px) + 24px);
-  max-width: calc(100% - var(--sidebar-w, 72px) - 48px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  box-sizing: border-box;
-  background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-}
+/* Panneau principal : adminShell.module.css (.content) */
 
 .form {
   display: grid;
@@ -36,11 +12,13 @@
 
 .header h1 {
   margin: 0;
-  font-size: 1.75rem;
-  color: #1e293b;
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: -0.02em;
 }
 
 .header p {

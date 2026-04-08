@@ -548,6 +548,65 @@ class CreateBooking(Resource):
             return APIErrorHandler.handle_exception(e, logger)
 
 
+@bookings_ns.route("/<int:booking_id>/worldline/hosted-checkout")
+class BookingWorldlineHostedCheckout(Resource):
+    """Démarre un paiement Worldline (MyCheckout) pour une réservation client."""
+
+    @require_booking_ownership("read")
+    @limiter.limit("30 per hour")
+    def post(self, booking_id, booking, user):
+        from services.worldline.client_factory import worldline_configured
+        from services.worldline.hosted_checkout_service import (
+            create_worldline_hosted_checkout,
+        )
+
+        role_val = str(getattr(user.role, "value", user.role))
+        if role_val != UserRole.client.value:
+            return APIErrorHandler.handle_permission_error(
+                "Le paiement en ligne est réservé aux comptes client",
+                logger_instance=logger,
+            )
+
+        client = client_repo.find_by_user_id(user.id)
+        if not client:
+            return APIErrorHandler.handle_permission_error(
+                "Profil client introuvable",
+                logger_instance=logger,
+            )
+
+        if not worldline_configured():
+            return {
+                "error": "payment_unavailable",
+                "message": "Paiement Worldline non configuré sur ce serveur",
+            }, 503
+
+        payload = request.get_json(silent=True) or {}
+        return_url = payload.get("return_url")
+
+        try:
+            out = create_worldline_hosted_checkout(
+                booking=booking,
+                user=user,
+                client=client,
+                return_url_override=return_url if isinstance(return_url, str) else None,
+            )
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
+        except RuntimeError as e:
+            return {
+                "error": "worldline_configuration",
+                "message": str(e),
+            }, 503
+        except Exception as e:
+            db.session.rollback()
+            return APIErrorHandler.handle_exception(e, logger)
+
+        return success_response(data=out)
+
+
 # =====================================================
 # Récupération, mise à jour et annulation d'une réservation
 # =====================================================

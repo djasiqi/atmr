@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, Component } from 'react';
 
-const LIBRARIES = ['places', 'geometry'];
+/** Inclut `marker` pour AdvancedMarkerElement (remplace google.maps.Marker déprécié). */
+const LIBRARIES = ['places', 'geometry', 'marker'];
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-script';
 
 const GoogleMapsContext = createContext({ isLoaded: false, loadError: null });

@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  FaCar,
-  FaChartBar,
-  FaChevronRight,
-  FaClipboardList,
-  FaExclamationTriangle,
-  FaFileInvoice,
-  FaRedoAlt,
-  FaServer,
-  FaUser,
-  FaUserClock,
-} from 'react-icons/fa';
+  FiActivity,
+  FiAlertTriangle,
+  FiClipboard,
+  FiDollarSign,
+  FiFileText,
+  FiLayers,
+  FiPlus,
+  FiServer,
+  FiUsers,
+  FiXCircle,
+  FiZap,
+} from 'react-icons/fi';
+import { FaExclamationTriangle, FaRedoAlt } from 'react-icons/fa';
+import InlineDatePicker from '../../../components/ui/InlineDatePicker';
+import ov from '../../company/Dashboard/components/OverviewCards.module.css';
+import dms from '../../company/Dashboard/components/DispatchModeStatusBar.module.css';
 import { fetchAdminDashboardSummary } from '../../../services/adminService';
 import {
   LineChart,
@@ -24,6 +29,13 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import styles from './AdminDashboard.module.css';
+import shell from '../adminShell.module.css';
+
+function makeToday() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 
 const formatFrDateTime = (iso) => {
   if (!iso) return '—';
@@ -63,6 +75,7 @@ const AdminDashboard = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dashboardDay, setDashboardDay] = useState(makeToday);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,34 +102,49 @@ const AdminDashboard = () => {
     return [
       {
         key: 'bookings_pending_action',
-        title: 'Réservations à traiter',
-        subtitle: 'Non terminées (opérationnel)',
+        title: 'À traiter',
+        subtitle: 'Réservations (opérationnel)',
+        Icon: FiClipboard,
         to: `${b}/reservations`,
         value: summary?.priorities?.bookings_pending_action ?? 0,
+        accentKey: 'bookings_pending_action',
       },
       {
         key: 'demo_requests_open',
-        title: 'Demandes démo non traitées',
-        subtitle: 'Statut « nouvelle »',
+        title: 'Démos',
+        subtitle: 'Demandes nouvelles',
+        Icon: FiLayers,
         to: `${b}/demo-requests?status=new`,
         value: summary?.priorities?.demo_requests_open ?? 0,
+        accentKey: 'demo_requests_open',
       },
       {
         key: 'tenants_suspended',
-        title: 'Tenants suspendus',
-        subtitle: 'Gouvernance plateforme',
+        title: 'Tenants',
+        subtitle: 'Suspendus',
+        Icon: FiAlertTriangle,
         to: `${b}/platform-ops/tenants`,
         value: summary?.priorities?.tenants_suspended ?? 0,
+        accentKey: 'tenants_suspended',
       },
       {
         key: 'platform_alerts_open',
-        title: 'Opérations gouvernance ouvertes',
-        subtitle: 'Change requests en cours',
+        title: 'Gouvernance',
+        subtitle: 'CR ouverts',
+        Icon: FiServer,
         to: `${b}/platform-ops/overview`,
         value: summary?.priorities?.platform_alerts_open ?? 0,
+        accentKey: 'platform_alerts_open',
       },
     ];
   }, [adminId, summary]);
+
+  const priorityAccent = (card, v) => {
+    const n = Number(v) || 0;
+    if (card.accentKey === 'tenants_suspended' && n > 0) return 'danger';
+    if (n > 0) return 'warning';
+    return 'default';
+  };
 
   const kpi = summary?.kpi_business;
   const plat = summary?.platform_snippet;
@@ -139,35 +167,33 @@ const AdminDashboard = () => {
   };
 
   return (
-    <main className={styles.content}>
-      <header className={styles.pageHeader}>
-        <div className={styles.pageHeaderText}>
-          <div className={styles.titleRow}>
-            <h1>Tableau de bord administrateur</h1>
+    <main className={shell.content}>
+      <header className={styles.dashboardHeader}>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.headerTitle} data-tour-id="admin-dashboard-title">
+            Tableau de bord administrateur
+          </h1>
+          <div className={styles.headerMeta}>
+            <InlineDatePicker value={dashboardDay} onChange={(iso) => setDashboardDay(iso)} />
             {loading ? <span className={styles.liveBadge}>Chargement…</span> : null}
-            {dataReady ? <span className={styles.liveBadgeOk}>À jour</span> : null}
+            {dataReady ? (
+              <span className={styles.liveBadgeOk}>
+                <span className={styles.liveDot} aria-hidden />
+                À jour
+              </span>
+            ) : null}
           </div>
-          <p className={styles.pageSub}>
-            Synthèse opérationnelle : priorités, état de la plateforme et indicateurs clés.
-          </p>
         </div>
-        <nav className={styles.quickActions} aria-label="Raccourcis admin">
-          <Link to={`${base}/reservations`} className={styles.actionButton}>
-            Réservations
-          </Link>
-          <Link to={`${base}/users`} className={styles.actionButtonGhost}>
-            Utilisateurs
-          </Link>
-          <Link to={`${base}/platform-ops/overview`} className={styles.actionButtonGhost}>
+        <div className={styles.headerActions}>
+          <Link to={`${base}/platform-ops/overview`} className={styles.headerBtnSecondary}>
+            <FiZap size={16} aria-hidden />
             Plateforme
           </Link>
-          <Link to={`${base}/invoices`} className={styles.actionButtonGhost}>
-            Factures
+          <Link to={`${base}/reservations`} className={styles.headerBtnPrimary} data-tour-id="admin-reservations-cta">
+            <FiPlus size={16} aria-hidden />
+            Réservations
           </Link>
-          <Link to={`${base}/demo-requests`} className={styles.actionButtonGhost}>
-            Demandes démo
-          </Link>
-        </nav>
+        </div>
       </header>
 
       {error ? (
@@ -184,125 +210,126 @@ const AdminDashboard = () => {
         </div>
       ) : null}
 
-      <section className={styles.sectionPanel} aria-label="Priorités du jour">
-        <div className={styles.sectionHead}>
-          <h2 className={styles.sectionHeading}>Priorités du jour</h2>
-          <p className={styles.sectionHint}>Accès direct aux écrans concernés.</p>
-        </div>
-        <div className={styles.priorityGrid}>
-          {priorityCards.map((card) => (
+      <div className={ov.kpiGrid} data-tour-id="admin-kpi-grid" aria-label="Priorités">
+        {priorityCards.map((card) => {
+          const acc = priorityAccent(card, card.value);
+          const accentClass = ov[`accent_${acc}`] || '';
+          const Icon = card.Icon;
+          return (
             <Link
               key={card.key}
               to={card.to}
-              className={`${styles.priorityCardLink} ${
-                dataReady && card.value > 0 ? styles.priorityCardAttention : ''
-              }`}
+              className={`${ov.kpiCard} ${accentClass}`}
+              title={`${card.title} — ${card.subtitle}`}
             >
-              <div className={styles.priorityCardTop}>
-                <span className={styles.priorityCardTitle}>{card.title}</span>
-                <FaChevronRight className={styles.priorityChevron} aria-hidden />
+              <div className={ov.kpiIconContainer}>
+                <Icon className={ov.kpiIcon} aria-hidden />
               </div>
-              <span className={styles.priorityCardSubtitle}>{card.subtitle}</span>
-              <strong className={styles.priorityCardValue}>{fmtNum(card.value)}</strong>
+              <div className={ov.kpiContent}>
+                <span className={ov.kpiLabel}>{card.title}</span>
+                <span className={styles.kpiLinkSub}>{card.subtitle}</span>
+                <span className={ov.kpiValue}>{fmtNum(card.value)}</span>
+              </div>
             </Link>
-          ))}
-        </div>
-      </section>
+          );
+        })}
+      </div>
 
-      <section className={styles.sectionPanel} aria-label="Santé plateforme">
-        <div className={styles.sectionHead}>
-          <h2 className={styles.sectionHeading}>Santé plateforme</h2>
-          <p className={styles.sectionHint}>Aperçu ; le détail se gère dans la console Plateforme.</p>
+      <div
+        className={`${dms.bar} ${styles.adminPlatformBar} ${
+          !dataReady ? dms.bar_neutral : plat?.overall_status === 'ok' ? dms.bar_brand : dms.bar_neutral
+        }`}
+        aria-label="Santé plateforme"
+      >
+        <div className={dms.modeInfo}>
+          <FiServer size={14} className={dms.modeIcon} aria-hidden />
+          <span className={dms.modeLabel}>Plateforme</span>
+          <span className={dms.modeSep}>—</span>
+          <span className={dms.modeDesc}>
+            {!dataReady
+              ? 'Chargement du statut…'
+              : plat?.overall_status === 'ok'
+                ? 'État global nominal'
+                : 'État dégradé — vérifier la console Ops'}
+          </span>
         </div>
-        <div className={styles.platformStrip}>
-          <div className={styles.platformStripMain}>
-            <div className={styles.platformIconWrap}>
-              <FaServer className={styles.platformIcon} aria-hidden />
-            </div>
-            <div className={styles.platformStatusBlock}>
-              <span className={styles.platformLabel}>État global</span>
-              <span
-                className={
-                  !dataReady
-                    ? styles.statusPillMuted
-                    : plat?.overall_status === 'ok'
-                      ? styles.statusPillOk
-                      : styles.statusPillWarn
-                }
-              >
-                {!dataReady ? '—' : plat?.overall_status === 'ok' ? 'OK' : 'Dégradé'}
-              </span>
-            </div>
-            <div className={styles.platformCounts}>
-              <span className={styles.platformChip}>
-                <span className={styles.platformChipLabel}>Alertes</span>
-                <span className={styles.platformChipVal}>{fmtNum(plat?.open_alerts)}</span>
-              </span>
-              <span className={styles.platformChip}>
-                <span className={styles.platformChipLabel}>Runbooks (jour)</span>
-                <span className={styles.platformChipVal}>{fmtNum(plat?.runbooks_today)}</span>
-              </span>
-              <span className={styles.platformChip}>
-                <span className={styles.platformChipLabel}>Dérive</span>
-                <span className={styles.platformChipVal}>{fmtNum(plat?.tenants_in_drift)}</span>
-              </span>
-            </div>
-          </div>
-          <div className={styles.platformQuickLinks}>
+        <div className={styles.platformBarRight}>
+          <span className={dms.aiSuggestions}>
+            Alertes {fmtNum(plat?.open_alerts)} · Runbooks {fmtNum(plat?.runbooks_today)} · Dérive{' '}
+            {fmtNum(plat?.tenants_in_drift)}
+          </span>
+          <div className={styles.platformBarLinks}>
             <Link to={`${base}/platform-ops/audit`}>Audit</Link>
+            <span className={styles.platformBarSep}>·</span>
             <Link to={`${base}/platform-ops/tenants`}>Tenants</Link>
+            <span className={styles.platformBarSep}>·</span>
             <Link to={`${base}/platform-ops/runbooks`}>Runbooks</Link>
+            <span className={styles.platformBarSep}>·</span>
             <Link to={`${base}/platform-ops/reconciliation`}>Réconciliation</Link>
           </div>
         </div>
-      </section>
+      </div>
 
       <section className={styles.sectionPanel} aria-label="Indicateurs métier">
         <div className={styles.sectionHead}>
           <h2 className={styles.sectionHeading}>Indicateurs métier</h2>
-          <p className={styles.sectionHint}>Fenêtres glissantes (7 j. / 30 j.) ou mois civil selon l&apos;indicateur.</p>
+          <p className={styles.sectionHint}>
+            Fenêtres glissantes (7 j. / 30 j.) ou mois civil selon l&apos;indicateur.
+          </p>
         </div>
-        <div className={styles.stats}>
-          <div className={styles.card}>
-            <FaCar className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Réservations créées (7 jours)</h3>
-              <p>{fmtNum(kpi?.bookings_created_7d)}</p>
+        <div className={`${ov.kpiGrid} ${styles.bizKpiGrid}`}>
+          <div className={`${ov.kpiCard} ${ov.accent_default}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiActivity className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Créées (7 j.)</span>
+              <span className={ov.kpiValue}>{fmtNum(kpi?.bookings_created_7d)}</span>
             </div>
           </div>
-          <div className={styles.card}>
-            <FaClipboardList className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Réservations terminées (7 jours)</h3>
-              <p>{fmtNum(kpi?.bookings_completed_7d)}</p>
+          <div className={`${ov.kpiCard} ${ov.accent_brand}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiClipboard className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Terminées (7 j.)</span>
+              <span className={ov.kpiValue}>{fmtNum(kpi?.bookings_completed_7d)}</span>
             </div>
           </div>
-          <div className={styles.card}>
-            <FaChartBar className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Réservations annulées (7 jours)</h3>
-              <p>{fmtNum(kpi?.bookings_canceled_7d)}</p>
+          <div className={`${ov.kpiCard} ${ov.accent_default}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiXCircle className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Annulées (7 j.)</span>
+              <span className={ov.kpiValue}>{fmtNum(kpi?.bookings_canceled_7d)}</span>
             </div>
           </div>
-          <div className={styles.card}>
-            <FaUserClock className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Utilisateurs actifs (30 jours, hors admin)</h3>
-              <p>{fmtNum(kpi?.active_users_30d)}</p>
+          <div className={`${ov.kpiCard} ${ov.accent_brand}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiUsers className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Utilisateurs actifs (30 j.)</span>
+              <span className={ov.kpiValue}>{fmtNum(kpi?.active_users_30d)}</span>
             </div>
           </div>
-          <div className={styles.card}>
-            <FaFileInvoice className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Factures émises (mois en cours)</h3>
-              <p>{fmtNum(kpi?.invoices_current_month)}</p>
+          <div className={`${ov.kpiCard} ${ov.accent_default}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiFileText className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Factures (mois)</span>
+              <span className={ov.kpiValue}>{fmtNum(kpi?.invoices_current_month)}</span>
             </div>
           </div>
-          <div className={styles.card}>
-            <FaUser className={styles.icon} />
-            <div className={styles.cardContent}>
-              <h3>Revenu facturé (mois en cours)</h3>
-              <p className={styles.moneyValue}>{fmtMoney(kpi?.revenue_current_month_chf)}</p>
+          <div className={`${ov.kpiCard} ${ov.accent_success}`}>
+            <div className={ov.kpiIconContainer}>
+              <FiDollarSign className={ov.kpiIcon} aria-hidden />
+            </div>
+            <div className={ov.kpiContent}>
+              <span className={ov.kpiLabel}>Revenu facturé (CHF)</span>
+              <span className={ov.kpiValue}>{fmtMoney(kpi?.revenue_current_month_chf)}</span>
             </div>
           </div>
         </div>
@@ -322,34 +349,47 @@ const AdminDashboard = () => {
           <div className={styles.chartWrap}>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={trends} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" vertical={false} />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: '#64748B', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
                   tickLine={false}
-                  axisLine={{ stroke: '#E2E8F0' }}
+                  axisLine={{ stroke: 'var(--border-primary)' }}
                 />
                 <YAxis
-                  tick={{ fill: '#64748B', fontSize: 11 }}
+                  tick={{ fill: 'var(--text-tertiary)', fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                   width={40}
                 />
                 <Tooltip
                   contentStyle={{
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '8px',
-                    fontSize: '12px',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--font-xs)',
+                    background: 'var(--bg-primary)',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
+                  labelStyle={{ color: 'var(--text-secondary)' }}
+                />
+                <Legend
+                  wrapperStyle={{
+                    fontSize: 'var(--font-xs)',
+                    color: 'var(--text-tertiary)',
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: '12px', color: '#64748B' }} />
                 <Line
                   type="monotone"
                   dataKey="bookings"
                   name="Créations"
-                  stroke="#00796B"
+                  stroke="var(--brand-primary)"
                   strokeWidth={2}
-                  dot={{ r: 3, fill: '#fff', stroke: '#00796B', strokeWidth: 2 }}
+                  dot={{
+                    r: 3,
+                    fill: 'var(--bg-primary)',
+                    stroke: 'var(--brand-primary)',
+                    strokeWidth: 2,
+                  }}
                   activeDot={{ r: 4 }}
                 />
               </LineChart>

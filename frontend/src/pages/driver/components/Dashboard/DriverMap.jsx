@@ -1,7 +1,8 @@
 // src/pages/driver/components/Dashboard/DriverMap.jsx
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, Polyline, InfoWindow } from '@react-google-maps/api';
+import GoogleMapsAdvancedMarker from '../../../../components/common/GoogleMapsAdvancedMarker';
 import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../components/common/MapPlaceholder';
 import {
@@ -214,7 +215,7 @@ const DriverMap = ({ assignments = [], myLocation, delays = {}, isLoaded = true 
       >
         {/* Position conducteur */}
         {displayPos && (
-          <Marker
+          <GoogleMapsAdvancedMarker
             position={displayPos}
             icon={{
               url: myLocationIcon,
@@ -236,7 +237,7 @@ const DriverMap = ({ assignments = [], myLocation, delays = {}, isLoaded = true 
 
         {/* Marqueurs Pickup/Dropoff */}
         {poiMarkers.map((poi) => (
-          <Marker
+          <GoogleMapsAdvancedMarker
             key={poi.key}
             position={poi.pos}
             icon={{

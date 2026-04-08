@@ -2,6 +2,7 @@ import React from 'react';
 import { FaCheckCircle, FaExclamationTriangle, FaChartLine, FaRobot } from 'react-icons/fa';
 import useShadowMode from '../../../hooks/useShadowMode';
 import styles from './ShadowModeDashboard.module.css';
+import shell from '../adminShell.module.css';
 
 /**
  * Dashboard Admin pour monitorer le Shadow Mode MDI.
@@ -32,7 +33,7 @@ const ShadowModeDashboard = () => {
 
   if (loading) {
     return (
-      <main className={styles.main}>
+      <main className={shell.content}>
         <div className={styles.loadingContainer}>
           <div className={styles.spinner}></div>
           <p>Chargement des données Shadow Mode...</p>
@@ -43,7 +44,7 @@ const ShadowModeDashboard = () => {
 
   if (error) {
     return (
-      <main className={styles.main}>
+      <main className={shell.content}>
         <div className={styles.errorContainer}>
           <FaExclamationTriangle className={styles.errorIcon} />
           <h2>Erreur de chargement</h2>
@@ -59,7 +60,7 @@ const ShadowModeDashboard = () => {
   // Si Shadow Mode pas actif
   if (!isActive) {
     return (
-      <main className={styles.main}>
+      <main className={shell.content}>
         <div className={styles.header}>
           <h1>
             <FaRobot /> Shadow Mode MDI
@@ -109,7 +110,7 @@ const ShadowModeDashboard = () => {
       : 0;
 
   return (
-    <main className={styles.main}>
+    <main className={shell.content}>
           {/* Header */}
           <div className={styles.header}>
             <div>

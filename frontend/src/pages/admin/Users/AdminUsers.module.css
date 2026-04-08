@@ -13,31 +13,7 @@
   flex: 1;
 }
 
-/* ✅ Contenu principal */
-.content {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--spacing-lg);
-  width: 100%; /* Prendre toute la largeur disponible */
-  background-color: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  
-  /* S'adapte à la largeur de la sidebar (72px ou 240px) */
-  margin: var(--spacing-lg);
-  margin-top: calc(80px + var(--spacing-lg)); /* Marge pour le header (80px) */
-  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-  
-  overflow-x: hidden;
-  overflow-y: auto;
-  position: relative;
-  z-index: var(--z-base);
-  box-sizing: border-box;
-  transition:
-    margin-left var(--transition-base),
-    max-width var(--transition-base);
-}
+/* Panneau principal : adminShell .content via import JS ; .shellMain = surcharges page ci-dessous */
 
 /* S'assurer que toutes les sections prennent 100% de la largeur */
 h1,
@@ -49,17 +25,20 @@ h1,
   box-sizing: border-box;
 }
 
-h1 {
-  text-align: left; /* Aligner à gauche */
+.pageHeader {
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
 }
 
-/* ✅ Titre principal */
-h1 {
+/* Titres — alignés shell / entreprise */
+.pageHeader h1 {
   font-size: var(--font-2xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
-  margin-bottom: var(--spacing-lg);
-  text-align: center;
+  margin: 0 0 var(--spacing-xs) 0;
+  text-align: left;
+  letter-spacing: -0.02em;
 }
 
 /* 🔎 Barre de recherche */
@@ -239,15 +218,6 @@ td:nth-child(4) {
 
 /* ✅ Responsive design */
 @media (max-width: 768px) {
-  .content {
-    margin: var(--spacing-sm);
-    margin-top: calc(80px + var(--spacing-sm));
-    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm)); /* Sidebar toujours visible */
-    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
-    width: 100%;
-    padding: var(--spacing-md);
-  }
-
   h1 {
     text-align: left;
   }
@@ -277,35 +247,12 @@ td:nth-child(4) {
   }
 }
 
-/* Design refresh */
-.adminContainer {
-  background: #f8fafc;
-  font-family: Inter, -apple-system, Segoe UI, sans-serif;
-}
-
-.content {
-  padding: 24px;
-  margin: 24px;
-  margin-top: 96px;
-  margin-left: calc(var(--sidebar-w, 72px) + 24px);
-  max-width: calc(100% - var(--sidebar-w, 72px) - 48px);
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: none;
-}
-
-.pageHeader h1 {
-  margin: 0;
-  text-align: left;
-  color: #1e293b;
-  font-size: 1.75rem;
-}
-
 .subtext {
-  margin: 8px 0 0;
-  color: #64748b;
-  font-size: 0.95rem;
+  margin: var(--spacing-xs) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-sm);
+  line-height: 1.5;
+  max-width: 42rem;
 }
 
 .metricsGrid {
@@ -623,7 +570,7 @@ td:nth-child(4) {
 }
 
 @media (max-width: 768px) {
-  .content {
+  .shellMain {
     margin: 12px;
     margin-top: 88px;
     margin-left: calc(var(--sidebar-w, 72px) + 12px);

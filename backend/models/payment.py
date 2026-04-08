@@ -15,6 +15,8 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
+    Text,
     func,
 )
 from sqlalchemy import Enum as SAEnum
@@ -69,6 +71,11 @@ class Payment(db.Model):
         index=True,
     )
 
+    payment_provider = Column(String(32), nullable=True)
+    worldline_hosted_checkout_id = Column(String(128), nullable=True, unique=True)
+    worldline_payment_id = Column(String(128), nullable=True, index=True)
+    worldline_partial_redirect_url = Column(Text, nullable=True)
+
     # Relations
     client = relationship("Client", back_populates="payments", passive_deletes=True)
     booking = relationship("Booking", back_populates="payments", passive_deletes=True)
@@ -88,6 +95,11 @@ class Payment(db.Model):
             "updated_at": _iso(self.updated_at),
             "client_id": self.client_id,
             "booking_id": self.booking_id,
+            "payment_provider": getattr(self, "payment_provider", None),
+            "worldline_hosted_checkout_id": getattr(
+                self, "worldline_hosted_checkout_id", None
+            ),
+            "worldline_payment_id": getattr(self, "worldline_payment_id", None),
             "booking_info": {
                 "pickup_location": bk.pickup_location if bk else None,
                 "dropoff_location": bk.dropoff_location if bk else None,
@@ -118,9 +130,6 @@ class Payment(db.Model):
         allowed = {"credit_card", "paypal", "bank_transfer", "cash"}
         if isinstance(method, str):
             method = method.strip()
-            # Mapper anciennes valeurs vers enum si possible
-            if method == "credit_card":
-                return "card"  # Mapper vers la nouvelle valeur
             if method in allowed:
                 return method
             # Essayer de valider avec PaymentMethod enum

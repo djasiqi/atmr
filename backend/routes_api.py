@@ -221,6 +221,7 @@ def init_namespaces(app):
         security_monitoring_ns,
     )  # ✅ S3: Monitoring sécurité
     from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
+    from routes.worldline_webhook import worldline_webhook_bp
     from routes.transport_vouchers import (  # ✅ P3: Bons de transport
         transport_vouchers_ns,
     )
@@ -237,6 +238,7 @@ def init_namespaces(app):
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
     app.register_blueprint(gateway_auth_bp)
+    app.register_blueprint(worldline_webhook_bp, url_prefix=f"{API_PREFIX}/v1")
 
     # ❌ TEMPORAIREMENT DÉSACTIVÉ POUR TEST
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives

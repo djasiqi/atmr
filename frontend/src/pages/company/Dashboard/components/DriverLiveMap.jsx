@@ -16,7 +16,12 @@ import {
   formatLastSeen,
   makeCircleMarkerIcon,
   makeClusterIcon,
+  iconAnchorToAdvancedMarkerCss,
+  GOOGLE_MAPS_USE_JS_STYLES,
 } from '../../../../utils/mapUtils';
+
+/** Cercle chauffeur 24×24, ancrage au centre du disque (12, 12). */
+const DRIVER_MARKER_ANCHOR = iconAnchorToAdvancedMarkerCss(12, 12, 24, 24);
 
 const ENABLE_CLUSTERING = process.env.REACT_APP_ENABLE_DRIVER_CLUSTERING === 'true';
 const MAP_DEBUG =
@@ -25,6 +30,19 @@ const MAP_DEBUG =
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
+
+/** LatLng ou littéral pour bounds / setCenter (Marker classique ou AdvancedMarkerElement). */
+function getMarkerLatLngLiteral(marker) {
+  if (typeof marker.getPosition === 'function') {
+    const p = marker.getPosition();
+    if (!p) return null;
+    return { lat: p.lat(), lng: p.lng() };
+  }
+  const p = marker.position;
+  if (!p) return null;
+  if (typeof p.lat === 'function') return { lat: p.lat(), lng: p.lng() };
+  return { lat: p.lat, lng: p.lng };
+}
 
 // Popup chauffeur — mini card structurée, classes CSS globales .lirie-popup-*
 const createStyledTooltip = (driver, opts = {}) => {
@@ -106,7 +124,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
   const defaultZoom = companyCoords ? 13 : 9;
 
-  // Créer ou mettre à jour un marqueur Google Maps
+  // Créer ou mettre à jour un marqueur (Marker classique si style Lirie JS, sinon AdvancedMarkerElement)
   const upsertMarker = useCallback((id, position, status, isStale, driver, tooltipOpts) => {
     const map = mapRef.current;
     if (!map || !window.google) return;
@@ -114,36 +132,98 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     const markerColors = { ...STATUS_COLORS, available: AVAILABLE_LIGHT_GREEN };
     const color = isStale ? '#9e9e9e' : (markerColors[status] ?? markerColors.available);
     const opacity = isStale ? 0.7 : 1;
+    const iconUrl = makeCircleMarkerIcon(color, opacity);
+
+    if (GOOGLE_MAPS_USE_JS_STYLES) {
+      if (markersRef.current[id]) {
+        const marker = markersRef.current[id];
+        marker.setPosition(position);
+        marker.setIcon({
+          url: iconUrl,
+          scaledSize: new window.google.maps.Size(24, 24),
+          anchor: new window.google.maps.Point(12, 12),
+        });
+        marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
+        marker._driverStatus = status;
+        return marker;
+      }
+
+      const clustered = ENABLE_CLUSTERING && clustererRef.current;
+      const marker = new window.google.maps.Marker({
+        position,
+        map: clustered ? null : map,
+        icon: {
+          url: iconUrl,
+          scaledSize: new window.google.maps.Size(24, 24),
+          anchor: new window.google.maps.Point(12, 12),
+        },
+        optimized: true,
+      });
+
+      marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
+      marker._driverStatus = status;
+
+      marker.addListener('mouseover', () => {
+        if (!infoWindowRef.current) {
+          infoWindowRef.current = new window.google.maps.InfoWindow({
+            disableAutoPan: false,
+            maxWidth: 260,
+            pixelOffset: new window.google.maps.Size(0, -4),
+          });
+        }
+        infoWindowRef.current.setContent(marker._tooltipHtml);
+        infoWindowRef.current.open(map, marker);
+      });
+      marker.addListener('mouseout', () => {
+        if (infoWindowRef.current) infoWindowRef.current.close();
+      });
+
+      markersRef.current[id] = marker;
+      if (clustered && clustererRef.current) {
+        clustererRef.current.addMarker(marker);
+      }
+      return marker;
+    }
+
+    const AdvancedMarkerElement = window.google?.maps?.marker?.AdvancedMarkerElement;
+    if (!AdvancedMarkerElement) return;
 
     if (markersRef.current[id]) {
       const marker = markersRef.current[id];
-      marker.setPosition(position);
-      marker.setIcon({
-        url: makeCircleMarkerIcon(color, opacity),
-        scaledSize: new window.google.maps.Size(24, 24),
-        anchor: new window.google.maps.Point(12, 12),
-      });
+      marker.position = position;
+      const img = marker._img;
+      if (img) {
+        img.src = iconUrl;
+        img.style.opacity = String(opacity);
+      }
       marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
       marker._driverStatus = status;
       return marker;
     }
 
-    const marker = new window.google.maps.Marker({
+    const img = document.createElement('img');
+    img.src = iconUrl;
+    img.width = 24;
+    img.height = 24;
+    img.style.display = 'block';
+    img.style.opacity = String(opacity);
+    img.draggable = false;
+
+    const clustered = ENABLE_CLUSTERING && clustererRef.current;
+    const marker = new AdvancedMarkerElement({
       position,
-      map: ENABLE_CLUSTERING ? null : map,
-      icon: {
-        url: makeCircleMarkerIcon(color, opacity),
-        scaledSize: new window.google.maps.Size(24, 24),
-        anchor: new window.google.maps.Point(12, 12),
-      },
-      optimized: true,
+      map: clustered ? null : map,
+      content: img,
+      anchorLeft: DRIVER_MARKER_ANCHOR.anchorLeft,
+      anchorTop: DRIVER_MARKER_ANCHOR.anchorTop,
+      gmpClickable: true,
     });
+    marker._img = img;
 
     marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
     marker._driverStatus = status;
 
-    // InfoWindow au survol — positionnement natif Google Maps
-    marker.addListener('mouseover', () => {
+    const onMouseEnter = () => {
       if (!infoWindowRef.current) {
         infoWindowRef.current = new window.google.maps.InfoWindow({
           disableAutoPan: false,
@@ -152,16 +232,22 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         });
       }
       infoWindowRef.current.setContent(marker._tooltipHtml);
-      infoWindowRef.current.open(map, marker);
-    });
-    marker.addListener('mouseout', () => {
+      infoWindowRef.current.open({ map, anchor: marker });
+    };
+    const onMouseLeave = () => {
       if (infoWindowRef.current) infoWindowRef.current.close();
-    });
+    };
+
+    img.addEventListener('mouseenter', onMouseEnter);
+    img.addEventListener('mouseleave', onMouseLeave);
+    marker._hoverCleanup = () => {
+      img.removeEventListener('mouseenter', onMouseEnter);
+      img.removeEventListener('mouseleave', onMouseLeave);
+    };
 
     markersRef.current[id] = marker;
 
-    // Ajouter au clusterer si activé
-    if (ENABLE_CLUSTERING && clustererRef.current) {
+    if (clustered && clustererRef.current) {
       clustererRef.current.addMarker(marker);
     }
 
@@ -175,7 +261,12 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (ENABLE_CLUSTERING && clustererRef.current) {
       clustererRef.current.removeMarker(marker);
     }
-    marker.setMap(null);
+    if (typeof marker._hoverCleanup === 'function') marker._hoverCleanup();
+    if (GOOGLE_MAPS_USE_JS_STYLES) {
+      marker.setMap(null);
+    } else {
+      marker.map = null;
+    }
     delete markersRef.current[id];
   }, []);
 
@@ -187,7 +278,10 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (entries.length === 0) return;
 
     const bounds = new window.google.maps.LatLngBounds();
-    entries.forEach((m) => bounds.extend(m.getPosition()));
+    entries.forEach((m) => {
+      const ll = getMarkerLatLngLiteral(m);
+      if (ll) bounds.extend(ll);
+    });
     map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
 
     const listener = window.google.maps.event.addListenerOnce(map, 'idle', () => {
@@ -203,24 +297,50 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     mapRef.current = map;
 
     if (ENABLE_CLUSTERING) {
-      clustererRef.current = new MarkerClusterer({
-        map,
-        markers: [],
-        renderer: {
-          render: ({ count, position }) => {
-            const size = count < 10 ? 40 : count < 50 ? 46 : 52;
-            return new window.google.maps.Marker({
-              position,
-              icon: {
-                url: makeClusterIcon(count),
-                scaledSize: new window.google.maps.Size(size, size),
-                anchor: new window.google.maps.Point(size / 2, size / 2),
-              },
-              zIndex: Number(window.google.maps.Marker.MAX_ZINDEX) + count,
-            });
+      if (GOOGLE_MAPS_USE_JS_STYLES) {
+        clustererRef.current = new MarkerClusterer({
+          map,
+          markers: [],
+          renderer: {
+            render: ({ count, position }) => {
+              const size = count < 10 ? 40 : count < 50 ? 46 : 52;
+              return new window.google.maps.Marker({
+                position,
+                icon: {
+                  url: makeClusterIcon(count),
+                  scaledSize: new window.google.maps.Size(size, size),
+                  anchor: new window.google.maps.Point(size / 2, size / 2),
+                },
+                zIndex: Number(window.google.maps.Marker.MAX_ZINDEX) + count,
+              });
+            },
           },
-        },
-      });
+        });
+      } else if (window.google?.maps?.marker?.AdvancedMarkerElement) {
+        const AdvancedMarkerElement = window.google.maps.marker.AdvancedMarkerElement;
+        clustererRef.current = new MarkerClusterer({
+          map,
+          markers: [],
+          renderer: {
+            render: ({ count, position }) => {
+              const size = count < 10 ? 40 : count < 50 ? 46 : 52;
+              const img = document.createElement('img');
+              img.src = makeClusterIcon(count);
+              img.width = size;
+              img.height = size;
+              img.style.display = 'block';
+              const clusterAnchor = iconAnchorToAdvancedMarkerCss(size / 2, size / 2, size, size);
+              return new AdvancedMarkerElement({
+                position,
+                content: img,
+                anchorLeft: clusterAnchor.anchorLeft,
+                anchorTop: clusterAnchor.anchorTop,
+                zIndex: 1000000 + count,
+              });
+            },
+          },
+        });
+      }
     }
 
     setMapReady(true);
@@ -275,8 +395,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
     const visibleMarkers = Object.values(markersRef.current);
     if (visibleMarkers.length === 1) {
-      const pos = visibleMarkers[0].getPosition();
-      map.setCenter(pos);
+      const pos = getMarkerLatLngLiteral(visibleMarkers[0]);
+      if (pos) map.setCenter(pos);
       map.setZoom(15);
     } else if (visibleMarkers.length > 1) {
       fitBoundsToMarkers(14);

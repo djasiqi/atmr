@@ -146,6 +146,33 @@
   background: var(--danger-hover);
 }
 
+.payBtn {
+  background: var(--brand-primary);
+  color: white;
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+  margin-right: var(--spacing-xs);
+}
+
+.payBtn:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.payBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bookingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
 /* 📌 Affichage de l'entreprise et du chauffeur */
 .bookingDetails {
   display: flex;

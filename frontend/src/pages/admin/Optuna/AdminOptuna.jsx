@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaRobot, FaPlay, FaSpinner, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { runOptunaOptimization, fetchCompanies, trainModelWithOptimalParams } from '../../../services/adminService';
 import styles from './AdminOptuna.module.css';
+import shell from '../adminShell.module.css';
 
 const AdminOptuna = () => {
   const [loading, setLoading] = useState(false);
@@ -169,7 +170,7 @@ const AdminOptuna = () => {
   };
 
   return (
-    <main className={styles.main}>
+    <main className={shell.content}>
           <div className={styles.header}>
             <h1>
               <FaRobot /> Optimisation Optuna

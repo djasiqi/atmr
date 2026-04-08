@@ -14,27 +14,7 @@
   height: 100%;
 }
 
-.content {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--spacing-lg);
-  background-color: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  margin: var(--spacing-lg);
-  margin-top: calc(80px + var(--spacing-lg));
-  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
-  width: 100%;
-  box-shadow: var(--shadow-md);
-  overflow-x: hidden;
-  overflow-y: auto;
-  position: relative;
-  z-index: var(--z-base);
-  box-sizing: border-box;
-  transition:
-    margin-left var(--transition-base),
-    max-width var(--transition-base);
-}
+/* Panneau principal : adminShell .content via import JS (PlatformLayout) */
 
 .pageHeader {
   display: flex;
@@ -866,14 +846,6 @@
 }
 
 @media (max-width: 768px) {
-  .content {
-    margin: var(--spacing-sm);
-    margin-top: calc(80px + var(--spacing-sm));
-    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm));
-    max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-sm) * 2));
-    padding: var(--spacing-md);
-  }
-
   .pageHeader {
     flex-direction: column;
     align-items: stretch;

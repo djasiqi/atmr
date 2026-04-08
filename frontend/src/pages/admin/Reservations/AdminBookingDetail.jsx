@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { FaClipboardList } from 'react-icons/fa';
 import { fetchAdminBookingDetail } from '../../../services/adminService';
 import styles from './AdminReservations.module.css';
+import shell from '../adminShell.module.css';
 
 const SOURCE_LABELS = {
   client: 'Client',
@@ -83,7 +84,7 @@ const AdminBookingDetail = () => {
   const sourceKey = createdBy?.source && SOURCE_LABELS[createdBy.source] ? createdBy.source : 'unknown';
 
   return (
-    <main className={`${styles.content} ${styles.detailMain}`}>
+    <main className={`${shell.content} ${styles.detailMain}`}>
       <header className={styles.detailPageHeader}>
         <Link to={`${base}/reservations`} className={styles.detailBack}>
           ← Retour aux réservations

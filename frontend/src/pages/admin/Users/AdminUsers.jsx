@@ -9,6 +9,7 @@ import {
   fetchInstitutions,
 } from '../../../services/adminService';
 import styles from './AdminUsers.module.css';
+import adminShell from '../adminShell.module.css';
 
 const ROLE_LABELS = {
   admin: 'Admin',
@@ -233,7 +234,7 @@ const AdminUsers = () => {
 
   return (
     <>
-      <main className={styles.content}>
+      <main className={`${adminShell.content} ${styles.shellMain}`}>
           <header className={styles.pageHeader}>
             <h1>Gestion des utilisateurs</h1>
             <p className={styles.subtext}>

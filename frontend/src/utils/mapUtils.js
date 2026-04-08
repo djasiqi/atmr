@@ -38,7 +38,9 @@ export const STATUS_COLORS = {
 };
 
 // ─── Style carte Lirie — épuré, professionnel, calme ───
-const LIRIE_MAP_STYLES = [
+// Avec Advanced Markers, `mapId` est requis : l’API n’autorise pas `styles` en JS en même temps.
+// Réimporter ce JSON comme style de carte dans Google Cloud Console pour le Map ID utilisé.
+export const LIRIE_MAP_STYLES = [
   // Désactiver les POI et simplifier le transit
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.medical', stylers: [{ visibility: 'on' }] },
@@ -65,8 +67,22 @@ const LIRIE_MAP_STYLES = [
   { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#94A3B8' }] },
 ];
 
-// Options par défaut pour <GoogleMap>
-export const DEFAULT_MAP_OPTIONS = {
+/**
+ * Map ID requis pour AdvancedMarkerElement (Google Cloud Console → Map Management).
+ * En dev sans ID dédié, `DEMO_MAP_ID` permet de valider l’intégration ; en prod, définir
+ * REACT_APP_GOOGLE_MAPS_MAP_ID pour votre projet.
+ */
+export const GOOGLE_MAPS_MAP_ID =
+  process.env.REACT_APP_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
+
+/**
+ * `cloud` : mapId + marqueurs avancés ; le style Lirie doit être importé dans la console Google (pas de `styles` en JS).
+ * Toute autre valeur / absent : `styles: LIRIE_MAP_STYLES` en JS + marqueurs classiques (rendu Lirie immédiat, warning dépréciation possible).
+ */
+export const GOOGLE_MAPS_USE_JS_STYLES =
+  process.env.REACT_APP_GOOGLE_MAPS_LIRIE_STYLE !== 'cloud';
+
+const BASE_MAP_UI_OPTIONS = {
   disableDefaultUI: true,
   zoomControl: false,
   streetViewControl: false,
@@ -75,10 +91,20 @@ export const DEFAULT_MAP_OPTIONS = {
   scaleControl: true,
   clickableIcons: false,
   gestureHandling: 'greedy',
-  styles: LIRIE_MAP_STYLES,
 };
 
-// Options carte pour pages publiques (Home, Client) — avec UI par défaut
+// Options par défaut pour <GoogleMap>
+export const DEFAULT_MAP_OPTIONS = GOOGLE_MAPS_USE_JS_STYLES
+  ? {
+      ...BASE_MAP_UI_OPTIONS,
+      styles: LIRIE_MAP_STYLES,
+    }
+  : {
+      ...BASE_MAP_UI_OPTIONS,
+      mapId: GOOGLE_MAPS_MAP_ID,
+    };
+
+// Options carte pour pages publiques (Home, Client)
 export const PUBLIC_MAP_OPTIONS = {
   ...DEFAULT_MAP_OPTIONS,
 };
@@ -167,6 +193,27 @@ export const getFreshnessStatus = (driver) => {
 };
 
 // ─── Marqueurs SVG professionnels Lirie ───
+
+/**
+ * Ancrage pour `google.maps.marker.AdvancedMarkerElement` : `anchorLeft` / `anchorTop` sont des
+ * chaînes CSS (doc Google), p.ex. "-50%" / "-100%", pas des nombres 0–1.
+ * Reproduit l’effet de `google.maps.Marker` avec `icon.anchor` (px) + `scaledSize`.
+ *
+ * @param {number} ax - pixels depuis le bord gauche de l’icône
+ * @param {number} ay - pixels depuis le haut
+ * @param {number} w - largeur
+ * @param {number} h - hauteur
+ * @returns {{ anchorLeft: string, anchorTop: string }}
+ */
+export function iconAnchorToAdvancedMarkerCss(ax, ay, w, h) {
+  if (!w || !h || !Number.isFinite(ax) || !Number.isFinite(ay)) {
+    return { anchorLeft: '-50%', anchorTop: '-50%' };
+  }
+  return {
+    anchorLeft: `${-(ax / w) * 100}%`,
+    anchorTop: `${-(ay / h) * 100}%`,
+  };
+}
 
 /**
  * Marqueur cercle chauffeur avec ombre portée.

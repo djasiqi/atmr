@@ -1,6 +1,6 @@
 // src/components/layout/Sidebar/AdminSidebar/AdminSidebar.js
-import React, { useState, useEffect, useMemo } from 'react';
-import { NavLink, useLocation, useParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Link, NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
 import {
   FaHome,
   FaUser,
@@ -9,16 +9,32 @@ import {
   FaCog,
   FaRobot,
   FaChartLine,
-  FaBars,
-  FaTimes,
   FaServer,
+  FaSignOutAlt,
+  FaChevronDown,
 } from 'react-icons/fa';
 import { usePlatformCapabilities, PLATFORM_SEGMENTS } from '../../../../hooks/usePlatformCapabilities';
+import { logoutUser } from '../../../../utils/apiClient';
 import styles from './AdminSidebar.module.css';
+
+function getInitials(name = '') {
+  const parts = name.trim().split(/\s+/).slice(0, 2);
+  return parts.map((p) => p[0]?.toUpperCase() || '').join('') || 'AD';
+}
+
+/** Largeurs alignées sur CompanySidebar + --sidebar-w pour le contenu principal */
+function getAdminSidebarWidthPx() {
+  const w = window.innerWidth;
+  if (w <= 480) return 56;
+  if (w <= 768) return 64;
+  if (w <= 1024) return 220;
+  return 256;
+}
 
 const AdminSidebar = () => {
   const { public_id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const adminId = public_id ?? '';
   const { canAccess, isLoading: platformLoading } = usePlatformCapabilities();
 
@@ -27,43 +43,57 @@ const AdminSidebar = () => {
     return PLATFORM_SEGMENTS.some((s) => canAccess(s));
   }, [platformLoading, canAccess]);
 
-  // État du toggle (sauvegardé dans localStorage)
-  const [isExpanded, setIsExpanded] = useState(() => {
-    const saved = localStorage.getItem('adminSidebarExpanded');
-    return saved !== null ? saved === 'true' : true; // Par défaut ouvert
-  });
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
-  // Sauvegarder l'état dans localStorage
   useEffect(() => {
-    localStorage.setItem('adminSidebarExpanded', String(isExpanded));
-  }, [isExpanded]);
-
-  // Mettre à jour la variable CSS pour la responsivité du contenu principal
-  // S'exécute au montage et à chaque changement d'état
-  useEffect(() => {
-    // Sur mobile, toujours en mode collapsed (icônes seulement)
-    const isMobile = window.innerWidth <= 768;
-    const sidebarWidth = isMobile ? 72 : (isExpanded ? 240 : 72); // Largeur en pixels
-    document.documentElement.style.setProperty('--sidebar-w', `${sidebarWidth}px`);
-    
-    // Écouter les changements de taille d'écran
-    const handleResize = () => {
-      const mobile = window.innerWidth <= 768;
-      const width = mobile ? 72 : (isExpanded ? 240 : 72);
-      document.documentElement.style.setProperty('--sidebar-w', `${width}px`);
+    const update = () => {
+      document.documentElement.style.setProperty('--sidebar-w', `${getAdminSidebarWidthPx()}px`);
     };
-    
-    window.addEventListener('resize', handleResize);
-    
-    // Cleanup : restaurer la valeur par défaut si nécessaire
+    update();
+    window.addEventListener('resize', update);
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', update);
       document.documentElement.style.setProperty('--sidebar-w', '72px');
     };
-  }, [isExpanded]);
+  }, []);
 
-  const toggleSidebar = () => {
-    setIsExpanded(!isExpanded);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
+
+  const userData = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const publicId = userData?.public_id || null;
+  const displayName = userData?.username || 'Administrateur';
+  const userEmail = userData?.email || '';
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch {
+      window.location.href = '/login';
+    }
+  }, []);
+
+  const handleAccountClick = () => {
+    if (!publicId) return;
+    navigate(`/dashboard/account/${publicId}`);
+    setUserMenuOpen(false);
   };
 
   const base = `/dashboard/admin/${adminId}`;
@@ -74,7 +104,13 @@ const AdminSidebar = () => {
       items: [
         { icon: FaHome, label: 'Tableau de bord', to: base, end: true, isPlatform: false },
         { icon: FaCar, label: 'Réservations', to: `${base}/reservations`, isPlatform: false },
-        { icon: FaFileInvoice, label: 'Factures', to: `${base}/invoices`, isPlatform: false },
+        {
+          icon: FaFileInvoice,
+          label: 'Facturation',
+          to: `${base}/billing/pilotage`,
+          isBillingHub: true,
+          isPlatform: false,
+        },
         { icon: FaChartLine, label: 'Demandes demo', to: `${base}/demo-requests`, isPlatform: false },
       ],
     },
@@ -110,49 +146,109 @@ const AdminSidebar = () => {
   }
 
   return (
-    <nav className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed}`}>
-      {/* Bouton toggle */}
-      <button
-        type="button"
-        className={styles.toggleButton}
-        onClick={toggleSidebar}
-        aria-label={isExpanded ? 'Réduire la barre latérale' : 'Agrandir la barre latérale'}
-        aria-expanded={isExpanded}
-      >
-        {isExpanded ? <FaTimes /> : <FaBars />}
-      </button>
+    <aside className={styles.sidebar} aria-label="Navigation administration">
+      <div className={styles.sidebarBrand}>
+        <Link to={base} className={styles.brandLink} title="Tableau de bord admin">
+          <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} />
+          <div className={styles.brandText}>
+            <span className={styles.brandName}>Lirie</span>
+            <span className={styles.brandSub}>Administration</span>
+          </div>
+        </Link>
+      </div>
 
-      <ul className={styles.menuList}>
-        {sections.map((section) => (
-          <React.Fragment key={section.title}>
-            <li className={styles.sectionLabelItem} aria-hidden={!isExpanded}>
-              <span className={styles.sectionLabel}>{isExpanded ? section.title : '·'}</span>
-            </li>
+      {sections.map((section, idx) => (
+        <div key={section.title} className={styles.navSection}>
+          {idx > 0 && <div className={styles.navDivider} aria-hidden="true" />}
+          <div className={styles.navLabel}>{section.title}</div>
+          <nav className={styles.nav} aria-label={section.title}>
             {section.items.map((item) => {
               const Icon = item.icon;
               return (
-                <li key={item.to} className={styles.menuItem}>
-                  <NavLink
-                    to={item.to}
-                    end={item.end ?? false}
-                    className={({ isActive }) => {
-                      const active = item.isPlatform
-                        ? location.pathname.includes('/platform-ops')
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end ?? false}
+                  className={({ isActive }) => {
+                    const active = item.isPlatform
+                      ? location.pathname.includes('/platform-ops')
+                      : item.isBillingHub
+                        ? location.pathname.startsWith(`${base}/billing`)
                         : isActive;
-                      return `${styles.menuLink} ${active ? styles.active : ''}`;
-                    }}
-                    title={!isExpanded ? item.label : undefined}
-                  >
-                    <Icon className={styles.icon} />
-                    {isExpanded && <span className={styles.label}>{item.label}</span>}
-                  </NavLink>
-                </li>
+                    return `${styles.navItem} ${active ? styles.navActive : ''}`;
+                  }}
+                  title={item.label}
+                >
+                  <span className={styles.navIcon}>
+                    <Icon />
+                  </span>
+                  <span className={styles.navText}>{item.label}</span>
+                </NavLink>
               );
             })}
-          </React.Fragment>
-        ))}
-      </ul>
-    </nav>
+          </nav>
+        </div>
+      ))}
+
+      <div className={styles.sidebarSpacer} aria-hidden="true" />
+
+      <div className={styles.userBlock} ref={userMenuRef}>
+        <button
+          type="button"
+          className={styles.userBtn}
+          onClick={() => setUserMenuOpen((p) => !p)}
+          aria-expanded={userMenuOpen}
+          aria-label="Menu utilisateur"
+        >
+          <div className={styles.userAvatar}>{initials}</div>
+          <div className={styles.userMeta}>
+            <span className={styles.userDisplayName}>{displayName}</span>
+            <span className={styles.userRole}>Administrateur</span>
+          </div>
+          <FaChevronDown
+            className={`${styles.userChevron} ${userMenuOpen ? styles.userChevronOpen : ''}`}
+          />
+        </button>
+
+        {userMenuOpen && (
+          <div className={styles.userDropdown}>
+            {userEmail ? <div className={styles.userDropdownEmail}>{userEmail}</div> : null}
+            {userEmail ? <div className={styles.userDropdownDivider} /> : null}
+            <button type="button" className={styles.userDropdownItem} onClick={handleAccountClick}>
+              Gestion du compte
+            </button>
+            {publicId ? (
+              <Link
+                to={`/reservations/${publicId}`}
+                className={styles.userDropdownItem}
+                onClick={() => setUserMenuOpen(false)}
+              >
+                Mes réservations
+              </Link>
+            ) : null}
+            <Link
+              to="/dashboard/support"
+              className={styles.userDropdownItem}
+              onClick={() => setUserMenuOpen(false)}
+            >
+              Support client
+            </Link>
+            <Link
+              to="/dashboard/upcoming-rides"
+              className={styles.userDropdownItem}
+              onClick={() => setUserMenuOpen(false)}
+            >
+              Prochaines courses
+            </Link>
+            <div className={styles.userDropdownDivider} />
+            <button type="button" className={styles.userDropdownItem} onClick={handleLogout}>
+              <FaSignOutAlt />
+              <span>Déconnexion</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </aside>
   );
 };
 

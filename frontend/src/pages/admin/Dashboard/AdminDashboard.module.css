@@ -1,10 +1,12 @@
-/* ✅ Conteneur principal */
+/* Shell aligné dashboard entreprise (CompanyDashboard) */
 .adminContainer {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--bg-secondary);
   box-sizing: border-box;
+  /* Aligné CompanyHeader (--hdr-h 56px) pour header + marges contenu */
+  --header-height: 56px;
 }
 
 /* Mise en page : zone sous le header, pleine largeur pour que le contenu calcule bien % */
@@ -16,60 +18,72 @@
   height: 100%;
 }
 
-/* Contenu principal — sidebar fixe : largeur = viewport − sidebar − marges (pleine largeur utile) */
-.content {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: var(--spacing-lg);
-  background-color: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  margin: var(--spacing-lg);
-  margin-top: calc(80px + var(--spacing-lg));
-  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
-  margin-right: var(--spacing-lg);
-  /* Largeur utile = parent (100%) − sidebar fixe − marges latérales */
-  width: calc(100% - var(--sidebar-w, 72px) - 2 * var(--spacing-lg));
-  box-shadow: var(--shadow-md);
-  overflow-x: hidden;
-  overflow-y: auto;
-  position: relative;
-  z-index: var(--z-base);
-  box-sizing: border-box;
-  transition: margin-left var(--transition-base);
-}
+/* Panneau principal : voir adminShell.module.css (.content) */
 
-.pageHeader {
+/* ── En-tête page — aligné CompanyDashboard ── */
+.dashboardHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
   padding-bottom: var(--spacing-md);
   border-bottom: 1px solid var(--border-primary);
 }
 
-.pageHeaderText {
-  min-width: 0;
-  flex: 1;
-}
-
-.titleRow {
+.headerLeft {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
 }
 
-.pageHeader h1 {
+.brandSub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  line-height: 1.4;
+}
+
+.headerTitle {
   font-size: var(--font-2xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   color: var(--text-primary);
   margin: 0;
+  line-height: 1.2;
   letter-spacing: -0.02em;
 }
 
+.headerMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.headerDateRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-sm);
+  color: var(--text-tertiary);
+  text-transform: capitalize;
+}
+
+.headerDateIcon {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.headerDateText {
+  line-height: 1.3;
+}
+
 .pageSub {
-  margin: 0.5rem 0 0;
+  margin: var(--spacing-xs) 0 0;
   color: var(--text-secondary);
   font-size: var(--font-sm);
   line-height: 1.5;
@@ -79,77 +93,125 @@
 .liveBadge,
 .liveBadgeOk {
   font-size: var(--font-xs);
-  font-weight: var(--font-weight-medium);
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.01em;
 }
 
 .liveBadge {
   color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  background: var(--brand-primary-lightest);
+  border: 1px solid rgba(0, 121, 107, 0.15);
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
 }
 
 .liveBadgeOk {
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  background: var(--success-bg);
+  color: var(--success-primary);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--success-border);
+  white-space: nowrap;
 }
 
-.quickActions {
+.liveDot {
+  width: 8px;
+  height: 8px;
+  background: var(--success-primary);
+  border-radius: 50%;
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot {
+    animation: none;
+  }
+
+  .headerBtnPrimary:hover {
+    transform: none;
+  }
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.headerActions {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
-  align-items: flex-start;
 }
 
-.actionButton,
-.actionButtonGhost {
-  border-radius: 10px;
-  padding: 0.5rem 0.9rem;
+.headerBtnPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+  height: 30px;
+  min-height: 30px;
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-hover) 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
   font-size: var(--font-sm);
   font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-brand);
   text-decoration: none;
-  transition:
-    background var(--transition-base),
-    border-color var(--transition-base),
-    box-shadow var(--transition-base);
+  white-space: nowrap;
+  font-family: inherit;
 }
 
-.actionButton {
-  background: linear-gradient(
-    135deg,
-    var(--brand-primary) 0%,
-    var(--brand-primary-dark, #00695c) 100%
-  );
-  color: var(--text-inverse, #fff);
-  border: 1px solid var(--brand-primary);
-  box-shadow: var(--shadow-xs);
+.headerBtnPrimary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+  color: #ffffff;
+  text-decoration: none;
 }
 
-/* Forcer le texte clair sur fond vert (les styles globaux a:hover appliquent du vert) */
-.quickActions .actionButton:hover,
-.quickActions .actionButton:focus-visible,
-.quickActions .actionButton:active {
-  color: var(--text-inverse, #fff);
+.headerBtnPrimary:active {
+  transform: translateY(0);
 }
 
-.actionButton:hover {
-  filter: brightness(1.03);
-}
-
-.actionButtonGhost {
-  background: var(--bg-primary);
-  color: var(--text-secondary);
+.headerBtnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 36px;
+  background: transparent;
+  color: var(--brand-primary);
   border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-decoration: none;
+  white-space: nowrap;
+  font-family: inherit;
 }
 
-.actionButtonGhost:hover {
-  border-color: rgba(0, 121, 107, 0.35);
-  color: var(--text-primary);
-  background: var(--brand-primary-lightest, rgba(0, 121, 107, 0.04));
+.headerBtnSecondary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  text-decoration: none;
 }
 
 .errorBanner {
@@ -294,6 +356,90 @@
   width: 100%;
   min-width: 0;
   min-height: 240px;
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+}
+
+/* Sous-ligne sur cartes KPI cliquables (priorités admin) */
+.kpiLinkSub {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+/* Grille 6 indicateurs métier (3×2 desktop) — surcharge la grille 4 col. d’OverviewCards */
+.sectionPanel .bizKpiGrid {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: var(--spacing-md);
+}
+
+@media (max-width: 1024px) {
+  .sectionPanel .bizKpiGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .sectionPanel .bizKpiGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Barre état plateforme — extension DispatchModeStatusBar */
+.adminPlatformBar {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: var(--spacing-xs);
+}
+
+.platformBarRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.platformBarLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: var(--font-xs);
+}
+
+.platformBarLinks a {
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+.platformBarLinks a:hover {
+  text-decoration: underline;
+}
+
+.platformBarSep {
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .platformBarRight {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .platformBarLinks {
+    justify-content: flex-start;
+  }
 }
 
 .priorityGrid {
@@ -311,22 +457,25 @@
   min-height: 6.75rem;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-primary);
+  border-left: 3px solid rgba(0, 121, 107, 0.35);
   background: var(--bg-primary);
   text-decoration: none;
   color: inherit;
   transition:
     box-shadow var(--transition-base),
-    border-color var(--transition-base);
+    border-color var(--transition-base),
+    transform var(--transition-fast);
 }
 
 .priorityCardLink:hover {
-  border-color: rgba(0, 121, 107, 0.28);
-  box-shadow: var(--shadow-xs);
+  border-color: var(--brand-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .priorityCardAttention {
-  border-left: 3px solid var(--warning-border, #d97706);
-  background: var(--bg-secondary);
+  border-left: 3px solid var(--warning-primary);
+  background: var(--warning-bg);
 }
 
 .priorityCardTop {
@@ -374,7 +523,7 @@
 .platformStrip {
   border-radius: var(--radius-lg);
   padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--bg-primary);
+  background: var(--brand-primary-lightest);
   border: 1px solid var(--border-primary);
   border-left: 3px solid var(--brand-primary);
   box-shadow: var(--shadow-xs);
@@ -580,65 +729,112 @@
 }
 
 .activityStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--font-xs);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 .activityStatusOk {
-  color: var(--success-text, #0a7a3b);
+  background: var(--success-bg);
+  color: var(--success-primary);
+  border: 1px solid var(--success-border);
 }
 
 .activityStatusPending {
-  color: var(--warning-text, #b45309);
+  background: var(--warning-bg);
+  color: var(--warning-primary);
+  border: 1px solid var(--warning-border);
 }
 
 .activityStatusProgress {
-  color: #1e4db7;
+  background: var(--info-bg);
+  color: var(--info-primary);
+  border: 1px solid var(--info-border);
 }
 
 .activityStatusDanger {
-  color: var(--danger-text, #b42318);
+  background: var(--danger-bg);
+  color: var(--danger-primary);
+  border: 1px solid var(--danger-border);
 }
 
 .activityStatusDefault {
+  background: var(--bg-tertiary);
   color: var(--text-secondary);
+  border: 1px solid var(--border-primary);
 }
 
 /* Cartes KPI — alignées plateforme / guidelines Lirie (plat, sobre) */
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-sm);
   margin-top: var(--spacing-md);
   margin-bottom: 0;
 }
 
 .card {
   background: var(--bg-primary);
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  box-shadow: none;
   display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  transition:
-    border-color var(--transition-base),
-    box-shadow var(--transition-base);
+  align-items: center;
+  gap: var(--spacing-sm);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
   border: 1px solid var(--border-primary);
 }
 
 .card:hover {
-  border-color: rgba(0, 121, 107, 0.22);
+  border-color: var(--brand-primary);
   box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.kpiIconWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  background: var(--brand-primary-lightest);
+  color: var(--brand-primary);
+  border: none;
+}
+
+.kpiIconWrapTeal {
+  background: var(--brand-primary-lightest);
+  color: var(--brand-primary-dark);
+}
+
+.kpiIconWrapMuted {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+.kpiIconWrapBlue {
+  background: var(--info-bg);
+  color: var(--info-primary);
+}
+
+.kpiIconWrapRevenue {
+  background: var(--success-bg);
+  color: var(--success-primary);
 }
 
 .icon {
-  font-size: 1.25rem;
+  font-size: 18px;
   line-height: 1;
   flex-shrink: 0;
-  color: var(--brand-primary);
-  margin-top: 0.15rem;
-  opacity: 0.95;
+  margin: 0;
+  opacity: 1;
 }
 
 /* ✅ Contenu des cartes */
@@ -647,23 +843,24 @@
   text-align: left;
 }
 
-/* ✅ Titres des statistiques */
+/* Labels / valeurs — même hiérarchie qu’OverviewCards (entreprise) */
 .card h3 {
-  font-size: var(--font-xs);
+  font-size: 0.65rem;
   font-weight: var(--font-weight-medium);
-  margin: 0 0 var(--spacing-xxs) 0;
-  color: var(--text-secondary);
-  text-transform: none;
-  letter-spacing: 0.01em;
-  line-height: 1.35;
+  margin: 0 0 1px 0;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  line-height: 1.2;
 }
 
 .card p {
   font-size: var(--font-xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   margin: 0;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 
 .moneyValue {
@@ -818,16 +1015,13 @@
 }
 
 /* ✅ Gestion de la responsivité */
-@media (max-width: 768px) {
-  .content {
-    margin: var(--spacing-sm);
-    margin-top: calc(80px + var(--spacing-sm));
-    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm));
-    margin-right: var(--spacing-sm);
-    width: calc(100% - var(--sidebar-w, 72px) - 2 * var(--spacing-sm));
-    padding: var(--spacing-md);
+@media (prefers-reduced-motion: reduce) {
+  .priorityCardLink:hover {
+    transform: none;
   }
+}
 
+@media (max-width: 768px) {
   .pilotageRow,
   .stats {
     grid-template-columns: 1fr;
@@ -840,7 +1034,7 @@
   }
 
   .icon {
-    font-size: var(--font-2xl);
+    font-size: 16px;
   }
 
   .cardContent h3 {
@@ -855,13 +1049,20 @@
     transform: none;
   }
 
-  .pageHeader {
+  .dashboardHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .quickActions {
+  .headerActions {
     justify-content: flex-start;
+  }
+
+  .headerBtnPrimary,
+  .headerBtnSecondary {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
   }
 
   .errorBanner {

@@ -458,7 +458,7 @@ services:
           memory: 1G
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.2.0
     container_name: atmr-grafana
     ports:
       - "3001:3000"
@@ -485,20 +485,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 40s
     depends_on:
       prometheus:
         condition: service_healthy
     restart: unless-stopped
-    # ✅ 3.6: Limits CPU/mémoire pour Grafana
+    # ✅ 3.6: Limits CPU/mémoire pour Grafana (1G évite OOM au chargement des plugins)
     deploy:
       resources:
         limits:
           cpus: "0.5"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.25"
-          memory: 256M
+          memory: 512M
 
   # ✅ C2: Service Locust pour tests de charge
   locust:

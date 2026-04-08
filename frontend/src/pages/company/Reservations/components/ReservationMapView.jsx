@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { GoogleMap, Marker, Polyline, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, Polyline, InfoWindow } from '@react-google-maps/api';
+import GoogleMapsAdvancedMarker from '../../../../components/common/GoogleMapsAdvancedMarker';
 import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../components/common/MapPlaceholder';
 import {
@@ -177,7 +178,7 @@ const ReservationMapView = ({ reservations }) => {
         >
           {/* Marqueurs pickup */}
           {markerData.map((m) => (
-            <Marker
+            <GoogleMapsAdvancedMarker
               key={m.id}
               position={m.position}
               icon={{
@@ -191,7 +192,7 @@ const ReservationMapView = ({ reservations }) => {
 
           {/* Marqueur dropoff actif */}
           {activeRoute?.dropoff && (
-            <Marker
+            <GoogleMapsAdvancedMarker
               position={activeRoute.dropoff}
               icon={{
                 url: makePinMarkerIcon('dropoff'),

@@ -1,0 +1,81 @@
+/**
+ * Coquille visuelle commune — toutes les pages sous AdminLayout.
+ * Alignée sur CompanyDashboard (panneau blanc, --bg-secondary, sidebar --sidebar-w).
+ */
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--spacing-lg);
+  background-color: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  margin: var(--spacing-lg);
+  margin-top: calc(var(--header-height) + var(--spacing-lg));
+  margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-lg));
+  margin-right: var(--spacing-lg);
+  max-width: calc(100% - var(--sidebar-w, 72px) - calc(var(--spacing-lg) * 2));
+  box-shadow: var(--shadow-md);
+  overflow-x: hidden;
+  overflow-y: auto;
+  position: relative;
+  z-index: var(--z-base);
+  box-sizing: border-box;
+  transition:
+    margin-left var(--transition-base),
+    max-width var(--transition-base);
+}
+
+@media (max-width: 768px) {
+  .content {
+    margin: var(--spacing-sm);
+    margin-top: calc(var(--header-height) + var(--spacing-sm));
+    margin-left: calc(var(--sidebar-w, 72px) + var(--spacing-sm));
+    margin-right: var(--spacing-sm);
+    max-width: calc(100% - var(--sidebar-w, 72px) - 2 * var(--spacing-sm));
+    padding: var(--spacing-md);
+  }
+}
+
+/* En-têtes de page — même hiérarchie que dashboard entreprise / institution */
+.brandSub {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  line-height: 1.4;
+  margin-bottom: var(--spacing-xs);
+}
+
+.pageTitle {
+  font-size: var(--font-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-align: left;
+}
+
+.pageSub {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-width: 42rem;
+}
+
+.pageHeader {
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.pageHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}

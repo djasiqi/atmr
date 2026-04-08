@@ -1,20 +1,35 @@
-// src/components/layout/HeaderDashboard.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// src/components/layout/Header/HeaderDashboard.jsx
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { FiCalendar } from 'react-icons/fi';
 import styles from './HeaderDashboard.module.css';
 import { logoutUser } from '../../../utils/apiClient';
 
-const HeaderDashboard = () => {
+function formatToday() {
+  return new Date().toLocaleDateString('fr-CH', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+/**
+ * @param {{ variant?: 'default' | 'admin' }} props
+ * - default : barre pleine largeur (client, chauffeur).
+ * - admin : alignée CompanyHeader — uniquement au-dessus du contenu, pas de la sidebar teal.
+ */
+const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
+  const isAdmin = variant === 'admin';
+  const { public_id } = useParams();
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [userName, setUserName] = useState('Utilisateur');
+  const [userName, setUserName] = useState(userNameProp || 'Utilisateur');
   const [publicId, setPublicId] = useState(null);
   const [userRole, setUserRole] = useState('');
   const navigate = useNavigate();
   const menuRef = useRef(null);
 
   useEffect(() => {
-    // ✅ Vérifier l'authentification : soit token dans localStorage (mobile), soit infos utilisateur (web avec cookies)
-    const _token = localStorage.getItem('authToken');
     const userData = localStorage.getItem('user');
     if (userData) {
       try {
@@ -26,8 +41,13 @@ const HeaderDashboard = () => {
         console.error("Erreur lors de la récupération de l'utilisateur :", error);
       }
     }
-    // ✅ Si pas de token ni d'infos utilisateur, les valeurs par défaut restent
   }, []);
+
+  useEffect(() => {
+    if (userNameProp) setUserName(userNameProp);
+  }, [userNameProp]);
+
+  const displayName = userNameProp || userName;
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -53,13 +73,91 @@ const HeaderDashboard = () => {
   }, []);
 
   const dashboardLink = publicId && userRole ? `/dashboard/${userRole}/${publicId}` : '/dashboard';
+  const adminHome =
+    public_id && isAdmin ? `/dashboard/admin/${public_id}` : dashboardLink;
+
+  const todayLabel = useMemo(() => formatToday(), []);
+
+  const userDropdown = (
+    <div className={styles.userSection} ref={menuRef}>
+      <button
+        type="button"
+        className={styles.userButton}
+        onClick={toggleMenu}
+        aria-expanded={isMenuOpen}
+        aria-haspopup="menu"
+        aria-label="Menu utilisateur"
+      >
+        {displayName} <span className={styles.arrow} aria-hidden>
+          ▼
+        </span>
+      </button>
+      {isMenuOpen && (
+        <div className={styles.dropdownMenu}>
+          <div className={styles.userInfo}>
+            <p className={styles.userName}>{displayName}</p>
+          </div>
+          <div className={styles.menuOptions}>
+            <button type="button" className={styles.menuLink} onClick={handleAccountClick}>
+              Gestion du compte
+            </button>
+            {publicId ? (
+              <Link to={`/reservations/${publicId}`} className={styles.menuLink}>
+                Mes Réservations
+              </Link>
+            ) : (
+              <span className={styles.menuLink} style={{ cursor: 'not-allowed', opacity: 0.5 }}>
+                Mes Réservations (Indisponible)
+              </span>
+            )}
+            <Link to="/dashboard/support" className={styles.menuLink}>
+              Support client
+            </Link>
+            <Link to="/dashboard/upcoming-rides" className={styles.menuLink}>
+              Prochaines courses
+            </Link>
+          </div>
+          <div className={styles.logout}>
+            <button type="button" className={styles.logoutButton} onClick={handleLogout}>
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  if (isAdmin) {
+    return (
+      <header
+        className={`${styles.header} ${styles.headerAdmin}`}
+        role="banner"
+        aria-label="En-tête console administrateur"
+      >
+        <div className={styles.headerLeft}>
+          <Link to={adminHome} className={styles.brand} aria-label="Accueil console administrateur">
+            <div className={styles.logoWrap}>
+              <img src="/icon-dark.png" alt="" className={styles.logoImg} />
+            </div>
+            <span className={styles.adminWorkspaceTitle}>Console administrateur</span>
+          </Link>
+        </div>
+        <div className={styles.headerRight}>
+          <div className={styles.indicator}>
+            <FiCalendar className={styles.indicatorIcon} aria-hidden />
+            <span className={styles.indicatorText}>{todayLabel}</span>
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
-    <header className={styles.header}>
+    <header className={styles.header} role="banner">
       <Link to={dashboardLink} className={styles.logo}>
         Dashboard
       </Link>
-      <nav className={styles.nav}>
+      <nav className={styles.nav} aria-label="Navigation rapide">
         <ul className={styles.navList}>
           <li>
             <Link to="/dashboard/bookings" className={styles.navLink}>
@@ -83,43 +181,7 @@ const HeaderDashboard = () => {
           </li>
         </ul>
       </nav>
-      <div className={styles.userSection} ref={menuRef}>
-        <div className={styles.userButton} onClick={toggleMenu}>
-          {userName} <span className={styles.arrow}>▼</span>
-        </div>
-        {isMenuOpen && (
-          <div className={styles.dropdownMenu}>
-            <div className={styles.userInfo}>
-              <p className={styles.userName}>{userName}</p>
-            </div>
-            <div className={styles.menuOptions}>
-              <button className={styles.menuLink} onClick={handleAccountClick}>
-                Gestion du compte
-              </button>
-              {publicId ? (
-                <Link to={`/reservations/${publicId}`} className={styles.menuLink}>
-                  Mes Réservations
-                </Link>
-              ) : (
-                <span className={styles.menuLink} style={{ cursor: 'not-allowed', opacity: 0.5 }}>
-                  Mes Réservations (Indisponible)
-                </span>
-              )}
-              <Link to="/dashboard/support" className={styles.menuLink}>
-                Support client
-              </Link>
-              <Link to="/dashboard/upcoming-rides" className={styles.menuLink}>
-                Prochaines courses
-              </Link>
-            </div>
-            <div className={styles.logout}>
-              <button className={styles.logoutButton} onClick={handleLogout}>
-                Déconnexion
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {userDropdown}
     </header>
   );
 };

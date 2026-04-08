@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { usePlatformCapabilities } from '../../../hooks/usePlatformCapabilities';
 import styles from './AdminPlatformOps.module.css';
+import adminShell from '../adminShell.module.css';
 
 const SEGMENTS = [
   { id: 'overview', label: 'Vue globale' },
@@ -23,7 +24,7 @@ const PlatformLayout = () => {
   const visible = SEGMENTS.filter((s) => canAccess(s.id));
 
   return (
-    <main className={styles.content}>
+    <main className={adminShell.content}>
       <nav className={styles.tabBar} role="tablist" aria-label="Segments plateforme">
         {isLoading && (
           <span className={styles.subtle} role="status">

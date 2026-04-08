@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import apiClient from '../../../utils/apiClient';
+import { startWorldlineHostedCheckout } from '../../../services/clientWorldlinePaymentService';
 import { useParams, useNavigate } from 'react-router-dom';
 import './ClientDashboard.css';
 import { useMutation } from '@tanstack/react-query';
 
 // Google Maps
-import { GoogleMap, Polyline, Marker } from '@react-google-maps/api';
+import { GoogleMap, Polyline } from '@react-google-maps/api';
 import { useGoogleMapsLoaded } from '../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../components/common/MapPlaceholder';
+import GoogleMapsAdvancedMarker from '../../../components/common/GoogleMapsAdvancedMarker';
 import {
   PUBLIC_MAP_OPTIONS,
   MAP_COLORS,
@@ -219,6 +221,7 @@ const ClientDashboard = () => {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       })
       .then((response) => {
+        const bookingId = response.data?.data?.booking_id ?? response.data?.booking_id;
         alert('Réservation effectuée avec succès !');
         setUpcomingBookings([...upcomingBookings, response.data.booking]);
         setPickup('');
@@ -227,6 +230,17 @@ const ClientDashboard = () => {
         setSelectedTime('');
         setMedicalFacility('');
         setDoctorName('');
+        if (
+          bookingId &&
+          window.confirm('Souhaitez-vous payer en ligne maintenant (Worldline) ?')
+        ) {
+          startWorldlineHostedCheckout(bookingId).catch((pe) => {
+            alert(
+              pe?.message ||
+                "Le paiement en ligne n'est pas disponible pour le moment."
+            );
+          });
+        }
       })
       .catch((err) => {
         console.error('Erreur réservation :', err);
@@ -336,8 +350,9 @@ const ClientDashboard = () => {
                   options={PUBLIC_MAP_OPTIONS}
                   onLoad={onMapLoad}
                 >
+                  {/* AdvancedMarkerElement (pas le Marker déprécié de @react-google-maps/api) */}
                   {pickupMarkerPos && (
-                    <Marker
+                    <GoogleMapsAdvancedMarker
                       position={pickupMarkerPos}
                       icon={{
                         url: makePinMarkerIcon('pickup'),
@@ -348,7 +363,7 @@ const ClientDashboard = () => {
                     />
                   )}
                   {destinationMarkerPos && (
-                    <Marker
+                    <GoogleMapsAdvancedMarker
                       position={destinationMarkerPos}
                       icon={{
                         url: makePinMarkerIcon('dropoff'),
