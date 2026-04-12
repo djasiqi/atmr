@@ -16,17 +16,61 @@ from typing import Any, Protocol, cast
 from application.events.event_bus import publish_event
 from domain.bookings.commands import CreateBookingCommand
 from domain.events.events import BookingCreatedEvent
+from models.enums import ClientType
 from schemas.booking_schemas import BookingCreateSchema
-from services.geo.geo_resolver import resolve_pickup_admin
-from shared.geo_utils import GeoValidator
-from shared.time_utils import parse_local_naive
+from services.geo.geo_resolver import (
+    geo_unit_id_from_pickup_admin_token,
+    resolve_pickup_admin,
+)
 from services.platform_tenant_gates import assert_company_not_platform_suspended
+from shared.booking_company_resolution import (
+    resolve_booking_owner_company_id_for_create,
+)
+from shared.geo_utils import GeoValidator
+from shared.time_utils import api_scheduled_iso_to_naive_geneva
 
 logger = logging.getLogger(__name__)
 
 
+def _compose_client_notes_medical(validated_data: dict[str, Any]) -> str | None:
+    """Notes internes (occurrences, récurrence, message libre portail client)."""
+    parts: list[str] = []
+    try:
+        occ = int(validated_data.get("occurrences") or 1)
+    except (TypeError, ValueError):
+        occ = 1
+    if occ > 1:
+        parts.append(f"Occurrences demandées (même trajet) : {occ}")
+    if validated_data.get("is_recurring"):
+        rtype = (validated_data.get("recurrence_type") or "").strip()
+        rlen = validated_data.get("recurrence_series_length")
+        rend = (validated_data.get("recurrence_end_date") or "").strip()
+        rdays = validated_data.get("recurrence_days") or []
+        line = (
+            f"Récurrence demandée (portail client) : type={rtype or '?'}, "
+            f"répétitions prévues={rlen}"
+        )
+        if rend:
+            line += f", jusqu'au {rend}"
+        if rtype == "custom" and rdays:
+            line += f", jours 0=lun..6=dim : {','.join(str(int(d)) for d in rdays)}"
+        line += (
+            " — une réservation est créée par cette demande ; "
+            "série à confirmer / reproduire côté transporteur."
+        )
+        parts.append(line)
+    client_note = (validated_data.get("client_note") or "").strip()
+    if client_note:
+        parts.append(client_note)
+    if not parts:
+        return None
+    return "\n".join(parts)
+
+
 class _ClientDTO(Protocol):
-    company_id: int
+    company_id: int | None
+    default_billed_to_company_id: int | None
+    client_type: ClientType
 
 
 class ClientRepoPort(Protocol):
@@ -45,7 +89,7 @@ class GeocodingPort(Protocol):
 
 class BookingLike(Protocol):
     id: int
-    company_id: int
+    company_id: int | None
 
 
 class BookingWriterPort(Protocol):
@@ -54,7 +98,7 @@ class BookingWriterPort(Protocol):
         *,
         user_id: int,
         client_id: int,
-        company_id: int,
+        company_id: int | None,
         customer_name: str,
         pickup_location: str,
         dropoff_location: str,
@@ -87,6 +131,8 @@ class BookingWriterPort(Protocol):
         pricing_profile_version_id: int | None,
         price_amount: float | None,
         price_breakdown_json: dict[str, Any] | None,
+        notes_medical: str | None = None,
+        return_scheduled_time: Any | None = None,
     ) -> BookingLike: ...
 
 
@@ -162,10 +208,25 @@ class CreateBookingUseCase:
 
         # Parser la date
         try:
-            scheduled_time = parse_local_naive(validated_data["scheduled_time"])
+            scheduled_time = api_scheduled_iso_to_naive_geneva(
+                validated_data["scheduled_time"]
+            )
         except Exception as date_error:
             logger.error("Erreur de conversion scheduled_time: %s", date_error)
             raise ValueError("Invalid scheduled_time format") from date_error
+        if scheduled_time is None:
+            raise ValueError("Invalid scheduled_time format")
+
+        return_scheduled_time = None
+        rt_raw = validated_data.get("return_time")
+        if rt_raw:
+            try:
+                return_scheduled_time = api_scheduled_iso_to_naive_geneva(rt_raw)
+            except Exception as date_error:
+                logger.error("Erreur de conversion return_time: %s", date_error)
+                raise ValueError("Invalid return_time format") from date_error
+
+        notes_medical = _compose_client_notes_medical(validated_data)
 
         # Calcul distance/duration
         try:
@@ -230,11 +291,9 @@ class CreateBookingUseCase:
         client_dto = self.client_repo.find_by_id(cmd.client_id)
         if not client_dto:
             raise ValueError("Client non trouvé")
-        company_id = int(getattr(client_dto, "company_id", 0) or 0)
-        if company_id <= 0:
-            raise ValueError("Client invalide (company_id manquant)")
-
-        assert_company_not_platform_suspended(company_id)
+        company_id = resolve_booking_owner_company_id_for_create(client_dto)
+        if company_id is not None and company_id > 0:
+            assert_company_not_platform_suspended(company_id)
 
         pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, geocode_miss = (
             self._geocode_booking_addresses(validated_data, company_id)
@@ -254,6 +313,13 @@ class CreateBookingUseCase:
             pickup_text=validated_data.get("dropoff_location"),
         )
 
+        pickup_geo_unit_id = geo_unit_id_from_pickup_admin_token(
+            str(pickup_admin.get("token") or "")
+        )
+        dropoff_geo_unit_id = geo_unit_id_from_pickup_admin_token(
+            str(dropoff_admin.get("token") or "")
+        )
+
         new_booking = self.booking_writer.create_and_commit(
             user_id=cmd.user_id,
             client_id=cmd.client_id,
@@ -271,7 +337,7 @@ class CreateBookingUseCase:
             pickup_lon=pickup_lon,
             dropoff_lat=dropoff_lat,
             dropoff_lon=dropoff_lon,
-            is_round_trip=bool(cmd.data.get("is_round_trip", False)),
+            is_round_trip=bool(validated_data.get("is_round_trip", False)),
             pickup_admin_token=pickup_admin.get("token"),
             pickup_canton_code=pickup_admin.get("canton_code"),
             pickup_admin_source=pickup_admin.get("source"),
@@ -284,12 +350,14 @@ class CreateBookingUseCase:
             dropoff_admin_confidence=dropoff_admin.get("confidence"),
             dropoff_admin_label=dropoff_admin.get("label"),
             dropoff_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
-            pickup_geo_unit_id=None,
-            dropoff_geo_unit_id=None,
+            pickup_geo_unit_id=pickup_geo_unit_id,
+            dropoff_geo_unit_id=dropoff_geo_unit_id,
             pricing_profile_id=None,
             pricing_profile_version_id=None,
             price_amount=None,
             price_breakdown_json=None,
+            notes_medical=notes_medical,
+            return_scheduled_time=return_scheduled_time,
         )
 
         if geocode_miss:
@@ -359,18 +427,6 @@ class CreateBookingUseCase:
         company: Any | None,
         address_type: str,
     ) -> tuple[float, float, bool]:
-        fallback_fn = self.fallback_coords_fn
-        if fallback_fn is None:
-            msg = (
-                "CreateBookingUseCase nécessite une dépendance injectée "
-                "`fallback_coords_fn`. "
-                "Utiliser BookingService (ou une factory) pour le wiring "
-            )
-            raise RuntimeError(msg + "production.")
-
-        lat, lon = fallback_fn(company)
-        geocoded = False
-
         if coords and "lat" in coords and "lon" in coords:
             lat_val = coords.get("lat")
             lon_val = coords.get("lon")
@@ -379,39 +435,32 @@ class CreateBookingUseCase:
                 and lon_val is not None
                 and GeoValidator.is_valid(lat_val, lon_val)
             ):
-                lat = lat_val
-                lon = lon_val
-                geocoded = True
                 logger.info(
-                    "✅ %s géocodé (cache hit): %s -> (%.6f, %.6f)",
+                    "✅ %s géocodé: %s -> (%.6f, %.6f)",
                     address_type.capitalize(),
                     address,
-                    lat,
-                    lon,
+                    lat_val,
+                    lon_val,
                 )
-            else:
-                logger.info(
-                    (
-                        "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                        "approximatives: (%.6f, %.6f) - géocodage asynchrone en "
-                        "cours"
-                    ),
-                    address_type.capitalize(),
-                    lat,
-                    lon,
-                )
-        else:
-            logger.info(
-                (
-                    "⚠️ %s géocodage cache miss, utilisation coordonnées "
-                    "approximatives: (%.6f, %.6f) - géocodage asynchrone en cours"
-                ),
-                address_type.capitalize(),
-                lat,
-                lon,
-            )
+                return float(lat_val), float(lon_val), True
 
-        return lat, lon, geocoded
+        fallback_fn = self.fallback_coords_fn
+        if fallback_fn is None:
+            msg = (
+                f"Géocodage échoué pour {address_type} '{address}' et "
+                "aucune fonction fallback configurée."
+            )
+            raise RuntimeError(msg)
+
+        lat, lon = fallback_fn(company)
+        logger.warning(
+            "⚠️ %s géocodage échoué pour '%s', fallback: (%.6f, %.6f)",
+            address_type.capitalize(),
+            address,
+            lat,
+            lon,
+        )
+        return lat, lon, False
 
     def _trigger_async_geocoding(
         self, booking_id: int, pickup_address: str, dropoff_address: str

@@ -1,6 +1,6 @@
 // src/pages/company/Dashboard/CompanyDashboard.jsx
 import React, { useCallback, useState, useEffect, useMemo, useTransition } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { FiZap, FiPlus, FiBarChart2 } from 'react-icons/fi';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import useDispatchStatus from '../../../hooks/useDispatchStatus';
@@ -33,6 +33,7 @@ import {
   fetchRequestOffers,
   acceptRequestOffer,
   rejectRequestOffer,
+  fetchCompanyReservationsPaginated,
 } from '../../../services/companyService';
 import useCompanyData from '../../../hooks/useCompanyData';
 import useRealtimeDashboard from '../../../hooks/useRealtimeDashboard';
@@ -43,10 +44,16 @@ import ChatWidget from '../../../components/widgets/ChatWidget';
 import EditDriverForm from '../components/EditDriverForm';
 import Modal from '../../../components/common/Modal';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
+import DataFreshnessBadge from '../../../components/common/DataFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
-import { lirieKeys } from '../../../queryKeys/lirie';
+import { lirieKeys, LIRIE_QK_PREFIX } from '../../../queryKeys/lirie';
+import {
+  canonicalRealtimeTimeMs,
+  shouldAcceptRealtimeEvent,
+} from '../../../utils/realtimeEventGuard';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 
 function makeToday() {
   const d = new Date();
@@ -54,9 +61,17 @@ function makeToday() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+function offsetCalendarYmd(dayOffset) {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 const CompanyDashboard = () => {
   const location = useLocation();
-  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const navigate = useNavigate();
+  const isDemoEnv = getAuthEnv() === 'demo';
   const fallbackDemoMission = isDemoEnv
     ? (
         localStorage.getItem('demo_recommended_journey') ||
@@ -88,6 +103,35 @@ const CompanyDashboard = () => {
     reloadDriver,
     upsertReservation,
   } = useCompanyData({ day: dispatchDay });
+
+  /** Demandes PENDING visibles pour l'entreprise sur une fenêtre de dates (repère les courses hors jour sélectionné). */
+  const pendingWindowStart = useMemo(() => offsetCalendarYmd(-2), []);
+  const pendingWindowEnd = useMemo(() => offsetCalendarYmd(14), []);
+  const { data: pendingWindowPayload } = useQuery({
+    queryKey: [
+      LIRIE_QK_PREFIX,
+      'company-pending-window',
+      company?.id,
+      pendingWindowStart,
+      pendingWindowEnd,
+    ],
+    queryFn: () =>
+      fetchCompanyReservationsPaginated({
+        startDate: pendingWindowStart,
+        endDate: pendingWindowEnd,
+        tab: 'pending',
+        perPage: 100,
+        page: 1,
+        excludeCanceled: true,
+      }),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    enabled: Boolean(company?.id),
+  });
+  const pendingWindowReservations = useMemo(
+    () => (Array.isArray(pendingWindowPayload?.reservations) ? pendingWindowPayload.reservations : []),
+    [pendingWindowPayload]
+  );
 
   const socket = useCompanySocket();
   useDispatchStatus(socket);
@@ -142,6 +186,36 @@ const CompanyDashboard = () => {
   const [quickAssignOpen, setQuickAssignOpen] = useState(false);
   const [quickAssignOpportunity, setQuickAssignOpportunity] = useState(null);
   const [quickAssigning, setQuickAssigning] = useState(false);
+  const [lastDataSyncAt, setLastDataSyncAt] = useState(null);
+  const [liveMapEnabled, setLiveMapEnabled] = useState(() => {
+    if (process.env.NODE_ENV === 'test') return true;
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('live_map') === '1') return true;
+    return localStorage.getItem('company_dashboard_live_map') === '1';
+  });
+
+  useEffect(() => {
+    if ((reservations || []).length > 0 || (driver || []).length > 0) {
+      setLastDataSyncAt(Date.now());
+    }
+  }, [reservations, driver, qualityMetrics]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('live_map') === '1') {
+      setLiveMapEnabled(true);
+      localStorage.setItem('company_dashboard_live_map', '1');
+    }
+  }, [location.search]);
+
+  const handleEnableLiveMap = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    params.set('live_map', '1');
+    localStorage.setItem('company_dashboard_live_map', '1');
+    setLiveMapEnabled(true);
+    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   const handleEditDriver = (d) => {
     setDriverToEdit(d);
@@ -293,6 +367,12 @@ const CompanyDashboard = () => {
 
   useEffect(() => {
     if (!socket) return;
+    const acceptRealtime = (payload, entityKey = null) =>
+      shouldAcceptRealtimeEvent({
+        eventId: payload?.event_id,
+        entityKey,
+        canonicalTimeMs: canonicalRealtimeTimeMs(payload),
+      });
     const refetchAll = () => {
       startTransition(() => {
         refetchAssigned?.();
@@ -303,33 +383,51 @@ const CompanyDashboard = () => {
         });
       });
     };
-    const onAssignCreated = () => refetchAll();
-    const onAssignUpdated = () => refetchAll();
-    const onAssignDeleted = () => refetchAll();
-    const onDispatchStatePatch = () => refetchAll();
-    const onDispatchDashboardSnapshot = () => {
+    const onAssignCreated = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
+      refetchAll();
+    };
+    const onAssignUpdated = (data) => {
+      if (!acceptRealtime(data, data?.assignment_id ? `assignment:${data.assignment_id}` : null)) return;
+      refetchAll();
+    };
+    const onAssignDeleted = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
+      refetchAll();
+    };
+    const onDispatchStatePatch = (data) => {
+      if (!acceptRealtime(data, data?.reservation_id ? `booking:${data.reservation_id}` : null)) return;
+      refetchAll();
+    };
+    const onDispatchDashboardSnapshot = (data) => {
+      if (!acceptRealtime(data, dispatchDay ? `dispatch-dashboard:${dispatchDay}` : null)) return;
       queryClient.invalidateQueries({
         queryKey: lirieKeys.dispatchRealtimeDashboard(dispatchDay),
       });
     };
     const onDispatchProgress = (_p) => {};
     const onDispatchError = (err) => {
+      if (!acceptRealtime(err)) return;
       console.error('dispatch_error:', err);
       refetchAll();
     };
     const onDispatchRunCompleted = (data) => {
+      if (!acceptRealtime(data, data?.dispatch_run_id ? `dispatch-run:${data.dispatch_run_id}` : null)) return;
       console.log('Dispatch run completed:', data);
       refetchAll();
     };
     const onTransferReceived = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       console.log('Transfert reçu:', data);
       refetchAll();
     };
     const onTransferProposed = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       console.log('Transfert proposé:', data);
       refetchAll();
     };
     const onBookingUpdated = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       console.log('Course mise à jour:', data);
       refetchAll();
     };
@@ -756,6 +854,30 @@ const CompanyDashboard = () => {
     [pendingReservations, filterBySearch, filterByDelaysOnly, applyStructuredFilters]
   );
 
+  const pendingOnOtherDays = useMemo(() => {
+    return pendingWindowReservations.filter((r) => {
+      if ((r.status || '').toLowerCase() !== 'pending') return false;
+      const st = String(r.scheduled_time || r.pickup_time || '');
+      return Boolean(st) && !st.startsWith(dispatchDay);
+    });
+  }, [pendingWindowReservations, dispatchDay]);
+
+  const pendingHiddenByFilters = useMemo(
+    () =>
+      reservationTab === 'pending' &&
+      !urgenceMode &&
+      pendingReservations.length > 0 &&
+      displayPending.length === 0,
+    [reservationTab, urgenceMode, pendingReservations.length, displayPending.length]
+  );
+
+  const firstOtherDayYmd = useMemo(() => {
+    const r = pendingOnOtherDays[0];
+    if (!r) return null;
+    const st = String(r.scheduled_time || r.pickup_time || '');
+    return st.length >= 10 ? st.slice(0, 10) : null;
+  }, [pendingOnOtherDays]);
+
   const displayAssigned = useMemo(
     () => applyStructuredFilters(filterByDelaysOnly(filterBySearch(assignedReservations))),
     [assignedReservations, filterBySearch, filterByDelaysOnly, applyStructuredFilters]
@@ -796,8 +918,12 @@ const CompanyDashboard = () => {
       refetchAssigned?.();
       refetchDelays?.();
       refetchInstitutionOffers?.();
+      queryClient.invalidateQueries({
+        queryKey: [LIRIE_QK_PREFIX, 'company-pending-window'],
+        exact: false,
+      });
     });
-  }, [reloadReservations, refetchAssigned, refetchDelays, refetchInstitutionOffers]);
+  }, [reloadReservations, refetchAssigned, refetchDelays, refetchInstitutionOffers, queryClient]);
 
   const handleOpportunityAction = useCallback((opp) => {
     setQuickAssignOpportunity(opp);
@@ -830,7 +956,6 @@ const CompanyDashboard = () => {
 
   return (
     <div className={styles.companyContainer}>
-      <Toaster position="top-right" richColors />
       <CompanyHeader />
 
       <div className={styles.dashboard}>
@@ -876,6 +1001,14 @@ const CompanyDashboard = () => {
               </button>
             </div>
           </header>
+          <DataFreshnessBadge
+            lastSyncAt={lastDataSyncAt}
+            isSyncing={loadingReservations || loadingDriver || loadingRealtimeDashboard}
+            realtimeEnabled
+            realtimeConnected={Boolean(socket?.connected)}
+            sourceLabel="Dispatch"
+            className={styles.dashboardFreshness}
+          />
 
           {/* ============ 2. KPI + MODE DISPATCH ============ */}
           <OverviewCards
@@ -907,13 +1040,29 @@ const CompanyDashboard = () => {
           <div className={isManualMode ? styles.singleColumnLayout : styles.twoColumnLayout}>
             <div className={isManualMode ? styles.fullColumn : styles.leftColumn}>
               <section className={styles.mapSection} data-tour-id="dispatch-assign">
-                <DriverLiveMap
-                  date={dispatchDay}
-                  drivers={driver || []}
-                  bookings={activeBookings}
-                  assignments={assignmentsForMap}
-                  delays={delaysByBooking}
-                />
+                {liveMapEnabled ? (
+                  <DriverLiveMap
+                    date={dispatchDay}
+                    drivers={driver || []}
+                    bookings={activeBookings}
+                    assignments={assignmentsForMap}
+                    delays={delaysByBooking}
+                  />
+                ) : (
+                  <div className={styles.mapDeferred}>
+                    <p className={styles.mapDeferredTitle}>Carte live en pause pour accelerer l'affichage.</p>
+                    <p className={styles.mapDeferredText}>
+                      Activez la carte lorsque vous en avez besoin pour charger Google Maps et le suivi en direct.
+                    </p>
+                    <button
+                      type="button"
+                      className={styles.mapDeferredButton}
+                      onClick={handleEnableLiveMap}
+                    >
+                      Activer la carte live
+                    </button>
+                  </div>
+                )}
                 {fetchingDelays && <small className={styles.hint}>Mise à jour des retards...</small>}
               </section>
             </div>
@@ -933,6 +1082,39 @@ const CompanyDashboard = () => {
 
           {/* ============ 4. RÉSERVATIONS — PLEINE LARGEUR ============ */}
           <section className={`${styles.reservationsFullSection} ${urgenceMode ? styles.urgenceSection : ''}`} data-tour-id="dispatch-followup">
+            {!urgenceMode &&
+              reservationTab === 'pending' &&
+              !loadingReservations &&
+              pendingOnOtherDays.length > 0 &&
+              displayPending.length === 0 && (
+                <div className={styles.pendingScopeBanner} role="status">
+                  <p>
+                    <strong>{pendingOnOtherDays.length}</strong> demande
+                    {pendingOnOtherDays.length > 1 ? 's' : ''} en attente sur d&apos;autres dates que le jour affiché (
+                    <strong>{dispatchDay}</strong>). Les courses du portail client sont filtrées par{' '}
+                    <strong>date de prise en charge</strong> : choisissez la bonne date en haut à gauche.
+                  </p>
+                  <div className={styles.pendingScopeActions}>
+                    {firstOtherDayYmd ? (
+                      <button
+                        type="button"
+                        className={styles.pendingScopeJumpBtn}
+                        onClick={() => setDispatchDay(firstOtherDayYmd)}
+                      >
+                        Afficher le {firstOtherDayYmd.split('-').reverse().join('.')}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            {!urgenceMode && reservationTab === 'pending' && pendingHiddenByFilters ? (
+              <div className={styles.pendingScopeBanner} role="status">
+                <p>
+                  Des courses <strong>en attente</strong> existent pour ce jour, mais les filtres (chauffeur,
+                  horaire, recherche…) les masquent. Réinitialisez les filtres ou élargissez la plage horaire.
+                </p>
+              </div>
+            ) : null}
             <ReservationFilterBar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -1001,6 +1183,14 @@ const CompanyDashboard = () => {
                 </button>
               </div>
             )}
+
+            {!urgenceMode && reservationTab === 'assigned' ? (
+              <p className={styles.tabHint} role="note">
+                Les demandes à accepter (marché ouvert, sans chauffeur assigné) sont listées sous
+                « En attente » avec le statut « pending ». Cet onglet regroupe les courses déjà
+                acceptées en attente d&apos;assignation chauffeur.
+              </p>
+            ) : null}
 
             {urgenceMode ? (
               <ReservationTable

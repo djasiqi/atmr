@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
+
 from ext import redis_client
 from models import GeoUnit, GeoUnitType
 from shared.retry import retry_http_request
-
 
 LEGACY_CANTON_MAP = {
     "geneve": "GE",
@@ -479,3 +479,34 @@ def resolve_pickup_admin(
         "confidence": "fallback",
         "label": None,
     }
+
+
+def geo_unit_id_from_pickup_admin_token(token: str | None) -> int | None:
+    """Associe le jeton figé ``resolve_pickup_admin`` à un ``geo_unit.id`` (scoring dispatch).
+
+    Formats gérés : ``commune:<code>`` (ex. commune du départ), ``canton:<code>`` (ex. GE).
+    Retourne ``None`` si hors contexte Flask, jeton absent ou inconnu en base.
+    """
+    try:
+        from flask import has_app_context
+    except ImportError:
+        return None
+    if not has_app_context():
+        return None
+    raw = (token or "").strip()
+    if not raw:
+        return None
+    pair: tuple[GeoUnitType, str] | None = None
+    if raw.startswith("commune:"):
+        code = raw.split(":", 1)[1].strip()
+        if code:
+            pair = (GeoUnitType.COMMUNE, code)
+    elif raw.startswith("canton:"):
+        code = raw.split(":", 1)[1].strip().upper()
+        if code:
+            pair = (GeoUnitType.CANTON, code)
+    if not pair:
+        return None
+    ut, code = pair
+    row = GeoUnit.query.filter_by(type=ut, code=code).first()
+    return int(row.id) if row else None
