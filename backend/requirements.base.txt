@@ -126,7 +126,7 @@ webencodings>=0.5.0
 # Note: pytest et pytest-flask sont dans requirements-dev.txt
 # factory-boy est utilisé en production pour les fixtures de test dans certains cas
 factory-boy>=3.3.0
-rich>=13.0.0
+rich>=15.0.0
 
 # ========== Type Stubs (for pyright/mypy) ==========
 types-requests>=2.32.0
