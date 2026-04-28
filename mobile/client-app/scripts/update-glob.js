@@ -55,7 +55,7 @@ try {
       stdio: 'inherit',
       cwd: path.join(__dirname, '..')
     });
-  } catch (error) {
+  } catch (_error) {
     // npm audit peut échouer s'il y a des vulnérabilités, c'est normal
     console.log('\n💡 Utilisez "npm audit fix" pour corriger automatiquement les vulnérabilités');
   }

@@ -1,0 +1,197 @@
+import { useCallback, useLayoutEffect, useRef } from "react";
+import {
+  FlatList,
+  type ListRenderItem,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type FlatList as FlatListType,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { SharedChatMessage } from "../types";
+import { MessageBubble } from "./MessageBubble";
+
+const CHAT_STRIP_BG = "#fafafa";
+const CHAT_STRIP_TOP_BORDER = "#e5e7eb";
+/** Marge de lecture typique + complément sûr (encoches) dans le contenu. */
+const CONTENT_GUTTER = 16;
+
+export type ChatListInitialScroll = { type: "last" } | { type: "index"; index: number };
+
+type ChatListProps = {
+  messages: SharedChatMessage[];
+  loading?: boolean;
+  emptyLabel?: string;
+  onLoadMore?: () => void;
+  loadMoreLabel?: string;
+  loadMoreDisabled?: boolean;
+  loadingMore?: boolean;
+  onOpenImage?: (url: string) => void;
+  onOpenPdf?: (url: string) => void;
+  /**
+   * Incrémenté à chaque focus d’écran (ex. onglet chat) pour réappliquer l’ancre.
+   */
+  listAnchorKey?: number;
+  /** Si absent, équivalent à `{ type: "last" }`. */
+  initialScroll?: ChatListInitialScroll;
+  /**
+   * Annule le padding horizontal du parent (ex. 24) pour un fond bord-à-bord
+   * dans la zone sûre ; le contenu reste géré par la gouttière + safe area.
+   */
+  bleedOverParentPadding?: number;
+};
+
+export function ChatList({
+  messages,
+  loading = false,
+  emptyLabel = "Aucun message pour le moment.",
+  onLoadMore,
+  loadMoreLabel = "Charger plus ancien",
+  loadMoreDisabled = false,
+  loadingMore = false,
+  onOpenImage,
+  onOpenPdf,
+  listAnchorKey = 0,
+  initialScroll = { type: "last" },
+  bleedOverParentPadding = 24,
+}: ChatListProps) {
+  const insets = useSafeAreaInsets();
+  const listRef = useRef<FlatListType<SharedChatMessage> | null>(null);
+  const contentPad = {
+    paddingLeft: CONTENT_GUTTER + insets.left,
+    paddingRight: CONTENT_GUTTER + insets.right,
+  };
+  const prevAnchorKeyRef = useRef<number | null>(null);
+  const hadMessagesRef = useRef(false);
+
+  const applyInitialScroll = useCallback(() => {
+    const list = listRef.current;
+    if (!list || messages.length === 0) return;
+    if (initialScroll.type === "last") {
+      list.scrollToEnd({ animated: false });
+      return;
+    }
+    const index = Math.min(Math.max(0, initialScroll.index), messages.length - 1);
+    try {
+      list.scrollToIndex({ index, animated: false, viewPosition: 0 });
+    } catch {
+      list.scrollToEnd({ animated: false });
+    }
+  }, [initialScroll, messages.length]);
+
+  const onScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      const list = listRef.current;
+      if (!list) return;
+      const offset = Math.max(0, info.index * (info.averageItemLength || 80));
+      list.scrollToOffset({ offset, animated: false });
+      setTimeout(() => {
+        try {
+          list.scrollToIndex({ index: info.index, animated: false, viewPosition: 0 });
+        } catch {
+          list.scrollToEnd({ animated: false });
+        }
+      }, 50);
+    },
+    []
+  );
+
+  useLayoutEffect(() => {
+    if (loading) return;
+    if (messages.length === 0) {
+      hadMessagesRef.current = false;
+      return;
+    }
+    const anchorBumped = prevAnchorKeyRef.current !== listAnchorKey;
+    const firstDataPaint = !hadMessagesRef.current;
+    if (!anchorBumped && !firstDataPaint) return;
+    hadMessagesRef.current = true;
+    prevAnchorKeyRef.current = listAnchorKey;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => applyInitialScroll());
+    });
+  }, [listAnchorKey, loading, messages.length, initialScroll, applyInitialScroll]);
+
+  const renderItem: ListRenderItem<SharedChatMessage> = useCallback(
+    ({ item }) => (
+      <MessageBubble message={item} onOpenImage={onOpenImage} onOpenPdf={onOpenPdf} />
+    ),
+    [onOpenImage, onOpenPdf]
+  );
+
+  const keyExtractor = useCallback((item: SharedChatMessage) => String(item.id), []);
+
+  const header = onLoadMore ? (
+    <Pressable
+      onPress={onLoadMore}
+      disabled={loadMoreDisabled || loadingMore}
+      style={{
+        borderWidth: 1,
+        borderColor: "#e5e7eb",
+        borderRadius: 10,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        marginBottom: 12,
+        backgroundColor: "#fff",
+        opacity: loadMoreDisabled || loadingMore ? 0.6 : 1,
+      }}
+    >
+      <Text style={{ textAlign: "center", color: "#111827" }}>
+        {loadingMore ? "Chargement…" : loadMoreLabel}
+      </Text>
+    </Pressable>
+  ) : null;
+
+  const emptyC =
+    loading && messages.length === 0 ? (
+      <View style={{ paddingVertical: 24, alignItems: "center" }}>
+        <Text style={{ color: "#6b7280" }}>Chargement des messages…</Text>
+      </View>
+    ) : (
+      <View style={{ paddingVertical: 24, alignItems: "center" }}>
+        <Text style={{ color: "#6b7280" }}>{emptyLabel}</Text>
+      </View>
+    );
+
+  return (
+    <View
+      style={[
+        styles.bleedStrip,
+        { marginHorizontal: -bleedOverParentPadding, backgroundColor: CHAT_STRIP_BG },
+      ]}
+    >
+      <FlatList
+        ref={listRef}
+        data={messages}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        style={styles.flat}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        onScrollToIndexFailed={onScrollToIndexFailed}
+        ListHeaderComponent={header}
+        ListEmptyComponent={messages.length === 0 ? emptyC : null}
+        contentContainerStyle={[
+          styles.listContent,
+          contentPad,
+          { paddingTop: 12, paddingBottom: 20, flexGrow: 1 },
+        ]}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  bleedStrip: {
+    flex: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: CHAT_STRIP_TOP_BORDER,
+  },
+  flat: {
+    flex: 1,
+  },
+  listContent: {
+    backgroundColor: CHAT_STRIP_BG,
+  },
+});

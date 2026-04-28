@@ -1,5 +1,5 @@
 import React, { useEffect, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import CompanyEnterpriseLayout from './components/layout/CompanyEnterpriseLayout';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ✅ P1-1: apiClient n'est plus utilisé directement (cookies httpOnly gèrent l'authentification)
@@ -8,15 +8,19 @@ import DefaultLayout from './store/layouts/DefaultLayout';
 import ProtectedRoute from './utils/ProtectedRoute';
 import PlatformSegmentGuard from './pages/admin/PlatformOps/PlatformSegmentGuard';
 import GoogleMapsProvider from './components/common/GoogleMapsProvider';
+import PwaOfflineBanner from './components/common/PwaOfflineBanner';
+import { Toaster } from 'sonner';
+import Home from './pages/Home/Home';
+import { hasActiveSession } from './utils/webAuthSession';
+import BookNewRedirect from './pages/Auth/BookNewRedirect';
 
 // ✅ PERF: Pages critiques (eager loading - chargées immédiatement)
-import Home from './pages/Home/Home';
-import SignUp from './pages/Auth/Signup';
 import Login from './pages/Auth/Login';
 import AppNamespaceRedirect from './pages/Auth/AppNamespaceRedirect';
 import DashboardRedirect from './pages/Auth/DashboardRedirect';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import ResetPassword from './pages/Auth/ResetPassword';
+import SignupActivation from './pages/Auth/SignupActivation';
 import Unauthorized from './pages/Error/Unauthorized';
 import NotFound from './pages/Error/NotFound';
 
@@ -46,6 +50,49 @@ function RedirectToBillingPilotageCompany() {
     />
   );
 }
+
+function ScrollToTopOnNavigation() {
+  const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
+
+  return null;
+}
+
+function LegacySignupRedirect() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search || '');
+  params.set('mode', 'signup');
+  return <Navigate to={`/login?${params.toString()}`} replace />;
+}
+
+const MAP_ROUTE_PATTERNS = [
+  /^\/dashboard\/client\/.+/,
+  /^\/dashboard\/company\/[^/]+\/.+/,
+  /^\/demo\/dashboard\/company\/[^/]+\/.+/,
+  /^\/driver\/map(?:\/|$)/,
+];
+
+function GoogleMapsRouteScope({ children }) {
+  const location = useLocation();
+  // Tout le périmètre « dashboard entreprise » (index + sous-routes) a besoin du contexte
+  // Google Maps pour DriverLiveMap, cartes paramètres, etc. Avant : seul l’index avec
+  // ?live_map=1 ou les sous-chemins du type .../company/:id/xxx étaient couverts ;
+  // l’index seul n’avait pas de GoogleMapsProvider → isLoaded restait false (défaut
+  // du context) et la carte restait en « Chargement de la carte... » au retour sur la page.
+  const isCompanyEnterpriseArea = /^\/(?:demo\/)?dashboard\/company\/[^/]+/.test(
+    location.pathname
+  );
+  const needsGoogleMaps =
+    isCompanyEnterpriseArea ||
+    MAP_ROUTE_PATTERNS.some((pattern) => pattern.test(location.pathname));
+  if (!needsGoogleMaps) {
+    return children;
+  }
+  return <GoogleMapsProvider>{children}</GoogleMapsProvider>;
+}
 const AdminSettings = lazy(() => import('./pages/admin/Settings/AdminSettings'));
 const AdminDemoRequests = lazy(() => import('./pages/admin/DemoRequests/AdminDemoRequests'));
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -62,9 +109,13 @@ const AdminOptuna = lazy(() => import('./pages/admin/Optuna/AdminOptuna'));
 const ClientDashboard = lazy(() => import('./pages/client/Dashboard/ClientDashboard'));
 const AccountUser = lazy(() => import('./pages/client/Account/AccountUser'));
 const ReservationsPage = lazy(() => import('./pages/client/Reservations/ReservationsPage'));
-const ClientWorldlinePaymentReturn = lazy(() =>
-  import('./pages/client/Payment/ClientWorldlinePaymentReturn')
+const ClientSaferpayPaymentReturn = lazy(() =>
+  import('./pages/client/Payment/ClientSaferpayPaymentReturn')
 );
+const ClientSaferpayCheckoutStart = lazy(() =>
+  import('./pages/client/Payment/ClientSaferpayCheckoutStart')
+);
+const GuestSaferpayAppReturn = lazy(() => import('./pages/Public/GuestSaferpayAppReturn'));
 const DriverDashboard = lazy(() => import('./pages/driver/Dashboard/DriverDashboard'));
 const DriverSchedulePage = lazy(() => import('./pages/driver/DriverSchedulePage'));
 const DriverMapPage = lazy(() => import('./pages/driver/Map/DriverMapPage'));
@@ -84,8 +135,14 @@ const RLMetricsDashboard = lazy(
   () => import('./pages/company/Dispatch/Dashboard/RLMetricsDashboard')
 );
 const AnalyticsDashboard = lazy(() => import('./pages/company/Analytics/AnalyticsDashboard'));
-const Dashboard = lazy(() => import('./pages/Home/Dashboard'));
 const PrivacyPolicy = lazy(() => import('./pages/Legal/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/Legal/TermsOfService'));
+const LegalNotice = lazy(() => import('./pages/Legal/LegalNotice'));
+const DeplacezVousPage = lazy(() => import('./pages/Public/DeplacezVousPage'));
+const ConduirePage = lazy(() => import('./pages/Public/ConduirePage'));
+const ProfessionnelPage = lazy(() => import('./pages/Public/ProfessionnelPage'));
+const AProposPage = lazy(() => import('./pages/Public/AProposPage'));
+const AidePage = lazy(() => import('./pages/Public/AidePage'));
 const Contact = lazy(() => import('./pages/Legal/Contact'));
 const DemoRequest = lazy(() => import('./pages/Legal/DemoRequest'));
 const ContactSupport = lazy(() => import('./pages/Legal/ContactSupport'));
@@ -96,6 +153,12 @@ const ContactBilling = lazy(() => import('./pages/Legal/ContactBilling'));
 const ContactFamily = lazy(() => import('./pages/Legal/ContactFamily'));
 const DemoHome = lazy(() => import('./pages/demo/DemoHome'));
 const DemoAccessConsume = lazy(() => import('./pages/demo/DemoAccessConsume'));
+
+/** Anciens liens e-mail / favoris `/client/payment/worldline/*` → Saferpay. */
+function LegacyWorldlinePaymentUrlRedirect({ targetBase }) {
+  const { search } = useLocation();
+  return <Navigate replace to={`${targetBase}${search}`} />;
+}
 
 // ✅ ÉTAPE 6: Pages Institution (lazy loading)
 const AcceptInvite = lazy(() => import('./pages/Auth/AcceptInvite'));
@@ -139,7 +202,7 @@ function setupTokenAutoRefresh() {
   const id = setInterval(
     async () => {
       const now = Date.now();
-      const user = localStorage.getItem('user');
+      const hasSession = hasActiveSession();
 
       // Vérifier si l'utilisateur est actif (moins de 55 min d'inactivité)
       const isActive = now - lastActivity < 55 * 60 * 1000;
@@ -150,7 +213,7 @@ function setupTokenAutoRefresh() {
       // 1. Les cookies sont envoyés automatiquement avec chaque requête
       // 2. Le backend peut détecter l'expiration et renouveler automatiquement
       // 3. L'interceptor 401 gère déjà le refresh en cas d'erreur
-      if (!user || !isActive) {
+      if (!hasSession || !isActive) {
         return; // Pas d'utilisateur ou inactif, ne rien faire
       }
 
@@ -178,8 +241,35 @@ const App = () => {
     return cleanup;
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    let idleId = null;
+    let timerId = null;
+
+    const loadSharedComponentsCss = () => {
+      if (cancelled) return;
+      import('./styles/components.css').catch(() => {});
+    };
+
+    // Déférer les styles utilitaires volumineux non critiques au premier écran.
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(loadSharedComponentsCss, { timeout: 1800 });
+    } else {
+      timerId = window.setTimeout(loadSharedComponentsCss, 800);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timerId != null) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, []);
+
   return (
-    <GoogleMapsProvider>
     <QueryClientProvider client={queryClient}>
       <Router
         future={{
@@ -187,24 +277,45 @@ const App = () => {
           v7_relativeSplatPath: true,
         }}
       >
+        <ScrollToTopOnNavigation />
+        <Toaster position="top-right" richColors closeButton />
+        <PwaOfflineBanner />
         {/* ✅ PERF: Suspense pour gérer le lazy loading des routes */}
-        <Suspense
-          fallback={
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                height: '100vh',
-                fontSize: '18px',
-                color: '#666',
-              }}
-            >
-              Chargement...
-            </div>
-          }
-        >
-          <Routes>
+        <GoogleMapsRouteScope>
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100vh',
+                  gap: '12px',
+                  padding: '24px',
+                }}
+              >
+                <div
+                  style={{
+                    width: 'min(760px, 100%)',
+                    height: '22px',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%)',
+                  }}
+                />
+                <div
+                  style={{
+                    width: 'min(760px, 100%)',
+                    height: '180px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(90deg, #eef2f7 0%, #f8fafc 50%, #eef2f7 100%)',
+                  }}
+                />
+                <div style={{ fontSize: '15px', color: '#64748b' }}>Chargement de la page…</div>
+              </div>
+            }
+          >
+            <Routes>
             <Route
               path="/"
               element={
@@ -214,11 +325,49 @@ const App = () => {
               }
             />
             <Route
-              path="/signup"
+              path="/deplacez-vous"
               element={
                 <DefaultLayout>
-                  <SignUp />
+                  <DeplacezVousPage />
                 </DefaultLayout>
+              }
+            />
+            <Route
+              path="/conduire"
+              element={
+                <DefaultLayout>
+                  <ConduirePage />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/professionnel"
+              element={
+                <DefaultLayout>
+                  <ProfessionnelPage />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/a-propos"
+              element={
+                <DefaultLayout>
+                  <AProposPage />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/aide"
+              element={
+                <DefaultLayout>
+                  <AidePage />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <LegacySignupRedirect />
               }
             />
             <Route
@@ -229,7 +378,23 @@ const App = () => {
                 </DefaultLayout>
               }
             />
+            <Route
+              path="/guest/payment/saferpay/return"
+              element={
+                <Suspense fallback={null}>
+                  <GuestSaferpayAppReturn />
+                </Suspense>
+              }
+            />
             <Route path="/app/*" element={<AppNamespaceRedirect />} />
+            <Route
+              path="/book/new"
+              element={
+                <ProtectedRoute>
+                  <BookNewRedirect />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/dashboard"
               element={
@@ -281,6 +446,14 @@ const App = () => {
               }
             />
             <Route
+              path="/activate-account"
+              element={
+                <DefaultLayout>
+                  <SignupActivation />
+                </DefaultLayout>
+              }
+            />
+            <Route
               path="/invite/:token"
               element={<AcceptInvite />}
             />
@@ -289,6 +462,22 @@ const App = () => {
               element={
                 <DefaultLayout>
                   <PrivacyPolicy />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/conditions"
+              element={
+                <DefaultLayout>
+                  <TermsOfService />
+                </DefaultLayout>
+              }
+            />
+            <Route
+              path="/mentions-legales"
+              element={
+                <DefaultLayout>
+                  <LegalNotice />
                 </DefaultLayout>
               }
             />
@@ -364,15 +553,6 @@ const App = () => {
                 </DefaultLayout>
               }
             />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-
             <Route
               path="/dashboard/admin/:public_id"
               element={
@@ -491,13 +671,35 @@ const App = () => {
               }
             />
             <Route
-              path="/client/payment/worldline/return"
+              path="/client/payment/saferpay/return"
               element={
                 <ProtectedRoute allowedRoles={['client']}>
                   <Suspense fallback={null}>
-                    <ClientWorldlinePaymentReturn />
+                    <ClientSaferpayPaymentReturn />
                   </Suspense>
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/client/payment/saferpay/start"
+              element={
+                <ProtectedRoute allowedRoles={['client']}>
+                  <Suspense fallback={null}>
+                    <ClientSaferpayCheckoutStart />
+                  </Suspense>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/client/payment/worldline/return"
+              element={
+                <LegacyWorldlinePaymentUrlRedirect targetBase="/client/payment/saferpay/return" />
+              }
+            />
+            <Route
+              path="/client/payment/worldline/start"
+              element={
+                <LegacyWorldlinePaymentUrlRedirect targetBase="/client/payment/saferpay/start" />
               }
             />
 
@@ -621,11 +823,11 @@ const App = () => {
 
             <Route path="/unauthorized" element={<Unauthorized />} />
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
+            </Routes>
+          </Suspense>
+        </GoogleMapsRouteScope>
       </Router>
     </QueryClientProvider>
-    </GoogleMapsProvider>
   );
 };
 

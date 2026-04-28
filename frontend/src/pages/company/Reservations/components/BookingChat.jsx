@@ -19,6 +19,8 @@ export default function BookingChat({
   fetchMessages: fetchMessagesProp = null,
   sendMessage: sendMessageProp = null,
   closed = false,
+  /** Si true, affiche un court message au lieu de ne rien rendre quand l’API renvoie 404. */
+  showUnavailableHint = false,
 }) {
   const [messages, setMessages] = useState([]);
   const [hasMore, setHasMore] = useState(false);
@@ -149,7 +151,16 @@ export default function BookingChat({
     }
   };
 
-  if (unavailable) return null;
+  if (unavailable) {
+    if (!showUnavailableHint) return null;
+    return (
+      <div className={s.chatSection}>
+        <p className={s.emptyState}>
+          Messagerie indisponible pour cette réservation (aucun canal ouvert).
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={s.chatSection}>
@@ -177,13 +188,20 @@ export default function BookingChat({
 
             {messages.map((m) => {
               const isCompany = m.sender_type === 'COMPANY';
+              const isClient = m.sender_type === 'CLIENT';
               return (
                 <div
                   key={m.id}
-                  className={`${s.messageRow} ${isCompany ? s.messageRowCompany : s.messageRowInstitution}`}
+                  className={`${s.messageRow} ${
+                    isCompany ? s.messageRowCompany : isClient ? s.messageRowClient : s.messageRowInstitution
+                  }`}
                 >
                   <span className={s.senderLabel}>{m.sender_label}</span>
-                  <div className={`${s.bubble} ${isCompany ? s.bubbleCompany : s.bubbleInstitution}`}>
+                  <div
+                    className={`${s.bubble} ${
+                      isCompany ? s.bubbleCompany : isClient ? s.bubbleClient : s.bubbleInstitution
+                    }`}
+                  >
                     {m.content}
                   </div>
                   <span className={s.timestamp}>{fmtTime(m.created_at)}</span>

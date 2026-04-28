@@ -34,6 +34,7 @@ import {
 import { logoutUser } from '../../../services/authService';
 import NotificationBell from './NotificationBell';
 import Modal from '../../../components/common/Modal';
+import { getActiveAccessToken, getAuthEnv } from '../../../utils/webAuthSession';
 import styles from './InstitutionLayout.module.css';
 
 const InstitutionRequestCreate = lazy(() => import('../Requests/InstitutionRequestCreate'));
@@ -68,12 +69,7 @@ function resolvePageMeta(pathname, publicId) {
 }
 
 function getCurrentAccessToken() {
-  try {
-    const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
-    return localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken') || null;
-  } catch {
-    return null;
-  }
+  return getActiveAccessToken({ allowLegacy: true });
 }
 
 function decodeTokenClaims() {
@@ -116,7 +112,7 @@ const InstitutionLayout = () => {
   const tokenClaims = decodeTokenClaims();
   let isDemoEnv = false;
   try {
-    isDemoEnv = localStorage.getItem('lirie_auth_env') === 'demo';
+    isDemoEnv = getAuthEnv() === 'demo';
   } catch {
     isDemoEnv = false;
   }
@@ -424,6 +420,13 @@ const InstitutionLayout = () => {
 
         {/* Child route content */}
         <div className={styles.content}>
+          <div
+            className={styles.mobileCanonStripe}
+            role="status"
+            title="Suivi terrain : l’application LIRIE Operations complète ce portail (LIRIE_MOBILE_WEB_CANON)."
+          >
+            Mobilité terrain : l&apos;app LIRIE Operations complète ce portail — détail dans le canon multi-surface.
+          </div>
           <Outlet />
         </div>
 

@@ -15,13 +15,13 @@ services:
       - ./nginx/nginx-dev.conf:/etc/nginx/nginx.conf:ro
       - ./backend/uploads:/usr/share/nginx/uploads:ro
     depends_on:
-      api:
+      atmr_api:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - default
 
-  api:
+  atmr_api:
     ports: [] # Ne plus exposer 5000 - nginx prend le relais
     expose:
       - "5000"

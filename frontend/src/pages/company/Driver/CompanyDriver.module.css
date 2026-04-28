@@ -568,6 +568,14 @@
   animation: livePulse 2s ease-in-out infinite;
 }
 
+.mapHeaderRight .liveDotDisconnected {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: none;
+}
+
 @keyframes livePulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }
@@ -577,6 +585,16 @@
   font-size: 11px;
   font-weight: 600;
   color: #059669;
+}
+
+.liveTextMuted {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #94a3b8);
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .collapseBtn {
@@ -715,6 +733,74 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.refreshSpin {
+  animation: spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refreshSpin {
+    animation: none;
+  }
+}
+
+.driverListBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.driverListRefreshing {
+  transition: opacity 0.2s ease;
+  opacity: 0.9;
+}
+
+.listRefreshBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 10px) var(--radius-lg, 10px) 0 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.listRefreshBar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brand-primary, #00796b) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: listRefPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes listRefPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .driverListRefreshing {
+    transition: none;
+  }
+  .listRefreshBar::after {
+    animation: none;
+    background: var(--brand-primary, #00796b);
+    opacity: 0.65;
+  }
 }
 
 .emptyState {

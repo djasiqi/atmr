@@ -1,13 +1,16 @@
 import { configureStore } from '@reduxjs/toolkit';
 import userSlice from './slices/userSlice';
-import authSlice from './slices/authSlice';
-import reservationSlice from './slices/reservationSlice';
+
+// Le runtime principal repose sur React Query.
+// Ce store Redux est conservé uniquement pour les écrans/tests legacy
+// et doit rester compilable sans dépendre de slices supprimées.
+const noopReducer = (state = {}) => state;
 
 const store = configureStore({
   reducer: {
     user: userSlice,
-    auth: authSlice,
-    reservations: reservationSlice,
+    auth: noopReducer,
+    reservations: noopReducer,
   },
 });
 

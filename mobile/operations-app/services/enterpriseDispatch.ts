@@ -27,15 +27,38 @@ import {
   RideCreatePayload,
   AddressSuggestion,
   ClientOption,
+  type DriverAccountInfo,
 } from "@/types/enterpriseDispatch";
 import { sendIngestEvent } from "@/src/config/telemetry";
+
+const shouldFallbackToLegacy = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return status === 404 || status === 405 || status === 501;
+};
+
+const getCompanyMobileFirst = async <T>(
+  mobilePath: string,
+  legacyPath: string,
+  config?: Parameters<typeof enterpriseApi.get<T>>[1]
+) => {
+  try {
+    return await enterpriseApi.get<T>(mobilePath, config);
+  } catch (error) {
+    if (!shouldFallbackToLegacy(error)) {
+      throw error;
+    }
+    return enterpriseApi.get<T>(legacyPath, config);
+  }
+};
 
 export const getDispatchStatus = async (date?: string): Promise<DispatchStatus> => {
   const params: { date?: string } = {};
   if (date) {
     params.date = date;
   }
-  const response = await enterpriseApi.get<DispatchStatus>(
+  const response = await getCompanyMobileFirst<DispatchStatus>(
+    "/company_mobile/dispatch/v1/status",
     "/dispatch/v1/status",
     { params }
   );
@@ -53,7 +76,8 @@ interface ListRidesParams {
 export const getDispatchRides = async (
   params: ListRidesParams
 ): Promise<PaginatedRides> => {
-  const response = await enterpriseApi.get<PaginatedRides>(
+  const response = await getCompanyMobileFirst<PaginatedRides>(
+    "/company_mobile/dispatch/v1/rides",
     "/dispatch/v1/rides",
     {
       params: {
@@ -167,7 +191,7 @@ export const markRideUrgent = async (
     payload
   );
   if (__DEV__ && URGENT_DEBUG) {
-    log.debug("mark ride urgent response", data);
+    log.debug("mark ride urgent response", { response: data });
   }
   return data;
 };
@@ -198,14 +222,6 @@ export const getDispatchSettings = async (): Promise<DispatchSettings> => {
   );
   return response.data;
 };
-
-export interface DriverAccountInfo {
-  has_driver_account: boolean;
-  driver_id?: number;
-  driver_type?: "REGULAR" | "EMERGENCY";
-  is_active?: boolean;
-  is_available?: boolean;
-}
 
 export const getMyDriverAccount = async (): Promise<DriverAccountInfo> => {
   log.info("calling driver-account endpoint", {});
@@ -365,7 +381,8 @@ export const fetchRealtimeDashboard = async (
   if (date) {
     params.date = date;
   }
-  const response = await enterpriseApi.get<RealtimeDashboardData>(
+  const response = await getCompanyMobileFirst<RealtimeDashboardData>(
+    "/company_mobile/dispatch/v1/dashboard/realtime",
     "/dispatch/v1/dashboard/realtime",
     { params }
   );

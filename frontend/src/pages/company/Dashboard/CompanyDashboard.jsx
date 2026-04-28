@@ -48,7 +48,7 @@ import DataFreshnessBadge from '../../../components/common/DataFreshnessBadge';
 import InlineDatePicker from '../../../components/ui/InlineDatePicker';
 import { toast } from 'sonner';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
-import { lirieKeys, LIRIE_QK_PREFIX } from '../../../queryKeys/lirie';
+import { lirieKeys, LIRIE_QK_PREFIX, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
 import {
   canonicalRealtimeTimeMs,
   shouldAcceptRealtimeEvent,
@@ -217,6 +217,53 @@ const CompanyDashboard = () => {
     navigate(`${location.pathname}?${params.toString()}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
 
+  /**
+   * Active la carte live sans clic : double rAF pour le premier paint, puis
+   * requestIdleCallback (ou repli 600 ms) + `startTransition` afin d'éviter
+   * de figer l'UI pendant le chargement de Google Maps.
+   */
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') return;
+    if (liveMapEnabled) return;
+    let cancelled = false;
+    let raf1Id;
+    let raf2Id;
+    let idleId;
+    let timeoutId;
+
+    const run = () => {
+      if (cancelled) return;
+      startTransition(() => {
+        if (!cancelled) handleEnableLiveMap();
+      });
+    };
+
+    raf1Id = requestAnimationFrame(() => {
+      raf2Id = requestAnimationFrame(() => {
+        if (cancelled) return;
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          idleId = window.requestIdleCallback(run, { timeout: 2000 });
+        } else {
+          timeoutId = window.setTimeout(run, 650);
+        }
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (raf1Id != null) window.cancelAnimationFrame(raf1Id);
+      if (raf2Id != null) window.cancelAnimationFrame(raf2Id);
+      if (idleId != null && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+        try {
+          window.cancelIdleCallback(idleId);
+        } catch {
+          // ignore
+        }
+      }
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, [liveMapEnabled, handleEnableLiveMap]);
+
   const handleEditDriver = (d) => {
     setDriverToEdit(d);
     setShowEditModal(true);
@@ -284,10 +331,7 @@ const CompanyDashboard = () => {
       await dispatchNowForReservation(id, 15);
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+        void lirieInvalidateCompanyReservationLists(queryClient);
       });
       toast.success('Dispatch urgent déclenché avec succès');
     } catch (e) {
@@ -295,9 +339,11 @@ const CompanyDashboard = () => {
       const errorMessage = errorData?.message || errorData?.error;
       const status = e?.response?.status;
 
-      console.debug('[DispatchNow] Error status:', status);
-      console.debug('[DispatchNow] Error data:', errorData);
-      console.debug('[DispatchNow] Error message:', errorMessage);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[DispatchNow] Error status:', status);
+        console.debug('[DispatchNow] Error data:', errorData);
+        console.debug('[DispatchNow] Error message:', errorMessage);
+      }
 
       const errorLower = (errorMessage || '').toLowerCase();
       const errorErrorLower = (errorData?.error || '').toLowerCase();
@@ -308,7 +354,9 @@ const CompanyDashboard = () => {
           errorErrorLower.includes('retour') ||
           errorErrorLower.includes('aller'));
 
-      console.debug('[DispatchNow] isReturnNotReady:', isReturnNotReady);
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[DispatchNow] isReturnNotReady:', isReturnNotReady);
+      }
 
       if (isReturnNotReady) {
         const detailMessage =
@@ -316,9 +364,11 @@ const CompanyDashboard = () => {
           errorData?.error ||
           "Impossible de déclencher un retour d'urgence. La course aller doit être complétée avant de déclencher le retour.";
 
-        console.debug('[DispatchNow] Showing warning:', detailMessage);
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('[DispatchNow] Showing warning:', detailMessage);
+          console.debug('Dispatch urgent refusé (comportement attendu):', detailMessage);
+        }
         toast.warning(detailMessage, { duration: 5000 });
-        console.debug('Dispatch urgent refusé (comportement attendu):', detailMessage);
       } else {
         console.error('Dispatch urgent:', e);
         toast.error(errorMessage || 'Erreur lors du dispatch urgent.');
@@ -413,22 +463,30 @@ const CompanyDashboard = () => {
     };
     const onDispatchRunCompleted = (data) => {
       if (!acceptRealtime(data, data?.dispatch_run_id ? `dispatch-run:${data.dispatch_run_id}` : null)) return;
-      console.log('Dispatch run completed:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Dispatch run completed:', data);
+      }
       refetchAll();
     };
     const onTransferReceived = (data) => {
       if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
-      console.log('Transfert reçu:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Transfert reçu:', data);
+      }
       refetchAll();
     };
     const onTransferProposed = (data) => {
       if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
-      console.log('Transfert proposé:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Transfert proposé:', data);
+      }
       refetchAll();
     };
     const onBookingUpdated = (data) => {
       if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
-      console.log('Course mise à jour:', data);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Course mise à jour:', data);
+      }
       refetchAll();
     };
     if (useUnifiedDispatchWs) {
@@ -508,10 +566,7 @@ const CompanyDashboard = () => {
       startTransition(() => {
         refetchInstitutionOffers();
         reloadReservations();
-        queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+        void lirieInvalidateCompanyReservationLists(queryClient);
       });
       return result;
     } catch (err) {
@@ -609,10 +664,7 @@ const CompanyDashboard = () => {
       setScheduleModalReservation(null);
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+        void lirieInvalidateCompanyReservationLists(queryClient);
       });
     } catch (err) {
       console.error('Retour :', err);
@@ -646,12 +698,9 @@ const CompanyDashboard = () => {
     }
     const ymd = String(created?.scheduled_time || resp?.reservation?.scheduled_time || '').slice(0, 10);
     if (ymd) setDispatchDay(ymd);
-    startTransition(() => {
+      startTransition(() => {
       reloadReservations({ silent: true });
-      queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+      void lirieInvalidateCompanyReservationLists(queryClient);
     });
   };
 
@@ -691,14 +740,13 @@ const CompanyDashboard = () => {
       }
 
       const result = await deleteReservation(id, reasonCode, reasonText);
-      console.log('Réservation supprimée:', result);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Réservation supprimée:', result);
+      }
 
       startTransition(() => {
         reloadReservations();
-        queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+        void lirieInvalidateCompanyReservationLists(queryClient);
       });
 
       toast.success(`Réservation #${id} supprimée avec succès`);
@@ -938,10 +986,7 @@ const CompanyDashboard = () => {
         reloadReservations();
         refetchAssigned?.();
         refetchDelays?.();
-        queryClient.invalidateQueries({
-          queryKey: ['lirie', 'company-reservations'],
-          exact: false,
-        });
+        void lirieInvalidateCompanyReservationLists(queryClient);
       });
       toast.success('Assignation confirmée');
       setQuickAssignOpen(false);
@@ -1050,16 +1095,17 @@ const CompanyDashboard = () => {
                   />
                 ) : (
                   <div className={styles.mapDeferred}>
-                    <p className={styles.mapDeferredTitle}>Carte live en pause pour accelerer l'affichage.</p>
+                    <p className={styles.mapDeferredTitle}>Chargement de la carte en cours</p>
                     <p className={styles.mapDeferredText}>
-                      Activez la carte lorsque vous en avez besoin pour charger Google Maps et le suivi en direct.
+                      Le reste du tableau de bord s&apos;affiche d&apos;abord, puis la carte
+                      s&apos;active toute seule (Google Maps) pour ne pas bloquer l&apos;interface.
                     </p>
                     <button
                       type="button"
                       className={styles.mapDeferredButton}
                       onClick={handleEnableLiveMap}
                     >
-                      Activer la carte live
+                      Activer maintenant
                     </button>
                   </div>
                 )}

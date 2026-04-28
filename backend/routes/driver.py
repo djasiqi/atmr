@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import traceback
 from datetime import UTC, datetime, timedelta
@@ -26,6 +27,7 @@ from constants.driver_api_errors import (
     BOOKING_COMPANY_FORBIDDEN,
 )
 from ext import db, role_required, socketio
+from middleware.trace_id import get_trace_id
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
 from routes.db_error_utils import format_integrity_error
@@ -51,6 +53,7 @@ from services.realtime.live_driver_status import (
     resolve_mission_status_for_driver,
 )
 from services.realtime.socketio import fanout_driver_location_update
+from services.tracking import enqueue_tracking_event
 from shared.error_handlers import APIErrorHandler
 from shared.notifications import notify_booking_update
 
@@ -75,6 +78,77 @@ LON_MAX = LON_THRESHOLD
 MIN_POINTS_FOR_MATCHING = 3
 MIN_TOKEN_LENGTH = 10
 BODY_PREVIEW_MAX_LEN = 200
+HTTP_STATUS_OK = 200
+HTTP_STATUS_BAD_REQUEST = 400
+HTTP_STATUS_FORBIDDEN = 403
+HTTP_STATUS_NOT_FOUND = 404
+HTTP_STATUS_SERVER_ERROR = 500
+TRACKING_INGEST_ASYNC_ENABLED = (
+    os.getenv("TRACKING_INGEST_ASYNC_ENABLED", "false").lower() == "true"
+)
+
+
+def _resolve_tracking_ack_status(  # noqa: PLR0911
+    *,
+    accept_status: str | None,
+    accept_reason: str | None,
+    skipped: bool,
+) -> str:
+    if skipped:
+        if accept_reason in {"duplicate_event_id", "duplicate_proximity"}:
+            return "duplicate"
+        if accept_reason in {"older_than_canonical", "too_old_for_mode"}:
+            return "stale"
+        return "ignored"
+    if accept_status in {"accepted_canonical", "accepted_observability_only"}:
+        return "accepted"
+    if accept_reason in {"duplicate_event_id", "duplicate_proximity"}:
+        return "duplicate"
+    if accept_reason in {"older_than_canonical", "too_old_for_mode"}:
+        return "stale"
+    if accept_status == "rejected_invalid":
+        return "rejected"
+    return "ignored"
+
+
+def _normalize_transition_error_payload(
+    payload: dict[str, Any], status_code: int
+) -> dict[str, Any]:
+    if status_code < HTTP_STATUS_BAD_REQUEST:
+        return payload
+    if payload.get("error_code") and payload.get("retryable") is not None:
+        return payload
+
+    error_raw = str(payload.get("error") or payload.get("message") or "").strip().lower()
+    code = "driver_transition_unknown"
+    retryable = False
+
+    if status_code == HTTP_STATUS_NOT_FOUND or "not found" in error_raw:
+        code = "driver_transition_not_found"
+    elif status_code == HTTP_STATUS_FORBIDDEN:
+        if payload.get("code") == BOOKING_ASSIGNED_TO_OTHER_DRIVER:
+            code = "driver_transition_conflict"
+        elif payload.get("code") == BOOKING_COMPANY_FORBIDDEN:
+            code = "driver_transition_forbidden"
+        else:
+            code = "driver_transition_forbidden"
+    elif status_code == HTTP_STATUS_BAD_REQUEST:
+        if "missing json payload" in error_raw:
+            code = "driver_transition_invalid_request"
+        elif "invalid status" in error_raw or "must be" in error_raw or "impossible" in error_raw:
+            code = "driver_transition_invalid_transition"
+        elif "already" in error_raw:
+            code = "driver_transition_already_applied"
+        else:
+            code = "driver_transition_invalid_transition"
+    elif status_code >= HTTP_STATUS_SERVER_ERROR:
+        code = "driver_transition_conflict"
+        retryable = True
+
+    normalized = dict(payload)
+    normalized["error_code"] = code
+    normalized["retryable"] = retryable
+    return normalized
 
 # sentry (si initialisé dans app.py, on garde try/except pour éviter
 # ImportError en tests)
@@ -223,35 +297,53 @@ def get_driver_from_token() -> tuple[Driver | None, dict[str, Any] | None, int |
 
     logger.info("User details: id=%s, role=%s", user.id, user.role)
 
-    if user.role != UserRole.driver:
-        logger.error(
-            "User %s n'a pas le rôle 'driver'",
+    driver_repo = DriverRepository()
+    # UserDTO: pas d'attribut .driver - charger le modele Driver par user_id
+    driver = driver_repo.find_model_by_user_id(user.id)
+    active_ctx = (request.headers.get("X-Active-Context-Id") or "").strip()
+    context_driver_id: int | None = None
+    if active_ctx.startswith("driver:"):
+        try:
+            context_driver_id = int(active_ctx.split(":", 1)[1].strip())
+        except (ValueError, IndexError):
+            context_driver_id = None
+
+    if user.role == UserRole.driver:
+        if not driver:
+            logger.error("Driver not found for user ID: %s", user.id)
+            error_response, status_code = APIErrorHandler.handle_not_found(
+                "Driver",
+                user.id,
+                logger,
+            )
+            return None, error_response, status_code
+        return driver, None, None
+
+    # App unifiée : rôle BDD = company, etc. + fiche chauffeur + en-tête driver:{id}
+    if (
+        context_driver_id is not None
+        and driver is not None
+        and int(driver.id) == context_driver_id
+    ):
+        logger.info(
+            "Driver found: %s for user %s (contexte unifié)",
+            driver.id,
             getattr(user, "username", user.id),
         )
-        error_response, status_code = APIErrorHandler.handle_not_found(
-            "Driver",
-            user_public_id,
-            logger,
-        )
-        return None, error_response, status_code
+        return driver, None, None
 
-    driver_repo = DriverRepository()
-    driver = driver_repo.find_model_by_user_id(user.id)
-    if not driver:
-        logger.error("Driver not found for user ID: {user.id}")
-        error_response, status_code = APIErrorHandler.handle_not_found(
-            "Driver",
-            user.id,
-            logger,
-        )
-        return None, error_response, status_code
-
-    logger.info(
-        "Driver found: %s for user %s",
-        driver.id,
+    logger.error(
+        "User %s n'est pas un chauffeur (role=%s, contexte actif: %s)",
         getattr(user, "username", user.id),
+        user.role,
+        active_ctx or "—",
     )
-    return driver, None, None
+    error_response, status_code = APIErrorHandler.handle_not_found(
+        "Driver",
+        user_public_id,
+        logger,
+    )
+    return None, error_response, status_code
 
 
 def notify_booking_cancelled(driver_id: int, booking_id: int) -> None:
@@ -821,20 +913,29 @@ class DriverBookingsSince(Resource):
                 # Filtrer par updated_at >= since ET statuts appropriés
                 from models.booking import Booking
                 from models.enums import BookingStatus
+                include_terminal = (
+                    str(request.args.get("include_terminal", "false")).strip().lower()
+                    in {"1", "true", "yes", "on"}
+                )
+                statuses = [
+                    BookingStatus.ASSIGNED,
+                    BookingStatus.EN_ROUTE,
+                    BookingStatus.IN_PROGRESS,
+                ]
+                if include_terminal:
+                    statuses.extend(
+                        [
+                            BookingStatus.COMPLETED,
+                            BookingStatus.RETURN_COMPLETED,
+                            BookingStatus.CANCELED,
+                        ]
+                    )
 
                 bookings = (
                     Booking.query.filter(Booking.driver_id == driver.id)
                     .filter(Booking.updated_at >= since_dt)
-                    .filter(
-                        Booking.status.in_(
-                            [
-                                BookingStatus.ASSIGNED,
-                                BookingStatus.EN_ROUTE,
-                                BookingStatus.IN_PROGRESS,
-                            ]
-                        )
-                    )
-                    .order_by(Booking.updated_at.asc())
+                    .filter(Booking.status.in_(statuses))
+                    .order_by(Booking.updated_at.asc(), Booking.id.asc())
                     .all()
                 )
 
@@ -1351,6 +1452,41 @@ class DriverLocation(Resource):
                             location_mode = p.get("location_mode") or "mission_live"
                             is_background = bool(p.get("is_background", False))
                             mission_id = p.get("mission_id")
+
+                            if TRACKING_INGEST_ASYNC_ENABLED:
+                                ingest_payload = {
+                                    "latitude": lat,
+                                    "longitude": lon,
+                                    "speed": speed,
+                                    "heading": heading,
+                                    "accuracy": accuracy,
+                                    "recorded_at": recorded_at,
+                                    "sent_at": sent_at,
+                                    "location_mode": location_mode,
+                                    "is_background": is_background,
+                                    "mission_id": mission_id,
+                                }
+                                company_id_raw = getattr(driver, "company_id", None)
+                                company_id_value = (
+                                    int(company_id_raw)
+                                    if isinstance(company_id_raw, (int, str))
+                                    else None
+                                )
+                                ingest_result = enqueue_tracking_event(
+                                    driver_id=driver.id,
+                                    payload=ingest_payload,
+                                    source="http",
+                                    company_id=company_id_value,
+                                )
+                                if ingest_result.get("queued"):
+                                    return {
+                                        "ok": True,
+                                        "queued": True,
+                                        "trace_id": ingest_result.get("trace_id"),
+                                        "accept_status": "accepted_async",
+                                        "accept_reason": "queued_kafka",
+                                    }, 202
+
                             loc_event_id_raw = request.headers.get(
                                 "X-Location-Event-Id"
                             ) or request.headers.get("x-location-event-id")
@@ -1520,57 +1656,45 @@ class DriverLocation(Resource):
                                         is_active=bool(getattr(driver, "is_active", True)),
                                         presence_status=presence_status,
                                     )
+                                    canonical_payload = {
+                                        "driver_id": driver.id,
+                                        "company_id": driver.company_id,
+                                        "lat": lat,
+                                        # Canonique realtime company: `lon` (alias `lng` transitoire)
+                                        "lon": lon,
+                                        "lng": lon,
+                                        "speed": speed,
+                                        "speed_mps": speed,
+                                        "heading": heading,
+                                        "accuracy": accuracy,
+                                        "accuracy_m": accuracy,
+                                        "ts": recorded_at,
+                                        "timestamp": recorded_at,
+                                        "recorded_at": recorded_at,
+                                        "sent_at": sent_at,
+                                        "received_at": received_at,
+                                        "is_background": is_background,
+                                        "mission_id": mission_id,
+                                        "location_mode": location_mode,
+                                        "last_seen_seconds": last_seen_seconds,
+                                        "location_status": location_status,
+                                        "presence_status": presence_status,
+                                        "status": driver_status_resolved,
+                                        "mission_status": (
+                                            mission_status_resolved
+                                            if mission_status_resolved != "NONE"
+                                            else None
+                                        ),
+                                        "is_available": driver_status_resolved == "available",
+                                        "offline_reason": "",
+                                        "source": source,
+                                        "first_name": first_name,
+                                        "last_name": last_name,
+                                    }
                                     fanout_driver_location_update(
                                         company_id_for_room,
-                                        {
-                                            "driver_id": driver.id,
-                                            "company_id": driver.company_id,
-                                            "lat": lat,
-                                            "lon": lon,
-                                            "speed": speed,
-                                            "speed_mps": speed,
-                                            "heading": heading,
-                                            "accuracy": accuracy,
-                                            "accuracy_m": accuracy,
-                                            "ts": recorded_at,
-                                            "recorded_at": recorded_at,
-                                            "sent_at": sent_at,
-                                            "received_at": received_at,
-                                            "is_background": is_background,
-                                            "mission_id": mission_id,
-                                            "location_mode": location_mode,
-                                            "last_seen_seconds": last_seen_seconds,
-                                            "location_status": location_status,
-                                            "presence_status": presence_status,
-                                            "source": source,
-                                            "first_name": first_name,
-                                            "last_name": last_name,
-                                        },
-                                        {
-                                            "driver_id": driver.id,
-                                            "company_id": driver.company_id,
-                                            "lat": lat,
-                                            "lng": lon,
-                                            "timestamp": recorded_at,
-                                            "recorded_at": recorded_at,
-                                            "received_at": received_at,
-                                            "status": driver_status_resolved,
-                                            "mission_status": (
-                                                mission_status_resolved
-                                                if mission_status_resolved != "NONE"
-                                                else None
-                                            ),
-                                            "presence_status": presence_status,
-                                            "location_status": location_status,
-                                            "is_available": driver_status_resolved
-                                            == "available",
-                                            "offline_reason": "",
-                                            "last_seen_seconds": last_seen_seconds,
-                                            "location_mode": location_mode,
-                                            "mission_id": mission_id,
-                                            "first_name": first_name,
-                                            "last_name": last_name,
-                                        },
+                                        canonical_payload,
+                                        canonical_payload,
                                         accept_status=accept_status,
                                     )
                                 except Exception as fanout_err:
@@ -1602,7 +1726,125 @@ class DriverLocation(Resource):
             result = {"error": f"Internal error: {e!s}"}
             status_code = 500
 
+        if status_code == HTTP_STATUS_OK and result.get("ok") is True:
+            result_payload = cast("dict[str, Any]", result)
+            accept_status_value = str(result.get("accept_status") or "")
+            accept_reason_value = (
+                str(result.get("accept_reason"))
+                if result.get("accept_reason") is not None
+                else None
+            )
+            tracking_event_id = request.headers.get("X-Location-Event-Id") or request.headers.get(
+                "x-location-event-id"
+            )
+            body = cast("dict[str, Any]", request.get_json(silent=True) or {})
+            if not tracking_event_id:
+                tracking_event_id = body.get("tracking_event_id") or body.get(
+                    "location_event_id"
+                )
+            result_payload["tracking_event_id"] = (
+                str(tracking_event_id) if tracking_event_id else None
+            )
+            result_payload["ack_status"] = _resolve_tracking_ack_status(
+                accept_status=accept_status_value,
+                accept_reason=accept_reason_value,
+                skipped=bool(result.get("skipped", False)),
+            )
+            result_payload["trace_id"] = get_trace_id()
+
         return result, status_code
+
+
+@driver_ns.route("/me/locations/batch")
+class DriverLocationBatch(Resource):
+    @jwt_required()
+    @role_required(UserRole.driver)
+    def post(self):
+        """Admission tracking batch asynchrone (HTTP 202)."""
+        driver, error_response, status_code = get_driver_from_token()
+        if error_response:
+            return error_response, status_code
+        driver = cast("Driver", driver)
+
+        if not TRACKING_INGEST_ASYNC_ENABLED:
+            return {
+                "error": "tracking_ingest_async_disabled",
+                "message": "Activez TRACKING_INGEST_ASYNC_ENABLED pour /me/locations/batch.",
+            }, 409
+
+        body = request.get_json(force=True, silent=True) or {}
+        raw_positions = body.get("positions") if isinstance(body, dict) else None
+        if not isinstance(raw_positions, list) or not raw_positions:
+            return {"error": "positions_required"}, 400
+
+        accepted = 0
+        rejected = 0
+        trace_ids: list[str] = []
+        reject_reasons: dict[str, int] = {}
+        for point in raw_positions:
+            if not isinstance(point, dict):
+                rejected += 1
+                continue
+            if ("latitude" not in point and "lat" not in point) or (
+                "longitude" not in point and "lon" not in point
+            ):
+                rejected += 1
+                continue
+            payload = {
+                "latitude": point.get("latitude", point.get("lat")),
+                "longitude": point.get("longitude", point.get("lon")),
+                "speed": point.get("speed"),
+                "heading": point.get("heading"),
+                "accuracy": point.get("accuracy"),
+                "recorded_at": point.get("recorded_at") or point.get("timestamp"),
+                "sent_at": datetime.now(UTC).isoformat(),
+                "location_mode": point.get("location_mode") or "mission_live",
+                "is_background": bool(point.get("is_background", False)),
+                "mission_id": point.get("mission_id"),
+                "tracking_event_id": point.get("tracking_event_id"),
+            }
+            company_id_raw = getattr(driver, "company_id", None)
+            company_id_value = (
+                int(company_id_raw)
+                if isinstance(company_id_raw, (int, str))
+                else None
+            )
+            ingest_result = enqueue_tracking_event(
+                driver_id=driver.id,
+                payload=payload,
+                source="http_batch",
+                company_id=company_id_value,
+            )
+            if ingest_result.get("queued"):
+                accepted += 1
+                trace_id = ingest_result.get("trace_id")
+                if isinstance(trace_id, str):
+                    trace_ids.append(trace_id)
+            else:
+                rejected += 1
+                reason_obj = ingest_result.get("reason")
+                reason = str(reason_obj) if reason_obj else "kafka_error"
+                reject_reasons[reason] = reject_reasons.get(reason, 0) + 1
+
+        response = {
+            "ok": True,
+            "queued": accepted > 0,
+            "accept_status": "accepted_async",
+            "accepted_count": accepted,
+            "rejected_count": rejected,
+            "trace_ids": trace_ids[:20],
+            "reject_reasons": reject_reasons,
+            "fallback_required": rejected > 0,
+        }
+        if accepted == 0 and rejected > 0:
+            return {
+                **response,
+                "ok": False,
+                "accept_status": "fallback_required",
+                "accept_reason": "kafka_unavailable_batch",
+                "message": "Aucun point batch n'a pu etre queue en Kafka. Reessayez.",
+            }, 503
+        return response, 202
 
 
 @driver_ns.route("/me/accident")
@@ -2150,6 +2392,8 @@ class UpdateBookingStatus(Resource):
             }
             status_code = 500
 
+        if isinstance(result, dict):
+            result = _normalize_transition_error_payload(result, int(status_code or 500))
         return result, status_code
 
 

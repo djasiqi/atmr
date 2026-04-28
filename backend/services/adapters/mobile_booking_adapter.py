@@ -10,12 +10,17 @@ et ne doivent pas être inclus dans le payload retourné.
 
 from __future__ import annotations
 
+import os
+from typing import Any
+
 # Longueur d'une date ISO YYYY-MM-DD
 _ISO_DATE_LEN = 10
 
 
 def map_mobile_ride_payload_to_manual_booking_payload(
     payload: dict[str, object],
+    *,
+    enforce_structured_address: bool = False,
 ) -> dict[str, object]:
     """Convertit le payload mobile vers le format canonique ManualBookingCreateSchema.
 
@@ -36,11 +41,78 @@ def map_mobile_ride_payload_to_manual_booking_payload(
     """
     result: dict[str, object] = {}
 
-    # Adresses (conversion des noms)
+    def _to_float(value: Any) -> float | None:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return None
+
+    enforce_mode = enforce_structured_address or (
+        os.getenv("COMPANY_MOBILE_STRUCTURED_RIDE_PAYLOAD_ENABLED", "0") == "1"
+    )
+
+    def _extract_address(
+        value: object,
+        *,
+        address_key: str,
+    ) -> tuple[str | None, str | None, float | None, float | None]:
+        if isinstance(value, str):
+            if enforce_mode:
+                raise ValueError(f"{address_key}.label est requis")
+            normalized = value.strip()
+            return (normalized or None, None, None, None)
+        if not isinstance(value, dict):
+            if enforce_mode:
+                raise ValueError(f"{address_key} doit être un objet structuré")
+            return (None, None, None, None)
+        label_raw = value.get("label") or value.get("address") or value.get("description")
+        place_id_raw = value.get("place_id") or value.get("placeId")
+        lat_raw = value.get("lat") or value.get("latitude")
+        lon_raw = value.get("lon") or value.get("lng") or value.get("longitude")
+        label = str(label_raw).strip() if isinstance(label_raw, str) else None
+        place_id = str(place_id_raw).strip() if isinstance(place_id_raw, str) else None
+        lat = _to_float(lat_raw)
+        lon = _to_float(lon_raw)
+        if enforce_mode and not label:
+            raise ValueError(f"{address_key}.label est requis en mode structuré")
+        return (label or None, place_id or None, lat, lon)
+
+    # Adresses (conversion des noms + extraction coordonnées)
     if "pickup_address" in payload:
-        result["pickup_location"] = payload["pickup_address"]
+        pickup_label, pickup_place_id, pickup_lat, pickup_lon = _extract_address(
+            payload["pickup_address"],
+            address_key="pickup_address",
+        )
+        if pickup_label:
+            result["pickup_location"] = pickup_label
+        if pickup_lat is not None:
+            result["pickup_lat"] = pickup_lat
+        if pickup_lon is not None:
+            result["pickup_lon"] = pickup_lon
+        if pickup_place_id:
+            result["pickup_place_id"] = pickup_place_id
+        if enforce_mode and not pickup_label:
+            raise ValueError("pickup_address.label est requis")
+
     if "dropoff_address" in payload:
-        result["dropoff_location"] = payload["dropoff_address"]
+        dropoff_label, dropoff_place_id, dropoff_lat, dropoff_lon = _extract_address(
+            payload["dropoff_address"],
+            address_key="dropoff_address",
+        )
+        if dropoff_label:
+            result["dropoff_location"] = dropoff_label
+        if dropoff_lat is not None:
+            result["dropoff_lat"] = dropoff_lat
+        if dropoff_lon is not None:
+            result["dropoff_lon"] = dropoff_lon
+        if dropoff_place_id:
+            result["dropoff_place_id"] = dropoff_place_id
+        if enforce_mode and not dropoff_label:
+            raise ValueError("dropoff_address.label est requis")
 
     # Aller-retour
     if "is_return" in payload:

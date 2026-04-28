@@ -1,0 +1,91 @@
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.row {
+  pointer-events: none;
+}
+
+.nameStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.bar {
+  display: block;
+  height: 9px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary, #e2e8f0) 0%,
+    var(--bg-hover, #f1f5f9) 50%,
+    var(--bg-tertiary, #e2e8f0) 100%
+  );
+  background-size: 200% 100%;
+  animation: clSk 1.1s ease-in-out infinite;
+}
+
+.wName {
+  width: 64%;
+  max-width: 180px;
+  height: 12px;
+}
+
+.wId {
+  width: 44px;
+  height: 9px;
+  margin-top: 4px;
+  margin-left: 0;
+}
+
+.wContact {
+  width: 88px;
+  max-width: 100%;
+}
+
+.wAddress {
+  width: 72px;
+  max-width: 100%;
+}
+
+.wStatus {
+  width: 44px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.wDate {
+  width: 72px;
+  height: 10px;
+}
+
+.wMenu {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  margin-left: auto;
+}
+
+@keyframes clSk {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+    background: var(--bg-tertiary, #e2e8f0);
+  }
+}

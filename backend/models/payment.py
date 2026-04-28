@@ -59,10 +59,10 @@ class Payment(db.Model):
     )
 
     user_id = Column(
-        Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("user.id", ondelete="CASCADE"), nullable=True, index=True
     )
     client_id = Column(
-        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=True, index=True
     )
     booking_id = Column(
         Integer,
@@ -75,6 +75,10 @@ class Payment(db.Model):
     worldline_hosted_checkout_id = Column(String(128), nullable=True, unique=True)
     worldline_payment_id = Column(String(128), nullable=True, index=True)
     worldline_partial_redirect_url = Column(Text, nullable=True)
+
+    saferpay_token = Column(Text, nullable=True)
+    saferpay_transaction_id = Column(String(128), nullable=True, index=True)
+    saferpay_notify_key = Column(String(64), nullable=True)
 
     # Relations
     client = relationship("Client", back_populates="payments", passive_deletes=True)
@@ -100,6 +104,8 @@ class Payment(db.Model):
                 self, "worldline_hosted_checkout_id", None
             ),
             "worldline_payment_id": getattr(self, "worldline_payment_id", None),
+            "saferpay_transaction_id": getattr(self, "saferpay_transaction_id", None),
+            "saferpay_has_token": bool(getattr(self, "saferpay_token", None)),
             "booking_info": {
                 "pickup_location": bk.pickup_location if bk else None,
                 "dropoff_location": bk.dropoff_location if bk else None,
@@ -110,6 +116,8 @@ class Payment(db.Model):
     # Validations
     @validates("user_id")
     def validate_user_id(self, _key, user_id):
+        if user_id is None:
+            return None
         if not isinstance(user_id, int) or user_id <= 0:
             msg = "L'ID utilisateur pour Payment doit être un entier positif."
             raise ValueError(msg)

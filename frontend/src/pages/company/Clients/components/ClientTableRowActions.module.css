@@ -2,6 +2,12 @@
 
 .actionsContainer {
   position: relative;
+  z-index: 1;
+}
+
+/* Menu ouvert : au-dessus des lignes suivantes et du bord du tableau */
+.actionsContainer:has([role='menu']) {
+  z-index: 2000;
 }
 
 .menuButton {
@@ -41,7 +47,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 180px;
-  z-index: 100;
+  z-index: 2001;
   overflow: hidden;
   animation: slideDown 0.2s ease-out;
 }

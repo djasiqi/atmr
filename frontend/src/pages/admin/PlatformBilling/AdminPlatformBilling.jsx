@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import {
   createPlatformBillingPeriod,
   downloadPlatformBillingPeriodExport,
@@ -26,6 +27,9 @@ const statusLabel = (s) => {
 };
 
 const AdminPlatformBilling = () => {
+  const { public_id: adminId } = useParams();
+  const base = `/dashboard/admin/${adminId}/billing`;
+
   const [periods, setPeriods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -194,7 +198,7 @@ const AdminPlatformBilling = () => {
           support). Distinct du pilotage analytique sous « Factures ».
         </p>
         <p className={styles.pilotageLink}>
-          <Link to={`${base}/invoices`}>Voir le pilotage billing (analytique)</Link>
+          <Link to={`${base}/pilotage`}>Voir le pilotage billing (analytique)</Link>
         </p>
       </section>
 
@@ -434,7 +438,7 @@ const AdminPlatformBilling = () => {
           </div>
         </div>
       ) : null}
-    </div>
+    </main>
   );
 };
 

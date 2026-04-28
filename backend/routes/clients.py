@@ -1,12 +1,15 @@
+import hashlib
+import json
 import logging
 import re
 import unicodedata
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
-from datetime import UTC, datetime
 from typing import Any, cast
 from urllib.parse import urlencode
 
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import jwt_required
 from flask_mail import Message
 from flask_restx import (
@@ -14,12 +17,24 @@ from flask_restx import (
     Resource,
     fields,
 )
+from marshmallow import ValidationError
 
 from app import sentry_sdk
-from ext import mail, role_required
+from ext import limiter, mail, role_required
+from infrastructure.bookings.distance_duration import get_distance_duration_fn
 from middleware.trace_id import get_trace_id
-from models import BillingParty, Client, ClientBillingParty, ClientStay, Company, db
-from models.enums import GenderEnum, UserRole
+from models import (
+    BillingParty,
+    Client,
+    ClientBillingParty,
+    ClientStay,
+    ClinicBillingPartyMapping,
+    Company,
+    PlatformClientIndicativeFareConfig,
+    PricingProfile,
+    db,
+)
+from models.enums import ClientType, GenderEnum, UserRole
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.user_repository import UserRepository
@@ -29,13 +44,61 @@ from routes.api_error_models import (
     create_permission_error_model,
     create_validation_error_model,
 )
+from schemas.booking_schemas import BookingPreviewSchema
+from schemas.validation_utils import handle_validation_error, validate_request
+from services.booking.client_booking_live_serializer import enrich_client_bookings_list
+from services.booking.expire_unpaid_client_bookings import (
+    expire_awaiting_client_payment_bookings,
+)
+from services.booking.urgent_return_for_client import (
+    apply_client_urgent_return_dispatch,
+)
+from services.client_surface.indicative_fare import (
+    compute_indicative_amount_chf,
+)
+from services.external.ai import get_optimized_route
+from services.geo.geo_resolver import (
+    geo_unit_id_from_pickup_admin_token,
+    resolve_pickup_admin,
+)
+from services.geolocation.geocoding_interface import get_geocoding_service
+from services.pricing.pricing_engine import compute_price
 from services.security.idempotency import IdempotencyService
+from shared.booking_company_resolution import (
+    resolve_booking_owner_company_id_for_create,
+)
+from shared.client_surface_contracts import (
+    CANONICAL_ADDRESS_CONTRACT_VERSION,
+    CANONICAL_PRECISION_ACCEPTANCE_MATRIX,
+    MEDICAL_FIELDS_CONTRACT_VERSION,
+    PREVIEW_CONTRACT_VERSION,
+    PRICING_CONTRACT_VERSION,
+    PRICING_STATUS_VALUES,
+    STATUS_DICTIONARY_VERSION,
+)
 from shared.error_handlers import APIErrorHandler
 from shared.infrastructure.adapters.auth_adapter import (
     get_current_user_via_use_case,
 )
+from shared.time_utils import api_scheduled_iso_to_naive_geneva
 
 TOTAL_AMOUNT_ZERO = 0
+WEEKEND_START_WEEKDAY = 5
+
+# Correspondance institution / clinique (fallbacks par nom)
+_INSTITUTION_NAME_MIN_LEN_SUBSTRING_MATCH = 4
+_INSTITUTION_NAME_SEQUENCE_SIMILARITY_MIN = 0.8
+
+
+def _canonical_address_hash(label: str, lat: float, lng: float) -> str:
+    base = f"{label.strip().lower()}|{lat:.6f}|{lng:.6f}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
+
+
+def _canonical_precision_level(place_payload: dict[str, Any] | None) -> str:
+    if place_payload and place_payload.get("place_id"):
+        return "rooftop"
+    return "street"
 
 logger = logging.getLogger(__name__)
 
@@ -70,18 +133,146 @@ client_profile_model = clients_ns.model(
             pattern="^\\d{4}-\\d{2}-\\d{2}$",
         ),
         "gender": fields.String(description="Genre", enum=["HOMME", "FEMME", "AUTRE"]),
+        "floor": fields.String(description="Étage / appartement", max_length=20),
+        "door_code": fields.String(description="Digicode, interphone", max_length=50),
+        "access_notes": fields.String(
+            description="Complément d’accès (entrée, parking, PMR…)", max_length=4000
+        ),
     },
 )
 
-# Modèle pour la création d'une réservation
+# Aligné sur routes/bookings.py (Marshmallow valide le corps ; ce modèle sert surtout à la doc OpenAPI)
 booking_create_model = clients_ns.model(
-    "BookingCreate",
+    "ClientBookingCreate",
     {
-        "dropoff_location": fields.String(required=True, description="Lieu de dépose"),
-        "scheduled_time": fields.String(
-            required=True, description="Date et heure prévue (format ISO 8601)"
+        "customer_name": fields.String(
+            required=True, min_length=1, max_length=200, description="Nom du client"
         ),
-        "amount": fields.Float(description="Montant de la réservation", default=10),
+        "pickup_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Lieu de prise en charge",
+        ),
+        "dropoff_location": fields.String(
+            required=True, min_length=1, max_length=500, description="Lieu de dépose"
+        ),
+        "scheduled_time": fields.String(
+            required=True,
+            description=(
+                "ISO 8601. Si asap=true, peut être null (dérivé côté serveur)."
+            ),
+        ),
+        "asap": fields.Boolean(
+            description="Dès que possible (scheduled_time dérivé)", default=False
+        ),
+        "amount": fields.Float(required=True, min=0, description="Montant indicatif"),
+        "medical_facility": fields.String(
+            description="Établissement médical", default="", max_length=200
+        ),
+        "doctor_name": fields.String(
+            description="Nom du médecin", default="", max_length=200
+        ),
+        "hospital_service": fields.String(
+            description="Service ou unité (ex. urgences, cardiologie)", default="", max_length=100
+        ),
+        "is_round_trip": fields.Boolean(
+            description="Créer également un retour", default=False
+        ),
+        "return_time": fields.String(
+            description="ISO 8601 heure de retour (optionnel)", default=None
+        ),
+        "return_date": fields.String(
+            description="Date de retour (YYYY-MM-DD) si l'heure exacte n'est pas connue.",
+            default=None,
+        ),
+        "preview_amount": fields.Float(
+            required=False,
+            description="Montant du preview backend transmis pour cohérence create/pay.",
+        ),
+        "occurrences": fields.Integer(
+            description="Nombre de trajets identiques (1–20), information au transporteur",
+            default=1,
+            min=1,
+            max=20,
+        ),
+        "client_note": fields.String(
+            description=(
+                "Précisions pour le transporteur (optionnel, max 500 car.). "
+                "Les lignes « occurrences » / « récurrence » sont ajoutées par le serveur "
+                "au-dessus dans notes_medical ; l'établissement et le médecin sont des champs séparés."
+            ),
+            default="",
+            max_length=500,
+        ),
+        "is_recurring": fields.Boolean(
+            description="Demande de série récurrente (métadonnée pour le transporteur)",
+            default=False,
+        ),
+        "recurrence_type": fields.String(
+            description="daily | weekly | custom", enum=["daily", "weekly", "custom"]
+        ),
+        "recurrence_days": fields.List(
+            fields.Integer(description="0=lun .. 6=dim"),
+            description="Jours si type=custom",
+        ),
+        "recurrence_end_date": fields.String(
+            description="Fin de série optionnelle (YYYY-MM-DD)",
+        ),
+        "recurrence_series_length": fields.Integer(
+            description="Nombre de répétitions prévues (1–52) si is_recurring",
+        ),
+    },
+)
+
+booking_preview_model = clients_ns.model(
+    "ClientBookingPreview",
+    {
+        "pickup_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Lieu de prise en charge (saisi ou canonique).",
+        ),
+        "dropoff_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Lieu de dépose (saisi ou canonique).",
+        ),
+        "scheduled_time": fields.String(
+            required=True,
+            description="ISO 8601. Si asap=true, peut être omis (dérivé côté backend).",
+        ),
+        "asap": fields.Boolean(default=False),
+        "is_round_trip": fields.Boolean(default=False),
+        "return_time": fields.String(required=False),
+        "return_date": fields.String(required=False),
+        "occurrences": fields.Integer(required=False),
+        "client_note": fields.String(required=False),
+        "is_recurring": fields.Boolean(required=False),
+        "recurrence_type": fields.String(required=False, enum=["daily", "weekly", "custom"]),
+        "recurrence_days": fields.List(fields.Integer, required=False),
+        "recurrence_end_date": fields.String(required=False),
+        "recurrence_series_length": fields.Integer(required=False),
+    },
+)
+
+indicative_fare_estimate_model = clients_ns.model(
+    "IndicativeFareEstimateBody",
+    {
+        "pickup_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Adresse ou libellé départ",
+        ),
+        "dropoff_location": fields.String(
+            required=True,
+            min_length=1,
+            max_length=500,
+            description="Adresse ou libellé arrivée",
+        ),
     },
 )
 
@@ -94,7 +285,7 @@ booking_create_model = clients_ns.model(
 class ManageClientProfile(Resource):
     @jwt_required()
     @role_required(UserRole.client)
-    def get(self, public_id):
+    def get(self, public_id):  # noqa: PLR0911
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -102,6 +293,14 @@ class ManageClientProfile(Resource):
                     "User not found or invalid token",
                     logger_instance=logger,
                 )
+            if public_id == "me":
+                client_me = client_repo.find_by_user_id_with_user(current_user.id)
+                if not client_me:
+                    return APIErrorHandler.handle_permission_error(
+                        "Client profile not found",
+                        logger_instance=logger,
+                    )
+                return cast("Any", client_me).serialize, 200
             if (
                 current_user.public_id != public_id
                 and current_user.role != UserRole.admin
@@ -189,6 +388,12 @@ class ManageClientProfile(Resource):
                 client_data["birth_date"] = validated_data["birth_date"]
             if "avs_number" in validated_data:
                 client_data["avs_number"] = validated_data["avs_number"]
+            if "floor" in validated_data:
+                client_data["floor"] = validated_data["floor"]
+            if "door_code" in validated_data:
+                client_data["door_code"] = validated_data["door_code"]
+            if "access_notes" in validated_data:
+                client_data["access_notes"] = validated_data["access_notes"]
 
             # Utiliser le use case pour les champs Client
             if client_data:
@@ -236,8 +441,9 @@ class RecentBookings(Resource):
                     public_id if "public_id" in locals() else None,
                     logger,
                 )
+            expire_awaiting_client_payment_bookings()
             bookings = booking_repo.find_models_by_client_id(client.id, limit=4)
-            return [cast("Any", booking).serialize for booking in bookings], 200
+            return enrich_client_bookings_list(bookings), 200
         except Exception as e:
             logger.error("❌ ERREUR recent_bookings: %s - %s", type(e).__name__, str(e))
             return APIErrorHandler.handle_exception(e, logger)
@@ -254,15 +460,25 @@ class ClientBookings(Resource):
     @role_required(UserRole.client)
     def get(self, public_id):
         try:
-            client = client_repo.find_by_public_id_with_user(public_id)
+            if public_id == "me":
+                current_user = get_current_user_via_use_case()
+                if not current_user:
+                    return APIErrorHandler.handle_permission_error(
+                        "User not found or invalid token",
+                        logger_instance=logger,
+                    )
+                client = client_repo.find_by_user_id_with_user(current_user.id)
+            else:
+                client = client_repo.find_by_public_id_with_user(public_id)
             if not client:
                 return APIErrorHandler.handle_not_found(
                     "Client profile",
                     public_id if "public_id" in locals() else None,
                     logger,
                 )
+            expire_awaiting_client_payment_bookings()
             bookings = booking_repo.find_models_by_client_id(client.id)
-            return [cast("Any", booking).serialize for booking in bookings], 200
+            return enrich_client_bookings_list(bookings), 200
         except Exception as e:
             logger.error(
                 "❌ ERREUR list_client_bookings: %s - %s", type(e).__name__, str(e)
@@ -271,7 +487,9 @@ class ClientBookings(Resource):
 
     @jwt_required()
     @role_required(UserRole.client)
-    @clients_ns.expect(booking_create_model)
+    @limiter.limit("50 per hour")
+    # validate=False : la vérité métier = BookingCreateSchema (asap, champs optionnels, null)
+    @clients_ns.expect(booking_create_model, validate=False)
     @clients_ns.response(200, "Réservation créée avec succès (idempotency)")
     @clients_ns.response(201, "Réservation créée avec succès")
     @clients_ns.response(400, "Erreur de validation", validation_error_model)
@@ -281,139 +499,738 @@ class ClientBookings(Resource):
         409, "Réservation déjà existante (idempotency)", api_error_model
     )
     @clients_ns.response(500, "Erreur serveur", api_error_model)
-    def post(self, _public_id):  # noqa: PLR0911
-        """Créer une réservation pour un client.
+    def post(self, public_id):
+        """Créer une réservation — même logique que POST /bookings/clients/<id>/bookings.
 
-        ✅ P0: Support idempotency-key pour éviter les doublons.
+        Le paramètre URL doit être `public_id` (Flask-RESTX) ; un nom `_public_id`
+        provoquait TypeError (500).
         """
+        from routes.bookings import execute_client_booking_creation
+
+        return execute_client_booking_creation(public_id)
+
+
+@clients_ns.route("/me/bookings")
+class ClientMyBookings(Resource):
+    """Liste des réservations du client authentifié (sans passer par public_id)."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    def get(self):
         try:
-            # ✅ P0: Vérifier idempotency-key
-            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
-            if idempotency_key:
-                cached_response = IdempotencyService.check_key(idempotency_key)
-                if cached_response[0]:  # Key exists
-                    logger.info(
-                        "Idempotency key found, returning cached response",
-                        extra={
-                            "trace_id": get_trace_id(),
-                            "idempotency_key": idempotency_key,
-                        },
-                    )
-                    return cached_response[1], 201
-
-            # Validation initiale combinée
             current_user = get_current_user_via_use_case()
-            client = None
-            if current_user:
-                client = client_repo.find_by_user_id(current_user.id)
-
-            # Validation combinée pour réduire les returns
             if not current_user:
-                return APIErrorHandler.handle_not_found("User", None, logger)
-            if not client:
-                return APIErrorHandler.handle_not_found("Client profile", None, logger)
-
-            data = request.get_json() or {}
-
-            # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
-
-            from schemas.booking_schemas import BookingCreateSchema
-            from schemas.validation_utils import (
-                handle_validation_error,
-                validate_request,
-            )
-
-            try:
-                validated_data = validate_request(
-                    BookingCreateSchema(), data, strict=False
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
                 )
+
+            client = client_repo.find_by_user_id_with_user(current_user.id)
+            if not client:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+
+            expire_awaiting_client_payment_bookings()
+            bookings = booking_repo.find_models_by_client_id(client.id)
+            return enrich_client_bookings_list(bookings), 200
+        except Exception as e:
+            logger.error(
+                "❌ ERREUR list_my_client_bookings: %s - %s", type(e).__name__, str(e)
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("50 per hour")
+    @clients_ns.expect(booking_create_model, validate=False)
+    @clients_ns.response(200, "Réservation créée avec succès (idempotency)")
+    @clients_ns.response(201, "Réservation créée avec succès")
+    @clients_ns.response(400, "Erreur de validation", validation_error_model)
+    @clients_ns.response(401, "Non authentifié", permission_error_model)
+    @clients_ns.response(403, "Non autorisé", permission_error_model)
+    @clients_ns.response(
+        409, "Réservation déjà existante (idempotency)", api_error_model
+    )
+    @clients_ns.response(500, "Erreur serveur", api_error_model)
+    def post(self):
+        """Créer une réservation pour le client authentifié (équivalent POST /.../<public_id>/bookings)."""
+        from routes.bookings import execute_client_booking_creation
+
+        current_user = get_current_user_via_use_case()
+        if not current_user:
+            return APIErrorHandler.handle_permission_error(
+                "User not found or invalid token",
+                logger_instance=logger,
+            )
+        client = client_repo.find_by_user_id_with_user(current_user.id)
+        if not client:
+            return APIErrorHandler.handle_permission_error(
+                "Client profile not found",
+                logger_instance=logger,
+            )
+        return execute_client_booking_creation(str(current_user.public_id))
+
+
+@clients_ns.route("/me/bookings/preview")
+class ClientMyBookingPreview(Resource):
+    """Prévisualisation prix/trajet avant création effective d'une réservation client."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("60 per hour")
+    @clients_ns.expect(booking_preview_model, validate=False)
+    def post(self):  # noqa: PLR0911
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
+
+            client = client_repo.find_by_user_id_with_user(current_user.id)
+            if not client:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+
+            data = request.get_json(silent=True) or {}
+            try:
+                validated = validate_request(BookingPreviewSchema(), data)
             except ValidationError as e:
                 return handle_validation_error(e)
 
-            # Validation du format de date et de l'heure future (regroupée)
-            scheduled_time = None
-            error_response = None
-            try:
-                dt = datetime.fromisoformat(validated_data["scheduled_time"])
-                scheduled_time = dt if dt.tzinfo else dt.replace(tzinfo=UTC)
-                if dt.tzinfo:
-                    scheduled_time = dt.astimezone(UTC)
-                if scheduled_time <= datetime.now(UTC):
-                    error_response = APIErrorHandler.handle_validation_error(
-                        "Scheduled time must be in the future",
-                        field="scheduled_time",
-                        logger_instance=logger,
-                    )
-            except ValueError:
-                error_response = APIErrorHandler.handle_validation_error(
-                    "Invalid scheduled_time format",
-                    field="scheduled_time",
+            geocoding = get_geocoding_service()
+            pickup = geocoding.geocode_address(
+                validated["pickup_location"],
+                country="CH",
+            )
+            dropoff = geocoding.geocode_address(
+                validated["dropoff_location"],
+                country="CH",
+            )
+            if not pickup or pickup.get("lat") is None or pickup.get("lon") is None:
+                return APIErrorHandler.handle_validation_error(
+                    "Adresse de départ non géocodable.",
+                    field="pickup_location",
                     logger_instance=logger,
                 )
-
-            if error_response or scheduled_time is None:
-                return error_response or APIErrorHandler.handle_validation_error(
-                    "Invalid scheduled_time",
-                    field="scheduled_time",
+            if not dropoff or dropoff.get("lat") is None or dropoff.get("lon") is None:
+                return APIErrorHandler.handle_validation_error(
+                    "Adresse de destination non géocodable.",
+                    field="dropoff_location",
                     logger_instance=logger,
                 )
+            pickup_lat_raw = pickup.get("lat")
+            pickup_lon_raw = pickup.get("lon")
+            dropoff_lat_raw = dropoff.get("lat")
+            dropoff_lon_raw = dropoff.get("lon")
+            if (
+                pickup_lat_raw is None
+                or pickup_lon_raw is None
+                or dropoff_lat_raw is None
+                or dropoff_lon_raw is None
+            ):
+                return APIErrorHandler.handle_validation_error(
+                    "Coordonnées géographiques incomplètes.",
+                    field="pickup_location",
+                    logger_instance=logger,
+                )
+            pickup_lat = float(pickup_lat_raw)
+            pickup_lng = float(pickup_lon_raw)
+            dropoff_lat = float(dropoff_lat_raw)
+            dropoff_lng = float(dropoff_lon_raw)
 
-            # ✅ DDD: Utiliser le use case pour créer la réservation
-            from bookings.infrastructure.adapters.booking_service_adapter import (
-                create_booking_via_use_case,
+            distance_fn = get_distance_duration_fn()
+            duration_seconds, distance_meters = distance_fn(
+                validated["pickup_location"],
+                validated["dropoff_location"],
             )
 
-            # Préparer les données pour le use case
-            booking_data = {
-                "customer_name": f"{client.user.first_name} {client.user.last_name}",
-                "pickup_location": validated_data["pickup_location"],
-                "dropoff_location": validated_data["dropoff_location"],
-                "scheduled_time": scheduled_time.isoformat(),
-                "amount": validated_data.get("amount", 10),
-            }
+            pickup_admin = resolve_pickup_admin(
+                lat=pickup_lat,
+                lng=pickup_lng,
+                pickup_zip=None,
+                pickup_text=validated.get("pickup_location"),
+            )
+            dropoff_admin = resolve_pickup_admin(
+                lat=dropoff_lat,
+                lng=dropoff_lng,
+                pickup_zip=None,
+                pickup_text=validated.get("dropoff_location"),
+            )
+            pickup_geo_unit_id = geo_unit_id_from_pickup_admin_token(
+                str(pickup_admin.get("token") or "")
+            )
+            dropoff_geo_unit_id = geo_unit_id_from_pickup_admin_token(
+                str(dropoff_admin.get("token") or "")
+            )
 
-            try:
-                new_booking = create_booking_via_use_case(
-                    user_id=current_user.id, client_id=client.id, data=booking_data
+            company_id = resolve_booking_owner_company_id_for_create(client)
+            if not company_id and getattr(client, "client_type", None) is ClientType.PORTAL:
+                portal_ref = int(
+                    current_app.config.get("PORTAL_CLIENT_PREVIEW_COMPANY_ID", 0) or 0
                 )
+                if portal_ref > 0:
+                    company_id = portal_ref
+            if not company_id:
+                ind_cfg = db.session.get(PlatformClientIndicativeFareConfig, 1)
+                if (
+                    getattr(client, "client_type", None) is ClientType.PORTAL
+                    and ind_cfg
+                    and bool(ind_cfg.is_enabled)
+                ):
+                    # Même source dist/dur que POST /me/indicative-fare/estimate
+                    # pour aligner le montant sur l’indicatif affiché (ex. 45 CHF).
+                    route_res = get_optimized_route(
+                        str(validated["pickup_location"]),
+                        str(validated["dropoff_location"]),
+                    )
+                    if route_res.get("error"):
+                        return APIErrorHandler.handle_validation_error(
+                            str(route_res.get("error") or "Itinéraire indisponible."),
+                            field="pickup_location",
+                            logger_instance=logger,
+                        )
+                    route_dist_m = int(route_res.get("distance_m") or 0)
+                    route_dur_s = int(route_res.get("duration_s") or 0)
+                    ind_amt = compute_indicative_amount_chf(
+                        route_dist_m, route_dur_s, ind_cfg
+                    )
+                    pricing_status = "estimated"
+                    if pricing_status not in PRICING_STATUS_VALUES:
+                        pricing_status = "unavailable"
+                    pickup_label = str(validated["pickup_location"])
+                    dropoff_label = str(validated["dropoff_location"])
+                    ind_breakdown: dict[str, Any] = {
+                        "source": "platform_indicative_fare",
+                        "config_version": int(ind_cfg.config_version or 0),
+                    }
+                    return {
+                        "success": True,
+                        "contracts": {
+                            "status_dictionary_version": STATUS_DICTIONARY_VERSION,
+                            "pricing_contract_version": PRICING_CONTRACT_VERSION,
+                            "canonical_address_contract_version": (
+                                CANONICAL_ADDRESS_CONTRACT_VERSION
+                            ),
+                            "preview_contract_version": PREVIEW_CONTRACT_VERSION,
+                            "medical_fields_contract_version": (
+                                MEDICAL_FIELDS_CONTRACT_VERSION
+                            ),
+                        },
+                        "pricing": {
+                            "amount": float(ind_amt),
+                            "currency": "CHF",
+                            "distance_meters": route_dist_m,
+                            "duration_seconds": route_dur_s,
+                            "pricing_profile_id": None,
+                            "pricing_profile_version_id": None,
+                            "pricing_status": pricing_status,
+                            "breakdown": ind_breakdown,
+                        },
+                        "canonical_addresses": {
+                            "pickup": {
+                                "label": pickup_label,
+                                "lat": pickup_lat,
+                                "lng": pickup_lng,
+                                "lon": pickup_lng,
+                                "place_id": pickup.get("place_id"),
+                                "osm_id": pickup.get("osm_id"),
+                                "photon_id": pickup.get("photon_id"),
+                                "canonical_hash": _canonical_address_hash(
+                                    pickup_label, pickup_lat, pickup_lng
+                                ),
+                                "precision_level": _canonical_precision_level(pickup),
+                                "admin_token": pickup_admin.get("token"),
+                            },
+                            "dropoff": {
+                                "label": dropoff_label,
+                                "lat": dropoff_lat,
+                                "lng": dropoff_lng,
+                                "lon": dropoff_lng,
+                                "place_id": dropoff.get("place_id"),
+                                "osm_id": dropoff.get("osm_id"),
+                                "photon_id": dropoff.get("photon_id"),
+                                "canonical_hash": _canonical_address_hash(
+                                    dropoff_label, dropoff_lat, dropoff_lng
+                                ),
+                                "precision_level": _canonical_precision_level(dropoff),
+                                "admin_token": dropoff_admin.get("token"),
+                            },
+                        },
+                        "workflow": {
+                            "payment_required": True,
+                            "transmission_requires_client_action": False,
+                        },
+                        "validation": {
+                            "canonical_precision_acceptance_matrix": (
+                                CANONICAL_PRECISION_ACCEPTANCE_MATRIX
+                            )
+                        },
+                    }, 200
+                return {
+                    "error": "preview_unavailable",
+                    "message": "Prévisualisation indisponible pour ce contexte client.",
+                }, 422
 
-                # ✅ P0: Ajouter trace_id dans la réponse
-                trace_id = get_trace_id()
-                logger.info(
-                    "✅ Réservation créée avec succès: booking_id=%s, client_id=%s",
-                    new_booking.id if hasattr(new_booking, "id") else None,
-                    client.id,
-                    extra={
-                        "trace_id": trace_id,
-                        "booking_id": new_booking.id
-                        if hasattr(new_booking, "id")
-                        else None,
-                        "client_id": client.id,
-                    },
-                )
+            profile = (
+                PricingProfile.query.filter_by(company_id=company_id, is_active=True)
+                .order_by(PricingProfile.created_at.desc())
+                .first()
+            )
+            if not profile:
+                return {
+                    "error": "preview_unavailable",
+                    "message": "Aucun profil de pricing actif.",
+                }, 422
 
-                result = {
-                    "message": "Booking created successfully",
-                    "booking": new_booking.serialize,
-                    "trace_id": trace_id,
-                }
+            version = profile.current_version
+            if not version and profile.versions:
+                version = sorted(
+                    profile.versions,
+                    key=lambda item: int(item.version),
+                    reverse=True,
+                )[0]
+            if not version:
+                return {
+                    "error": "preview_unavailable",
+                    "message": "Aucune version de pricing active.",
+                }, 422
 
-                # ✅ P0: Stocker la réponse pour idempotency
-                if idempotency_key:
-                    IdempotencyService.store_response(idempotency_key, result, 201)
-
-                return result, 201
-            except (ValueError, RuntimeError) as e:
-                # Erreur de validation ou de géocodage
+            scheduled_time = api_scheduled_iso_to_naive_geneva(validated["scheduled_time"])
+            if scheduled_time is None:
                 return APIErrorHandler.handle_validation_error(
-                    str(e),
+                    "scheduled_time invalide",
+                    field="scheduled_time",
                     logger_instance=logger,
                 )
 
+            now_ref = datetime.now(
+                scheduled_time.tzinfo) if scheduled_time.tzinfo else datetime.now()
+            minutes_until = max(0, int((scheduled_time - now_ref).total_seconds() // 60))
+            context = {
+                "is_weekend": scheduled_time.weekday() >= WEEKEND_START_WEEKDAY,
+                "is_round_trip": bool(validated.get("is_round_trip")),
+                "pickup_local_time": scheduled_time.strftime("%H:%M"),
+                "minutes_until_pickup": minutes_until,
+                "distance_km": max(float(distance_meters or 0) / 1000.0, 0.0),
+                "pickup_admin_token": pickup_admin.get("token"),
+                "dropoff_admin_token": dropoff_admin.get("token"),
+                "pickup_lat": pickup_lat,
+                "pickup_lng": pickup_lng,
+                "dropoff_lat": dropoff_lat,
+                "dropoff_lng": dropoff_lng,
+                "pickup_geo_unit_id": pickup_geo_unit_id,
+                "dropoff_geo_unit_id": dropoff_geo_unit_id,
+                "zones_count": (
+                    1
+                    if pickup_admin.get("token") == dropoff_admin.get("token")
+                    else 2
+                ),
+                "requires_waiting": bool(validated.get("requires_waiting")),
+            }
+            try:
+                amount, breakdown = compute_price(validated, version, context)
+            except Exception:
+                logger.exception("❌ Erreur compute_price en preview client")
+                return {
+                    "error": "preview_unavailable",
+                    "message": "Impossible de calculer le prix prévisionnel.",
+                }, 422
+
+            pricing_status = "estimated"
+            if pricing_status not in PRICING_STATUS_VALUES:
+                pricing_status = "unavailable"
+            pickup_label = str(validated["pickup_location"])
+            dropoff_label = str(validated["dropoff_location"])
+
+            return {
+                "success": True,
+                "contracts": {
+                    "status_dictionary_version": STATUS_DICTIONARY_VERSION,
+                    "pricing_contract_version": PRICING_CONTRACT_VERSION,
+                    "canonical_address_contract_version": CANONICAL_ADDRESS_CONTRACT_VERSION,
+                    "preview_contract_version": PREVIEW_CONTRACT_VERSION,
+                    "medical_fields_contract_version": MEDICAL_FIELDS_CONTRACT_VERSION,
+                },
+                "pricing": {
+                    "amount": float(amount),
+                    "currency": profile.currency,
+                    "distance_meters": int(distance_meters),
+                    "duration_seconds": int(duration_seconds),
+                    "pricing_profile_id": profile.id,
+                    "pricing_profile_version_id": version.id,
+                    "pricing_status": pricing_status,
+                    "breakdown": breakdown,
+                },
+                "canonical_addresses": {
+                    "pickup": {
+                        "label": pickup_label,
+                        "lat": pickup_lat,
+                        "lng": pickup_lng,
+                        "lon": pickup_lng,
+                        "place_id": pickup.get("place_id"),
+                        "osm_id": pickup.get("osm_id"),
+                        "photon_id": pickup.get("photon_id"),
+                        "canonical_hash": _canonical_address_hash(
+                            pickup_label, pickup_lat, pickup_lng
+                        ),
+                        "precision_level": _canonical_precision_level(pickup),
+                        "admin_token": pickup_admin.get("token"),
+                    },
+                    "dropoff": {
+                        "label": dropoff_label,
+                        "lat": dropoff_lat,
+                        "lng": dropoff_lng,
+                        "lon": dropoff_lng,
+                        "place_id": dropoff.get("place_id"),
+                        "osm_id": dropoff.get("osm_id"),
+                        "photon_id": dropoff.get("photon_id"),
+                        "canonical_hash": _canonical_address_hash(
+                            dropoff_label, dropoff_lat, dropoff_lng
+                        ),
+                        "precision_level": _canonical_precision_level(dropoff),
+                        "admin_token": dropoff_admin.get("token"),
+                    },
+                },
+                "workflow": {
+                    "payment_required": True,
+                    "transmission_requires_client_action": False,
+                },
+                "validation": {
+                    "canonical_precision_acceptance_matrix": (
+                        CANONICAL_PRECISION_ACCEPTANCE_MATRIX
+                    )
+                },
+            }, 200
         except Exception as e:
-            sentry_sdk.capture_exception(e)
-            logger.error("❌ ERREUR create_booking: %s - %s", type(e).__name__, str(e))
+            logger.error("❌ ERREUR booking_preview: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+def _indicative_fare_estimate_log(
+    *,
+    estimate_status: str,
+    config_version: int | None,
+    distance_m: int | None,
+    duration_s: int | None,
+    indicative_amount_chf: float | None,
+    user_id: int | None,
+    client_id: int | None,
+    route_error: str | None = None,
+) -> None:
+    payload: dict[str, object] = {
+        "estimate_status": estimate_status,
+        "config_version": config_version,
+        "distance_m": distance_m,
+        "duration_s": duration_s,
+        "indicative_amount_chf": indicative_amount_chf,
+        "user_id": user_id,
+        "client_id": client_id,
+    }
+    if route_error is not None:
+        payload["route_error"] = route_error
+    logger.info("indicative_fare_estimate %s", json.dumps(payload, default=str))
+
+
+@clients_ns.route("/me/indicative-fare/estimate")
+class ClientIndicativeFareEstimate(Resource):
+    """POST /me/indicative-fare/estimate: indicative amount; route from get_optimized_route (same as /ai/optimized-route)."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("60 per hour")
+    @clients_ns.expect(indicative_fare_estimate_model, validate=False)
+    def post(self) -> Any:  # noqa: PLR0911
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
+            client = client_repo.find_by_user_id_with_user(current_user.id)
+            if not client:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+            data = request.get_json(silent=True) or {}
+            pickup = str(data.get("pickup_location") or "").strip()
+            dropoff = str(data.get("dropoff_location") or "").strip()
+            if not pickup or not dropoff:
+                return APIErrorHandler.handle_validation_error(
+                    "pickup_location et dropoff_location sont requis.",
+                    field="pickup_location",
+                    logger_instance=logger,
+                )
+
+            cfg = db.session.get(PlatformClientIndicativeFareConfig, 1)
+            if not cfg:
+                _indicative_fare_estimate_log(
+                    estimate_status="disabled",
+                    config_version=None,
+                    distance_m=None,
+                    duration_s=None,
+                    indicative_amount_chf=None,
+                    user_id=current_user.id,
+                    client_id=client.id,
+                )
+                return {
+                    "error": "indicative_fare_unconfigured",
+                    "message": "Indicative fare estimation is not configured.",
+                }, 503
+            if not bool(cfg.is_enabled):
+                _indicative_fare_estimate_log(
+                    estimate_status="disabled",
+                    config_version=cfg.config_version,
+                    distance_m=None,
+                    duration_s=None,
+                    indicative_amount_chf=None,
+                    user_id=current_user.id,
+                    client_id=client.id,
+                )
+                return {
+                    "error": "indicative_fare_disabled",
+                    "message": "Indicative fare estimation is currently unavailable.",
+                }, 412
+
+            result = get_optimized_route(pickup, dropoff)
+            if result.get("error"):
+                err = str(result.get("error") or "route")
+                _indicative_fare_estimate_log(
+                    estimate_status="route_error",
+                    config_version=cfg.config_version,
+                    distance_m=None,
+                    duration_s=None,
+                    indicative_amount_chf=None,
+                    user_id=current_user.id,
+                    client_id=client.id,
+                    route_error=err,
+                )
+                return {
+                    "error": "indicative_fare_route_error",
+                    "message": err,
+                }, 400
+            dist = int(result.get("distance_m") or 0)
+            dur = int(result.get("duration_s") or 0)
+            amount = compute_indicative_amount_chf(dist, dur, cfg)
+            amt = float(amount)
+            _indicative_fare_estimate_log(
+                estimate_status="success",
+                config_version=cfg.config_version,
+                distance_m=dist,
+                duration_s=dur,
+                indicative_amount_chf=amt,
+                user_id=current_user.id,
+                client_id=client.id,
+            )
+            return {
+                "distance_m": dist,
+                "duration_s": dur,
+                "indicative_amount_chf": amt,
+                "currency": "CHF",
+                "config_version": int(cfg.config_version or 0),
+                "is_contractual": False,
+            }, 200
+        except Exception as e:
+            logger.error("❌ indicative_fare_estimate: %s - %s", type(e).__name__, str(e))
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@clients_ns.route(
+    "/<string:public_id>/bookings/<int:booking_id>/confirm-return-time"
+)
+class ClientBookingConfirmReturnTime(Resource):
+    """Portail client : après contact téléphonique, confirmer l'heure du segment retour."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("30 per hour")
+    def post(self, public_id, booking_id):  # noqa: PLR0911
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "Authentification requise", logger_instance=logger
+                )
+            if (
+                str(current_user.public_id) != str(public_id)
+                and current_user.role != UserRole.admin
+            ):
+                return APIErrorHandler.handle_permission_error(
+                    "Accès refusé à ce profil client", logger_instance=logger
+                )
+
+            client = client_repo.find_by_public_id_with_user(public_id)
+            if not client:
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id,
+                    logger,
+                )
+
+            booking = booking_repo.find_model_by_id_and_client(
+                int(booking_id), int(client.id)
+            )
+            if not booking:
+                return APIErrorHandler.handle_not_found(
+                    "Booking",
+                    str(booking_id),
+                    logger,
+                )
+
+            if bool(getattr(booking, "is_return", False)):
+                ret_booking = booking
+            else:
+                ret_booking = getattr(booking, "return_trip", None)
+            if ret_booking is None:
+                return APIErrorHandler.handle_validation_error(
+                    "Cette réservation n’a pas de segment retour lié.",
+                    logger_instance=logger,
+                )
+
+            st = getattr(ret_booking, "status", None)
+            st_val = str(getattr(st, "value", st) or "").upper()
+            if st_val in {"CANCELLED", "CANCELED", "REJECTED"}:
+                return APIErrorHandler.handle_validation_error(
+                    "Le segment retour est annulé ; confirmation impossible.",
+                    logger_instance=logger,
+                )
+
+            if getattr(ret_booking, "scheduled_time", None) is None:
+                return APIErrorHandler.handle_validation_error(
+                    "Aucune date de retour enregistrée ; contactez le transporteur.",
+                    logger_instance=logger,
+                )
+
+            if bool(getattr(ret_booking, "time_confirmed", True)):
+                return {"already_confirmed": True, "return_booking_id": ret_booking.id}, 200
+
+            ret_booking.time_confirmed = True
+            db.session.add(ret_booking)
+            db.session.commit()
+
+            return {
+                "success": True,
+                "return_booking_id": ret_booking.id,
+                "time_confirmed": True,
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "❌ confirm_return_time: %s - %s", type(e).__name__, str(e)
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+@clients_ns.route(
+    "/<string:public_id>/bookings/<int:booking_id>/request-urgent-return"
+)
+class ClientBookingRequestUrgentReturn(Resource):
+    """Portail client : apres l'aller termine, programmer un retour d'urgence (~15 min)."""
+
+    @jwt_required()
+    @role_required(UserRole.client)
+    @limiter.limit("20 per hour")
+    def post(self, public_id, booking_id):  # noqa: PLR0911
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "Authentification requise", logger_instance=logger
+                )
+            if (
+                str(current_user.public_id) != str(public_id)
+                and current_user.role != UserRole.admin
+            ):
+                return APIErrorHandler.handle_permission_error(
+                    "Accès refusé à ce profil client", logger_instance=logger
+                )
+
+            client = client_repo.find_by_public_id_with_user(public_id)
+            if not client:
+                return APIErrorHandler.handle_not_found(
+                    "Client profile",
+                    public_id,
+                    logger,
+                )
+
+            booking = booking_repo.find_model_by_id_and_client(
+                int(booking_id), int(client.id)
+            )
+            if not booking:
+                return APIErrorHandler.handle_not_found(
+                    "Booking",
+                    str(booking_id),
+                    logger,
+                )
+
+            outbound = booking
+            if bool(getattr(booking, "is_return", False)):
+                pid = getattr(booking, "parent_booking_id", None)
+                if pid is None:
+                    return APIErrorHandler.handle_validation_error(
+                        "Réservation retour sans aller parent.",
+                        logger_instance=logger,
+                    )
+                outbound = booking_repo.find_model_by_id_and_client(
+                    int(pid), int(client.id)
+                )
+                if not outbound:
+                    return APIErrorHandler.handle_not_found(
+                        "Booking",
+                        str(pid),
+                        logger,
+                    )
+
+            payload_json = request.get_json(silent=True) or {}
+            try:
+                minutes_offset = int(payload_json.get("minutes_offset", 15))
+            except (TypeError, ValueError):
+                minutes_offset = 15
+            minutes_offset = max(1, min(minutes_offset, 120))
+
+            ok, err_code, payload = apply_client_urgent_return_dispatch(
+                outbound=outbound,
+                minutes_offset=minutes_offset,
+            )
+            if not ok:
+                messages = {
+                    "booking_must_be_outbound": "Référence de réservation invalide.",
+                    "return_segment_missing": (
+                        "Aucun segment retour n'est lié à cette course."
+                    ),
+                    "outbound_not_completed": (
+                        "L'aller doit être terminé avant de programmer le retour "
+                        "d'urgence."
+                    ),
+                    "return_status_unknown": (
+                        "Statut du retour indisponible. Réessayez plus tard."
+                    ),
+                    "return_already_finished": "Le retour est déjà terminé ou annulé.",
+                    "return_already_started": (
+                        "Le retour est déjà en cours ; contactez le transporteur."
+                    ),
+                    "company_missing_on_return": (
+                        "Transporteur introuvable pour ce retour."
+                    ),
+                }
+                return APIErrorHandler.handle_validation_error(
+                    messages.get(err_code or "", err_code or "bad_request"),
+                    logger_instance=logger,
+                )
+
+            return {"success": True, **(payload or {})}, 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "request_urgent_return: %s - %s", type(e).__name__, str(e)
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -437,6 +1254,50 @@ def _normalize_name_for_match(value: str | None) -> str:
     )
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _sanitize_company_email(raw_value: str | None) -> str | None:
+    """Retourne un email valide pour Company, sinon None."""
+    if raw_value is None:
+        return None
+    candidate = str(raw_value).strip()
+    if not candidate:
+        return None
+    if re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", candidate):
+        return candidate
+    return None
+
+
+def _sanitize_company_phone(raw_value: str | None) -> str | None:
+    """Retourne un téléphone valide pour Company, sinon None."""
+    if raw_value is None:
+        return None
+    candidate = str(raw_value).strip()
+    if not candidate:
+        return None
+    if re.match(r"^\+?[0-9\s\-\(\)]{7,20}$", candidate):
+        return candidate
+    return None
+
+
+def _to_optional_float(raw_value: Any) -> float | None:
+    """Convertit en float si possible, sinon None."""
+    if raw_value in (None, ""):
+        return None
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_optional_decimal(raw_value: Any) -> Decimal | None:
+    """Convertit en Decimal si possible, sinon None."""
+    if raw_value in (None, ""):
+        return None
+    try:
+        return Decimal(str(raw_value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
 
 
 def _serialize_client_stay(stay: ClientStay) -> dict[str, Any]:
@@ -525,7 +1386,7 @@ def _serialize_client_stay_with_clinic_details(
         ).first()
     if not fallback_client and owner_company_id is not None and clinic.name:
         clinic_name_clean = clinic.name.strip()
-        if len(clinic_name_clean) >= 4:
+        if len(clinic_name_clean) >= _INSTITUTION_NAME_MIN_LEN_SUBSTRING_MATCH:
             fallback_client = Client.query.filter(
                 Client.is_institution.is_(True),
                 Client.company_id == owner_company_id,
@@ -555,7 +1416,7 @@ def _serialize_client_stay_with_clinic_details(
                     cand_norm == clinic_norm
                     or cand_norm in clinic_norm
                     or clinic_norm in cand_norm
-                    or similarity >= 0.8
+                    or similarity >= _INSTITUTION_NAME_SEQUENCE_SIMILARITY_MIN
                 ):
                     fallback_client = candidate
                     break
@@ -1377,6 +2238,34 @@ class GenerateQRBill(Resource):
 class DeleteAccount(Resource):
     @jwt_required()
     @role_required(UserRole.client)
+    def get(self):
+        """Retourne le profil client authentifié (`/clients/me`)."""
+        try:
+            current_user = get_current_user_via_use_case()
+            if not current_user:
+                return APIErrorHandler.handle_permission_error(
+                    "User not found or invalid token",
+                    logger_instance=logger,
+                )
+
+            client = client_repo.find_by_user_id_with_user(current_user.id)
+            if not client:
+                return APIErrorHandler.handle_permission_error(
+                    "Client profile not found",
+                    logger_instance=logger,
+                )
+            return cast("Any", client).serialize, 200
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
+            logger.error(
+                "❌ ERREUR get_client_me: %s - %s",
+                type(e).__name__,
+                str(e),
+            )
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @jwt_required()
+    @role_required(UserRole.client)
     def delete(self):
         try:
             current_user = get_current_user_via_use_case()
@@ -1491,6 +2380,9 @@ class CancelBooking(Resource):
                 CancelBookingUseCase,
             )
 
+            st_before = getattr(booking.status, "value", booking.status)
+            previous_status = str(st_before or "")
+
             uc = CancelBookingUseCase()
             input_data = CancelBookingInput(booking=cast(Any, booking))
             uc_result = uc.execute(input_data)
@@ -1500,6 +2392,40 @@ class CancelBooking(Resource):
                 }, uc_result.status_code or 400
 
             db.session.commit()
+
+            try:
+                from security.audit_log import AuditLogger
+
+                AuditLogger.log_action(
+                    action_type="booking_cancelled",
+                    action_category="booking",
+                    user_id=current_user.id,
+                    user_type="client",
+                    company_id=getattr(booking, "company_id", None),
+                    booking_id=getattr(booking, "id", None),
+                    correlation_id=get_trace_id(),
+                    action_details={
+                        "source": "routes.clients.cancel",
+                        "previous_status": previous_status,
+                        "new_status": "canceled",
+                        "trigger": "user",
+                    },
+                )
+            except Exception as audit_exc:
+                logger.critical(
+                    "[booking] audit booking_cancelled failed booking_id=%s: %s",
+                    getattr(booking, "id", None),
+                    audit_exc,
+                    exc_info=True,
+                )
+                try:
+                    from services.monitoring.prometheus import (
+                        inc_booking_audit_write_failed,
+                    )
+
+                    inc_booking_audit_write_failed(action_type="booking_cancelled")
+                except Exception:
+                    pass
 
             # ✅ P0: Ajouter trace_id dans la réponse
             trace_id = get_trace_id()
@@ -2003,11 +2929,49 @@ class CreateCompanyForInstitutionClient(Resource):
                             break
 
             # Créer la Company seulement si nécessaire
-            domicile_lat = getattr(client, "domicile_lat", None)
-            domicile_lon = getattr(client, "domicile_lon", None)
+            domicile_lat = _to_optional_float(getattr(client, "domicile_lat", None))
+            domicile_lon = _to_optional_float(getattr(client, "domicile_lon", None))
             domicile_address = getattr(client, "domicile_address", None) or ""
             domicile_zip = getattr(client, "domicile_zip", None) or ""
             domicile_city = getattr(client, "domicile_city", None) or ""
+            preferred_rate = _to_optional_decimal(
+                getattr(client, "preferential_rate", None)
+            )
+            company_email = _sanitize_company_email(
+                getattr(client, "contact_email", None)
+            ) or _sanitize_company_email(getattr(company_user, "email", None))
+            company_phone = _sanitize_company_phone(
+                getattr(client, "contact_phone", None)
+            ) or _sanitize_company_phone(getattr(company_user, "phone", None))
+
+            if (
+                getattr(client, "contact_email", None)
+                and not _sanitize_company_email(getattr(client, "contact_email", None))
+            ):
+                logger.warning(
+                    "⚠️ Email contact invalide ignoré pour client institution %s: %r",
+                    client_id,
+                    client.contact_email,
+                )
+            if (
+                getattr(client, "contact_phone", None)
+                and not _sanitize_company_phone(getattr(client, "contact_phone", None))
+            ):
+                logger.warning(
+                    "⚠️ Téléphone contact invalide ignoré pour client institution %s: %r",
+                    client_id,
+                    client.contact_phone,
+                )
+            if (
+                getattr(client, "preferential_rate", None) is not None
+                and preferred_rate is None
+            ):
+                logger.warning(
+                    "⚠️ Tarif préférentiel invalide ignoré pour client institution %s: %r",
+                    client_id,
+                    client.preferential_rate,
+                )
+
             postal_city = " ".join(part for part in [domicile_zip, domicile_city] if part)
             full_address = (
                 f"{domicile_address}, {postal_city}".strip(", ")
@@ -2023,26 +2987,14 @@ class CreateCompanyForInstitutionClient(Resource):
                 new_company.domicile_address_line1 = domicile_address or None
                 new_company.domicile_zip = domicile_zip or None
                 new_company.domicile_city = domicile_city or None
-                new_company.latitude = (
-                    float(domicile_lat) if domicile_lat is not None else None
-                )
-                new_company.longitude = (
-                    float(domicile_lon) if domicile_lon is not None else None
-                )
-                new_company.contact_email = (
-                    client.contact_email or company_user.email or ""
-                )
-                new_company.contact_phone = (
-                    client.contact_phone or company_user.phone or ""
-                )
+                new_company.latitude = domicile_lat
+                new_company.longitude = domicile_lon
+                new_company.contact_email = company_email
+                new_company.contact_phone = company_phone
                 new_company.service_area = ""
                 new_company.max_daily_bookings = 50
                 new_company.is_approved = False
-                new_company.preferential_rate = (
-                    client.preferential_rate
-                    if getattr(client, "preferential_rate", None) is not None
-                    else None
-                )
+                new_company.preferential_rate = preferred_rate
 
                 db.session.add(new_company)
                 db.session.flush()
@@ -2057,21 +3009,17 @@ class CreateCompanyForInstitutionClient(Resource):
                 new_company.domicile_zip = domicile_zip or new_company.domicile_zip
                 new_company.domicile_city = domicile_city or new_company.domicile_city
                 new_company.latitude = (
-                    float(domicile_lat)
-                    if domicile_lat is not None
-                    else new_company.latitude
+                    domicile_lat if domicile_lat is not None else new_company.latitude
                 )
                 new_company.longitude = (
-                    float(domicile_lon)
-                    if domicile_lon is not None
-                    else new_company.longitude
+                    domicile_lon if domicile_lon is not None else new_company.longitude
                 )
-                if client.contact_email:
-                    new_company.contact_email = client.contact_email
-                if client.contact_phone:
-                    new_company.contact_phone = client.contact_phone
-                if getattr(client, "preferential_rate", None) is not None:
-                    new_company.preferential_rate = client.preferential_rate
+                if company_email:
+                    new_company.contact_email = company_email
+                if company_phone:
+                    new_company.contact_phone = company_phone
+                if preferred_rate is not None:
+                    new_company.preferential_rate = preferred_rate
 
             # Associer la Company au client
             client.default_billed_to_company_id = new_company.id
@@ -2085,7 +3033,7 @@ class CreateCompanyForInstitutionClient(Resource):
                 else:
                     billing_address = f"{client.domicile_zip} {client.domicile_city}"
 
-            from models import BillingParty, BillingPartyType, ClinicBillingPartyMapping
+            from models import BillingParty, BillingPartyType
 
             billing_ref = f"clinic_company:{new_company.id}"
             billing_party = BillingParty.query.filter_by(

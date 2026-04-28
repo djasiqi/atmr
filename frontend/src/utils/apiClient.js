@@ -2,6 +2,15 @@
 import axios from 'axios';
 // ✅ P1-1: getRefreshToken n'est plus utilisé (cookies httpOnly)
 // import { getRefreshToken } from '../hooks/useAuthToken';
+import {
+  getCompanyScopedAccessToken,
+  getAuthEnv as getSessionAuthEnv,
+  getEnvAccessToken,
+  getEnvRefreshToken,
+  getEnvUser,
+  removeLegacyGlobalTokens,
+  setAuthEnv as setSessionAuthEnv,
+} from './webAuthSession';
 
 let baseApiRest = process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_API_URL || '/api/v1';
 
@@ -81,35 +90,22 @@ const isUnifiedGatewayHost = () => {
 };
 
 export const getCurrentAuthEnv = () => {
-  try {
-    const value = localStorage.getItem(AUTH_ENV_STORAGE_KEY);
-    return value === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
-  } catch (_) {
-    return APP_ENV_KEY;
-  }
+  return getSessionAuthEnv();
 };
 
 export const setCurrentAuthEnv = (env) => {
-  const next = env === DEMO_ENV_KEY ? DEMO_ENV_KEY : APP_ENV_KEY;
-  try {
-    localStorage.setItem(AUTH_ENV_STORAGE_KEY, next);
-  } catch (_) {
-    // no-op
-  }
-  return next;
+  return setSessionAuthEnv(env);
 };
 
 const getStorageTokenByEnv = (env) =>
-  env === DEMO_ENV_KEY ? localStorage.getItem('demo_access_token') : localStorage.getItem('app_access_token');
+  getEnvAccessToken(env, { allowLegacy: false });
 
-const getStorageRefreshByEnv = (env) =>
-  env === DEMO_ENV_KEY ? localStorage.getItem('demo_refresh_token') : localStorage.getItem('app_refresh_token');
+const _getStorageRefreshByEnv = (env) =>
+  getEnvRefreshToken(env, { allowLegacy: false });
 
 const getStoredRoleFromEnv = (env) => {
   try {
-    const raw = localStorage.getItem(`${env}_user`) || localStorage.getItem('user');
-    if (!raw) return '';
-    const parsed = JSON.parse(raw);
+    const parsed = getEnvUser(env);
     return String(parsed?.role || '')
       .trim()
       .toLowerCase();
@@ -123,11 +119,7 @@ const getScopedCompanyAccessToken = (env) => {
     // En demo, utiliser strictement le token demo pour éviter les mélanges app<->demo.
     return getStorageTokenByEnv(DEMO_ENV_KEY);
   }
-  return (
-    localStorage.getItem('company_access_token') ||
-    localStorage.getItem('company_authToken') ||
-    getStorageTokenByEnv(APP_ENV_KEY)
-  );
+  return getCompanyScopedAccessToken(APP_ENV_KEY) || getStorageTokenByEnv(APP_ENV_KEY);
 };
 
 const resolveApiBase = (url) => {
@@ -156,6 +148,9 @@ try {
   // no-op
 }
 
+/** Profil client, listes de réservations, etc. peuvent dépasser 30s (charge serveur, réseau, requêtes parallèles). */
+const DEFAULT_REST_TIMEOUT_MS = 60_000;
+
 const apiRest = axios.create({
   baseURL: baseApiRest,
   headers: {
@@ -163,7 +158,7 @@ const apiRest = axios.create({
     Accept: 'application/json; charset=utf-8',
   },
   withCredentials: true, // ✅ Activer les cookies httpOnly pour l'authentification
-  timeout: 30000,
+  timeout: DEFAULT_REST_TIMEOUT_MS,
   responseType: 'json',
   responseEncoding: 'utf8',
 });
@@ -246,7 +241,9 @@ const addAuthHeader = async (cfg = {}) => {
     const role = getStoredRoleFromEnv(env);
     const envToken = getStorageTokenByEnv(env);
     const legacyCrossEnvToken =
-      env === APP_ENV_KEY ? localStorage.getItem('authToken') : null;
+      process.env.REACT_APP_ENABLE_LEGACY_GLOBAL_TOKEN_FALLBACK === 'true' && env === APP_ENV_KEY
+        ? getEnvAccessToken(APP_ENV_KEY, { allowLegacy: true })
+        : null;
     const companyScopedToken =
       role === 'company' || role === 'admin' ? getScopedCompanyAccessToken(env) : null;
     // Pour baseURL === /api/demo : jamais authToken/refreshToken (legacy app)
@@ -420,7 +417,12 @@ export const logoutUser = async (options = { redirect: true }) => {
     window.dispatchEvent(new Event('auth-changed'));
 
     if (options?.redirect !== false) {
-      window.location.href = '/login';
+      const path = `${window.location.pathname}${window.location.search || ''}`;
+      const isAlreadyLogin = window.location.pathname === '/login';
+      window.location.href =
+        !isAlreadyLogin && path && path !== '/'
+          ? `/login?next=${encodeURIComponent(path)}`
+          : '/login';
     }
   }
 };
@@ -486,10 +488,7 @@ apiClient.interceptors.response.use(
 
       try {
         const targetEnv = cfg._targetEnv || getCurrentAuthEnv();
-        const refreshToken =
-          targetEnv === DEMO_ENV_KEY
-            ? getStorageRefreshByEnv(DEMO_ENV_KEY)
-            : getStorageRefreshByEnv(targetEnv) || localStorage.getItem('refreshToken');
+        const refreshToken = getEnvRefreshToken(targetEnv, { allowLegacy: true });
         const refreshBase = isUnifiedGatewayHost()
           ? targetEnv === DEMO_ENV_KEY
             ? API_BASES.demo
@@ -515,7 +514,6 @@ apiClient.interceptors.response.use(
           } else {
             localStorage.setItem('app_access_token', nextAccessToken);
           }
-          localStorage.setItem('authToken', nextAccessToken);
         }
         if (nextRefreshToken) {
           if (targetEnv === DEMO_ENV_KEY) {
@@ -523,8 +521,9 @@ apiClient.interceptors.response.use(
           } else {
             localStorage.setItem('app_refresh_token', nextRefreshToken);
           }
-          localStorage.setItem('refreshToken', nextRefreshToken);
         }
+        // Nettoyage progressif des clés legacy globales après refresh réussi.
+        removeLegacyGlobalTokens();
 
         // Process queued requests après rafraîchissement réussi
         processQueue(null, null);
@@ -546,7 +545,21 @@ apiClient.interceptors.response.use(
         }
       } catch (refreshError) {
         processQueue(refreshError, null);
-        
+
+        if (process.env.NODE_ENV === 'production') {
+          import('@sentry/react')
+            .then((Sentry) => {
+              Sentry.captureException(refreshError, {
+                tags: { auth_flow: 'refresh_token_failed' },
+                extra: {
+                  requestUrl: cfg?.url,
+                  requestMethod: cfg?.method,
+                },
+              });
+            })
+            .catch(() => {});
+        }
+
         // ✅ Détecter si l'erreur est due à un token non-fresh requis
         const errorData = refreshError?.response?.data || {};
         const errorMsg = (errorData.msg || errorData.error || errorData.message || '').toLowerCase();

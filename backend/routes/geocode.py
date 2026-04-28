@@ -25,6 +25,7 @@ from services.geolocation.google_places import (
     autocomplete_address,
     geocode_address_google,
     get_place_details,
+    reverse_geocode_latlng_google,
 )
 from shared.error_handlers import APIErrorHandler
 from shared.retry import retry_http_request
@@ -621,6 +622,102 @@ def photon_query(
     return cast("Dict[str, Any]", r.json())
 
 
+def photon_reverse_geocode(lat: float, lon: float) -> Dict[str, Any] | None:
+    """Géocodage inverse via Photon (fallback sans Google)."""
+    headers = {
+        "User-Agent": "ATMR-Geocoding/1.0 (https://www.lirie.ch; contact@lirie.ch)"
+    }
+    try:
+        r = requests.get(
+            f"{PHOTON}/reverse",
+            params={"lat": lat, "lon": lon, "lang": "fr"},
+            headers=headers,
+            timeout=6,
+        )
+        r.raise_for_status()
+        data = cast(Dict[str, Any], r.json())
+    except requests.RequestException as e:
+        current_app.logger.warning("Photon reverse geocode HTTP error: %s", e)
+        return None
+    except Exception as e:
+        current_app.logger.warning("Photon reverse geocode error: %s", e)
+        return None
+
+    features = data.get("features") or []
+    if not features:
+        return None
+    feat = features[0]
+    props = feat.get("properties") or {}
+    geom = feat.get("geometry") or {}
+    coords = geom.get("coordinates") or []
+    try:
+        lon_v = float(coords[0]) if len(coords) > 1 else lon
+        lat_v = float(coords[1]) if len(coords) > 1 else lat
+    except (TypeError, ValueError, IndexError):
+        lon_v, lat_v = lon, lat
+
+    hn = str(props.get("housenumber") or "").strip()
+    street = str(props.get("street") or "").strip()
+    pc = str(props.get("postcode") or "").strip()
+    city = str(
+        props.get("city")
+        or props.get("town")
+        or props.get("village")
+        or props.get("district")
+        or ""
+    ).strip()
+    name = str(props.get("name") or "").strip()
+
+    line_street: list[str] = []
+    if hn or street:
+        line_street.append(f"{hn} {street}".strip())
+    elif name:
+        line_street.append(name)
+    locality = f"{pc} {city}".strip()
+    parts = [p for p in [*line_street, locality] if p]
+    address = ", ".join(parts)
+    if not address.strip():
+        return None
+
+    return {
+        "source": "photon_reverse",
+        "label": address,
+        "address": address,
+        "lat": lat_v,
+        "lon": lon_v,
+        "place_id": props.get("osm_id"),
+    }
+
+
+def resolve_reverse_geocode_for_client(lat: float, lon: float) -> Dict[str, Any] | None:
+    """Résout lat/lon en adresse lisible (Google si actif, sinon Photon)."""
+    if USE_GOOGLE_PLACES:
+        try:
+            r = reverse_geocode_latlng_google(lat, lon)
+            if r:
+                addr = (r.get("address") or "").strip()
+                lat_r = r.get("lat")
+                lon_r = r.get("lon")
+                if addr and lat_r is not None and lon_r is not None:
+                    return {
+                        "source": "google_reverse",
+                        "label": addr,
+                        "address": addr,
+                        "lat": float(lat_r),
+                        "lon": float(lon_r),
+                        "place_id": r.get("place_id"),
+                    }
+        except GooglePlacesError:
+            current_app.logger.debug(
+                "Google reverse geocode indisponible (lat=%s lon=%s), fallback Photon",
+                lat,
+                lon,
+            )
+        except Exception as e:
+            current_app.logger.warning("Google reverse geocode error: %s", e)
+    return photon_reverse_geocode(lat, lon)
+
+
 def _strip_tags(value: str) -> str:
     return re.sub(r"<[^>]+>", "", value or "").strip()
 
@@ -1161,6 +1258,44 @@ class GeocodeAliases(Resource):
                 "category": hit.get("category"),
             }
         ], 200
+
+
+@geocode_ns.route("/reverse")
+class GeocodeReverse(Resource):
+    @geocode_ns.doc(
+        security=None,
+        params={
+            "lat": "Latitude (WGS84)",
+            "lon": "Longitude (WGS84)",
+        },
+    )
+    @limiter.limit("60 per minute")
+    def get(self):
+        """Géocodage inverse : coordonnées GPS → adresse postale lisible."""
+        try:
+            lat = float(request.args.get("lat", ""))
+            lon = float(request.args.get("lon", ""))
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "lat et lon doivent être numériques.",
+                field="lat",
+                logger_instance=current_app.logger,
+            )
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            return APIErrorHandler.handle_validation_error(
+                "Coordonnées hors limites.",
+                field="lat",
+                logger_instance=current_app.logger,
+            )
+
+        item = resolve_reverse_geocode_for_client(lat, lon)
+        if not item:
+            return APIErrorHandler.handle_not_found(
+                "Adresse pour cette position",
+                f"{lat},{lon}",
+                current_app.logger,
+            )
+        return item, 200
 
 
 @geocode_ns.route("/autocomplete")

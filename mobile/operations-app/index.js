@@ -1,6 +1,7 @@
 import './polyfills';
 
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging';
+import { getApps } from '@react-native-firebase/app';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { DevSettings, Platform } from 'react-native';
 
@@ -46,31 +47,39 @@ async function ensureChannel() {
   channelReady = true;
 }
 
-const messaging = getMessaging();
-setBackgroundMessageHandler(messaging, async (remoteMessage) => {
+if (Platform.OS !== 'web' && getApps().length > 0) {
   try {
-    const { data } = remoteMessage;
-    if (!data) return;
-    if (data.type === 'silent_update') return;
-    await ensureChannel();
-    // ID déterministe : évite doublons quand plusieurs FCM arrivent (ex: 2 DeviceTokens même appareil)
-    const notifId = `mission_${data.booking_id || data.trace_id || Date.now()}_${data.type || "push"}`.replace(/\s/g, "_");
-    await notifee.displayNotification({
-      id: notifId,
-      title: data.title || 'Liri Opérations',
-      body: data.body || '',
-      data,
-      android: {
-        channelId: data.channelId || 'missions_v2',
-        importance: AndroidImportance.HIGH,
-        sound: 'default',
-        pressAction: { id: 'default' },
-      },
+    const messaging = getMessaging();
+    setBackgroundMessageHandler(messaging, async (remoteMessage) => {
+      try {
+        const { data } = remoteMessage;
+        if (!data) return;
+        if (data.type === 'silent_update') return;
+        await ensureChannel();
+        // ID déterministe : évite doublons quand plusieurs FCM arrivent (ex: 2 DeviceTokens même appareil)
+        const notifId = `mission_${data.booking_id || data.trace_id || Date.now()}_${data.type || "push"}`.replace(/\s/g, "_");
+        await notifee.displayNotification({
+          id: notifId,
+          title: data.title || 'Liri Opérations',
+          body: data.body || '',
+          data,
+          android: {
+            channelId: data.channelId || 'missions_v2',
+            importance: AndroidImportance.HIGH,
+            sound: 'default',
+            pressAction: { id: 'default' },
+          },
+        });
+      } catch {
+        // Ne pas planter le background handler — Android le tuerait comme ANR
+      }
     });
-  } catch {
-    // Ne pas planter le background handler — Android le tuerait comme ANR
+  } catch (e) {
+    if (__DEV__) {
+      console.warn('[FCM] setBackgroundMessageHandler non enregistré', e?.message || e);
+    }
   }
-});
+}
 
 try {
   require('expo-router/entry');

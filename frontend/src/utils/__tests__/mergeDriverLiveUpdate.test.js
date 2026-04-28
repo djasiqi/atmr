@@ -6,6 +6,13 @@ import {
 } from '../mergeDriverLiveUpdate';
 
 describe('mergeDriverLiveUpdate', () => {
+  it('priorise lon canonique quand lon et lng sont présents', () => {
+    const driver = { id: 1, latitude: 46.2, longitude: 6.1 };
+    const out = mergeDriverLiveUpdate(driver, { lat: 46.3, lon: 6.4, lng: 6.2 }, true);
+    expect(out.latitude).toBe(46.3);
+    expect(out.longitude).toBe(6.4);
+  });
+
   it('fusionne lng depuis live state', () => {
     const driver = { id: 1, latitude: 46.2, longitude: 6.1 };
     const out = mergeDriverLiveUpdate(driver, { lat: 46.3, lng: 6.2 }, true);

@@ -6,6 +6,7 @@
 
 import { AppState, InteractionManager, Platform } from "react-native";
 import { getLogger } from "@/utils/logger";
+import { assertDriverSurface } from "@/services/authSurface";
 import {
   initConnectivityPolicy,
   stopConnectivityPolicy,
@@ -381,6 +382,9 @@ class SyncEngineImpl {
   private started = false;
 
   start(): void {
+    if (!assertDriverSurface("syncEngine.start")) {
+      return;
+    }
     if (this.started) {
       log.debug("syncEngine already started (double mount, no-op)");
       return;

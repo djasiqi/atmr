@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
     name="tasks.rl_retrain_model",
     bind=True,
     acks_late=True,
-    task_time_limit=7200,  # ✅ P3: 2 heures max (7200 secondes) pour éviter tasks infinies
-    task_soft_time_limit=6600,  # ✅ P3: 1h50 soft limit (6600 secondes)
+    task_time_limit=2100,
+    task_soft_time_limit=1800,
     max_retries=1,  # 1 retry en cas d'échec transitoire
     autoretry_for=(TimeoutError, ConnectionError),
 )
@@ -543,8 +543,8 @@ def optuna_optimize_impl(
     name="tasks.rl_optuna_optimize",
     bind=True,
     acks_late=True,
-    task_time_limit=86400,  # 24 heures max (optimisation longue)
-    task_soft_time_limit=82800,  # 23 heures soft limit
+    task_time_limit=2100,
+    task_soft_time_limit=1800,
     max_retries=0,  # Pas de retry automatique pour les optimisations longues
     autoretry_for=(),
 )
@@ -838,8 +838,8 @@ def train_model_with_optimal_params_impl(
     name="tasks.rl_train_model_optimal",
     bind=True,
     acks_late=True,
-    task_time_limit=86400,  # 24 heures max
-    task_soft_time_limit=82800,  # 23 heures soft limit
+    task_time_limit=2100,
+    task_soft_time_limit=1800,
     max_retries=0,
     autoretry_for=(),
 )

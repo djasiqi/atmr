@@ -314,6 +314,62 @@ def geocode_address_google(
         raise GooglePlacesError(msg) from e
 
 
+def reverse_geocode_latlng_google(
+    lat: float,
+    lon: float,
+    *,
+    language: str = DEFAULT_LANGUAGE,
+) -> Dict[str, Any] | None:
+    """Géocodage inverse (coordonnées → adresse formatée) via Google Geocoding API."""
+    if not GOOGLE_API_KEY:
+        msg = "Clé API Google Maps non configurée"
+        raise GooglePlacesError(msg)
+
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params: Dict[str, Any] = {
+        "latlng": f"{lat},{lon}",
+        "key": GOOGLE_API_KEY,
+        "language": language,
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("status") == "ZERO_RESULTS":
+            app_logger.warning(
+                "⚠️ Reverse geocode: aucun résultat pour latlng=%s,%s", lat, lon
+            )
+            return None
+
+        if data.get("status") != "OK":
+            error_msg = data.get("error_message", data.get("status"))
+            app_logger.warning("⚠️ Google reverse geocode: %s", error_msg)
+            return None
+
+        results = data.get("results", [])
+        if not results:
+            return None
+
+        result = results[0]
+        location = result.get("geometry", {}).get("location", {})
+
+        return {
+            "address": result.get("formatted_address", ""),
+            "lat": location.get("lat"),
+            "lon": location.get("lng"),
+            "place_id": result.get("place_id"),
+            "location_type": result.get("geometry", {}).get("location_type"),
+            "address_components": result.get("address_components", []),
+        }
+
+    except requests.RequestException as e:
+        app_logger.error("❌ Google reverse geocode API: %s", e)
+        msg = f"Erreur lors du géocodage inverse: {e}"
+        raise GooglePlacesError(msg) from e
+
+
 def extract_address_components(
     address_components: List[Dict[str, Any]],
 ) -> Dict[str, str]:

@@ -340,6 +340,22 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                     except Exception:
                         logger.debug("[EventBus] Executing company updated notification failed (non-critical)")
 
+            # Portail client : uniquement « en route » (acceptation / assignation gérés ailleurs).
+            if status_val == "en_route":
+                try:
+                    from services.notifications.end_client_booking_notify import (
+                        notify_end_client_booking_milestone,
+                    )
+
+                    notify_end_client_booking_milestone(
+                        booking, milestone="en_route", send_push=True
+                    )
+                except Exception:
+                    logger.debug(
+                        "[EventBus] End-client en_route notification failed (non-critical)",
+                        exc_info=True,
+                    )
+
             logger.debug(
                 "[EventBus] BookingUpdatedEvent routed: driver_socket=%s driver_push=%s company_socket=%s company_push=%s (actor_role=%s)",
                 targets.notify_driver_socket,
@@ -409,8 +425,8 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
         if (
             cancel_source != "cascade_from_outbound"
             and booking
-            and booking.is_round_trip
-            and not booking.is_return
+            and bool(getattr(booking, "is_round_trip", False))
+            and not bool(getattr(booking, "is_return", False))
             and getattr(booking, "return_trip", None)
         ):
             ret = booking.return_trip
@@ -422,9 +438,10 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
                     BookingStatus.RETURN_COMPLETED,
                 ):
                     logger.critical(
-                        "[R5-CASCADE] Retour id=%s status=%s annulé par cascade "
-                        "(aller id=%s annulé) — situation anormale",
-                        ret.id, ret.status, booking.id,
+                        "[R5-CASCADE] Retour id=%s status=%s annulé par cascade (aller id=%s annulé) - situation anormale",
+                        ret.id,
+                        ret.status,
+                        booking.id,
                     )
 
                 from application.bookings.cancellation_rules import (

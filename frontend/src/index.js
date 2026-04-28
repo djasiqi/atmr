@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
 import reportWebVitals from './reportWebVitals';
+import { registerPwaServiceWorker } from './utils/registerPwaServiceWorker';
 import * as Sentry from '@sentry/react';
 import { onCLS, onINP, onFCP, onLCP, onTTFB } from 'web-vitals';
 import { SpeedInsights } from '@vercel/speed-insights/react';
@@ -11,28 +12,38 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 const SENTRY_DSN = process.env.REACT_APP_SENTRY_DSN;
 const ENVIRONMENT =
   process.env.REACT_APP_SENTRY_ENVIRONMENT || process.env.NODE_ENV || 'development';
+const SENTRY_REPLAY_ENABLED =
+  process.env.REACT_APP_SENTRY_REPLAY_ENABLED === 'true' ||
+  process.env.REACT_APP_SENTRY_REPLAY_ENABLED === '1';
 
 // ✅ Initialiser Sentry uniquement en production (évite les erreurs de connexion en dev)
 if (SENTRY_DSN && ENVIRONMENT !== 'development') {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: ENVIRONMENT,
-    integrations: [
-      Sentry.browserTracingIntegration({
-        // Tracer les performances des pages
-        tracePropagationTargets: ['localhost', /^\//],
-      }),
+  const sentryIntegrations = [
+    Sentry.browserTracingIntegration({
+      // Tracer les performances des pages
+      tracePropagationTargets: ['localhost', /^\//],
+    }),
+  ];
+
+  if (SENTRY_REPLAY_ENABLED) {
+    sentryIntegrations.push(
       Sentry.replayIntegration({
         // Enregistrer les sessions avec erreurs
         maskAllText: true,
         blockAllMedia: true,
-      }),
-    ],
+      })
+    );
+  }
+
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: ENVIRONMENT,
+    integrations: sentryIntegrations,
     // Performance Monitoring
     tracesSampleRate: 0.1, // 10% en production
     // Session Replay
-    replaysSessionSampleRate: 0.1, // 10% des sessions
-    replaysOnErrorSampleRate: 1.0, // 100% des sessions avec erreur
+    replaysSessionSampleRate: SENTRY_REPLAY_ENABLED ? 0.1 : 0.0,
+    replaysOnErrorSampleRate: SENTRY_REPLAY_ENABLED ? 1.0 : 0.0,
   });
   console.log('✅ Sentry initialisé en mode', ENVIRONMENT);
 } else {
@@ -228,3 +239,4 @@ root.render(
 // pour logger les résultats (par exemple : reportWebVitals(console.log))
 // ou envoyez-les à un endpoint d'analytics. En savoir plus : https://bit.ly/CRA-vitals
 reportWebVitals();
+registerPwaServiceWorker();

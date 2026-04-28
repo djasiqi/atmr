@@ -8,9 +8,11 @@ Ces routes permettent de :
 """
 
 import logging
+import os
 import re
+import socket
 
-from flask import request
+from flask import current_app, request
 from flask_jwt_extended import jwt_required  # pyright: ignore
 from flask_restx import Namespace, Resource, fields  # pyright: ignore
 
@@ -459,3 +461,145 @@ class EmailDomainDiagnostic(Resource):
                 "success": False,
                 "error": f"Erreur lors du diagnostic: {e!s}",
             }, 500
+
+
+@email_ns.route("/health")
+class EmailHealth(Resource):
+    """Healthcheck de la configuration email (SMTP/Brevo)."""
+
+    @jwt_required()
+    @role_required(UserRole.company)
+    @email_ns.response(200, "Healthcheck email")
+    @email_ns.response(403, "Permission refusée")
+    def get(self):
+        """Retourne l'état de la configuration email active.
+
+        - N'envoie aucun email
+        - Vérifie la joignabilité SMTP si provider SMTP
+        - Expose un diagnostic lisible pour environnement local
+        """
+        provider = (os.getenv("EMAIL_PROVIDER", "smtp") or "smtp").strip().lower()
+        notifications_enabled = (os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+        smtp_host = (
+            os.getenv("SMTP_HOST")
+            or os.getenv("MAIL_SERVER")
+            or "smtp.gmail.com"
+        ).strip()
+        smtp_port_raw = (
+            os.getenv("SMTP_PORT")
+            or os.getenv("MAIL_PORT")
+            or "587"
+        ).strip()
+        try:
+            smtp_port = int(smtp_port_raw)
+        except ValueError:
+            smtp_port = 587
+
+        smtp_user = (os.getenv("SMTP_USER") or os.getenv("SMTP_USERNAME") or "").strip()
+        smtp_password_set = bool((os.getenv("SMTP_PASSWORD") or "").strip())
+        brevo_api_key_set = bool((os.getenv("BREVO_API_KEY") or "").strip())
+
+        is_localhost = smtp_host in {"localhost", "127.0.0.1", "::1"}
+
+        smtp_connect_ok = None
+        smtp_connect_error = None
+        if provider == "smtp":
+            try:
+                with socket.create_connection((smtp_host, smtp_port), timeout=2.5):
+                    smtp_connect_ok = True
+            except Exception as e:
+                smtp_connect_ok = False
+                smtp_connect_error = str(e)
+
+        return {
+            "success": True,
+            "email_notifications_enabled": notifications_enabled,
+            "provider": provider,
+            "brevo": {
+                "api_key_configured": brevo_api_key_set,
+            },
+            "smtp": {
+                "host": smtp_host,
+                "port": smtp_port,
+                "is_localhost": is_localhost,
+                "username_configured": bool(smtp_user),
+                "password_configured": smtp_password_set,
+                "connectivity_ok": smtp_connect_ok,
+                "connectivity_error": smtp_connect_error,
+            },
+            "message": (
+                "Provider Brevo actif."
+                if provider == "brevo"
+                else "Provider SMTP actif."
+            ),
+        }, 200
+
+
+@email_ns.route("/health/public")
+class EmailHealthPublic(Resource):
+    """Healthcheck email public en local (sans JWT)."""
+
+    @email_ns.response(200, "Healthcheck email public")
+    @email_ns.response(403, "Accès refusé")
+    def get(self):
+        """Version publique du healthcheck, limitée aux environnements dev/test."""
+        env = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+        is_testing = bool(current_app.config.get("TESTING"))
+        is_dev = env in {"development", "dev", "local"}
+        if not (is_dev or is_testing):
+            return {"error": "Endpoint disponible uniquement en développement/test."}, 403
+
+        remote = (request.remote_addr or "").strip()
+        if remote not in {"127.0.0.1", "::1", ""}:
+            return {"error": "Endpoint public autorisé uniquement en localhost."}, 403
+
+        provider = (os.getenv("EMAIL_PROVIDER", "smtp") or "smtp").strip().lower()
+        notifications_enabled = (os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        smtp_host = (
+            os.getenv("SMTP_HOST")
+            or os.getenv("MAIL_SERVER")
+            or "smtp.gmail.com"
+        ).strip()
+        smtp_port_raw = (
+            os.getenv("SMTP_PORT")
+            or os.getenv("MAIL_PORT")
+            or "587"
+        ).strip()
+        try:
+            smtp_port = int(smtp_port_raw)
+        except ValueError:
+            smtp_port = 587
+
+        smtp_connect_ok = None
+        smtp_connect_error = None
+        if provider == "smtp":
+            try:
+                with socket.create_connection((smtp_host, smtp_port), timeout=2.5):
+                    smtp_connect_ok = True
+            except Exception as e:
+                smtp_connect_ok = False
+                smtp_connect_error = str(e)
+
+        return {
+            "success": True,
+            "scope": "public_local_only",
+            "provider": provider,
+            "email_notifications_enabled": notifications_enabled,
+            "smtp": {
+                "host": smtp_host,
+                "port": smtp_port,
+                "connectivity_ok": smtp_connect_ok,
+                "connectivity_error": smtp_connect_error,
+            },
+        }, 200

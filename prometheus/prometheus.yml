@@ -29,11 +29,13 @@ rule_files:
 # Scrape configurations
 scrape_configs:
   # Métriques Prometheus de l'application backend (dispatch, SLO, OSRM)
+  # Cible : service docker-compose.yml = atmr_api (même réseau que ce Prometheus, profile monitoring).
+  # Ne pas utiliser "backend" ici : ce nom est réservé au stack production (docker-compose.production / monitoring).
   - job_name: 'atmr-backend'
     metrics_path: '/api/v1/prometheus/metrics'
     static_configs:
       - targets:
-          - 'api:5000'  # Service API dans docker-compose
+          - 'atmr_api:5000'
         labels:
           service: 'atmr-backend'
           component: 'api'

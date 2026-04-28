@@ -95,7 +95,7 @@ class AssignDriverToReservationUseCase:
         try:
             already_same = (
                 int(getattr(booking, "driver_id", 0) or 0) == driver_id
-                and status == "assigned"
+                and status_lower == "assigned"
             )
         except Exception:
             already_same = False

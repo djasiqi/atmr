@@ -22,6 +22,78 @@ const STATUS_LABELS = {
 
 const DISPLAY_INCREMENT = 50;
 
+/** Aller lié à un retour (drapeau persisté ou relation `return_trip`). */
+function reservationIsRoundTripOutbound(r) {
+  if (!r || r.is_return) return false;
+  return Boolean(r.is_round_trip || r.has_return);
+}
+
+function findParentBooking(allReservations, parentId) {
+  if (!parentId || !Array.isArray(allReservations)) return null;
+  return allReservations.find((x) => x.id === parentId) || null;
+}
+
+function findReturnBookingForOutbound(allReservations, outboundId) {
+  if (!outboundId || !Array.isArray(allReservations)) return null;
+  return (
+    allReservations.find(
+      (x) => x && x.is_return && Number(x.parent_booking_id) === Number(outboundId)
+    ) || null
+  );
+}
+
+/** Montants aller-retour : total sur l’aller, libellé explicite sur le retour si montant 0. */
+function renderAmountCell(r, allReservations) {
+  const amt = Number(r.amount || 0);
+  const parent = r.is_return ? findParentBooking(allReservations, r.parent_booking_id) : null;
+  const parentAmt = parent != null ? Number(parent.amount || 0) : null;
+
+  if (r.is_return && amt === 0 && parentAmt != null && parentAmt > 0) {
+    return (
+      <div className={styles.amountCellStack}>
+        <span
+          className={styles.amountLegLabel}
+          title="Le tarif est porté par la course aller ; ce segment ne facture pas en plus."
+        >
+          Inclus dans l&apos;aller
+        </span>
+        <span className={styles.amountSub}>
+          {parentAmt.toFixed(2)} CHF au total (aller + retour)
+        </span>
+      </div>
+    );
+  }
+
+  if (!r.is_return && reservationIsRoundTripOutbound(r)) {
+    const ret = findReturnBookingForOutbound(allReservations, r.id);
+    const retAmt = ret != null ? Number(ret.amount || 0) : 0;
+    if (retAmt > 0) {
+      return (
+        <span>
+          <span className={styles.amountValue}>{amt.toFixed(2)}</span>
+          <span className={styles.amountCurrency}> CHF</span>
+        </span>
+      );
+    }
+    return (
+      <div className={styles.amountCellStack}>
+        <span>
+          <span className={styles.amountValue}>{amt.toFixed(2)}</span>
+          <span className={styles.amountCurrency}> CHF</span>
+        </span>
+        <span className={styles.amountSub}>Total aller-retour</span>
+      </div>
+    );
+  }
+
+  return (
+    <span>
+      <span className={styles.amountValue}>{amt.toFixed(2)}</span>
+      <span className={styles.amountCurrency}> CHF</span>
+    </span>
+  );
+}
+
 const getDelayRowClass = (delayMinutes) => {
   if (!delayMinutes || delayMinutes <= 0) return '';
   if (delayMinutes >= 15) return 'rowDelayed';
@@ -121,6 +193,22 @@ const ReservationTable = ({
                         {r.client.institution_name}
                       </span>
                     )}
+                    {reservationIsRoundTripOutbound(r) ? (
+                      <span
+                        className={styles.roundTripBadge}
+                        title="Demande aller-retour : cette ligne est l’aller ; une course retour est liée."
+                      >
+                        Aller-retour
+                      </span>
+                    ) : null}
+                    {r.is_return ? (
+                      <span
+                        className={styles.returnLegBadge}
+                        title="Course retour liée à l’aller (même dossier client)."
+                      >
+                        Retour
+                      </span>
+                    ) : null}
                     {delayMinutes > 0 && formatDelay(delayMinutes) && (
                       <span className={`${styles.delayBadge} ${
                         delayMinutes >= 15 ? styles.delayBadgeCritical
@@ -145,10 +233,7 @@ const ReservationTable = ({
                     </div>
                   </td>
                   <td>
-                    <span className={styles.amountValue}>
-                      {Number(r.amount || 0).toFixed(2)}
-                    </span>
-                    <span className={styles.amountCurrency}> CHF</span>
+                    {renderAmountCell(r, reservations)}
                     {(() => {
                       const meta = r.metadata_json || {};
                       const billingStatus = meta.billing_resolution_status;
@@ -259,6 +344,16 @@ const ReservationTable = ({
                   {r.client?.institution_name && (
                     <span className={styles.mobileCardInstitution}>{r.client.institution_name}</span>
                   )}
+                  {reservationIsRoundTripOutbound(r) ? (
+                    <span className={styles.roundTripBadge} title="Demande aller-retour (aller + retour liés).">
+                      Aller-retour
+                    </span>
+                  ) : null}
+                  {r.is_return ? (
+                    <span className={styles.returnLegBadge} title="Course retour liée à l’aller.">
+                      Retour
+                    </span>
+                  ) : null}
                 </div>
                 <span className={`${styles.statusBadge} ${styles[status] || ''}`}>
                   {STATUS_LABELS[status] || status}
@@ -282,8 +377,7 @@ const ReservationTable = ({
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Montant</span>
                   <span className={styles.mobileCardValue}>
-                    <span className={styles.amountValue}>{Number(r.amount || 0).toFixed(2)}</span>
-                    <span className={styles.amountCurrency}> CHF</span>
+                    {renderAmountCell(r, reservations)}
                   </span>
                 </div>
                 {delayMinutes > 0 && formatDelay(delayMinutes) && (

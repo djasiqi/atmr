@@ -110,15 +110,18 @@ else:
     )
     app_logger.warning(msg)
 
+# Verbosité Socket.IO uniquement en LOG_LEVEL=DEBUG (évite bruit/IO en prod)
+_sio_debug_logs = os.getenv("LOG_LEVEL", "").upper() == "DEBUG"
+
 socketio = SocketIO(
     async_mode=ASYNC_MODE,
     message_queue=_socketio_message_queue,  # ✅ FIX: Utiliser Redis si REDIS_URL défini (au lieu de None hardcodé)
     # ✅ Configuration des timeouts pour éviter "Bad file descriptor"
     ping_timeout=60,  # Timeout avant de considérer le client déconnecté (secondes)
     ping_interval=25,  # Intervalle entre les pings (secondes)
-    # ✅ Gestion propre des déconnexions
-    engineio_logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
-    logger=True,  # ✅ ACTIVÉ TEMPORAIREMENT POUR DEBUG
+    # ✅ Gestion propre des déconnexions — logs moteur Socket.IO = DEBUG seulement
+    engineio_logger=_sio_debug_logs,
+    logger=_sio_debug_logs,
 )
 
 # ========================
@@ -378,6 +381,91 @@ def setup_db_profiler(app):
         app.logger.debug(
             "[DB Profiler] Profiling désactivé (set ENABLE_DB_PROFILING=true)"
         )
+
+
+# Sprint 2 H14: rotation JWT versionnée par kid (double clé + période de grâce).
+def _build_jwt_keyring() -> tuple[dict[str, str], str, set[str], str]:
+    active_key = str(
+        current_app.config.get("JWT_SECRET_KEY") or os.getenv("JWT_SECRET_KEY") or ""
+    ).strip()
+    active_kid = str(current_app.config.get("JWT_ACTIVE_KID") or "active").strip()
+    accepted_raw = str(current_app.config.get("JWT_ACCEPTED_KIDS") or "").strip()
+    default_kid = str(
+        current_app.config.get("JWT_LEGACY_DEFAULT_KID") or active_kid
+    ).strip()
+
+    legacy_csv = str(
+        current_app.config.get("JWT_LEGACY_SECRET_KEYS")
+        or os.getenv("JWT_LEGACY_SECRET_KEYS", "")
+    )
+    legacy_keys = [k.strip() for k in legacy_csv.split(",") if k.strip()]
+
+    keyring: dict[str, str] = {}
+    if active_key:
+        keyring[active_kid] = active_key
+    for idx, legacy_key in enumerate(legacy_keys, start=1):
+        keyring[f"legacy-{idx}"] = legacy_key
+
+    accepted_kids = {kid.strip() for kid in accepted_raw.split(",") if kid.strip()}
+    if not accepted_kids:
+        accepted_kids = set(keyring.keys())
+    accepted_kids.add(active_kid)
+
+    if default_kid not in keyring:
+        default_kid = active_kid
+
+    return keyring, active_kid, accepted_kids, default_kid
+
+
+@jwt.additional_headers_loader
+def add_jwt_kid_header(_identity):
+    keyring, active_kid, _accepted_kids, _default_kid = _build_jwt_keyring()
+    if active_kid in keyring:
+        return {"kid": active_kid}
+    return {}
+
+
+@jwt.decode_key_loader
+def load_decode_key(jwt_header, _jwt_payload):
+    keyring, active_kid, accepted_kids, default_kid = _build_jwt_keyring()
+    if not keyring:
+        return str(current_app.config.get("JWT_SECRET_KEY") or "")
+
+    kid = str((jwt_header or {}).get("kid") or "").strip()
+
+    try:
+        from security.security_metrics import (
+            jwt_invalid_kid_total,
+            jwt_verify_kid_total,
+            jwt_verify_legacy_key_total,
+        )
+    except Exception:
+        jwt_invalid_kid_total = None
+        jwt_verify_kid_total = None
+        jwt_verify_legacy_key_total = None
+
+    if kid:
+        if kid in keyring and kid in accepted_kids:
+            if jwt_verify_kid_total is not None:
+                jwt_verify_kid_total.labels(kid=kid).inc()
+            if kid.startswith("legacy-") and jwt_verify_legacy_key_total is not None:
+                jwt_verify_legacy_key_total.labels(kid=kid).inc()
+            return keyring[kid]
+
+        if jwt_invalid_kid_total is not None:
+            jwt_invalid_kid_total.labels(kid=kid).inc()
+        app_logger.warning("[JWT] kid inconnu ou non accepté: %s", kid)
+        return keyring.get(active_kid) or next(iter(keyring.values()))
+
+    # Compat transition: token legacy sans kid.
+    selected_kid = default_kid if default_kid in accepted_kids else active_kid
+    if selected_kid in keyring:
+        if jwt_verify_kid_total is not None:
+            jwt_verify_kid_total.labels(kid=selected_kid).inc()
+        if selected_kid.startswith("legacy-") and jwt_verify_legacy_key_total is not None:
+            jwt_verify_legacy_key_total.labels(kid=selected_kid).inc()
+        return keyring[selected_kid]
+    return keyring.get(active_kid) or next(iter(keyring.values()))
 
 
 #  JWT error handlers
@@ -786,6 +874,12 @@ def role_required(*roles):
                     # Le claim du token n'est pas un rôle valide,
                     # continuer avec la vérification DB
                     pass
+
+            # Multi-contexte (app unifiée) : rôle BDD = company, contexte actif = chauffeur
+            if not role_check_passed and user.driver is not None and UserRole.driver in allowed_roles:
+                active_ctx = (request.headers.get("X-Active-Context-Id") or "").strip()
+                if active_ctx == f"driver:{user.driver.id}":
+                    role_check_passed = True
 
             # Si le claim du token n'a pas passé,
             # vérifier le rôle de l'utilisateur dans la DB

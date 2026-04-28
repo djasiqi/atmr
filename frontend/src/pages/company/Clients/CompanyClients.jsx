@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   FiPlus,
@@ -28,6 +29,9 @@ import {
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import ClientsTable from './components/ClientsTable';
+import ClientsTableSkeleton from './components/ClientsTableSkeleton';
+import { useLirieCompany } from '../../../hooks/useLirieCompany';
+import { lirieKeys, LIRIE_QK_PREFIX } from '../../../queryKeys/lirie';
 import EditClientModal from './components/EditClientModal';
 import NewClientModal from './components/NewClientModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
@@ -40,6 +44,22 @@ import {
   buildSearchHaystack,
   getClientDisplayName,
 } from '../../../utils/clientSearchUtils';
+
+/** Garde la fiche la plus ancienne (id minimal) par `linked_institution_id` (établissements). */
+function dedupeInstitutionClientsByLinkedId(list) {
+  if (!Array.isArray(list) || list.length === 0) return list;
+  const seen = new Set();
+  const out = [];
+  for (const c of [...list].sort((a, b) => (a.id || 0) - (b.id || 0))) {
+    if (c.is_institution && c.linked_institution_id != null) {
+      const k = c.linked_institution_id;
+      if (seen.has(k)) continue;
+      seen.add(k);
+    }
+    out.push(c);
+  }
+  return out;
+}
 
 function ChipDropdown({ icon, value, options, onChange }) {
   const [open, setOpen] = useState(false);
@@ -86,9 +106,34 @@ function ChipDropdown({ icon, value, options, onChange }) {
 }
 
 const CompanyClients = () => {
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { company } = useLirieCompany();
+  const canLoadClients = Boolean(company?.id);
+
+  const {
+    data: clientsData,
+    isLoading: clientsListInitialLoading,
+    isRefetching: clientsListRefetching,
+    isError: clientsListError,
+    refetch: refetchClients,
+  } = useQuery({
+    queryKey: canLoadClients
+      ? lirieKeys.companyClients(company.id)
+      : [LIRIE_QK_PREFIX, 'company-clients', 'disabled'],
+    enabled: canLoadClients,
+    queryFn: async () => {
+      const data = await fetchCompanyClients();
+      return Array.isArray(data) ? data : [];
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const clients = useMemo(
+    () => (Array.isArray(clientsData) ? clientsData : []),
+    [clientsData]
+  );
+
+  const [detailsError, setDetailsError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [editingClient, setEditingClient] = useState(null);
@@ -111,31 +156,25 @@ const CompanyClients = () => {
   const [pendingOpenClientId, setPendingOpenClientId] = useState(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const selectedClientIdRef = useRef(null);
+  /** Après fermeture manuelle : un tour d'effet ignore ?selected= (URL souvent en retard sur l'état), sinon on rouvre la fiche. */
+  const skipUrlReopenRef = useRef(false);
+  const detailsRequestSeq = useRef(0);
   const didInitOpenClientRef = useRef(false);
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
 
   const clientCache = useMemo(() => new Map(), []);
 
-  const loadClients = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchCompanyClients();
-      const clientsArray = Array.isArray(data) ? data : [];
-      setClients(clientsArray);
-    } catch (err) {
-      console.error('Erreur lors du chargement des clients:', err);
-      setError('Impossible de charger les clients');
-      setClients([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const clientsDeduped = useMemo(
+    () => dedupeInstitutionClientsByLinkedId(clients),
+    [clients],
+  );
 
-  useEffect(() => {
-    loadClients();
-  }, [loadClients]);
+  const loadClients = useCallback(async () => {
+    setDetailsError(null);
+    await refetchClients();
+  }, [refetchClients]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -168,11 +207,11 @@ const CompanyClients = () => {
 
   const clientsWithHaystack = useMemo(
     () =>
-      clients.map((c) => ({
+      clientsDeduped.map((c) => ({
         client: c,
         haystackNorm: normalizeText(buildSearchHaystack(c)),
       })),
-    [clients]
+    [clientsDeduped]
   );
 
   const filteredAndSortedClients = useMemo(() => {
@@ -242,34 +281,43 @@ const CompanyClients = () => {
       return;
     }
 
+    const seq = ++detailsRequestSeq.current;
     setLoadingDetails(true);
     try {
       const details = await fetchClientDetails(clientId);
+      if (seq !== detailsRequestSeq.current) return;
       clientCache.set(clientId, details);
       setClientDetails(details);
+      setDetailsError(null);
     } catch (err) {
+      if (seq !== detailsRequestSeq.current) return;
       console.error('Erreur lors du chargement des details:', err);
-      setError('Erreur lors du chargement des details du client');
+      setDetailsError('Erreur lors du chargement des details du client');
     } finally {
-      setLoadingDetails(false);
+      if (seq === detailsRequestSeq.current) {
+        setLoadingDetails(false);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectClient = useCallback((client) => {
     const clientId = client.id;
+    skipUrlReopenRef.current = false;
+    selectedClientIdRef.current = clientId;
     setSelectedClientId(clientId);
     setIsDrawerOpen(true);
     setIsEditMode(false);
     setHasUnsavedChanges(false);
 
-    const newSearchParams = new URLSearchParams(searchParams);
-    newSearchParams.set('selected', clientId.toString());
-    setSearchParams(newSearchParams);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('selected', String(clientId));
+      return next;
+    });
 
     loadClientDetails(clientId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadClientDetails]);
+  }, [loadClientDetails, setSearchParams]);
 
   const handleCloseDrawer = useCallback(() => {
     if (hasUnsavedChanges) {
@@ -279,7 +327,9 @@ const CompanyClients = () => {
       if (!confirmed) return;
     }
 
+    skipUrlReopenRef.current = true;
     setIsDrawerOpen(false);
+    selectedClientIdRef.current = null;
     setSelectedClientId(null);
     setPendingOpenClientId(null);
     setIsEditMode(false);
@@ -366,17 +416,36 @@ const CompanyClients = () => {
   };
 
   useEffect(() => {
-    const selectedId = searchParams.get('selected');
-    if (selectedId) {
-      const clientId = parseInt(selectedId, 10);
-      if (!isNaN(clientId) && clientId !== selectedClientId) {
-        const client = clients.find((c) => c.id === clientId);
-        if (client) {
-          handleSelectClient(client);
-        }
+    selectedClientIdRef.current = selectedClientId;
+  }, [selectedClientId]);
+
+  /* Sync *depuis* l'URL (deep link, back/forward) uniquement : ne pas mettre
+   * `selectedClientId` dans les deps, sinon on ré-applique l'ancien ?selected=
+   * avant la mise à jour d'URL après un clic, ce qui remet l'ex-client. */
+  useEffect(() => {
+    if (skipUrlReopenRef.current) {
+      skipUrlReopenRef.current = false;
+      const selectedId = searchParams.get('selected');
+      if (selectedId) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('selected');
+          return next;
+        });
       }
+      return;
     }
-  }, [searchParams, clients, selectedClientId, handleSelectClient]);
+
+    const selectedId = searchParams.get('selected');
+    if (!selectedId) return;
+    const clientId = parseInt(selectedId, 10);
+    if (Number.isNaN(clientId)) return;
+    if (clientId === selectedClientIdRef.current) return;
+    const client = clients.find((c) => c.id === clientId);
+    if (client) {
+      handleSelectClient(client);
+    }
+  }, [searchParams, clients, handleSelectClient, setSearchParams]);
 
   useEffect(() => {
     if (!pendingOpenClientId || clients.length === 0) return;
@@ -477,13 +546,26 @@ const CompanyClients = () => {
   };
 
   const stats = useMemo(() => ({
-    total: clients.length,
-    regular: clients.filter((c) => !c.is_institution).length,
-    institutions: clients.filter((c) => c.is_institution).length,
-    active: clients.filter((c) => c.is_active).length,
-  }), [clients]);
+    total: clientsDeduped.length,
+    regular: clientsDeduped.filter((c) => !c.is_institution).length,
+    institutions: clientsDeduped.filter((c) => c.is_institution).length,
+    active: clientsDeduped.filter((c) => c.is_active).length,
+  }), [clientsDeduped]);
 
-  const panelOpen = isDrawerOpen && clientDetails;
+  const clientDetailsForPanel = useMemo(() => {
+    if (clientDetails == null || selectedClientId == null) return null;
+    if (clientDetails.id !== selectedClientId) return null;
+    return clientDetails;
+  }, [clientDetails, selectedClientId]);
+
+  const panelOpen = isDrawerOpen
+    && selectedClientId
+    && (clientDetailsForPanel != null || loadingDetails);
+
+  const listError = clientsListError ? 'Impossible de charger les clients' : null;
+  const showListSkeleton = !canLoadClients || clientsListInitialLoading;
+  const showListRefresh = clientsListRefetching && !showListSkeleton;
+  const listOrDetailsError = listError || detailsError;
 
   useEffect(() => {
     if (!isDrawerOpen) return;
@@ -601,8 +683,15 @@ const CompanyClients = () => {
                 <span className={styles.barResultCount}>
                   {filteredAndSortedClients.length} résultat{filteredAndSortedClients.length !== 1 ? 's' : ''}
                 </span>
-                <button type="button" className={styles.refreshBtn} title="Rafraîchir" onClick={loadClients}>
-                  <FiRefreshCw size={14} />
+                <button
+                  type="button"
+                  className={styles.refreshBtn}
+                  title="Rafraîchir"
+                  onClick={loadClients}
+                  aria-busy={clientsListRefetching}
+                  disabled={showListSkeleton}
+                >
+                  <FiRefreshCw size={14} className={clientsListRefetching ? styles.refreshSpin : ''} />
                 </button>
               </div>
             </div>
@@ -634,30 +723,44 @@ const CompanyClients = () => {
               </div>
             </div>
 
-            {/* Loading / Error */}
-            {loading && <div className={styles.loading}>Chargement des clients...</div>}
-
-            {error && (
+            {/* Erreur liste (bloque le tableau) ou fiche (message seul) */}
+            {listOrDetailsError && (
               <div className={styles.error}>
-                <span>{error}</span>
-                <button onClick={loadClients} className={styles.retryBtn}>
-                  <FiRefreshCw size={14} />
-                  Reessayer
-                </button>
+                <span>{listOrDetailsError}</span>
+                {listError && (
+                  <button type="button" onClick={loadClients} className={styles.retryBtn}>
+                    <FiRefreshCw size={14} />
+                    Reessayer
+                  </button>
+                )}
               </div>
             )}
 
-            {!loading && !error && (
+            {showListSkeleton && <ClientsTableSkeleton rowCount={8} />}
+
+            {!showListSkeleton && !listError && (
               <>
-                {/* Zone D -- Table */}
-                <ClientsTable
-                  clients={paginatedClients}
-                  onSelect={handleSelectClient}
-                  onEdit={handleEditClient}
-                  onDelete={handleDeleteClick}
-                  selectedClientId={selectedClientId}
-                  onRefresh={loadClients}
-                />
+                <div
+                  className={showListRefresh ? styles.clientsListRefreshing : styles.clientsListBlock}
+                  aria-busy={showListRefresh}
+                >
+                  {showListRefresh && (
+                    <div
+                      className={styles.listRefreshBar}
+                      role="status"
+                      aria-label="Mise à jour des clients"
+                    />
+                  )}
+                  {/* Zone D -- Table */}
+                  <ClientsTable
+                    clients={paginatedClients}
+                    onSelect={handleSelectClient}
+                    onEdit={handleEditClient}
+                    onDelete={handleDeleteClick}
+                    selectedClientId={selectedClientId}
+                    onRefresh={loadClients}
+                  />
+                </div>
 
                 {/* Pagination compacte */}
                 {totalPages > 1 && (
@@ -697,9 +800,12 @@ const CompanyClients = () => {
           {panelOpen && (
             <aside className={styles.sidePanel}>
               <div className={styles.sidePanelInner}>
-                {isEditMode ? (
+                {loadingDetails && !clientDetailsForPanel ? (
+                  <div className={styles.sidePanelLoading}>Chargement de la fiche client…</div>
+                ) : isEditMode && clientDetailsForPanel ? (
                   <ClientEditForm
-                    client={clientDetails}
+                    key={selectedClientId}
+                    client={clientDetailsForPanel}
                     onSave={handleSaveInDrawer}
                     onCancel={handleCancelEdit}
                     onClose={handleCloseDrawer}
@@ -713,14 +819,15 @@ const CompanyClients = () => {
                       }
                     }}
                   />
-                ) : (
+                ) : !isEditMode && clientDetailsForPanel ? (
                   <ClientReadView
-                    client={clientDetails}
+                    key={selectedClientId}
+                    client={clientDetailsForPanel}
                     onEdit={handleEditInDrawer}
                     onClose={handleCloseDrawer}
                     loading={loadingDetails}
                   />
-                )}
+                ) : null}
               </div>
             </aside>
           )}

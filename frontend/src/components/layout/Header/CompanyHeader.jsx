@@ -20,6 +20,7 @@ import { lirieKeys } from '../../../queryKeys/lirie';
 import resolveLogoUrl from '../../../utils/resolveLogoUrl';
 import SocketStatusBadge from '../../common/SocketStatusBadge';
 import CompanyNotificationBell from './CompanyNotificationBell';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 
 function getInitials(name = '') {
   const parts = name.trim().split(/\s+/).slice(0, 2);
@@ -51,7 +52,7 @@ const CompanyHeader = () => {
     })();
   const isDemoEnv =
     location.pathname.startsWith('/demo/') ||
-    (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+    getAuthEnv() === 'demo';
   const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
 
   const { company } = useLirieCompany();
@@ -64,11 +65,6 @@ const CompanyHeader = () => {
     if (!abs) return '';
     if (abs && !abs.startsWith('http') && !abs.startsWith('data:') && !abs.startsWith('blob:')) {
       return '';
-    }
-    if (abs.startsWith('http://') || abs.startsWith('https://')) {
-      const sep = abs.includes('?') ? '&' : '?';
-      const cacheBuster = Math.floor(Date.now() / 1000);
-      return `${abs}${sep}v=${cacheBuster}`;
     }
     return abs;
   }, [company?.logo_url]);
@@ -117,7 +113,10 @@ const CompanyHeader = () => {
                 className={styles.logoImg}
                 onError={() => setLogoError(true)}
                 onLoad={() => setLogoError(false)}
+                width="36"
+                height="36"
                 loading="eager"
+                decoding="async"
               />
             ) : (
               <div className={styles.logoFallback} aria-hidden="true">

@@ -1,5 +1,7 @@
 """Tests pour les schemas de validation Marshmallow."""
 
+import re
+
 import pytest
 from marshmallow import ValidationError
 
@@ -28,7 +30,7 @@ from schemas.planning_schemas import (
     PlanningUnavailabilityQuerySchema,
     PlanningWeeklyTemplateQuerySchema,
 )
-from schemas.validation_utils import validate_request
+from schemas.validation_utils import ISO8601_DATETIME_REGEX, validate_request
 
 
 class TestLoginSchema:
@@ -168,6 +170,94 @@ class TestBookingCreateSchema:
             validate_request(BookingCreateSchema(), data)
         assert "errors" in exc_info.value.messages
         assert "amount" in exc_info.value.messages["errors"]
+
+    def test_asap_true_fills_scheduled_time_when_missing(self):
+        """Portail client : mode « dès que possible » sans scheduled_time."""
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "asap": True,
+            "amount": 50.0,
+        }
+        result = validate_request(BookingCreateSchema(), data)
+        assert result["asap"] is True
+        st = result["scheduled_time"]
+        assert isinstance(st, str)
+        assert re.match(ISO8601_DATETIME_REGEX, st)
+
+    def test_recurring_weekly_requires_series_length(self):
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "is_recurring": True,
+            "recurrence_type": "weekly",
+            "recurrence_series_length": 6,
+            "recurrence_end_date": "2026-01-15",
+        }
+        result = validate_request(BookingCreateSchema(), data)
+        assert result["is_recurring"] is True
+        assert result["recurrence_series_length"] == 6
+        assert result["recurrence_end_date"] == "2026-01-15"
+
+    def test_round_trip_requires_return_date_or_return_time(self):
+        """Aller-retour portail : au moins return_date ou return_time."""
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "is_round_trip": True,
+        }
+        with pytest.raises(ValidationError):
+            validate_request(BookingCreateSchema(), data)
+
+    def test_round_trip_return_date_only_valid(self):
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "is_round_trip": True,
+            "return_date": "2025-12-26",
+        }
+        result = validate_request(BookingCreateSchema(), data)
+        assert result["is_round_trip"] is True
+        assert result["return_date"] == "2025-12-26"
+        assert result.get("return_time") in (None, "")
+
+    def test_round_trip_return_date_before_outbound_rejected(self):
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "is_round_trip": True,
+            "return_date": "2025-12-24",
+        }
+        with pytest.raises(ValidationError) as exc_info:
+            validate_request(BookingCreateSchema(), data)
+        assert "return_date" in str(exc_info.value).lower()
+
+    def test_recurring_custom_requires_days(self):
+        data = {
+            "customer_name": "Jane Doe",
+            "pickup_location": "Rue du Rhône 1, Genève",
+            "dropoff_location": "CHUV, Lausanne",
+            "scheduled_time": "2025-12-25T10:00:00Z",
+            "amount": 50.0,
+            "is_recurring": True,
+            "recurrence_type": "custom",
+            "recurrence_series_length": 4,
+        }
+        with pytest.raises(ValidationError):
+            validate_request(BookingCreateSchema(), data)
 
 
 class TestBookingListSchema:
@@ -378,12 +468,10 @@ class TestBookingUpdateSchema:
 
     def test_boolean_fields(self):
         """Test validation des champs booléens."""
-        # is_round_trip=True => return_time requis
+        # is_round_trip=True sans return_time : autorisé (retour à définir)
         data = {"is_round_trip": True}
-        with pytest.raises(ValidationError) as exc_info:
-            validate_request(BookingUpdateSchema(), data, strict=False)
-        assert "errors" in exc_info.value.messages
-        # l'erreur est portée au niveau _schema (règle croisée)
+        result = validate_request(BookingUpdateSchema(), data, strict=False)
+        assert result["is_round_trip"] is True
 
         data = {"is_round_trip": True, "return_time": "2025-12-25T18:00:00Z"}
         result = validate_request(BookingUpdateSchema(), data, strict=False)
@@ -571,40 +659,47 @@ class TestClientCreateSchema:
 
         # Utiliser un email unique pour éviter les conflits de contrainte unique
         unique_email = f"client_{uuid.uuid4().hex[:8]}@example.com"
-        data = {"client_type": "SELF_SERVICE", "email": unique_email}
+        data = {
+            "management_mode": "SELF_SERVICE",
+            "email": unique_email,
+            "gender": "male",
+        }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "SELF_SERVICE"
+        assert result["management_mode"] == "SELF_SERVICE"
         assert result["email"] == unique_email
 
         # SELF_SERVICE avec champs optionnels
         data = {
-            "client_type": "SELF_SERVICE",
+            "management_mode": "SELF_SERVICE",
             "email": "client2@example.com",
+            "gender": "female",
             "phone": "+33612345678",
             "notes": "Notes client",
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "SELF_SERVICE"
+        assert result["management_mode"] == "SELF_SERVICE"
         assert result["email"] == "client2@example.com"
         assert result["phone"] == "+33612345678"
 
     def test_valid_private_client(self):
-        """✅ Test validation création client PRIVATE avec champs requis."""
+        """✅ Test validation création client MANAGED (ex-PRIVATE) avec champs requis."""
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": "Jean",
             "last_name": "Dupont",
             "address": "123 Rue Example, 75001 Paris",
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "PRIVATE"
+        assert result["management_mode"] == "MANAGED"
         assert result["first_name"] == "Jean"
         assert result["last_name"] == "Dupont"
         assert result["address"] == "123 Rue Example, 75001 Paris"
 
-        # PRIVATE avec tous les champs
+        # MANAGED avec tous les champs
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "female",
             "first_name": "Marie",
             "last_name": "Martin",
             "address": "456 Avenue Test, 1000 Lausanne",
@@ -614,7 +709,7 @@ class TestClientCreateSchema:
             "billing_address": "456 Avenue Test, 1000 Lausanne",
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "PRIVATE"
+        assert result["management_mode"] == "MANAGED"
         assert result["first_name"] == "Marie"
         assert result["email"] == "marie@example.com"
         assert result["billing_address"] == "456 Avenue Test, 1000 Lausanne"
@@ -622,20 +717,22 @@ class TestClientCreateSchema:
     def test_valid_corporate_client(self):
         """✅ Test validation création client CORPORATE avec champs requis."""
         data = {
-            "client_type": "CORPORATE",
+            "management_mode": "CORPORATE",
+            "gender": "male",
             "first_name": "Enterprise",
             "last_name": "Corp",
             "address": "789 Business Street, 2000 Neuchâtel",
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "CORPORATE"
+        assert result["management_mode"] == "CORPORATE"
         assert result["first_name"] == "Enterprise"
         assert result["last_name"] == "Corp"
         assert result["address"] == "789 Business Street, 2000 Neuchâtel"
 
         # CORPORATE avec institution
         data = {
-            "client_type": "CORPORATE",
+            "management_mode": "CORPORATE",
+            "gender": "female",
             "first_name": "Institution",
             "last_name": "Name",
             "address": "Institution Address",
@@ -643,35 +740,37 @@ class TestClientCreateSchema:
             "institution_name": "Hopital Cantonal",
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "CORPORATE"
+        assert result["management_mode"] == "CORPORATE"
         assert result["is_institution"] is True
         assert result["institution_name"] == "Hopital Cantonal"
 
     def test_missing_client_type(self):
-        """✅ Test erreur si client_type manquant (requis)."""
+        """✅ Test erreur si management_mode manquant (requis)."""
         import uuid
 
         # Utiliser un email unique pour éviter les conflits de contrainte unique
         unique_email = f"client_{uuid.uuid4().hex[:8]}@example.com"
         data = {
-            "email": unique_email
-            # client_type manquant
+            "email": unique_email,
+            "gender": "male",
+            # management_mode manquant
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientCreateSchema(), data, strict=False)
         assert "errors" in exc_info.value.messages
-        assert "client_type" in exc_info.value.messages["errors"]
+        assert "management_mode" in exc_info.value.messages["errors"]
 
     def test_invalid_client_type(self):
-        """✅ Test erreur si client_type invalide."""
+        """✅ Test erreur si management_mode invalide."""
         data = {
-            # Doit être SELF_SERVICE, PRIVATE ou CORPORATE
-            "client_type": "INVALID_TYPE"
+            # Doit être SELF_SERVICE, MANAGED ou CORPORATE
+            "management_mode": "INVALID_TYPE",
+            "gender": "male",
         }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientCreateSchema(), data, strict=False)
         assert "errors" in exc_info.value.messages
-        assert "client_type" in exc_info.value.messages["errors"]
+        assert "management_mode" in exc_info.value.messages["errors"]
 
     def test_email_validation_for_self_service(self):
         """✅ Test validation email pour SELF_SERVICE.
@@ -679,12 +778,20 @@ class TestClientCreateSchema:
         Email optionnel dans schema mais requis logiquement.
         """
         # Email valide
-        data = {"client_type": "SELF_SERVICE", "email": "valid@example.com"}
+        data = {
+            "management_mode": "SELF_SERVICE",
+            "gender": "male",
+            "email": "valid@example.com",
+        }
         result = validate_request(ClientCreateSchema(), data, strict=False)
         assert result["email"] == "valid@example.com"
 
         # Email invalide (format)
-        data = {"client_type": "SELF_SERVICE", "email": "invalid-email"}
+        data = {
+            "management_mode": "SELF_SERVICE",
+            "gender": "male",
+            "email": "invalid-email",
+        }
         with pytest.raises(ValidationError) as exc_info:
             validate_request(ClientCreateSchema(), data, strict=False)
         assert "errors" in exc_info.value.messages
@@ -692,7 +799,8 @@ class TestClientCreateSchema:
 
         # Email trop long (max 254)
         data = {
-            "client_type": "SELF_SERVICE",
+            "management_mode": "SELF_SERVICE",
+            "gender": "male",
             "email": "a" * 250 + "@example.com",  # > 254 caractères
         }
         with pytest.raises(ValidationError) as exc_info:
@@ -704,32 +812,35 @@ class TestClientCreateSchema:
         # (validé par la route pour SELF_SERVICE)
         # mais testons que le schéma l'accepte comme optionnel
         data = {
-            "client_type": "SELF_SERVICE"
+            "management_mode": "SELF_SERVICE",
+            "gender": "male",
             # email absent (valide pour le schéma, sera validé par la route)
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "SELF_SERVICE"
+        assert result["management_mode"] == "SELF_SERVICE"
         assert "email" not in result or result.get("email") is None
 
     def test_required_fields_for_private_corporate(self):
-        """✅ Test validation champs requis pour PRIVATE et CORPORATE.
+        """✅ Test validation champs requis pour MANAGED et CORPORATE.
 
         Validés logiquement dans la route.
         """
-        # PRIVATE sans first_name, last_name, address
+        # MANAGED sans first_name, last_name, address
         # (valides pour le schéma, validés par la route)
         data = {
-            "client_type": "PRIVATE"
+            "management_mode": "MANAGED",
+            "gender": "male",
             # first_name, last_name, address manquants
             # (valides pour schéma, route les exigera)
         }
         result = validate_request(ClientCreateSchema(), data, strict=False)
-        assert result["client_type"] == "PRIVATE"
+        assert result["management_mode"] == "MANAGED"
         # Le schéma accepte ces champs comme optionnels, mais la route les validera
 
         # Test validation longueur si fournis
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": "a" * 101,  # > 100 caractères
         }
         with pytest.raises(ValidationError) as exc_info:
@@ -741,7 +852,8 @@ class TestClientCreateSchema:
         """Test validation longueurs des champs."""
         # first_name trop long
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": "a" * 101,  # Max 100
         }
         with pytest.raises(ValidationError) as exc_info:
@@ -751,7 +863,8 @@ class TestClientCreateSchema:
 
         # address trop long
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "address": "a" * 501,  # Max 500
         }
         with pytest.raises(ValidationError) as exc_info:
@@ -761,7 +874,8 @@ class TestClientCreateSchema:
 
         # notes trop long
         data = {
-            "client_type": "SELF_SERVICE",
+            "management_mode": "SELF_SERVICE",
+            "gender": "male",
             "email": "test@example.com",
             "notes": "a" * 1001,  # Max 1000
         }
@@ -774,7 +888,8 @@ class TestClientCreateSchema:
         """Test validation coordonnées GPS."""
         # billing_lat hors limite
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": "Test",
             "last_name": "User",
             "address": "Test Address",
@@ -787,7 +902,8 @@ class TestClientCreateSchema:
 
         # billing_lon hors limite
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": "Test",
             "last_name": "User",
             "address": "Test Address",
@@ -799,11 +915,11 @@ class TestClientCreateSchema:
         assert "billing_lon" in exc_info.value.messages["errors"]
 
     def test_valid_client_types(self):
-        """Test tous les types de clients valides."""
-        valid_types = ["SELF_SERVICE", "PRIVATE", "CORPORATE"]
-        for client_type in valid_types:
-            data = {"client_type": client_type}
-            if client_type == "SELF_SERVICE":
+        """Test tous les modes de gestion valides (management_mode)."""
+        valid_modes = ["SELF_SERVICE", "MANAGED", "CORPORATE"]
+        for management_mode in valid_modes:
+            data = {"management_mode": management_mode, "gender": "male"}
+            if management_mode == "SELF_SERVICE":
                 data["email"] = "test@example.com"
             else:
                 data["first_name"] = "Test"
@@ -811,7 +927,7 @@ class TestClientCreateSchema:
                 data["address"] = "Test Address"
 
             result = validate_request(ClientCreateSchema(), data, strict=False)
-            assert result["client_type"] == client_type
+            assert result["management_mode"] == management_mode
 
 
 class TestManualBookingCreateSchema:

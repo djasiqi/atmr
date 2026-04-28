@@ -5,10 +5,11 @@ import {
 } from 'react-icons/fi';
 import apiClient from '../utils/apiClient';
 import useShadowMode from '../hooks/useShadowMode';
+import { getAuthEnv, hasCompanyScopedAccessToken } from '../utils/webAuthSession';
 import './DispatchModeSelector.css';
 
 const hasCompanyToken = () =>
-  !!(localStorage.getItem('company_access_token') || localStorage.getItem('company_authToken'));
+  hasCompanyScopedAccessToken(getAuthEnv());
 
 /**
  * Composant amélioré de sélection du mode de dispatch autonome.

@@ -257,6 +257,52 @@ def to_geneva_local(dt: Union[str, datetime, None]) -> datetime | None:
     return d.astimezone(LOCAL_TZ)
 
 
+def geneva_naive_midnight_from_date_ymd(ymd: str) -> datetime | None:
+    """Construit minuit (datetime naïf fuseau métier) pour une date ``YYYY-MM-DD``.
+
+    Utilisé notamment pour un retour aller-retour dont la **date** est connue
+    mais l'heure reste à confirmer (sentinelle 00:00 + ``time_confirmed=False``).
+    """
+    s = str(ymd).strip()
+    if not s:
+        return None
+    try:
+        d = date.fromisoformat(s)
+    except ValueError:
+        return None
+    return datetime(d.year, d.month, d.day, 0, 0, 0)
+
+
+def api_scheduled_iso_to_naive_geneva(
+    value: Union[str, datetime, None],
+) -> datetime | None:
+    """Convertit une date/heure de réservation issue du portail (ISO, souvent UTC « Z »).
+
+    - Chaîne avec fuseau (Z ou offset) : interprétée comme instant absolu puis
+      ramenée à l'horloge Europe/Zurich **sans** tzinfo (convention métier DB).
+    - Chaîne sans fuseau : ``parse_iso8601`` suppose déjà LOCAL_TZ, puis idem.
+    - ``datetime`` aware : conversion vers l'horloge locale naïve.
+    - ``datetime`` naïf : considéré déjà en heure locale métier.
+
+    Évite l'ancien piège ``replace(tzinfo=None)`` sur un UTC aware (perte de
+    1-2 h vs l'heure affichée côté client) et l'ambiguïté JSON ``T...`` sans « Z »
+    interprété comme local par les navigateurs.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            loc = to_geneva_local(value)
+            return loc.replace(tzinfo=None) if loc else None
+        return value.replace(tzinfo=None)
+    s = str(value).strip()
+    parsed = parse_iso8601(s)
+    if parsed is not None:
+        loc = to_geneva_local(parsed)
+        return loc.replace(tzinfo=None) if loc else None
+    return parse_local_naive(s)
+
+
 def format_geneva(dt: Union[str, datetime, None]) -> Tuple[str | None, str | None]:
     """Retourne ('YYYY-MM-DD','HH:MM') en **LOCAL_TZ** (aware),
     pratique pour l'affichage."""
@@ -274,8 +320,10 @@ def iso_utc_z(dt: Union[str, datetime, None]) -> str | None:
 
 # Exposer également ces noms pour ne pas casser les imports
 __all__ += [
+    "api_scheduled_iso_to_naive_geneva",
     "ensure_aware_utc",
     "format_geneva",
+    "geneva_naive_midnight_from_date_ymd",
     "iso_utc_z",
     "minutes_between",
     "minutes_from_now",

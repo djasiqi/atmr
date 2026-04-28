@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { FiMessageSquare, FiX, FiPaperclip, FiSend, FiImage, FiFileText } from 'react-icons/fi';
 import useCompanySocket from '../../hooks/useCompanySocket';
 import apiClient from '../../utils/apiClient';
+import { getActiveUser } from '../../utils/webAuthSession';
 import { v4 as uuidv4 } from 'uuid';
 import './ChatWidget.css';
 
@@ -31,13 +32,10 @@ export default function ChatWidget({ companyId }) {
   const currentUserId = useMemo(() => {
     try {
       // D'abord, essayer de récupérer depuis l'objet user dans localStorage
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        // Le backend stocke l'ID numérique dans user.id
-        if (user.id) {
-          return Number(user.id);
-        }
+      const user = getActiveUser();
+      // Le backend stocke l'ID numérique dans user.id
+      if (user?.id) {
+        return Number(user.id);
       }
       // Fallback: si user.id n'est pas dans localStorage, on ne peut pas déterminer l'ID
       // Le token JWT contient public_id dans 'sub', mais pas user.id (ID numérique)
@@ -51,7 +49,7 @@ export default function ChatWidget({ companyId }) {
 
   const [myName] = useState(() => {
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = getActiveUser() || {};
       return user.username || 'Moi';
     } catch {
       return 'Moi';

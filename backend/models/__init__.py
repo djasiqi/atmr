@@ -10,6 +10,7 @@ from ext import db
 # ========== ML & Autonomous Systems (après les autres modèles) ==========
 from .ab_test_result import ABTestResult
 from .app_version_config import AppVersionConfig
+from .activation_session import ActivationSession
 from .autonomous_action import AutonomousAction
 
 # ========== ÉTAPE 1 : Import helpers & enums ==========
@@ -58,12 +59,14 @@ from .driver import (
 from .enums import (
     AssignmentStatus,
     BillingIntent,
+    BookingCreatedVia,
     BookingStatus,
     BreakType,
     BillingReviewStatus,
     BillingPartyType,
     BillingSource,
     ClientType,
+    ManagementMode,
     DispatchOfferStatus,
     DispatchMode,
     DispatchStatus,
@@ -152,8 +155,6 @@ from .ml_prediction import MLPrediction
 from .partner_invoice import PartnerInvoice
 from .partnership import Partnership
 from .platform_admin_permission_grant import PlatformAdminPermissionGrant
-from .platform_change_request import PlatformChangeRequest
-from .platform_runbook_execution import PlatformRunbookExecution
 from .platform_billing import (
     CompanyPlatformBillingConfig,
     PlatformBillingPeriod,
@@ -162,9 +163,13 @@ from .platform_billing import (
     PlatformSubscriptionPricing,
     PlatformSupportEntry,
 )
+from .platform_client_indicative_fare_config import (
+    PlatformClientIndicativeFareConfig,
+)
+from .platform_change_request import PlatformChangeRequest
+from .platform_runbook_execution import PlatformRunbookExecution
 from .password_history import PasswordHistory  # ✅ S3: Historique mots de passe
 from .payment import Payment
-from .worldline_webhook_event import WorldlineWebhookEvent
 from .profiling_metrics import ProfilingMetrics  # ✅ 3.4: Profiling automatique
 from .refresh_token import RefreshToken
 from .rl_feedback import RLFeedback
@@ -180,6 +185,7 @@ from .vehicle import Vehicle
 # ========== EXPORTS ==========
 __all__ = [
     "ABTestResult",
+    "ActivationSession",
     "AppVersionConfig",
     "Assignment",
     "AssignmentStatus",
@@ -187,6 +193,7 @@ __all__ = [
     "Booking",
     "BookingMessage",
     "BookingMessageSender",
+    "BookingCreatedVia",
     "BookingStatus",
     "BookingTransfer",
     "BreakType",
@@ -201,6 +208,7 @@ __all__ = [
     "ClientStay",
     "ClinicBillingPartyMapping",
     "ClientType",
+    "ManagementMode",
     "Company",
     "ContactRequest",
     "CuratorTeam",
@@ -279,6 +287,7 @@ __all__ = [
     "CompanyPlatformBillingConfig",
     "PlatformInvoice",
     "PlatformInvoiceLine",
+    "PlatformClientIndicativeFareConfig",
     "PlatformRunbookExecution",
     "PlatformSubscriptionPricing",
     "PlatformSupportEntry",

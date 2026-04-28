@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from bookings.application.use_cases.create_booking import (
+from application.bookings.create_booking import (
     BookingWriterPort,
     ClientRepoPort,
     CreateBookingUseCase,

@@ -14,7 +14,7 @@ from decimal import Decimal
 import pytest
 
 from models import Booking, ClientStay, Invoice, InvoiceLine, db
-from models.enums import BookingStatus, InvoiceStatus
+from models.enums import BookingStatus, ClientType, InvoiceStatus, ManagementMode
 from tests.integration.helpers import (
     assert_response_json,
     assert_response_status,
@@ -266,7 +266,7 @@ class TestInvoicesIntegration:
 
         from ext import bcrypt
         from models import Client, ClientStay, User
-        from models.enums import ClientType, UserRole
+        from models.enums import UserRole
 
         now = datetime.now(UTC)
         year, month = now.year, now.month
@@ -291,7 +291,8 @@ class TestInvoicesIntegration:
             c.first_name = prefix
             c.last_name = "Test"
             c.email = f"{prefix}@test.ch"
-            c.client_type = ClientType.PRIVATE
+            c.client_type = ClientType.TRANSPORT
+            c.management_mode = ManagementMode.MANAGED
             db.session.add(c)
             db.session.flush()
             return c
@@ -518,7 +519,7 @@ class TestInvoicesIntegration:
 
         from ext import bcrypt
         from models import Client, User
-        from models.enums import ClientType, UserRole
+        from models.enums import UserRole
 
         year, month = 2026, 2
         start = datetime(year, month, 1)
@@ -547,7 +548,8 @@ class TestInvoicesIntegration:
             c.first_name = prefix
             c.last_name = "EligibleTest"
             c.email = f"{prefix}@test.ch"
-            c.client_type = ClientType.PRIVATE
+            c.client_type = ClientType.TRANSPORT
+            c.management_mode = ManagementMode.MANAGED
             db.session.add(c)
             db.session.flush()
             return c
@@ -663,7 +665,7 @@ class TestInvoicesIntegration:
 
         from ext import bcrypt
         from models import Client, User
-        from models.enums import ClientType, UserRole
+        from models.enums import UserRole
 
         year, month = 2026, 2
         start = datetime(year, month, 1)
@@ -687,7 +689,8 @@ class TestInvoicesIntegration:
         c.first_name = "Unbilled"
         c.last_name = "CanceledBillable"
         c.email = "unbilled_cb@test.ch"
-        c.client_type = ClientType.PRIVATE
+        c.client_type = ClientType.TRANSPORT
+        c.management_mode = ManagementMode.MANAGED
         db.session.add(c)
         db.session.flush()
 
@@ -817,7 +820,7 @@ class TestInvoicesIntegration:
 
         from ext import bcrypt
         from models import Client, User
-        from models.enums import ClientType, UserRole
+        from models.enums import UserRole
 
         now = datetime.now(UTC)
         year, month = now.year, now.month
@@ -844,7 +847,8 @@ class TestInvoicesIntegration:
         client.first_name = "AllerRetour"
         client.last_name = "Test"
         client.email = "aller_retour@test.ch"
-        client.client_type = ClientType.PRIVATE
+        client.client_type = ClientType.TRANSPORT
+        client.management_mode = ManagementMode.MANAGED
         db.session.add(client)
         db.session.flush()
 
@@ -1105,7 +1109,7 @@ class TestInvoicesIntegration:
 
         from ext import bcrypt
         from models import Client, User
-        from models.enums import ClientType, UserRole
+        from models.enums import UserRole
 
         # Créer un User pour client2
         # ✅ FIX: Rendre l'email unique pour éviter UniqueViolation
@@ -1128,7 +1132,8 @@ class TestInvoicesIntegration:
         client2.first_name = "Client2"
         client2.last_name = "Test"
         client2.email = "client2@test.ch"
-        client2.client_type = ClientType.PRIVATE
+        client2.client_type = ClientType.TRANSPORT
+        client2.management_mode = ManagementMode.MANAGED
         db.session.add(client2)
         db.session.flush()
 
@@ -1175,9 +1180,8 @@ class TestInvoicesIntegration:
         institution.first_name = "Institution"
         institution.last_name = "Test"
         institution.email = "institution@test.ch"
-        institution.client_type = (
-            ClientType.CORPORATE
-        )  # Utiliser CORPORATE au lieu de INSTITUTION
+        institution.client_type = ClientType.TRANSPORT
+        institution.management_mode = ManagementMode.CORPORATE
         institution.is_institution = True
         db.session.add(institution)
         db.session.commit()
@@ -1262,3 +1266,330 @@ class TestInvoicesIntegration:
         response = authenticated_client.post(url)
         # Peut retourner 200 ou 404 selon l'implémentation
         assert response.status_code in [200, 404]
+
+
+@pytest.mark.integration
+class TestInvoicesV1PeriodPreviewAndDraftEdit:
+    """V1 : prévisualisation période, édition brouillon, refus si non brouillon."""
+
+    def test_period_preview_patient(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.billed_to_company_id = None
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("80.00")
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{test_company.id}/invoices/period-preview"
+            f"?year={y}&month={m}&client_id={test_client.id}"
+        )
+        response = authenticated_client.get(url)
+        assert_response_status(response, 200)
+        data = assert_response_json(response, expected_keys=["data"])
+        d = data["data"]
+        assert d.get("mode") == "standard"
+        assert d.get("transports_count", 0) >= 1
+        assert float(d.get("estimated_total", 0)) >= 80.0
+
+    def test_period_preview_s2_clinic_only_billed_to_clinic(
+        self, authenticated_client, test_company, db
+    ):
+        if not test_company:
+            pytest.skip("test_company required")
+        from models import Client, ClientStay, User
+        from models.enums import UserRole
+        from ext import bcrypt
+        import uuid as u
+
+        mid = datetime.now(UTC) + timedelta(hours=3)
+        y, m = mid.year, mid.month
+        start = datetime(y, m, 1, tzinfo=UTC)
+        clinic_company_id = test_company.id
+        company_id = test_company.id
+
+        uobj = User(
+            public_id=str(u.uuid4()),
+            username=f"s2c_{u.uuid4().hex[:6]}",
+            email=f"s2c_{u.uuid4().hex[:6]}@test.ch",
+            role=UserRole.CLIENT,
+            first_name="Pat",
+            last_name="S2",
+        )
+        uobj.password = bcrypt.generate_password_hash("password123").decode("utf-8")
+        db.session.add(uobj)
+        db.session.flush()
+        c = Client()
+        c.user = uobj
+        c.company_id = company_id
+        c.first_name = "Pat"
+        c.last_name = "S2"
+        c.email = "p@s2.test"
+        c.client_type = ClientType.TRANSPORT
+        c.management_mode = ManagementMode.MANAGED
+        db.session.add(c)
+        db.session.flush()
+        stay = ClientStay()
+        stay.client_id = c.id
+        stay.company_id = clinic_company_id
+        stay.start_date = start
+        stay.end_date = None
+        stay.status = "active"
+        db.session.add(stay)
+        b_clinic = Booking()
+        b_clinic.user_id = c.user_id
+        b_clinic.company_id = company_id
+        b_clinic.client_id = c.id
+        b_clinic.customer_name = "Pat S2"
+        b_clinic.pickup_location = "A"
+        b_clinic.dropoff_location = "B"
+        b_clinic.scheduled_time = mid
+        b_clinic.completed_at = mid
+        b_clinic.status = BookingStatus.COMPLETED
+        b_clinic.amount = Decimal("120.00")
+        b_clinic.invoice_line_id = None
+        b_clinic.billed_to_type = "clinic"
+        b_clinic.billed_to_company_id = clinic_company_id
+        b_patient = Booking()
+        b_patient.user_id = c.user_id
+        b_patient.company_id = company_id
+        b_patient.client_id = c.id
+        b_patient.customer_name = "Pat S2"
+        b_patient.pickup_location = "A"
+        b_patient.dropoff_location = "B"
+        b_patient.scheduled_time = mid
+        b_patient.completed_at = mid
+        b_patient.status = BookingStatus.COMPLETED
+        b_patient.amount = Decimal("40.00")
+        b_patient.invoice_line_id = None
+        b_patient.billed_to_type = "patient"
+        b_patient.billed_to_company_id = None
+        db.session.add(b_clinic)
+        db.session.add(b_patient)
+        db.session.commit()
+
+        url = (
+            f"/api/v1/invoices/companies/{company_id}/invoices/period-preview"
+            f"?year={y}&month={m}&clinic_company_id={clinic_company_id}"
+        )
+        r = authenticated_client.get(url)
+        assert_response_status(r, 200)
+        d = r.get_json()["data"]
+        assert d["mode"] == "clinic_monthly"
+        assert d["transports_count"] == 1
+        assert float(d["estimated_total"]) == 120.0
+
+    def test_draft_remove_line_frees_booking(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+        from models.enums import InvoiceLineType
+
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.billed_to_company_id = None
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("100.00")
+        db.session.commit()
+
+        gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
+        gen = authenticated_client.post(
+            gen_url,
+            json={
+                "client_id": test_client.id,
+                "period_year": y,
+                "period_month": m,
+            },
+        )
+        assert gen.status_code in (200, 201)
+        inv_data = gen.get_json()
+        invoice_id = inv_data.get("id")
+        assert invoice_id
+
+        inv = Invoice.query.get(invoice_id)
+        assert inv
+        line = next(
+            (l for l in inv.lines if l.reservation_id == test_completed_booking.id), None
+        )
+        assert line is not None
+        del_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{line.id}"
+        dresp = authenticated_client.delete(del_url)
+        assert_response_status(dresp, 200)
+        db.session.refresh(test_completed_booking)
+        assert test_completed_booking.invoice_line_id is None
+
+    def test_draft_patch_line_recomputes(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+        from models.enums import InvoiceLineType
+
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("100.00")
+        db.session.commit()
+
+        gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
+        gen = authenticated_client.post(
+            gen_url,
+            json={"client_id": test_client.id, "period_year": y, "period_month": m},
+        )
+        assert gen.status_code in (200, 201)
+        inv_data = gen.get_json()
+        invoice_id = inv_data.get("id")
+        before_total = float(inv_data.get("total_amount", 0))
+        inv = Invoice.query.get(invoice_id)
+        line = [l for l in inv.lines if l.type == InvoiceLineType.RIDE][0]
+        purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{line.id}"
+        pr = authenticated_client.patch(purl, json={"line_total": 50.0})
+        assert_response_status(pr, 200)
+        out = pr.get_json()["data"]["invoice"]
+        assert out["id"] == invoice_id
+        assert float(out["total_amount"]) < before_total
+
+    def test_draft_get_repairs_zero_total_with_vat_on_custom_line(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        """GET brouillon : si une ligne a HT≠0 mais TTC=0, recalcul TTC + totaux facture."""
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("100.00")
+        db.session.commit()
+
+        gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
+        gen = authenticated_client.post(
+            gen_url, json={"client_id": test_client.id, "period_year": y, "period_month": m}
+        )
+        assert gen.status_code in (200, 201)
+        inv_data = gen.get_json()
+        invoice_id = inv_data.get("id")
+        assert invoice_id
+
+        cust_url = (
+            f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/custom-line"
+        )
+        cr = authenticated_client.post(
+            cust_url,
+            json={"description": "Accompagnement QA", "line_total": 22.5},
+        )
+        assert_response_status(cr, 200)
+
+        inv = Invoice.query.get(invoice_id)
+        assert inv
+        custom = next(
+            (l for l in inv.lines if l.description and "Accompagnement QA" in l.description),
+            None,
+        )
+        assert custom is not None
+        custom.total_with_vat = Decimal("0")
+        db.session.commit()
+
+        get_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}"
+        gr = authenticated_client.get(get_url)
+        assert_response_status(gr, 200)
+        payload = gr.get_json()["data"]
+        lines = payload.get("lines") or []
+        tw_sum = sum(float(ln.get("total_with_vat") or 0) for ln in lines)
+        assert float(payload["total_amount"]) == pytest.approx(tw_sum, rel=1e-5)
+        custom_out = next(
+            ln for ln in lines if "Accompagnement QA" in (ln.get("description") or "")
+        )
+        assert float(custom_out.get("total_with_vat") or 0) > 0
+
+    def test_draft_apply_global_discount_custom_negative_line(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("200.00")
+        db.session.commit()
+
+        gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
+        gen = authenticated_client.post(
+            gen_url,
+            json={"client_id": test_client.id, "period_year": y, "period_month": m},
+        )
+        assert gen.status_code in (200, 201)
+        inv_data = gen.get_json()
+        invoice_id = inv_data.get("id")
+        disc_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/apply-global-discount"
+        dr = authenticated_client.post(
+            disc_url, json={"global_discount_percent": 10.0, "global_discount_note": "Test QA"}
+        )
+        assert_response_status(dr, 200)
+        inv_out = dr.get_json()["data"]["invoice"]
+        lines = inv_out.get("lines") or []
+        remise_lines = [
+            ln
+            for ln in lines
+            if str(ln.get("type", "")).upper() == "CUSTOM"
+            and float(ln.get("line_total", 0) or 0) < 0
+        ]
+        assert len(remise_lines) >= 1
+        if len(remise_lines) > 1:
+            assert all("remise" in (ln.get("description") or "").lower() for ln in remise_lines)
+
+    def test_draft_edit_refused_when_invoice_sent(
+        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_invoice, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+        from models.enums import InvoiceLineType
+
+        test_invoice.status = InvoiceStatus.SENT
+        for old in list(test_invoice.lines):
+            db.session.delete(old)
+        il = InvoiceLine(
+            invoice_id=test_invoice.id,
+            reservation_id=test_completed_booking.id,
+            type=InvoiceLineType.RIDE,
+            description="X",
+            qty=Decimal("1.00"),
+            unit_price=Decimal("10.00"),
+            line_total=Decimal("10.00"),
+            vat_amount=Decimal("0.00"),
+            total_with_vat=Decimal("10.00"),
+        )
+        db.session.add(il)
+        db.session.flush()
+        test_completed_booking.invoice_line_id = il.id
+        db.session.commit()
+        purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/lines/{il.id}"
+        pr = authenticated_client.patch(purl, json={"line_total": 5.0})
+        assert pr.status_code == 400
+        err = pr.get_json() or {}
+        emsg = err.get("error")
+        if emsg is None and isinstance(err.get("data"), dict):
+            emsg = err["data"].get("error")
+        assert emsg
+        assert "brouillon" in str(emsg).lower() or "draft" in str(emsg).lower()

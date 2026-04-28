@@ -22,6 +22,30 @@ from services.dispatch.scoring_engine import (
 logger = logging.getLogger(__name__)
 
 
+def _canton_token_from_address_keywords(address: str | None) -> str | None:
+    """Si geocodage inverse echoue, deduit ``canton:XX`` depuis des mots-cles canton dans l'adresse (ex. Geneve -> GE)."""
+    from services.geo.geo_resolver import LEGACY_CANTON_MAP, normalize_text
+
+    n = normalize_text(address)
+    if not n:
+        return None
+    for keyword, code in LEGACY_CANTON_MAP.items():
+        if keyword in n:
+            return f"canton:{code}"
+    return None
+
+
+def _token_for_geo_unit_lookup(admin_payload: dict[str, Any]) -> str | None:
+    """Construit un jeton utilisable par ``geo_unit_id_from_pickup_admin_token`` (Photon peut renvoyer ``canton_code`` sans ``token``)."""
+    token = (admin_payload.get("token") or "").strip()
+    if token:
+        return token
+    cc = (admin_payload.get("canton_code") or "").strip().upper()
+    if cc:
+        return f"canton:{cc}"
+    return None
+
+
 def ensure_booking_dispatch_geo_units(booking: Booking) -> bool:
     """Renseigne ``pickup_geo_unit_id`` / ``dropoff_geo_unit_id`` si absents mais coords connues.
 
@@ -45,7 +69,10 @@ def ensure_booking_dispatch_geo_units(booking: Booking) -> bool:
                 pickup_zip=None,
                 pickup_text=getattr(booking, "pickup_location", None),
             )
-            gid = geo_unit_id_from_pickup_admin_token(pa.get("token"))
+            token = _token_for_geo_unit_lookup(pa) or _canton_token_from_address_keywords(
+                getattr(booking, "pickup_location", None)
+            )
+            gid = geo_unit_id_from_pickup_admin_token(token)
             if gid:
                 booking.pickup_geo_unit_id = int(gid)
                 changed = True
@@ -59,7 +86,10 @@ def ensure_booking_dispatch_geo_units(booking: Booking) -> bool:
                 pickup_zip=None,
                 pickup_text=getattr(booking, "dropoff_location", None),
             )
-            gid = geo_unit_id_from_pickup_admin_token(da.get("token"))
+            token = _token_for_geo_unit_lookup(da) or _canton_token_from_address_keywords(
+                getattr(booking, "dropoff_location", None)
+            )
+            gid = geo_unit_id_from_pickup_admin_token(token)
             if gid:
                 booking.dropoff_geo_unit_id = int(gid)
                 changed = True
@@ -96,6 +126,25 @@ def _notify_companies_new_dispatch_offers(booking_id: int) -> None:
             "[open_booking_offers] emit new_reservation echoue booking_id=%s",
             booking_id,
         )
+
+
+def booking_open_market_has_dispatch_candidates(booking: Booking) -> bool:
+    """Vrai si au moins une entreprise avec dispatch activé est candidate pour cette course.
+
+    Réservé au **marché ouvert** (``company_id`` absent) : avant paiement en ligne, évite
+    d'encaisser si aucun transporteur ne peut être sollicité par le moteur de dispatch.
+    """
+    if getattr(booking, "company_id", None) is not None:
+        return True
+    ensure_booking_dispatch_geo_units(booking)
+    db.session.refresh(booking)
+    pickup_gu = getattr(booking, "pickup_geo_unit", None)
+    drop_gu = getattr(booking, "dropoff_geo_unit", None)
+    candidates = compute_candidates(
+        pickup_geo_unit=pickup_gu,
+        drop_geo_unit=drop_gu,
+    )
+    return len(candidates) > 0
 
 
 def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:

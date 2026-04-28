@@ -202,11 +202,33 @@ def resolve_geo_unit(
 
 
 def resolve_legacy_service_area_to_canton_codes(legacy_service_area: str | None) -> list[str]:
-    text = normalize_text(legacy_service_area)
+    """Codes canton (ex. ``GE``) pour le fallback scoring, depuis texte libre ou JSON ``{"tokens":["canton:GE"]}``."""
+    raw = (legacy_service_area or "").strip()
+    if not raw:
+        return []
+    codes: list[str] = []
+    if raw.startswith("{"):
+        try:
+            payload = json.loads(raw)
+            if isinstance(payload, dict):
+                tokens = payload.get("tokens")
+                if isinstance(tokens, list):
+                    for t in tokens:
+                        if not isinstance(t, str):
+                            continue
+                        tl = t.strip().lower()
+                        if tl.startswith("canton:"):
+                            cc = t.split(":", 1)[1].strip().upper()
+                            if cc and cc not in codes:
+                                codes.append(cc)
+                if codes:
+                    return codes
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    text = normalize_text(raw)
     if not text:
         return []
     parts = [p.strip() for p in text.replace(";", ",").split(",") if p.strip()]
-    codes: list[str] = []
     for part in parts:
         mapped = LEGACY_CANTON_MAP.get(part)
         if mapped and mapped not in codes:

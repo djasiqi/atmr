@@ -68,8 +68,10 @@ export function InAppNotificationToast() {
 
   return (
     <Animated.View
-      style={[styles.container, { transform: [{ translateY }] }]}
-      pointerEvents="box-none"
+      style={[
+        styles.container,
+        { transform: [{ translateY }], pointerEvents: "box-none" },
+      ]}
     >
       <TouchableOpacity
         style={styles.toast}

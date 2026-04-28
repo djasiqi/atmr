@@ -40,12 +40,43 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 6371 * c
 
 
-def _mode_allowed(service_area: ServiceArea, pickup_match: bool, drop_match: bool) -> bool:
+def _pickup_drop_same_canton(
+    pickup_chain: list[GeoUnit], drop_chain: list[GeoUnit]
+) -> bool | None:
+    """True si prise en charge et dépose partagent le même canton (chaîne géo)."""
+    pu = next(
+        (g for g in pickup_chain if getattr(g.type, "value", str(g.type)) == "canton"),
+        None,
+    )
+    dr = next(
+        (g for g in drop_chain if getattr(g.type, "value", str(g.type)) == "canton"),
+        None,
+    )
+    if pu is None or dr is None:
+        return None
+    return int(pu.id) == int(dr.id)
+
+
+def _mode_allowed(
+    service_area: ServiceArea,
+    pickup_match: bool,
+    drop_match: bool,
+    *,
+    intra_strict_drop: bool,
+) -> bool:
+    """``intra_strict_drop`` : vrai seulement si trajet strictement intra-canton (même canton).
+
+    Pour ``C_INTRA_ONLY`` et trajet **inter**-cantons (ex. GE → VD), on aligne le dispatch
+    sur la **prise en charge** (entreprises « basées » sur le canton de départ), comme
+    ``B_PICKUP_ONLY``, afin de proposer la course aux transporteurs du canton de pickup.
+    """
     mode = service_area.coverage_mode.value
     if mode in ("A_STRICT", "B_PICKUP_ONLY"):
         return pickup_match
     if mode == "C_INTRA_ONLY":
-        return pickup_match and drop_match
+        if intra_strict_drop:
+            return pickup_match and drop_match
+        return pickup_match
     if mode == "D_NATIONAL":
         return True
     return False
@@ -56,6 +87,7 @@ def _best_company_candidate(
     company: Company,
     pickup_chain: list[GeoUnit],
     drop_chain: list[GeoUnit],
+    intra_strict_drop: bool,
 ) -> DispatchCandidate | None:
     best_score = -1
     best_reason: dict[str, Any] | None = None
@@ -67,7 +99,9 @@ def _best_company_candidate(
             continue
         pickup_match = area.geo_unit_id in pickup_map
         drop_match = area.geo_unit_id in drop_ids
-        if not _mode_allowed(area, pickup_match, drop_match):
+        if not _mode_allowed(
+            area, pickup_match, drop_match, intra_strict_drop=intra_strict_drop
+        ):
             continue
 
         if area.coverage_mode.value == "D_NATIONAL":
@@ -106,6 +140,8 @@ def compute_candidates(
 ) -> list[DispatchCandidate]:
     pickup_chain = geo_chain(pickup_geo_unit)
     drop_chain = geo_chain(drop_geo_unit)
+    same_canton = _pickup_drop_same_canton(pickup_chain, drop_chain)
+    intra_strict_drop = same_canton is True
     companies = Company.query.filter(Company.dispatch_enabled.is_(True)).all()
     candidates: list[DispatchCandidate] = []
 
@@ -114,6 +150,7 @@ def compute_candidates(
             company=company,
             pickup_chain=pickup_chain,
             drop_chain=drop_chain,
+            intra_strict_drop=intra_strict_drop,
         )
         if best:
             candidates.append(best)

@@ -5,8 +5,10 @@
 # Usage local (Docker):
 #   ./scripts/update_genevieve_boillat_dates.sh
 #
-# Usage production (SSH):
-#   SERVER_HOST=138.201.155.201 SERVER_USER=deploy SERVER_PATH=/srv/atmr ./scripts/update_genevieve_boillat_dates.sh
+# Usage production (SSH) :
+#   export SERVER_HOST=... SERVER_USER=deploy SERVER_PATH=/srv/atmr
+#   ./scripts/update_genevieve_boillat_dates.sh
+# (voir docs/deployment-ssh.md)
 
 set -e
 

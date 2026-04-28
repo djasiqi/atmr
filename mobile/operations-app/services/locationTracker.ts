@@ -9,6 +9,7 @@ import { AppState, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { getLogger } from "@/utils/logger";
+import { assertDriverSurface } from "@/services/authSurface";
 import { getDistanceInMeters } from "./location";
 import { enqueueLocation } from "./locationQueue";
 import {
@@ -667,6 +668,9 @@ export class AdaptiveLocationTracker {
    * Démarrer le tracking adaptatif.
    */
   async startTracking(): Promise<void> {
+    if (!assertDriverSurface("AdaptiveLocationTracker.startTracking")) {
+      return;
+    }
     if (this.isTracking) {
       log.debug("tracking already active");
       return;
@@ -1012,6 +1016,9 @@ export function getAdaptiveLocationTracker(): AdaptiveLocationTracker {
  * Démarrer le tracking adaptatif (helper).
  */
 export async function startAdaptiveLocationTracking(): Promise<void> {
+  if (!assertDriverSurface("startAdaptiveLocationTracking")) {
+    return;
+  }
   try {
     await MissionStateManager.syncActiveMissionFromServerIfMissing();
   } catch {

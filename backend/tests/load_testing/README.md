@@ -360,7 +360,8 @@ locust ... --run-time=10m
 locust -f dispatch_load_test.py --headless ...
 
 # Terminal 2 : Monitoring backend
-docker stats atmr-api-1
+# Exécuter depuis la racine du monorepo
+docker stats "$(docker compose -f docker-compose.yml ps -q atmr_api)"
 
 # Terminal 3 : Logs temps réel
 docker-compose logs -f api | grep DISPATCH

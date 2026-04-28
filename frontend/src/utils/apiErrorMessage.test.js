@@ -12,12 +12,12 @@ describe('getApiErrorMessage', () => {
       response: {
         data: {
           error: 'payment_unavailable',
-          message: 'Paiement Worldline non configuré sur ce serveur',
+          message: 'Paiement Saferpay non configuré sur ce serveur',
         },
       },
     };
     expect(getApiErrorMessage(err, 'Défaut')).toBe(
-      'Paiement Worldline non configuré sur ce serveur'
+      'Paiement Saferpay non configuré sur ce serveur'
     );
   });
 
@@ -29,7 +29,7 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(err, 'Défaut')).toBe('Montant invalide');
   });
 
-  it('utilise le message d’une Error métier (ex. après startWorldlineHostedCheckout)', () => {
+  it('utilise le message d’une Error métier (ex. après startSaferpayHostedCheckout)', () => {
     expect(
       getApiErrorMessage(new Error('URL de retour non autorisée'), 'Défaut')
     ).toBe('URL de retour non autorisée');
@@ -40,5 +40,18 @@ describe('getApiErrorMessage', () => {
       response: { data: { data: { message: 'Détail interne' } } },
     };
     expect(getApiErrorMessage(err, 'Défaut')).toBe('Détail interne');
+  });
+
+  it('lit le texte dans error quand error_code est présent (format legacy)', () => {
+    const err = {
+      message: 'Request failed with status code 400',
+      response: {
+        data: {
+          error: 'Incorrect old password',
+          error_code: 'validation_error',
+        },
+      },
+    };
+    expect(getApiErrorMessage(err, 'Défaut')).toBe('Incorrect old password');
   });
 });

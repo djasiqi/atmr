@@ -1,0 +1,397 @@
+"""Consumer Kafka tracking ingest robuste.
+
+Contrat:
+- consume topic raw
+- publish processed avec ACK court avant commit
+- retry local borné sur erreurs transitoires
+- échec définitif => DLQ puis commit uniquement si DLQ ACK confirmé
+- aucun auto-replay métier dans ce worker
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import signal
+import sys
+import time
+from typing import Any
+
+from .kafka_topics import (
+    TOPIC_DRIVER_LOCATION_DLQ,
+    TOPIC_DRIVER_LOCATION_PROCESSED,
+    TOPIC_DRIVER_LOCATION_RAW,
+)
+
+try:
+    from services.monitoring.driver_location_metrics import (
+        inc_tracking_kafka_dlq_messages,
+        inc_tracking_kafka_messages_produced,
+        inc_tracking_kafka_publish_errors,
+        inc_tracking_kafka_rebalance,
+        observe_tracking_kafka_e2e_latency,
+    )
+except Exception:  # pragma: no cover
+    def inc_tracking_kafka_messages_produced(*, topic: str) -> None:
+        _ = topic
+        pass
+
+    def inc_tracking_kafka_publish_errors(*, topic: str, stage: str) -> None:
+        _ = (topic, stage)
+        pass
+
+    def inc_tracking_kafka_dlq_messages(*, reason: str) -> None:
+        _ = reason
+        pass
+
+    def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:
+        _ = latency_ms
+        pass
+
+    def inc_tracking_kafka_rebalance(*, event: str) -> None:
+        _ = event
+        pass
+
+logger = logging.getLogger(__name__)
+
+KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
+TRACKING_INGEST_ASYNC_ENABLED = (
+    os.getenv("TRACKING_INGEST_ASYNC_ENABLED", "false").lower() == "true"
+)
+KAFKA_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
+)
+KAFKA_CONSUMER_GROUP = os.getenv("KAFKA_TRACKING_CONSUMER_GROUP", "tracking-ingest-consumer-group")
+KAFKA_COMPRESSION_TYPE = os.getenv("KAFKA_COMPRESSION_TYPE", "gzip")
+KAFKA_ACKS = os.getenv("KAFKA_ACKS", "all")
+KAFKA_AUTO_OFFSET_RESET = os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
+KAFKA_MAX_RETRIES = int(os.getenv("KAFKA_MAX_RETRIES", "3"))
+KAFKA_RETRY_BACKOFF_MS = int(os.getenv("KAFKA_RETRY_BACKOFF_MS", "300"))
+KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "0.5"))
+KAFKA_MAX_BLOCK_MS = int(os.getenv("KAFKA_MAX_BLOCK_MS", "500"))
+TRACKING_DLQ_RETRY_BACKOFF_S = float(os.getenv("TRACKING_DLQ_RETRY_BACKOFF_S", "1.0"))
+KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
+KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
+KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
+KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
+KAFKA_SSL_CAFILE = os.getenv("KAFKA_SSL_CAFILE", "")
+KAFKA_SSL_CERTFILE = os.getenv("KAFKA_SSL_CERTFILE", "")
+KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
+
+
+def _kafka_security_config() -> dict[str, Any]:
+    cfg: dict[str, Any] = {"security_protocol": KAFKA_SECURITY_PROTOCOL}
+    if KAFKA_SASL_MECHANISM:
+        cfg["sasl_mechanism"] = KAFKA_SASL_MECHANISM
+    if KAFKA_SASL_USERNAME:
+        cfg["sasl_plain_username"] = KAFKA_SASL_USERNAME
+    if KAFKA_SASL_PASSWORD:
+        cfg["sasl_plain_password"] = KAFKA_SASL_PASSWORD
+    if KAFKA_SSL_CAFILE:
+        cfg["ssl_cafile"] = KAFKA_SSL_CAFILE
+    if KAFKA_SSL_CERTFILE:
+        cfg["ssl_certfile"] = KAFKA_SSL_CERTFILE
+    if KAFKA_SSL_KEYFILE:
+        cfg["ssl_keyfile"] = KAFKA_SSL_KEYFILE
+    return cfg
+
+
+def _header_int(value: int) -> bytes:
+    return str(max(0, value)).encode("utf-8")
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    name = exc.__class__.__name__.lower()
+    message = str(exc).lower()
+    transient_tokens = (
+        "timeout",
+        "temporarily",
+        "leader",
+        "broker",
+        "connection",
+        "network",
+        "throttle",
+        "retry",
+    )
+    return any(token in name or token in message for token in transient_tokens)
+
+
+class TrackingIngestConsumer:
+    def __init__(self) -> None:
+        super().__init__()
+        self._consumer = None
+        self._producer = None
+        self._running = False
+        self._initialized = False
+        signal.signal(signal.SIGTERM, self._shutdown_signal)
+        signal.signal(signal.SIGINT, self._shutdown_signal)
+        if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
+            self._init_clients()
+
+    def _init_clients(self) -> None:
+        try:
+            from kafka import ConsumerRebalanceListener
+            from kafka import KafkaConsumer as KC
+            from kafka import KafkaProducer as KP
+
+            class _RebalanceListener(ConsumerRebalanceListener):
+                def on_partitions_revoked(self, revoked):
+                    try:
+                        inc_tracking_kafka_rebalance(event="revoked")
+                    except Exception:
+                        logger.debug("[tracking_consumer] rebalance metric unavailable", exc_info=True)
+                    logger.warning("[tracking_consumer] partitions revoked=%s", revoked)
+
+                def on_partitions_assigned(self, assigned):
+                    try:
+                        inc_tracking_kafka_rebalance(event="assigned")
+                    except Exception:
+                        logger.debug("[tracking_consumer] rebalance metric unavailable", exc_info=True)
+                    logger.info("[tracking_consumer] partitions assigned=%s", assigned)
+
+            self._consumer = KC(
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                group_id=KAFKA_CONSUMER_GROUP,
+                enable_auto_commit=False,
+                auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
+                value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+                key_deserializer=lambda k: k.decode("utf-8") if k else None,
+                **_kafka_security_config(),
+            )
+            self._consumer.subscribe([TOPIC_DRIVER_LOCATION_RAW], listener=_RebalanceListener())
+            self._producer = KP(
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                key_serializer=lambda k: k.encode("utf-8") if k else None,
+                acks=KAFKA_ACKS,
+                compression_type=KAFKA_COMPRESSION_TYPE,
+                enable_idempotence=True,
+                retries=3,
+                max_block_ms=KAFKA_MAX_BLOCK_MS,
+                **_kafka_security_config(),
+            )
+            self._initialized = True
+            logger.info("[tracking_consumer] initialized")
+        except ImportError:
+            logger.error("[tracking_consumer] kafka-python dependency missing")
+        except Exception:
+            logger.exception("[tracking_consumer] initialization failed")
+
+    def _is_valid(self, message: dict[str, Any]) -> bool:
+        payload = message.get("payload")
+        if not isinstance(payload, dict):
+            return False
+        has_lat = "latitude" in payload or "lat" in payload
+        has_lon = "longitude" in payload or "lon" in payload
+        return has_lat and has_lon
+
+    def _publish_with_ack(
+        self,
+        *,
+        topic: str,
+        key: str,
+        message: dict[str, Any],
+        retry_count: int,
+    ) -> None:
+        assert self._producer is not None
+        future = self._producer.send(
+            topic,
+            key=key,
+            value=message,
+            headers=[("retry_count", _header_int(retry_count))],
+        )
+        future.get(timeout=KAFKA_PUBLISH_ACK_TIMEOUT_S)
+        try:
+            inc_tracking_kafka_messages_produced(topic=topic)
+        except Exception:
+            logger.debug("[tracking_consumer] produced metric unavailable", exc_info=True)
+
+    def _commit_current(self) -> None:
+        assert self._consumer is not None
+        self._consumer.commit()
+
+    def _send_to_dlq_and_commit(
+        self,
+        *,
+        record,
+        key: str,
+        source_message: dict[str, Any],
+        error: Exception,
+        retry_count: int,
+        error_type: str,
+    ) -> bool:
+        dlq_payload = {
+            "original_topic": record.topic,
+            "original_partition": record.partition,
+            "original_offset": record.offset,
+            "original_key": record.key,
+            "original_message": source_message,
+            "error": str(error),
+            "error_type": error_type,
+            "retry_count": retry_count,
+            "timestamp": int(time.time() * 1000),
+        }
+        try:
+            self._publish_with_ack(
+                topic=TOPIC_DRIVER_LOCATION_DLQ,
+                key=key,
+                message=dlq_payload,
+                retry_count=retry_count,
+            )
+            self._commit_current()
+            try:
+                inc_tracking_kafka_dlq_messages(reason=error_type)
+            except Exception:
+                logger.debug("[tracking_consumer] dlq metric unavailable", exc_info=True)
+            logger.warning(
+                "[tracking_consumer] DLQ confirmed topic=%s partition=%s offset=%s type=%s",
+                record.topic,
+                record.partition,
+                record.offset,
+                error_type,
+            )
+            return True
+        except Exception:
+            try:
+                inc_tracking_kafka_publish_errors(topic=TOPIC_DRIVER_LOCATION_DLQ, stage="dlq_publish_failed")
+            except Exception:
+                logger.debug("[tracking_consumer] publish error metric unavailable", exc_info=True)
+            logger.error(
+                "[tracking_consumer] DLQ publish failed -> backoff sleep=%.3fs topic=%s partition=%s offset=%s",
+                TRACKING_DLQ_RETRY_BACKOFF_S,
+                record.topic,
+                record.partition,
+                record.offset,
+            )
+            logger.critical(
+                "[tracking_consumer] DLQ publish failed, commit skipped topic=%s partition=%s offset=%s",
+                record.topic,
+                record.partition,
+                record.offset,
+                exc_info=True,
+            )
+            # Évite une boucle chaude sur le même offset si la DLQ est indisponible.
+            time.sleep(TRACKING_DLQ_RETRY_BACKOFF_S)
+            return False
+
+    def _observe_e2e_latency(self, message: dict[str, Any]) -> None:
+        received_at_ms = message.get("received_at_ms")
+        if not isinstance(received_at_ms, (int, float)):
+            return
+        latency_ms = max(0.0, (time.time() * 1000) - float(received_at_ms))
+        try:
+            observe_tracking_kafka_e2e_latency(latency_ms=latency_ms)
+        except Exception:
+            logger.debug("[tracking_consumer] e2e metric unavailable", exc_info=True)
+
+    def _process_record(self, record) -> bool:
+        message_obj = record.value if isinstance(record.value, dict) else {}
+        try:
+            driver_id_obj = message_obj.get("driver_id")
+            if not isinstance(driver_id_obj, (int, str)):
+                raise ValueError("driver_id_missing")
+            driver_id = int(driver_id_obj)
+            key = f"driver_{driver_id}"
+        except Exception as exc:
+            return self._send_to_dlq_and_commit(
+                record=record,
+                key="driver_unknown",
+                source_message=message_obj,
+                error=exc,
+                retry_count=0,
+                error_type="invalid_driver_id",
+            )
+
+        if not self._is_valid(message_obj):
+            return self._send_to_dlq_and_commit(
+                record=record,
+                key=key,
+                source_message=message_obj,
+                error=ValueError("invalid_payload"),
+                retry_count=0,
+                error_type="invalid_payload",
+            )
+
+        for attempt in range(1, KAFKA_MAX_RETRIES + 1):
+            try:
+                validated = {**message_obj, "validated_at_ms": record.timestamp}
+                self._publish_with_ack(
+                    topic=TOPIC_DRIVER_LOCATION_PROCESSED,
+                    key=key,
+                    message=validated,
+                    retry_count=attempt - 1,
+                )
+                self._commit_current()
+                self._observe_e2e_latency(message_obj)
+                return True
+            except Exception as exc:
+                transient = _is_transient_error(exc)
+                try:
+                    inc_tracking_kafka_publish_errors(topic=TOPIC_DRIVER_LOCATION_PROCESSED, stage="processed_publish_failed")
+                except Exception:
+                    logger.debug("[tracking_consumer] publish error metric unavailable", exc_info=True)
+
+                if transient and attempt < KAFKA_MAX_RETRIES:
+                    sleep_s = (KAFKA_RETRY_BACKOFF_MS * attempt) / 1000.0
+                    logger.warning(
+                        "[tracking_consumer] transient publish error attempt=%s/%s sleep=%.3fs",
+                        attempt,
+                        KAFKA_MAX_RETRIES,
+                        sleep_s,
+                    )
+                    time.sleep(sleep_s)
+                    continue
+                error_type = "transient_exhausted" if transient else "definitive_failure"
+                return self._send_to_dlq_and_commit(
+                    record=record,
+                    key=key,
+                    source_message=message_obj,
+                    error=exc,
+                    retry_count=attempt,
+                    error_type=error_type,
+                )
+        return False
+
+    def start(self) -> None:
+        if not self._initialized:
+            logger.error("[tracking_consumer] cannot start, not initialized")
+            return
+        assert self._consumer is not None
+        self._running = True
+        logger.info("[tracking_consumer] start loop")
+        while self._running:
+            polled = self._consumer.poll(timeout_ms=1000)
+            for _tp, records in polled.items():
+                for record in records:
+                    try:
+                        self._process_record(record)
+                    except Exception:
+                        logger.exception("[tracking_consumer] processing error")
+        self.close()
+
+    def _shutdown_signal(self, signum, _frame) -> None:
+        logger.info("[tracking_consumer] shutdown signal=%s", signum)
+        self._running = False
+
+    def close(self) -> None:
+        if self._consumer is not None:
+            self._consumer.close()
+        if self._producer is not None:
+            self._producer.flush(timeout=3)
+            self._producer.close()
+
+
+def run_tracking_ingest_consumer() -> None:
+    if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
+        logger.error("[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED)")
+        sys.exit(1)
+    consumer = TrackingIngestConsumer()
+    consumer.start()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    run_tracking_ingest_consumer()
+

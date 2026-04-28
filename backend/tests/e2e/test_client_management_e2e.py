@@ -286,7 +286,7 @@ class TestCompanyClientCreateUpdatePersistE2E:
 
         # 1. Create company client (aligné NewClientModal payload)
         create_payload = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
             "email": email,
             "first_name": "E2E",
             "last_name": "CreateUpdate",

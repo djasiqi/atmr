@@ -16,6 +16,7 @@ class BookingStatusEnum(Enum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     ASSIGNED = "assigned"
+    EN_ROUTE = "en_route"
     CANCELED = "canceled"
 
 
@@ -65,6 +66,35 @@ class SpyAssignmentWriter:
                 "driver_id": driver_id,
             }
         )
+
+
+def test_update_accepted_booking_preserves_status():
+    from application.bookings.update_pending_booking import UpdatePendingBookingInput
+
+    booking = FakeBooking(
+        status=BookingStatusEnum.ACCEPTED, pickup_location="X", dropoff_location="Y"
+    )
+    uc = UpdatePendingBookingUseCase()
+    res = uc.execute(
+        UpdatePendingBookingInput(
+            booking=booking, validated_data={"pickup_location": "X2", "amount": 42.0}
+        )
+    )
+    assert res.success is True
+    assert booking.status == BookingStatusEnum.ACCEPTED
+    assert booking.pickup_location == "X2"
+
+
+def test_update_booking_rejects_en_route():
+    from application.bookings.update_pending_booking import UpdatePendingBookingInput
+
+    booking = FakeBooking(status=BookingStatusEnum.EN_ROUTE)
+    uc = UpdatePendingBookingUseCase()
+    res = uc.execute(
+        UpdatePendingBookingInput(booking=booking, validated_data={"pickup_location": "Z"})
+    )
+    assert res.success is False
+    assert res.status_code == 400
 
 
 def test_update_pending_booking_sets_fields_and_detects_address_change():

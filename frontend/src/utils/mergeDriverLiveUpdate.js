@@ -28,6 +28,15 @@ export function canonicalTimeMs(o) {
   return parseIsoMs(o.received_at ?? o.recorded_at ?? o.timestamp);
 }
 
+function pickLatitude(update, driver) {
+  return update.lat ?? update.latitude ?? update.current_lat ?? driver.latitude;
+}
+
+function pickLongitude(update, driver) {
+  // Canonique backend: `lon`; compat transitoire: `lng` / `longitude` / `current_lon`.
+  return update.lon ?? update.lng ?? update.longitude ?? update.current_lon ?? driver.longitude;
+}
+
 /**
  * Fusionne un événement temps réel (driver_location_update / driver_live_state_update)
  * dans un objet chauffeur déjà chargé depuis l’API canonique.
@@ -46,9 +55,8 @@ export function mergeDriverLiveUpdate(driver, update, fromLiveState) {
     }
   }
 
-  const latitude = update.lat ?? update.latitude ?? update.current_lat ?? driver.latitude;
-  const longitude =
-    update.lon ?? update.lng ?? update.longitude ?? update.current_lon ?? driver.longitude;
+  const latitude = pickLatitude(update, driver);
+  const longitude = pickLongitude(update, driver);
   const locationStatus = fromLiveState
     ? update.location_status ?? driver.location_status ?? null
     : driver.location_status ?? update.location_status ?? null;

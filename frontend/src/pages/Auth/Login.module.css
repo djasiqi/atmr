@@ -25,6 +25,13 @@
   animation: fadeInUp 0.4s ease-out;
 }
 
+@media (min-width: 1280px) {
+  .loginCard {
+    max-width: 560px;
+    padding: calc(var(--spacing-2xl) + 4px) calc(var(--spacing-xl) + 8px);
+  }
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -41,6 +48,61 @@
 .header {
   text-align: center;
   margin-bottom: var(--spacing-xl);
+}
+
+.modeSwitchBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--spacing-md);
+}
+
+.modeSwitchFieldScope {
+  --brand: #00796B;
+  --brand-hover: #00695C;
+  --brand-light: #F0FDFA;
+  --brand-ring: 0 0 0 4px rgba(0, 121, 107, 0.1);
+  --brand-muted: #91A3A0;
+  --accent: #0A88EF;
+  --accent-light: #67A5CE;
+  --border: #E2E8F0;
+  --border-hover: #CBD5E1;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-muted: #64748B;
+  --bg-surface: #FFFFFF;
+  --bg-muted: #F8FAFC;
+  --danger: #EF4444;
+  --success: #059669;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --input-h: 35px;
+  --transition: 0.2s ease;
+}
+
+.modeSwitchLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.modeSwitchSegment {
+  width: 100%;
+  display: flex;
+}
+
+.modeSwitchBtn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.modeSwitchBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--brand-ring);
 }
 
 .logo {
@@ -63,6 +125,16 @@
   margin: 0;
 }
 
+.resumeHint {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin: var(--spacing-sm) 0 0 0;
+  padding: var(--spacing-sm);
+  background: var(--bg-tertiary, #f1f5f9);
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+}
+
 /* ── Form ── */
 
 .form {
@@ -77,6 +149,261 @@
   gap: var(--spacing-xs);
 }
 
+.passwordRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.passwordColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.passwordStrengthWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.passwordStrengthBarTrack {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-tertiary, #f8fafc);
+  overflow: hidden;
+}
+
+.passwordStrengthBarFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.passwordStrengthWeak {
+  background: #94a3b8;
+}
+
+.passwordStrengthMedium {
+  background: #2d9c8f;
+}
+
+.passwordStrengthStrong {
+  background: var(--brand-primary, #00796b);
+}
+
+.passwordStrengthLabel {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.passwordChecks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.checkValid,
+.checkInvalid {
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+}
+
+.checkValid {
+  color: #166534;
+}
+
+.checkInvalid {
+  color: #b91c1c;
+}
+
+.identityFieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.identityFieldset .label {
+  margin-bottom: 0;
+}
+
+.mobilityFieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  gap: 8px;
+}
+
+.mobilityHint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.mobilityChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobilityChip {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: var(--radius-pill, 999px);
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mobilityChip:hover {
+  border-color: var(--border-hover, #c4cad3);
+}
+
+.mobilityChipActive {
+  border-color: var(--brand-primary);
+  background: rgba(0, 121, 107, 0.08);
+  color: var(--brand-primary);
+}
+
+.mobilityResetBtn {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--brand-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.identityRow {
+  display: grid;
+  grid-template-columns: 100px 1fr 1fr;
+  gap: 8px;
+}
+
+.identityCivility {
+  width: 100px;
+  min-width: 0;
+  min-height: 30px;
+  height: 30px;
+  padding-right: 0;
+  overflow: visible;
+}
+
+.civilityAutocompleteProxy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.civilityTrigger {
+  width: 100%;
+  min-height: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-pill, 999px);
+  padding: 0 10px 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.civilityTrigger:focus-visible {
+  outline: none;
+}
+
+.civilityPlaceholder {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.civilityValue {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.civilityChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: transform 0.15s ease;
+}
+
+.civilityChevronOpen {
+  transform: rotate(180deg);
+}
+
+.civilityMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-primary, #fff);
+  box-shadow: var(--shadow-md, 0 10px 24px rgba(15, 23, 42, 0.12));
+}
+
+.civilityOptionBtn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  min-height: 28px;
+  padding: 0 10px;
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.civilityOptionBtn:hover {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.civilityOptionBtnActive {
+  background: rgba(0, 121, 107, 0.08);
+  color: var(--brand-primary, #00796b);
+}
+
+.civilitySelect {
+  min-height: 30px;
+  height: 30px;
+  line-height: 30px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  background-color: transparent;
+  background-image: none;
+  padding-right: 8px !important;
+}
+
 .label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
@@ -87,6 +414,98 @@
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.inputWrapperPlain {
+  min-height: 40px;
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--bg-primary, #fff);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.inputWrapperPlain:hover {
+  border-color: var(--border-hover, #c4cad3);
+}
+
+.inputWrapperPlain:focus-within {
+  border-color: var(--brand-primary);
+  box-shadow: none;
+}
+
+.inputWrapperPlain .input {
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+  min-height: 40px;
+  height: 40px;
+  line-height: 40px;
+  font-weight: 400;
+}
+
+.inputWrapperPlain .input:hover,
+.inputWrapperPlain .input:focus {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.inputWrapperPlain .input:focus-visible {
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+.inputWrapperPlain .inputPasswordPadding {
+  padding-right: 44px;
+}
+
+.inputWrapper30 {
+  min-height: 30px;
+  height: 30px;
+}
+
+.inputWrapper30 .input {
+  min-height: 30px;
+  height: 30px;
+  line-height: 30px;
+}
+
+.inputWrapper30 .inputPasswordPadding {
+  padding-right: 34px;
+}
+
+.inputWrapper30 .togglePassword {
+  width: 24px;
+  height: 24px;
+  right: 4px;
+}
+
+.identityRow .inputWrapperPlain {
+  min-height: 30px;
+  height: 30px;
+}
+
+.identityRow .inputWrapperPlain .input,
+.identityRow .inputWrapperPlain .inputSelect {
+  min-height: 30px;
+  height: 30px;
+  line-height: 30px;
+}
+
+.inputSelect {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 28px !important;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2394a3b8'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
 }
 
 .inputIcon {
@@ -115,7 +534,7 @@
 }
 
 .input::placeholder {
-  color: var(--text-disabled);
+  color: var(--text-quaternary, #b0b8c4);
 }
 
 .input:hover {
@@ -146,6 +565,11 @@
   cursor: pointer;
   color: var(--text-tertiary);
   transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.inputWrapperPlain .togglePassword {
+  right: 6px;
+  background: transparent;
 }
 
 .togglePassword:hover {
@@ -340,4 +764,19 @@
   .title {
     font-size: var(--font-size-xl);
   }
+
+  .identityRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .passwordRow {
+    grid-template-columns: 1fr;
+  }
+
+  .passwordChecks {
+    grid-template-columns: 1fr;
+  }
+
+  .mobilityResetBtn { font-size: 11px; }
 }

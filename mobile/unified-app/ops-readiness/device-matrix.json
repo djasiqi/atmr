@@ -1,0 +1,30 @@
+{
+  "artifact": "minimum-device-validation-matrix",
+  "ownerRole": "qa",
+  "validatedByRole": "mobile",
+  "requiredForGates": ["W0", "W1", "W2", "W3"],
+  "devices": [
+    {
+      "id": "D1",
+      "profile": "Android Pixel recent",
+      "purpose": "Google reference notifications and runtime behavior"
+    },
+    {
+      "id": "D2",
+      "profile": "Android Samsung recent (One UI)",
+      "purpose": "Battery optimization, Doze, background limits"
+    },
+    {
+      "id": "D3",
+      "profile": "iPhone recent",
+      "purpose": "APNs, permission prompts, iOS background behavior"
+    },
+    {
+      "id": "D4",
+      "profile": "Android aggressive battery OEM",
+      "purpose": "Optional stress gate for production promotion",
+      "optional": true
+    }
+  ]
+}
+

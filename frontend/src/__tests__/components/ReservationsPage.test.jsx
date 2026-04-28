@@ -4,14 +4,24 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ReservationsPage from 'pages/client/Reservations/ReservationsPage';
-import { fetchBookings } from 'services/bookingService';
+import { exportBookingsPDF, fetchBookings } from 'services/bookingService';
 import { fetchClient } from 'services/clientService';
 import apiClient from 'utils/apiClient';
+import { toast } from 'sonner';
 
 // Mocks
 jest.mock('services/bookingService');
 jest.mock('services/clientService');
 jest.mock('utils/apiClient');
+jest.mock('sonner', () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+    warning: jest.fn(),
+    info: jest.fn(),
+  },
+  Toaster: () => null,
+}));
 
 // Mock layout components
 jest.mock('components/layout/Header/HeaderDashboard', () => {
@@ -27,7 +37,6 @@ jest.mock('components/layout/Footer/Footer', () => {
 });
 
 // Mock window functions
-global.alert = jest.fn();
 global.confirm = jest.fn();
 
 const createWrapper = () => {
@@ -77,13 +86,14 @@ describe('ReservationsPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    window.__LIRIE_CLIENT_KPI__ = [];
     localStorage.clear();
     localStorage.setItem('public_id', 'client-123');
-    global.alert.mockClear();
     global.confirm.mockReturnValue(true);
 
     fetchClient.mockResolvedValue(mockClient);
     fetchBookings.mockResolvedValue(mockBookings);
+    exportBookingsPDF.mockResolvedValue({});
     apiClient.delete.mockResolvedValue({ status: 200 });
   });
 
@@ -94,7 +104,7 @@ describe('ReservationsPage', () => {
   it('devrait afficher la liste des réservations', async () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    expect(await screen.findByText('📌 Mes Réservations')).toBeInTheDocument();
+    expect(await screen.findByText('Mes courses')).toBeInTheDocument();
     expect(screen.getByTestId('header-dashboard')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
   });
@@ -113,26 +123,33 @@ describe('ReservationsPage', () => {
   it('devrait séparer les courses à venir et passées', async () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    expect(await screen.findByText('📅 Courses à venir')).toBeInTheDocument();
-    expect(screen.getByText('📅 Courses passées')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'À venir' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Historique' })).toBeInTheDocument();
+  });
+
+  it('affiche la section Prochaine course lorsqu’une course future existe', async () => {
+    render(<ReservationsPage />, { wrapper: createWrapper() });
+
+    expect(await screen.findByText('Prochaine course')).toBeInTheDocument();
+    expect(screen.getByText('Aucune autre course programmée.')).toBeInTheDocument();
   });
 
   it('devrait filtrer par statut', async () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    const filterSelect = await screen.findByDisplayValue('📋 Tous');
-    fireEvent.change(filterSelect, { target: { value: 'completed' } });
+    const filterToutes = await screen.findByRole('button', { name: 'Toutes' });
+    expect(filterToutes).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Terminées' }));
 
     await waitFor(() => {
-      // Devrait filtrer pour n'afficher que les courses terminées
-      expect(filterSelect.value).toBe('completed');
+      expect(screen.getByRole('button', { name: 'Terminées' })).toHaveAttribute('aria-pressed', 'true');
     });
   });
 
   it('devrait trier par date', async () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    const sortSelect = await screen.findByDisplayValue('📅 Trier par Date');
+    const sortSelect = await screen.findByDisplayValue('Par date');
     expect(sortSelect).toBeInTheDocument();
 
     fireEvent.change(sortSelect, { target: { value: 'amount' } });
@@ -158,6 +175,10 @@ describe('ReservationsPage', () => {
     });
 
     expect(apiClient.delete).toHaveBeenCalledWith('/bookings/1');
+    await waitFor(() => {
+      expect(fetchBookings).toHaveBeenCalledTimes(2);
+    });
+    expect(toast.success).toHaveBeenCalledWith('Réservation annulée.');
   });
 
   it("ne devrait pas annuler si l'utilisateur refuse", async () => {
@@ -177,26 +198,13 @@ describe('ReservationsPage', () => {
     expect(apiClient.delete).not.toHaveBeenCalled();
   });
 
-  it("devrait permettre d'exporter en PDF", async () => {
-    render(<ReservationsPage />, { wrapper: createWrapper() });
-
-    const monthSelect = await screen.findByDisplayValue('📅 Sélectionner un mois');
-    fireEvent.change(monthSelect, { target: { value: '10' } });
-
-    const exportButton = screen.getByText(/Exporter en PDF/i);
-    fireEvent.click(exportButton);
-
-    await waitFor(() => {
-      expect(global.alert).toHaveBeenCalled();
-    });
-  });
-
   it('devrait afficher un message si aucune réservation', async () => {
     fetchBookings.mockResolvedValue([]);
 
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
-    expect(await screen.findByText('Aucune course à venir.')).toBeInTheDocument();
+    expect(await screen.findByText(/Vous n'avez aucune course à venir/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Réserver une course/i })).toBeInTheDocument();
     expect(screen.getByText('Aucune course passée.')).toBeInTheDocument();
   });
 
@@ -206,7 +214,18 @@ describe('ReservationsPage', () => {
     render(<ReservationsPage />, { wrapper: createWrapper() });
 
     expect(
-      await screen.findByText('Erreur lors du chargement des réservations.')
+      await screen.findByText('Impossible de charger les réservations.')
     ).toBeInTheDocument();
+  });
+
+  it("émet l'événement KPI d'export historique", async () => {
+    render(<ReservationsPage />, { wrapper: createWrapper() });
+    await screen.findByText('Historique');
+    fireEvent.click(await screen.findByRole('button', { name: /Exporter en PDF/i }));
+    await waitFor(() => {
+      expect(window.__LIRIE_CLIENT_KPI__.some((e) => e.name === 'history_export_clicked')).toBe(
+        true
+      );
+    });
   });
 });

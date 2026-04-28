@@ -6,6 +6,7 @@ from models.enums import BookingStatus
 
 # Clés = valeur enum (ex. PENDING) ; affichage stable côté front via `status_label`.
 STATUS_LABEL_FR: dict[str, str] = {
+    BookingStatus.AWAITING_CLIENT_PAYMENT.value: "En attente de paiement",
     BookingStatus.PENDING.value: "En attente",
     BookingStatus.ACCEPTED.value: "Acceptée",
     BookingStatus.ASSIGNED.value: "Assignée",

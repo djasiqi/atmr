@@ -1,6 +1,8 @@
 """Repository pour l'accès aux données TripTracking."""
 
+from ext import db
 from models import TripTracking
+from services.data_plane.read_write_routing import ReadContext, data_plane_router
 
 logger = __import__("logging").getLogger(__name__)
 
@@ -17,8 +19,16 @@ class TripTrackingRepository:
         Returns:
             Liste de TripTracking triés par timestamp ascendant
         """
-        return (
-            TripTracking.query.filter_by(assignment_id=assignment_id)
-            .order_by(TripTracking.timestamp.asc())
-            .all()
+        bind_key = data_plane_router.read_bind(
+            ReadContext(
+                critical_post_write=False,
+                analytical=True,
+            )
         )
+        stmt = (
+            db.select(TripTracking)
+            .where(TripTracking.assignment_id == assignment_id)
+            .order_by(TripTracking.timestamp.asc())
+            .execution_options(bind_key=bind_key)
+        )
+        return list(db.session.execute(stmt).scalars().all())

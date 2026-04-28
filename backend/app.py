@@ -18,6 +18,7 @@ if (
 import json
 import logging
 import re
+import time
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -88,7 +89,13 @@ from services.demo.environment_guard import (
 
 # ---------- Chargement .env ----------
 BASE_DIR = Path(__file__).resolve().parent
-# Charger .env avec override uniquement en développement
+# Dépôt monorepo : souvent un `.env` à la racine (Docker, secrets partagés) et un
+# `backend/.env` pour le service API. Charger la racine d'abord (sans écraser
+# l'existant), puis `backend/.env` ; en dev ce dernier a la priorite sur les cles
+# qu'il definit (ex. SAFERPAY_* uniquement dans la racine restent disponibles).
+_repo_root_env = BASE_DIR.parent / ".env"
+if _repo_root_env.is_file():
+    load_dotenv(_repo_root_env, override=False)
 if os.getenv("FLASK_ENV", default=None) == "development":
     load_dotenv(BASE_DIR / ".env", override=True)
 else:
@@ -278,6 +285,114 @@ class CustomJSONEncoder(json.JSONEncoder):
         return super().default(o)
 
 
+# Cache in-memory (par processus worker) pour le fichier flag maintenance : évite stat()/read
+# sur chaque requête. TTL 5s — aligné sur la propagation type ChatOps.
+_MAINTENANCE_FLAG_CACHE_TTL_SEC = 5.0
+_maintenance_flag_file_cache: dict[str, Any] = {
+    "at": 0.0,
+    "file_active": False,
+    "reason": "",
+}
+
+
+def _check_maintenance_flag_cached() -> tuple[bool, str]:
+    """Lecture du flag fichier maintenance avec cache TTL 5s (time.monotonic()).
+
+    Returns:
+        (file_active, reason): actif si le fichier impose un 503, message pour le body JSON.
+
+    En cas d'erreur FS/lecture: pas de 503 fichier, sans cacher l'échec (re-tentative au prochain appel).
+    """
+    c = _maintenance_flag_file_cache
+    now = time.monotonic()
+    if c["at"] and (now - c["at"] < _MAINTENANCE_FLAG_CACHE_TTL_SEC):
+        return c["file_active"], c["reason"]
+
+    try:
+        maintenance_tmp_dir = os.getenv("MAINTENANCE_TMP_DIR", "/tmp")
+        flag_file = Path(maintenance_tmp_dir) / "atmr_maintenance_mode.flag"
+        if not flag_file.exists():
+            c["at"] = now
+            c["file_active"] = False
+            c["reason"] = ""
+            return False, ""
+        c["at"] = now
+        c["file_active"] = True
+        c["reason"] = flag_file.read_text().strip()
+        return c["file_active"], c["reason"]
+    except Exception:
+        c["at"] = 0.0
+        return False, ""
+
+
+def _is_maintenance_sane_bypass_path() -> bool:
+    """Retourne True pour court-circuiter le flag fichier maintenance (I/O / 503).
+
+    - Health : inchangé vis-à-vis de l'exemption historique.
+    - OPTIONS sur statique / bruit : évite d'ouvrir le flag pour des pré-vols.
+    L'environnement ``MAINTENANCE_MODE=true`` est géré **avant** ce court-circuit.
+    """
+    from flask import request
+
+    p = request.path or ""
+    if p in ("/health", "/api/health", "/api/v1/health"):
+        return True
+    if request.method == "OPTIONS" and (
+        p.startswith(("/static/", "/swaggerui/", "/uploads/"))
+        or p in ("/favicon.ico", "/robots.txt")
+    ):
+        return True
+    return False
+
+
+# Cache in-process (par worker) : public_id JWT -> user_id pour _track_unauthorized_access.
+# Évite un User.query à chaque 401/403 lorsque le même jeton génère des refus répétés.
+_UNAUTHORIZED_ACCESS_USER_ID_CACHE: dict[str, tuple[int | None, float]] = {}
+_UNAUTHORIZED_ACCESS_USER_ID_TTL_SEC = 60.0
+_UNAUTHORIZED_ACCESS_USER_ID_MAX = 256
+
+
+def _prune_unauthorized_access_user_id_cache(now: float) -> None:
+    c = _UNAUTHORIZED_ACCESS_USER_ID_CACHE
+    expired = [k for k, (_, ts) in c.items() if now - ts >= _UNAUTHORIZED_ACCESS_USER_ID_TTL_SEC]
+    for k in expired:
+        del c[k]
+    while len(c) > _UNAUTHORIZED_ACCESS_USER_ID_MAX // 2:
+        c.pop(next(iter(c)), None)
+
+
+def _resolve_user_id_for_unauthorized_access_alert() -> int | None:
+    """Résout l'ID interne utilisateur pour les alertes 401/403, sans requête DB inutile.
+
+    - Pas d'identité JWT exploitable : None (aucun accès à User).
+    - Identité présente : requête DB ou entrée de cache court (même public_id, fenêtre TTL).
+    """
+    try:
+        from flask_jwt_extended import get_jwt_identity
+
+        public_id = get_jwt_identity()
+    except Exception:
+        return None
+    if not public_id:
+        return None
+    now = time.monotonic()
+    if public_id in _UNAUTHORIZED_ACCESS_USER_ID_CACHE:
+        uid, ts = _UNAUTHORIZED_ACCESS_USER_ID_CACHE[public_id]
+        if now - ts < _UNAUTHORIZED_ACCESS_USER_ID_TTL_SEC:
+            return uid
+    try:
+        from models import User
+
+        user = User.query.filter_by(public_id=public_id).first()
+        uid = user.id if user else None
+    except Exception:
+        return None
+    if len(_UNAUTHORIZED_ACCESS_USER_ID_CACHE) >= _UNAUTHORIZED_ACCESS_USER_ID_MAX:
+        _prune_unauthorized_access_user_id_cache(now)
+    _UNAUTHORIZED_ACCESS_USER_ID_CACHE[public_id] = (uid, now)
+    return uid
+
+
 def create_app(config_name: str | None = None):
     if config_name is None:
         config_name = os.getenv("FLASK_CONFIG", "development")
@@ -338,6 +453,10 @@ def create_app(config_name: str | None = None):
     from config import validate_production_security
 
     validate_production_security(app)
+
+    from services.saferpay.config import warn_saferpay_test_api_url_in_production
+
+    warn_saferpay_test_api_url_in_production(app.logger, config_name=config_name)
 
     # ✅ Force UTF-8 encoding pour JSON et réponses
     app.config["JSON_AS_ASCII"] = False
@@ -762,7 +881,7 @@ def create_app(config_name: str | None = None):
         # Vérifier variable d'environnement
         if os.getenv("MAINTENANCE_MODE", "false").lower() == "true":
             # Permettre les healthchecks même en maintenance
-            if request.path in ["/health", "/api/health"]:
+            if request.path in ["/health", "/api/health", "/api/v1/health"]:
                 return None
             return jsonify(
                 {
@@ -771,24 +890,18 @@ def create_app(config_name: str | None = None):
                 }
             ), 503
 
-        # Vérifier fichier flag (pour killswitch ChatOps)
-        try:
-            from pathlib import Path
+        # Même exemption que l'historique fichier, sans lire le flag (early-exit)
+        if _is_maintenance_sane_bypass_path():
+            return None
 
-            # Utiliser variable d'environnement pour le chemin (défaut: /tmp/)
-            maintenance_tmp_dir = os.getenv("MAINTENANCE_TMP_DIR", "/tmp")
-            flag_file = Path(maintenance_tmp_dir) / "atmr_maintenance_mode.flag"
-            if flag_file.exists():
-                reason = flag_file.read_text().strip()
-                # Permettre les healthchecks même en maintenance
-                if request.path in ["/health", "/api/health"]:
-                    return None
-                return jsonify(
-                    {"error": "Service en maintenance", "message": reason}
-                ), 503
-        except Exception:
-            # Si erreur de lecture du flag, continuer normalement
-            pass
+        # Fichier flag (killswitch ChatOps) — cache TTL 5s, pas de stat() à chaque requête
+        file_active, file_reason = _check_maintenance_flag_cached()
+        if file_active:
+            if request.path in ["/health", "/api/health", "/api/v1/health"]:
+                return None
+            return jsonify(
+                {"error": "Service en maintenance", "message": file_reason}
+            ), 503
 
     # ✅ S3: Middleware pour capturer les tentatives d'accès non autorisé
     @app.after_request
@@ -801,23 +914,7 @@ def create_app(config_name: str | None = None):
 
                 ip_address = request.remote_addr or "unknown"
                 endpoint = request.path or "unknown"
-                user_id = None
-
-                # Essayer de récupérer l'ID utilisateur si authentifié
-                try:
-                    from flask_jwt_extended import (
-                        get_jwt_identity,
-                    )
-
-                    user_public_id = get_jwt_identity()
-                    if user_public_id:
-                        from models import User
-
-                        user = User.query.filter_by(public_id=user_public_id).first()
-                        if user:
-                            user_id = user.id
-                except Exception:
-                    pass  # Pas d'utilisateur authentifié ou erreur
+                user_id = _resolve_user_id_for_unauthorized_access_alert()
 
                 # Enregistrer la tentative pour détection d'alertes
                 SecurityAlertService.record_unauthorized_access(
@@ -849,7 +946,7 @@ def create_app(config_name: str | None = None):
             return None
 
         # Permettre les healthchecks même en read-only
-        if request.path in ["/health", "/api/health"]:
+        if request.path in ["/health", "/api/health", "/api/v1/health"]:
             return None
 
         try:
@@ -1499,13 +1596,41 @@ def create_app(config_name: str | None = None):
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
 
+    @app.after_request
+    def _ensure_cors_headers_on_errors(response):  # pyright: ignore[reportUnusedFunction]
+        """Garantit les headers CORS même sur réponses d'erreur Flask/RESTX."""
+        origin = request.headers.get("Origin")
+        if not origin:
+            return response
+
+        allowed_origin: str | None = None
+        if cors_origins == "*" or origin in cast("list[str]", cors_origins):
+            allowed_origin = origin
+
+        if not allowed_origin:
+            return response
+
+        response.headers.setdefault("Access-Control-Allow-Origin", allowed_origin)
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        response.headers.setdefault(
+            "Access-Control-Allow-Headers", ", ".join(_cors_allow_headers)
+        )
+        response.headers.setdefault(
+            "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        )
+        response.headers.setdefault("Vary", "Origin")
+        return response
+
     # 6) Sentry
     sentry_dsn = os.getenv("SENTRY_DSN", default=None)
     if sentry_dsn and config_name != "testing":
+        _sentry_traces_default = "0.1" if config_name == "production" else "1.0"
         sentry_sdk.init(
             dsn=sentry_dsn,
             integrations=[FlaskIntegration()],
-            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0")),
+            traces_sample_rate=float(
+                os.getenv("SENTRY_TRACES_SAMPLE_RATE", _sentry_traces_default)
+            ),
             environment=config_name,
         )
 
@@ -1608,36 +1733,9 @@ def create_app(config_name: str | None = None):
             # Note: Le handler CORS preflight est défini AVANT Flask-CORS (ligne ~1094)
             # pour intercepter les requêtes OPTIONS en premier
 
-            # ✅ 3.2: Ajouter header Deprecation sur toutes les routes /api/v1/*
-            @app.after_request
-            def _add_deprecation_header_v1(response):  # pyright: ignore
-                """Ajoute le header Deprecation sur les routes API v1."""
-                if request.path and request.path.startswith("/api/v1/"):
-                    response.headers["Deprecation"] = 'version="v1"'
-                    # Date estimée de suppression
-                    response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"
-                    response.headers["Link"] = (
-                        '<https://docs.atmr.ch/api/v2>; rel="successor-version"'
-                    )
-                return response
+            from middleware.api_contract_headers import register_api_contract_headers
 
-            # ✅ 3.2: Ajouter header Deprecation sur routes legacy /api/*
-            # (si activées)
-            @app.after_request
-            def _add_deprecation_header_legacy(response):  # pyright: ignore
-                """Ajoute le header Deprecation sur les routes API legacy."""
-                if (
-                    request.path
-                    and request.path.startswith("/api/")
-                    and not request.path.startswith("/api/v")
-                ):
-                    # Route legacy (sans version)
-                    response.headers["Deprecation"] = 'version="legacy"'
-                    response.headers["Sunset"] = "Wed, 01 Jan 2025 00:00:00 GMT"
-                    response.headers["Link"] = (
-                        '<https://docs.atmr.ch/api/v1>; rel="successor-version"'
-                    )
-                return response
+            register_api_contract_headers(app)
 
             # ✅ 3.2: Shim générique pour /api[/vX]/auth/login si RESTX rate
             # Supporte /api/auth/login (legacy), /api/v1/auth/login

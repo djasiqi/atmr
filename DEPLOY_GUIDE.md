@@ -32,7 +32,7 @@ GitHub → Settings → Secrets and variables → Actions → New repository sec
 | `DOCKER_TAG`        | `latest`                         |
 | `DOCKERHUB_USERNAME`| Votre username Docker Hub        |
 | `DOCKERHUB_TOKEN`   | Token Docker Hub                 |
-| `SSH_HOST`          | IP du serveur (ex: `138.201.155.201`) |
+| `SSH_HOST`          | Hôte du serveur (défini en local, voir [docs/deployment-ssh.md](docs/deployment-ssh.md)) |
 | `SSH_USER`          | User SSH (ex: `deploy`)          |
 | `SSH_PORT`          | Port SSH (ex: `22`)              |
 | `SSH_KEY`           | Clé privée SSH (copier `~/.ssh/id_rsa`) |
@@ -138,7 +138,7 @@ curl -I https://api.lirie.ch/health
 
 ```bash
 # SSH au serveur
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 
 # Voir les logs backend
 cd /srv/atmr

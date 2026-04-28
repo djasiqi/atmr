@@ -10,25 +10,28 @@ import AddressAutocomplete from '../../../../components/common/AddressAutocomple
 import InlineDatePicker from '../../../../components/ui/InlineDatePicker';
 import InlineTimePicker from '../../../../components/ui/InlineTimePicker';
 import useCompanySocket from '../../../../hooks/useCompanySocket';
+import { toast } from 'sonner';
 import BookingChat from './BookingChat';
+import { completeReservation, patchBillingAdjustment } from '../../../../services/companyService';
+import { fetchClinicBillingMappings } from '../../../../services/settingsService';
 import s from './ReservationDetailPanel.module.css';
 
 const STATUS_MAP = {
   pending:            { label: 'En attente',       css: 'statusPending' },
-  accepted:           { label: 'Acceptee',         css: 'statusAccepted' },
-  assigned:           { label: 'Assignee',         css: 'statusAssigned' },
+  accepted:           { label: 'Acceptée',         css: 'statusAccepted' },
+  assigned:           { label: 'Assignée',         css: 'statusAssigned' },
   en_route:           { label: 'En route',         css: 'statusEnRoute' },
   in_progress:        { label: 'En cours',         css: 'statusInProgress' },
-  completed:          { label: 'Terminee',         css: 'statusCompleted' },
-  return_completed:   { label: 'Retour termine',   css: 'statusCompleted' },
-  canceled:           { label: 'Annulee',          css: 'statusCancelled' },
-  cancelled:          { label: 'Annulee',          css: 'statusCancelled' },
-  rejected:           { label: 'Refusee',          css: 'statusCancelled' },
-  no_show:            { label: 'Non presente',     css: 'statusCancelled' },
+  completed:          { label: 'Terminée',         css: 'statusCompleted' },
+  return_completed:   { label: 'Retour terminé',   css: 'statusCompleted' },
+  canceled:           { label: 'Annulée',          css: 'statusCancelled' },
+  cancelled:          { label: 'Annulée',          css: 'statusCancelled' },
+  rejected:           { label: 'Refusée',          css: 'statusCancelled' },
+  no_show:            { label: 'Non présente',     css: 'statusCancelled' },
 };
 
 const VOUCHER_STATUS_LABELS = {
-  draft: 'Brouillon', submitted: 'Soumis', validated: 'Valide', rejected: 'Rejete', expired: 'Expire',
+  draft: 'Brouillon', submitted: 'Soumis', validated: 'Valide', rejected: 'Rejeté', expired: 'Expiré',
 };
 
 const VOUCHER_TYPE_LABELS = {
@@ -64,44 +67,44 @@ const buildTimeline = (r) => {
     const instName = it.institution_name;
     if (it.created_at) {
       events.push({
-        event: `Demande creee${it.created_by_name ? ` par ${it.created_by_name}` : ''}${instName ? ` (${instName})` : ''}`,
+        event: `Demande créée${it.created_by_name ? ` par ${it.created_by_name}` : ''}${instName ? ` (${instName})` : ''}`,
         date: it.created_at,
       });
     }
-    if (it.sent_at) events.push({ event: 'Demande envoyee', date: it.sent_at });
+    if (it.sent_at) events.push({ event: 'Demande envoyée', date: it.sent_at });
     if (it.accepted_at) {
       events.push({
-        event: `Demande acceptee${it.accepted_by_company_name ? ` par ${it.accepted_by_company_name}` : ''}`,
+        event: `Demande acceptée${it.accepted_by_company_name ? ` par ${it.accepted_by_company_name}` : ''}`,
         date: it.accepted_at,
       });
     }
-    if (it.converted_at) events.push({ event: 'Reservation creee', date: it.converted_at });
-    if (it.cancelled_at) events.push({ event: 'Demande annulee', date: it.cancelled_at });
+    if (it.converted_at) events.push({ event: 'Réservation créée', date: it.converted_at });
+    if (it.cancelled_at) events.push({ event: 'Demande annulée', date: it.cancelled_at });
   } else {
-    if (r.created_at) events.push({ event: 'Reservation creee', date: r.created_at });
+    if (r.created_at) events.push({ event: 'Réservation créée', date: r.created_at });
   }
 
   // Booking lifecycle events
   if (r.accepted_at && !it?.accepted_at) {
-    events.push({ event: `Acceptee${driverName ? ` par ${driverName}` : ''}`, date: r.accepted_at });
+    events.push({ event: `Acceptée${driverName ? ` par ${driverName}` : ''}`, date: r.accepted_at });
   }
-  if (r.assigned_at) events.push({ event: `Assignee${driverName ? ` a ${driverName}` : ''}`, date: r.assigned_at });
+  if (r.assigned_at) events.push({ event: `Assignée${driverName ? ` à ${driverName}` : ''}`, date: r.assigned_at });
   if (r.picked_up_at || r.boarded_at) {
     events.push({ event: `Client pris en charge${driverName ? ` par ${driverName}` : ''}`, date: r.picked_up_at || r.boarded_at });
   }
-  if (r.started_at) events.push({ event: 'Course demarree', date: r.started_at });
-  if (r.completed_at) events.push({ event: 'Course terminee', date: r.completed_at });
+  if (r.started_at) events.push({ event: 'Course démarrée', date: r.started_at });
+  if (r.completed_at) events.push({ event: 'Course terminée', date: r.completed_at });
   if ((r.cancelled_at || r.canceled_at) && !it?.cancelled_at) {
     const roleMap = { company: 'Entreprise', driver: 'Chauffeur', admin: 'Admin', system: 'Système' };
     const byLabel = roleMap[r.cancelled_by_role] || '';
     const reasonLabel = r.cancellation_display_label || r.cancellation_reason_code || '';
     const billable = r.is_cancellation_billable;
 
-    let detail = 'Annulee';
+    let detail = 'Annulée';
     if (byLabel) detail += ` par ${byLabel}`;
     if (reasonLabel) detail += ` — ${reasonLabel}`;
-    if (billable === true) detail += ' (facturee)';
-    else if (billable === false) detail += ' (non facturee)';
+    if (billable === true) detail += ' (facturée)';
+    else if (billable === false) detail += ' (non facturée)';
 
     events.push({ event: detail, date: r.cancelled_at || r.canceled_at, type: 'cancel' });
   }
@@ -127,7 +130,52 @@ const parseTime = (r) => {
   return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
 };
 
-const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
+function isBillingLockedForAdjust(r) {
+  if (!r) return true;
+  if (r.billing_locked_at) return true;
+  if (r.invoice_line_id != null && r.invoice_line_id !== '') return true;
+  return false;
+}
+
+/** Statut de réservation fiable (liste dispatch / appels API variés : string, { value }, nombres). */
+function getReservationStatusKey(res) {
+  if (res == null) return 'unknown';
+  const raw = res.status ?? res.booking_status;
+  if (raw == null || raw === '') return 'unknown';
+  if (typeof raw === 'string') {
+    return raw.trim().toLowerCase();
+  }
+  if (typeof raw === 'object' && raw.value != null) {
+    return String(raw.value).trim().toLowerCase();
+  }
+  return String(raw).trim().toLowerCase();
+}
+
+/**
+ * Ligne dispatch parfois sans `status` explicite : fallback `scheduled` alors qu’un chauffeur est déjà là.
+ * On aligne l’UI (badge + clôture) sur « assignée » dans ce cas.
+ */
+function inferTripStatusForUi(res) {
+  if (!res) return 'unknown';
+  const s0 = getReservationStatusKey(res);
+  if (['unknown', 'scheduled', ''].includes(s0) && (res.driver_id || res.assignment?.driver_id) && !res.completed_at) {
+    return 'assigned';
+  }
+  return s0;
+}
+
+/**
+ * Ajustement facturation (patient / clinique) : uniquement saisies manuelles **entreprise** (dispatch),
+ * pas invité (Lirie, déjà payé) ni portail client / institution / API.
+ * `created_via` : voir `BookingCreatedVia` côté API (serialize).
+ */
+function allowBillingAdjustByCreatedVia(res) {
+  if (res == null) return false;
+  const v = String(res.created_via ?? 'legacy').toLowerCase();
+  return v === 'dispatcher' || v === 'legacy';
+}
+
+const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onReservationUpdated }) => {
   const [vouchers, setVouchers] = useState([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
   const [searchParams] = useSearchParams();
@@ -138,6 +186,20 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [form, setForm] = useState({});
+
+  const [billingForm, setBillingForm] = useState({
+    amount: '',
+    billed_to_type: 'patient',
+    billed_to_company_id: '',
+    override_reason: '',
+  });
+  const [savingBilling, setSavingBilling] = useState(false);
+  const [billingError, setBillingError] = useState(null);
+  const [completeReason, setCompleteReason] = useState('');
+  const [savingComplete, setSavingComplete] = useState(false);
+  /** Cliniques (Company) issues des mappings paramètres facturation — pour liste + sélecteur. */
+  const [clinicRoster, setClinicRoster] = useState([]);
+  const [clinicRosterLoading, setClinicRosterLoading] = useState(false);
 
   const isDateTimeInPast = useMemo(() => {
     if (!form.scheduled_date || !form.scheduled_time) return false;
@@ -179,6 +241,20 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
     if (reservation) {
       setForm(buildFormFromReservation(reservation));
       setEditing(false);
+      const btype = String(
+        reservation.billed_to_type || reservation.billing?.billed_to_type || 'patient',
+      ).toLowerCase();
+      setBillingForm({
+        amount: reservation.amount != null && reservation.amount !== '' ? String(reservation.amount) : '',
+        billed_to_type: ['patient', 'clinic', 'insurance'].includes(btype) ? btype : 'patient',
+        billed_to_company_id:
+          reservation.billed_to_company_id != null && reservation.billed_to_company_id !== ''
+            ? String(reservation.billed_to_company_id)
+            : '',
+        override_reason: '',
+      });
+      setBillingError(null);
+      setCompleteReason('');
     }
   }, [reservation, buildFormFromReservation]);
 
@@ -212,13 +288,133 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
     if (reservation?.id) loadVouchers();
   }, [reservation?.id, loadVouchers]);
 
+  const allowBillingAdjustByOrigin = useMemo(
+    () => (reservation ? allowBillingAdjustByCreatedVia(reservation) : false),
+    [reservation],
+  );
+  /** Vrai = masquer l’ajustement (invité, portail, etc.) — alias de `!allowBillingAdjustByOrigin`. */
+  const hidePortalPatientPreRideAdjust = !allowBillingAdjustByOrigin;
+
+  useEffect(() => {
+    if (!reservation?.id) return;
+    if (hidePortalPatientPreRideAdjust) {
+      setClinicRoster([]);
+      setClinicRosterLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setClinicRosterLoading(true);
+      try {
+        const res = await fetchClinicBillingMappings();
+        if (cancelled) return;
+        const rows = Array.isArray(res?.data) ? res.data : [];
+        const byId = new Map();
+        for (const m of rows) {
+          if (m && m.is_active === false) continue;
+          const id = m.clinic_company_id;
+          if (id == null) continue;
+          const party = m.billing_party_name && String(m.billing_party_name).trim();
+          const clinicN = m.clinic_company_name && String(m.clinic_company_name).trim();
+          const label = party || clinicN || 'Clinique';
+          if (!byId.has(id)) {
+            const pr = m.preferential_rate_chf;
+            const preferentialRateChf =
+              pr != null && pr !== '' && Number.isFinite(Number(pr)) ? Number(pr) : null;
+            byId.set(id, {
+              id,
+              name: label,
+              preferential_rate_chf: preferentialRateChf,
+            });
+          }
+        }
+        setClinicRoster(
+          [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'fr-CH')),
+        );
+      } catch {
+        if (!cancelled) setClinicRoster([]);
+      } finally {
+        if (!cancelled) setClinicRosterLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reservation?.id, hidePortalPatientPreRideAdjust]);
+
+  /** Noms de cliniques pour liste + <select> (jamais d’ID affiché) : mappings + clinique liée à la réservation. */
+  const clinicSelectOptions = useMemo(() => {
+    const byId = new Map();
+    for (const c of clinicRoster) {
+      byId.set(Number(c.id), c.name);
+    }
+    const add = (id, name) => {
+      const n = Number(id);
+      if (!Number.isFinite(n) || n < 1) return;
+      const label = (name && String(name).trim()) || 'Clinique';
+      if (!byId.has(n)) byId.set(n, label);
+    };
+    const bc = reservation?.billing?.billed_to_company;
+    const instLabel = (() => {
+      const m = reservation?.medical_facility && String(reservation.medical_facility).trim();
+      if (m && m !== 'Non spécifié') return m;
+      return null;
+    })();
+    if (bc && bc.id != null) {
+      add(bc.id, instLabel || bc.name);
+    }
+    const btype = String(
+      reservation?.billed_to_type || reservation?.billing?.billed_to_type || '',
+    ).toLowerCase();
+    if (btype === 'clinic' && reservation?.billed_to_company_id != null) {
+      add(reservation.billed_to_company_id, instLabel || bc?.name);
+    }
+    if (String(billingForm?.billed_to_type || '').toLowerCase() === 'clinic' && billingForm?.billed_to_company_id) {
+      const fid = Number(billingForm.billed_to_company_id);
+      const nameForForm =
+        bc && Number(bc.id) === fid ? (instLabel || bc.name) : undefined;
+      add(billingForm.billed_to_company_id, nameForForm);
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr-CH'));
+  }, [clinicRoster, reservation, billingForm.billed_to_type, billingForm.billed_to_company_id]);
+
+  /** Tarif préf. clinique (CHF) : company clinique, sinon client institution, sinon réservation. */
+  const getPreferentialRateChfForClinicCompany = useCallback(
+    (clinicCompanyId) => {
+      const n = Number(clinicCompanyId);
+      if (!Number.isFinite(n) || n < 1) return null;
+      const fromRoster = clinicRoster.find((c) => Number(c.id) === n);
+      if (
+        fromRoster
+        && fromRoster.preferential_rate_chf != null
+        && Number.isFinite(Number(fromRoster.preferential_rate_chf))
+      ) {
+        return Number(fromRoster.preferential_rate_chf);
+      }
+      const bc = reservation?.billing?.billed_to_company;
+      if (bc
+        && Number(bc.id) === n
+        && bc.preferential_rate != null
+        && Number.isFinite(Number(bc.preferential_rate))) {
+        return Number(bc.preferential_rate);
+      }
+      return null;
+    },
+    [clinicRoster, reservation?.billing?.billed_to_company],
+  );
+
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
     if (!onSave || !reservation?.id) return;
-    if (isDateTimeInPast) return;
+    if (isDateTimeInPast) {
+      setSaveError("La date et l'heure de la course sont dans le passé. Ajustez l'horaire pour enregistrer.");
+      return;
+    }
     try {
       setSaving(true);
       setSaveError(null);
@@ -246,9 +442,78 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
     setSaveError(null);
   };
 
+  const handleManualComplete = async () => {
+    if (!reservation?.id) return;
+    const st = inferTripStatusForUi(reservation);
+    if (st === 'en_route' && !completeReason.trim()) {
+      toast.error('Motif obligatoire pour clôturer une course en route.');
+      return;
+    }
+    try {
+      setSavingComplete(true);
+      const data = await completeReservation(
+        reservation.id,
+        st === 'en_route' ? { reason: completeReason } : null,
+      );
+      toast.success('Course clôturée');
+      onReservationUpdated?.(data?.reservation || data);
+    } catch (e) {
+      const err = e?.response?.data || e;
+      const msg = err?.error || err?.message || (typeof err === 'string' ? err : 'Échec de la clôture');
+      toast.error(String(msg));
+    } finally {
+      setSavingComplete(false);
+    }
+  };
+
+  const handleBillingAdjust = async () => {
+    if (!reservation?.id) return;
+    const v = (billingForm.override_reason || '').trim();
+    if (!v) {
+      setBillingError('Le motif est obligatoire pour tout ajustement de facturation.');
+      return;
+    }
+    setBillingError(null);
+    const amt = parseFloat(String(billingForm.amount).replace(',', '.'), 10);
+    if (Number.isNaN(amt) || amt < 0 || (amt > 0 && amt < 0.5)) {
+      setBillingError('Montant invalide (0 ou ≥ 0,50 CHF).');
+      return;
+    }
+    const btype = billingForm.billed_to_type;
+    let bcomp = null;
+    if (btype !== 'patient') {
+      const n = parseInt(String(billingForm.billed_to_company_id).trim(), 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        setBillingError('Identifiant entreprise (tiers payeur) obligatoire pour clinique / assurance.');
+        return;
+      }
+      bcomp = n;
+    }
+    try {
+      setSavingBilling(true);
+      const payload = {
+        override_reason: v,
+        amount: amt,
+        billed_to_type: btype,
+        billed_to_company_id: btype === 'patient' ? null : bcomp,
+      };
+      const data = await patchBillingAdjustment(reservation.id, payload);
+      toast.success('Facturation mise à jour');
+      onReservationUpdated?.(data?.reservation || data);
+    } catch (e) {
+      const err = e?.response?.data || e;
+      const msg = err?.error || err?.message || 'Échec de la mise à jour';
+      setBillingError(String(msg));
+      toast.error(String(msg));
+    } finally {
+      setSavingBilling(false);
+    }
+  };
+
   if (!reservation) return null;
 
-  const status = reservation.status?.toLowerCase() || 'unknown';
+  const displayTripStatus = inferTripStatusForUi(reservation);
+  const status = displayTripStatus;
   const statusInfo = STATUS_MAP[status] || { label: status, css: 'statusPending' };
   const meta = reservation.metadata_json || {};
   const billedToType = reservation.billed_to_type
@@ -260,6 +525,8 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
   const isFailed = billingStatusVal && billingStatusVal.startsWith('failed');
   const isInstitutionBooking = !!meta.institution_id || !!reservation.institution_timeline;
   const isTransferredBooking = !!reservation.is_transferred || !!reservation.active_transfer;
+  const isDirectPortalClientBooking =
+    !!reservation.client_id && !isInstitutionBooking && !isTransferredBooking;
   const chatBookingId = reservation.is_return && reservation.parent_booking_id
     ? reservation.parent_booking_id
     : reservation.id;
@@ -274,12 +541,12 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
       {/* Header */}
       <div className={s.panelHeader}>
         <div className={s.panelTitleRow}>
-          <span className={s.panelTitle}>Reservation #{reservation.id}</span>
+          <span className={s.panelTitle}>Réservation #{reservation.id}</span>
           <span className={`${s.statusBadge} ${s[statusInfo.css]}`}>{statusInfo.label}</span>
         </div>
         <div className={s.headerActions}>
           {!editing && onSave && (
-            <button className={s.editBtn} onClick={() => setEditing(true)} aria-label="Editer" title="Editer">
+            <button className={s.editBtn} onClick={() => setEditing(true)} aria-label="Éditer" title="Éditer">
               <FiEdit2 size={14} />
             </button>
           )}
@@ -305,11 +572,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               <span className={s.editContextMeta}>#{reservation.id}</span>
             </div>
 
-            {/* ─── Itineraire ─── */}
+            {/* ─── Itinéraire ─── */}
             <div className={s.editGroup}>
               <div className={s.editGroupTitle}>
                 <FiMapPin size={12} className={s.editGroupIcon} />
-                Itineraire
+                Itinéraire
               </div>
 
               {/* Route visuelle : dot → ligne → dot */}
@@ -324,7 +591,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                     <AddressAutocomplete
                       value={form.pickup_location}
                       onChange={(e) => handleChange('pickup_location', e?.target?.value ?? e)}
-                      placeholder="Depart"
+                      placeholder="Départ"
                     />
                   </div>
                   <div className={s.editInputWrap}>
@@ -338,10 +605,10 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               </div>
 
               {/* Accès départ — compact row */}
-              <div className={s.editSubLabel}>Acces depart</div>
+              <div className={s.editSubLabel}>Accès départ</div>
               <div className={s.editRowTriple}>
                 <input type="text" className={s.editInput} value={form.pickup_floor}
-                  onChange={(e) => handleChange('pickup_floor', e.target.value)} placeholder="Etage" />
+                  onChange={(e) => handleChange('pickup_floor', e.target.value)} placeholder="Étage" />
                 <input type="text" className={s.editInput} value={form.pickup_door_code}
                   onChange={(e) => handleChange('pickup_door_code', e.target.value)} placeholder="Code" />
                 <input type="text" className={s.editInput} value={form.pickup_entry_point}
@@ -349,7 +616,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               </div>
               <input type="text" className={s.editInput} value={form.pickup_access_notes}
                 onChange={(e) => handleChange('pickup_access_notes', e.target.value)}
-                placeholder="Consignes depart" style={{ marginTop: 6 }} />
+                placeholder="Consignes départ" style={{ marginTop: 6 }} />
             </div>
 
             <div className={s.editDivider} />
@@ -362,18 +629,18 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               </div>
               <input type="text" className={s.editInput} value={form.medical_facility}
                 onChange={(e) => handleChange('medical_facility', e.target.value)}
-                placeholder="Etablissement / Lieu" />
+                placeholder="Établissement / lieu" />
               <div className={s.editRow} style={{ marginTop: 8 }}>
                 <input type="text" className={s.editInput} value={form.hospital_service}
                   onChange={(e) => handleChange('hospital_service', e.target.value)}
                   placeholder="Service" />
                 <input type="text" className={s.editInput} value={form.doctor_name}
                   onChange={(e) => handleChange('doctor_name', e.target.value)}
-                  placeholder="Medecin" />
+                  placeholder="Médecin" />
               </div>
               <input type="text" className={s.editInput} value={form.dropoff_access_notes}
                 onChange={(e) => handleChange('dropoff_access_notes', e.target.value)}
-                placeholder="Consignes arrivee" style={{ marginTop: 8 }} />
+                placeholder="Consignes arrivée" style={{ marginTop: 8 }} />
             </div>
 
             <div className={s.editDivider} />
@@ -403,7 +670,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 </div>
               </div>
               {isDateTimeInPast && (
-                <div className={s.fieldErrorHint}>La date et l'heure sont dans le passe</div>
+                <div className={s.fieldErrorHint}>La date et l'heure sont dans le passé</div>
               )}
             </div>
 
@@ -430,13 +697,13 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 </div>
                 <div className={s.editRow}>
                   <input type="tel" className={s.editInput} value={form.phone}
-                    onChange={(e) => handleChange('phone', e.target.value)} placeholder="Telephone" />
+                    onChange={(e) => handleChange('phone', e.target.value)} placeholder="Téléphone" />
                   <input type="text" className={s.editInput} value={form.external_reference}
                     onChange={(e) => handleChange('external_reference', e.target.value)} placeholder="Ref. DPI" />
                 </div>
                 <textarea className={s.editTextarea} value={form.notes_medical}
                   onChange={(e) => handleChange('notes_medical', e.target.value)}
-                  placeholder="Pathologie, difficultes, mobilite..." rows={2} style={{ marginTop: 8 }} />
+                  placeholder="Pathologie, difficultés, mobilité…" rows={2} style={{ marginTop: 8 }} />
                 <textarea className={s.editTextarea} value={form.instructions}
                   onChange={(e) => handleChange('instructions', e.target.value)}
                   placeholder="Instructions chauffeur" rows={2} style={{ marginTop: 8 }} />
@@ -449,7 +716,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 </div>
                 <textarea className={s.editTextarea} value={form.instructions}
                   onChange={(e) => handleChange('instructions', e.target.value)}
-                  placeholder="Description du materiel" rows={3} />
+                  placeholder="Description du matériel" rows={3} />
               </div>
             )}
 
@@ -505,7 +772,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 )}
                 {(reservation.client?.contact_phone || reservation.client?.phone) && (
                   <div className={s.summaryItem}>
-                    <span className={s.summaryLabel}>Telephone</span>
+                    <span className={s.summaryLabel}>Téléphone</span>
                     <span className={s.summaryValue}>{reservation.client.contact_phone || reservation.client.phone}</span>
                   </div>
                 )}
@@ -520,12 +787,12 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               </div>
               {Number.isFinite(Number(originalAmount)) && Number.isFinite(Number(adjustedDelta)) && Math.abs(adjustedDelta) >= 0.01 && (
                 <div className={s.adjustedNote}>
-                  Montant saisi : {formatCurrency(originalAmount)} — Ajuste : {adjustedDelta >= 0 ? '+' : '-'}{formatCurrency(Math.abs(adjustedDelta))}
+                  Montant saisi : {formatCurrency(originalAmount)} — Ajusté : {adjustedDelta >= 0 ? '+' : '-'}{formatCurrency(Math.abs(adjustedDelta))}
                 </div>
               )}
               {reservation.active_transfer && (
                 <div className={s.adjustedNote}>
-                  Course transferee ({reservation.active_transfer.status}) — owner: {reservation.active_transfer.owner_company_name || reservation.active_transfer.owner_company_id} / executant: {reservation.active_transfer.executing_company_name || reservation.active_transfer.executing_company_id}
+                  Course transférée ({reservation.active_transfer.status}) — titulaire : {reservation.active_transfer.owner_company_name || reservation.active_transfer.owner_company_id} / exécutant : {reservation.active_transfer.executing_company_name || reservation.active_transfer.executing_company_id}
                 </div>
               )}
             </div>
@@ -544,12 +811,12 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 </div>
                 <div className={s.routeStops}>
                   <div className={s.routeStop}>
-                    <div className={s.routeStopLabel}>Depart</div>
+                    <div className={s.routeStopLabel}>Départ</div>
                     <div className={s.routeStopAddress}>{reservation.pickup_location || '-'}</div>
                     {/* Access details départ */}
                     {(reservation.client?.floor || reservation.client?.door_code || reservation.client?.access_notes || reservation.pickup_access_notes) && (
                       <div className={s.routeStopMeta}>
-                        {reservation.client?.floor && <span>Etage {reservation.client.floor}</span>}
+                        {reservation.client?.floor && <span>Étage {reservation.client.floor}</span>}
                         {reservation.client?.door_code && <span>Code {reservation.client.door_code}</span>}
                         {(reservation.pickup_access_notes || reservation.client?.access_notes) && (
                           <span>{reservation.pickup_access_notes || reservation.client.access_notes}</span>
@@ -558,7 +825,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                     )}
                   </div>
                   <div className={s.routeStop}>
-                    <div className={s.routeStopLabel}>Arrivee</div>
+                    <div className={s.routeStopLabel}>Arrivée</div>
                     <div className={s.routeStopAddress}>{reservation.dropoff_location || '-'}</div>
                     {reservation.dropoff_access_notes && (
                       <div className={s.routeStopMeta}>
@@ -588,7 +855,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                   <div className={s.detailGrid}>
                     {facility && (
                       <div className={s.detailItem}>
-                        <span className={s.detailLabel}>Etablissement</span>
+                        <span className={s.detailLabel}>Établissement</span>
                         <span className={s.detailValue}>{facility}</span>
                       </div>
                     )}
@@ -600,7 +867,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                     )}
                     {doctor && (
                       <div className={s.detailItem}>
-                        <span className={s.detailLabel}>Medecin</span>
+                        <span className={s.detailLabel}>Médecin</span>
                         <span className={s.detailValue}>{doctor}</span>
                       </div>
                     )}
@@ -621,11 +888,11 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                 <div className={s.section}>
                   <div className={s.sectionHeader}>
                     <div className={`${s.sectionIcon} ${s.sectionIconWarning}`}><FiInfo size={13} /></div>
-                    <h3 className={s.sectionTitle}>Patient & notes</h3>
+                    <h3 className={s.sectionTitle}>Patient et notes</h3>
                   </div>
                   {phone && (
                     <div className={s.infoRow}>
-                      <span className={s.infoLabel}><FiPhone size={11} /> Telephone</span>
+                      <span className={s.infoLabel}><FiPhone size={11} /> Téléphone</span>
                       <span className={s.infoValue}>{phone}</span>
                     </div>
                   )}
@@ -637,7 +904,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                   )}
                   {wheelchair && (
                     <div className={s.infoRow}>
-                      <span className={s.infoLabel}><FiTruck size={11} /> Mobilite</span>
+                      <span className={s.infoLabel}><FiTruck size={11} /> Mobilité</span>
                       <span className={s.infoValue}>
                         {reservation.wheelchair_need ? 'Fauteuil requis' : 'Fauteuil client'}
                       </span>
@@ -653,94 +920,313 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
               );
             })()}
 
-            {/* Facturation */}
-            <div className={s.section}>
-              <div className={s.sectionHeader}>
-                <div className={`${s.sectionIcon} ${s.sectionIconWarning}`}><FiFileText size={13} /></div>
-                <h3 className={s.sectionTitle}>Facturation</h3>
-              </div>
-              {(() => {
-                const isCancelled = ['canceled', 'cancelled'].includes(status);
-                const billable = reservation.is_cancellation_billable;
+            {/* Facturation (lecture + ajustement dans la même section) */}
+            {(() => {
+              const stLower = inferTripStatusForUi(reservation);
+              const canAdjustBilling = !editing
+                && !['canceled', 'cancelled', 'rejected', 'no_show'].includes(stLower)
+                && !isBillingLockedForAdjust(reservation)
+                && !hidePortalPatientPreRideAdjust;
+              const resolvedIntent = billingIntent || billedToType || 'patient';
+              const intentLabel = INTENT_LABELS[resolvedIntent] || resolvedIntent;
+              const BILLED_TO_LABELS = { patient: 'Patient', clinic: 'Clinique', insurance: 'Assurance' };
+              const typeLabel = BILLED_TO_LABELS[billingForm.billed_to_type] || billingForm.billed_to_type;
+              const clinicForSummary = clinicSelectOptions.find(
+                (c) => String(c.id) === String(billingForm.billed_to_company_id),
+              );
+              const clinicExtra = billingForm.billed_to_type === 'clinic' && clinicForSummary
+                ? ` — ${clinicForSummary.name}`
+                : '';
+              const summaryAmount = Number.isFinite(Number(billingForm.amount))
+                ? Number(billingForm.amount)
+                : (Number(reservation?.amount) || 0);
 
-                if (isCancelled && billable === false) {
-                  return (
-                    <div className={`${s.billingStatus} ${s.billingStatusCancelled}`}>
-                      <FiAlertCircle size={13} />
-                      Annulee — non facturee
-                      {reservation.cancellation_display_label && (
-                        <span className={s.billingMuted} style={{ marginLeft: 4 }}>
-                          ({reservation.cancellation_display_label})
-                        </span>
-                      )}
+              const billingAdjustForm = (
+                <div
+                  className={isInstitutionBooking ? s.billingAdjustBlock : undefined}
+                >
+                  {!isInstitutionBooking && (
+                    <div className={s.billingCurrentSummary} role="status">
+                      <span className={s.billingCurrentAmount}>{formatCurrency(summaryAmount)}</span>
+                      <span className={s.billingCurrentSep} aria-hidden>·</span>
+                      <span>
+                        Destinataire : {typeLabel}
+                        {clinicExtra}
+                      </span>
                     </div>
-                  );
-                }
-
-                const resolvedIntent = billingIntent || billedToType || 'patient';
-                const intentLabel = INTENT_LABELS[resolvedIntent] || resolvedIntent;
-                const instName = meta.institution_name || reservation.institution_timeline?.institution_name;
-
-                if (isCancelled && billable === true) {
-                  const feeAmount = reservation.cancellation_fee_amount;
-                  const feePct = reservation.cancellation_fee_percent;
-                  return (
-                    <>
-                      <div className={`${s.billingStatus} ${s.billingStatusDanger}`}>
-                        Annulee — facturee
-                        <span className={`${s.billingBadge} ${s.billingBadgeDanger}`}>Facturation maintenue</span>
-                      </div>
-                      {feeAmount != null && feeAmount > 0 && (
-                        <p className={s.billingMuted} style={{ fontWeight: 600 }}>
-                          Frais d'annulation : {Number(feeAmount).toFixed(2)} CHF
-                          {feePct != null ? ` (${feePct}%)` : ''}
-                        </p>
-                      )}
-                      <p className={s.billingMuted}>
-                        Facture a : {intentLabel}
-                        {instName ? ` — ${instName}` : ''}
+                  )}
+                  <p className={`${s.billingMuted} ${s.billingHelpText}`}>
+                    Ajustez le montant (CHF) et le payeur. Pour « Clinique », choisissez l’établissement. Toute modification exige un bref motif.
+                  </p>
+                  <div className={s.billingClinicRoster}>
+                    <div className={s.billingClinicRosterTitle}>
+                      Cliniques / partenaires (mappings)
+                    </div>
+                    {clinicRosterLoading ? (
+                      <p className={s.billingMuted} style={{ fontSize: 12, margin: 0 }}>Chargement…</p>
+                    ) : clinicSelectOptions.length === 0 ? (
+                      <p className={s.billingMuted} style={{ fontSize: 12, margin: 0 }}>
+                        Aucune clinique connue. Configurez les mappings dans Paramètres → Facturation, ou liez la réservation à une clinique (nom d’entreprise) côté course.
                       </p>
-                      {reservation.cancellation_display_label && (
-                        <p className={s.billingMuted}>Motif : {reservation.cancellation_display_label}</p>
-                      )}
-                    </>
-                  );
-                }
-
-                if (isInstitutionBooking) {
-                  return (
-                    <>
-                      <div className={`${s.billingStatus} ${isFailed ? s.billingStatusDanger : s.billingStatusSuccess}`}>
-                        Facture a : {intentLabel}
-                        {billingStatusVal && (
-                          <span className={`${s.billingBadge} ${isFailed ? s.billingBadgeDanger : s.billingBadgeSuccess}`}>
-                            {isFailed ? 'Action requise' : 'Resolu'}
-                          </span>
-                        )}
-                      </div>
-                      {instName && (
-                        <p className={s.billingMuted}>Institution : {instName}</p>
-                      )}
-                      {isFailed && (
-                        <div className={s.billingWarning}>
-                          <FiAlertCircle size={13} />
-                          <span>Informations de facturation incompletes. Verifiez le dossier client.</span>
-                        </div>
-                      )}
-                    </>
-                  );
-                }
-
-                return (
-                  <div className={`${s.billingStatus} ${s.billingStatusPatient}`}>
-                    Facture a : {intentLabel}
+                    ) : (
+                      <ul className={s.billingClinicRosterList}>
+                        {clinicSelectOptions.map((c) => (
+                          <li key={c.id}>
+                            <span className={s.billingClinicRosterName}>{c.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
-                );
-              })()}
-            </div>
+                  {billingError && <div className={s.saveErrorBanner}>{billingError}</div>}
+                  <div className={s.editGroup} style={{ marginTop: 0 }}>
+                    <label className={s.editLabel} htmlFor="adj-amount">Montant (CHF)</label>
+                    <input
+                      id="adj-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className={s.editInput}
+                      value={billingForm.amount}
+                      onChange={(e) => setBillingForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    />
+                    <label className={s.editLabel} style={{ marginTop: 8 }} htmlFor="adj-btype">Destinataire</label>
+                    <select
+                      id="adj-btype"
+                      className={s.editInput}
+                      value={billingForm.billed_to_type}
+                      onChange={(e) => {
+                        const btype = e.target.value;
+                        setBillingForm((prev) => {
+                          const next = { ...prev, billed_to_type: btype };
+                          if (btype === 'clinic' && prev.billed_to_company_id) {
+                            const r = getPreferentialRateChfForClinicCompany(prev.billed_to_company_id);
+                            if (r != null) {
+                              next.amount = r.toFixed(2);
+                            }
+                          }
+                          return next;
+                        });
+                      }}
+                    >
+                      <option value="patient">Patient</option>
+                      <option value="clinic">Clinique</option>
+                      <option value="insurance">Assurance</option>
+                    </select>
+                    {billingForm.billed_to_type === 'clinic' && (
+                      <>
+                        <label className={s.editLabel} style={{ marginTop: 8 }} htmlFor="adj-bcomp">
+                          Clinique cible
+                        </label>
+                        {clinicRosterLoading ? (
+                          <p className={s.billingMuted} style={{ fontSize: 12, margin: '4px 0 0' }}>Chargement des cliniques…</p>
+                        ) : clinicSelectOptions.length > 0 ? (
+                          <select
+                            id="adj-bcomp"
+                            className={s.editInput}
+                            value={billingForm.billed_to_company_id}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setBillingForm((prev) => {
+                                const next = { ...prev, billed_to_company_id: v };
+                                if (v && String(prev.billed_to_type).toLowerCase() === 'clinic') {
+                                  const r = getPreferentialRateChfForClinicCompany(v);
+                                  if (r != null) {
+                                    next.amount = r.toFixed(2);
+                                  }
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <option value="">Sélectionner une clinique…</option>
+                            {clinicSelectOptions.map((c) => (
+                              <option key={c.id} value={String(c.id)}>{c.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className={s.billingMuted} id="adj-bcomp" style={{ fontSize: 12, margin: '4px 0 0' }}>
+                            Aucune clinique disponible : ajoutez des mappings ou une clinique liée à la course (voir la liste ci-dessus).
+                          </p>
+                        )}
+                      </>
+                    )}
+                    {billingForm.billed_to_type === 'insurance' && (
+                      <>
+                        <label className={s.editLabel} style={{ marginTop: 8 }} htmlFor="adj-bins">
+                          ID entreprise (assurance)
+                        </label>
+                        <input
+                          id="adj-bins"
+                          type="number"
+                          min="1"
+                          className={s.editInput}
+                          value={billingForm.billed_to_company_id}
+                          onChange={(e) => setBillingForm((prev) => ({ ...prev, billed_to_company_id: e.target.value }))}
+                          placeholder="ID entreprise cible"
+                        />
+                      </>
+                    )}
+                    <label className={s.editLabel} style={{ marginTop: 8 }} htmlFor="adj-reason">Motif (obligatoire)</label>
+                    <textarea
+                      id="adj-reason"
+                      className={s.editTextarea}
+                      rows={2}
+                      value={billingForm.override_reason}
+                      onChange={(e) => setBillingForm((prev) => ({ ...prev, override_reason: e.target.value }))}
+                    />
+                    <button
+                      type="button"
+                      className={s.editSaveBtn}
+                      style={{ marginTop: 12 }}
+                      onClick={handleBillingAdjust}
+                      disabled={savingBilling}
+                    >
+                      {savingBilling ? 'Enregistrement…' : 'Enregistrer'}
+                    </button>
+                  </div>
+                </div>
+              );
+
+              return (
+                <div className={s.section}>
+                  <div className={s.sectionHeader}>
+                    <div className={`${s.sectionIcon} ${s.sectionIconWarning}`}><FiFileText size={13} /></div>
+                    <h3 className={s.sectionTitle}>Facturation</h3>
+                  </div>
+                  {(() => {
+                    const isCancelled = ['canceled', 'cancelled'].includes(status);
+                    const billable = reservation.is_cancellation_billable;
+
+                    if (isCancelled && billable === false) {
+                      return (
+                        <div className={`${s.billingStatus} ${s.billingStatusCancelled}`}>
+                          <FiAlertCircle size={13} />
+                          Annulée — non facturée
+                          {reservation.cancellation_display_label && (
+                            <span className={s.billingMuted} style={{ marginLeft: 4 }}>
+                              ({reservation.cancellation_display_label})
+                            </span>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    const instName = meta.institution_name || reservation.institution_timeline?.institution_name;
+
+                    if (isCancelled && billable === true) {
+                      const feeAmount = reservation.cancellation_fee_amount;
+                      const feePct = reservation.cancellation_fee_percent;
+                      return (
+                        <>
+                          <div className={`${s.billingStatus} ${s.billingStatusDanger}`}>
+                            Annulée — facturée
+                            <span className={`${s.billingBadge} ${s.billingBadgeDanger}`}>Facturation maintenue</span>
+                          </div>
+                          {feeAmount != null && feeAmount > 0 && (
+                            <p className={s.billingMuted} style={{ fontWeight: 600 }}>
+                              Frais d'annulation : {Number(feeAmount).toFixed(2)} CHF
+                              {feePct != null ? ` (${feePct}%)` : ''}
+                            </p>
+                          )}
+                          <p className={s.billingMuted}>
+                            Facture à : {intentLabel}
+                            {instName ? ` — ${instName}` : ''}
+                          </p>
+                          {reservation.cancellation_display_label && (
+                            <p className={s.billingMuted}>Motif : {reservation.cancellation_display_label}</p>
+                          )}
+                        </>
+                      );
+                    }
+
+                    if (isInstitutionBooking) {
+                      return (
+                        <>
+                          <div className={`${s.billingStatus} ${isFailed ? s.billingStatusDanger : s.billingStatusSuccess}`}>
+                            Facture à : {intentLabel}
+                            {billingStatusVal && (
+                              <span className={`${s.billingBadge} ${isFailed ? s.billingBadgeDanger : s.billingBadgeSuccess}`}>
+                                {isFailed ? 'Action requise' : 'Résolu'}
+                              </span>
+                            )}
+                          </div>
+                          {instName && (
+                            <p className={s.billingMuted}>Institution : {instName}</p>
+                          )}
+                          {isFailed && (
+                            <div className={s.billingWarning}>
+                              <FiAlertCircle size={13} />
+                              <span>Informations de facturation incomplètes. Vérifiez le dossier client.</span>
+                            </div>
+                          )}
+                          {canAdjustBilling && billingAdjustForm}
+                        </>
+                      );
+                    }
+
+                    if (canAdjustBilling) {
+                      return billingAdjustForm;
+                    }
+
+                    return (
+                      <div className={`${s.billingStatus} ${s.billingStatusPatient}`}>
+                        Facture à : {intentLabel}
+                      </div>
+                    );
+                  })()}
+                  {!editing && isBillingLockedForAdjust(reservation) && (
+                    <p className={s.billingMuted} style={{ marginTop: 8 }}>
+                      Facturation verrouillée : ajustement du montant ou du destinataire impossible.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Clôture manuelle (entreprise) — hors PUT opérationnel */}
+            {(() => {
+              const stLower = inferTripStatusForUi(reservation);
+              const canManualComplete = !editing
+                && ['accepted', 'assigned', 'in_progress', 'en_route'].includes(stLower);
+              if (!canManualComplete) return null;
+              return (
+                <div className={s.section}>
+                  <div className={s.sectionHeader}>
+                    <div className={`${s.sectionIcon} ${s.sectionIconBrand}`}><FiClock size={13} /></div>
+                    <h3 className={s.sectionTitle}>Clôture de la course</h3>
+                  </div>
+                  <p className={s.billingMuted} style={{ marginBottom: 8 }}>
+                    {stLower === 'en_route'
+                      ? 'Clôture par l’entreprise si l’app chauffeur ne permet pas de terminer la course. Un motif est obligatoire.'
+                      : (stLower === 'accepted' || stLower === 'assigned'
+                        ? 'À utiliser notamment quand le trajet s’est déroulé mais la course n’a pas pu être clôturée côté chauffeur (self-service, facturation clinique, etc.) — pas de motif requis, sauf en course « en route » ci-dessus.'
+                        : 'Terminer la course depuis l’espace entreprise si besoin.')}
+                  </p>
+                  {stLower === 'en_route' && (
+                    <textarea
+                      className={s.editTextarea}
+                      rows={2}
+                      placeholder="Motif de la clôture manuelle (obligatoire)"
+                      value={completeReason}
+                      onChange={(e) => setCompleteReason(e.target.value)}
+                      style={{ marginBottom: 8 }}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className={s.editSaveBtn}
+                    onClick={handleManualComplete}
+                    disabled={savingComplete}
+                  >
+                    {savingComplete ? 'Validation…' : 'Valider la course'}
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Mini-chat (institution ou partenariat) */}
-            {(isInstitutionBooking || isTransferredBooking) && (
+            {(isInstitutionBooking || isTransferredBooking || isDirectPortalClientBooking) && (
               <BookingChat
                 bookingId={chatBookingId}
                 socket={companySocket}
@@ -789,9 +1275,9 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                       )}
                       {v.valid_from && (
                         <div className={s.voucherInfo}>
-                          Periode : {v.valid_to
+                          Période : {v.valid_to
                             ? `${new Date(v.valid_from).toLocaleDateString('fr-CH')} - ${new Date(v.valid_to).toLocaleDateString('fr-CH')}`
-                            : `A partir du ${new Date(v.valid_from).toLocaleDateString('fr-CH')}`
+                            : `À partir du ${new Date(v.valid_from).toLocaleDateString('fr-CH')}`
                           }
                         </div>
                       )}
@@ -821,7 +1307,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
                   <FiTrash2 size={13} />
                   {['en_route', 'assigned'].includes(status)
                     ? 'Annuler la course'
-                    : 'Supprimer la reservation'}
+                    : 'Supprimer la réservation'}
                 </button>
               </div>
             )}
@@ -837,7 +1323,7 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete }) => {
             {/* Return link */}
             {returnTo && (
               <button className={s.returnBtn} onClick={() => window.location.assign(returnTo)}>
-                Retour au controle facturation
+                Retour au contrôle facturation
               </button>
             )}
           </>

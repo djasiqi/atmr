@@ -41,6 +41,24 @@
   color: #666;
 }
 
+.pendingNotice {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fff8e1;
+  border: 1px solid #ffcc80;
+  color: #8a5200;
+}
+
+.timeoutNotice {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
 .refreshOutline {
   margin-top: 1rem;
   padding: 0.5rem 1rem;
@@ -56,8 +74,17 @@
   background: #f0faf8;
 }
 
+.errorBlock {
+  margin-bottom: 1rem;
+}
+
+.errorBlock .link {
+  margin-top: 0.75rem;
+}
+
 .error {
   color: #b00020;
+  margin: 0;
 }
 
 .actions {

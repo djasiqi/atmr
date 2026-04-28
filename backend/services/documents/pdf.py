@@ -1039,6 +1039,28 @@ _BILLED_TO_COUNTRY_PATTERNS = (
 )
 
 
+def _dedupe_postal_and_city_line(cp_city: str) -> str:
+    """Supprime la répétition « NPA Ville NPA Ville » (ex. 1247 Anières 1247 Anières, Suisse)."""
+    import re
+
+    if not (cp_city and str(cp_city).strip()):
+        return cp_city
+    t = re.sub(r"\s+", " ", str(cp_city).strip())
+    t = re.sub(r"(\b\d{4})\s*,\s+", r"\1 ", t)
+    if "," in t:
+        head, sep, tail = t.partition(",")
+        head = head.strip()
+        tail = tail.strip().lstrip(",")
+        m = re.match(r"^((\d{4}\s+.+?))(?:\s+\1)+$", head, re.IGNORECASE)
+        if m:
+            head = m.group(1).strip()
+        return f"{head}, {tail}".replace(" ,", " ")
+    m2 = re.match(r"^((\d{4}\s+.+?))(?:\s+\1)+$", t, re.IGNORECASE)
+    if m2:
+        return m2.group(1).strip()
+    return t
+
+
 def _format_billed_to_three_lines(
     raw: str, company_country: str | None = None
 ) -> str:
@@ -1098,6 +1120,7 @@ def _format_billed_to_three_lines(
             )
             if show_country:
                 cp_city = f"{cp_city}, {address_country_display}"
+    cp_city = _dedupe_postal_and_city_line(cp_city)
     return f"{street}<br/>{cp_city}"
 
 
@@ -1768,7 +1791,7 @@ def _build_s2_table(
             pn_raw = pn_raw[: MAX_PATIENT_NAME_LENGTH - 1] + "."
         patient_cell = Paragraph(_format_patient_name_s2(pn_raw), s2_main_style)
         amt = item.get("amount") or Decimal("0")
-        amount_val = f"{Decimal(amt):.2f}"
+        amount_val = f"{Decimal(amt):.2f} CHF"
         adj_note = _collect_adjustment_notes_from_consolidated_item(item)
         note_suffix = ""
         if adj_note:
@@ -1805,12 +1828,12 @@ def _build_s2_table(
 
     if include_non_ride:
         for line in invoice.lines:
-            # LATE_FEE, REMINDER_FEE, CUSTOM (pas RIDE ni MATERIAL_DELIVERY)
+            # Lignes hors transport : ex. accompagnement (CUSTOM > 0), honoraires.
             if line.type not in (
                 InvoiceLineType.RIDE,
                 InvoiceLineType.MATERIAL_DELIVERY,
             ):
-                # Remise globale : ligne CUSTOM négative — déjà dans le bloc totaux, pas dans le tableau transports
+                # Remise globale : ligne CUSTOM négative — synthèse dans le bloc totaux, pas ici
                 if (
                     line.type == InvoiceLineType.CUSTOM
                     and line.line_total is not None
@@ -1818,8 +1841,16 @@ def _build_s2_table(
                 ):
                     continue
                 amt = line.line_total if line.line_total is not None else Decimal("0")
-                amount = f"{Decimal(amt):.2f}"
-                table_data.append(["", "", line.description[:30], amount])
+                amount = f"{Decimal(amt):.2f} CHF"
+                esc_d = _xml_escape_for_paragraph((line.description or "")[:500])
+                sub = _custom_prestation_subline_for_pdf(line)
+                if sub:
+                    esc_s = _xml_escape_for_paragraph(sub)
+                    desc_html = f"{esc_d}<br/><font size='8' color='#4b5563'>{esc_s}</font>"
+                else:
+                    desc_html = esc_d
+                desc_cell = Paragraph(desc_html, s2_main_style)
+                table_data.append(["", "", desc_cell, amount])
 
     # Date et Client inchangés (éviter décalage gauche). Montant réduit pour donner
     # plus d'espace à Transport à droite, sans déplacer les colonnes de gauche.
@@ -1857,18 +1888,6 @@ def _build_s2_table(
         style_rules.append(("LINEBELOW", (0, r), (-1, r), 0.15, colors.lightgrey))
     tbl.setStyle(TableStyle(style_rules))
     return (tbl, consolidated)
-
-
-def _invoice_is_s2_clinic_monthly(invoice: Invoice) -> bool:
-    """Vrai uniquement pour la facturation clinique mensuelle multi-patients (S2)."""
-    try:
-        bs = getattr(invoice, "billing_strategy", None)
-        if bs is None:
-            return False
-        val = bs.value if hasattr(bs, "value") else str(bs)
-        return val == "s2_clinic_monthly"
-    except Exception:
-        return False
 
 
 def _swiss_group_int_str(whole: int) -> str:
@@ -1943,9 +1962,80 @@ def _format_chf_pdf_mono(
     return inner.rjust(width)
 
 
+def _format_qty_unit_for_custom_pdf(q: Any) -> str:
+    """Affichage compacité d’une quantité / durée (évite 2,00 h si entier)."""
+    try:
+        f = float(q)
+    except (TypeError, ValueError):
+        return "?"
+    if abs(f - round(f)) < 1e-9 and abs(f) < 1e12:
+        return str(int(round(f)))
+    s = f"{f:.2f}"
+    if s.endswith("0") and "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s
+
+
+def _format_money_two_decimals(d: Any) -> str:
+    try:
+        return f"{float(d):.2f}"
+    except (TypeError, ValueError):
+        return "0.00"
+
+
+def _custom_prestation_subline_for_pdf(line: "InvoiceLine") -> str | None:
+    """Sous-ligne factu : détail « durée / quantité » pour prestations CUSTOM > 0."""
+    if (
+        line.type != InvoiceLineType.CUSTOM
+        or line.line_total is None
+        or line.line_total <= 0
+    ):
+        return None
+    qv = _format_qty_unit_for_custom_pdf(line.qty)
+    up = _format_money_two_decimals(line.unit_price)
+    tot = _format_money_two_decimals(line.line_total)
+    meta = getattr(line, "line_meta", None)
+    cp = meta.get("custom_prestation") if isinstance(meta, dict) else None
+    if not isinstance(cp, dict):
+        return f"{qv} × {up} CHF = {tot} CHF HT"
+    mode = cp.get("mode")
+    if mode == "time":
+        tu = (cp.get("time_unit") or "h")
+        if tu not in ("min", "h", "d", "mois"):
+            tu = "h"
+        qsym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
+        psym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
+        return f"{qv} {qsym[tu]} × {up} CHF/{psym[tu]} = {tot} CHF HT"
+    if mode == "quantity":
+        return f"{qv} × {up} CHF = {tot} CHF HT"
+    return f"{qv} × {up} CHF = {tot} CHF HT"
+
+
 def _format_global_discount_pdf_label(pct_gd: float) -> str:
-    """Libellé court remise globale (PDF). La note utilisateur est sur une ligne séparée."""
-    return f"Remise ({pct_gd:g} %)"
+    """Libellé remise globale (PDF) : le taux s'applique sur le HT des transports, pas sur tout le détail."""
+    return f"Remise (transports, {pct_gd:g} %)"
+
+
+def _sum_positive_billed_lines_excluding_global_discount(
+    invoice: "Invoice",
+) -> float | None:
+    """Somme des HT **positifs** (ce qui apparaît dans le détail), hors ligne de remise globale (CUSTOM < 0).
+
+    Aligne le « Sous-total HT » du bloc totaux avec la somme des montants listés (transports
+    + lignes forfait/frais), et évite d'afficher la seule `meta['subtotal_before_ht']` (RIDE
+    seuls, avant forfaits) qui ne correspondait pas à la somme des lignes du PDF.
+    """
+    total = Decimal("0")
+    for line in invoice.lines:
+        if line.line_total is None:
+            continue
+        if line.type == InvoiceLineType.CUSTOM and line.line_total < 0:
+            continue
+        if line.line_total > 0:
+            total += line.line_total
+    if total > 0:
+        return float(total)
+    return None
 
 
 def _build_totals_table(
@@ -1983,16 +2073,9 @@ def _build_totals_table(
     elif vat_total > 0:
         vat_is_applicable = True
 
-    # Remise globale facturation directe (lignes au tarif normal + synthèse).
-    # Ne pas confondre avec le paramètre is_s2 du tableau (format « TOTAL À FACTURER ») :
-    # on exclut seulement les vraies factures S2 clinique mensuelle.
+    # Remise globale : méta enregistrée par apply_draft_global_discount (S1, S2, client, clinique).
     gd_meta: dict[str, Any] | None = None
-    if (
-        isinstance(invoice.meta, dict)
-        and invoice.meta.get("global_discount")
-        and not is_third_party
-        and not _invoice_is_s2_clinic_monthly(invoice)
-    ):
+    if isinstance(invoice.meta, dict) and invoice.meta.get("global_discount"):
         gd_meta = cast(dict[str, Any], invoice.meta["global_discount"])
 
     totals_extra_style_rules: list[tuple[Any, ...]] = []
@@ -2051,7 +2134,71 @@ def _build_totals_table(
             col_widths = [2.2 * cm, 4.6 * cm, 4.0 * cm, 3.5 * cm]
     elif template == "detailed":
         if is_third_party:
-            if vat_is_applicable:
+            if gd_meta is not None and not is_reminder:
+                _detail_sum = _sum_positive_billed_lines_excluding_global_discount(
+                    invoice
+                )
+                gross_ht = (
+                    _detail_sum
+                    if _detail_sum is not None
+                    else float(gd_meta.get("subtotal_before_ht", subtotal))
+                )
+                disc_ht = float(gd_meta.get("amount_ht", 0))
+                pct_gd = float(gd_meta.get("percent", 0))
+                note_gd = str(gd_meta.get("note") or "").strip()
+                disc_label = _format_global_discount_pdf_label(pct_gd)
+                total_data = [
+                    ["", "", "", "", "Sous-total HT", _format_chf_pdf(gross_ht)],
+                    ["", "", "", "", disc_label, _format_chf_discount_pdf(disc_ht)],
+                ]
+                if note_gd:
+                    total_data.append(["", "", "", "", note_gd[:280], ""])
+                    totals_extra_style_rules.extend(
+                        [
+                            ("SPAN", (4, 2), (5, 2)),
+                            ("ALIGN", (4, 2), (5, 2), "LEFT"),
+                            ("FONTSIZE", (4, 2), (5, 2), 8),
+                            ("TEXTCOLOR", (4, 2), (5, 2), colors.HexColor("#4b5563")),
+                            ("FONTNAME", (4, 2), (5, 2), font_name),
+                        ]
+                    )
+                if vat_is_applicable:
+                    total_data.extend(
+                        [
+                            [
+                                "",
+                                "",
+                                "",
+                                "",
+                                "Total HT après remise",
+                                _format_chf_pdf(subtotal),
+                            ],
+                            [
+                                "",
+                                "",
+                                "",
+                                "",
+                                f"{vat_label_display} :",
+                                _format_chf_pdf(vat_total),
+                            ],
+                            ["", "", "", "", total_label, _format_chf_pdf(total)],
+                        ]
+                    )
+                else:
+                    total_data.extend(
+                        [
+                            [
+                                "",
+                                "",
+                                "",
+                                "",
+                                "Total HT après remise",
+                                _format_chf_pdf(subtotal),
+                            ],
+                            ["", "", "", "", total_label, _format_chf_pdf(total)],
+                        ]
+                    )
+            elif vat_is_applicable:
                 total_data = [
                     ["", "", "", "", "Sous-total :", f"{subtotal:.2f}"],
                     ["", "", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
@@ -2062,7 +2209,14 @@ def _build_totals_table(
             col_widths = [1.6 * cm, 2.1 * cm, 2.8 * cm, 2.8 * cm, 2.7 * cm, 3 * cm]
         else:
             if gd_meta is not None and not is_reminder:
-                gross_ht = float(gd_meta.get("subtotal_before_ht", subtotal))
+                _detail_sum = _sum_positive_billed_lines_excluding_global_discount(
+                    invoice
+                )
+                gross_ht = (
+                    _detail_sum
+                    if _detail_sum is not None
+                    else float(gd_meta.get("subtotal_before_ht", subtotal))
+                )
                 disc_ht = float(gd_meta.get("amount_ht", 0))
                 pct_gd = float(gd_meta.get("percent", 0))
                 note_gd = str(gd_meta.get("note") or "").strip()
@@ -2125,7 +2279,74 @@ def _build_totals_table(
                 total_data = [["", "", "", total_label, total_amt]]
             col_widths = [2.0 * cm, 3.5 * cm, 3.5 * cm, 4.2 * cm, 3.4 * cm]
     elif is_third_party:
-        if vat_is_applicable:
+        if gd_meta is not None and not is_reminder:
+            _detail_sum = _sum_positive_billed_lines_excluding_global_discount(
+                invoice
+            )
+            gross_ht = (
+                _detail_sum
+                if _detail_sum is not None
+                else float(gd_meta.get("subtotal_before_ht", subtotal))
+            )
+            disc_ht = float(gd_meta.get("amount_ht", 0))
+            pct_gd = float(gd_meta.get("percent", 0))
+            note_gd = str(gd_meta.get("note") or "").strip()
+            disc_label = _format_global_discount_pdf_label(pct_gd)
+            total_data = [
+                ["", "", "", "Sous-total HT", _format_chf_pdf(gross_ht)],
+                ["", "", "", disc_label, _format_chf_discount_pdf(disc_ht)],
+            ]
+            if note_gd:
+                total_data.append(["", "", "", note_gd[:280], ""])
+                _note_row = len(total_data) - 1
+                totals_extra_style_rules.extend(
+                    [
+                        ("SPAN", (3, _note_row), (4, _note_row)),
+                        ("ALIGN", (3, _note_row), (4, _note_row), "LEFT"),
+                        ("FONTSIZE", (3, _note_row), (4, _note_row), 8),
+                        (
+                            "TEXTCOLOR",
+                            (3, _note_row),
+                            (4, _note_row),
+                            colors.HexColor("#4b5563"),
+                        ),
+                        ("FONTNAME", (3, _note_row), (4, _note_row), font_name),
+                    ]
+                )
+            if vat_is_applicable:
+                total_data.extend(
+                    [
+                        [
+                            "",
+                            "",
+                            "",
+                            "Total HT après remise",
+                            _format_chf_pdf(subtotal),
+                        ],
+                        [
+                            "",
+                            "",
+                            "",
+                            f"{vat_label_display} :",
+                            _format_chf_pdf(vat_total),
+                        ],
+                        ["", "", "", total_label, _format_chf_pdf(total)],
+                    ]
+                )
+            else:
+                total_data.extend(
+                    [
+                        [
+                            "",
+                            "",
+                            "",
+                            "Total HT après remise",
+                            _format_chf_pdf(subtotal),
+                        ],
+                        ["", "", "", total_label, _format_chf_pdf(total)],
+                    ]
+                )
+        elif vat_is_applicable:
             total_data = [
                 ["", "", "", "Sous-total :", f"{subtotal:.2f}"],
                 ["", "", "", f"{vat_label_display} :", f"{vat_total:.2f}"],
@@ -2136,7 +2357,14 @@ def _build_totals_table(
         col_widths = [1.8 * cm, 2.8 * cm, 4.3 * cm, 2.1 * cm, 3 * cm]
     else:
         if gd_meta is not None and not is_reminder:
-            gross_ht = float(gd_meta.get("subtotal_before_ht", subtotal))
+            _detail_sum = _sum_positive_billed_lines_excluding_global_discount(
+                invoice
+            )
+            gross_ht = (
+                _detail_sum
+                if _detail_sum is not None
+                else float(gd_meta.get("subtotal_before_ht", subtotal))
+            )
             disc_ht = float(gd_meta.get("amount_ht", 0))
             pct_gd = float(gd_meta.get("percent", 0))
             note_gd = str(gd_meta.get("note") or "").strip()
@@ -3299,7 +3527,7 @@ class PDFService:
             font_name,
             font_name_bold,
             s2_main_style,
-            include_non_ride=False,
+            include_non_ride=True,
             available_width_pt=usable_width_pt,
         )
 
@@ -3880,15 +4108,17 @@ class PDFService:
             ]
         else:
             total_amount = float(invoice.total_amount)
-            if (
-                isinstance(invoice.meta, dict)
-                and invoice.meta.get("global_discount")
-                and not is_third_party
-                and not is_s2
-            ):
+            if isinstance(invoice.meta, dict) and invoice.meta.get("global_discount"):
                 gd_min = cast(dict[str, Any], invoice.meta["global_discount"])
             if gd_min is not None:
-                gross_ht = float(gd_min.get("subtotal_before_ht", 0))
+                _detail_min = _sum_positive_billed_lines_excluding_global_discount(
+                    invoice
+                )
+                gross_ht = (
+                    _detail_min
+                    if _detail_min is not None
+                    else float(gd_min.get("subtotal_before_ht", 0))
+                )
                 disc_ht = float(gd_min.get("amount_ht", 0))
                 pct_gd = float(gd_min.get("percent", 0))
                 note_gd = str(gd_min.get("note") or "").strip()

@@ -6,6 +6,7 @@ import {
   fetchAdminPricingZoneSets,
   updateAdminPricingZoneSet,
 } from '../../../services/settingsService';
+import IndicativeFareAdminSection from '../../../components/admin/IndicativeFareAdminSection';
 import styles from './AdminSettings.module.css';
 import shell from '../adminShell.module.css';
 
@@ -461,6 +462,8 @@ const AdminSettings = () => {
 
   return (
     <main className={shell.content}>
+          <IndicativeFareAdminSection />
+
           <section className={styles.hero}>
             <h1>Paramètres administrateur</h1>
             <p>

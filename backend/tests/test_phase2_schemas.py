@@ -127,6 +127,18 @@ class TestClientUpdateSchema:
             validate_request(ClientUpdateSchema(), data, strict=False)
         assert "birth_date" in exc_info.value.messages.get("errors", {})
 
+    def test_access_fields_optional(self):
+        """Champs accès domicile optionnels."""
+        data = {
+            "floor": "3e",
+            "door_code": "1234A",
+            "access_notes": "Sonner chez Dupont",
+        }
+        result = validate_request(ClientUpdateSchema(), data, strict=False)
+        assert result["floor"] == "3e"
+        assert result["door_code"] == "1234A"
+        assert result["access_notes"] == "Sonner chez Dupont"
+
 
 class TestDriverProfileUpdateSchema:
     """Tests pour DriverProfileUpdateSchema."""

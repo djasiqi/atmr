@@ -13,9 +13,13 @@ import {
 } from '../../../../services/settingsService';
 import apiClient from '../../../../utils/apiClient';
 import { showSuccess, showError } from '../../../../utils/toast';
+import {
+  getAuthEnv,
+  hasCompanyScopedAccessToken,
+} from '../../../../utils/webAuthSession';
 
 const hasCompanyToken = () =>
-  !!(localStorage.getItem('company_access_token') || localStorage.getItem('company_authToken'));
+  hasCompanyScopedAccessToken(getAuthEnv());
 
 const SERVICE_AREA_ALLOWED_TYPES = new Set(['commune', 'district', 'canton']);
 const SERVICE_AREA_SINGLE_MODES = new Set(['canton', 'district']);

@@ -1,0 +1,465 @@
+import { AxiosError } from "axios";
+import { apiClient } from "../../core/api/client";
+import {
+  HttpCircuitBreakerScope,
+  onHttpRequestFailure,
+  onHttpRequestSuccess,
+  shouldAllowHttpRequest,
+} from "../../core/network/httpCircuitBreaker";
+import {
+  DriverLocationPayload,
+  DriverLocationAck,
+  DriverMission,
+  DriverMissionDetail,
+  DriverPushRegistrationPayload,
+  DriverStatusTransitionPayload,
+} from "./types";
+import {
+  readDriverProfileCache,
+  writeDriverProfileCache,
+} from "./services/driverProfileCache";
+
+/** Correspond au JSON renvoyé par PUT /driver/me/bookings/:id/status. */
+export type DriverStatusUpdateResult = {
+  booking_id?: number;
+  status?: string;
+  server_time?: string;
+  unchanged?: boolean;
+  mission_milestone?: string;
+  error?: string;
+  [key: string]: unknown;
+};
+
+export type DriverApiError = {
+  status: number | null;
+  code: string;
+  message: string;
+  retryable?: boolean;
+};
+
+export type DriverChatMessage = {
+  id: number | string;
+  content: string;
+  sender_role?: string;
+  sender_name?: string | null;
+  timestamp: string;
+  image_url?: string | null;
+  pdf_url?: string | null;
+  pdf_filename?: string | null;
+  audio_url?: string | null;
+};
+
+export type DriverEtaSnapshot = {
+  mission_id: number;
+  eta_minutes: number | null;
+  eta_updated_at: string | null;
+};
+
+export type DriverProfile = {
+  id?: number | string;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  [key: string]: unknown;
+};
+
+export type DriverRouteSnapshot = {
+  route?: unknown;
+  points?: unknown[];
+  [key: string]: unknown;
+};
+
+export type DriverCompletedTrip = {
+  id: number | string;
+  pickup_location?: string | null;
+  dropoff_location?: string | null;
+  status?: string | null;
+  [key: string]: unknown;
+};
+
+function normalizeError(error: unknown): DriverApiError {
+  const e = error as AxiosError<{
+    error?: string;
+    code?: string;
+    message?: string;
+    error_code?: string;
+    error_message?: string;
+    retryable?: boolean;
+  }>;
+  return {
+    status: e.response?.status ?? null,
+    code: e.response?.data?.error_code ?? e.response?.data?.code ?? "UNKNOWN_ERROR",
+    message:
+      e.response?.data?.error_message ??
+      e.response?.data?.message ??
+      e.response?.data?.error ??
+      e.message ??
+      "Erreur inconnue",
+    retryable:
+      typeof e.response?.data?.retryable === "boolean"
+        ? e.response?.data?.retryable
+        : undefined,
+  };
+}
+
+function toFailureReason(error: unknown): string {
+  const axiosError = error as AxiosError;
+  if (axiosError.code) return axiosError.code;
+  if (axiosError.response?.status) return `http_${axiosError.response.status}`;
+  return "unknown_error";
+}
+
+async function runWithCircuitBreaker<T>(
+  scope: HttpCircuitBreakerScope,
+  operation: () => Promise<T>
+): Promise<T> {
+  if (!shouldAllowHttpRequest(scope)) {
+    throw {
+      status: null,
+      code: "HTTP_CIRCUIT_BREAKER_OPEN",
+      message: `Circuit breaker HTTP ouvert (${scope})`,
+      retryable: true,
+    } satisfies DriverApiError;
+  }
+  try {
+    const result = await operation();
+    onHttpRequestSuccess(scope);
+    return result;
+  } catch (error) {
+    onHttpRequestFailure(scope, toFailureReason(error));
+    throw normalizeError(error);
+  }
+}
+
+function asArray(value: unknown): DriverMission[] {
+  if (Array.isArray(value)) {
+    return value as DriverMission[];
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (Array.isArray(obj.items)) return obj.items as DriverMission[];
+    if (Array.isArray(obj.results)) return obj.results as DriverMission[];
+    if (Array.isArray(obj.data)) return obj.data as DriverMission[];
+    if (Array.isArray(obj.bookings)) return obj.bookings as DriverMission[];
+  }
+  return [];
+}
+
+export async function getDriverMissions(): Promise<DriverMission[]> {
+  return runWithCircuitBreaker("mission_sync", async () => {
+    const { data } = await apiClient.get("/driver/me/bookings");
+    return asArray(data);
+  });
+}
+
+export async function getDriverMissionsSince(sinceIso: string): Promise<DriverMission[]> {
+  return runWithCircuitBreaker("mission_sync", async () => {
+    const { data } = await apiClient.get("/driver/me/bookings/since", {
+      params: { since: sinceIso, include_terminal: true },
+    });
+    return asArray(data);
+  });
+}
+
+export async function getDriverMissionDetail(missionId: number): Promise<DriverMissionDetail> {
+  return runWithCircuitBreaker("mission_sync", async () => {
+    const { data } = await apiClient.get(`/driver/me/bookings/${missionId}`);
+    return data as DriverMissionDetail;
+  });
+}
+
+export async function updateDriverMissionStatus(
+  payload: DriverStatusTransitionPayload
+): Promise<DriverStatusUpdateResult> {
+  return runWithCircuitBreaker("mission_transition", async () => {
+    const { data } = await apiClient.put<DriverStatusUpdateResult>(
+      `/driver/me/bookings/${payload.missionId}/status`,
+      { status: payload.targetStatus, reason: payload.reason ?? null },
+      {
+        headers: {
+          "X-Idempotency-Key": payload.idempotencyKey,
+        },
+      }
+    );
+    return (data ?? {}) as DriverStatusUpdateResult;
+  });
+}
+
+export async function sendDriverLocation(payload: DriverLocationPayload): Promise<DriverLocationAck> {
+  return runWithCircuitBreaker("tracking_http", async () => {
+    const { data } = await apiClient.put("/driver/me/location", {
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+      accuracy: payload.accuracy ?? null,
+      heading: payload.heading ?? null,
+      speed: payload.speed ?? null,
+      is_background: payload.isBackground ?? false,
+      mission_id: payload.missionId ?? null,
+      timestamp: payload.timestamp ?? new Date().toISOString(),
+      location_mode: payload.locationMode ?? "mission_live",
+      tracking_event_id: payload.trackingEventId ?? null,
+    }, {
+      headers: payload.trackingEventId
+        ? {
+            "X-Location-Event-Id": payload.trackingEventId,
+          }
+        : undefined,
+    });
+    const status = String((data as { ack_status?: unknown })?.ack_status ?? "accepted");
+    const ackStatus: DriverLocationAck["ack_status"] =
+      status === "accepted" ||
+      status === "duplicate" ||
+      status === "stale" ||
+      status === "ignored" ||
+      status === "rejected"
+        ? status
+        : "accepted";
+    return {
+      ack_status: ackStatus,
+      accept_reason: typeof (data as { accept_reason?: unknown })?.accept_reason === "string"
+        ? String((data as { accept_reason?: unknown }).accept_reason)
+        : null,
+      tracking_event_id:
+        typeof (data as { tracking_event_id?: unknown })?.tracking_event_id === "string"
+          ? String((data as { tracking_event_id?: unknown }).tracking_event_id)
+          : null,
+      trace_id: typeof (data as { trace_id?: unknown })?.trace_id === "string"
+        ? String((data as { trace_id?: unknown }).trace_id)
+        : null,
+    };
+  });
+}
+
+export async function registerDriverPushToken(
+  payload: DriverPushRegistrationPayload
+): Promise<void> {
+  try {
+    await apiClient.post("/driver/save-push-token", {
+      token: payload.token,
+      driverId: payload.driverId,
+      platform: payload.platform,
+      provider: payload.provider,
+      client_auth_surface: "driver",
+    });
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function quickAcceptDriverMission(missionId: number): Promise<void> {
+  try {
+    await apiClient.post(`/driver/me/bookings/${missionId}/quick-accept`);
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function quickRejectDriverMission(missionId: number): Promise<void> {
+  try {
+    await apiClient.post(`/driver/me/bookings/${missionId}/quick-reject`);
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function quickStartDriverMission(missionId: number): Promise<void> {
+  await updateDriverMissionStatus({
+    missionId,
+    targetStatus: "IN_PROGRESS",
+    idempotencyKey: `push-start-${missionId}-${Date.now()}`,
+  });
+}
+
+export async function quickCompleteDriverMission(missionId: number): Promise<void> {
+  await updateDriverMissionStatus({
+    missionId,
+    targetStatus: "COMPLETED",
+    idempotencyKey: `push-complete-${missionId}-${Date.now()}`,
+  });
+}
+
+export async function updateDriverAvailability(isAvailable: boolean): Promise<void> {
+  try {
+    await apiClient.put("/driver/me/availability", {
+      available: isAvailable,
+    });
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+function normalizeMessages(value: unknown): DriverChatMessage[] {
+  if (!Array.isArray(value)) return [];
+  const messages: DriverChatMessage[] = [];
+  value.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const raw = entry as Record<string, unknown>;
+    const id = raw.id;
+    const content = typeof raw.content === "string" ? raw.content : "";
+    const timestamp =
+      typeof raw.timestamp === "string" && raw.timestamp.length > 0
+        ? raw.timestamp
+        : new Date().toISOString();
+    messages.push({
+      id: typeof id === "string" || typeof id === "number" ? id : `${timestamp}-${content}`,
+      content,
+      sender_role: typeof raw.sender_role === "string" ? raw.sender_role : undefined,
+      sender_name: typeof raw.sender_name === "string" ? raw.sender_name : null,
+      timestamp,
+      image_url: typeof raw.image_url === "string" ? raw.image_url : null,
+      pdf_url: typeof raw.pdf_url === "string" ? raw.pdf_url : null,
+      pdf_filename: typeof raw.pdf_filename === "string" ? raw.pdf_filename : null,
+      audio_url: typeof raw.audio_url === "string" ? raw.audio_url : null,
+    });
+  });
+  return messages;
+}
+
+export async function getDriverMessages(
+  companyId: number,
+  options?: { before?: string; limit?: number }
+): Promise<DriverChatMessage[]> {
+  try {
+    const { data } = await apiClient.get(`/messages/${companyId}`, {
+      params: {
+        before: options?.before,
+        limit: options?.limit ?? 40,
+      },
+    });
+    return normalizeMessages(data);
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverMissionEta(missionId: number): Promise<DriverEtaSnapshot> {
+  try {
+    const { data } = await apiClient.get("/driver/me/bookings/eta", {
+      params: { mission_id: missionId },
+    });
+    const payload = (data ?? {}) as Record<string, unknown>;
+    const etaMinutesRaw = payload.eta_minutes ?? payload.eta ?? null;
+    const etaMinutes = typeof etaMinutesRaw === "number" ? etaMinutesRaw : Number(etaMinutesRaw);
+    return {
+      mission_id: missionId,
+      eta_minutes: Number.isFinite(etaMinutes) ? etaMinutes : null,
+      eta_updated_at:
+        typeof payload.eta_updated_at === "string" && payload.eta_updated_at.length > 0
+          ? payload.eta_updated_at
+          : new Date().toISOString(),
+    };
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverProfile(): Promise<DriverProfile> {
+  const cacheHit = await readDriverProfileCache({ allowStale: false });
+  if (cacheHit.status === "hit" && cacheHit.profile) {
+    return cacheHit.profile;
+  }
+  try {
+    const { data } = await apiClient.get("/driver/me/profile");
+    if (data && typeof data === "object") {
+      const profile = data as DriverProfile;
+      await writeDriverProfileCache(profile);
+      return profile;
+    }
+    return {};
+  } catch (error) {
+    const staleCache = await readDriverProfileCache({ allowStale: true });
+    if (staleCache.profile) {
+      return staleCache.profile;
+    }
+    throw normalizeError(error);
+  }
+}
+
+export async function updateDriverProfile(payload: Partial<DriverProfile>): Promise<DriverProfile> {
+  try {
+    const { data } = await apiClient.put("/driver/me/profile", payload);
+    if (data && typeof data === "object") {
+      const profile = data as DriverProfile;
+      await writeDriverProfileCache(profile);
+      return profile;
+    }
+    return {};
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function updateDriverPhoto(photoUrl: string): Promise<DriverProfile> {
+  try {
+    const { data } = await apiClient.put("/driver/me/photo", {
+      photo_url: photoUrl,
+    });
+    if (data && typeof data === "object") {
+      const profile = data as DriverProfile;
+      await writeDriverProfileCache(profile);
+      return profile;
+    }
+    return {};
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverRoute(): Promise<DriverRouteSnapshot> {
+  try {
+    const { data } = await apiClient.get("/driver/me/route");
+    if (data && typeof data === "object") {
+      return data as DriverRouteSnapshot;
+    }
+    return {};
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverBookingsAll(): Promise<DriverMission[]> {
+  try {
+    const { data } = await apiClient.get("/driver/me/bookings/all");
+    return asArray(data);
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverCompanyBookingsToday(): Promise<DriverMission[]> {
+  try {
+    const { data } = await apiClient.get("/driver/me/company-bookings/today");
+    return asArray(data);
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function getDriverCompletedTrips(driverId: number): Promise<DriverCompletedTrip[]> {
+  try {
+    const { data } = await apiClient.get(`/drivers/${driverId}/completed-trips`);
+    if (Array.isArray(data)) return data as DriverCompletedTrip[];
+    if (data && typeof data === "object") {
+      const payload = data as Record<string, unknown>;
+      if (Array.isArray(payload.items)) return payload.items as DriverCompletedTrip[];
+      if (Array.isArray(payload.results)) return payload.results as DriverCompletedTrip[];
+      if (Array.isArray(payload.data)) return payload.data as DriverCompletedTrip[];
+      if (Array.isArray(payload.bookings)) return payload.bookings as DriverCompletedTrip[];
+    }
+    return [];
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+
+export async function triggerDriverTestPush(): Promise<void> {
+  try {
+    await apiClient.post("/driver/me/test-push");
+  } catch (error) {
+    throw normalizeError(error);
+  }
+}
+

@@ -25,6 +25,7 @@ import {
 import { FaSignOutAlt, FaChevronDown } from 'react-icons/fa';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
 import { logoutUser } from '../../../../utils/apiClient';
+import { getActiveUser, getAuthEnv } from '../../../../utils/webAuthSession';
 import styles from './CompanySidebar.module.css';
 
 function getInitials(name = '') {
@@ -92,14 +93,7 @@ const CompanySidebar = () => {
   }, []);
 
   // User data from localStorage
-  const userData = useMemo(() => {
-    try {
-      const raw = localStorage.getItem('user') || localStorage.getItem('company_user');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  }, []);
+  const userData = useMemo(() => getActiveUser(), []);
 
   const userEmail = userData?.email || '';
   const userRole = userData?.role || 'company';
@@ -125,7 +119,7 @@ const CompanySidebar = () => {
 
   const isDemoEnv =
     location.pathname.startsWith('/demo/') ||
-    (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+    getAuthEnv() === 'demo';
   const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
   const basePath = `${dashboardRoot}/company/${public_id}`;
 
@@ -151,7 +145,7 @@ const CompanySidebar = () => {
     <aside className={styles.sidebar}>
       {/* ── Branding ── */}
       <div className={styles.sidebarBrand}>
-        <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} />
+        <img src="/icon-dark.png" alt="Lirie" className={styles.brandLogo} width="36" height="36" />
         <div className={styles.brandText}>
           <span className={styles.brandName}>Lirie</span>
           <span className={styles.brandSub}>Espace Entreprise</span>
@@ -170,6 +164,8 @@ const CompanySidebar = () => {
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navActive : ''}`
               }
+              aria-label={item.label}
+              title={item.label}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -197,6 +193,8 @@ const CompanySidebar = () => {
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navActive : ''}`
               }
+              aria-label={item.label}
+              title={item.label}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -216,6 +214,8 @@ const CompanySidebar = () => {
               className={({ isActive }) =>
                 `${styles.navItem} ${isActive ? styles.navActive : ''}`
               }
+              aria-label={item.label}
+              title={item.label}
             >
               <span className={styles.navIcon}>{item.icon}</span>
               <span className={styles.navText}>{item.label}</span>
@@ -233,6 +233,9 @@ const CompanySidebar = () => {
           className={styles.userBtn}
           onClick={() => setUserMenuOpen((p) => !p)}
           aria-label="Menu utilisateur"
+          aria-expanded={userMenuOpen}
+          aria-haspopup="menu"
+          type="button"
         >
           <div className={styles.userAvatar}>{initials}</div>
           <div className={styles.userMeta}>
@@ -248,7 +251,7 @@ const CompanySidebar = () => {
           <div className={styles.userDropdown}>
             {userEmail && <div className={styles.userDropdownEmail}>{userEmail}</div>}
             <div className={styles.userDropdownDivider} />
-            <button className={styles.userDropdownItem} onClick={handleLogout}>
+            <button className={styles.userDropdownItem} onClick={handleLogout} type="button">
               <FaSignOutAlt />
               <span>Se déconnecter</span>
             </button>

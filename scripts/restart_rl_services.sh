@@ -2,7 +2,9 @@
 # Script pour redémarrer tous les services RL
 # Usage: ./scripts/restart_rl_services.sh
 
-SERVER="${1:-deploy@138.201.155.201}"
+: "${SERVER_HOST:?Définir SERVER_HOST. Voir docs/deployment-ssh.md.}"
+SERVER_USER="${SERVER_USER:-deploy}"
+SERVER="${1:-${SERVER_USER}@${SERVER_HOST}}"
 
 echo "🔄 Redémarrage des services RL..."
 echo "Serveur: $SERVER"

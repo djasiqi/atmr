@@ -4,7 +4,7 @@
 
 set -e
 
-SERVER_HOST="${SERVER_HOST:-138.201.155.201}"
+: "${SERVER_HOST:?Définir SERVER_HOST. Voir docs/deployment-ssh.md.}"
 SERVER_USER="${SERVER_USER:-deploy}"
 SERVER_PATH="${SERVER_PATH:-/srv/atmr}"
 

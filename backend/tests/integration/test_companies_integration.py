@@ -74,7 +74,9 @@ class TestCompaniesIntegration:
             "last_name": "Client",
             "email": "newclient@test.ch",
             "phone": "0211234567",
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
+            "address": "Rue du Test 1, 1200 Genève",
         }
 
         response = authenticated_client.post(url, json=payload)

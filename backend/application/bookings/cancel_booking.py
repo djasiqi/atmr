@@ -64,8 +64,8 @@ class CancelBookingUseCase:
 
     def execute(self, input_data: CancelBookingInput) -> CancelBookingOutput:
         booking = input_data.booking
-        status = _status_value(getattr(booking, "status", None))
-        if status not in {"pending", "assigned"}:
+        status = _status_value(getattr(booking, "status", None)).strip().lower()
+        if status not in {"pending", "assigned", "awaiting_client_payment"}:
             return CancelBookingOutput(
                 success=False,
                 error={

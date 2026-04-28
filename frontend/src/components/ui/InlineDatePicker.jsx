@@ -107,7 +107,15 @@ function smartComplete(digits) {
   return null;
 }
 
-export default function InlineDatePicker({ value, onChange, placeholder: _placeholder }) {
+export default function InlineDatePicker({
+  value,
+  onChange,
+  placeholder: _placeholder,
+  className = '',
+  inputClassName = '',
+  invalid = false,
+  inputId,
+}) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
@@ -257,18 +265,20 @@ export default function InlineDatePicker({ value, onChange, placeholder: _placeh
 
   return (
     <>
-      <div ref={wrapperRef} className={dp.field}>
+      <div ref={wrapperRef} className={`${dp.field} ${className}`.trim()}>
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           inputMode="numeric"
-          className={`form-input ${dp.input} ${inputError ? 'error' : ''}`}
+          className={`form-input ${dp.input} ${inputClassName} ${inputError ? 'error' : ''}`.trim()}
           value={masked || ''}
           onChange={handleInputChange}
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
           placeholder="__.__.____"
           maxLength={10}
+          aria-invalid={invalid || inputError}
         />
         <button
           type="button"

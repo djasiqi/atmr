@@ -6,18 +6,18 @@ import { fetchAssignedReservations, fetchCompanyReservations } from '../services
  */
 export const useDispatchData = (date, dispatchMode) => {
   const [dispatches, setDispatches] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // true: évite un frame « vide / aucune course » avant le premier fetch
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const loadDispatches = useCallback(async () => {
+    if (dispatchMode == null) {
+      return;
+    }
     setLoading(true);
     setError(null);
 
     try {
-      // 🐛 DEBUG: Log pour voir quelle valeur de dispatchMode est utilisée
-      console.log('[useDispatchData] dispatchMode:', dispatchMode, 'type:', typeof dispatchMode);
-      console.log('[useDispatchData] Comparison with "manual":', dispatchMode === 'manual');
-      
       // En mode Manuel : charger TOUTES les réservations du jour (pas seulement les assignées)
       // En modes Semi-Auto et Fully-Auto : charger les réservations assignées/dispatched
       const data =

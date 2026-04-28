@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from models.enums import ClientType
+from models.enums import ClientType, ManagementMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,9 +26,11 @@ class ClientDTO:
     id: int
     user_id: int
     company_id: int | None = None
+    default_billed_to_company_id: int | None = None
 
     # Type de client
-    client_type: ClientType = ClientType.SELF_SERVICE
+    client_type: ClientType = ClientType.PORTAL
+    management_mode: ManagementMode | None = None
 
     # Coordonnées de facturation/contacts
     billing_address: str | None = None
@@ -81,10 +83,16 @@ class ClientDTO:
             "id": self.id,
             "user_id": self.user_id,
             "company_id": self.company_id,
+            "default_billed_to_company_id": self.default_billed_to_company_id,
             "client_type": (
                 self.client_type.value
                 if hasattr(self.client_type, "value")
                 else str(self.client_type)
+            ),
+            "management_mode": (
+                self.management_mode.value
+                if self.management_mode and hasattr(self.management_mode, "value")
+                else self.management_mode
             ),
             "billing_address": self.billing_address,
             "billing_lat": float(self.billing_lat) if self.billing_lat else None,

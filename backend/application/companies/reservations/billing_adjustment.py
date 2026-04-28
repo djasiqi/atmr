@@ -1,0 +1,236 @@
+"""Ajustement facturation (montant, billed_to) par l'entreprise de transport — PATCH dédié."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from ext import db
+from models import Invoice, InvoiceLine
+from models.booking import Booking
+from models.company import Company
+from models.enums import BookingCreatedVia, InvoiceStatus
+
+from ._status import status_value
+
+
+def _active_invoice_line_exists(booking_id: int) -> bool:
+    return (
+        db.session.query(InvoiceLine)
+        .join(Invoice, InvoiceLine.invoice_id == Invoice.id)
+        .filter(
+            InvoiceLine.reservation_id == booking_id,
+            Invoice.status != InvoiceStatus.CANCELLED,
+        )
+        .first()
+        is not None
+    )
+
+
+def booking_billing_is_locked(booking: Booking) -> tuple[bool, str | None]:
+    if getattr(booking, "billing_locked_at", None) is not None:
+        return True, "La facturation de cette réservation est verrouillée (billing_locked_at)."
+    if getattr(booking, "invoice_line_id", None) is not None:
+        return (
+            True,
+            "Cette réservation est déjà rattachée à une ligne de facture.",
+        )
+    if _active_invoice_line_exists(int(booking.id)):
+        return (
+            True,
+            "Une facture non annulée contient déjà une ligne pour cette réservation.",
+        )
+    return False, None
+
+
+def _company_may_adjust_billing_by_origin(booking: Any) -> tuple[bool, str | None]:
+    """Ajustement patient/clinique : réservé aux saisies entreprise (dispatch), pas invité / portail / API."""
+    raw = getattr(booking, "created_via", None)
+    if raw is None:
+        return True, None
+    v = raw.value if isinstance(raw, BookingCreatedVia) else str(raw).lower()
+    blocked = {
+        BookingCreatedVia.PUBLIC_GUEST.value,
+        BookingCreatedVia.CLIENT_APP.value,
+        BookingCreatedVia.API_PARTNER.value,
+        BookingCreatedVia.INSTITUTION_PORTAL.value,
+    }
+    if v in blocked:
+        return (
+            False,
+            "L'ajustement du destinataire de facture n'est disponible que pour les courses "
+            "créées manuellement par l'entreprise (saisie dispatch). Les demandes invité, "
+            "portail client, institution ou partenaire API ne sont pas modifiables ici.",
+        )
+    return True, None
+
+
+@dataclass(frozen=True, slots=True)
+class BookingBillingAdjustmentResult:
+    ok: bool
+    error: dict[str, Any] | None = None
+    status_code: int | None = None
+    # Pour audit côté route
+    before: dict[str, Any] | None = None
+    after: dict[str, Any] | None = None
+
+
+class CompanyBookingBillingAdjustmentUseCase:
+    """PATCH billing-adjustment : ne pas mélanger avec le PUT opérationnel."""
+
+    _TERMINAL_EXCLUDE: frozenset[str] = frozenset(
+        {
+            "canceled",
+            "cancelled",
+            "no_show",
+            "rejected",
+        }
+    )
+
+    def execute(  # noqa: PLR0911 — validations métier explicites
+        self,
+        booking: Booking,
+        *,
+        data: dict[str, Any],
+        keys_present: set[str],
+    ) -> BookingBillingAdjustmentResult:
+        st = status_value(getattr(booking, "status", None)).lower()
+        if st in self._TERMINAL_EXCLUDE:
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": "Impossible d'ajuster la facturation d'une réservation annulée."},
+                status_code=400,
+            )
+
+        allow_origin, origin_msg = _company_may_adjust_billing_by_origin(booking)
+        if not allow_origin:
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": origin_msg or "Ajustement de facturation non autorisé."},
+                status_code=400,
+            )
+
+        locked, lock_msg = booking_billing_is_locked(booking)
+        if locked:
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": lock_msg or "Facturation non modifiable."},
+                status_code=409,
+            )
+
+        override = (data.get("override_reason") or "").strip()
+        if not override:
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": "Le champ override_reason est obligatoire."},
+                status_code=400,
+            )
+
+        has_amount = "amount" in keys_present and data.get("amount") is not None
+        has_btype = "billed_to_type" in keys_present and data.get("billed_to_type") is not None
+        has_bcomp = "billed_to_company_id" in keys_present
+
+        if not (has_amount or has_btype or has_bcomp):
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={
+                    "error": "Au moins un champ amount, billed_to_type ou "
+                    "billed_to_company_id est requis."
+                },
+                status_code=400,
+            )
+
+        raw_old_type = getattr(booking, "billed_to_type", None) or "patient"
+        old_type_str = str(raw_old_type).lower().strip()
+        old = {
+            "amount": float(booking.amount) if booking.amount is not None else None,
+            "billed_to_type": old_type_str,
+            "billed_to_company_id": getattr(booking, "billed_to_company_id", None),
+        }
+
+        if has_btype and data.get("billed_to_type") is not None:
+            target_btype = str(data["billed_to_type"]).lower().strip()
+        else:
+            target_btype = old_type_str
+        if target_btype not in ("patient", "clinic", "insurance"):
+            return BookingBillingAdjustmentResult(
+                ok=False,
+                error={"error": "billed_to_type invalide (patient, clinic, insurance)."},
+                status_code=400,
+            )
+
+        target_bcomp: int | None
+        if has_bcomp:
+            raw = data["billed_to_company_id"]
+            if raw is None:
+                target_bcomp = None
+            else:
+                try:
+                    target_bcomp = int(raw)
+                except (TypeError, ValueError):
+                    return BookingBillingAdjustmentResult(
+                        ok=False,
+                        error={"error": "billed_to_company_id invalide."},
+                        status_code=400,
+                    )
+        else:
+            target_bcomp = old["billed_to_company_id"]
+
+        if target_btype == "patient":
+            if has_bcomp and target_bcomp is not None:
+                return BookingBillingAdjustmentResult(
+                    ok=False,
+                    error={"error": "billed_to_company_id doit être absent ou null si billed_to_type vaut patient."},
+                    status_code=400,
+                )
+            target_bcomp = None
+        else:
+            if target_bcomp is None or (isinstance(target_bcomp, int) and target_bcomp <= 0):
+                return BookingBillingAdjustmentResult(
+                    ok=False,
+                    error={
+                        "error": f"billed_to_company_id est obligatoire et strictement positif pour billed_to_type={target_btype}."
+                    },
+                    status_code=400,
+                )
+            c = db.session.get(Company, int(target_bcomp))
+            if c is None:
+                return BookingBillingAdjustmentResult(
+                    ok=False,
+                    error={"error": "billed_to_company_id : entreprise cible introuvable."},
+                    status_code=400,
+                )
+
+        if has_amount:
+            try:
+                amt = float(data["amount"])
+            except (TypeError, ValueError):
+                return BookingBillingAdjustmentResult(
+                    ok=False,
+                    error={"error": "amount invalide."},
+                    status_code=400,
+                )
+            if amt < 0 or (amt > 0 and amt < 0.5):  # noqa: PLR2004 — aligné schéma réservation
+                return BookingBillingAdjustmentResult(
+                    ok=False,
+                    error={"error": "Le montant doit être nul ou au moins 0,50 CHF."},
+                    status_code=400,
+                )
+            booking.amount = round(amt, 2)
+        booking.billed_to_type = target_btype
+        booking.billed_to_company_id = target_bcomp
+
+        after = {
+            "amount": float(booking.amount) if booking.amount is not None else None,
+            "billed_to_type": str(getattr(booking, "billed_to_type", None) or "patient")
+            .lower()
+            .strip(),
+            "billed_to_company_id": getattr(booking, "billed_to_company_id", None),
+        }
+
+        return BookingBillingAdjustmentResult(
+            ok=True,
+            before=old,
+            after=after,
+            status_code=200,
+        )

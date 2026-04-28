@@ -45,84 +45,74 @@ const Signup = () => {
 
   // Validation du formulaire
   const validateForm = () => {
-    const { username, email, password } = formData;
+    const { username, email, password, phone } = formData;
 
-    if (!username || !email.trim() || !password) {
-      setErrorMessage('Tous les champs obligatoires doivent être remplis.');
+    if (!username.trim() || !email.trim() || !password) {
+      setErrorMessage(‘Tous les champs obligatoires doivent être remplis.’);
       return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setErrorMessage('Veuillez entrer une adresse email valide.');
+      setErrorMessage(‘Veuillez entrer une adresse email valide.’);
       return false;
     }
 
     if (password.length < 8) {
-      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
+      setErrorMessage(‘Le mot de passe doit contenir au moins 8 caractères.’);
+      return false;
+    }
+
+    if (!phone.trim() || phone.trim().length < 7) {
+      setErrorMessage(‘Un numéro de téléphone valide est requis.’);
       return false;
     }
 
     return true;
   };
 
-  // Gestion de l'envoi du formulaire
+  // Gestion de l’envoi du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) return; // Validation avant d'envoyer les données
-
-    console.log('Données soumises :', formData); // Debugging : Vérifiez les données envoyées
+    if (!validateForm()) return;
 
     try {
-      // ✅ Appeler le bon endpoint via apiClient (baseURL = /api)
-      const response = await apiClient.post('/auth/register', formData);
+      const response = await apiClient.post(‘/auth/register’, {
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        phone: formData.phone.trim(),
+        address: formData.address.trim() || undefined,
+      });
 
-      console.log('Réponse du backend :', response.data); // Loguez la réponse pour confirmation
-      setSuccessMessage(response.data.message);
-      setErrorMessage('');
+      const { activation_session_id, masked_email, masked_phone } = response.data || {};
 
-      // Redirection vers le tableau de bord
-      // 🔐 Option 1 (UX ++) : auto-login après inscription
-      try {
-        const { email, password } = formData;
-        const loginRes = await apiClient.post('/auth/login', {
-          email,
-          password,
-        });
-        const { token, user, refresh_token } = loginRes.data || {};
-        if (token && user) {
-          localStorage.setItem('authToken', token);
-          if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
-          const role = String((user.role || '').toLowerCase());
-          localStorage.setItem('user', JSON.stringify({ ...user, role }));
-          localStorage.setItem('public_id', user.public_id);
-          navigate(`/dashboard/${role}/${user.public_id}`, { replace: true });
-        } else {
-          // fallback : si pas de token, on envoie sur la page login
-          navigate('/login', { replace: true });
+      if (!activation_session_id) {
+        setErrorMessage("Inscription créée mais session d’activation manquante. Contactez le support.");
+        return;
+      }
+
+      navigate(
+        `/activate-account?activation_session_id=${encodeURIComponent(activation_session_id)}`,
+        {
+          replace: true,
+          state: {
+            maskedEmail: masked_email ?? ‘’,
+            maskedPhone: masked_phone ?? ‘’,
+            prefillEmail: formData.email.trim(),
+          },
         }
-      } catch {
-        // fallback : si l’auto-login échoue
-        navigate('/login', { replace: true });
-      }
+      );
     } catch (error) {
-      // Détectez les erreurs de type CORS
-      if (error.message === 'Network Error') {
-        console.error('Erreur réseau détectée. Cela peut indiquer un problème CORS.');
-        setErrorMessage(
-          'Impossible de communiquer avec le serveur. Vérifiez la configuration CORS.'
-        );
-      } else if (error.response) {
-        // Loguez les détails de l'erreur côté serveur
-        console.error('Erreur du serveur :', error.response.data);
-        setErrorMessage(error.response.data.error || "Une erreur s'est produite.");
-      } else {
-        console.error('Erreur inattendue :', error);
-        setErrorMessage('Une erreur inattendue est survenue.');
-      }
-
-      setSuccessMessage(''); // Réinitialiser les messages de succès
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        (error?.message === ‘Network Error’
+          ? ‘Impossible de communiquer avec le serveur.’
+          : "Une erreur s’est produite.");
+      setErrorMessage(msg);
+      setSuccessMessage(‘’);
     }
   };
 

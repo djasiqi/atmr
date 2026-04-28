@@ -5,6 +5,7 @@ import useAuthToken from '../../hooks/useAuthToken';
 import { trackDemoEvent } from '../../services/demoAnalyticsService';
 import { setDemoPassword } from '../../services/demoAccessService';
 import { setCurrentAuthEnv } from '../../utils/apiClient';
+import { getAuthEnv, writeAuthSession } from '../../utils/webAuthSession';
 import styles from './DemoHome.module.css';
 
 const normalizeDemoRole = (rawRole) => {
@@ -37,7 +38,7 @@ const DemoHome = () => {
   const publicId = user?.public_id;
   const mustSetPassword = Boolean(user?.force_password_change) && !passwordSetupDone;
   const recommendedJourney = useMemo(() => {
-    const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
+    const env = getAuthEnv();
     return String(
       localStorage.getItem(`${env}_demo_recommended_journey`) ||
         localStorage.getItem('demo_recommended_journey') ||
@@ -94,42 +95,20 @@ const DemoHome = () => {
       const env = setCurrentAuthEnv(result?.target_env || 'demo');
       const rawUser = result?.user || null;
       const role = normalizeDemoRole(rawUser?.role);
-      const userPayload = rawUser
-        ? JSON.stringify({ ...rawUser, role, force_password_change: false })
+      const sessionUser = rawUser
+        ? { ...rawUser, role, force_password_change: false }
         : null;
       const accessToken = result?.token || result?.access_token || null;
       const refreshToken = result?.refresh_token || null;
 
-      if (userPayload) {
-        localStorage.setItem(`${env}_user`, userPayload);
-        localStorage.setItem('user', userPayload);
-        localStorage.setItem(`${env}_public_id`, rawUser?.public_id || '');
-        localStorage.setItem('public_id', rawUser?.public_id || '');
-        if (role === 'company' || role === 'admin') {
-          localStorage.setItem('company_user', userPayload);
-          localStorage.setItem('company_public_id', rawUser?.public_id || '');
-        } else if (role === 'institution') {
-          localStorage.setItem('institution_user', userPayload);
-          localStorage.setItem('institution_public_id', rawUser?.public_id || '');
-        }
-      }
-      if (accessToken) {
-        localStorage.setItem(`${env}_access_token`, accessToken);
-        localStorage.setItem('authToken', accessToken);
-        if (role === 'company' || role === 'admin') {
-          localStorage.setItem('company_access_token', accessToken);
-        } else if (role === 'institution') {
-          localStorage.setItem('institution_access_token', accessToken);
-        }
-      }
-      if (refreshToken) {
-        localStorage.setItem(`${env}_refresh_token`, refreshToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        if (role === 'company' || role === 'admin') {
-          localStorage.setItem('company_refresh_token', refreshToken);
-        } else if (role === 'institution') {
-          localStorage.setItem('institution_refresh_token', refreshToken);
-        }
+      if (sessionUser) {
+        writeAuthSession({
+          env,
+          user: sessionUser,
+          role,
+          accessToken,
+          refreshToken,
+        });
       }
       window.dispatchEvent(new Event('auth-changed'));
       setPasswordSetupDone(true);

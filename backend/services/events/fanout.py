@@ -286,6 +286,14 @@ def _send_push_to_driver(
                 pass
 
         notification_type = data.get("type", "unknown") if data else "unknown"
+        if data:
+            booking_id = data.get("booking_id")
+            if booking_id is not None and data.get("mission_id") is None:
+                data["mission_id"] = booking_id
+            data.setdefault(
+                "payload_schema_version",
+                "booking_v1" if data.get("booking_id") is not None else "mission_v2",
+            )
 
         # ✅ Phase 1 - Quick Wins: Ajouter le canal Android approprié
         data["channelId"] = _get_notification_channel(notification_type)

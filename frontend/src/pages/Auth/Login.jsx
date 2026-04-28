@@ -1,11 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useLocation, Link, useSearchParams } from 'react-router-dom';
+
 import apiClient, { cleanLocalSession, setCurrentAuthEnv } from '../../utils/apiClient';
 import { jwtDecode } from 'jwt-decode';
 import { queryClient } from '../../App';
+import { buildSafeAppPath, pathFromNextQueryParam } from '../../utils/safeReturnPath';
+import { hasActiveSession, writeAuthSession } from '../../utils/webAuthSession';
+import { linkMobilityProfileToUser, saveMobilityProfileForEmail } from '../../utils/clientMobilityProfile';
+import {
+  getPendingActivationByEmail,
+  removePendingActivationByEmail,
+  setPendingActivationSession,
+} from '../../utils/activationSessionStore';
+import useAuthToken from '../../hooks/useAuthToken';
+import AddressAutocomplete from '../../components/common/AddressAutocomplete';
 import styles from './Login.module.css';
+import institutionStyles from '../institution/Requests/InstitutionRequestForm.module.css';
 
 const REMEMBER_KEY = 'lirie_remember_me';
+const SIGNUP_DISABLED =
+  process.env.REACT_APP_SIGNUP_DISABLED === 'true' || process.env.REACT_APP_SIGNUP_DISABLED === '1';
+const CIVILITY_OPTIONS = [
+  { value: '', label: 'Civilité' },
+  { value: 'Mme', label: 'Mme' },
+  { value: 'M.', label: 'M.' },
+  { value: 'Autre', label: 'Autre' },
+];
 
 const EyeIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -21,53 +41,162 @@ const EyeOffIcon = () => (
   </svg>
 );
 
-const MailIcon = () => (
-  <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="4" width="20" height="16" rx="2" />
-    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg className={styles.inputIcon} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
 const Login = () => {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const authUser = useAuthToken();
+  const modeParam = String(searchParams.get('mode') || '').toLowerCase();
+  const authMode = modeParam === 'signup' ? 'signup' : 'login';
+  const isSignupMode = authMode === 'signup';
   const justActivated = location.state?.activated === true;
+  const nextFromQuery = pathFromNextQueryParam(searchParams.get('next') || '');
+  const fromProtectedRoute = location.state?.from;
+  const safeReturnFromState =
+    fromProtectedRoute?.pathname != null
+      ? buildSafeAppPath(fromProtectedRoute.pathname, fromProtectedRoute.search || '')
+      : null;
 
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [showPassword, setShowPassword] = useState(false);
+  const [loginFormData, setLoginFormData] = useState({ email: '', password: '' });
+  const [signupFormData, setSignupFormData] = useState({
+    civility: '',
+    firstName: '',
+    lastName: '',
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    phone: '',
+    address: '',
+    needsWheelchair: false,
+    needsElectricWheelchair: false,
+    needsWalkingAid: false,
+    needsDoorToDoorAssistance: false,
+    assistanceLevel: '',
+    emergencyContact: '',
+    mobilityNotes: '',
+  });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [isCivilityOpen, setIsCivilityOpen] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage] = useState(
-    justActivated ? 'Compte activé avec succès ! Connectez-vous avec votre nouveau mot de passe.' : ''
-  );
+  const [successMessage, setSuccessMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const civilityDropdownRef = useRef(null);
+  const hasSafeNext = Boolean(nextFromQuery || safeReturnFromState);
+  const loginSearch = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('mode', 'login');
+    if (nextFromQuery) params.set('next', nextFromQuery);
+    const raw = params.toString();
+    return raw ? `?${raw}` : '';
+  }, [nextFromQuery]);
+  const signupSearch = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('mode', 'signup');
+    if (nextFromQuery) params.set('next', nextFromQuery);
+    const raw = params.toString();
+    return raw ? `?${raw}` : '';
+  }, [nextFromQuery]);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(REMEMBER_KEY);
       if (saved) {
         const { email, password } = JSON.parse(saved);
-        setFormData({ email: email || '', password: password || '' });
+        setLoginFormData({ email: email || '', password: password || '' });
         setRememberMe(true);
       }
     } catch { /* ignore corrupted data */ }
   }, []);
 
-  const handleInputChange = (e) => {
+  useEffect(() => {
+    if (justActivated) {
+      setSuccessMessage('Compte activé avec succès ! Connectez-vous avec votre nouveau mot de passe.');
+    }
+    if (location.state?.signupSuccess === true) {
+      setSuccessMessage('Inscription réussie. Connectez-vous pour continuer.');
+    }
+    if (location.state?.prefillEmail && typeof location.state.prefillEmail === 'string') {
+      setLoginFormData((prev) => ({ ...prev, email: location.state.prefillEmail }));
+    }
+  }, [justActivated, location.state]);
+
+  useEffect(() => {
+    if (!authUser || !hasActiveSession()) return;
+    const destination = nextFromQuery || safeReturnFromState || '/dashboard';
+    navigate(destination, { replace: true });
+  }, [authUser, navigate, nextFromQuery, safeReturnFromState]);
+
+  useEffect(() => {
+    setErrorMessage('');
+    setIsCivilityOpen(false);
+  }, [authMode]);
+
+  useEffect(() => {
+    if (!isCivilityOpen) return undefined;
+    const handleDocumentMouseDown = (event) => {
+      if (!civilityDropdownRef.current) return;
+      if (!civilityDropdownRef.current.contains(event.target)) {
+        setIsCivilityOpen(false);
+      }
+    };
+    const handleDocumentEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsCivilityOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+    document.addEventListener('keydown', handleDocumentEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown);
+      document.removeEventListener('keydown', handleDocumentEscape);
+    };
+  }, [isCivilityOpen]);
+
+  const handleLoginInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setLoginFormData({ ...loginFormData, [name]: value });
     setErrorMessage('');
   };
 
-  const validateForm = () => {
-    const { email, password } = formData;
+  const handleSignupInputChange = (e) => {
+    const { name, value } = e.target;
+    setSignupFormData({ ...signupFormData, [name]: value });
+    setErrorMessage('');
+  };
+
+  const handleSignupToggleChange = (name) => {
+    setSignupFormData((prev) => ({
+      ...prev,
+      [name]: !prev[name],
+    }));
+    setErrorMessage('');
+  };
+
+  const handleCivilitySelect = (value) => {
+    setSignupFormData((prev) => ({ ...prev, civility: value }));
+    setIsCivilityOpen(false);
+    setErrorMessage('');
+  };
+
+  const handleClearMobilityNeeds = () => {
+    setSignupFormData((prev) => ({
+      ...prev,
+      needsWheelchair: false,
+      needsElectricWheelchair: false,
+      needsWalkingAid: false,
+      needsDoorToDoorAssistance: false,
+      assistanceLevel: '',
+      emergencyContact: '',
+      mobilityNotes: '',
+    }));
+    setErrorMessage('');
+  };
+
+  const validateLoginForm = () => {
+    const { email, password } = loginFormData;
 
     if (!email.trim() || !password) {
       setErrorMessage('Veuillez remplir tous les champs.');
@@ -88,14 +217,46 @@ const Login = () => {
     return true;
   };
 
-  const handleSubmit = async (e) => {
+  const validateSignupForm = () => {
+    const { firstName, lastName, email, password, confirmPassword, phone, address } = signupFormData;
+
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword || !phone.trim() || !address.trim()) {
+      setErrorMessage('Tous les champs obligatoires doivent être remplis.');
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setErrorMessage('Veuillez entrer une adresse email valide.');
+      return false;
+    }
+
+    if (password.length < 8) {
+      setErrorMessage('Le mot de passe doit contenir au moins 8 caractères.');
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Les mots de passe ne correspondent pas.');
+      return false;
+    }
+
+    if (phone.trim().length < 6) {
+      setErrorMessage('Veuillez entrer un numéro de téléphone valide.');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
 
-    if (!validateForm()) return;
+    if (!validateLoginForm()) return;
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/auth/login', formData, { skipCsrf: true });
+      const response = await apiClient.post('/auth/login', loginFormData, { skipCsrf: true });
       const { token, user, refresh_token, target_env, redirect_to } = response.data;
 
       if (!user || !user.role || !user.public_id) {
@@ -106,8 +267,8 @@ const Login = () => {
 
       if (rememberMe) {
         localStorage.setItem(REMEMBER_KEY, JSON.stringify({
-          email: formData.email,
-          password: formData.password,
+          email: loginFormData.email,
+          password: loginFormData.password,
         }));
       } else {
         localStorage.removeItem(REMEMBER_KEY);
@@ -124,60 +285,64 @@ const Login = () => {
         roleSegment = String(user.role || '').toLowerCase();
       }
 
-      const userPayload = JSON.stringify({ ...user, role: roleSegment });
-      localStorage.setItem(`${authEnv}_user`, userPayload);
-      localStorage.setItem(`${authEnv}_public_id`, user.public_id);
-      if (token) localStorage.setItem(`${authEnv}_access_token`, token);
-      if (refresh_token) localStorage.setItem(`${authEnv}_refresh_token`, refresh_token);
-
-      if (roleSegment === 'company' || roleSegment === 'admin') {
-        localStorage.removeItem('driver_access_token');
-        localStorage.removeItem('driver_refresh_token');
-        localStorage.removeItem('driver_user');
-        localStorage.removeItem('driver_public_id');
-        localStorage.setItem('company_user', userPayload);
-        localStorage.setItem('company_public_id', user.public_id);
-        if (token) localStorage.setItem('company_access_token', token);
-        if (refresh_token) localStorage.setItem('company_refresh_token', refresh_token);
-      } else if (roleSegment === 'driver') {
-        localStorage.removeItem('company_access_token');
-        localStorage.removeItem('company_refresh_token');
-        localStorage.removeItem('company_user');
-        localStorage.removeItem('company_public_id');
-        localStorage.setItem('driver_user', userPayload);
-        localStorage.setItem('driver_public_id', user.public_id);
-        if (token) localStorage.setItem('driver_access_token', token);
-        if (refresh_token) localStorage.setItem('driver_refresh_token', refresh_token);
-      } else if (roleSegment === 'institution') {
-        localStorage.removeItem('company_access_token');
-        localStorage.removeItem('company_refresh_token');
-        localStorage.removeItem('company_user');
-        localStorage.removeItem('company_public_id');
-        localStorage.removeItem('driver_access_token');
-        localStorage.removeItem('driver_refresh_token');
-        localStorage.removeItem('driver_user');
-        localStorage.removeItem('driver_public_id');
-        localStorage.setItem('institution_user', userPayload);
-        localStorage.setItem('institution_public_id', user.public_id);
-        if (token) localStorage.setItem('institution_access_token', token);
-        if (refresh_token) localStorage.setItem('institution_refresh_token', refresh_token);
-      }
-
-      localStorage.setItem('user', userPayload);
-      localStorage.setItem('public_id', user.public_id);
-      if (token) localStorage.setItem('authToken', token);
-      if (refresh_token) localStorage.setItem('refreshToken', refresh_token);
+      writeAuthSession({
+        env: authEnv,
+        user,
+        role: roleSegment,
+        accessToken: token,
+        refreshToken: refresh_token,
+      });
+      removePendingActivationByEmail(loginFormData.email);
+      linkMobilityProfileToUser({
+        publicId: user.public_id,
+        email: user.email || loginFormData.email,
+      });
 
       window.dispatchEvent(new Event('auth-changed'));
 
       if (user.force_password_change) {
         navigate(`/force-reset-password/${user.public_id}`, { replace: true });
       } else {
-        navigate(redirect_to || `/dashboard/${roleSegment}/${user.public_id}`, { replace: true });
+        const preferredReturn = safeReturnFromState || nextFromQuery;
+        const destination =
+          redirect_to ||
+          preferredReturn ||
+          `/dashboard/${roleSegment}/${user.public_id}`;
+        navigate(destination, { replace: true });
       }
     } catch (error) {
       const responseData = error?.response?.data;
       const status = error?.response?.status;
+      if (status === 403 && responseData?.reason === 'account_pending_activation') {
+        const pendingActivation = getPendingActivationByEmail(loginFormData.email);
+        const sessionId =
+          pendingActivation?.activation_session_id || responseData?.activation_session_id;
+        const maskedEmail =
+          pendingActivation?.masked_email || responseData?.masked_email || null;
+        const maskedPhone =
+          pendingActivation?.masked_phone || responseData?.masked_phone || null;
+        if (sessionId) {
+          setPendingActivationSession({
+            email: loginFormData.email,
+            activation_session_id: sessionId,
+            masked_email: maskedEmail,
+            masked_phone: maskedPhone,
+          });
+          const params = new URLSearchParams();
+          params.set('activation_session_id', sessionId);
+          navigate(`/activate-account?${params.toString()}`, {
+            replace: true,
+            state: {
+              prefillEmail: loginFormData.email,
+              maskedEmail,
+              maskedPhone,
+            },
+          });
+          return;
+        }
+        setErrorMessage('Compte en attente de validation email/SMS. Vérifiez vos messages ou réinscrivez-vous.');
+        return;
+      }
       console.error('Erreur lors de la connexion :', {
         status,
         url: error?.config?.url,
@@ -200,16 +365,192 @@ const Login = () => {
     }
   };
 
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+
+    if (SIGNUP_DISABLED) {
+      setErrorMessage("Les inscriptions sont temporairement suspendues. Contactez info@lirie.ch.");
+      return;
+    }
+
+    if (!validateSignupForm()) return;
+
+    setIsLoading(true);
+    try {
+      const normalizedFirstName = signupFormData.firstName.trim();
+      const normalizedLastName = signupFormData.lastName.trim();
+      const payload = {
+        username: `${normalizedFirstName} ${normalizedLastName}`.trim(),
+        email: signupFormData.email,
+        password: signupFormData.password,
+        phone: signupFormData.phone,
+        address: signupFormData.address,
+      };
+      const registerResponse = await apiClient.post('/auth/register', payload);
+      const activationSessionId = registerResponse?.data?.activation_session_id;
+      const maskedEmail = registerResponse?.data?.masked_email;
+      const maskedPhone = registerResponse?.data?.masked_phone;
+      if (!activationSessionId) {
+        const backendMessage =
+          registerResponse?.data?.message ||
+          registerResponse?.data?.error ||
+          "Inscription creee mais activation indisponible. Contactez le support.";
+        setErrorMessage(
+          `${backendMessage} (activation_session_id manquant)`
+        );
+        setIsLoading(false);
+        return;
+      }
+      if (activationSessionId) {
+        setPendingActivationSession({
+          email: signupFormData.email,
+          activation_session_id: activationSessionId,
+          masked_email: maskedEmail,
+          masked_phone: maskedPhone,
+        });
+      }
+      saveMobilityProfileForEmail(signupFormData.email, {
+        needsWheelchair: signupFormData.needsWheelchair,
+        needsElectricWheelchair: signupFormData.needsElectricWheelchair,
+        needsWalkingAid: signupFormData.needsWalkingAid,
+        needsDoorToDoorAssistance: signupFormData.needsDoorToDoorAssistance,
+        assistanceLevel: signupFormData.assistanceLevel,
+        emergencyContact: signupFormData.emergencyContact,
+        notes: signupFormData.mobilityNotes,
+      });
+      const params = new URLSearchParams();
+      if (activationSessionId) {
+        params.set('activation_session_id', activationSessionId);
+      }
+      const rawActivationQuery = params.toString();
+      navigate(`/activate-account${rawActivationQuery ? `?${rawActivationQuery}` : ''}`, {
+        replace: true,
+        state: {
+          signupSuccess: true,
+          prefillEmail: signupFormData.email,
+          maskedEmail: maskedEmail || null,
+          maskedPhone: maskedPhone || null,
+        },
+      });
+    } catch (error) {
+      const responseData = error?.response?.data;
+      const backendMessage =
+        responseData?.message ??
+        responseData?.detail ??
+        responseData?.error ??
+        (typeof responseData === 'string' ? responseData : null);
+      setErrorMessage(backendMessage || "Impossible de créer le compte pour le moment.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const passwordChecks = useMemo(() => {
+    const password = signupFormData.password || '';
+    return {
+      minLength: password.length >= 8,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      digit: /\d/.test(password),
+      special: /[^A-Za-z0-9]/.test(password),
+    };
+  }, [signupFormData.password]);
+
+  const strengthScore = useMemo(() => {
+    const values = [
+      passwordChecks.minLength,
+      passwordChecks.uppercase,
+      passwordChecks.lowercase,
+      passwordChecks.digit,
+      passwordChecks.special,
+    ];
+    return values.filter(Boolean).length;
+  }, [passwordChecks]);
+
+  const strengthLabel = useMemo(() => {
+    if (strengthScore <= 2) return 'Faible';
+    if (strengthScore <= 4) return 'Moyen';
+    return 'Fort';
+  }, [strengthScore]);
+
+  const strengthToneClass = useMemo(() => {
+    if (strengthScore <= 2) return styles.passwordStrengthWeak;
+    if (strengthScore <= 4) return styles.passwordStrengthMedium;
+    return styles.passwordStrengthStrong;
+  }, [strengthScore]);
+
   return (
     <div className={styles.pageWrapper}>
       <div className={styles.loginCard}>
         <div className={styles.header}>
-          <img src="/logo-lirie.png" alt="Lirie" className={styles.logo} />
-          <h1 className={styles.title}>Connexion</h1>
-          <p className={styles.subtitle}>Accédez à votre espace Lirie</p>
+          <div className={`${styles.modeSwitchBlock} ${styles.modeSwitchFieldScope}`}>
+            <span id="login-auth-mode-label" className={styles.modeSwitchLabel}>
+              Mode d&apos;authentification
+            </span>
+            <div
+              className={`${institutionStyles.missionSegment} ${styles.modeSwitchSegment}`}
+              role="tablist"
+              aria-labelledby="login-auth-mode-label"
+            >
+              <Link
+                to={`/login${loginSearch}`}
+                replace
+                role="tab"
+                aria-selected={!isSignupMode}
+                className={`${institutionStyles.missionBtn} ${styles.modeSwitchBtn} ${!isSignupMode ? institutionStyles.missionBtnActive : ''}`}
+              >
+                Connexion
+              </Link>
+              <Link
+                to={`/login${signupSearch}`}
+                replace
+                role="tab"
+                aria-selected={isSignupMode}
+                className={`${institutionStyles.missionBtn} ${styles.modeSwitchBtn} ${isSignupMode ? institutionStyles.missionBtnActive : ''}`}
+              >
+                Inscription
+              </Link>
+            </div>
+          </div>
+          <img src="/logo-lirie.png" alt="Lirie" className={styles.logo} width="56" height="56" />
+          <h1 className={styles.title}>{isSignupMode ? 'Créer un compte' : 'Connexion'}</h1>
+          <p className={styles.subtitle}>
+            {isSignupMode ? 'Inscrivez-vous pour démarrer rapidement vos réservations.' : 'Accédez à votre espace Lirie'}
+          </p>
+          {(() => {
+            const next = nextFromQuery || safeReturnFromState || '';
+            if (isSignupMode || !next) return null;
+            if (
+              next.includes('/client/payment/saferpay/return') ||
+              next.includes('/client/payment/worldline/return')
+            ) {
+              return (
+                <p className={styles.resumeHint} role="note">
+                  Après connexion, vous serez renvoyé vers la page de statut de votre paiement (Saferpay).
+                </p>
+              );
+            }
+            if (
+              next.includes('/client/payment/saferpay/start') ||
+              next.includes('/client/payment/worldline/start')
+            ) {
+              return (
+                <p className={styles.resumeHint} role="note">
+                  Après connexion, vous pourrez poursuivre le paiement sécurisé de votre réservation
+                  (Saferpay).
+                </p>
+              );
+            }
+            return null;
+          })()}
+          {hasSafeNext && !isSignupMode ? (
+            <p className={styles.resumeHint} role="note">
+              Après connexion, vous serez redirigé vers votre réservation.
+            </p>
+          ) : null}
         </div>
 
-        <form className={styles.form} onSubmit={handleSubmit} noValidate>
+        <form className={styles.form} onSubmit={isSignupMode ? handleSignupSubmit : handleLoginSubmit} autoComplete="on" noValidate>
           {successMessage && (
             <p className={styles.successMessage} role="status">
               {successMessage}
@@ -222,79 +563,364 @@ const Login = () => {
             </p>
           )}
 
-          <div className={styles.inputGroup}>
-            <label htmlFor="email" className={styles.label}>Adresse email</label>
-            <div className={styles.inputWrapper}>
-              <MailIcon />
-              <input
-                type="email"
-                name="email"
-                id="email"
-                className={styles.input}
-                placeholder="nom@entreprise.ch"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                autoComplete="email"
-                autoFocus
-              />
-            </div>
-          </div>
+          {isSignupMode && SIGNUP_DISABLED ? (
+            <p className={styles.resumeHint} role="note">
+              Les inscriptions sont temporairement suspendues. Pour toute demande d&apos;accès, contactez
+              {' '}
+              <a href="mailto:info@lirie.ch">info@lirie.ch</a>.
+            </p>
+          ) : (
+            <>
+              {isSignupMode ? (
+                <fieldset className={`${styles.inputGroup} ${styles.identityFieldset}`}>
+                  <legend className={styles.label}>Identité</legend>
+                  <div className={styles.identityRow}>
+                    <div
+                      ref={civilityDropdownRef}
+                      className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.identityCivility}`}
+                    >
+                      <input
+                        type="text"
+                        name="civility"
+                        id="civility"
+                        value={signupFormData.civility}
+                        readOnly
+                        tabIndex={-1}
+                        aria-hidden="true"
+                        autoComplete="honorific-prefix"
+                        className={styles.civilityAutocompleteProxy}
+                      />
+                      <button
+                        type="button"
+                        className={styles.civilityTrigger}
+                        aria-label="Civilité"
+                        aria-haspopup="listbox"
+                        aria-expanded={isCivilityOpen}
+                        aria-controls="civility-listbox"
+                        onClick={() => setIsCivilityOpen((prev) => !prev)}
+                      >
+                        <span
+                          className={
+                            signupFormData.civility
+                              ? styles.civilityValue
+                              : styles.civilityPlaceholder
+                          }
+                        >
+                          {signupFormData.civility || 'Civilité'}
+                        </span>
+                        <span
+                          className={`${styles.civilityChevron} ${isCivilityOpen ? styles.civilityChevronOpen : ''}`}
+                          aria-hidden="true"
+                        >
+                          <svg viewBox="0 0 20 20" width="14" height="14" focusable="false">
+                            <path d="M5.5 7.5 10 12l4.5-4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      </button>
+                      {isCivilityOpen ? (
+                        <ul
+                          id="civility-listbox"
+                          role="listbox"
+                          aria-label="Civilité"
+                          className={styles.civilityMenu}
+                        >
+                          {CIVILITY_OPTIONS.map((option) => (
+                            <li key={option.label} role="none">
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={signupFormData.civility === option.value}
+                                className={`${styles.civilityOptionBtn} ${
+                                  signupFormData.civility === option.value
+                                    ? styles.civilityOptionBtnActive
+                                    : ''
+                                }`}
+                                onClick={() => handleCivilitySelect(option.value)}
+                              >
+                                {option.label}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                    <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain}`}>
+                      <input
+                        type="text"
+                        name="firstName"
+                        id="firstName"
+                        className={styles.input}
+                        placeholder="Prénom"
+                        value={signupFormData.firstName}
+                        onChange={handleSignupInputChange}
+                        required
+                        autoComplete="given-name"
+                        autoFocus
+                      />
+                    </div>
+                    <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain}`}>
+                      <input
+                        type="text"
+                        name="lastName"
+                        id="lastName"
+                        className={styles.input}
+                        placeholder="Nom"
+                        value={signupFormData.lastName}
+                        onChange={handleSignupInputChange}
+                        required
+                        autoComplete="family-name"
+                      />
+                    </div>
+                  </div>
+                </fieldset>
+              ) : null}
 
-          <div className={styles.inputGroup}>
-            <label htmlFor="password" className={styles.label}>Mot de passe</label>
-            <div className={styles.inputWrapper}>
-              <LockIcon />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                name="password"
-                id="password"
-                className={`${styles.input} ${styles.inputPasswordPadding}`}
-                placeholder="Entrez votre mot de passe"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className={styles.togglePassword}
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
-              >
-                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
-            </div>
-          </div>
+              <div className={styles.inputGroup}>
+                <label htmlFor="email" className={styles.label}>Adresse email</label>
+                <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                  <input
+                    type="email"
+                    name="email"
+                    id="email"
+                    className={styles.input}
+                    placeholder="nom@entreprise.ch"
+                    value={isSignupMode ? signupFormData.email : loginFormData.email}
+                    onChange={isSignupMode ? handleSignupInputChange : handleLoginInputChange}
+                    required
+                    autoComplete="email"
+                    autoFocus={!isSignupMode}
+                  />
+                </div>
+              </div>
 
-          <div className={styles.metaRow}>
-            <label className={styles.rememberLabel}>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className={styles.rememberCheckbox}
-              />
-              <span className={styles.checkboxCustom} />
-              Se souvenir de moi
-            </label>
-            <Link to="/forgot-password" className={styles.forgotLink}>
-              Mot de passe oublié ?
-            </Link>
-          </div>
+              {isSignupMode ? (
+                <div className={styles.inputGroup}>
+                  <div className={styles.passwordRow}>
+                    <div className={styles.passwordColumn}>
+                      <label htmlFor="password" className={styles.label}>Mot de passe</label>
+                      <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                        <input
+                          type={showSignupPassword ? 'text' : 'password'}
+                          name="password"
+                          id="password"
+                          className={`${styles.input} ${styles.inputPasswordPadding}`}
+                          placeholder="Créez un mot de passe"
+                          value={signupFormData.password}
+                          onChange={handleSignupInputChange}
+                          required
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          className={styles.togglePassword}
+                          onClick={() => setShowSignupPassword(!showSignupPassword)}
+                          aria-label={showSignupPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                        >
+                          {showSignupPassword ? <EyeOffIcon /> : <EyeIcon />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className={styles.passwordColumn}>
+                      <label htmlFor="confirmPassword" className={styles.label}>Confirmer le mot de passe</label>
+                      <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                        <input
+                          type={showSignupPassword ? 'text' : 'password'}
+                          name="confirmPassword"
+                          id="confirmPassword"
+                          className={styles.input}
+                          placeholder="Confirmez le mot de passe"
+                          value={signupFormData.confirmPassword}
+                          onChange={handleSignupInputChange}
+                          required
+                          autoComplete="new-password"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className={styles.passwordStrengthWrap}>
+                    <div className={styles.passwordStrengthBarTrack}>
+                      <div
+                        className={`${styles.passwordStrengthBarFill} ${strengthToneClass}`}
+                        style={{ width: `${(strengthScore / 5) * 100}%` }}
+                      />
+                    </div>
+                    <p className={styles.passwordStrengthLabel}>
+                      Niveau de solidite: {strengthLabel}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.inputGroup}>
+                  <label htmlFor="password" className={styles.label}>Mot de passe</label>
+                  <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                    <input
+                      type={showLoginPassword ? 'text' : 'password'}
+                      name="password"
+                      id="password"
+                      className={`${styles.input} ${styles.inputPasswordPadding}`}
+                      placeholder="Entrez votre mot de passe"
+                      value={loginFormData.password}
+                      onChange={handleLoginInputChange}
+                      required
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className={styles.togglePassword}
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      aria-label={showLoginPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    >
+                      {showLoginPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isSignupMode ? (
+                <>
+                  <div className={styles.inputGroup}>
+                    <label htmlFor="phone" className={styles.label}>Téléphone</label>
+                    <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                      <input
+                        type="text"
+                        name="phone"
+                        id="phone"
+                        className={styles.input}
+                        placeholder="+41 ..."
+                        value={signupFormData.phone}
+                        onChange={handleSignupInputChange}
+                        autoComplete="tel"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label htmlFor="address" className={styles.label}>Adresse</label>
+                    <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                      <AddressAutocomplete
+                        inputId="address"
+                        name="address"
+                        inputClassName={styles.input}
+                        placeholder="Votre adresse"
+                        value={signupFormData.address}
+                        onChange={handleSignupInputChange}
+                        onSelect={(item) => {
+                          setSignupFormData((prev) => ({
+                            ...prev,
+                            address: item?.label || item?.address || prev.address,
+                          }));
+                        }}
+                        autoComplete="street-address"
+                        autoCapitalize="words"
+                        minChars={2}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <fieldset className={`${styles.inputGroup} ${styles.mobilityFieldset}`}>
+                    <legend className={styles.label}>Besoins de mobilité (optionnel)</legend>
+                    <p className={styles.mobilityHint}>
+                      Indiquez seulement ce qui est utile pour vos trajets.
+                    </p>
+                    <div className={styles.mobilityChips}>
+                      <button
+                        type="button"
+                        className={`${styles.mobilityChip} ${signupFormData.needsWheelchair ? styles.mobilityChipActive : ''}`}
+                        aria-pressed={signupFormData.needsWheelchair}
+                        onClick={() => handleSignupToggleChange('needsWheelchair')}
+                      >
+                        Fauteuil manuel
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.mobilityChip} ${signupFormData.needsElectricWheelchair ? styles.mobilityChipActive : ''}`}
+                        aria-pressed={signupFormData.needsElectricWheelchair}
+                        onClick={() => handleSignupToggleChange('needsElectricWheelchair')}
+                      >
+                        Fauteuil électrique
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.mobilityChip} ${signupFormData.needsWalkingAid ? styles.mobilityChipActive : ''}`}
+                        aria-pressed={signupFormData.needsWalkingAid}
+                        onClick={() => handleSignupToggleChange('needsWalkingAid')}
+                      >
+                        Aide à la marche
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.mobilityChip} ${signupFormData.needsDoorToDoorAssistance ? styles.mobilityChipActive : ''}`}
+                        aria-pressed={signupFormData.needsDoorToDoorAssistance}
+                        onClick={() => handleSignupToggleChange('needsDoorToDoorAssistance')}
+                      >
+                        Porte-à-porte
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.mobilityResetBtn}
+                      onClick={handleClearMobilityNeeds}
+                    >
+                      Réinitialiser les besoins
+                    </button>
+                    <div className={styles.inputGroup}>
+                      <label htmlFor="mobilityNotes" className={styles.label}>Précisions (optionnel)</label>
+                      <div className={`${styles.inputWrapper} ${styles.inputWrapperPlain} ${styles.inputWrapper30}`}>
+                        <input
+                          type="text"
+                          name="mobilityNotes"
+                          id="mobilityNotes"
+                          className={styles.input}
+                          placeholder="Ex: étage sans ascenseur, digicode..."
+                          value={signupFormData.mobilityNotes}
+                          onChange={handleSignupInputChange}
+                        />
+                      </div>
+                    </div>
+                  </fieldset>
+                </>
+              ) : (
+                <div className={styles.metaRow}>
+                  <label className={styles.rememberLabel}>
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className={styles.rememberCheckbox}
+                    />
+                    <span className={styles.checkboxCustom} />
+                    Se souvenir de moi
+                  </label>
+                  <Link to="/forgot-password" className={styles.forgotLink}>
+                    Mot de passe oublié ?
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
 
           <button
             type="submit"
             className={styles.submitButton}
-            disabled={isLoading}
+            disabled={isLoading || (isSignupMode && SIGNUP_DISABLED)}
           >
             {isLoading && <span className={styles.spinner} />}
-            {isLoading ? 'Connexion en cours...' : 'Se connecter'}
+            {isLoading
+              ? (isSignupMode ? 'Inscription en cours...' : 'Connexion en cours...')
+              : (isSignupMode ? "Créer mon compte" : 'Se connecter')}
           </button>
         </form>
 
         <div className={styles.footer}>
+          <p className={styles.footerText}>
+            {isSignupMode ? 'Déjà inscrit ? ' : 'Pas encore de compte ? '}
+            <Link
+              to={isSignupMode ? `/login${loginSearch}` : `/login${signupSearch}`}
+              className={styles.forgotLink}
+            >
+              {isSignupMode ? 'Se connecter' : 'Créer un compte'}
+            </Link>
+          </p>
           <p className={styles.footerText}>
             Lirie — Plateforme de transport sanitaire
           </p>

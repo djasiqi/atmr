@@ -2,7 +2,15 @@
   background: var(--bg-primary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-primary);
-  overflow: hidden;
+  /* visible : un overflow hidden coupait le menu d’actions (position absolute) */
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+
+.tableScroll {
+  width: 100%;
+  max-width: 100%;
 }
 
 .table {
@@ -56,6 +64,13 @@
   padding: 10px 14px;
   font-size: 13px;
   color: var(--text-secondary);
+  vertical-align: middle;
+}
+
+.tdActions {
+  position: relative;
+  width: 1%;
+  white-space: nowrap;
   vertical-align: middle;
 }
 
@@ -174,7 +189,7 @@
 /* ====== Responsive ====== */
 
 @media (max-width: 1024px) {
-  .tableContainer {
+  .tableScroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -188,8 +203,12 @@
   .tableContainer {
     width: 100%;
     max-width: 100%;
-    overflow-x: auto;
     box-sizing: border-box;
+  }
+
+  .tableScroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .table {

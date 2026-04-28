@@ -1,6 +1,6 @@
 .page {
   min-height: 100%;
-  background: linear-gradient(180deg, #f0faf7 0%, #ffffff 55%, #f7f8fa 100%);
+  background: var(--bg-app, #f8fafc);
 }
 
 .inner {
@@ -39,8 +39,8 @@
   gap: 14px 16px;
   background: #fff;
   border: 1px solid var(--border-primary);
-  border-radius: 20px;
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   padding: 24px;
 }
 
@@ -60,11 +60,12 @@
 .field select,
 .field textarea {
   border: 1px solid var(--border-primary);
-  border-radius: 12px;
-  padding: 11px 12px;
+  border-radius: var(--radius-md);
+  min-height: 42px;
+  padding: 10px 12px;
   font: inherit;
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: var(--bg-primary);
 }
 
 .field input:focus,
@@ -111,7 +112,8 @@
 .primaryButton,
 .primaryLink,
 .secondaryButton {
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  min-height: 42px;
   padding: 10px 16px;
   font-size: 0.95rem;
   text-decoration: none;
@@ -123,14 +125,14 @@
   background: var(--brand-primary);
   border: 1px solid var(--brand-primary);
   color: #fff;
-  box-shadow: var(--shadow-brand);
+  box-shadow: none;
 }
 
 .primaryButton:hover,
 .primaryLink:hover {
   background: var(--brand-primary-dark);
   border-color: var(--brand-primary-dark);
-  box-shadow: 0 6px 20px rgba(0, 121, 107, 0.3);
+  box-shadow: none;
 }
 
 .primaryButton:disabled {
@@ -187,9 +189,9 @@
 
 .block {
   border: 1px solid var(--border-primary);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: #fff;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   padding: 18px;
 }
 

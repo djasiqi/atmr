@@ -2,7 +2,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { detectConflict, resolveConflict, createConflictMessage } from '../utils/conflictResolution';
-import { toast } from 'react-toastify';
+import { toast } from 'sonner';
 
 /**
  * Hook pour mutations optimistes avec rollback et résolution de conflits
@@ -84,7 +84,7 @@ export function useOptimisticMutation({
         }
         
         if (showToast && options.showSuccessToast !== false) {
-          toast.info('Mise à jour en cours...', { autoClose: 1000 });
+          toast.info('Mise à jour en cours...', { duration: 1000 });
         }
       } catch (err) {
         console.error('[useOptimisticMutation] Error in optimistic update:', err);
@@ -131,7 +131,7 @@ export function useOptimisticMutation({
             
             if (showToast) {
               toast.warning(createConflictMessage(optimisticStateRef.current, result), {
-                autoClose: 5000,
+                duration: 5000,
               });
             }
           } else {

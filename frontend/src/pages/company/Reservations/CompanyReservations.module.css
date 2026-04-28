@@ -267,6 +267,71 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Contenu liste (table + pagination) : rechargement sans masquer le tableau */
+.listBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.listBlockRefreshing {
+  transition: opacity 0.2s ease;
+  opacity: 0.88;
+}
+
+.listRefreshBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 20;
+  overflow: hidden;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.listRefreshBar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brand-primary) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: listRefreshPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes listRefreshPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listBlockRefreshing {
+    transition: none;
+  }
+
+  .listRefreshBar::after {
+    animation: none;
+    background: var(--brand-primary);
+    opacity: 0.7;
+  }
+}
+
 .emptyState {
   display: flex;
   flex-direction: column;

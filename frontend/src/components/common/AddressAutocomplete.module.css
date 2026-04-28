@@ -35,6 +35,42 @@
   box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.10);
 }
 
+/* Champ intégré dans un conteneur déjà bordé (ex. Home / ClientDashboard fieldGroup) */
+.inputFlush {
+  width: 100%;
+  min-height: 30px;
+  height: 30px;
+  /* léger décalage du texte ; le dashboard client surcharge avec plus d’espace à gauche */
+  padding: 0 6px 0 6px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 400;
+  font-family: inherit;
+  color: var(--text-primary, #1e293b);
+  background: transparent;
+  transition: color 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.inputFlush::placeholder {
+  color: var(--text-quaternary, #b0b8c4);
+  font-weight: 400;
+}
+
+.inputFlush:hover,
+.inputFlush:focus,
+.inputFlush:focus-visible {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
 /* ─── Dropdown container ─── */
 .dropdown {
   background: var(--bg-primary, #fff);

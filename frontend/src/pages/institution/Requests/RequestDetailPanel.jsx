@@ -19,6 +19,7 @@ import {
 } from '../../../hooks/useInstitutionData';
 import { useQueryClient } from '@tanstack/react-query';
 import { canManageRequests, canEditBilling } from '../../../utils/institutionPermissions';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 import { toast } from 'sonner';
 import { getInstitutionSocket } from '../../../services/institutionSocket';
 import { fetchBookingMessages, sendBookingMessage } from '../../../services/institutionService';
@@ -244,7 +245,7 @@ const RequestDetailPanel = ({ requestId, onClose }) => {
   const [demoChatMessages, setDemoChatMessages] = useState([]);
   const demoTimersRef = useRef([]);
   const isDemoInstitution = useMemo(() => {
-    const env = (localStorage.getItem('lirie_auth_env') || '').toLowerCase();
+    const env = getAuthEnv();
     const mission = (
       localStorage.getItem('demo_recommended_journey') ||
       localStorage.getItem('demo_demo_recommended_journey') ||

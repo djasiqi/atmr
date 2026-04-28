@@ -57,13 +57,12 @@ class Invoice(db.Model):
         ForeignKey("client.id"), nullable=False, index=True
     )
 
-    # Facturation tierce (Third-Party Billing)
+    # Facturation tierce (legacy) — préférer ``billing_party_id`` pour le nouveau code (V2+).
     bill_to_client_id: Mapped[int | None] = mapped_column(
         ForeignKey("client.id"), nullable=True, index=True
     )
 
-    # ✅ Payeur unifié (source de vérité à terme)
-    # Rétrocompat: on garde bill_to_client_id le temps de migrer progressivement.
+    # Payeur unifié (canon cible) — quand renseigné, il prime sur ``bill_to_client_id`` / clinique héritée.
     billing_party_id: Mapped[int | None] = mapped_column(
         ForeignKey("billing_parties.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -78,6 +77,7 @@ class Invoice(db.Model):
         nullable=False,
         server_default=InvoiceBillingStrategy.S1_PATIENT.value,
     )
+    # Clinique payeuse (S2, legacy) — V2 : dériver depuis BillingParty quand possible.
     billed_to_company_id: Mapped[int | None] = mapped_column(
         ForeignKey("company.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -439,6 +439,16 @@ class Invoice(db.Model):
             }
             if self.billed_to_company
             else None,
+            "payer_resolution": {
+                "primary": (
+                    "billing_party"
+                    if self.billing_party_id is not None
+                    else "legacy"
+                ),
+                "billing_party_id": self.billing_party_id,
+                "legacy_bill_to_client_id": self.bill_to_client_id,
+                "legacy_billed_to_company_id": self.billed_to_company_id,
+            },
             "lines": [line.to_dict() for line in self.lines]
             if hasattr(self, "lines")
             else [],
@@ -484,6 +494,8 @@ class InvoiceLine(db.Model):
         ForeignKey("booking.id", name="fk_invoice_line_reservation"),
         nullable=True,
     )
+    # Prestations CUSTOM : mode facturation (temps/quantité, unité) pour PDF / affichage
+    line_meta = Column(JSONB, nullable=True)
 
     # Relations
     invoice = relationship("Invoice", back_populates="lines")
@@ -499,7 +511,7 @@ class InvoiceLine(db.Model):
 
     def to_dict(self):
         """Sérialise la ligne de facture en dictionnaire."""
-        return {
+        d = {
             "id": self.id,
             "invoice_id": self.invoice_id,
             "type": self.type.value,
@@ -513,6 +525,9 @@ class InvoiceLine(db.Model):
             "adjustment_note": self.adjustment_note,
             "reservation_id": self.reservation_id,
         }
+        if self.line_meta is not None:
+            d["line_meta"] = self.line_meta
+        return d
 
 
 class InvoicePayment(db.Model):

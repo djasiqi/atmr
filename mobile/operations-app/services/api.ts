@@ -1064,6 +1064,8 @@ export const registerPushToken = async (payload: {
   deviceId?: string;
   platform?: "ios" | "android";
   provider?: "expo" | "fcm";
+  /** Métadonnée client (Phase 4A) — le backend peut ignorer jusqu’à durcissement 4B. */
+  clientAuthSurface?: "driver" | "enterprise";
 }) => {
   const device_id =
     payload.device_id ||
@@ -1082,6 +1084,9 @@ export const registerPushToken = async (payload: {
     device_id,
     platform,
     provider,
+    ...(payload.clientAuthSurface
+      ? { client_auth_surface: payload.clientAuthSurface }
+      : {}),
   });
   return res.data;
 };
@@ -1292,16 +1297,46 @@ export const loginDriver = async (
   }
 };
 
-export const fetchUserInfo = async (): Promise<{
+/** Réponse contractuelle GET /auth/me (bootstrap session — clés toujours présentes). */
+export type AuthMeResponse = {
   id: number;
   public_id: string;
   username: string;
-  email: string;
+  email: string | null;
   role: string;
-}> => {
-  const res = await api.get("/auth/me");
+  bootstrap_version: number;
+  account_active: boolean;
+  profile_active: boolean | null;
+  profile_type: string | null;
+  company_id: number | null;
+  driver_id: number | null;
+  access_denied_code: string | null;
+  message: string | null;
+  /** Présent uniquement en 403 (rétrocompat). */
+  error?: string;
+  /** Présent uniquement en 403 (rétrocompat). */
+  reason?: string;
+};
+
+export const fetchUserInfo = async (): Promise<AuthMeResponse> => {
+  const res = await api.get<AuthMeResponse>("/auth/me");
   return res.data;
 };
+
+/**
+ * Effets de bord bootstrap : IDs attendus par socket / resync (AsyncStorage).
+ * À appeler après un GET /auth/me réussi (200).
+ */
+export async function persistAuthMeBootstrapSideEffects(
+  me: AuthMeResponse
+): Promise<void> {
+  if (typeof me.driver_id === "number") {
+    await asyncStorage.setDriverId(me.driver_id);
+  }
+  if (typeof me.company_id === "number") {
+    await asyncStorage.setDriverCompanyId(me.company_id);
+  }
+}
 
 // ========== Refresh Token ==========
 export type RefreshTokenResponse = {

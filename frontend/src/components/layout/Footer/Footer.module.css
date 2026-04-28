@@ -4,8 +4,14 @@
    ============================================================ */
 
 .footer {
-  background: #f7faf9;
+  background: #fafcfb;
   border-top: 1px solid var(--border-primary);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  /* Pleine largeur viewport même si le parent est centré ou a du padding horizontal */
+  width: 100vw;
+  max-width: none;
+  margin-left: calc(50% - 50vw);
 }
 
 .inner {

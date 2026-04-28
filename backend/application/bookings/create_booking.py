@@ -11,6 +11,7 @@ import logging
 import os
 import re
 from collections.abc import Callable
+from contextlib import nullcontext, suppress
 from datetime import datetime, timezone
 from typing import Any, Protocol, cast
 
@@ -20,6 +21,7 @@ from application.events.event_bus import publish_event
 from domain.bookings.commands import CreateBookingCommand
 from domain.client_dto import ClientDTO
 from domain.events.events import BookingCreatedEvent
+from ext import db
 from models import PricingProfile
 from schemas.booking_schemas import BookingCreateSchema
 from services.geo.geo_resolver import (
@@ -30,8 +32,12 @@ from services.pricing.pricing_engine import compute_price
 from shared.booking_company_resolution import (
     resolve_booking_owner_company_id_for_create,
 )
+from shared.client_portal_notes import compose_client_portal_notes_medical
 from shared.geo_utils import GeoValidator
-from shared.time_utils import api_scheduled_iso_to_naive_geneva
+from shared.time_utils import (
+    api_scheduled_iso_to_naive_geneva,
+    geneva_naive_midnight_from_date_ymd,
+)
 
 logger = logging.getLogger(__name__)
 WEEKEND_START_INDEX = 5
@@ -51,40 +57,6 @@ def _to_positive_amount(value: Any) -> float | None:
     except Exception:
         return None
     return parsed if parsed > 0 else None
-
-
-def _compose_client_notes_medical(validated_data: dict[str, Any]) -> str | None:
-    parts: list[str] = []
-    try:
-        occ = int(validated_data.get("occurrences") or 1)
-    except (TypeError, ValueError):
-        occ = 1
-    if occ > 1:
-        parts.append(f"Occurrences demandées (même trajet) : {occ}")
-    if validated_data.get("is_recurring"):
-        rtype = (validated_data.get("recurrence_type") or "").strip()
-        rlen = validated_data.get("recurrence_series_length")
-        rend = (validated_data.get("recurrence_end_date") or "").strip()
-        rdays = validated_data.get("recurrence_days") or []
-        line = (
-            f"Récurrence demandée (portail client) : type={rtype or '?'}, "
-            f"répétitions prévues={rlen}"
-        )
-        if rend:
-            line += f", jusqu'au {rend}"
-        if rtype == "custom" and rdays:
-            line += f", jours 0=lun..6=dim : {','.join(str(int(d)) for d in rdays)}"
-        line += (
-            " — une réservation est créée par cette demande ; "
-            "série à confirmer / reproduire côté transporteur."
-        )
-        parts.append(line)
-    client_note = (validated_data.get("client_note") or "").strip()
-    if client_note:
-        parts.append(client_note)
-    if not parts:
-        return None
-    return "\n".join(parts)
 
 
 class ClientRepoPort(Protocol):
@@ -120,6 +92,7 @@ class BookingWriterPort(Protocol):
         amount: float,
         medical_facility: str,
         doctor_name: str,
+        hospital_service: str,
         duration_seconds: int,
         distance_meters: int,
         pickup_lat: float,
@@ -147,6 +120,7 @@ class BookingWriterPort(Protocol):
         price_breakdown_json: dict[str, Any] | None,
         notes_medical: str | None = None,
         return_scheduled_time: Any | None = None,
+        return_time_exact: bool = False,
     ) -> BookingLike: ...
 
 
@@ -232,15 +206,24 @@ class CreateBookingUseCase:
             raise ValueError("Invalid scheduled_time format")
 
         return_scheduled_time = None
+        return_time_exact = False
         rt_raw = validated_data.get("return_time")
+        rd_raw = validated_data.get("return_date")
         if rt_raw:
             try:
                 return_scheduled_time = api_scheduled_iso_to_naive_geneva(rt_raw)
             except Exception as date_error:
                 logger.error("Erreur de conversion return_time: %s", date_error)
                 raise ValueError("Invalid return_time format") from date_error
+            return_time_exact = True
+        elif bool(validated_data.get("is_round_trip")) and rd_raw:
+            rd_str = str(rd_raw).strip() if isinstance(rd_raw, str) else ""
+            if rd_str:
+                return_scheduled_time = geneva_naive_midnight_from_date_ymd(rd_str)
+                if return_scheduled_time is None:
+                    raise ValueError("Invalid return_date format")
 
-        notes_medical = _compose_client_notes_medical(validated_data)
+        notes_medical = compose_client_portal_notes_medical(validated_data)
 
         client_dto = self.client_repo.find_by_id(cmd.client_id)
         if not client_dto:
@@ -391,6 +374,14 @@ class CreateBookingUseCase:
             dropoff_lat=dropoff_lat,
             dropoff_lon=dropoff_lon,
         )
+        # Paiement client = montant reçu, sauf tarifs préf. / « manual » (plus bas) :
+        # - PORTAL : company_id is None → pas de gel côté entreprise
+        #   (le sous-traitant n’est pas encore connu) ; l’`amount` du body reprend
+        #   la prévisualisation calculée côté plateforme
+        #   (route preview + profil de référence PORTAL_CLIENT_PREVIEW_COMPANY_ID),
+        #   cohérent avec Saferpay (booking.amount).
+        # - TRANSPORT : `price_amount` peut remplacer le body si le moteur de
+        #   price freeze renvoie un montant pour l’entreprise rattachée.
 
         if preferential_amount is not None:
             validated_data["amount"] = preferential_amount
@@ -412,45 +403,56 @@ class CreateBookingUseCase:
             if isinstance(price_breakdown_json, dict):
                 price_breakdown_json["pricing_amount_applied"] = True
 
-        new_booking = self.booking_writer.create_and_commit(
-            user_id=cmd.user_id,
-            client_id=cmd.client_id,
-            company_id=company_id,
-            customer_name=validated_data["customer_name"],
-            pickup_location=validated_data["pickup_location"],
-            dropoff_location=validated_data["dropoff_location"],
-            scheduled_time=scheduled_time,
-            amount=float(validated_data["amount"]),
-            medical_facility=validated_data.get("medical_facility", ""),
-            doctor_name=validated_data.get("doctor_name", ""),
-            duration_seconds=duration_seconds,
-            distance_meters=distance_meters,
-            pickup_lat=pickup_lat,
-            pickup_lon=pickup_lon,
-            dropoff_lat=dropoff_lat,
-            dropoff_lon=dropoff_lon,
-            is_round_trip=bool(validated_data.get("is_round_trip", False)),
-            pickup_admin_token=pickup_admin.get("token"),
-            pickup_canton_code=pickup_admin.get("canton_code"),
-            pickup_admin_source=pickup_admin.get("source"),
-            pickup_admin_confidence=pickup_admin.get("confidence"),
-            pickup_admin_label=pickup_admin.get("label"),
-            pickup_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
-            dropoff_admin_token=dropoff_admin.get("token"),
-            dropoff_canton_code=dropoff_admin.get("canton_code"),
-            dropoff_admin_source=dropoff_admin.get("source"),
-            dropoff_admin_confidence=dropoff_admin.get("confidence"),
-            dropoff_admin_label=dropoff_admin.get("label"),
-            dropoff_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
-            pickup_geo_unit_id=pickup_geo_unit_id,
-            dropoff_geo_unit_id=dropoff_geo_unit_id,
-            pricing_profile_id=pricing_profile_id,
-            pricing_profile_version_id=pricing_profile_version_id,
-            price_amount=price_amount,
-            price_breakdown_json=price_breakdown_json,
-            notes_medical=notes_medical,
-            return_scheduled_time=return_scheduled_time,
-        )
+        if has_app_context():
+            get_transaction = getattr(db.session, "get_transaction", None)
+            has_transaction = bool(
+                get_transaction() if callable(get_transaction) else False
+            )
+            tx_context = nullcontext() if has_transaction else db.session.begin()
+        else:
+            tx_context = nullcontext()
+        with tx_context:
+            new_booking = self.booking_writer.create_and_commit(
+                user_id=cmd.user_id,
+                client_id=cmd.client_id,
+                company_id=company_id,
+                customer_name=validated_data["customer_name"],
+                pickup_location=validated_data["pickup_location"],
+                dropoff_location=validated_data["dropoff_location"],
+                scheduled_time=scheduled_time,
+                amount=float(validated_data["amount"]),
+                medical_facility=validated_data.get("medical_facility", ""),
+                doctor_name=validated_data.get("doctor_name", ""),
+                hospital_service=validated_data.get("hospital_service", ""),
+                duration_seconds=duration_seconds,
+                distance_meters=distance_meters,
+                pickup_lat=pickup_lat,
+                pickup_lon=pickup_lon,
+                dropoff_lat=dropoff_lat,
+                dropoff_lon=dropoff_lon,
+                is_round_trip=bool(validated_data.get("is_round_trip", False)),
+                pickup_admin_token=pickup_admin.get("token"),
+                pickup_canton_code=pickup_admin.get("canton_code"),
+                pickup_admin_source=pickup_admin.get("source"),
+                pickup_admin_confidence=pickup_admin.get("confidence"),
+                pickup_admin_label=pickup_admin.get("label"),
+                pickup_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
+                dropoff_admin_token=dropoff_admin.get("token"),
+                dropoff_canton_code=dropoff_admin.get("canton_code"),
+                dropoff_admin_source=dropoff_admin.get("source"),
+                dropoff_admin_confidence=dropoff_admin.get("confidence"),
+                dropoff_admin_label=dropoff_admin.get("label"),
+                dropoff_admin_resolved_at=datetime.now(timezone.utc),  # noqa: UP017
+                pickup_geo_unit_id=pickup_geo_unit_id,
+                dropoff_geo_unit_id=dropoff_geo_unit_id,
+                pricing_profile_id=pricing_profile_id,
+                pricing_profile_version_id=pricing_profile_version_id,
+                price_amount=price_amount,
+                price_breakdown_json=price_breakdown_json,
+                notes_medical=notes_medical,
+                return_scheduled_time=return_scheduled_time,
+                return_time_exact=return_time_exact,
+            )
 
         if geocode_miss:
             self._trigger_async_geocoding(
@@ -465,6 +467,40 @@ class CreateBookingUseCase:
                 company_id=getattr(new_booking, "company_id", None),
             )
         )
+
+        try:
+            from middleware.trace_id import get_trace_id
+            from security.audit_log import AuditLogger
+
+            st = getattr(new_booking, "status", None)
+            new_status = str(getattr(st, "value", st) or "")
+            AuditLogger.log_action(
+                action_type="booking_created",
+                action_category="booking",
+                user_id=cmd.user_id,
+                user_type="client",
+                company_id=getattr(new_booking, "company_id", None),
+                booking_id=int(getattr(new_booking, "id", 0) or 0),
+                correlation_id=get_trace_id(),
+                action_details={
+                    "source": "application.bookings.create_booking",
+                    "previous_status": None,
+                    "new_status": new_status,
+                    "trigger": "user",
+                },
+            )
+        except Exception as audit_exc:
+            logger.critical(
+                "[booking] audit booking_created failed booking_id=%s: %s",
+                getattr(new_booking, "id", None),
+                audit_exc,
+                exc_info=True,
+            )
+            from services.monitoring.prometheus import inc_booking_audit_write_failed
+
+            with suppress(Exception):
+                inc_booking_audit_write_failed(action_type="booking_created")
+
         return new_booking
 
     def _compute_pricing_freeze(  # noqa: PLR0911

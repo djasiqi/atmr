@@ -11,7 +11,7 @@ Create Date: 2026-02-09
 from alembic import op
 
 revision = "transport_ux_001"
-down_revision = None
+down_revision = "055c847af0bf"
 branch_labels = None
 depends_on = None
 

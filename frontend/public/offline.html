@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0D7F72" />
+    <title>Hors ligne — Lirie</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        background: #f4faf9;
+        color: #1e293b;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        text-align: center;
+      }
+      img {
+        width: 120px;
+        height: auto;
+        margin-bottom: 1.25rem;
+      }
+      h1 {
+        font-size: 1.35rem;
+        margin: 0 0 0.75rem;
+        color: #0d7f72;
+      }
+      p {
+        margin: 0 0 1.25rem;
+        line-height: 1.5;
+        max-width: 28rem;
+      }
+      button {
+        background: #0d7f72;
+        color: #fff;
+        border: none;
+        padding: 0.65rem 1.25rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      button:active {
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <img src="./logo-lirie.png" alt="Lirie" width="120" height="120" />
+    <h1>Pas de connexion réseau</h1>
+    <p>
+      Vérifiez votre connexion mobile ou Wi‑Fi, puis réessayez. Les réservations et le paiement en ligne
+      nécessitent un accès Internet.
+    </p>
+    <button type="button" onclick="window.location.reload()">Réessayer</button>
+    <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #64748b">
+      <a href="./" style="color: #0d7f72">Accueil Lirie</a>
+    </p>
+  </body>
+</html>

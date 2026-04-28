@@ -1,0 +1,144 @@
+# docker-compose.postgres-replica.yml
+# Override Phase 4 — PostgreSQL streaming replication (primary → 1 replica).
+#
+# Activation :
+#   docker compose \
+#     -f docker-compose.production.yml \
+#     -f docker-compose.postgres-replica.yml \
+#     up -d
+#
+# Variables d'environnement requises (dans .env.production) :
+#   POSTGRES_REPLICATION_PASSWORD=<mot de passe fort>
+#   REPLICA_DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer-replica:6433/${POSTGRES_DB}
+#
+# Architecture :
+#   postgres (primary, port 5432, WAL sender actif)
+#     └─→ postgres-replica (hot standby, port 5432, read-only)
+#              └─→ pgbouncer-replica (port 6433, transaction pool, lectures)
+#
+# Le backend lit REPLICA_DATABASE_URL → DataPlaneRouter.read_bind() route
+# toutes les lectures non-critiques vers pgbouncer-replica.
+
+services:
+
+  # ── Primary : activer WAL et le script de création du compte replicator ──
+  postgres:
+    image: timescale/timescaledb-ha:pg15-latest
+    # Surcharge l'image de base pour ajouter TimescaleDB (P0-1).
+    # timescaledb-ha inclut PostGIS, TimescaleDB, et les outils de réplication.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/config/postgres/postgresql-primary.conf:/etc/postgresql/postgresql.conf:ro
+      - ./backend/config/postgres/init-replication.sql:/docker-entrypoint-initdb.d/02-replication.sql:ro
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      # Ouvre l'accès replication depuis le réseau Docker interne uniquement.
+      # pg_hba.conf inline via hba_file serait plus propre mais nécessite un
+      # fichier monté. On autorise via POSTGRES_HOST_AUTH_METHOD + env:
+      - hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:?}
+      # Transmis au script init-replication.sql via ALTER SYSTEM :
+      POSTGRES_OPTIONS: "-c app.replication_password=${POSTGRES_REPLICATION_PASSWORD}"
+
+  # ── Replica : hot standby streaming depuis le primary ─────────────────────
+  postgres-replica:
+    image: timescale/timescaledb-ha:pg15-latest
+    container_name: atmr-postgres-replica
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_PRIMARY_HOST: postgres
+      POSTGRES_PRIMARY_PORT: 5432
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD:?}
+      POSTGRES_USER: ${POSTGRES_USER:-atmr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-atmr}
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+      - ./backend/config/postgres/replica-entrypoint.sh:/scripts/replica-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/replica-entrypoint.sh"]
+    expose:
+      - "5432"
+    networks:
+      - atmr-network
+    healthcheck:
+      # pg_is_in_recovery() retourne true uniquement si le nœud est en standby.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-atmr} && psql -U ${POSTGRES_USER:-atmr} -c 'SELECT pg_is_in_recovery()' | grep -q 't'"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
+
+  # ── PgBouncer replica : point d'entrée lectures pour le backend ───────────
+  pgbouncer-replica:
+    image: edoburu/pgbouncer:latest
+    container_name: atmr-pgbouncer-replica
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres-replica
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-atmr}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-atmr_password}
+      DB_NAME: ${POSTGRES_DB:-atmr}
+      LISTEN_PORT: 6433
+      POOL_MODE: transaction
+      # Le replica est read-only → pool plus grand car pas d'accès exclusifs.
+      MAX_CLIENT_CONN: 3000
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_REPLICA_POOL_SIZE:-300}
+      RESERVE_POOL_SIZE: ${PGBOUNCER_REPLICA_RESERVE_SIZE:-60}
+      SERVER_RESET_QUERY: DISCARD ALL
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+      AUTH_TYPE: scram-sha-256
+    expose:
+      - "6433"
+    depends_on:
+      postgres-replica:
+        condition: service_healthy
+    networks:
+      - atmr-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6433 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Backend : injecter REPLICA_DATABASE_URL ───────────────────────────────
+  backend:
+    depends_on:
+      pgbouncer-replica:
+        condition: service_healthy
+    environment:
+      REPLICA_DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr_password}@pgbouncer-replica:6433/${POSTGRES_DB:-atmr}"
+      # Pool séparé pour les lectures replica (ajusté via env si besoin)
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+
+  # ── Celery workers : même pool replica pour analytics/reporting ───────────
+  celery-worker:
+    environment:
+      REPLICA_DATABASE_URL: "postgresql+psycopg2://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr_password}@pgbouncer-replica:6433/${POSTGRES_DB:-atmr}"
+
+volumes:
+  postgres_replica_data:
+    driver: local

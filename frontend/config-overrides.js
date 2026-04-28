@@ -113,6 +113,21 @@ module.exports = {
         return plugin;
       }),
     };
+
+    // PWA : precache des assets de build + fallback SPA (Workbox)
+    const WorkboxWebpackPlugin = require('workbox-webpack-plugin');
+    config.plugins.push(
+      new WorkboxWebpackPlugin.GenerateSW({
+        clientsClaim: true,
+        skipWaiting: true,
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/socket\.io/],
+        additionalManifestEntries: [
+          { url: '/offline.html', revision: '20260408-offline-v1' },
+        ],
+      })
+    );
   }
 
   return config;

@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour validation des endpoints d'authentification."""
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     fields,
     validate,
@@ -30,7 +30,7 @@ class RegisterSchema(Schema):
     # Champs optionnels
     first_name = fields.Str(load_default=None, validate=validate.Length(max=100))
     last_name = fields.Str(load_default=None, validate=validate.Length(max=100))
-    phone = fields.Str(load_default=None, validate=validate.Length(max=20))
+    phone = fields.Str(required=True, validate=validate.Length(min=7, max=20))
     address = fields.Str(load_default=None, validate=validate.Length(max=500))
     birth_date = fields.Date(load_default=None)
     gender = fields.Str(
@@ -55,3 +55,43 @@ class ChangePasswordSchema(Schema):
     current_password = fields.Str(required=True)
     new_password = fields.Str(required=True, validate=PASSWORD_VALIDATOR)
     confirm_password = fields.Str(required=True)
+
+
+class VerifyEmailActivationSchema(Schema):
+    token = fields.Str(required=True, validate=validate.Length(min=16, max=2048))
+
+
+class VerifySmsActivationSchema(Schema):
+    activation_session_id = fields.Str(
+        required=True, validate=validate.Length(min=8, max=64)
+    )
+    code = fields.Str(required=True, validate=validate.Regexp(r"^\d{6}$"))
+
+
+class FinalizeActivationSchema(Schema):
+    activation_session_id = fields.Str(
+        required=True, validate=validate.Length(min=8, max=64)
+    )
+
+
+class ResendActivationSchema(Schema):
+    activation_session_id = fields.Str(
+        required=True, validate=validate.Length(min=8, max=64)
+    )
+
+
+class UpdateActivationPhoneSchema(Schema):
+    activation_session_id = fields.Str(
+        required=True, validate=validate.Length(min=8, max=64)
+    )
+    phone = fields.Str(required=True, validate=validate.Length(min=7, max=20))
+
+
+class PasswordlessOtpRequestSchema(Schema):
+    channel = fields.Str(required=True, validate=validate.OneOf(["email", "phone"]))
+    identifier = fields.Str(required=True, validate=validate.Length(min=3, max=255))
+
+
+class PasswordlessOtpVerifySchema(Schema):
+    otp_session_id = fields.Str(required=True, validate=validate.Length(min=8, max=128))
+    code = fields.Str(required=True, validate=validate.Regexp(r"^\d{6}$"))

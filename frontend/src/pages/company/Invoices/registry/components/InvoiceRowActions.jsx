@@ -20,6 +20,8 @@ import {
   canRegeneratePdf,
   canCancelInvoice,
   canDuplicateInvoice,
+  canEditDraft,
+  invoiceStatusLower,
   getNextReminderLevel,
 } from '../../../../../services/invoiceService';
 
@@ -34,6 +36,7 @@ const InvoiceRowActions = ({
   onCancel,
   onViewPdf,
   onDuplicate,
+  onEditDraft,
   isGuideAnchor = false,
 }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -88,6 +91,14 @@ const InvoiceRowActions = ({
   const hasReminder = latestReminder && latestReminder.pdf_url;
 
   const actions = [
+    {
+      key: 'editDraft',
+      label: 'Éditer le brouillon',
+      icon: <FiEdit size={14} />,
+      onClick: () => onEditDraft?.(),
+      className: styles.actionBtnPrimary,
+      show: Boolean(onEditDraft) && canEditDraft(invoice),
+    },
     {
       key: 'viewInitial',
       label: 'Voir facture initiale',
@@ -146,7 +157,7 @@ const InvoiceRowActions = ({
       icon: <FiMail size={14} />,
       onClick: onSendReminderEmail,
       className: styles.actionBtnPrimary,
-      show: invoice.reminder_level > 0 && invoice.status !== 'paid',
+      show: invoice.reminder_level > 0 && invoiceStatusLower(invoice) !== 'paid',
     },
     {
       key: 'regenerate',

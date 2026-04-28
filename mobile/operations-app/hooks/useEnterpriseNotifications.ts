@@ -33,7 +33,7 @@ Notifications.setNotificationHandler({
 });
 
 export const useEnterpriseNotifications = () => {
-  const { enterpriseSession, loading } = useAuth();
+  const { enterpriseSession, loading, mode } = useAuth();
   const socket = useEnterpriseSocket();
   const router = useRouter();
   const appState = useRef(AppState.currentState);
@@ -44,9 +44,13 @@ export const useEnterpriseNotifications = () => {
     chatMessage?: (data: any) => void;
   }>({});
 
-  // Enregistrer le token push pour l'entreprise
+  // Enregistrer le token push pour l'entreprise (uniquement en surface enterprise — évite course driver/entreprise)
   useEffect(() => {
-    if (Platform.OS === "web" || loading || !enterpriseSession?.company?.id) {
+    if (mode !== "enterprise") {
+      lastRegisteredCompanyId = null;
+      lastRegisteredToken = null;
+    }
+    if (Platform.OS === "web" || loading || mode !== "enterprise" || !enterpriseSession?.company?.id) {
       return;
     }
 
@@ -144,7 +148,7 @@ export const useEnterpriseNotifications = () => {
         registerPushPromise = null;
       });
     }
-  }, [enterpriseSession, loading]);
+  }, [enterpriseSession, loading, mode]);
 
   // Écouter les événements Socket.IO et envoyer des notifications
   useEffect(() => {

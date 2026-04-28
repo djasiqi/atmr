@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { consumeDemoMagicLink } from '../../services/demoAccessService';
 import { setCurrentAuthEnv } from '../../utils/apiClient';
+import { setDemoRecommendedJourney, writeAuthSession } from '../../utils/webAuthSession';
 import styles from './DemoAccessConsume.module.css';
 
 const buildTokenStateKey = (token) => `demo_magic_link_state:${token}`;
@@ -139,41 +140,15 @@ const DemoAccessConsume = () => {
         const accessToken = result?.token || result?.access_token || null;
         const refreshToken = result?.refresh_token || null;
         if (user) {
-          const userPayload = JSON.stringify(user);
-          localStorage.setItem(`${nextEnv}_user`, userPayload);
-          localStorage.setItem(`${nextEnv}_public_id`, user.public_id || '');
-          localStorage.setItem('user', userPayload);
-          localStorage.setItem('public_id', user.public_id || '');
-
-          // Sync role-specific storages so ProtectedRoute does not bounce to /login.
-          if (role === 'company' || role === 'admin') {
-            localStorage.setItem('company_user', userPayload);
-            localStorage.setItem('company_public_id', user.public_id || '');
-          } else if (role === 'institution') {
-            localStorage.setItem('institution_user', userPayload);
-            localStorage.setItem('institution_public_id', user.public_id || '');
-          }
+          writeAuthSession({
+            env: nextEnv,
+            user,
+            role,
+            accessToken,
+            refreshToken,
+          });
         }
-        if (accessToken) {
-          localStorage.setItem(`${nextEnv}_access_token`, accessToken);
-          localStorage.setItem('authToken', accessToken);
-          if (role === 'company' || role === 'admin') {
-            localStorage.setItem('company_access_token', accessToken);
-          } else if (role === 'institution') {
-            localStorage.setItem('institution_access_token', accessToken);
-          }
-        }
-        if (refreshToken) {
-          localStorage.setItem(`${nextEnv}_refresh_token`, refreshToken);
-          localStorage.setItem('refreshToken', refreshToken);
-          if (role === 'company' || role === 'admin') {
-            localStorage.setItem('company_refresh_token', refreshToken);
-          } else if (role === 'institution') {
-            localStorage.setItem('institution_refresh_token', refreshToken);
-          }
-        }
-        localStorage.setItem(`${nextEnv}_demo_recommended_journey`, recommendedJourney);
-        localStorage.setItem('demo_recommended_journey', recommendedJourney);
+        setDemoRecommendedJourney(recommendedJourney, nextEnv);
         window.dispatchEvent(new Event('auth-changed'));
         const redirectTo =
           String(result?.redirect_to || '/demo/home').trim() || '/demo/home';

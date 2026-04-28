@@ -1,9 +1,21 @@
 // src/components/layout/Header/HeaderDashboard.jsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { FiCalendar } from 'react-icons/fi';
+import React, { useState, useEffect, useRef, useMemo, useId, useCallback } from 'react';
+import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import {
+  FiBell,
+  FiCalendar,
+  FiChevronDown,
+  FiGrid,
+  FiHelpCircle,
+  FiList,
+  FiLogOut,
+  FiSettings,
+  FiUser,
+} from 'react-icons/fi';
+import { toast } from 'sonner';
 import styles from './HeaderDashboard.module.css';
 import { logoutUser } from '../../../utils/apiClient';
+import { getEnvUser } from '../../../utils/webAuthSession';
 
 function formatToday() {
   return new Date().toLocaleDateString('fr-CH', {
@@ -11,6 +23,15 @@ function formatToday() {
     day: 'numeric',
     month: 'short',
   });
+}
+
+function initialsFromName(name) {
+  if (!name || !String(name).trim()) return '?';
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  return parts[0].slice(0, 2).toUpperCase();
 }
 
 /**
@@ -28,12 +49,13 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
   const [userRole, setUserRole] = useState('');
   const navigate = useNavigate();
   const menuRef = useRef(null);
+  const menuPanelId = useId();
+  const closeMenu = useCallback(() => setIsMenuOpen(false), []);
 
   useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
+    const user = getEnvUser();
+    if (user) {
       try {
-        const user = JSON.parse(userData);
         if (user?.username) setUserName(user.username);
         if (user?.public_id) setPublicId(user.public_id);
         if (user?.role) setUserRole(user.role);
@@ -54,11 +76,18 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
   };
 
   const handleAccountClick = () => {
+    setIsMenuOpen(false);
     if (!publicId) return;
+    const r = (userRole || '').toLowerCase();
+    if (r === 'driver') {
+      navigate('/driver/settings');
+      return;
+    }
     navigate(`/dashboard/account/${publicId}`);
   };
 
   const handleLogout = async () => {
+    setIsMenuOpen(false);
     await logoutUser();
   };
 
@@ -72,54 +101,147 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const dashboardLink = publicId && userRole ? `/dashboard/${userRole}/${publicId}` : '/dashboard';
+  useEffect(() => {
+    if (!isMenuOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isMenuOpen]);
+
+  const roleLower = (userRole || '').toLowerCase();
+  const dashboardLink =
+    publicId && roleLower
+      ? `/dashboard/${roleLower}/${publicId}`
+      : '/dashboard';
+
+  const clientNavItems =
+    publicId && roleLower === 'client'
+      ? [
+          { to: `/dashboard/client/${publicId}`, label: 'Réserver' },
+          { to: `/reservations/${publicId}`, label: 'Mes courses' },
+          { to: `/dashboard/account/${publicId}`, label: 'Mon compte' },
+          { to: '/aide', label: 'Aide' },
+        ]
+      : [];
+
+  const driverNavItems =
+    publicId && roleLower === 'driver'
+      ? [
+          { to: `/dashboard/driver/${publicId}`, label: 'Tableau de bord' },
+          { to: '/driver/schedule', label: 'Planning' },
+          { to: '/driver/map', label: 'Carte' },
+          { to: '/driver/history', label: 'Historique' },
+          { to: '/driver/settings', label: 'Paramètres' },
+        ]
+      : [];
+
+  const quickNavItems =
+    roleLower === 'client' ? clientNavItems : roleLower === 'driver' ? driverNavItems : [];
   const adminHome =
     public_id && isAdmin ? `/dashboard/admin/${public_id}` : dashboardLink;
 
   const todayLabel = useMemo(() => formatToday(), []);
 
+  const roleLabel =
+    roleLower === 'driver' ? 'Chauffeur' : roleLower === 'client' ? 'Client' : 'Compte';
+
+  const handleNotificationsClick = () => {
+    toast.info('Aucune notification pour le moment.');
+  };
+
   const userDropdown = (
     <div className={styles.userSection} ref={menuRef}>
       <button
         type="button"
-        className={styles.userButton}
+        className={`${styles.userButton}${isMenuOpen ? ` ${styles.userButtonOpen}` : ''}`}
         onClick={toggleMenu}
         aria-expanded={isMenuOpen}
-        aria-haspopup="menu"
-        aria-label="Menu utilisateur"
+        aria-haspopup="true"
+        aria-controls={menuPanelId}
+        aria-label={`Menu compte — ${displayName}`}
       >
-        {displayName} <span className={styles.arrow} aria-hidden>
-          ▼
+        <span className={styles.userButtonAvatar} aria-hidden>
+          {initialsFromName(displayName)}
         </span>
+        <span className={styles.userButtonName}>{displayName}</span>
+        <FiChevronDown className={styles.userButtonChevron} aria-hidden />
       </button>
       {isMenuOpen && (
-        <div className={styles.dropdownMenu}>
+        <div
+          id={menuPanelId}
+          className={styles.dropdownMenu}
+          role="region"
+          aria-label="Actions du compte"
+        >
           <div className={styles.userInfo}>
-            <p className={styles.userName}>{displayName}</p>
+            <div className={styles.userAvatar} aria-hidden>
+              {initialsFromName(displayName)}
+            </div>
+            <div className={styles.userMeta}>
+              <p className={styles.userName}>{displayName}</p>
+              <p className={styles.userRole}>{roleLabel}</p>
+            </div>
           </div>
-          <div className={styles.menuOptions}>
-            <button type="button" className={styles.menuLink} onClick={handleAccountClick}>
-              Gestion du compte
-            </button>
-            {publicId ? (
-              <Link to={`/reservations/${publicId}`} className={styles.menuLink}>
-                Mes Réservations
+          <ul className={styles.menuList}>
+            <li>
+              <button type="button" className={styles.menuItem} onClick={handleAccountClick}>
+                {roleLower === 'driver' ? (
+                  <FiSettings className={styles.menuItemIcon} aria-hidden />
+                ) : (
+                  <FiUser className={styles.menuItemIcon} aria-hidden />
+                )}
+                <span>{roleLower === 'driver' ? 'Paramètres' : 'Gestion du compte'}</span>
+              </button>
+            </li>
+            {publicId && roleLower === 'client' ? (
+              <li>
+                <Link
+                  to={`/reservations/${publicId}`}
+                  className={styles.menuItem}
+                  onClick={closeMenu}
+                >
+                  <FiList className={styles.menuItemIcon} aria-hidden />
+                  <span>Mes courses</span>
+                </Link>
+              </li>
+            ) : null}
+            {publicId && roleLower === 'client' ? (
+              <li>
+                <Link
+                  to={`/dashboard/client/${publicId}`}
+                  className={styles.menuItem}
+                  onClick={closeMenu}
+                >
+                  <FiCalendar className={styles.menuItemIcon} aria-hidden />
+                  <span>Réserver</span>
+                </Link>
+              </li>
+            ) : null}
+            {publicId && roleLower === 'driver' ? (
+              <li>
+                <Link
+                  to={`/dashboard/driver/${publicId}`}
+                  className={styles.menuItem}
+                  onClick={closeMenu}
+                >
+                  <FiGrid className={styles.menuItemIcon} aria-hidden />
+                  <span>Tableau de bord</span>
+                </Link>
+              </li>
+            ) : null}
+            <li>
+              <Link to="/aide" className={styles.menuItem} onClick={closeMenu}>
+                <FiHelpCircle className={styles.menuItemIcon} aria-hidden />
+                <span>Aide &amp; support</span>
               </Link>
-            ) : (
-              <span className={styles.menuLink} style={{ cursor: 'not-allowed', opacity: 0.5 }}>
-                Mes Réservations (Indisponible)
-              </span>
-            )}
-            <Link to="/dashboard/support" className={styles.menuLink}>
-              Support client
-            </Link>
-            <Link to="/dashboard/upcoming-rides" className={styles.menuLink}>
-              Prochaines courses
-            </Link>
-          </div>
+            </li>
+          </ul>
           <div className={styles.logout}>
             <button type="button" className={styles.logoutButton} onClick={handleLogout}>
-              Déconnexion
+              <FiLogOut className={styles.menuItemIcon} aria-hidden />
+              <span>Déconnexion</span>
             </button>
           </div>
         </div>
@@ -154,34 +276,35 @@ const HeaderDashboard = ({ variant = 'default', userName: userNameProp }) => {
 
   return (
     <header className={styles.header} role="banner">
-      <Link to={dashboardLink} className={styles.logo}>
-        Dashboard
+      <Link to={dashboardLink} className={styles.logo} aria-label="Aller au tableau de bord">
+        <img src="/logo-lirie.png" alt="" className={styles.logoBrandImg} width="120" height="30" />
       </Link>
       <nav className={styles.nav} aria-label="Navigation rapide">
         <ul className={styles.navList}>
-          <li>
-            <Link to="/dashboard/bookings" className={styles.navLink}>
-              Mes Réservations
-            </Link>
-          </li>
-          <li>
-            <Link to="/dashboard/payments" className={styles.navLink}>
-              Paiements
-            </Link>
-          </li>
-          <li>
-            <Link to="/dashboard/profile" className={styles.navLink}>
-              Profil
-            </Link>
-          </li>
-          <li>
-            <Link to="/dashboard/help" className={styles.navLink}>
-              Aide
-            </Link>
-          </li>
+          {quickNavItems.map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                className={({ isActive }) => `${styles.navLink} ${isActive ? styles.navLinkActive : ''}`}
+                end
+              >
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
         </ul>
       </nav>
-      {userDropdown}
+      <div className={styles.headerActions}>
+        <button
+          type="button"
+          className={styles.bellButton}
+          onClick={handleNotificationsClick}
+          aria-label="Notifications"
+        >
+          <FiBell className={styles.bellIcon} aria-hidden />
+        </button>
+        {userDropdown}
+      </div>
     </header>
   );
 };

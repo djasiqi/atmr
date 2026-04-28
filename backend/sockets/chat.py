@@ -10,6 +10,7 @@ et appelées par le framework.
 
 # ruff: noqa: I001
 import logging
+import os
 import time
 import traceback
 from contextlib import suppress
@@ -44,6 +45,7 @@ from services.monitoring.driver_location_metrics import (
 from services.monitoring.location_correlation_log import log_driver_location_processed
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
+from services.realtime.presence_registry import register_presence, remove_presence
 from services.realtime.live_driver_status import (
     resolve_driver_status_for_fanout as _resolve_driver_status,
     resolve_mission_status_for_driver as _resolve_mission_status_for_driver,
@@ -76,6 +78,44 @@ _TOKEN_EXPIRED_TRACKING: Dict[str, tuple[datetime | None, int]] = {}
 _TOKEN_EXPIRED_LOG_INTERVAL = 60  # Logger au maximum toutes les 60 secondes par IP
 _TOKEN_EXPIRED_MAX_COUNT = 5  # Après 5 erreurs, logger seulement toutes les 60s
 _TOKEN_EXPIRED_TRACKING_MAX_SIZE = 1000  # Taille max du dictionnaire avant nettoyage
+REALTIME_MAX_CONNECTIONS_PER_COMPANY = int(
+    os.getenv("REALTIME_MAX_CONNECTIONS_PER_COMPANY", "5000")
+)
+
+
+def _company_conn_key(company_id: int) -> str:
+    return f"realtime:company:{company_id}:active_connections"
+
+
+def _try_acquire_company_slot(company_id: int) -> bool:
+    if redis_client is None:
+        return True
+    try:
+        key = _company_conn_key(company_id)
+        current_raw = cast(Any, redis_client.incr(key))
+        if hasattr(current_raw, "__await__"):
+            # Defensive fallback si un client async est injecte par erreur.
+            return True
+        current = int(current_raw)
+        redis_client.expire(key, 120)
+        if current > REALTIME_MAX_CONNECTIONS_PER_COMPANY:
+            redis_client.decr(key)
+            return False
+        return True
+    except Exception:
+        logger.exception("[socketio] company slot acquire failed")
+        return True
+
+
+def _release_company_slot(company_id: int) -> None:
+    if redis_client is None:
+        return
+    try:
+        key = _company_conn_key(company_id)
+        redis_client.decr(key)
+        redis_client.expire(key, 120)
+    except Exception:
+        logger.exception("[socketio] company slot release failed")
 
 
 def _log_socketio_exception(
@@ -266,7 +306,7 @@ def _extract_token(auth) -> str | None:
 
     **Comportement en production :**
     - Si header Authorization présent : ignorer cookie/payload (priorité stricte)
-    - Payload auth : rejeté en production (sécurité)
+    - Payload auth (socket.io) : accepté si header/cookie absents (navigateur, Expo web) — pas de fuite URL, même validation JWT
 
     Args:
         auth: Payload d'authentification Socket.IO (dict ou None)
@@ -399,30 +439,19 @@ def _extract_token(auth) -> str | None:
                 },
             )
 
-            # Rejeter en production, accepter en dev uniquement
-            if is_prod:
-                logger.warning(
-                    "socket_token_payload_auth_rejected",
-                    extra={
-                        "event": "payload_auth_rejected",
-                        "reason": "production_security",
-                        "env": env,
-                    },
-                )
-                token_result = None
-            else:
-                # Dev: autoriser payload auth (mais avec warning)
-                token = str(tok).strip()
-                logger.debug(
-                    "socket_token_extracted",
-                    extra={
-                        "event": "token_extracted",
-                        "source": "auth_payload",
-                        "has_token": bool(token),
-                        "env": env,
-                    },
-                )
-                token_result = token
+            # Même jeton que Authorization / cookie ; requis pour clients web (handshake WS sans en-tête custom).
+            token = str(tok).strip()
+            logger.info(
+                "socket_token_extracted",
+                extra={
+                    "event": "token_extracted",
+                    "source": "auth_payload",
+                    "has_token": bool(token),
+                    "env": env,
+                    "is_production": is_prod,
+                },
+            )
+            token_result = token
 
     # ✅ S1: Support query string supprimé pour éviter fuite de tokens dans logs/URLs
     # Les clients doivent utiliser Header Authorization (mobile) ou Cookie (web)
@@ -822,6 +851,9 @@ def init_chat_socket(socketio: SocketIO):
                         },
                     )
                     raise SocketConnectionRefusedError("DRIVER_OR_COMPANY_NOT_FOUND")
+                if not _try_acquire_company_slot(int(driver.company_id)):
+                    ws_metrics.on_error("realtime_company_capacity_exceeded")
+                    raise SocketConnectionRefusedError("COMPANY_REALTIME_CAPACITY_EXCEEDED")
 
                 company_room = f"company_{driver.company_id}"
                 driver_room = f"driver_{driver.id}"
@@ -840,6 +872,13 @@ def init_chat_socket(socketio: SocketIO):
                     "device_id": device_id,
                     "session_diag": session_diag,
                 }
+                register_presence(
+                    sid=sid,
+                    user_id=user.id,
+                    role="driver",
+                    company_id=driver.company_id,
+                    driver_id=driver.id,
+                )
 
                 # ✅ Métriques
                 ws_metrics.on_connect(company_id=driver.company_id, user_id=user.id)
@@ -882,6 +921,9 @@ def init_chat_socket(socketio: SocketIO):
                     )
                     ws_metrics.on_error("company_not_found")
                     raise SocketConnectionRefusedError("COMPANY_NOT_FOUND")
+                if not _try_acquire_company_slot(int(company.id)):
+                    ws_metrics.on_error("realtime_company_capacity_exceeded")
+                    raise SocketConnectionRefusedError("COMPANY_REALTIME_CAPACITY_EXCEEDED")
 
                 room = f"company_{company.id}"
                 join_room(room)
@@ -896,6 +938,12 @@ def init_chat_socket(socketio: SocketIO):
                     "device_id": device_id,
                     "session_diag": session_diag,
                 }
+                register_presence(
+                    sid=sid,
+                    user_id=user.id,
+                    role="company",
+                    company_id=company.id,
+                )
 
                 # ✅ Métriques
                 ws_metrics.on_connect(company_id=company.id, user_id=user.id)
@@ -953,6 +1001,11 @@ def init_chat_socket(socketio: SocketIO):
                     "device_id": device_id,
                     "session_diag": session_diag,
                 }
+                register_presence(
+                    sid=sid,
+                    user_id=user.id,
+                    role="institution",
+                )
 
                 # ✅ Métriques
                 ws_metrics.on_connect(user_id=user.id)
@@ -968,6 +1021,45 @@ def init_chat_socket(socketio: SocketIO):
                         "user_public_id": public_id,
                         "institution_id": institution_id,
                         "role": "institution",
+                        "rooms": [room],
+                        "ip": client_ip,
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                        "timestamp": now.isoformat(),
+                        "request_trace_id": trace_id,
+                    },
+                )
+
+            elif user.role == UserRole.client:
+                room = f"client_{public_id}"
+                join_room(room)
+                emit("connected", {"message": f"✅ Client connecté à {room}"})
+
+                _SID_INDEX[sid] = {
+                    "user_public_id": public_id,
+                    "user_id": user.id,
+                    "ip": client_ip,
+                    "role": "client",
+                    "device_id": device_id,
+                    "session_diag": session_diag,
+                }
+                register_presence(
+                    sid=sid,
+                    user_id=user.id,
+                    role="client",
+                )
+
+                ws_metrics.on_connect(user_id=user.id)
+                ws_metrics.on_room_join(room)
+
+                logger.info(
+                    "socket_connect_success",
+                    extra={
+                        "event": "socket_connect_success",
+                        "sid": sid,
+                        "user_id": user.id,
+                        "user_public_id": public_id,
+                        "role": "client",
                         "rooms": [room],
                         "ip": client_ip,
                         "device_id": device_id,
@@ -2929,6 +3021,10 @@ def init_chat_socket(socketio: SocketIO):
             user_id = info.get("user_id") if info else None
             driver_id = info.get("driver_id") if info else None
             role = info.get("role") if info else None
+            if sid and user_id and role:
+                remove_presence(sid=sid, user_id=int(user_id), role=str(role))
+            if company_id and role in {"driver", "company"}:
+                _release_company_slot(int(company_id))
 
             # ✅ Tracking rooms : quitter les rooms appropriées
             if role == "driver" and driver_id and company_id:

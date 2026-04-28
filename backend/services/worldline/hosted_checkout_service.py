@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_WORLDLINE_MIN_AMOUNT_CENTS = 50
+_MERCHANT_REFERENCE_MAX_LEN = 30
+
 
 def create_worldline_hosted_checkout(
     *,
@@ -43,9 +46,11 @@ def create_worldline_hosted_checkout(
     if not worldline_configured():
         raise RuntimeError("Worldline n'est pas configuré sur ce serveur")
 
-    if booking.status != BookingStatus.PENDING:
+    booking_status = getattr(booking, "status", None)
+    if booking_status != BookingStatus.PENDING:
         raise ValueError("Seules les réservations en attente peuvent être payées en ligne")
-    if not booking.client_id or booking.client_id != client.id:
+    booking_client_id = getattr(booking, "client_id", None)
+    if not booking_client_id or booking_client_id != client.id:
         raise ValueError("Cette réservation n'appartient pas à ce client")
 
     amount = float(booking.amount or 0)
@@ -53,7 +58,7 @@ def create_worldline_hosted_checkout(
         raise ValueError("Montant de réservation invalide pour le paiement")
 
     cents = chf_amount_to_cents(amount)
-    if cents < 50:
+    if cents < _WORLDLINE_MIN_AMOUNT_CENTS:
         raise ValueError("Montant minimum Worldline (50 centimes) non atteint")
 
     if return_url_override and str(return_url_override).strip():
@@ -64,15 +69,21 @@ def create_worldline_hosted_checkout(
     wl_client = get_worldline_api_client()
     merchant_id = get_worldline_merchant_id()
 
-    from worldline.connect.sdk.v1.domain.amount_of_money import AmountOfMoney
-    from worldline.connect.sdk.v1.domain.create_hosted_checkout_request import (
+    from worldline.connect.sdk.v1.domain.amount_of_money import (  # type: ignore[reportMissingImports]
+        AmountOfMoney,
+    )
+    from worldline.connect.sdk.v1.domain.create_hosted_checkout_request import (  # type: ignore[reportMissingImports]
         CreateHostedCheckoutRequest,
     )
-    from worldline.connect.sdk.v1.domain.hosted_checkout_specific_input import (
+    from worldline.connect.sdk.v1.domain.hosted_checkout_specific_input import (  # type: ignore[reportMissingImports]
         HostedCheckoutSpecificInput,
     )
-    from worldline.connect.sdk.v1.domain.order import Order
-    from worldline.connect.sdk.v1.domain.order_references import OrderReferences
+    from worldline.connect.sdk.v1.domain.order import (  # type: ignore[reportMissingImports]
+        Order,
+    )
+    from worldline.connect.sdk.v1.domain.order_references import (  # type: ignore[reportMissingImports]
+        OrderReferences,
+    )
 
     payment_row = (
         Payment.query.filter_by(
@@ -96,23 +107,22 @@ def create_worldline_hosted_checkout(
         payment_row.payment_provider = "worldline"
         db.session.add(payment_row)
         db.session.flush()
-    else:
-        if payment_row.worldline_hosted_checkout_id:
-            try:
-                wl_client.v1().merchant(merchant_id).hostedcheckouts().delete(
-                    payment_row.worldline_hosted_checkout_id
-                )
-            except Exception as e:
-                logger.info(
-                    "Worldline delete ancien hosted checkout ignoré: %s",
-                    e,
-                    extra={"hosted_checkout_id": payment_row.worldline_hosted_checkout_id},
-                )
-            payment_row.worldline_hosted_checkout_id = None
-            payment_row.worldline_partial_redirect_url = None
+    elif payment_row.worldline_hosted_checkout_id:
+        try:
+            wl_client.v1().merchant(merchant_id).hostedcheckouts().delete(
+                payment_row.worldline_hosted_checkout_id
+            )
+        except Exception as e:
+            logger.info(
+                "Worldline delete ancien hosted checkout ignoré: %s",
+                e,
+                extra={"hosted_checkout_id": payment_row.worldline_hosted_checkout_id},
+            )
+        payment_row.worldline_hosted_checkout_id = None
+        payment_row.worldline_partial_redirect_url = None
 
     merchant_ref = f"L{booking.id}"
-    if len(merchant_ref) > 30:
+    if len(merchant_ref) > _MERCHANT_REFERENCE_MAX_LEN:
         merchant_ref = merchant_ref[:30]
 
     order = Order()

@@ -31,6 +31,25 @@ security_token_refreshes_total = Counter(
     "Nombre total de rafraîchissements de token",
 )
 
+# Vérification JWT par kid (rotation versionnée)
+jwt_verify_kid_total = Counter(
+    "jwt_verify_kid_total",
+    "Nombre total de vérifications JWT par kid",
+    ["kid"],
+)
+
+jwt_verify_legacy_key_total = Counter(
+    "jwt_verify_legacy_key_total",
+    "Nombre de vérifications JWT via clé legacy",
+    ["kid"],
+)
+
+jwt_invalid_kid_total = Counter(
+    "jwt_invalid_kid_total",
+    "Nombre de tokens JWT avec kid invalide ou non accepté",
+    ["kid"],
+)
+
 # Compteur des déconnexions
 security_logout_total = Counter(
     "security_logout_total",

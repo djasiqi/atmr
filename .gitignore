@@ -78,6 +78,10 @@ frontend/.env.local
 frontend/.env.*.local
 **/.env.production.local
 
+# Déploiement : secrets d’inventaire (hôte SSH, etc.)
+.local.deploy.env
+.local.deploy.env.*
+
 # Gabarits / fragments env — non versionnés (copie locale uniquement)
 **/env.example
 **/.env.example
@@ -180,3 +184,12 @@ backend/.gitconfig
 backend/.ssh/
 backend/.devcontainer/
 backend/gunicorn.ctl
+
+# Dumps locaux Traefik, extrait SDK Worldline, preuves scripts, DLQ locale
+tmp_traefik*.txt
+.tmp_wl_sdk/
+scripts/output/
+data/kafka-dlq/
+# Données cluster PostgreSQL locales (docker volume)
+postgres/
+backend/.gunicorn/

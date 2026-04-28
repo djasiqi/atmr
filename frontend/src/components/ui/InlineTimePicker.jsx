@@ -13,13 +13,14 @@ function parseTime(val) {
   return { h: h || '', m: m || '' };
 }
 
-export default function InlineTimePicker({ value, onChange, placeholder: _placeholder, className }) {
+export default function InlineTimePicker({ value, onChange, placeholder: _placeholder, className, inputId, onSelectNow }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
   const popoverRef = useRef(null);
   const inputRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [masked, setMasked] = useState('');
+  const [showUndefinedLabel, setShowUndefinedLabel] = useState(false);
 
   const { h: initH, m: initM } = parseTime(value);
   const [hours, setHours] = useState(initH || '08');
@@ -31,14 +32,21 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
       setMasked(`${h}:${m}`);
       setHours(h);
       setMinutes(m);
+      setShowUndefinedLabel(false);
     } else {
-      setMasked('');
+      if (!showUndefinedLabel) {
+        setMasked('');
+      }
     }
-  }, [value]);
+  }, [value, showUndefinedLabel]);
 
   const close = useCallback(() => setOpen(false), []);
 
   const handleInputChange = (e) => {
+    if (showUndefinedLabel) {
+      setShowUndefinedLabel(false);
+      setMasked('');
+    }
     const raw = e.target.value;
     const digits = raw.replace(/\D/g, '').slice(0, 4);
     let display = '';
@@ -60,7 +68,15 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
     }
   };
 
+  const handleInputFocus = () => {
+    if (showUndefinedLabel) {
+      setShowUndefinedLabel(false);
+      setMasked('');
+    }
+  };
+
   const handleInputBlur = () => {
+    if (showUndefinedLabel) return;
     const digits = masked.replace(/\D/g, '');
     if (digits.length === 0) { onChange(''); return; }
     if (digits.length < 4) setMasked(value ? `${parseTime(value).h}:${parseTime(value).m}` : '');
@@ -73,12 +89,13 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
   const selectPreset = (preset) => {
     const { h, m } = parseTime(preset);
     setHours(h); setMinutes(m); setMasked(`${h}:${m}`);
+    setShowUndefinedLabel(false);
     onChange(`${h}:${m}`);
     close();
   };
 
-  const onHoursChange = (e) => { const h = e.target.value; setHours(h); setMasked(`${h}:${minutes}`); onChange(`${h}:${minutes}`); };
-  const onMinutesChange = (e) => { const m = e.target.value; setMinutes(m); setMasked(`${hours}:${m}`); onChange(`${hours}:${m}`); };
+  const onHoursChange = (e) => { const h = e.target.value; setHours(h); setMasked(`${h}:${minutes}`); setShowUndefinedLabel(false); onChange(`${h}:${minutes}`); };
+  const onMinutesChange = (e) => { const m = e.target.value; setMinutes(m); setMasked(`${hours}:${m}`); setShowUndefinedLabel(false); onChange(`${hours}:${m}`); };
 
   const updatePosition = useCallback(() => {
     if (!wrapperRef.current) return;
@@ -116,11 +133,13 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
       <div ref={wrapperRef} className={tp.field}>
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           inputMode="numeric"
-          className={`form-input ${tp.input} ${className || ''}`}
+          className={`form-input ${tp.input} ${showUndefinedLabel ? tp.inputUndefined : ''} ${className || ''}`}
           value={masked}
           onChange={handleInputChange}
+          onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           onKeyDown={handleInputKeyDown}
           placeholder="__:__"
@@ -158,9 +177,21 @@ export default function InlineTimePicker({ value, onChange, placeholder: _placeh
             ))}
           </div>
           <div className={tp.footer}>
-            <button type="button" className={tp.footerBtn} onClick={() => { const now = new Date(); selectPreset(`${pad(now.getHours())}:${pad(Math.ceil(now.getMinutes() / 5) * 5 % 60)}`); }}>Maintenant</button>
-            <button type="button" className={tp.footerBtn} onClick={() => { selectPreset('00:00'); close(); }}>À définir</button>
-            {value && <button type="button" className={tp.footerBtnClear} onClick={() => { onChange(''); setMasked(''); close(); }}>Effacer</button>}
+            <button
+              type="button"
+              className={tp.footerBtn}
+              onClick={() => {
+                const now = new Date();
+                if (typeof onSelectNow === 'function') {
+                  onSelectNow(now);
+                }
+                selectPreset(`${pad(now.getHours())}:${pad(Math.ceil(now.getMinutes() / 5) * 5 % 60)}`);
+              }}
+            >
+              Maintenant
+            </button>
+            <button type="button" className={tp.footerBtn} onClick={() => { onChange(''); setMasked('A definir'); setShowUndefinedLabel(true); close(); }}>À définir</button>
+            {(value || showUndefinedLabel) && <button type="button" className={tp.footerBtnClear} onClick={() => { onChange(''); setMasked(''); setShowUndefinedLabel(false); close(); }}>Effacer</button>}
           </div>
         </div>,
         document.body,

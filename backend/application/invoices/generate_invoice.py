@@ -423,6 +423,8 @@ class GenerateInvoiceUseCase:
                 reservations.extend(
                     [b for b in assigned_bookings if b.id not in existing_ids]
                 )
+                # Même accès qu'en mode reservation_ids (annulation / frais d'annulation)
+                bookings_by_id = {r.id: r for r in reservations}
 
             if not reservations:
                 msg = "Aucune réservation trouvée pour cette période"

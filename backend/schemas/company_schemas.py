@@ -157,13 +157,14 @@ class ManualBookingCreateSchema(Schema):
 class ClientCreateSchema(Schema):
     """Schema pour création de client (POST /api/companies/me/clients)."""
 
-    # Champs selon client_type
-    client_type = fields.Str(
-        required=True, validate=validate.OneOf(["SELF_SERVICE", "PRIVATE", "CORPORATE"])
+    # Mode de gestion (SELF_SERVICE / MANAGED / CORPORATE)
+    management_mode = fields.Str(
+        required=True,
+        validate=validate.OneOf(["SELF_SERVICE", "MANAGED", "CORPORATE"]),
     )
     email = fields.Email(validate=validate.Length(max=254))
 
-    # Champs facturation (requis pour PRIVATE/CORPORATE)
+    # Champs facturation (requis pour MANAGED/CORPORATE)
     first_name = fields.Str(validate=validate.Length(min=1, max=100))
     last_name = fields.Str(validate=validate.Length(min=1, max=100))
     address = fields.Str(validate=validate.Length(min=1, max=500))

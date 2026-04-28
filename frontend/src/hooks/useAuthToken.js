@@ -1,16 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { jwtDecode } from 'jwt-decode';
+import {
+  getAuthEnv,
+  getEnvAccessToken,
+  getEnvRefreshToken,
+  getEnvUser,
+  removeLegacyGlobalTokens,
+} from '../utils/webAuthSession';
 
 const useAuthToken = () => {
   const [user, setUser] = useState(null);
-  const getAuthEnv = () => (localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app');
 
   // Fonction de lecture du localStorage → état user
   const readAuth = useCallback(() => {
     const env = getAuthEnv();
-    const token = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
-    const rawUser = localStorage.getItem(`${env}_user`) || localStorage.getItem('user');
-    const storedUser = rawUser ? JSON.parse(rawUser) : null;
+    const token = getEnvAccessToken(env, { allowLegacy: true });
+    const storedUser = getEnvUser(env);
 
     // Si on a un token dans localStorage (mode mobile), le décoder
     if (token) {
@@ -20,11 +25,8 @@ const useAuthToken = () => {
         // Vérifier expiration
         const currentTime = Date.now() / 1000;
         if (decoded.exp && decoded.exp < currentTime) {
-          console.warn('Token expiré');
-          try {
-            localStorage.removeItem('authToken');
-            localStorage.removeItem('refreshToken');
-          } catch {}
+          console.warn('🔐 Token expiré');
+          removeLegacyGlobalTokens();
           setUser(null);
           return;
         }
@@ -39,11 +41,8 @@ const useAuthToken = () => {
           public_id: decoded.sub,
         });
       } catch (error) {
-        console.error('Erreur lors du décodage du token:', error);
-        try {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('refreshToken');
-        } catch {}
+        console.error('❌ Erreur lors du décodage du token:', error);
+        removeLegacyGlobalTokens();
         setUser(null);
       }
     } else if (storedUser) {
@@ -99,48 +98,38 @@ export default useAuthToken;
 
 // ✅ Fonction d'accès directe au token brut
 export function getAccessToken() {
-  const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
-  const token = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
+  const env = getAuthEnv();
+  const token = getEnvAccessToken(env, { allowLegacy: true });
   if (!token) return null;
   try {
     const decoded = jwtDecode(token);
     const currentTime = Date.now() / 1000;
     if (decoded?.exp && decoded.exp < currentTime) {
       // Token expiré => l'effacer pour basculer sur le mode cookies httpOnly si présent.
-      try {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('refreshToken');
-      } catch {}
+      removeLegacyGlobalTokens();
       return null;
     }
   } catch {
     // Token illisible => éviter de le réutiliser.
-    try {
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('refreshToken');
-    } catch {}
+    removeLegacyGlobalTokens();
     return null;
   }
   return token;
 }
 
 export function getRefreshToken() {
-  const env = localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
-  const token = localStorage.getItem(`${env}_refresh_token`) || localStorage.getItem('refreshToken');
+  const env = getAuthEnv();
+  const token = getEnvRefreshToken(env, { allowLegacy: true });
   if (!token) return null;
   try {
     const decoded = jwtDecode(token);
     const currentTime = Date.now() / 1000;
     if (decoded?.exp && decoded.exp < currentTime) {
-      try {
-        localStorage.removeItem('refreshToken');
-      } catch {}
+      removeLegacyGlobalTokens();
       return null;
     }
   } catch {
-    try {
-      localStorage.removeItem('refreshToken');
-    } catch {}
+    removeLegacyGlobalTokens();
     return null;
   }
   return token;

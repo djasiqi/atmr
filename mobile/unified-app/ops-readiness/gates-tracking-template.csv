@@ -1,0 +1,11 @@
+Vague,Sous-bloc/Gate,Statut,KPI fige,Source de verite,Owner R,Owner A,Owner V,Date cible,Sprint,Gate IDs,Rollback,Decision comite/Waiver
+W0,Platform gate,,,,"","","",,,W0-1|W0-2|W0-3|W0-4|W0-5|W0-6,build_n_minus_1 + flags,
+W1,Driver runtime shadow,,,,"","","",,,W1-1|W1-2|W1-3|W1-4|W1-5|W1-6|W1-7,flags + http_only,
+W2,Mission convergence,,,,"","","",,,W2-1|W2-2|W2-3|W2-4,socket_off + polling,
+W3,Driver UI + quick-action,,,,"","","",,,W3-QA-1|W3-QA-2|W3-QA-3|W3-QA-4,disable_quick_action_route,
+W4,B5.1 Dispatch core,,,,"","","",,,B5.1-1|B5.1-2|B5.1-3|B5.1-4,dispatch_actions_off,
+W4,B5.2 Ride management,,,,"","","",,,B5.2-1|B5.2-2|B5.2-3|B5.2-4,readonly_rides,
+W4,B5.3 Reference data,,,,"","","",,,B5.3-1|B5.3-2|B5.3-3,manual_address_fallback,
+W4,B5.4 Partnerships/transfers,,,,"","","",,,B5.4-1|B5.4-2|B5.4-3,hide_transfer_menu,
+W4,B5.5 Billing,,,,"","","",,,B5.5-1|B5.5-2|B5.5-3,readonly_billing,
+W5,Post-parity hardening,,,,"","","",,,W5,flags + build_n_minus_1,

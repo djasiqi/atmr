@@ -34,7 +34,7 @@
   - Toujours générer les migrations **automatiquement** via **`alembic revision --autogenerate` exécuté dans le container**.
 
 ## 🔐 Accès serveur (prod) / environnement local (dev)
-- **Production** : accès serveur uniquement via SSH `ssh deploy@138.201.155.201` (utilisateur `deploy`, serveur prod).
+- **Production** : ne pas commiter d’hôte, d’IP ni d’utilisateur SSH. Définir `SERVER_HOST` (et `SERVER_USER` si besoin) en local — voir [docs/deployment-ssh.md](docs/deployment-ssh.md) et le fichier d’environnement local (ex. `.local.deploy.env`, non versionné).
 - **Développement** : utiliser l'environnement **local** basé sur **Docker** (docker compose) — il existe un serveur de dev local en containers.
 
 ## ✅ Qualité / warnings (obligatoire en fin de tâche)

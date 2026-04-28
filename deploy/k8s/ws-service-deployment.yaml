@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ws-service
+  namespace: atmr
+spec:
+  replicas: 20
+  selector:
+    matchLabels:
+      app: ws-service
+  template:
+    metadata:
+      labels:
+        app: ws-service
+    spec:
+      containers:
+        - name: ws-service
+          image: lirie/ws-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: POD_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WS_KAFKA_CONSUMER_ENABLED
+              value: "true"
+            - name: WS_KAFKA_GROUP_ID
+              value: "ws-service-shared"
+            - name: WS_KAFKA_ENABLE_MISSION_EVENTS
+              value: "false"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-config
+                  key: bootstrap-servers
+            - name: KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED
+              value: "driver.location.processed"
+            - name: KAFKA_TOPIC_MISSION_EVENTS
+              value: "mission.events"
+            - name: REDIS_CLUSTER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: redis-config
+                  key: redis-url
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-config
+                  key: redis-password
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secrets
+                  key: jwt-secret-key
+            - name: MAX_CONNECTIONS
+              value: "5000"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"

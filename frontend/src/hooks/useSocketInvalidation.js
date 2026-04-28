@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  canonicalRealtimeTimeMs,
+  getEntityKey,
+  shouldAcceptRealtimeEvent,
+} from '../utils/realtimeEventGuard';
 
 /**
  * Hook réutilisable pour invalider automatiquement React Query sur événements Socket.IO.
@@ -40,10 +45,6 @@ export function useSocketInvalidation(socket, eventMap, options = {}) {
   const queryClient = useQueryClient();
   const { onEvent, dependencies = [] } = options;
 
-  // ✅ useRef pour isoler seenEventIds par instance du hook (évite partage global)
-  const seenEventIdsRef = useRef(new Set());
-  const MAX_SEEN_EVENTS = 1000;
-
   // ✅ Queue d'invalidation pour coalescing (évite les storms)
   const invalidationQueueRef = useRef(new Set());
   const invalidationTimeoutRef = useRef(null);
@@ -55,7 +56,6 @@ export function useSocketInvalidation(socket, eventMap, options = {}) {
 
     // Créer les handlers pour chaque événement
     const handlers = {};
-    const seenEventIds = seenEventIdsRef.current;
     const invalidationQueue = invalidationQueueRef.current;
 
     // ✅ Fonction pour flush les invalidations en batch
@@ -67,7 +67,9 @@ export function useSocketInvalidation(socket, eventMap, options = {}) {
       keysToInvalidate.forEach((serializedKey) => {
         try {
           const queryKey = JSON.parse(serializedKey);
-          queryClient.invalidateQueries({ queryKey });
+          if (queryClient?.invalidateQueries) {
+            queryClient.invalidateQueries({ queryKey });
+          }
         } catch (error) {
           console.warn(
             `[useSocketInvalidation] Failed to parse query key: ${serializedKey}`,
@@ -83,21 +85,15 @@ export function useSocketInvalidation(socket, eventMap, options = {}) {
       const queryKeysConfig = eventMap[eventName];
 
       handlers[eventName] = (data) => {
-        // ✅ Déduplication par event_id (AVANT onEvent et invalidation)
+        // ✅ Contrat realtime minimal: dedup event_id + garde temporelle par entité.
         const eventId = data?.event_id;
-        if (eventId) {
-          if (seenEventIds.has(eventId)) {
-            console.warn(
-              `[useSocketInvalidation] Duplicate event ${eventId} ignored for event "${eventName}"`
-            );
-            return;
-          }
-          seenEventIds.add(eventId);
-          // Limiter la taille du Set (garder les 1000 derniers - FIFO)
-          if (seenEventIds.size > MAX_SEEN_EVENTS) {
-            const first = seenEventIds.values().next().value;
-            seenEventIds.delete(first);
-          }
+        const accepted = shouldAcceptRealtimeEvent({
+          eventId,
+          entityKey: getEntityKey(data, eventName),
+          canonicalTimeMs: canonicalRealtimeTimeMs(data),
+        });
+        if (!accepted) {
+          return;
         }
 
         // Appeler le callback optionnel

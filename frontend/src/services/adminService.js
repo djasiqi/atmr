@@ -1,11 +1,12 @@
 // src/services/adminService.js
 import apiClient from '../utils/apiClient';
+import { getActiveAccessToken } from '../utils/webAuthSession';
 /**
  * Récupère le token JWT stocké en local (si disponible).
  * ✅ Si pas de token, on compte sur les cookies httpOnly (apiClient gère automatiquement).
  */
 const getAuthToken = () => {
-  const token = localStorage.getItem('authToken');
+  const token = getActiveAccessToken({ allowLegacy: true });
   // ✅ Si pas de token, on retourne null et apiClient utilisera les cookies httpOnly
   return token || null;
 };

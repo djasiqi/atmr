@@ -16,6 +16,10 @@
   box-sizing: border-box;
 }
 
+.inputUndefined {
+  color: var(--text-tertiary, #6b7280) !important;
+}
+
 .iconBtn {
   position: absolute;
   right: 6px;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import styles from './NewInvoiceModal.module.css';
@@ -2335,11 +2336,22 @@ const NewInvoiceModal = ({
 
   const years = Array.from({ length: 3 }, (_, i) => new Date().getFullYear() - i);
 
-  return (
-    <div className="modal-overlay modal-invoice">
-      <div className={`modal-content modal-xl ${styles.modalInvoice}`} data-tour-id="invoice-new-modal">
+  return createPortal(
+    <div
+      className="modal-overlay modal-invoice"
+      role="presentation"
+    >
+      <div
+        className={`modal-content modal-xl ${styles.modalInvoice}`}
+        data-tour-id="invoice-new-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="invoice-new-modal-title"
+      >
         <div className="modal-header">
-          <h2 className="modal-title">Nouvelle facture</h2>
+          <h2 className="modal-title" id="invoice-new-modal-title">
+            Nouvelle facture
+          </h2>
           <button className="modal-close" onClick={handleClose}>
             ✕
           </button>
@@ -2359,6 +2371,12 @@ const NewInvoiceModal = ({
           {error && <div className="alert alert-error mb-md">{error}</div>}
 
           {successMessage && <div className={styles.success}>{successMessage}</div>}
+
+          <p className={styles.legacyPathBanner} role="note">
+            Parcours recommandé en routine : utiliser <strong>Facturer une période</strong> (liste
+            des factures). Cet écran regroupe des options avancées et des scénarios hérités ; il sera
+            progressivement remplacé.
+          </p>
 
           <div
             className={`${styles.formGroup} ${styles.stickyBillingType}`}
@@ -4016,7 +4034,8 @@ const NewInvoiceModal = ({
 
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

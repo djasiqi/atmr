@@ -1,0 +1,110 @@
+{
+  "version": "2026-04-21",
+  "notes": "Contrat topics Kafka ATMR/LIRIE",
+  "topics": [
+    {
+      "name": "driver.location.raw",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 7200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "tracking-ingest-producer:Write",
+        "tracking-ingest-consumer:Read",
+        "tracking-ingest-consumer:Describe"
+      ]
+    },
+    {
+      "name": "driver.location.processed",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "tracking-ingest-consumer:Write",
+        "ws-service:Read",
+        "ws-service:Describe"
+      ]
+    },
+    {
+      "name": "driver.location.dlq",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "tracking-ingest-consumer:Write",
+        "kafka-dlq-consumer:Read",
+        "kafka-dlq-consumer:Describe"
+      ]
+    },
+    {
+      "name": "notifications.push",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "notifications-producer:Write",
+        "notifications-consumer:Read",
+        "notifications-consumer:Describe"
+      ]
+    },
+    {
+      "name": "notifications.sms",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "notifications-producer:Write",
+        "notifications-consumer:Read",
+        "notifications-consumer:Describe"
+      ]
+    },
+    {
+      "name": "notifications.email",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "notifications-producer:Write",
+        "notifications-consumer:Read",
+        "notifications-consumer:Describe"
+      ]
+    },
+    {
+      "name": "notifications.dlq",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "notifications-consumer:Write",
+        "kafka-dlq-consumer:Read",
+        "kafka-dlq-consumer:Describe"
+      ]
+    },
+    {
+      "name": "mission.events",
+      "partitions": 36,
+      "replication_factor": 3,
+      "min_insync_replicas": 2,
+      "retention_ms": 259200000,
+      "cleanup_policy": "delete",
+      "acl_expected": [
+        "mission-events-producer:Write",
+        "ws-service:Read",
+        "ws-service:Describe"
+      ]
+    }
+  ]
+}

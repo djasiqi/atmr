@@ -8,15 +8,9 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient, { getCurrentAuthEnv } from '../utils/apiClient';
 import { lirieKeys } from '../queryKeys/lirie';
+import { hasCompanyScopedAccessToken } from '../utils/webAuthSession';
 
-const hasCompanyToken = () =>
-  getCurrentAuthEnv() === 'demo'
-    ? !!localStorage.getItem('demo_access_token')
-    : !!(
-        localStorage.getItem('company_access_token') ||
-        localStorage.getItem('company_authToken') ||
-        localStorage.getItem('app_access_token')
-      );
+const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
 
 /**
  * @param {string | null} date - YYYY-MM-DD (doit être le même que dispatchDay sur CompanyDashboard)

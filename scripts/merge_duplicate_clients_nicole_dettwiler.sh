@@ -2,7 +2,7 @@
 # Fusion des clients dupliqués "Nicole Dettwiler" (1219 Vernier)
 # Usernames: client-zcn9393w-mkhcab (16/01) et client-b3cym9km-mkola2 (21/01)
 # Usage: ./scripts/merge_duplicate_clients_nicole_dettwiler.sh
-# Sur prod: ssh deploy@138.201.155.201 'cd /srv/atmr && bash -s' < scripts/merge_duplicate_clients_nicole_dettwiler.sh
+# Sur prod : définir SERVER_HOST puis ex. scp/ssh (voir run_merge_clients_production.sh, docs/deployment-ssh.md)
 
 set -e
 

@@ -1,14 +1,17 @@
 """Routes Admin Ops / Platform — status/runtime + gouvernance V1 (tenant, policy, runbooks)."""
+# ruff: noqa: I001
 
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from flask import current_app, request
 from flask_jwt_extended import jwt_required
 from flask_restx import Namespace, Resource
 
 from ext import db, limiter, role_required
+from feature_flags import get_feature_flags_status
 from models import UserRole
 from models.company import Company
 from security.audit_log import AuditLogger
@@ -19,16 +22,16 @@ from services.platform_authz import (
     user_effective_platform_permissions,
 )
 from services.platform_audit_events import list_audit_events, replay_timeline_by_correlation_id
-from services.platform_exceptions import PlatformRollbackNotAllowed, PlatformRunbookConflict
-from services.platform_policy import evaluate_policy
-from feature_flags import get_feature_flags_status
 from services.platform_change_requests import (
     complete_change_request,
     create_change_request,
     get_change_request,
     list_change_requests,
 )
+from services.platform_exceptions import PlatformRollbackNotAllowed, PlatformRunbookConflict
+from services.platform_policy import evaluate_policy
 from services.platform_reconciliation import drift_summary_for_tenant
+from services.platform_region_topology import current_region_topology
 from services.platform_runbooks import (
     execute_runbook,
     get_execution,
@@ -37,9 +40,9 @@ from services.platform_runbooks import (
     preview_execution,
     rollback_execution,
 )
+from services.platform_runtime import build_platform_runtime_payload
 from services.platform_search import search_investigation
 from services.platform_services_catalog import list_platform_services
-from services.platform_runtime import build_platform_runtime_payload
 from services.platform_status_aggregator import build_platform_status_payload
 from services.platform_tenant_governance import (
     apply_suspend,
@@ -50,6 +53,7 @@ from services.platform_tenant_governance import (
 from shared.infrastructure.adapters.auth_adapter import get_current_user_via_use_case
 
 logger = logging.getLogger(__name__)
+MIN_JUSTIFICATION_LENGTH = 3
 
 platform_ops_ns = Namespace(
     "platform",
@@ -57,7 +61,7 @@ platform_ops_ns = Namespace(
 )
 
 
-def _correlation_id_from_request(data: dict | None) -> str | None:
+def _correlation_id_from_request(data: dict[str, Any] | None) -> str | None:
     if request.headers.get("X-Correlation-Id"):
         return request.headers.get("X-Correlation-Id")
     if data and data.get("correlation_id"):
@@ -117,6 +121,18 @@ class PlatformRuntimeResource(Resource):
         return payload, 200
 
 
+@platform_ops_ns.route("/topology/regions")
+class PlatformRegionTopologyResource(Resource):
+    """GET /api/v1/platform/topology/regions — état mono/multi-région."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        return current_region_topology(), 200
+
+
 @platform_ops_ns.route("/me")
 class PlatformMeResource(Resource):
     """GET /api/v1/platform/me — identité JWT + rôle plateforme (V1)."""
@@ -146,7 +162,7 @@ class PlatformMeResource(Resource):
 
 @platform_ops_ns.route("/search")
 class PlatformSearchResource(Resource):
-    """POST /api/v1/platform/search — InvestigationContext minimal (3 types d’IDs)."""
+    """POST /api/v1/platform/search — InvestigationContext minimal (3 types d'IDs)."""
 
     @jwt_required()
     @role_required(UserRole.admin)
@@ -383,11 +399,11 @@ class PlatformTenantSuspendResource(Resource):
     def post(self, tenant_id: int):
         data = request.get_json(silent=True) or {}
         justification = (data.get("justification") or "").strip()
-        if len(justification) < 3:
+        if len(justification) < MIN_JUSTIFICATION_LENGTH:
             return {
                 "decision": "blocked",
                 "reason_code": "justification_required",
-                "human_reason": "Une justification (≥ 3 caractères) est obligatoire.",
+                "human_reason": "Une justification (>= 3 caracteres) est obligatoire.",
             }, 400
 
         company = get_company_or_404(tenant_id)

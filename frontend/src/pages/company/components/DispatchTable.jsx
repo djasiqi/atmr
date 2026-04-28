@@ -27,6 +27,10 @@ import { useSocketInvalidation } from '../../../hooks/useSocketInvalidation';
 import { useQueryClient } from '@tanstack/react-query';
 import { lirieKeys } from '../../../queryKeys/lirie';
 import {
+  canonicalRealtimeTimeMs,
+  shouldAcceptRealtimeEvent,
+} from '../../../utils/realtimeEventGuard';
+import {
   runDispatchForDay,
   fetchDispatchRunById,
   fetchDispatchDelays,
@@ -83,6 +87,15 @@ const DispatchTable = ({
   const useUnifiedDispatchWs =
     process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === '1' ||
     process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === 'true';
+  const acceptRealtime = React.useCallback(
+    (payload, entityKey = null) =>
+      shouldAcceptRealtimeEvent({
+        eventId: payload?.event_id,
+        entityKey,
+        canonicalTimeMs: canonicalRealtimeTimeMs(payload),
+      }),
+    []
+  );
 
   const handleOptimizeDay = async () => {
     if (!dispatchDay) return;
@@ -219,6 +232,9 @@ const DispatchTable = ({
 
     // Declare a handler named for proper removal
     const onDispatchRunCompleted = (data) => {
+      if (!acceptRealtime(data, data?.dispatch_run_id ? `dispatch-run:${data.dispatch_run_id}` : null)) {
+        return;
+      }
       console.log('Dispatch run completed:', data);
       // Verify that the structure is as expected
       if (data && (data.dispatch_run_id || data.date)) {
@@ -237,7 +253,7 @@ const DispatchTable = ({
     return () => {
       socket.off('dispatch_run_completed', onDispatchRunCompleted);
     };
-  }, [socket, reload, dispatchDay, queryClient]);
+  }, [socket, reload, dispatchDay, queryClient, acceptRealtime]);
 
   // --- "dernière mise à jour" ---
   const [updatedAt, setUpdatedAt] = useState(Date.now());
@@ -344,6 +360,7 @@ const DispatchTable = ({
     } catch (_) {}
 
     const onAssignmentCreated = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) =>
           b.id === data.booking_id
@@ -364,6 +381,7 @@ const DispatchTable = ({
     };
 
     const onAssignmentUpdated = (data) => {
+      if (!acceptRealtime(data, data?.assignment_id ? `assignment:${data.assignment_id}` : null)) return;
       const patch = data.updates || data.fields || {};
       setRows((prev) =>
         prev.map((b) =>
@@ -376,6 +394,7 @@ const DispatchTable = ({
     };
 
     const onAssignmentCancelled = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, assignment: null } : b))
       );
@@ -383,6 +402,7 @@ const DispatchTable = ({
     };
 
     const onDispatchStatePatch = (data) => {
+      if (!acceptRealtime(data, data?.reservation_id ? `booking:${data.reservation_id}` : null)) return;
       const op = data?.op;
       if (op === 'assignment_created') {
         onAssignmentCreated({
@@ -401,6 +421,7 @@ const DispatchTable = ({
     };
 
     const onDelayDetected = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setDelays((prev) => ({
         ...prev,
         [data.booking_id]: {
@@ -425,6 +446,7 @@ const DispatchTable = ({
     };
 
     const _onBookingStatusChanged = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, status: data.status } : b))
       );
@@ -440,7 +462,8 @@ const DispatchTable = ({
 
     // NB : on écoute aussi si tu souhaites ajuster visuellement les ETAs
     let locTimer;
-    const onDriverLocationUpdated = (_data) => {
+    const onDriverLocationUpdated = (data) => {
+      if (!acceptRealtime(data, data?.driver_id ? `driver:${data.driver_id}` : null)) return;
       if (locTimer) clearTimeout(locTimer);
       locTimer = setTimeout(async () => {
         try {
@@ -494,7 +517,7 @@ const DispatchTable = ({
         socket.emit('unsubscribe:date', dispatchDay);
       } catch (_) {}
     };
-  }, [socket, dispatchDay, useUnifiedDispatchWs]);
+  }, [socket, dispatchDay, useUnifiedDispatchWs, acceptRealtime]);
 
   // ✅ Utiliser le hook réutilisable pour invalider React Query sur événements Socket.IO
   useSocketInvalidation(

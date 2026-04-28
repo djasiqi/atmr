@@ -16,6 +16,7 @@ from models.enums import (
     ClientType,
     InvoiceLineType,
     InvoiceStatus,
+    ManagementMode,
     TransferModel,
     UserRole,
 )
@@ -138,7 +139,8 @@ class InvoiceTransferService:
                 b2b_client.company_id = transfer.executing_company_id
                 b2b_client.is_institution = True
                 b2b_client.institution_name = owner_company.name
-                b2b_client.client_type = ClientType.CORPORATE
+                b2b_client.client_type = ClientType.TRANSPORT
+                b2b_client.management_mode = ManagementMode.CORPORATE
                 b2b_client.billing_address = owner_company.address
                 b2b_client.contact_email = (
                     owner_company.billing_email or owner_company.contact_email

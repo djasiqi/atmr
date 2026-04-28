@@ -23,18 +23,21 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 export function useHybridDataSync({
   fetchFn,
   socket = null,
+  enabled = true,
   staleThreshold = 120000, // 2 minutes
   pollIntervalConnected = 180000, // 3 minutes
   pollIntervalDisconnected = 45000, // 45 seconds
   onUpdate = null,
   dependencies = [],
 }) {
+  const debugLogsEnabled = process.env.REACT_APP_DEBUG_HYBRID_SYNC === 'true';
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [isPolling, setIsPolling] = useState(false);
   const [pollError, setPollError] = useState(null);
   
   const lastUpdateRef = useRef(Date.now());
   const pollTimeoutRef = useRef(null);
+  const pollInFlightRef = useRef(false);
   const backoffDelayRef = useRef(1000); // Start with 1 second
   const consecutiveFailuresRef = useRef(0);
   const maxBackoffDelay = 300000; // 5 minutes max
@@ -51,7 +54,9 @@ export function useHybridDataSync({
   // Fonction de polling avec exponential backoff
   const performPoll = useCallback(async () => {
     if (!fetchFn) return;
+    if (pollInFlightRef.current) return;
 
+    pollInFlightRef.current = true;
     setIsPolling(true);
     setPollError(null);
 
@@ -62,11 +67,13 @@ export function useHybridDataSync({
       consecutiveFailuresRef.current = 0;
       updateLastUpdate();
       
-      console.log(JSON.stringify({
-        event: 'hybrid_poll_success',
-        timestamp: new Date().toISOString(),
-        socket_connected: socket?.connected || false,
-      }));
+      if (debugLogsEnabled) {
+        console.log(JSON.stringify({
+          event: 'hybrid_poll_success',
+          timestamp: new Date().toISOString(),
+          socket_connected: socket?.connected || false,
+        }));
+      }
       
       return result;
     } catch (error) {
@@ -79,19 +86,22 @@ export function useHybridDataSync({
       
       setPollError(error);
       
-      console.warn(JSON.stringify({
-        event: 'hybrid_poll_error',
-        error: error?.message || String(error),
-        consecutive_failures: consecutiveFailuresRef.current,
-        next_backoff_ms: backoffDelayRef.current,
-        timestamp: new Date().toISOString(),
-      }));
+      if (debugLogsEnabled) {
+        console.warn(JSON.stringify({
+          event: 'hybrid_poll_error',
+          error: error?.message || String(error),
+          consecutive_failures: consecutiveFailuresRef.current,
+          next_backoff_ms: backoffDelayRef.current,
+          timestamp: new Date().toISOString(),
+        }));
+      }
       
       throw error;
     } finally {
       setIsPolling(false);
+      pollInFlightRef.current = false;
     }
-  }, [fetchFn, socket, updateLastUpdate]);
+  }, [debugLogsEnabled, fetchFn, socket, updateLastUpdate]);
 
   // Déterminer l'intervalle de polling selon l'état
   const getPollInterval = useCallback(() => {
@@ -146,13 +156,16 @@ export function useHybridDataSync({
 
   // Effet principal: démarrer le polling hybride
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     // Poll initial si nécessaire
     const timeSinceLastUpdate = Date.now() - lastUpdateRef.current;
     const isDataStale = timeSinceLastUpdate > staleThreshold;
-    const isSocketConnected = socket?.connected || false;
 
-    if (!isSocketConnected || isDataStale) {
-      // Poll immédiat si socket déconnecté ou données stale
+    if (isDataStale) {
+      // Poll immédiat uniquement si données stale
       performPoll().then(() => {
         scheduleNextPoll();
       }).catch(() => {
@@ -165,10 +178,12 @@ export function useHybridDataSync({
 
     // Écouter les changements de connexion socket
     const onConnect = () => {
-      console.log(JSON.stringify({
-        event: 'hybrid_socket_connected',
-        timestamp: new Date().toISOString(),
-      }));
+      if (debugLogsEnabled) {
+        console.log(JSON.stringify({
+          event: 'hybrid_socket_connected',
+          timestamp: new Date().toISOString(),
+        }));
+      }
       // Réinitialiser le backoff quand socket se reconnecte
       backoffDelayRef.current = 1000;
       consecutiveFailuresRef.current = 0;
@@ -176,10 +191,12 @@ export function useHybridDataSync({
     };
 
     const onDisconnect = () => {
-      console.log(JSON.stringify({
-        event: 'hybrid_socket_disconnected',
-        timestamp: new Date().toISOString(),
-      }));
+      if (debugLogsEnabled) {
+        console.log(JSON.stringify({
+          event: 'hybrid_socket_disconnected',
+          timestamp: new Date().toISOString(),
+        }));
+      }
       // Poll immédiatement quand socket se déconnecte
       performPoll().then(() => {
         scheduleNextPoll();
@@ -205,7 +222,7 @@ export function useHybridDataSync({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, staleThreshold, performPoll, scheduleNextPoll, ...dependencies]);
+  }, [debugLogsEnabled, enabled, socket, staleThreshold, performPoll, scheduleNextPoll, ...dependencies]);
 
   return {
     lastUpdate,

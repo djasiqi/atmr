@@ -1,6 +1,6 @@
 """✅ Schemas Marshmallow pour validation des endpoints clients."""
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
     fields,
     validate,
@@ -29,7 +29,12 @@ class ClientUpdateSchema(Schema):
     )
     gender = fields.Str(
         validate=validate.OneOf(
-            ["male", "female"], error="gender doit être: male ou female"
+            ["HOMME", "FEMME", "AUTRE"],
+            error="gender doit être: HOMME, FEMME ou AUTRE",
         )
     )
     avs_number = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    # Accès logement (modèle Client.door_code, floor, access_notes)
+    floor = fields.Str(validate=validate.Length(max=20), allow_none=True)
+    door_code = fields.Str(validate=validate.Length(max=50), allow_none=True)
+    access_notes = fields.Str(validate=validate.Length(max=4000), allow_none=True)

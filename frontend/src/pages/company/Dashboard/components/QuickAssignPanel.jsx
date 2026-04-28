@@ -70,6 +70,7 @@ const QuickAssignPanel = ({
         className={styles.panel}
         role="dialog"
         aria-label="Assignation rapide"
+        aria-modal="true"
         data-tour-id="quick-assign-panel"
       >
         <header className={styles.panelHeader}>

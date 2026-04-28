@@ -177,7 +177,7 @@ git push  # Déclenche le workflow GitHub Actions
 ### Redémarrage backend (si nécessaire)
 
 ```bash
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 cd /srv/atmr
 docker compose -f docker-compose.production.yml restart backend
 ```
@@ -197,7 +197,7 @@ docker compose -f docker-compose.production.yml restart backend
 
 ```bash
 # Vérifier les logs backend
-ssh deploy@138.201.155.201 "cd /srv/atmr && docker compose -f docker-compose.production.yml logs backend --tail=100 | grep -i 'token.*expir'"
+ssh deploy@$SERVER_HOST "cd /srv/atmr && docker compose -f docker-compose.production.yml logs backend --tail=100 | grep -i 'token.*expir'"
 
 # Devrait montrer des 401 au lieu de 500
 # ✅ Bon : "... 401 ..." + "[JWT] Token expiré intercepté"

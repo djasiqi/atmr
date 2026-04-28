@@ -78,6 +78,19 @@ def handle_driver_new_booking(event: dict[str, Any]) -> None:
             )
             try:
                 notify_driver_new_booking(int(driver_id), booking)
+                try:
+                    from services.notifications.end_client_booking_notify import (
+                        notify_end_client_booking_milestone,
+                    )
+
+                    notify_end_client_booking_milestone(
+                        booking, milestone="driver_assigned", send_push=True
+                    )
+                except Exception:
+                    logger.debug(
+                        "[EventBus] End-client driver_assigned notify failed (non-critical)",
+                        exc_info=True,
+                    )
                 logger.info(
                     "[EventBus] notify_driver_new_booking completed successfully for driver %s booking %s",
                     driver_id,

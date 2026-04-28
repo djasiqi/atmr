@@ -33,6 +33,7 @@ class BookingMessageSender(str, PyEnum):
 
     COMPANY = "COMPANY"
     INSTITUTION = "INSTITUTION"
+    CLIENT = "CLIENT"
 
 
 class BookingMessage(db.Model):

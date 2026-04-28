@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import apiClient from '../../../../../utils/apiClient';
+import { getActiveUser } from '../../../../../utils/webAuthSession';
 import styles from '../../CompanySettings.module.css';
 import {
   fetchTransportVouchers,
@@ -171,7 +172,7 @@ export default function TransportVouchersSection() {
         setMessage('Bon mis à jour avec succès');
       } else {
         // Récupérer company_id depuis le token/utilisateur
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const user = getActiveUser() || {};
         payload.company_id = user.company_id || user.companyId;
         await createTransportVoucher(payload);
         setMessage('Bon créé avec succès');

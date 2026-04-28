@@ -7,10 +7,15 @@ import { HapticTab } from '@/components/HapticTab';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { featureFlags } from '@/services/featureFlags';
+import { useInstitutionPermissions } from '@/services/useInstitutionPermissions';
+import { useInstitutionRealtime } from '@/services/useInstitutionRealtime';
 
 export default function InstitutionTabLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const permissions = useInstitutionPermissions();
+  useInstitutionRealtime(featureFlags.institutionMobileRealtimeEnabled);
 
   return (
     <Tabs
@@ -23,7 +28,7 @@ export default function InstitutionTabLayout() {
           ios: { position: 'absolute' },
           default: {},
         }),
-        headerRight: () => (
+        headerRight: () => (permissions.canCreateRequest && featureFlags.institutionMobileRequestSendEnabled ? (
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push('/(institution)/request-create')}
@@ -34,7 +39,7 @@ export default function InstitutionTabLayout() {
               Demande
             </Text>
           </Pressable>
-        ),
+        ) : null),
       }}
     >
       <Tabs.Screen
@@ -59,10 +64,31 @@ export default function InstitutionTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Réglages',
+          tabBarIcon: ({ color }) => <MaterialIcons name="settings" size={26} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="request-create"
         options={{
           href: null,
           title: 'Nouvelle demande',
+        }}
+      />
+      <Tabs.Screen
+        name="request/[requestId]"
+        options={{
+          href: null,
+          title: 'Détail demande',
+        }}
+      />
+      <Tabs.Screen
+        name="patient/[patientId]"
+        options={{
+          href: null,
+          title: 'Détail patient',
         }}
       />
     </Tabs>

@@ -1,6 +1,17 @@
 // frontend/src/services/settingsService.js
 import apiClient from '../utils/apiClient';
 
+/** Indicatif portail client (admin plateforme, singleton). */
+export const fetchAdminIndicativeFare = async () => {
+  const response = await apiClient.get('/admin/client-indicative-fare');
+  return response.data;
+};
+
+export const updateAdminIndicativeFare = async (payload) => {
+  const response = await apiClient.put('/admin/client-indicative-fare', payload);
+  return response.data;
+};
+
 /**
  * Service pour gérer les paramètres avancés de l'entreprise
  */

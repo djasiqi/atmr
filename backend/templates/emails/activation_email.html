@@ -1,0 +1,52 @@
+{% extends "emails/base_email.html" %}
+
+{% block title %}Activation de votre compte{% endblock %}
+
+{% block header_title %}Activation de votre compte{% endblock %}
+
+{% block content %}
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+    Confirmez votre adresse email pour activer votre compte en toute sécurité.
+</div>
+
+<h2>Bienvenue sur {{ product_name|default('ATMR') }}</h2>
+
+<p>Bonjour,</p>
+
+<p>
+    Merci pour votre inscription. Pour sécuriser votre accès, merci de confirmer votre adresse email.
+</p>
+
+<div style="text-align: center;">
+    <a href="{{ activation_link }}" class="button">Confirmer mon email</a>
+</div>
+
+<p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
+    Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
+    <a href="{{ activation_link }}" style="color: #667eea;">{{ activation_link }}</a>
+</p>
+
+<div class="divider"></div>
+
+<div class="info-box">
+    <p style="margin: 0;">
+        <strong>Important :</strong> ce lien est à usage unique et expire rapidement.
+    </p>
+</div>
+
+<div class="alert-box">
+    <p style="margin: 0; font-size: 13px;">
+        Si vous n'êtes pas à l'origine de cette action, vous pouvez ignorer cet email en toute sécurité.
+    </p>
+</div>
+{% endblock %}
+
+{% block footer %}
+<p style="margin: 0;">
+    Cet email a été envoyé automatiquement par {{ company_name|default('LIRIE') }}.<br>
+    Pour toute question, contactez le support.
+</p>
+<p style="margin: 10px 0 0 0;">
+    &copy; {{ current_year|default('2026') }} {{ company_name|default('LIRIE') }}. Tous droits réservés.
+</p>
+{% endblock %}

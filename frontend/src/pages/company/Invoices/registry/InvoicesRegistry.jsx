@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiFileText,
@@ -14,6 +15,7 @@ import {
   FiSend,
   FiMail,
   FiCheck,
+  FiList,
 } from 'react-icons/fi';
 import styles from './InvoicesRegistry.module.css';
 import {
@@ -28,16 +30,21 @@ import {
   regenerateInvoicePdf,
   cancelInvoice,
   duplicateInvoice,
+  fetchBillingOpportunities,
 } from '../../../../services/invoiceService';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
+import { lirieKeys, invoiceFiltersHash } from '../../../../queryKeys/lirie';
 import CommandBar from './components/CommandBar';
 import InvoiceRowActions from './components/InvoiceRowActions';
 import PaymentModal from './components/PaymentModal';
 import ReminderModal from './components/ReminderModal';
 import NewInvoiceModal from './components/NewInvoiceModal';
+import BillPeriodModal from './components/BillPeriodModal';
+import InvoiceDraftEditModal from './components/InvoiceDraftEditModal';
 import SendEmailModal from './components/SendEmailModal';
 import ExportPaymentsModal from './components/ExportPaymentsModal';
 import useUrlSearchSync from '../../../../hooks/useUrlSearchSync';
+import InvoicesTableSkeleton from './components/InvoicesTableSkeleton';
 
 const extractApiError = (err, fallback = 'Erreur inconnue') => {
   const data = err?.response?.data;
@@ -53,15 +60,12 @@ const InvoicesRegistry = () => {
   const { company } = useLirieCompany();
   const { public_id: routePublicId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
   const urlInvoiceId = searchParams.get('invoice_id');
-  const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({});
-  const [stats, setStats] = useState({});
+  const [actionError, setActionError] = useState(null);
+  const [listErrorDismissed, setListErrorDismissed] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     client_id: '',
@@ -84,6 +88,8 @@ const InvoicesRegistry = () => {
     invoice: null,
   });
   const [newInvoiceModal, setNewInvoiceModal] = useState({ open: false, invoiceDraft: null });
+  const [billPeriodOpen, setBillPeriodOpen] = useState(false);
+  const [draftEditInvoice, setDraftEditInvoice] = useState(null);
   /** Incrémenté uniquement après annulation de facture; déclenche refetch eligible + S2 dans le modal. */
   const [invoiceDataRefreshTrigger, setInvoiceDataRefreshTrigger] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', variant: 'default', onConfirm: null });
@@ -101,30 +107,80 @@ const InvoicesRegistry = () => {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  // Charger les factures
-  const loadInvoices = useCallback(async () => {
-    if (!company?.id) return;
+  const queryClient = useQueryClient();
+  const canLoadInvoices = Boolean(company?.id);
+  const filtersHash = useMemo(() => invoiceFiltersHash(filters), [filters]);
 
-    try {
-      setLoading(true);
-      setError(null);
+  const opportunityYear = filters.year || new Date().getFullYear();
+  const opportunityMonth = filters.month
+    ? Number(filters.month)
+    : new Date().getMonth() + 1;
 
+  const { data: billingOpportunitiesPayload } = useQuery({
+    queryKey: ['billingOpportunities', company?.id, opportunityYear, opportunityMonth],
+    queryFn: async () => {
+      const res = await fetchBillingOpportunities(
+        company.id,
+        opportunityYear,
+        opportunityMonth
+      );
+      if (res && typeof res === 'object' && res.data && typeof res.data === 'object') {
+        return res.data;
+      }
+      return res;
+    },
+    enabled: Boolean(company?.id),
+    staleTime: 60_000,
+  });
+
+  const {
+    data: listData,
+    error: invoicesListError,
+    isError: invoicesListIsError,
+    isLoading: listInitialLoading,
+    isRefetching: listRefetching,
+    refetch: refetchInvoicesList,
+  } = useQuery({
+    queryKey: canLoadInvoices
+      ? lirieKeys.companyInvoices(company.id, filtersHash)
+      : ['lirie', 'company-invoices', 'disabled'],
+    enabled: canLoadInvoices,
+    queryFn: async () => {
       const response = await fetchInvoices(company.id, filters);
-      // Le backend renvoie {"data": [...], "pagination": {...}, "stats": {...}}
       const invoicesData = response?.data || response?.invoices || [];
-      setInvoices(invoicesData);
-      setPagination(response?.pagination || {});
-      setStats(response?.stats || {});
-    } catch (err) {
-      setError(extractApiError(err, 'Erreur lors du chargement des factures'));
-    } finally {
-      setLoading(false);
-    }
-  }, [company?.id, filters]);
+      return {
+        invoices: Array.isArray(invoicesData) ? invoicesData : [],
+        pagination: response?.pagination || {},
+        stats: response?.stats || {},
+      };
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const invoices = useMemo(
+    () => (Array.isArray(listData?.invoices) ? listData.invoices : []),
+    [listData]
+  );
+  const pagination = listData?.pagination ?? {};
+  const stats = listData?.stats ?? {};
+
+  const listErrorMessage = useMemo(
+    () =>
+      invoicesListIsError
+        ? extractApiError(invoicesListError, 'Erreur lors du chargement des factures')
+        : null,
+    [invoicesListIsError, invoicesListError]
+  );
 
   useEffect(() => {
-    loadInvoices();
-  }, [loadInvoices]);
+    if (!invoicesListIsError) setListErrorDismissed(false);
+  }, [invoicesListIsError]);
+
+  const loadInvoices = useCallback(() => refetchInvoicesList(), [refetchInvoicesList]);
+  const showListTableSkeleton = canLoadInvoices && listInitialLoading;
+  const showListRefetching = listRefetching && !listInitialLoading;
+  const showListError = invoicesListIsError && !listErrorDismissed;
 
   useEffect(() => {
     if (!initialized) return;
@@ -140,20 +196,22 @@ const InvoicesRegistry = () => {
     }
   }, [initialized, initialSearch, shouldFocus, consumeFocus, filters.q]);
 
-  // Si invoice_id dans l'URL et facture absente de la liste, la charger et l'afficher
+  // Si invoice_id dans l'URL et facture absente de la liste, la charger et l'ajouter au cache
   useEffect(() => {
-    if (!urlInvoiceId || !company?.id || loading) return;
+    if (!urlInvoiceId || !company?.id || listInitialLoading) return;
     const invoiceId = parseInt(urlInvoiceId, 10);
     if (Number.isNaN(invoiceId)) return;
 
+    const key = lirieKeys.companyInvoices(company.id, filtersHash);
     const fetchAndPrependIfMissing = async () => {
       try {
         const res = await getInvoice(company.id, invoiceId);
         const inv = res?.data ?? res;
         if (inv?.id) {
-          setInvoices((prev) => {
-            if (prev.some((i) => i.id === invoiceId)) return prev;
-            return [inv, ...prev];
+          queryClient.setQueryData(key, (old) => {
+            if (!old?.invoices) return old;
+            if (old.invoices.some((i) => i.id === invoiceId)) return old;
+            return { ...old, invoices: [inv, ...old.invoices] };
           });
         }
       } catch (e) {
@@ -161,7 +219,7 @@ const InvoicesRegistry = () => {
       }
     };
     fetchAndPrependIfMissing();
-  }, [urlInvoiceId, company?.id, loading]);
+  }, [urlInvoiceId, company?.id, listInitialLoading, filtersHash, queryClient]);
 
   // Handlers
   const handleFilterChange = (newFilters) => {
@@ -257,7 +315,7 @@ const InvoicesRegistry = () => {
           setSelectedIds(new Set());
           await loadInvoices();
         } catch (err) {
-          setError(extractApiError(err, "Erreur lors de l'envoi groupé"));
+          setActionError(extractApiError(err, "Erreur lors de l'envoi groupé"));
         } finally {
           setBulkLoading(false);
         }
@@ -266,7 +324,7 @@ const InvoicesRegistry = () => {
   };
 
   // Marquer comme envoyée (papier) sans email
-  const handleMarkAsSent = (invoiceId) => {
+  const handleMarkAsSent = (invoiceId, { afterSuccess } = {}) => {
     setConfirmDialog({
       open: true,
       title: 'Marquer comme envoyée',
@@ -277,8 +335,9 @@ const InvoicesRegistry = () => {
         try {
           await markInvoiceAsSent(company.id, invoiceId);
           await loadInvoices();
+          afterSuccess?.();
         } catch (err) {
-          setError(extractApiError(err, "Erreur lors de l'envoi de la facture"));
+          setActionError(extractApiError(err, "Erreur lors de l'envoi de la facture"));
         }
       },
     });
@@ -299,7 +358,7 @@ const InvoicesRegistry = () => {
     // Trouver le dernier rappel
     const latestReminder = invoice.reminders?.[invoice.reminders.length - 1];
     if (!latestReminder) {
-      setError('Aucun rappel trouvé pour cette facture');
+      setActionError('Aucun rappel trouvé pour cette facture');
       return;
     }
     
@@ -313,6 +372,7 @@ const InvoicesRegistry = () => {
 
   // Envoyer par email
   const handleSendEmail = async (options) => {
+    const sentInvoiceId = sendEmailModal.invoice?.id;
     try {
       if (options.reminder_id) {
         // Envoi d'un rappel
@@ -335,6 +395,9 @@ const InvoicesRegistry = () => {
       
       await loadInvoices();
       setSendEmailModal({ open: false, invoice: null, isReminder: false, reminderId: null });
+      if (draftEditInvoice && sentInvoiceId && draftEditInvoice.id === sentInvoiceId) {
+        closeDraftEdit();
+      }
     } catch (err) {
       throw err; // Laisser le modal gérer l'erreur
     }
@@ -346,7 +409,7 @@ const InvoicesRegistry = () => {
       await loadInvoices();
       setPaymentModal({ open: false, invoice: null });
     } catch (err) {
-      setError(extractApiError(err, "Erreur lors de l'enregistrement du paiement"));
+      setActionError(extractApiError(err, "Erreur lors de l'enregistrement du paiement"));
     }
   };
 
@@ -356,7 +419,7 @@ const InvoicesRegistry = () => {
       await loadInvoices();
       setReminderModal({ open: false, invoice: null });
     } catch (err) {
-      setError(extractApiError(err, 'Erreur lors de la génération du rappel'));
+      setActionError(extractApiError(err, 'Erreur lors de la génération du rappel'));
     }
   };
 
@@ -365,7 +428,7 @@ const InvoicesRegistry = () => {
       await regenerateInvoicePdf(company.id, invoiceId);
       await loadInvoices();
     } catch (err) {
-      setError(extractApiError(err, 'Erreur lors de la régénération du PDF'));
+      setActionError(extractApiError(err, 'Erreur lors de la régénération du PDF'));
     }
   };
 
@@ -382,7 +445,7 @@ const InvoicesRegistry = () => {
           await loadInvoices();
           setInvoiceDataRefreshTrigger((t) => t + 1);
         } catch (err) {
-          setError(extractApiError(err, "Erreur lors de l'annulation de la facture"));
+          setActionError(extractApiError(err, "Erreur lors de l'annulation de la facture"));
         }
       },
     });
@@ -404,7 +467,7 @@ const InvoicesRegistry = () => {
             setNewInvoiceModal({ open: true, invoiceDraft: draftContext });
           }
         } catch (err) {
-          setError(extractApiError(err, 'Erreur lors de la duplication de la facture'));
+          setActionError(extractApiError(err, 'Erreur lors de la duplication de la facture'));
         }
       },
     });
@@ -418,13 +481,51 @@ const InvoicesRegistry = () => {
   };
 
   const handleNewInvoiceGenerated = (invoice) => {
-    // Recharger la liste des factures
     loadInvoices();
-    
-    // Optionnel: afficher un message de succès
-    // eslint-disable-next-line no-console
-    console.log('Nouvelle facture générée:', invoice);
   };
+
+  const clearDraftEditParams = useCallback(() => {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.delete('draft_edit');
+      p.delete('invoice_id');
+      return p;
+    });
+  }, [setSearchParams]);
+
+  const handlePeriodFlowInvoiceCreated = useCallback(
+    (invoice) => {
+      if (!invoice?.id) return;
+      loadInvoices();
+      setDraftEditInvoice(invoice);
+      setSearchParams((prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('invoice_id', String(invoice.id));
+        p.set('draft_edit', '1');
+        return p;
+      });
+    },
+    [loadInvoices, setSearchParams]
+  );
+
+  const closeDraftEdit = useCallback(() => {
+    setDraftEditInvoice(null);
+    clearDraftEditParams();
+  }, [clearDraftEditParams]);
+
+  const handleOpenDraftEdit = useCallback(
+    (invoice) => {
+      if (!invoice?.id) return;
+      setDraftEditInvoice(invoice);
+      setSearchParams((prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('invoice_id', String(invoice.id));
+        p.set('draft_edit', '1');
+        return p;
+      });
+    },
+    [setSearchParams]
+  );
 
   // Formatage des statuts
   const getStatusBadge = (status) => {
@@ -611,9 +712,19 @@ const InvoicesRegistry = () => {
               Exporter
             </button>
             <button
+              type="button"
+              className={styles.newInvoiceBtn}
+              onClick={() => setBillPeriodOpen(true)}
+              data-tour-id="invoice-bill-period-button"
+            >
+              <FiFileText size={14} />
+              Facturer une période
+            </button>
+            <button
               className={styles.newInvoiceBtn}
               onClick={() => setNewInvoiceModal({ open: true, invoiceDraft: null })}
               data-tour-id="invoice-new-button"
+              title="Assistant complet (S2, tierce, partenaire, …)"
             >
               <FiPlus size={14} />
               Nouvelle facture
@@ -663,6 +774,25 @@ const InvoicesRegistry = () => {
         </div>
       </div>
 
+      {billingOpportunitiesPayload && typeof billingOpportunitiesPayload.total_draft_would_create === 'number' && (
+        <div className={styles.opportunitiesBar} data-tour-id="billing-opportunities">
+          <FiList size={16} />
+          <span>
+            Période {String(opportunityMonth).padStart(2, '0')}/{opportunityYear} (filtre mois) :{' '}
+            <strong>{billingOpportunitiesPayload.total_draft_would_create}</strong> payeur
+            {billingOpportunitiesPayload.total_draft_would_create > 1 ? 's' : ''} avec courses à
+            facturer (patients + cliniques).
+          </span>
+          <button
+            type="button"
+            className={styles.alertLink}
+            onClick={() => setBillPeriodOpen(true)}
+          >
+            Facturer une période
+          </button>
+        </div>
+      )}
+
       {/* Alertes conditionnelles */}
       {(stats.overdue_count > 0 || unknownClientCount > 0) && (
         <div className={styles.alertsBar}>
@@ -687,11 +817,34 @@ const InvoicesRegistry = () => {
         </div>
       )}
 
-      {/* Messages d'erreur */}
-      {error && (
-        <div className={styles.error}>
-          {error}
-          <button onClick={() => setError(null)} aria-label="Fermer">
+      {/* Erreur liste (query) ou erreur d'action (mutations) */}
+      {(showListError || actionError) && (
+        <div className={styles.error} role="alert">
+          {showListError && (
+            <span>
+              {listErrorMessage}
+              <button
+                type="button"
+                className={styles.errorRetryBtn}
+                onClick={() => {
+                  setListErrorDismissed(false);
+                  void refetchInvoicesList();
+                }}
+              >
+                Réessayer
+              </button>
+            </span>
+          )}
+          {showListError && actionError && ' '}
+          {actionError && <span>{actionError}</span>}
+          <button
+            onClick={() => {
+              if (invoicesListIsError) setListErrorDismissed(true);
+              setActionError(null);
+            }}
+            type="button"
+            aria-label="Fermer"
+          >
             <FiX size={16} />
           </button>
         </div>
@@ -763,12 +916,23 @@ const InvoicesRegistry = () => {
         </div>
       )}
 
-      {/* Zone D — Table */}
-      <div className={styles.tableContainer}>
-        {loading ? (
-          <div className={styles.loading}>Chargement...</div>
-        ) : (
-          <table className={styles.table} data-tour-id="invoice-table">
+      {/* Zone D — Table : premier chargement = squelette ; rechargement = contenu + barre */}
+      {showListTableSkeleton ? (
+        <InvoicesTableSkeleton rowCount={Math.min(10, Math.max(5, filters.per_page || 7))} />
+      ) : (
+        <div
+          className={showListRefetching ? styles.listBlockRefreshing : styles.listBlock}
+          aria-busy={showListRefetching}
+        >
+          {showListRefetching && (
+            <div
+              className={styles.listRefreshBar}
+              role="status"
+              aria-label="Mise à jour des factures"
+            />
+          )}
+          <div className={styles.tableContainer}>
+            <table className={styles.table} data-tour-id="invoice-table">
             <thead>
               <tr>
                 <th className={styles.thCheckbox}>
@@ -863,6 +1027,7 @@ const InvoicesRegistry = () => {
                         onRegeneratePdf={() => handleRegeneratePdf(invoice.id)}
                         onCancel={() => handleCancelInvoice(invoice.id)}
                         onDuplicate={() => handleDuplicateInvoice(invoice.id)}
+                        onEditDraft={() => handleOpenDraftEdit(invoice)}
                         onViewPdf={(url) => window.open(url, '_blank')}
                       />
                     </td>
@@ -871,8 +1036,9 @@ const InvoicesRegistry = () => {
               })}
             </tbody>
           </table>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {pagination.pages > 1 && (
@@ -915,6 +1081,31 @@ const InvoicesRegistry = () => {
         invoice={reminderModal.invoice}
         onClose={() => setReminderModal({ open: false, invoice: null })}
         onReminder={handleReminder}
+      />
+
+      <BillPeriodModal
+        open={billPeriodOpen}
+        onClose={() => setBillPeriodOpen(false)}
+        companyId={company?.id}
+        onSuccess={handlePeriodFlowInvoiceCreated}
+        onOpenLegacy={() => {
+          setBillPeriodOpen(false);
+          setNewInvoiceModal({ open: true, invoiceDraft: null });
+        }}
+      />
+
+      <InvoiceDraftEditModal
+        open={Boolean(draftEditInvoice)}
+        initialInvoice={draftEditInvoice}
+        companyId={company?.id}
+        onClose={closeDraftEdit}
+        onUpdated={loadInvoices}
+        onOpenSendEmail={(inv) => {
+          setSendEmailModal({ open: true, invoice: inv, isReminder: false, reminderId: null });
+        }}
+        onMarkAsSent={(inv) => {
+          if (inv?.id) handleMarkAsSent(inv.id, { afterSuccess: closeDraftEdit });
+        }}
       />
 
       <NewInvoiceModal

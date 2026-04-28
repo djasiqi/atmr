@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers
 revision = "pat_logistics_001"
-down_revision = None
+down_revision = "20260204_patients_requests"
 branch_labels = None
 depends_on = None
 

@@ -9,6 +9,10 @@ from marshmallow import ValidationError
 
 from application.bookings.create_booking import CreateBookingUseCase
 from domain.bookings.commands import CreateBookingCommand
+from models.enums import ClientType
+from shared.booking_company_resolution import (
+    resolve_booking_owner_company_id_for_create,
+)
 
 
 class _FakeClientRepo:
@@ -16,7 +20,12 @@ class _FakeClientRepo:
         self._company_id = company_id
 
     def find_by_id(self, _client_id: int):  # type: ignore[no-untyped-def]
-        return SimpleNamespace(id=1, company_id=self._company_id)
+        ct = (
+            ClientType.TRANSPORT
+            if (self._company_id or 0) > 0
+            else ClientType.PORTAL
+        )
+        return SimpleNamespace(id=1, company_id=self._company_id, client_type=ct)
 
 
 class _FakeCompanyRepo:
@@ -125,3 +134,74 @@ def test_create_booking_use_case_invalid_scheduled_time_raises_value_error() -> 
                 },
             )
         )
+
+
+def test_resolve_booking_owner_company_id_order() -> None:
+    # Client entreprise : TRANSPORT avec company_id → propriétaire = entreprise du client
+    assert (
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=3,
+                default_billed_to_company_id=9,
+                client_type=ClientType.TRANSPORT,
+            )
+        )
+        == 3
+    )
+    # PORTAL : marché ouvert (default_billed ignoré pour le company_id du booking)
+    assert (
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=None,
+                default_billed_to_company_id=9,
+                client_type=ClientType.PORTAL,
+            )
+        )
+        is None
+    )
+    # TRANSPORT sans entreprise rattachée : état invalide
+    with pytest.raises(ValueError, match="Client TRANSPORT sans company_id"):
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=0,
+                default_billed_to_company_id=None,
+                client_type=ClientType.TRANSPORT,
+            )
+        )
+
+
+def test_resolve_portal_without_attachment_is_open_market() -> None:
+    assert (
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=None,
+                default_billed_to_company_id=None,
+                client_type=ClientType.PORTAL,
+            )
+        )
+        is None
+    )
+
+
+def test_resolve_booking_owner_company_id_unknown_client_type_raises() -> None:
+    with pytest.raises(ValueError, match="ClientType non géré"):
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=42,
+                client_type="CORPORATE",
+            )
+        )
+
+
+def test_resolve_portal_always_open_market() -> None:
+    """PORTAL : toujours marché ouvert, même avec company_id / default_billed."""
+    assert (
+        resolve_booking_owner_company_id_for_create(
+            SimpleNamespace(
+                company_id=99,
+                default_billed_to_company_id=88,
+                client_type=ClientType.PORTAL,
+            )
+        )
+        is None
+    )

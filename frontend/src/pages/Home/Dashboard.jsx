@@ -1,8 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
+import { getActiveUser } from '../../utils/webAuthSession';
 
 const Dashboard = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = getActiveUser();
 
   if (!user) {
     return <Navigate to="/login" />;

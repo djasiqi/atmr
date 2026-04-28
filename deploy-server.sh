@@ -24,8 +24,8 @@ error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Configuration par défaut (peut être surchargée par variables d'environnement)
-SERVER_HOST="${SERVER_HOST:-138.201.155.201}"
+# Configuration (obligatoire : SERVER_HOST — ne pas d’IP/hostname en dur, voir docs/deployment-ssh.md)
+: "${SERVER_HOST:?Définir SERVER_HOST (adresse du serveur). Voir docs/deployment-ssh.md.}"
 SERVER_USER="${SERVER_USER:-deploy}"
 SERVER_PATH="${SERVER_PATH:-/home/deploy/atmr}"
 

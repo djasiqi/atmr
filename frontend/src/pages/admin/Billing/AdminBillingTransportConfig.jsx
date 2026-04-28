@@ -139,7 +139,7 @@ const AdminBillingTransportConfig = () => {
       };
       await putPlatformBillingCompanyConfig(modalCompany.company_id, payload);
       setModalCompany(null);
-      await load();
+      await loadCompanies();
     } catch (e) {
       setModalError(e?.response?.data?.message || e?.message || 'Enregistrement impossible');
     } finally {

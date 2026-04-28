@@ -1,0 +1,96 @@
+groups:
+  - name: scalability_gate_phase0
+    interval: 30s
+    rules:
+      - alert: ScalabilityGateApiP95LatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000 > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API p95 latency au-dessus du gate Phase 0"
+          description: "La latence p95 API depasse 300ms sur 10 minutes."
+
+      - alert: ScalabilityGateDbPoolWaitHigh
+        expr: histogram_quantile(0.95, sum(rate(db_pool_wait_seconds_bucket[5m])) by (le)) * 1000 > 50
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Attente pool DB au-dessus du gate Phase 0"
+          description: "db_pool_wait p95 depasse 50ms."
+
+      - alert: ScalabilityGateKafkaLagHigh
+        expr: sum(kafka_consumergroup_lag) > 10000
+        for: 10m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Lag Kafka eleve"
+          description: "Le lag cumule depasse 10k messages pendant 10 minutes."
+
+      - alert: ScalabilityGateRealtimeLoss
+        expr: rate(realtime_events_lost_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: realtime
+        annotations:
+          summary: "Perte d'evenements realtime detectee"
+          description: "Des evenements realtime sont perdus."
+
+  - name: scalability_gate_phase4_kafka
+    interval: 30s
+    rules:
+      - alert: Phase4KafkaConsumerLagRawHigh
+        expr: sum(kafka_consumergroup_lag{topic="driver.location.raw"}) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Phase 4: lag kafka raw > 10k"
+          description: "Le lag du topic driver.location.raw depasse 10k pendant 5 minutes."
+
+      - alert: Phase4KafkaPublishErrorsHigh
+        expr: increase(tracking_kafka_publish_errors_total[10m]) > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Phase 4: erreurs publish tracking élevées"
+          description: "Le compteur d'erreurs publish tracking dépasse 100 sur 10 minutes."
+
+      - alert: Phase4KafkaE2eLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(tracking_kafka_e2e_latency_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Phase 4: latence E2E tracking élevée"
+          description: "La latence E2E p95 du tracking dépasse 1 seconde."
+
+      - alert: Phase4KafkaUnderReplicatedPartitions
+        expr: sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 2m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Phase 4: Under-replicated partitions detectees"
+          description: "Des partitions Kafka ne respectent plus la replication attendue."
+
+      - alert: Phase4KafkaOfflinePartitions
+        expr: sum(kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Phase 4: Offline partitions detectees"
+          description: "Au moins une partition Kafka est offline."

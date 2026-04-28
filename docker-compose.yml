@@ -1,3 +1,15 @@
+# Profils Compose (docker compose v2) — RAM : par défaut seul le socle dev minimal démarre.
+#   Base (aucun --profile) : postgres, pgbouncer, redis, osrm, atmr_api
+#   --profile celery     : + celery-worker, celery-beat, flower
+#   --profile monitoring : + prometheus, grafana
+#   --profile loadtest   : + locust
+# Exemples : docker compose up -d
+#            docker compose --profile celery up -d
+#            docker compose -f docker-compose.yml -f docker-compose.kafka.dev.yml up -d  # Kafka 1 broker (voir ce fichier)
+#
+# Tests DB : pour éviter l’avertissement « orphan » sur postgres_test, lancer aussi
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d postgres_test
+# (voir docker-compose.test.yml).
 services:
   postgres:
     image: postgis/postgis:16-3.4-alpine
@@ -32,6 +44,35 @@ services:
           cpus: "0.5"
           memory: 512M
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-atmr}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-atmr}
+      DB_NAME: ${POSTGRES_DB:-atmr}
+      LISTEN_PORT: 6432
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-100}
+      RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-20}
+      SERVER_RESET_QUERY: DISCARD ALL
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+      AUTH_TYPE: scram-sha-256
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
   # ✅ 3.5: Reverse proxy nginx (optionnel, décommenter pour activer)
   # nginx:
   #   image: nginx:alpine
@@ -40,12 +81,15 @@ services:
   #   volumes:
   #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
   #   depends_on:
-  #     - api
+  #     - atmr_api
   #   restart: unless-stopped
   #   networks:
   #     - default
 
-  api:
+  atmr_api:
+    # Nom stable : un seul conteneur API en dev — évite les replicas numérotés (-1/-2) et le scale accidentel.
+    container_name: atmr-atmr_api
+    image: atmr-api
     build:
       context: ./backend
       dockerfile: Dockerfile.production
@@ -61,26 +105,32 @@ services:
       retries: 10
       start_period: 90s
     # En développement, on peut surcharger la commande par défaut
-    # Le docker-entrypoint.sh sera utilisé si aucune commande n'est spécifiée
-    command: >
-      gunicorn wsgi:app
-      --bind 0.0.0.0:5000
-      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
-      --workers ${GUNICORN_WORKERS:-1}
-      --timeout 120
-      --access-logfile -
-      --error-logfile -
-      --log-level debug
-      --no-sendfile
+    # Commande shell : $${VAR} laisse l’expansion à sh dans le conteneur (évite l’interp. Compose côté hôte).
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec gunicorn wsgi:app \
+          --bind 0.0.0.0:5000 \
+          --worker-class $${GUNICORN_WORKER_CLASS:-eventlet} \
+          --workers $${GUNICORN_WORKERS:-2} \
+          --timeout 120 \
+          --access-logfile - \
+          --error-logfile - \
+          --log-level debug \
+          --no-sendfile
+    # Un seul replica en dev : le bind 5000:5000 est unique ; --scale atmr_api>1 peut laisser
+    # un conteneur sans endpoint réseau / sans DNS vers pgbouncer (cf. replica « api-1 » cassé).
     ports:
       - "5000:5000"
     env_file:
       - backend/.env
     environment:
       - PYTHONPATH=/app
-      - GUNICORN_WORKERS=2
-      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
-      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
+      # GOOGLE_MAPS_API_KEY : défini dans backend/.env (env_file ci-dessus). Ne pas réinjecter ${GOOGLE_MAPS_API_KEY}
+      # depuis l’hôte ici : une variable vide écraserait la valeur du fichier.
       - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
       - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-eventlet}
       - SIO_DISABLE_UPGRADES=false
@@ -133,15 +183,20 @@ services:
       # Volume explicite pour uploads (PDFs, logos) — évite ERR_CONNECTION_RESET
       - ./backend/uploads:/app/uploads
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_started
       osrm:
         condition: service_started
+    networks:
+      default:
+        aliases:
+          - api
     restart: unless-stopped
     # ✅ 3.6: Limits CPU/mémoire pour API (augmentées pour tests B2)
     deploy:
+      replicas: 1
       resources:
         limits:
           cpus: "4.0"
@@ -151,6 +206,7 @@ services:
           memory: 4G
 
   celery-worker:
+    profiles: ["celery"]
     build:
       context: ./backend
       dockerfile: Dockerfile.production
@@ -159,31 +215,25 @@ services:
       test:
         [
           "CMD-SHELL",
-          "celery -A celery_app:celery inspect ping -d celery@$$HOSTNAME -t 5 || exit 1",
+          "celery -A celery_app.celery status -t 10 | grep -q 'node online' || exit 1",
         ]
       interval: 30s
-      timeout: 10s
+      timeout: 60s
       retries: 3
-      start_period: 40s
+      start_period: 90s
     command:
-      [
-        "celery",
-        "-A",
-        "celery_app:celery",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "4",
-        "--max-tasks-per-child",
-        "100",
-        "-Q",
-        "default,notifications,realtime,dlq",
-      ]
+      - /bin/sh
+      - -c
+      - |
+        exec celery -A celery_app:celery worker -l info \
+          --concurrency $${CELERY_CONCURRENCY:-2} \
+          --max-tasks-per-child 100 \
+          -Q default,dispatch,realtime,notifications,billing,rl,geocoding,dlq
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -217,11 +267,11 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_started
-      api:
+      atmr_api:
         condition: service_healthy
     restart: unless-stopped
     # ✅ 3.6: Limits CPU/mémoire pour Celery Worker
@@ -235,6 +285,7 @@ services:
           memory: 512M
 
   celery-beat:
+    profiles: ["celery"]
     build:
       context: ./backend
       dockerfile: Dockerfile.production
@@ -243,7 +294,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "test -f /app/celerybeat-schedule.dat && echo 'ok' || exit 1",
+          "test -f /app/celerybeat-schedule || test -f /app/celerybeat-schedule.db || exit 1",
         ]
       interval: 60s
       timeout: 5s
@@ -265,7 +316,7 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
@@ -294,11 +345,11 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_started
-      api:
+      atmr_api:
         condition: service_healthy
     restart: unless-stopped
     # ✅ 3.6: Limits CPU/mémoire pour Celery Beat
@@ -312,6 +363,7 @@ services:
           memory: 128M
 
   flower:
+    profiles: ["celery"]
     build:
       context: ./backend
       dockerfile: Dockerfile.production
@@ -333,7 +385,7 @@ services:
     env_file:
       - backend/.env
     environment:
-      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@postgres:5432/${POSTGRES_DB:-atmr}
+      - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       - PYTHONPATH=/app
       - FLASK_CONFIG=${FLASK_CONFIG:-development}
       - FLASK_ENV=${FLASK_ENV:-development}
@@ -356,7 +408,7 @@ services:
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_started
@@ -384,7 +436,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    command: redis-server --appendonly yes
+    command: >-
+      redis-server
+      --appendonly yes
+      --maxmemory 400mb
+      --maxmemory-policy volatile-lru
     restart: unless-stopped
     # ✅ 3.6: Limits CPU/mémoire pour Redis
     deploy:
@@ -415,6 +471,7 @@ services:
           memory: 1G
 
   prometheus:
+    profiles: ["monitoring"]
     image: prom/prometheus:latest
     container_name: atmr-prometheus
     command:
@@ -444,7 +501,7 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      api:
+      atmr_api:
         condition: service_healthy
     restart: unless-stopped
     # ✅ 3.6: Limits CPU/mémoire pour Prometheus
@@ -458,6 +515,7 @@ services:
           memory: 1G
 
   grafana:
+    profiles: ["monitoring"]
     image: grafana/grafana:10.2.0
     container_name: atmr-grafana
     ports:
@@ -473,19 +531,14 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:3000/api/health",
-        ]
+      # 127.0.0.1 (pas localhost) : évite les échecs sporadiques si localhost résout en IPv6.
+      # curl -f : échoue si le code HTTP est ≥ 400.
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/api/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 15s
+      retries: 5
+      # Premiers boots / migrations SQLite sur disque lent (p.ex. Windows) : marge généreuse
+      start_period: 90s
     depends_on:
       prometheus:
         condition: service_healthy
@@ -502,6 +555,7 @@ services:
 
   # ✅ C2: Service Locust pour tests de charge
   locust:
+    profiles: ["loadtest"]
     image: locustio/locust:2.24.0
     ports:
       - "8089:8089" # Interface web Locust
@@ -512,7 +566,7 @@ services:
     environment:
       - LOCUST_HOST=http://api:5000
     depends_on:
-      - api
+      - atmr_api
     restart: "no" # Lancer manuellement quand nécessaire
     deploy:
       resources:
@@ -531,4 +585,5 @@ volumes:
 
 networks:
   default:
-    name: network_prod
+    # Même nom que docker-compose.kafka.yml (réseau partagé sans external quand on merge les deux fichiers).
+    name: atmr-stack

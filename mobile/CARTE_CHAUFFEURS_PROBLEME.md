@@ -192,7 +192,8 @@ Créer une page web simple que les chauffeurs ouvrent sur leur téléphone :
 
 ```bash
 # Se connecter au serveur
-ssh deploy@138.201.155.201
+# ssh (après export SERVER_HOST — voir docs/deployment-ssh.md)
+ssh deploy@$SERVER_HOST
 
 # Voir les logs de réception de positions
 cd /srv/atmr

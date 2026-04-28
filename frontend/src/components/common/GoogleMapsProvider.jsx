@@ -1,14 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, useRef, Component } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  Component,
+} from 'react';
 
-/** Inclut `marker` pour AdvancedMarkerElement (remplace google.maps.Marker déprécié). */
-const LIBRARIES = ['places', 'geometry', 'marker'];
-const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-script';
+import { isGoogleMapsSdkReady, loadGoogleMapsScript } from '../../utils/googleMapsLoader';
 
 const GoogleMapsContext = createContext({ isLoaded: false, loadError: null });
-
-const isSdkReady = () =>
-  typeof window !== 'undefined' &&
-  typeof window.google?.maps?.Map === 'function';
 
 /**
  * Hook pour savoir si Google Maps SDK est chargé.
@@ -23,15 +24,20 @@ export function useGoogleMapsLoaded() {
  * que useJsApiLoader en StrictMode et avec HMR.
  */
 function GoogleMapsLoader({ children }) {
-  const [isLoaded, setIsLoaded] = useState(isSdkReady);
+  const [isLoaded, setIsLoaded] = useState(isGoogleMapsSdkReady);
   const [loadError, setLoadError] = useState(null);
-  const attemptedRef = useRef(false);
+
+  // Même frame que le premier paint : si le SDK est déjà en cache, évite un flash « non chargé ».
+  useLayoutEffect(() => {
+    if (isGoogleMapsSdkReady()) {
+      setIsLoaded(true);
+    }
+  }, []);
 
   useEffect(() => {
-    if (isLoaded || attemptedRef.current) return;
-    attemptedRef.current = true;
+    if (isLoaded) return;
 
-    if (isSdkReady()) {
+    if (isGoogleMapsSdkReady()) {
       setIsLoaded(true);
       return;
     }
@@ -43,42 +49,41 @@ function GoogleMapsLoader({ children }) {
       return;
     }
 
-    // Vérifier si le script existe déjà (double-render StrictMode)
-    let script = document.getElementById(GOOGLE_MAPS_SCRIPT_ID);
-    if (script) {
-      const check = () => {
-        if (isSdkReady()) setIsLoaded(true);
-        else setTimeout(check, 100);
-      };
-      check();
-      return;
+    let cancelled = false;
+    let timeoutId = null;
+    let idleId = null;
+
+    const run = () => {
+      if (cancelled) return;
+      loadGoogleMapsScript()
+        .then(() => {
+          if (!cancelled) setIsLoaded(true);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            console.warn('[GoogleMaps] Chargement SDK', e?.message);
+            setLoadError(e instanceof Error ? e : new Error(String(e)));
+          }
+        });
+    };
+
+    const isLanding = typeof window !== 'undefined' && window.location?.pathname === '/';
+    if (!isLanding) {
+      run();
+    } else if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(() => run(), { timeout: 2500 });
+      timeoutId = window.setTimeout(() => run(), 2800);
+    } else {
+      timeoutId = window.setTimeout(() => run(), 1200);
     }
 
-    // Charger le script avec loading=async (recommandation Google)
-    const libs = LIBRARIES.join(',');
-    script = document.createElement('script');
-    script.id = GOOGLE_MAPS_SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}&loading=async`;
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      const check = () => {
-        if (isSdkReady()) {
-          setIsLoaded(true);
-        } else {
-          setTimeout(check, 50);
-        }
-      };
-      check();
+    return () => {
+      cancelled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      if (idleId && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
     };
-
-    script.onerror = () => {
-      console.warn('[GoogleMaps] Erreur chargement SDK');
-      setLoadError(new Error('Échec chargement Google Maps SDK'));
-    };
-
-    document.head.appendChild(script);
   }, [isLoaded]);
 
   return (

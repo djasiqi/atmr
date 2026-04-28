@@ -85,3 +85,39 @@ def test_fanout_emits_both_events_for_canonical() -> None:
         )
 
     assert safe_emit.call_count == 2
+
+
+def test_fanout_canonical_payload_keeps_lon_and_lng_for_both_events() -> None:
+    with patch("services.realtime.socketio._safe_emit") as safe_emit:
+        fanout_driver_location_update(
+            1,
+            {"driver_id": 10, "company_id": 1, "lat": 46.2, "lon": 6.1, "recorded_at": "2026-01-01T10:00:00Z"},
+            {"driver_id": 10, "company_id": 1, "status": "available"},
+            accept_status="accepted_canonical",
+        )
+
+    assert safe_emit.call_count == 2
+    first_event_name, first_payload = safe_emit.call_args_list[0][0][0], safe_emit.call_args_list[0][0][1]
+    second_event_name, second_payload = safe_emit.call_args_list[1][0][0], safe_emit.call_args_list[1][0][1]
+    assert first_event_name == "driver_location_update"
+    assert second_event_name == "driver_live_state_update"
+    assert first_payload["lon"] == 6.1
+    assert first_payload["lng"] == 6.1
+    assert second_payload["lon"] == 6.1
+    assert second_payload["lng"] == 6.1
+    # Même forme de base sur les deux events (hors nom d'event)
+    assert set(first_payload.keys()) == set(second_payload.keys())
+
+
+@patch("services.realtime.socketio.inc_payload_legacy_lng_usage")
+def test_fanout_tracks_legacy_lng_usage_when_lon_missing(metric_mock) -> None:
+    with patch("services.realtime.socketio._safe_emit"):
+        fanout_driver_location_update(
+            1,
+            {"driver_id": 10, "company_id": 1, "lat": 46.2, "lng": 6.1},
+            {"driver_id": 10, "company_id": 1},
+            accept_status="accepted_canonical",
+        )
+
+    # 2 émissions (location + live_state) => 2 normalisations legacy
+    assert metric_mock.call_count == 2

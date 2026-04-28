@@ -42,6 +42,16 @@ export const lirieKeys = {
     scopeHash,
   ],
 
+  /**
+   * Liste serveur paginée (page Réservations entreprise) — `listScopeHash` des filtres.
+   */
+  companyReservationsPaginated: (companyId, scope) => [
+    LIRIE_QK_PREFIX,
+    'company-reservations-paginated',
+    String(companyId),
+    listScopeHash(scope),
+  ],
+
   companyReservationsSummary: (day) => [
     LIRIE_QK_PREFIX,
     'company-reservations-summary',
@@ -51,6 +61,11 @@ export const lirieKeys = {
   assignedReservations: (day) => [LIRIE_QK_PREFIX, 'assigned-reservations', day],
 
   companyDrivers: () => [LIRIE_QK_PREFIX, 'company-drivers'],
+
+  /**
+   * Liste clients / institutions (page Clients entreprise, max 1000 côté API).
+   */
+  companyClients: (companyId) => [LIRIE_QK_PREFIX, 'company-clients', String(companyId ?? 'me')],
 
   companyDriverLocations: () => [LIRIE_QK_PREFIX, 'company-driver-locations'],
 
@@ -64,7 +79,29 @@ export const lirieKeys = {
 
   institutionOffers: () => [LIRIE_QK_PREFIX, 'institution-offers'],
 
+  /** @deprecated Utiliser companyInvoices — conservé si des imports legacy pointent ici. */
   invoices: (filtersHash) => [LIRIE_QK_PREFIX, 'invoices', filtersHash],
+
+  /**
+   * Registre des factures entreprise (GET paginé + stats) — scoping par `companyId` + hash filtres.
+   */
+  companyInvoices: (companyId, filtersHash) => [
+    LIRIE_QK_PREFIX,
+    'company-invoices',
+    String(companyId),
+    filtersHash,
+  ],
 
   scopedCompany: (companyId) => [LIRIE_QK_PREFIX, 'company', companyId],
 };
+
+/**
+ * Invalide les listes réservations entreprise : vue journée (dispatch) + page Réservations paginée.
+ */
+export function lirieInvalidateCompanyReservationLists(queryClient) {
+  if (!queryClient?.invalidateQueries) return Promise.resolve();
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations'], exact: false }),
+    queryClient.invalidateQueries({ queryKey: [LIRIE_QK_PREFIX, 'company-reservations-paginated'], exact: false }),
+  ]);
+}

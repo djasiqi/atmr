@@ -16,6 +16,7 @@ import DriverReports from '../components/Dashboard/DriverReports';
 import VoiceControl from '../components/Dashboard/VoiceControl';
 import useDriverLocation from '../../../hooks/useDriverLocation';
 import styles from './DriverDashboard.module.css';
+import DriverMobilePreferredBanner from './DriverMobilePreferredBanner';
 
 const DriverDashboard = () => {
   const { public_id } = useParams();
@@ -85,6 +86,7 @@ const DriverDashboard = () => {
       <HeaderDashboard />
       <DriverSidebar />
       <main className={styles.mainContent}>
+        <DriverMobilePreferredBanner />
         {/* Affichage du profil avec possibilité d'édition */}
         <DriverProfile
           public_id={public_id}

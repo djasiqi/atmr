@@ -21,6 +21,7 @@ import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/Co
 import DriverLiveMap from '../Dashboard/components/DriverLiveMap';
 import useDriver from '../../../hooks/useDriver';
 import CompanyDriverTable from '../components/CompanyDriverTable';
+import CompanyDriverTableSkeleton from '../components/CompanyDriverTableSkeleton';
 import AddDriverForm from '../components/AddDriverForm';
 import EditDriverForm from '../components/EditDriverForm';
 import useAuthToken from '../../../hooks/useAuthToken';
@@ -32,6 +33,7 @@ import {
 import DriverWorkingHoursTable from './DriverWorkingHoursTable';
 import { toast } from 'sonner';
 import s from './CompanyDriver.module.css';
+import { useCompanySocketConnected } from '../../../hooks/enterprise/useCompanySocketConnected';
 
 const AVAILABILITY_OPTIONS = [
   { value: 'all', label: 'Tous' },
@@ -83,10 +85,26 @@ const ChipDrop = ({ value, onChange, options, prefix }) => {
   );
 };
 
+const buildDriverSearchText = (drv) => {
+  const name = (drv?.full_name || [drv?.first_name, drv?.last_name].filter(Boolean).join(' ')).trim();
+  return [drv?.username, name, drv?.first_name, drv?.last_name, drv?.email, drv?.phone]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
 const CompanyDriver = () => {
   const user = useAuthToken();
-  const { drivers, loading, error, toggleDriverStatus, deleteDriverById, refreshDrivers } =
-    useDriver();
+  const mapSocketOk = useCompanySocketConnected();
+  const {
+    drivers,
+    loading,
+    isRefetching,
+    error,
+    toggleDriverStatus,
+    deleteDriverById,
+    refreshDrivers,
+  } = useDriver();
 
   const [showAddDriverModal, setShowAddDriverModal] = useState(false);
   const [showEditDriverModal, setShowEditDriverModal] = useState(false);
@@ -119,9 +137,9 @@ const CompanyDriver = () => {
 
   // Filtering
   const filteredDrivers = useMemo(() => {
+    const q = searchTerm.toLowerCase().trim();
     return (drivers || []).filter((drv) => {
-      const text = `${drv.username} ${drv.first_name} ${drv.last_name} ${drv.email || ''}`.toLowerCase();
-      const matchesSearch = text.includes(searchTerm.toLowerCase());
+      const matchesSearch = !q || buildDriverSearchText(drv).includes(q);
 
       const matchesStatus =
         statusFilter === 'all' ||
@@ -247,6 +265,9 @@ const CompanyDriver = () => {
     setStatusFilter(tabId);
   }, []);
 
+  const showTableSkeleton = loading;
+  const showListRefresh = isRefetching && !showTableSkeleton;
+
   return (
     <div className={s.pageContainer}>
       <CompanyHeader />
@@ -291,8 +312,9 @@ const CompanyDriver = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Rechercher..."
+                placeholder="Rechercher nom, prénom, email, téléphone"
                 className={s.searchInput}
+                autoComplete="off"
               />
               {searchTerm && (
                 <button type="button" className={s.clearBtn} onClick={() => setSearchTerm('')}>
@@ -325,8 +347,15 @@ const CompanyDriver = () => {
 
             <div className={s.barMeta}>
               <span className={s.barResultCount}>{filteredDrivers.length} résultat{filteredDrivers.length !== 1 ? 's' : ''}</span>
-              <button type="button" className={s.refreshBtn} title="Rafraîchir" onClick={refreshDrivers}>
-                <FiRefreshCw size={14} />
+              <button
+                type="button"
+                className={s.refreshBtn}
+                title="Rafraîchir"
+                onClick={refreshDrivers}
+                aria-busy={isRefetching}
+                disabled={showTableSkeleton}
+              >
+                <FiRefreshCw size={14} className={isRefetching ? s.refreshSpin : ''} />
               </button>
             </div>
           </div>
@@ -389,8 +418,16 @@ const CompanyDriver = () => {
                 <div className={s.mapHeaderRight}>
                   {!mapCollapsed && (
                     <>
-                      <span className={s.liveDot} />
-                      <span className={s.liveText}>En direct</span>
+                      <span
+                        className={mapSocketOk ? s.liveDot : s.liveDotDisconnected}
+                        title={mapSocketOk ? 'WebSocket connecté' : 'WebSocket déconnecté — données rafraîchies sur chargement / polling'}
+                      />
+                      <span
+                        className={mapSocketOk ? s.liveText : s.liveTextMuted}
+                        title={mapSocketOk ? 'Temps réel actif' : 'Temps réel indisponible — données mises en cache / HTTP'}
+                      >
+                        {mapSocketOk ? 'Temps réel' : 'Hors socket'}
+                      </span>
                     </>
                   )}
                   <button
@@ -438,18 +475,37 @@ const CompanyDriver = () => {
 
           {activeTab === 'drivers' && (
             <>
-              {loading ? (
-                <div className={s.loadingState}>
-                  <div className={s.spinner} />
-                  <p>Chargement des chauffeurs...</p>
-                </div>
+              {showTableSkeleton ? (
+                <CompanyDriverTableSkeleton rowCount={6} />
               ) : filteredDrivers.length === 0 ? (
                 <div className={s.emptyState}>
                   <FiInbox size={36} className={s.emptyIcon} />
-                  <h3 className={s.emptyTitle}>Aucun chauffeur dans cette categorie</h3>
-                  <p className={s.emptySubtitle}>
-                    Ajustez vos filtres ou ajoutez un nouveau chauffeur.
-                  </p>
+                  {drivers.length === 0 ? (
+                    <>
+                      <h3 className={s.emptyTitle}>Aucun chauffeur enregistre</h3>
+                      <p className={s.emptySubtitle}>
+                        Ajoutez un chauffeur pour commencer le suivi GPS.
+                      </p>
+                    </>
+                  ) : searchTerm.trim() || statusFilter !== 'all' || availabilityFilter !== 'all' ? (
+                    <>
+                      <h3 className={s.emptyTitle}>
+                        {searchTerm.trim() ? 'Aucun resultat pour cette recherche' : 'Aucun chauffeur dans ce filtre'}
+                      </h3>
+                      <p className={s.emptySubtitle}>
+                        {searchTerm.trim()
+                          ? 'Modifiez le texte de recherche ou reinitialisez les filtres.'
+                          : 'Changez l’onglet, la disponibilite ou la recherche.'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className={s.emptyTitle}>Aucun chauffeur dans cette categorie</h3>
+                      <p className={s.emptySubtitle}>
+                        Ajustez vos filtres ou ajoutez un nouveau chauffeur.
+                      </p>
+                    </>
+                  )}
                   <button
                     type="button"
                     className={s.btnPrimary}
@@ -460,12 +516,20 @@ const CompanyDriver = () => {
                   </button>
                 </div>
               ) : (
-                <CompanyDriverTable
-                  drivers={filteredDrivers}
-                  onEdit={openEditModal}
-                  onToggleStatus={toggleDriverStatus}
-                  onDeleteRequest={handleDeleteRequest}
-                />
+                <div
+                  className={showListRefresh ? s.driverListRefreshing : s.driverListBlock}
+                  aria-busy={showListRefresh}
+                >
+                  {showListRefresh && (
+                    <div className={s.listRefreshBar} role="status" aria-label="Mise à jour des chauffeurs" />
+                  )}
+                  <CompanyDriverTable
+                    drivers={filteredDrivers}
+                    onEdit={openEditModal}
+                    onToggleStatus={toggleDriverStatus}
+                    onDeleteRequest={handleDeleteRequest}
+                  />
+                </div>
               )}
             </>
           )}

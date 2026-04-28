@@ -22,6 +22,16 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
     return d.message.trim();
   }
 
+  // Réponses legacy : message utilisateur dans `error` + `error_code` (ex. validation 400)
+  if (
+    typeof d.error_code === 'string' &&
+    d.error_code.trim() &&
+    typeof d.error === 'string' &&
+    d.error.trim()
+  ) {
+    return d.error.trim();
+  }
+
   const inner = d.data;
   if (inner && typeof inner === 'object' && typeof inner.message === 'string' && inner.message.trim()) {
     return inner.message.trim();
@@ -31,12 +41,16 @@ export function getApiErrorMessage(error, fallback = 'Une erreur est survenue.')
     const code = d.error.trim();
     const known = {
       payment_unavailable: 'Le paiement en ligne est temporairement indisponible.',
-      worldline_configuration: 'Configuration du prestataire de paiement incomplète.',
+      saferpay_configuration: 'Configuration du prestataire de paiement (Saferpay) incomplète.',
+      saferpay_initialize_failed:
+        'Impossible de démarrer le paiement Saferpay (refus ou configuration). Réessayez plus tard ou contactez le support.',
       validation_error: typeof d.message === 'string' ? d.message : null,
     };
     if (known[code]) {
       return known[code];
     }
+    /* Message utilisateur direct (ex. "Client introuvable pour cette entreprise") */
+    return code;
   }
 
   return fallback;

@@ -4,35 +4,25 @@
  */
 import { useState, useEffect } from 'react';
 import { jwtDecode } from 'jwt-decode';
-
-const COMPANY_USER_KEY = 'company_user';
-const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
-const COMPANY_ACCESS_TOKEN_LEGACY = 'company_authToken';
-const COMPANY_REFRESH_KEY = 'company_refresh_token';
-const COMPANY_REFRESH_LEGACY = 'company_refreshToken';
-
-const getCompanyToken = () =>
-  localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) || localStorage.getItem(COMPANY_ACCESS_TOKEN_LEGACY);
+import {
+  clearCompanyScopedTokens,
+  getActiveUser,
+  getCompanyScopedAccessToken,
+} from '../utils/webAuthSession';
 
 const useCompanyAuthToken = () => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const token = getCompanyToken();
-    const rawUser = localStorage.getItem(COMPANY_USER_KEY);
-    const storedUser = rawUser ? JSON.parse(rawUser) : null;
+    const token = getCompanyScopedAccessToken();
+    const storedUser = getActiveUser();
 
     if (token) {
       try {
         const decoded = jwtDecode(token);
         const currentTime = Date.now() / 1000;
         if (decoded.exp && decoded.exp < currentTime) {
-          try {
-            localStorage.removeItem(COMPANY_ACCESS_TOKEN_KEY);
-            localStorage.removeItem(COMPANY_ACCESS_TOKEN_LEGACY);
-            localStorage.removeItem(COMPANY_REFRESH_KEY);
-            localStorage.removeItem(COMPANY_REFRESH_LEGACY);
-          } catch {}
+          clearCompanyScopedTokens();
           setUser(null);
           return;
         }
@@ -47,12 +37,7 @@ const useCompanyAuthToken = () => {
         });
       } catch (error) {
         console.error('❌ useCompanyAuthToken: token invalide', error);
-        try {
-          localStorage.removeItem(COMPANY_ACCESS_TOKEN_KEY);
-          localStorage.removeItem(COMPANY_ACCESS_TOKEN_LEGACY);
-          localStorage.removeItem(COMPANY_REFRESH_KEY);
-          localStorage.removeItem(COMPANY_REFRESH_LEGACY);
-        } catch {}
+        clearCompanyScopedTokens();
         setUser(null);
       }
     } else if (storedUser) {

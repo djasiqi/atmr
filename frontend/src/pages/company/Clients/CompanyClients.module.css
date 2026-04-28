@@ -381,6 +381,78 @@
   transform: rotate(180deg);
 }
 
+.refreshSpin {
+  animation: clientListSpin 0.75s linear infinite;
+}
+
+@keyframes clientListSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .refreshSpin {
+    animation: none;
+  }
+}
+
+.clientsListBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.clientsListRefreshing {
+  transition: opacity 0.2s ease;
+  opacity: 0.9;
+}
+
+.listRefreshBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 6;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 10px) var(--radius-lg, 10px) 0 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.listRefreshBar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brand-primary, #00796b) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: clientListRefPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes clientListRefPulse {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clientsListRefreshing {
+    transition: none;
+  }
+  .listRefreshBar::after {
+    animation: none;
+    background: var(--brand-primary, #00796b);
+    opacity: 0.65;
+  }
+}
+
 /* Zone C -- KPIs inline */
 .kpiBar {
   display: flex;
@@ -575,6 +647,12 @@
 
 .sidePanelInner::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+.sidePanelLoading {
+  padding: 24px 20px;
+  font-size: 14px;
+  color: var(--text-muted, #64748b);
 }
 
 /* ====== Responsive ====== */

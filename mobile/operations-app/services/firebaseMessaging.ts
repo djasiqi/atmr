@@ -10,13 +10,39 @@ import {
   getToken,
   onTokenRefresh,
 } from "@react-native-firebase/messaging";
-import { getApp } from "@react-native-firebase/app";
+import { getApp, getApps } from "@react-native-firebase/app";
 import notifee, { AndroidImportance, EventType } from "@notifee/react-native";
 import { getLogger } from "@/utils/logger";
 import { validateDeepLink } from "@/services/deepLinkHandler";
 
 const log = getLogger("FCM");
-const messaging = getMessaging(getApp());
+
+/** FCM natif uniquement ; pas d’app [DEFAULT] sur web / Expo Go / config absente. */
+let messagingMemo: FirebaseMessagingTypes.Module | null | undefined;
+
+function getMessagingOrNull(): FirebaseMessagingTypes.Module | null {
+  if (messagingMemo !== undefined) return messagingMemo;
+  if (Platform.OS === "web") {
+    messagingMemo = null;
+    return null;
+  }
+  try {
+    if (getApps().length === 0) {
+      messagingMemo = null;
+      log.warn("FCM désactivé: aucune app Firebase [DEFAULT] (google-services / dev build requis)");
+      return null;
+    }
+    messagingMemo = getMessaging(getApp());
+    return messagingMemo;
+  } catch (e) {
+    messagingMemo = null;
+    log.warn("FCM désactivé: initialisation Firebase impossible", {
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
+
 let permissionRequestPromise: Promise<boolean> | null = null;
 let tokenRequestPromise: Promise<string | null> | null = null;
 
@@ -65,6 +91,8 @@ async function ensureChannel(): Promise<void> {
  * iOS notification+data: system already shows it — skip display to avoid duplicates.
  */
 export function registerForegroundHandler(): () => void {
+  const messaging = getMessagingOrNull();
+  if (!messaging) return () => {};
   return onMessage(messaging, async (remoteMessage) => {
     log.info("foreground message received", {
       type: remoteMessage.data?.type,
@@ -99,6 +127,8 @@ export function registerForegroundHandler(): () => void {
  * Must be called early in the app lifecycle.
  */
 export async function handleInitialNotification(): Promise<void> {
+  const messaging = getMessagingOrNull();
+  if (!messaging) return;
   try {
     const remoteMessage = await getInitialNotification(messaging);
     if (remoteMessage) {
@@ -118,6 +148,8 @@ export async function handleInitialNotification(): Promise<void> {
  * Returns unsubscribe function.
  */
 export function registerNotificationOpenedHandler(): () => void {
+  const messaging = getMessagingOrNull();
+  if (!messaging) return () => {};
   return onNotificationOpenedApp(messaging, (remoteMessage) => {
     log.info("notification opened (background->tap)", {
       type: remoteMessage.data?.type,
@@ -150,6 +182,8 @@ export async function requestFCMPermission(): Promise<boolean> {
     return permissionRequestPromise;
   }
   permissionRequestPromise = (async () => {
+    const messaging = getMessagingOrNull();
+    if (!messaging) return false;
     try {
       const authStatus = await requestPermission(messaging);
       const enabled =
@@ -178,6 +212,8 @@ export async function getFCMToken(): Promise<string | null> {
     return tokenRequestPromise;
   }
   tokenRequestPromise = (async () => {
+    const messaging = getMessagingOrNull();
+    if (!messaging) return null;
     try {
       const token = await getToken(messaging);
       log.info("FCM token retrieved", { tokenPrefix: token?.substring(0, 12) });
@@ -208,6 +244,8 @@ export async function getFCMToken(): Promise<string | null> {
 export function onFCMTokenRefresh(
   callback: (token: string) => void
 ): () => void {
+  const messaging = getMessagingOrNull();
+  if (!messaging) return () => {};
   return onTokenRefresh(messaging, (token) => {
     log.info("FCM token refreshed", { tokenPrefix: token?.substring(0, 12) });
     callback(token);

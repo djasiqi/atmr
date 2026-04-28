@@ -31,7 +31,7 @@ from typing_extensions import override
 from ext import db
 
 from .base import _as_bool, _as_int, _iso
-from .enums import ClientType
+from .enums import ClientType, ManagementMode
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,13 @@ class Client(db.Model):
     client_type: Mapped[ClientType] = mapped_column(
         SAEnum(ClientType, name="client_type"),
         nullable=False,
-        default=ClientType.SELF_SERVICE,
-        server_default=ClientType.SELF_SERVICE.value,
+        default=ClientType.PORTAL,
+        server_default=ClientType.PORTAL.value,
+    )
+    management_mode: Mapped[ManagementMode | None] = mapped_column(
+        SAEnum(ManagementMode, name="management_mode"),
+        nullable=True,
+        default=None,
     )
 
     # Coordonnées de facturation/contacts
@@ -179,7 +184,10 @@ class Client(db.Model):
     # Validators
     @validates("contact_email")
     def validate_contact_email(self, _key: str, email: str) -> str:
-        if self.client_type == ClientType.SELF_SERVICE and not email:
+        if (
+            self.management_mode == ManagementMode.SELF_SERVICE
+            and not email
+        ):
             msg = "L'email est requis pour les clients self-service."
             raise ValueError(msg)
         if email:
@@ -458,7 +466,7 @@ class Client(db.Model):
         return bool(self.is_active)
 
     def is_self_service(self) -> bool:
-        return self.client_type == ClientType.SELF_SERVICE
+        return self.management_mode == ManagementMode.SELF_SERVICE
 
     @override
     def __repr__(self) -> str:

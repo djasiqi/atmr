@@ -1,0 +1,817 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+}
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  /* HeaderDashboard position: fixed — hauteur 80px : ne pas laisser le contenu passer sous la barre */
+  padding: calc(80px + var(--spacing-lg)) var(--spacing-md) var(--spacing-lg);
+  box-sizing: border-box;
+}
+
+.panelMotion {
+  width: 100%;
+}
+
+/* — Panneau unique (en-tête + corps + pied) — */
+.panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  margin-bottom: var(--spacing-lg);
+  box-shadow:
+    var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.05)),
+    0 10px 28px -12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.panelAccentDanger {
+  border-left: 3px solid var(--danger-primary);
+}
+
+.panelAccentSuccess {
+  border-left: 3px solid var(--success-primary);
+}
+
+.panelAccentPending {
+  border-left: 3px solid var(--warning-primary);
+}
+
+/* Bordure périphérique alignée sur le statut (comme carte démo Lirie) */
+.panelToneDanger {
+  border-color: var(--danger-border);
+}
+
+.panelToneSuccess {
+  border-color: var(--success-border);
+}
+
+.panelTonePending {
+  border-color: var(--warning-border);
+}
+
+.panelHeader {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+}
+
+.panelHeaderMain {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* — Bloc héros (statut visuel, inspiré flux paiement moderne) — */
+.heroBlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.heroBlockSuccess {
+  background: linear-gradient(
+    145deg,
+    var(--success-bg) 0%,
+    color-mix(in srgb, var(--success-bg) 88%, var(--bg-primary)) 100%
+  );
+  border-bottom-color: var(--success-border);
+}
+
+.heroBlockDanger {
+  background: linear-gradient(
+    145deg,
+    var(--danger-bg) 0%,
+    color-mix(in srgb, var(--danger-bg) 88%, var(--bg-primary)) 100%
+  );
+  border-bottom-color: var(--danger-border);
+}
+
+.heroBlockPending {
+  background: linear-gradient(
+    145deg,
+    var(--warning-bg) 0%,
+    color-mix(in srgb, var(--warning-bg) 88%, var(--bg-primary)) 100%
+  );
+  border-bottom-color: var(--warning-border);
+}
+
+.heroBlockNeutral {
+  background: linear-gradient(
+    145deg,
+    var(--bg-tertiary) 0%,
+    var(--bg-primary) 100%
+  );
+}
+
+.heroIconWrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-primary);
+  background: var(--bg-primary);
+}
+
+.heroIconWrapSuccess {
+  border-color: var(--success-border);
+  background: color-mix(in srgb, var(--bg-primary) 70%, var(--success-bg));
+}
+
+.heroIconWrapDanger {
+  border-color: var(--danger-border);
+  background: color-mix(in srgb, var(--bg-primary) 65%, var(--danger-bg));
+}
+
+.heroIconWrapPending {
+  border-color: var(--warning-border);
+  background: color-mix(in srgb, var(--bg-primary) 70%, var(--warning-bg));
+}
+
+.heroIconWrapNeutral {
+  border-color: var(--border-secondary);
+  background: var(--bg-tertiary);
+}
+
+.heroIconSvg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.heroIconWrapSuccess .heroIconSvg {
+  color: var(--success-hover);
+}
+
+.heroIconWrapDanger .heroIconSvg {
+  color: var(--danger-dark);
+}
+
+.heroIconWrapPending .heroIconSvg {
+  color: var(--warning-primary);
+}
+
+.heroIconWrapNeutral .heroIconSvg {
+  color: var(--text-secondary);
+}
+
+.heroKicker {
+  margin: 0;
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.heroTitle {
+  margin: 0;
+  max-width: 20rem;
+  font-size: clamp(1.35rem, 4vw, 1.6rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight, 1.2);
+}
+
+.heroBookingPill {
+  display: inline-flex;
+  align-items: center;
+  margin: var(--spacing-xs) 0 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  border: 1px solid var(--border-primary);
+}
+
+.heroBookingPillSuccess {
+  border-color: var(--success-border);
+  background: color-mix(in srgb, var(--bg-primary) 65%, var(--success-bg));
+}
+
+.heroBookingPillDanger {
+  border-color: var(--danger-border);
+  background: color-mix(in srgb, var(--bg-primary) 70%, var(--danger-bg));
+}
+
+.heroBookingPillPending {
+  border-color: var(--warning-border);
+  background: color-mix(in srgb, var(--bg-primary) 70%, var(--warning-bg));
+}
+
+.amountRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.amountRowLabel {
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--text-secondary);
+}
+
+.amountRowValue {
+  font-size: var(--font-md, 1rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.failureHints {
+  margin-bottom: var(--spacing-md);
+}
+
+.failureHintsTitle {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.failureHintSingle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--danger-dark);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+}
+
+.failureHintSingle span {
+  min-width: 0;
+}
+
+.failureHintIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--danger-primary);
+}
+
+.pendingCtaHint {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-xs, 0.75rem);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+@keyframes paySpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinnerIcon {
+  flex-shrink: 0;
+  animation: paySpin 1.15s linear infinite;
+}
+
+.ctaStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.ctaStack .link,
+.ctaStack .linkSecondary,
+.ctaDanger {
+  gap: 0.4rem;
+}
+
+.ctaIcon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.ctaDanger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  color: var(--text-inverse);
+  background: var(--danger-primary);
+  border: 1px solid transparent;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    filter var(--transition-fast, 0.15s ease);
+}
+
+.ctaDanger:hover {
+  color: var(--text-inverse);
+  text-decoration: none;
+  filter: brightness(0.95);
+}
+
+.ctaDanger:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+.panelFooterMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+}
+
+.panelFooterHelp {
+  margin: 0;
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: var(--font-xs, 0.75rem);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.footerDashboardLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.footerDashboardLink:hover {
+  color: var(--brand-primary-dark);
+  text-decoration: none;
+}
+
+.footerDashboardIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.footerDashboardLink:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+/* — Page démarrage checkout Saferpay (partage ce module CSS) — */
+.checkoutArticle {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  margin-bottom: var(--spacing-lg);
+  box-shadow:
+    var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.05)),
+    0 10px 28px -12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.checkoutHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-md);
+  border-bottom: 1px solid var(--border-primary);
+  background: linear-gradient(
+    145deg,
+    var(--bg-tertiary) 0%,
+    var(--bg-primary) 100%
+  );
+}
+
+.checkoutTitle {
+  margin: 0;
+  font-size: clamp(1.25rem, 3.5vw, 1.5rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.checkoutBody {
+  padding: var(--spacing-md);
+}
+
+.checkoutMeta {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.checkoutMeta strong {
+  color: var(--text-primary);
+}
+
+.checkoutPolling {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-md) 0 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--info-border);
+  background: var(--info-bg);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.checkoutErrorBox {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.checkoutErrorTitle {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--danger-dark);
+}
+
+.checkoutErrorText {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.checkoutErrorHint {
+  margin: 0;
+  font-size: var(--font-xs, 0.75rem);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.checkoutActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.checkoutFooter {
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+}
+
+.checkoutBackLink {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-primary-dark);
+  text-decoration: none;
+}
+
+.checkoutBackLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.checkoutOutlineBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    border-color var(--transition-fast, 0.15s ease);
+}
+
+.checkoutOutlineBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary-dark);
+}
+
+.checkoutOutlineBtn:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+.kicker {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.2rem, 3vw, 1.45rem);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: var(--line-height-tight, 1.2);
+}
+
+.panelBody {
+  padding: var(--spacing-md);
+}
+
+.sectionTitle {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.sectionEyebrow {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-xs, 0.75rem);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-tertiary);
+}
+
+.cardLead {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-sm, 0.9375rem);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.notice {
+  margin: 0 0 var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.45;
+}
+
+.noticeSuccess {
+  border: 1px solid var(--success-border);
+  background: var(--success-bg);
+  color: var(--text-primary);
+}
+
+.noticeInfo {
+  border: 1px solid var(--info-border);
+  background: var(--info-bg);
+  color: var(--text-primary);
+}
+
+.noticeWarning {
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--text-primary);
+}
+
+.emptyPayment {
+  margin: 0;
+  padding: var(--spacing-md) 0 0;
+  border-top: 1px solid var(--border-primary);
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--text-secondary);
+}
+
+.stateCard {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.stateText {
+  margin: 0;
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--text-secondary);
+}
+
+.errorCard {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  margin-bottom: var(--spacing-md);
+}
+
+.errorTitle {
+  margin: 0 0 var(--spacing-xs);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  color: var(--danger-dark);
+}
+
+.error {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-sm, 0.875rem);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.errorCard .link {
+  margin-top: 0;
+}
+
+.actionsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.navHelp {
+  margin: 0;
+  font-size: var(--font-xs, 0.75rem);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.navHelpLink {
+  color: var(--brand-primary-dark);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.navHelpLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footerHelpAccent {
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-primary-dark);
+}
+
+.ctaMotion {
+  transition: transform 0.18s ease;
+}
+
+@media (hover: hover) {
+  .ctaMotion:hover {
+    transform: scale(1.02);
+  }
+}
+
+.ctaMotion:active {
+  transform: scale(0.97);
+}
+
+@media (min-width: 480px) {
+  .actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .actions .link,
+  .actions .linkSecondary {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+  }
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  background: var(--brand-primary);
+  color: var(--text-inverse);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid transparent;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    box-shadow var(--transition-fast, 0.15s ease);
+}
+
+.link:hover {
+  background: var(--brand-primary-dark);
+  color: var(--text-inverse);
+  text-decoration: none;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+.linkSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 var(--spacing-md);
+  color: var(--brand-primary-dark);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-primary);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    border-color var(--transition-fast, 0.15s ease);
+}
+
+.linkSecondary:hover {
+  background: var(--brand-primary-lightest);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary-dark);
+  text-decoration: none;
+}
+
+.linkSecondary:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+}
+
+/* Lien vers l’app (retour Saferpay WebView / navigateur système) */
+.appReopenBanner {
+  width: 100%;
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+  text-align: center;
+}
+
+.appReopenLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.35rem var(--spacing-sm);
+  color: var(--brand-primary-dark);
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.appReopenLink:hover {
+  color: var(--brand-primary);
+}
+
+.appReopenLink:focus-visible {
+  outline: 2px solid var(--border-focus, var(--brand-primary));
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

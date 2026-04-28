@@ -1,18 +1,20 @@
 // frontend/tests/services/authService.test.js
 import { loginUser, registerUser, logoutUser, resetPassword } from 'services/authService';
 import apiClient from 'utils/apiClient';
+import * as apiClientModule from 'utils/apiClient';
 
 // Mock apiClient
-const mockCleanLocalSession = jest.fn();
-const mockCoreLogoutUser = jest.fn();
-
 jest.mock('utils/apiClient', () => {
   const actual = jest.requireActual('utils/apiClient');
   return {
+    __esModule: true,
     ...actual,
-    default: actual.default,
-    logoutUser: mockCoreLogoutUser,
-    cleanLocalSession: mockCleanLocalSession,
+    default: {
+      ...actual.default,
+      post: jest.fn(),
+    },
+    logoutUser: jest.fn(),
+    cleanLocalSession: jest.fn(),
   };
 });
 
@@ -24,7 +26,7 @@ describe('authService', () => {
   });
 
   describe('loginUser', () => {
-    it('devrait se connecter avec succès et stocker le token', async () => {
+    it('devrait se connecter avec succès et stocker la session utilisateur', async () => {
       const mockResponse = {
         data: {
           token: 'fake-jwt-token',
@@ -51,7 +53,8 @@ describe('authService', () => {
       });
 
       expect(result).toEqual({ success: true });
-      expect(localStorage.getItem('authToken')).toBe('fake-jwt-token');
+      // Tokens en cookies httpOnly: pas de persistance localStorage.
+      expect(localStorage.getItem('authToken')).toBeNull();
       expect(localStorage.getItem('public_id')).toBe('user-123');
 
       const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -77,7 +80,7 @@ describe('authService', () => {
       });
 
       expect(result).toEqual({ redirectToReset: true });
-      expect(localStorage.getItem('authToken')).toBe('fake-jwt-token');
+      expect(localStorage.getItem('authToken')).toBeNull();
     });
 
     it('devrait lever une erreur si public_id est manquant', async () => {
@@ -150,8 +153,8 @@ describe('authService', () => {
       localStorage.setItem('public_id', 'user-123');
 
       // Mock coreLogoutUser pour qu'il ne fasse pas d'appel réel
-      mockCoreLogoutUser.mockResolvedValue(undefined);
-      mockCleanLocalSession.mockImplementation(() => {
+      apiClientModule.logoutUser.mockResolvedValue(undefined);
+      apiClientModule.cleanLocalSession.mockImplementation(() => {
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
         localStorage.removeItem('public_id');
@@ -164,8 +167,8 @@ describe('authService', () => {
 
       await logoutUser({ redirect: false });
 
-      expect(mockCoreLogoutUser).toHaveBeenCalledWith({ redirect: false });
-      expect(mockCleanLocalSession).toHaveBeenCalled();
+      expect(apiClientModule.logoutUser).toHaveBeenCalledWith({ redirect: false });
+      expect(apiClientModule.cleanLocalSession).toHaveBeenCalled();
       expect(localStorage.getItem('authToken')).toBeNull();
       expect(localStorage.getItem('user')).toBeNull();
       expect(localStorage.getItem('public_id')).toBeNull();

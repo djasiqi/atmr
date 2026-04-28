@@ -306,6 +306,42 @@ def test_booking_amount_minimum_accepted(db, sample_client, sample_company):
     assert booking.amount == 0.5, "0.5 devrait être accepté comme montant minimum"
 
 
+def test_booking_return_leg_zero_amount_allowed(db, sample_client, sample_company):
+    """Course retour : montant 0 (tarif porté par l’aller), is_return avant amount."""
+    outbound = Booking(
+        client_id=sample_client.id,
+        company_id=sample_company.id,
+        user_id=sample_client.user_id,
+        customer_name="Aller",
+        pickup_location="Lausanne",
+        dropoff_location="Genève",
+        scheduled_time=now_local() + timedelta(days=1),
+        status=BookingStatus.PENDING,
+        amount=90.0,
+        is_return=False,
+    )
+    db.session.add(outbound)
+    db.session.flush()
+
+    retour = Booking(
+        client_id=sample_client.id,
+        company_id=sample_company.id,
+        user_id=sample_client.user_id,
+        customer_name="Aller",
+        pickup_location="Genève",
+        dropoff_location="Lausanne",
+        is_return=True,
+        parent_booking_id=outbound.id,
+        time_confirmed=False,
+        scheduled_time=None,
+        status=BookingStatus.PENDING,
+        amount=0,
+    )
+    db.session.add(retour)
+    db.session.flush()
+    assert retour.amount == 0.0
+
+
 # =====================================================
 # Tests géocodage obligatoire
 # =====================================================
@@ -636,11 +672,14 @@ def test_booking_ownership_admin_can_access_all_bookings(
 # =====================================================
 
 
-def test_booking_create_round_trip_without_return_time_rejected(
+def test_booking_create_round_trip_without_return_time_allowed(
     client, auth_headers, sample_client
 ):
-    """Test que is_round_trip=True sans return_time est rejeté."""
+    """Aller-retour : date de retour sans heure (return_date + heure à confirmer)."""
     from datetime import UTC, datetime, timedelta
+
+    scheduled_dt = datetime.now(UTC) + timedelta(hours=1)
+    return_ymd = (scheduled_dt + timedelta(days=1)).date().isoformat()
 
     response = client.post(
         f"/api/v1/bookings/clients/{sample_client.user.public_id}/bookings",
@@ -649,10 +688,10 @@ def test_booking_create_round_trip_without_return_time_rejected(
             "customer_name": "Test Client",
             "pickup_location": "Lausanne",
             "dropoff_location": "Genève",
-            "scheduled_time": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            "scheduled_time": scheduled_dt.isoformat(),
             "amount": 50.0,
             "is_round_trip": True,
-            # return_time manquant
+            "return_date": return_ymd,
         },
     )
 
@@ -661,9 +700,7 @@ def test_booking_create_round_trip_without_return_time_rejected(
     if response.status_code in (403, 404):
         return
 
-    assert response.status_code == 400
-    data = response.get_json()
-    assert "error" in data or "return_time" in str(data).lower()
+    assert response.status_code in (200, 201)
 
 
 def test_booking_create_round_trip_return_time_before_scheduled_rejected(
@@ -825,3 +862,121 @@ def test_booking_assigned_with_driver_id_accepted(
     booking.status = BookingStatus.ASSIGNED
     db.session.flush()  # Ne doit pas lever d'exception
     db.session.rollback()
+
+
+def _client_auth_headers(client, sample_client):
+    from flask_jwt_extended import create_access_token
+
+    from ext import db
+    from models.enums import UserRole
+    from models.user import User
+
+    user = db.session.get(User, sample_client.user_id)
+    claims = {
+        "role": UserRole.client.value,
+        "company_id": getattr(user, "company_id", None),
+        "driver_id": None,
+        "aud": "atmr-api",
+    }
+    with client.application.app_context():
+        token = create_access_token(
+            identity=str(user.public_id), additional_claims=claims
+        )
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+@pytest.mark.integration
+def test_saferpay_assert_returns_finalize_payload(
+    client, db, sample_company, sample_client, monkeypatch, requires_postgresql
+):
+    from datetime import UTC, datetime
+    from unittest.mock import patch
+
+    from models.booking import Booking
+    from models.enums import BookingStatus, PaymentStatus
+    from models.payment import Payment
+
+    monkeypatch.setenv("SAFERPAY_CUSTOMER_ID", "cid")
+    monkeypatch.setenv("SAFERPAY_TERMINAL_ID", "tid")
+    monkeypatch.setenv("SAFERPAY_API_USERNAME", "u")
+    monkeypatch.setenv("SAFERPAY_API_PASSWORD", "p")
+
+    booking = Booking()
+    booking.user_id = sample_client.user_id
+    booking.company_id = sample_company.id
+    booking.client_id = sample_client.id
+    booking.customer_name = "Test"
+    booking.pickup_location = "A"
+    booking.dropoff_location = "B"
+    booking.scheduled_time = datetime.now(UTC)
+    booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
+    booking.amount = 10.0
+    booking.billed_to_type = "patient"
+    db.session.add(booking)
+    db.session.flush()
+
+    pay = Payment(
+        amount=10.0,
+        method="credit_card",
+        status=PaymentStatus.PENDING,
+        user_id=sample_client.user_id,
+        client_id=sample_client.id,
+        booking_id=booking.id,
+        payment_provider="saferpay",
+    )
+    pay.saferpay_token = "t"
+    db.session.add(pay)
+    db.session.commit()
+    pid = pay.id
+
+    headers = _client_auth_headers(client, sample_client)
+    with patch(
+        "services.saferpay.finalize_payment.finalize_saferpay_payment",
+        return_value={"status": "already_completed", "payment_id": pid},
+    ):
+        rv = client.post(
+            f"/api/v1/bookings/{booking.id}/saferpay/assert",
+            json={"payment_id": pid},
+            headers=headers,
+        )
+    assert rv.status_code == 200
+    body = rv.get_json()
+    data = body.get("data") or body
+    assert data.get("status") == "already_completed"
+
+
+@pytest.mark.integration
+def test_saferpay_assert_not_found_payment(
+    client, db, sample_company, sample_client, monkeypatch, requires_postgresql
+):
+    from datetime import UTC, datetime
+
+    from models.booking import Booking
+    from models.enums import BookingStatus
+
+    monkeypatch.setenv("SAFERPAY_CUSTOMER_ID", "cid")
+    monkeypatch.setenv("SAFERPAY_TERMINAL_ID", "tid")
+    monkeypatch.setenv("SAFERPAY_API_USERNAME", "u")
+    monkeypatch.setenv("SAFERPAY_API_PASSWORD", "p")
+
+    booking = Booking()
+    booking.user_id = sample_client.user_id
+    booking.company_id = sample_company.id
+    booking.client_id = sample_client.id
+    booking.customer_name = "Test"
+    booking.pickup_location = "A"
+    booking.dropoff_location = "B"
+    booking.scheduled_time = datetime.now(UTC)
+    booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
+    booking.amount = 10.0
+    booking.billed_to_type = "patient"
+    db.session.add(booking)
+    db.session.commit()
+
+    headers = _client_auth_headers(client, sample_client)
+    rv = client.post(
+        f"/api/v1/bookings/{booking.id}/saferpay/assert",
+        json={"payment_id": 999999999},
+        headers=headers,
+    )
+    assert rv.status_code == 404

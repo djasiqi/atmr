@@ -6,6 +6,7 @@
 
 import axios from 'axios';
 import apiClient, { getCurrentAuthEnv } from '../utils/apiClient';
+import { hasCompanyScopedAccessToken } from '../utils/webAuthSession';
 
 /**
  * Log Axios "riche" pour diagnostic (status, url, responseData).
@@ -48,21 +49,12 @@ export const getDelays = async (date) => {
   }
 };
 
-const COMPANY_ACCESS_TOKEN_KEY = 'company_access_token';
-
 /**
  * Vérifie si company_access_token est disponible (requis pour /company_dispatch/*).
  * @returns {boolean}
  */
 const hasCompanyAccessToken = () =>
-  !!(
-    typeof localStorage !== 'undefined' &&
-    (getCurrentAuthEnv() === 'demo'
-      ? localStorage.getItem('demo_access_token')
-      : (localStorage.getItem(COMPANY_ACCESS_TOKEN_KEY) ||
-        localStorage.getItem('company_authToken') ||
-        localStorage.getItem('app_access_token')))
-  );
+  hasCompanyScopedAccessToken(getCurrentAuthEnv());
 
 let _warnedNoToken = false;
 

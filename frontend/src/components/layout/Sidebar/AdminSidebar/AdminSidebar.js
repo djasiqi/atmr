@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fa';
 import { usePlatformCapabilities, PLATFORM_SEGMENTS } from '../../../../hooks/usePlatformCapabilities';
 import { logoutUser } from '../../../../utils/apiClient';
+import { getActiveUser } from '../../../../utils/webAuthSession';
 import styles from './AdminSidebar.module.css';
 
 function getInitials(name = '') {
@@ -70,8 +71,7 @@ const AdminSidebar = () => {
 
   const userData = useMemo(() => {
     try {
-      const raw = localStorage.getItem('user');
-      return raw ? JSON.parse(raw) : null;
+      return getActiveUser();
     } catch {
       return null;
     }

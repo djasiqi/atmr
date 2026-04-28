@@ -502,6 +502,26 @@ def emit_booking_message(
             socketio.emit("booking_message", payload, to=f"institution_{institution_id}")
             emitted = True
 
+        # Propriétaire du booking (portail client) — reçoit aussi les réponses entreprise / institution
+        try:
+            from models.booking import Booking as BookingRow
+            from models.client import Client as ClientRow
+
+            b_row = db.session.get(BookingRow, booking_id)
+            if b_row and getattr(b_row, "client_id", None):
+                cli_row = getattr(b_row, "client", None) or ClientRow.query.get(b_row.client_id)
+                u_row = getattr(cli_row, "user", None) if cli_row else None
+                pub = (getattr(u_row, "public_id", None) or "").strip()
+                if pub:
+                    socketio.emit("booking_message", payload, to=f"client_{pub}")
+                    emitted = True
+        except Exception as room_err:
+            logger.debug(
+                "[BookingChat] client portal room emit skipped booking=%s: %s",
+                booking_id,
+                room_err,
+            )
+
         if emitted:
             logger.debug(
                 "[BookingChat] Emitted booking_message for booking %s (company=%s, institution=%s)",
@@ -534,6 +554,30 @@ def emit_booking_message(
                 message=f"{sender_label}: {content_preview}",
                 metadata={
                     "booking_id": booking_id,
+                    "sender_label": sender_label,
+                },
+            )
+
+        if sender_type == "CLIENT" and company_id:
+            persist_company_notification(
+                company_id=company_id,
+                event_type="booking_message",
+                title="Message client",
+                message=f"{sender_label}: {content_preview}",
+                metadata={
+                    "booking_id": booking_id,
+                    "sender_label": sender_label,
+                },
+            )
+
+        if sender_type == "CLIENT" and institution_id:
+            _persist_notification(
+                institution_id=institution_id,
+                event_type="booking_message",
+                message=f"{sender_label}: {content_preview}",
+                metadata={
+                    "booking_id": booking_id,
+                    "request_id": request_id,
                     "sender_label": sender_label,
                 },
             )
@@ -660,9 +704,16 @@ def get_request_info_from_booking(booking_id: int) -> dict[str, Any] | None:
 
     # Fallback: booking retour → résoudre via parent_booking_id
     booking = db.session.get(Booking, booking_id)
-    if booking and booking.is_return and booking.parent_booking_id:
+    if booking is not None:
+        is_return = bool(getattr(booking, "is_return", False))
+        parent_booking_id = getattr(booking, "parent_booking_id", None)
+    else:
+        is_return = False
+        parent_booking_id = None
+
+    if is_return and parent_booking_id:
         transport_req = TransportRequest.query.filter_by(
-            booking_id=booking.parent_booking_id,
+            booking_id=parent_booking_id,
         ).first()
         if transport_req:
             return _format_request_info(transport_req)

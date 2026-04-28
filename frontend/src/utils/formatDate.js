@@ -55,7 +55,7 @@ export function renderBookingDateTime(booking) {
   const timeConfirmed = booking.time_confirmed;
 
   // Si c'est un retour avec heure non confirmée (time_confirmed = false)
-  if (isReturn && scheduledTime && timeConfirmed === false) {
+  if (isReturn && scheduledTime && timeConfirmed !== true) {
     const date = new Date(scheduledTime);
     const pad = (n) => String(n).padStart(2, '0');
     const day = pad(date.getDate());

@@ -26,45 +26,14 @@ from services.platform_tenant_gates import assert_company_not_platform_suspended
 from shared.booking_company_resolution import (
     resolve_booking_owner_company_id_for_create,
 )
+from shared.client_portal_notes import compose_client_portal_notes_medical
 from shared.geo_utils import GeoValidator
-from shared.time_utils import api_scheduled_iso_to_naive_geneva
+from shared.time_utils import (
+    api_scheduled_iso_to_naive_geneva,
+    geneva_naive_midnight_from_date_ymd,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _compose_client_notes_medical(validated_data: dict[str, Any]) -> str | None:
-    """Notes internes (occurrences, récurrence, message libre portail client)."""
-    parts: list[str] = []
-    try:
-        occ = int(validated_data.get("occurrences") or 1)
-    except (TypeError, ValueError):
-        occ = 1
-    if occ > 1:
-        parts.append(f"Occurrences demandées (même trajet) : {occ}")
-    if validated_data.get("is_recurring"):
-        rtype = (validated_data.get("recurrence_type") or "").strip()
-        rlen = validated_data.get("recurrence_series_length")
-        rend = (validated_data.get("recurrence_end_date") or "").strip()
-        rdays = validated_data.get("recurrence_days") or []
-        line = (
-            f"Récurrence demandée (portail client) : type={rtype or '?'}, "
-            f"répétitions prévues={rlen}"
-        )
-        if rend:
-            line += f", jusqu'au {rend}"
-        if rtype == "custom" and rdays:
-            line += f", jours 0=lun..6=dim : {','.join(str(int(d)) for d in rdays)}"
-        line += (
-            " — une réservation est créée par cette demande ; "
-            "série à confirmer / reproduire côté transporteur."
-        )
-        parts.append(line)
-    client_note = (validated_data.get("client_note") or "").strip()
-    if client_note:
-        parts.append(client_note)
-    if not parts:
-        return None
-    return "\n".join(parts)
 
 
 class _ClientDTO(Protocol):
@@ -106,6 +75,7 @@ class BookingWriterPort(Protocol):
         amount: float,
         medical_facility: str,
         doctor_name: str,
+        hospital_service: str,
         duration_seconds: int,
         distance_meters: int,
         pickup_lat: float,
@@ -133,6 +103,7 @@ class BookingWriterPort(Protocol):
         price_breakdown_json: dict[str, Any] | None,
         notes_medical: str | None = None,
         return_scheduled_time: Any | None = None,
+        return_time_exact: bool = False,
     ) -> BookingLike: ...
 
 
@@ -218,15 +189,24 @@ class CreateBookingUseCase:
             raise ValueError("Invalid scheduled_time format")
 
         return_scheduled_time = None
+        return_time_exact = False
         rt_raw = validated_data.get("return_time")
+        rd_raw = validated_data.get("return_date")
         if rt_raw:
             try:
                 return_scheduled_time = api_scheduled_iso_to_naive_geneva(rt_raw)
             except Exception as date_error:
                 logger.error("Erreur de conversion return_time: %s", date_error)
                 raise ValueError("Invalid return_time format") from date_error
+            return_time_exact = True
+        elif bool(validated_data.get("is_round_trip")) and rd_raw:
+            rd_str = str(rd_raw).strip() if isinstance(rd_raw, str) else ""
+            if rd_str:
+                return_scheduled_time = geneva_naive_midnight_from_date_ymd(rd_str)
+                if return_scheduled_time is None:
+                    raise ValueError("Invalid return_date format")
 
-        notes_medical = _compose_client_notes_medical(validated_data)
+        notes_medical = compose_client_portal_notes_medical(validated_data)
 
         # Calcul distance/duration
         try:
@@ -331,6 +311,7 @@ class CreateBookingUseCase:
             amount=float(validated_data["amount"]),
             medical_facility=validated_data.get("medical_facility", ""),
             doctor_name=validated_data.get("doctor_name", ""),
+            hospital_service=validated_data.get("hospital_service", ""),
             duration_seconds=duration_seconds,
             distance_meters=distance_meters,
             pickup_lat=pickup_lat,
@@ -358,6 +339,7 @@ class CreateBookingUseCase:
             price_breakdown_json=None,
             notes_medical=notes_medical,
             return_scheduled_time=return_scheduled_time,
+            return_time_exact=return_time_exact,
         )
 
         if geocode_miss:

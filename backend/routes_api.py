@@ -167,6 +167,7 @@ def init_namespaces(app):
     # ruff: noqa: I001 - Imports organisés par domaine fonctionnel
     # ✅ Imports tardifs des namespaces pour éviter les cycles d'imports
     from routes.admin import admin_ns
+    from routes.ai_routes import ai_ns
     from routes.analytics import analytics_ns  # /analytics
     from routes.app_version import app_version_ns  # Version check mobile
     from routes.auth import auth_ns
@@ -216,12 +217,13 @@ def init_namespaces(app):
     from routes.planning import planning_ns
     from routes.pricing import pricing_ns
     from routes.prometheus_metrics import prometheus_metrics_ns
+    from routes.realtime_gateway import realtime_gateway_ns
     from routes.secret_rotation_monitoring import secret_rotation_ns
     from routes.security_monitoring import (
         security_monitoring_ns,
     )  # ✅ S3: Monitoring sécurité
     from routes.shadow_mode_routes import shadow_mode_bp  # Shadow Mode RL
-    from routes.worldline_webhook import worldline_webhook_bp
+    from routes.saferpay_notify import saferpay_notify_bp
     from routes.transport_vouchers import (  # ✅ P3: Bons de transport
         transport_vouchers_ns,
     )
@@ -238,7 +240,7 @@ def init_namespaces(app):
     # Enregistrer le Blueprint Shadow Mode (non-RESTX)
     app.register_blueprint(shadow_mode_bp)
     app.register_blueprint(gateway_auth_bp)
-    app.register_blueprint(worldline_webhook_bp, url_prefix=f"{API_PREFIX}/v1")
+    app.register_blueprint(saferpay_notify_bp, url_prefix=f"{API_PREFIX}/v1")
 
     # ❌ TEMPORAIREMENT DÉSACTIVÉ POUR TEST
     # ✅ Enregistrer les handlers Socket.IO pour alertes proactives
@@ -350,9 +352,13 @@ def init_namespaces(app):
     )
 
     api_v1.add_namespace(prometheus_metrics_ns, path="/prometheus")
+    api_v1.add_namespace(realtime_gateway_ns, path="/realtime-gateway")
 
     # Analytics namespace
     api_v1.add_namespace(analytics_ns, path="/analytics")
+
+    # Estimation d'itinéraire (dashboard client, POST /ai/optimized-route)
+    api_v1.add_namespace(ai_ns, path="/ai")
 
     # Company settings
     api_v1.add_namespace(settings_ns, path="/company-settings")

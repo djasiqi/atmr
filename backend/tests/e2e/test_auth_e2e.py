@@ -248,3 +248,33 @@ class TestAuthRoleBasedAccess:
         assert response.status_code == 200
         me_data = response.get_json()
         assert me_data["role"] == UserRole.ADMIN.value
+
+
+class TestAuthMeDriverBootstrapContract:
+    """GET /auth/me — contrat bootstrap (driver) après refactor session."""
+
+    def test_e2e_auth_me_driver_contract(self, e2e_client, db):
+        from tests.e2e.helpers.e2e_helpers import create_test_company, create_test_driver
+
+        company = create_test_company(db)
+        driver = create_test_driver(db, company=company)
+        user = driver.user
+        user.set_password("driverpass123", force_change=False)
+        db.session.commit()
+
+        login_response = e2e_client.post(
+            "/api/v1/auth/login",
+            json={"email": user.email, "password": "driverpass123"},
+        )
+        assert login_response.status_code == 200
+
+        response = e2e_client.get("/api/v1/auth/me")
+        assert response.status_code == 200
+        me_data = response.get_json()
+        assert me_data["role"] == UserRole.DRIVER.value
+        assert me_data["driver_id"] == driver.id
+        assert me_data["company_id"] == company.id
+        assert me_data["bootstrap_version"] == 1
+        assert me_data["access_denied_code"] is None
+        assert me_data["message"] is None
+        assert me_data["account_active"] is True

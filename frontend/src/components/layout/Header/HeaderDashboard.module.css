@@ -170,11 +170,59 @@
 }
 
 .logo {
-  font-size: var(--font-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--brand-primary);
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
   cursor: pointer;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.logo:hover {
+  opacity: 0.92;
+}
+
+.logoBrandImg {
+  height: 30px;
+  width: auto;
+  max-width: min(140px, 38vw);
+  object-fit: contain;
+  display: block;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.bellButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-base),
+    border-color var(--transition-base),
+    color var(--transition-base);
+}
+
+.bellButton:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-secondary);
+  color: var(--brand-primary);
+}
+
+.bellIcon {
+  font-size: 20px;
 }
 
 .nav {
@@ -195,11 +243,18 @@
   color: var(--text-primary);
   text-decoration: none;
   font-size: var(--font-sm);
-  transition: color var(--transition-base);
+  transition: color var(--transition-base), border-color var(--transition-base);
+  border-bottom: 2px solid transparent;
+  padding-bottom: 3px;
 }
 
 .navLink:hover {
   color: var(--brand-primary);
+}
+
+.navLinkActive {
+  color: var(--brand-primary);
+  border-bottom-color: var(--brand-primary);
 }
 
 .userSection {
@@ -209,13 +264,15 @@
 .userButton {
   background-color: var(--bg-tertiary);
   color: var(--text-primary);
-  padding: var(--spacing-xs) var(--spacing-md);
+  padding: var(--spacing-xs);
+  padding-inline-end: var(--spacing-sm);
   border-radius: var(--radius-full);
   border: 1px solid var(--border-primary);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
+  max-width: min(280px, 52vw);
   transition:
     background-color var(--transition-base),
     border-color var(--transition-base);
@@ -228,79 +285,234 @@
   border-color: var(--border-secondary);
 }
 
-.arrow {
-  font-size: var(--font-xs);
+.userButton:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.userButtonOpen {
+  border-color: var(--border-primary);
+  background-color: var(--bg-tertiary);
+}
+
+.userButtonAvatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+  color: var(--text-inverse);
+  background: var(--brand-primary-dark);
+}
+
+.userButtonName {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userButtonChevron {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
   color: var(--text-tertiary);
+  transition: transform var(--transition-base);
+}
+
+.userButtonOpen .userButtonChevron {
+  transform: rotate(180deg);
+}
+
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .dropdownMenu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + var(--spacing-sm));
   right: 0;
+  min-width: 260px;
+  max-width: min(300px, calc(100vw - var(--spacing-lg)));
   background: var(--bg-primary);
-  width: 250px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border-primary);
-  /* Au-dessus de la sidebar (1010) : --z-dropdown seul passait dessous */
   z-index: var(--z-popover, 1060);
   overflow: hidden;
+  animation: dropdownIn 0.12s ease-out;
 }
 
 .userInfo {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
   padding: var(--spacing-md);
-  border-bottom: 1px solid var(--border-secondary);
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.userAvatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.02em;
+  color: var(--text-inverse);
+  background: var(--brand-primary-dark);
+  border: 1px solid var(--border-primary);
+}
+
+.userMeta {
+  min-width: 0;
+  flex: 1;
 }
 
 .userName {
-  font-size: var(--font-xl);
-  font-weight: var(--font-weight-bold);
+  margin: 0 0 2px;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  line-height: var(--line-height-tight);
+  word-break: break-word;
 }
 
-.menuOptions {
-  padding: var(--spacing-sm);
+.userRole {
+  margin: 0;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
-.menuLink {
-  display: block;
-  padding: var(--spacing-sm);
+.menuList {
+  list-style: none;
+  margin: 0;
+  padding: var(--spacing-xs);
+}
+
+.menuList li {
+  margin: 0;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin: 0;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--text-primary);
   text-decoration: none;
-  font-size: var(--font-md);
-  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  cursor: pointer;
   transition:
-    background var(--transition-base),
-    color var(--transition-base);
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
-.menuLink:hover {
+a.menuItem {
+  color: var(--text-primary);
+}
+
+.menuItem:hover {
   background: var(--bg-hover);
-  color: var(--brand-primary);
+  color: var(--text-primary);
+}
+
+.menuItem:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.menuItemIcon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+}
+
+.menuItem:hover .menuItemIcon {
+  color: var(--text-secondary);
 }
 
 .logout {
-  padding: var(--spacing-sm);
-  text-align: center;
-  border-top: 1px solid var(--border-secondary);
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
+  border-top: 1px solid var(--border-primary);
 }
 
 .logoutButton {
-  background: var(--danger-primary);
-  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-height: 38px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
   border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: inherit;
   cursor: pointer;
-  font-size: var(--font-md);
-  transition: background var(--transition-base);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.logoutButton .menuItemIcon {
+  color: var(--text-tertiary);
 }
 
 .logoutButton:hover {
-  background: var(--danger-hover);
+  background: var(--danger-bg);
+  color: var(--danger-dark);
+}
+
+.logoutButton:hover .menuItemIcon {
+  color: var(--danger-primary);
+}
+
+.logoutButton:focus-visible {
+  outline: 2px solid var(--danger-border);
+  outline-offset: 1px;
 }
 
 @media (max-width: 768px) {
+  .logoBrandImg {
+    height: 26px;
+    max-width: min(120px, 44vw);
+  }
+
   .headerAdmin {
     margin-left: var(--sidebar-w, 60px);
     width: calc(100% - var(--sidebar-w, 60px));
@@ -332,10 +544,27 @@
   .brandTagline {
     display: none;
   }
+
+  .userButtonName {
+    display: none;
+  }
+
+  .userButton {
+    max-width: none;
+    padding-inline-end: 6px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .headerAdmin {
+    transition: none;
+  }
+
+  .dropdownMenu {
+    animation: none;
+  }
+
+  .userButtonChevron {
     transition: none;
   }
 }

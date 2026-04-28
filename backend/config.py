@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Callable, ClassVar
 from urllib.parse import quote_plus
 
+# Options SQLAlchemy create_engine ; connect_args inclut int (ex. prepare_threshold) pour PgBouncer.
+_SqlalchemyEngineOptions = dict[str, int | bool | dict[str, str | int | bool]]
+
 # Il est préférable de ne charger les variables d'environnement que si nécessaire
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -68,6 +71,21 @@ def _get_secret_from_vault_or_env(
         )
 
     return None
+
+
+def _is_psycopg3_dialect_in_url(db_url: str | None) -> bool:
+    """True si l'URL SQLAlchemy cible le dialecte psycopg (v3), pas psycopg2.
+
+    prepare_threshold (PgBouncer mode transaction) n'est supporté que par
+    psycopg>=3. Avec le dialecte par défaut postgresql:// (psycopg2), l'inclure
+    dans connect_args provoque: invalid connection option "prepare_threshold".
+    """
+    if not db_url:
+        return False
+    head = db_url.split("://", 1)[0].lower()
+    if head.endswith("+psycopg2") or head.endswith("+pypostgresql"):
+        return False
+    return "+psycopg" in head
 
 
 def _is_internal_database_host(host: str) -> bool:
@@ -150,6 +168,43 @@ def _build_database_url_safe() -> str:
     return base_url
 
 
+def _parse_replica_database_urls() -> list[str]:
+    """Parse la liste de replicas depuis l'environnement.
+
+    Sources supportées (ordre de priorité):
+    - REPLICA_DATABASE_URLS: CSV d'URLs
+    - REPLICA_DATABASE_URL: URL unique
+    """
+    replica_urls_csv = (os.getenv("REPLICA_DATABASE_URLS") or "").strip()
+    if replica_urls_csv:
+        return [url.strip() for url in replica_urls_csv.split(",") if url.strip()]
+
+    replica_url_single = (os.getenv("REPLICA_DATABASE_URL") or "").strip()
+    if replica_url_single:
+        return [replica_url_single]
+
+    return []
+
+
+def _build_sqlalchemy_binds(primary_url: str | None) -> dict[str, str]:
+    """Construit les binds SQLAlchemy primary/replica pour Phase 4.
+
+    Note:
+    - Le bind `replica` pointe sur la première URL replica (si fournie).
+    - Le round-robin multi-replicas est géré au niveau applicatif
+      par un routeur dédié, pas par SQLAlchemy_Binds.
+    """
+    binds: dict[str, str] = {}
+    if primary_url:
+        binds["primary"] = primary_url
+
+    replicas = _parse_replica_database_urls()
+    if replicas:
+        binds["replica"] = replicas[0]
+
+    return binds
+
+
 class Config:
     """Configuration de base partagée.
     Ne contient AUCUNE clé secrète pour être sûr en toute circonstance.
@@ -175,7 +230,7 @@ class Config:
     # Timeout pour requêtes SQL (secondes)
     SQLALCHEMY_QUERY_TIMEOUT = float(os.getenv("SQLALCHEMY_QUERY_TIMEOUT", "5.0"))
     # Options de base compatibles avec toutes les bases de données
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[_SqlalchemyEngineOptions] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
     }
@@ -210,6 +265,11 @@ class Config:
     JWT_DECODE_AUDIENCE = None  # None = désactive la validation automatique
     # Algorithme de signature JWT (HS256 = symétrique, secret partagé via Vault)
     JWT_ALGORITHM = "HS256"
+    # Sprint 2 H14: rotation JWT versionnée par kid.
+    JWT_ACTIVE_KID = os.getenv("JWT_ACTIVE_KID", "active")
+    JWT_ACCEPTED_KIDS = os.getenv("JWT_ACCEPTED_KIDS", "")
+    # Compat tokens legacy sans kid pendant transition.
+    JWT_LEGACY_DEFAULT_KID = os.getenv("JWT_LEGACY_DEFAULT_KID", JWT_ACTIVE_KID)
 
     # --- Cookies httpOnly pour tokens JWT ---
     # ✅ Migration localStorage → cookies httpOnly pour protection XSS
@@ -234,13 +294,41 @@ class Config:
     JWT_COOKIE_SECURE = COOKIE_SECURE  # HTTPS uniquement si Secure=true
     JWT_COOKIE_HTTP_ONLY = COOKIE_HTTP_ONLY  # Protection XSS
     JWT_COOKIE_SAMESITE = COOKIE_SAME_SITE  # Protection CSRF
+    # NOTE (CSRF) :
+    # The application already enforces CSRF protection via the custom middleware
+    # (backend/services/security/csrf.py) using X-CSRF-Token headers.
+    #
+    # Flask-JWT-Extended provides its own cookie CSRF mechanism
+    # (JWT_COOKIE_CSRF_PROTECT), but enabling it would introduce a second,
+    # incompatible CSRF validation layer unless login endpoints explicitly set
+    # the JWT CSRF cookies and integration tests are updated accordingly.
+    #
+    # For now we keep JWT_COOKIE_CSRF_PROTECT = False and rely on the existing
+    # application-level CSRF middleware which protects both web cookie flows
+    # and API header-based authentication.
+    #
+    # If future migration to native Flask-JWT CSRF is desired:
+    # 1. ensure login endpoints set CSRF cookies
+    # 2. align frontend header expectations
+    # 3. add integration tests for cookie-auth mutations
     JWT_COOKIE_CSRF_PROTECT = (
-        False  # Désactivé pour l'instant (peut être activé plus tard)
+        False  # intentionally False — see NOTE above
     )
     JWT_ACCESS_COOKIE_NAME = COOKIE_ACCESS_TOKEN_NAME
     JWT_REFRESH_COOKIE_NAME = COOKIE_REFRESH_TOKEN_NAME
     JWT_COOKIE_DOMAIN = COOKIE_DOMAIN
     JWT_COOKIE_PATH = COOKIE_PATH
+
+    # Portail client (ClientType PORTAL) : entreprise de référence pour
+    # POST /clients/me/bookings/preview (grille de tarification entreprise).
+    # 0 = le backend utilise la grille indicatif plateforme
+    # (``PlatformClientIndicativeFareConfig``), alignée sur
+    # ``POST /clients/me/indicative-fare/estimate`` — même ordre de grandeur
+    # que l’indicatif affiché dans l’app. Sinon, ID d’une company dont le
+    # PricingProfile sert de prévisualisation contractuelle.
+    PORTAL_CLIENT_PREVIEW_COMPANY_ID: int = int(
+        (os.getenv("PORTAL_CLIENT_PREVIEW_COMPANY_ID") or "0").strip() or "0"
+    )
 
     # --- Redis / Socket.IO ---
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.00.1:6379/0")
@@ -471,6 +559,9 @@ class DevelopmentConfig(Config):
         vault_key="value",
         env_key="MAIL_PASSWORD",
     )
+    # Supprime l'envoi SMTP réel en dev sauf si MAIL_SUPPRESS_SEND=false explicite.
+    # Évite ConnectionRefusedError sur localhost:25 (défaut Flask-Mail sans MAIL_SERVER).
+    MAIL_SUPPRESS_SEND: bool = os.getenv("MAIL_SUPPRESS_SEND", "true").lower() != "false"
     # PostgreSQL via Docker (DATABASE_URL doit être défini)
     # ✅ 4.1: Support dynamic secrets Database (via Vault) ou DATABASE_URL (fallback)
     SQLALCHEMY_DATABASE_URI = _get_secret_from_vault_or_env(
@@ -479,13 +570,22 @@ class DevelopmentConfig(Config):
         env_key="DATABASE_URL",
         default=os.getenv("DATABASE_URI"),
     )
+    SQLALCHEMY_BINDS = _build_sqlalchemy_binds(SQLALCHEMY_DATABASE_URI)
 
     # ✅ PostgreSQL-specific options pour développement
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
+    # prepare_threshold=0 : requis avec PgBouncer en mode transaction (psycopg3
+    # uniquement ; exclu si postgresql:// → psycopg2).
+    _dev_db_uri = SQLALCHEMY_DATABASE_URI
+    _dev_connect_args: dict[str, str | int] = {
+        "client_encoding": "utf8",
+    }
+    if _is_psycopg3_dialect_in_url(_dev_db_uri):
+        _dev_connect_args["prepare_threshold"] = 0
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[_SqlalchemyEngineOptions] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
         "pool_size": 10,  # ✅ PERF: Connection pooling (PostgreSQL uniquement)
         "max_overflow": 20,  # ✅ PERF: Max connections overflow (PostgreSQL uniquement)
-        "connect_args": {"client_encoding": "utf8"},
+        "connect_args": _dev_connect_args,
     }
 
     # CORRECTION: Ajout des configurations de cookies pour le développement
@@ -600,6 +700,7 @@ class ProductionConfig(Config):
     SQLALCHEMY_DATABASE_URI = (
         _db_url_from_secret if _db_url_from_secret else _build_database_url_safe()
     )
+    SQLALCHEMY_BINDS = _build_sqlalchemy_binds(SQLALCHEMY_DATABASE_URI)
     # Validation explicite pour éviter les erreurs
     # lors de l'initialisation Flask-SQLAlchemy
     if not SQLALCHEMY_DATABASE_URI:
@@ -625,15 +726,30 @@ class ProductionConfig(Config):
     _default_sslmode = "disable" if _is_internal_database_host(_db_host) else "require"
     _sslmode = os.getenv("POSTGRES_SSLMODE", _default_sslmode)
 
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
+    # Phase 4 : pool_size augmenté à 50 pour absorber 100k chauffeurs.
+    # Calcul : 12 workers x 50 = 600 connexions max -> PgBouncer multiplex vers 200 vraies.
+    # Configurable via DB_POOL_SIZE pour ajuster selon la RAM du serveur DB.
+    _prod_pool_size = int(os.getenv("DB_POOL_SIZE", "50"))
+    _prod_pool_max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+    _prod_pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+    _prod_pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[_SqlalchemyEngineOptions] = {
         **Config.SQLALCHEMY_ENGINE_OPTIONS,
-        "pool_size": 5,  # ✅ VERDICT FINAL: Réduit de 15 à 5 pour "safe 100 users" (6 workers x 10 max = 60 connexions, évite saturation PostgreSQL)
-        "max_overflow": 5,  # ✅ VERDICT FINAL: Réduit de 25 à 5 (max 10 par worker, total 60 connexions API + 4-16 Celery = 64-76 total)
+        "pool_size": _prod_pool_size,
+        "max_overflow": _prod_pool_max_overflow,
+        "pool_timeout": _prod_pool_timeout,
+        "pool_pre_ping": True,
+        "pool_recycle": _prod_pool_recycle,
         "connect_args": {
             "client_encoding": "utf8",
             # ✅ SECURITY: SSL désactivé pour Docker interne,
             # requis pour DB externes
             "sslmode": _sslmode,
+            **(
+                {"prepare_threshold": 0}
+                if _is_psycopg3_dialect_in_url(_db_uri)
+                else {}
+            ),
         },
     }
     # Cookies plus stricts en prod (peuvent être ajustés via env si reverse proxy HTTP)
@@ -733,12 +849,14 @@ class TestingConfig(Config):
     SECRET_KEY = "test-secret-key"
     JWT_SECRET_KEY = "test-jwt-key"
     MAIL_PASSWORD = "test-mail-password"
+    MAIL_SUPPRESS_SEND = True
     # Utiliser DATABASE_URL si disponible (PostgreSQL),
     # sinon SQLite en mémoire
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", "sqlite:///:memory:")
+    SQLALCHEMY_BINDS = _build_sqlalchemy_binds(SQLALCHEMY_DATABASE_URI)
     # Options de base uniquement
     # (pas de pool_size/max_overflow pour compatibilité SQLite)
-    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[dict[str, int | bool | dict[str, str]]] = {
+    SQLALCHEMY_ENGINE_OPTIONS: ClassVar[_SqlalchemyEngineOptions] = {
         "pool_pre_ping": True,
         "pool_recycle": 1800,
     }
@@ -759,10 +877,23 @@ class TestingConfig(Config):
         # Ajouter options PostgreSQL uniquement si DATABASE_URL pointe vers PostgreSQL
         db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri and db_uri.startswith("postgresql"):
+            prior = app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {}
+            prior_connect = prior.get("connect_args", {}) if isinstance(prior, dict) else {}
+            if not isinstance(prior_connect, dict):
+                prior_connect = {}
+            _tc_connect = {
+                **prior_connect,
+                "client_encoding": prior_connect.get("client_encoding", "utf8"),
+            }
+            if _is_psycopg3_dialect_in_url(db_uri):
+                _tc_connect["prepare_threshold"] = 0
+            else:
+                _tc_connect.pop("prepare_threshold", None)
             app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-                **app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {}),
+                **prior,
                 "pool_size": 5,  # Pool plus petit pour les tests
                 "max_overflow": 10,  # Overflow plus petit pour les tests
+                "connect_args": _tc_connect,
             }
 
 

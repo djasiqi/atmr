@@ -15,11 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  getMyDriverAccount,
-  DriverAccountInfo,
-  switchToDriverToken,
-} from "@/services/enterpriseDispatch";
+import { getMyDriverAccount, switchToDriverToken } from "@/services/enterpriseDispatch";
+import type { DriverAccountInfo } from "@/types/enterpriseDispatch";
 import {
   secureStorage,
   asyncStorage,

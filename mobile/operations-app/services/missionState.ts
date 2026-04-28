@@ -9,6 +9,7 @@ import {
   type PendingAction,
 } from "./pendingActionsQueue";
 import { getLogger } from "@/utils/logger";
+import { assertDriverSurface } from "@/services/authSurface";
 import { buildQuickActionLink, safeOpenURL, openNavigation } from "./deepLinks";
 import { BOOKING_ASSIGNED_TO_OTHER_DRIVER } from "@/constants/driverApiErrors";
 
@@ -459,6 +460,9 @@ class MissionStateManagerImpl {
   // -- Public API ----------------------------------------------------------
 
   async startMission(mission: Booking, destination?: string): Promise<void> {
+    if (!assertDriverSurface("MissionStateManager.startMission")) {
+      return;
+    }
     this.invalidatedReassigned = false;
     const missionStatus = normalizeBookingStatus(mission.status) as MissionBarStatus;
     // Ne pas régresser : si on a déjà EN_ROUTE/IN_PROGRESS (ex. transition optimiste),
@@ -487,6 +491,9 @@ class MissionStateManagerImpl {
   async requestTransition(
     targetStatus: MissionBarStatus
   ): Promise<RequestTransitionResult> {
+    if (!assertDriverSurface("MissionStateManager.requestTransition")) {
+      return { ok: false, reason: "invalid_transition" };
+    }
     await this.ensureHydrated();
     const bookingId = this.state.activeMission?.id;
     if (!bookingId) {

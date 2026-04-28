@@ -20,6 +20,7 @@ from models import Booking, Driver
 from models.base import _as_bool
 from models.enums import BookingStatus
 from services.company_driver_location_freshness import (
+    last_seen_seconds_from_db_last_position_update,
     last_seen_seconds_from_location_fields,
 )
 from services.geolocation.presence import (
@@ -188,6 +189,11 @@ def build_company_driver_locations_items(
             ).lower()
             if is_demo_company or driver_email.endswith("@demo.local"):
                 last_seen_seconds = 0
+            else:
+                last_seen_seconds = last_seen_seconds_from_db_last_position_update(
+                    getattr(driver, "last_position_update", None),
+                    now=now,
+                )
 
         is_active = _as_bool(getattr(driver, "is_active", True))
         active_booking = active_bookings_map.get(driver.id, {})
@@ -208,6 +214,16 @@ def build_company_driver_locations_items(
         location_status = compute_location_status(
             mode=location_mode, last_seen_seconds=last_seen_seconds
         )
+        if last_seen_seconds is not None and h and loc_data:
+            with suppress(Exception):
+                from services.monitoring.driver_location_metrics import (
+                    observe_canonical_staleness_seconds,
+                )
+
+                observe_canonical_staleness_seconds(
+                    location_mode=str(location_mode),
+                    last_seen_seconds=float(last_seen_seconds),
+                )
         presence_status = presence_status_from_location_status(location_status)
         is_stale = location_status in {"stale", "offline"}
 

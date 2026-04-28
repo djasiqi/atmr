@@ -13,7 +13,10 @@ from sqlalchemy.orm import joinedload
 
 from ext import app_logger, socketio
 from schemas.socket_events import EVENT_VERSION, SocketEvent
-from services.monitoring.driver_location_metrics import inc_fanout
+from services.monitoring.driver_location_metrics import (
+    inc_fanout,
+    inc_payload_legacy_lng_usage,
+)
 
 if TYPE_CHECKING:
     from models import Booking
@@ -48,6 +51,12 @@ _LIRIE_DISPATCH_DASHBOARD_WS = os.getenv("LIRIE_DISPATCH_DASHBOARD_WS", "").lowe
 )
 _DISPATCH_DB_THROTTLE_LAST: dict[int, float] = {}
 _DISPATCH_DB_THROTTLE_SEC = 2.0
+_COMPANY_REALTIME_CANONICAL_PAYLOAD_ENABLED = os.getenv(
+    "COMPANY_REALTIME_CANONICAL_PAYLOAD_ENABLED", "true"
+).lower() in ("1", "true", "yes")
+_COMPANY_REALTIME_LNG_CANONICAL_ENABLED = os.getenv(
+    "COMPANY_REALTIME_LONGITUDE_CANONICAL_ENABLED", "false"
+).lower() in ("1", "true", "yes")
 
 
 def _emit_alias_no_metrics(
@@ -288,6 +297,28 @@ def emit_company_event(
     )
 
 
+def get_client_user_room(public_id: str) -> str:
+    """Room Socket.IO portail client (alignée sur ``join_room`` dans ``sockets/chat``)."""
+    return f"client_{str(public_id).strip()}"
+
+
+def emit_client_user_event(
+    public_id: str,
+    event: str,
+    payload: dict[str, Any],
+    *,
+    namespace: str = DEFAULT_NAMESPACE,
+) -> None:
+    """Émet vers l'utilisateur portail client (``client_<public_id>``)."""
+    pid = str(public_id or "").strip()
+    if not pid:
+        return
+    enriched_payload = _enrich_payload_if_needed(payload, event)
+    _safe_emit(
+        event, enriched_payload, room=get_client_user_room(pid), namespace=namespace
+    )
+
+
 # P3 — invalidation snapshot GET /delays/live (throttle par entreprise + date locale)
 _DELAY_LIVE_INVALIDATE_THROTTLE_SEC = 25.0
 _DELAY_LIVE_LAST_EMIT: dict[tuple[int, str], float] = {}
@@ -416,6 +447,68 @@ def _maybe_emit_dispatch_dashboard_snapshot(
     )
 
 
+def _normalize_company_client_type(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    if value in ("mobile", "mobile_company", "operations_mobile"):
+        return "mobile"
+    if value in ("web", "company_web", "dashboard_web"):
+        return "web"
+    return "unknown"
+
+
+def _canonicalize_company_driver_payload(
+    payload: dict[str, Any],
+    *,
+    event_name: str,
+) -> dict[str, Any]:
+    """Normalise le payload realtime company sur un schéma canonique.
+
+    Canon:
+    - longitude canonique (historique): `lon`
+    - longitude canonique (nouvelle convention, flaggée): `lng`
+    - alias backward conservés pendant la fenêtre de compatibilité
+    - les 2 events company partagent la même forme de payload
+    """
+    out = dict(payload)
+    if not _COMPANY_REALTIME_CANONICAL_PAYLOAD_ENABLED:
+        return out
+
+    lat = out.get("lat", out.get("latitude", out.get("current_lat")))
+    if lat is not None:
+        out["lat"] = lat
+        out.setdefault("latitude", lat)
+
+    lon = out.get("lon")
+    if lon is None:
+        legacy_lng = out.get("lng")
+        if legacy_lng is not None:
+            lon = legacy_lng
+            inc_payload_legacy_lng_usage(
+                client_type=_normalize_company_client_type(out.get("client_type")),
+                event_name=event_name,
+            )
+        elif out.get("longitude") is not None:
+            lon = out.get("longitude")
+        elif out.get("current_lon") is not None:
+            lon = out.get("current_lon")
+
+    if lon is not None:
+        if _COMPANY_REALTIME_LNG_CANONICAL_ENABLED:
+            out["lng"] = lon
+            out["lon"] = lon
+        else:
+            out["lon"] = lon
+            out["lng"] = lon
+        out.setdefault("longitude", lon)
+
+    if out.get("timestamp") is None and out.get("recorded_at") is not None:
+        out["timestamp"] = out.get("recorded_at")
+    if out.get("ts") is None and out.get("recorded_at") is not None:
+        out["ts"] = out.get("recorded_at")
+
+    return out
+
+
 def fanout_driver_location_update(
     company_id: int,
     location_payload: dict[str, Any],
@@ -462,11 +555,23 @@ def fanout_driver_location_update(
         )
         return
     room = get_company_room(company_id)
-    loc_out = {**location_payload, "accept_status": accept_status}
+    unified_payload = {
+        **location_payload,
+        **live_state_payload,
+    }
+    loc_out = _canonicalize_company_driver_payload(
+        unified_payload,
+        event_name="driver_location_update",
+    )
+    loc_out["accept_status"] = accept_status
     _safe_emit("driver_location_update", loc_out, room=room, namespace=namespace)
     inc_fanout(event="driver_location_update", accept_status=accept_status)
     if accept_status == "accepted_canonical":
-        live_out = {**live_state_payload, "accept_status": accept_status}
+        live_out = _canonicalize_company_driver_payload(
+            unified_payload,
+            event_name="driver_live_state_update",
+        )
+        live_out["accept_status"] = accept_status
         _safe_emit("driver_live_state_update", live_out, room=room, namespace=namespace)
         inc_fanout(event="driver_live_state_update", accept_status=accept_status)
 

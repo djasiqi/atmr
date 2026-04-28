@@ -143,6 +143,30 @@
   white-space: nowrap;
 }
 
+.roundTripBadge,
+.returnLegBadge {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.roundTripBadge {
+  background: #e0f2f1;
+  color: #00695c;
+  border: 1px solid #b2dfdb;
+}
+
+.returnLegBadge {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+}
+
 .dateCell {
   white-space: nowrap;
   font-size: var(--font-sm);
@@ -209,6 +233,27 @@
   font-weight: var(--font-weight-normal);
   color: var(--text-tertiary);
   font-size: var(--font-xs);
+}
+
+.amountCellStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.amountSub {
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-normal);
+  color: var(--text-tertiary);
+  max-width: 200px;
+}
+
+.amountLegLabel {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
 }
 
 /* ---- Badge facturation ---- */

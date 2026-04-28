@@ -168,6 +168,9 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
     }
+    if (!String(formData.vehicleId || '').trim()) {
+      newErrors.vehicleId = 'Veuillez selectionner un vehicule';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -178,6 +181,12 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
     setIsSubmitting(true);
 
     const selectedVehicle = vehicles.find((v) => String(v.id) === String(formData.vehicleId));
+    const vehicleModel =
+      (selectedVehicle && String(selectedVehicle.model || selectedVehicle.name || '').trim()) || '';
+    const vehicleBrand =
+      (selectedVehicle && String(selectedVehicle.brand || '').trim()) || '';
+    const vehiclePlate =
+      (selectedVehicle && String(selectedVehicle.license_plate || '').trim()) || '';
 
     const payload = {
       username: formData.username.trim(),
@@ -191,9 +200,9 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
       address: domicileAddress.trim() || null,
       password: formData.password,
       vehicle_id: formData.vehicleId ? Number(formData.vehicleId) : null,
-      vehicle_assigned: selectedVehicle ? selectedVehicle.model : null,
-      brand: selectedVehicle ? selectedVehicle.brand : null,
-      license_plate: selectedVehicle ? selectedVehicle.license_plate : null,
+      vehicle_assigned: vehicleModel,
+      brand: vehicleBrand,
+      license_plate: vehiclePlate,
       contract_type: formData.contractType || 'CDI',
       employment_start_date: formData.employmentStartDate || null,
       license_valid_until: formData.licenseValidUntil || null,
@@ -382,16 +391,17 @@ const AddDriverForm = ({ onSubmit, onClose }) => {
             ) : (
               <PortalChipDropdown
                 options={[
-                  { value: '', label: 'Aucun véhicule' },
+                  { value: '', label: 'Choisir un véhicule' },
                   ...vehicles.map((v) => ({ value: String(v.id), label: `${v.model} - ${v.license_plate}${v.brand ? ` (${v.brand})` : ''}` })),
                 ]}
                 value={formData.vehicleId}
                 onChange={(v) => handleChange({ target: { name: 'vehicleId', value: v } })}
                 disabled={isSubmitting}
-                placeholder="Aucun véhicule"
+                placeholder="Choisir un véhicule"
               />
             )}
-            <span className={s.hint}>Peut être assigné ultérieurement</span>
+            {errors.vehicleId && <span className={s.error}>{errors.vehicleId}</span>}
+            <span className={s.hint}>Obligatoire : le compte chauffeur est cree avec ce vehicule.</span>
           </div>
         </div>
 

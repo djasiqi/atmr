@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any, Dict, cast
 
-from celery import shared_task  # pyright: ignore[reportMissingImports]
-from celery.exceptions import (  # pyright: ignore[reportMissingImports]
-    MaxRetriesExceededError,
-)
+from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.exc import DBAPIError, OperationalError
 
@@ -20,6 +19,17 @@ from models import Company, DispatchMode
 from services.unified_dispatch import engine
 
 logger = logging.getLogger(__name__)
+DISPATCH_TASK_TIME_LIMIT_SEC = int(
+    os.getenv("DISPATCH_TASK_TIME_LIMIT_SEC", os.getenv("CELERY_TASK_TIME_LIMIT", "150"))
+)
+DISPATCH_TASK_SOFT_TIME_LIMIT_SEC = int(
+    os.getenv(
+        "DISPATCH_TASK_SOFT_TIME_LIMIT_SEC",
+        os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "120"),
+    )
+)
+if DISPATCH_TASK_SOFT_TIME_LIMIT_SEC >= DISPATCH_TASK_TIME_LIMIT_SEC:
+    DISPATCH_TASK_SOFT_TIME_LIMIT_SEC = max(1, DISPATCH_TASK_TIME_LIMIT_SEC - 60)
 
 # ---- Helpers typage ----
 
@@ -36,9 +46,8 @@ def _safe_int(v: Any) -> int | None:
 @shared_task(
     bind=True,
     acks_late=True,  # ✅ Ne pas ack avant traitement complet
-    task_time_limit=600,  # 10 minutes max (600 secondes)
-    # - augmenté pour grandes matrices
-    task_soft_time_limit=540,  # 9 minutes soft limit (540 secondes)
+    task_time_limit=DISPATCH_TASK_TIME_LIMIT_SEC,
+    task_soft_time_limit=DISPATCH_TASK_SOFT_TIME_LIMIT_SEC,
     max_retries=3,
     default_retry_delay=30,
     # ✅ P1: Limiter retry aux exceptions retryables (évite retries inutiles
@@ -423,8 +432,8 @@ def run_dispatch_task(
 @shared_task(
     name="tasks.dispatch_tasks.autorun_tick",
     acks_late=True,
-    task_time_limit=600,  # ✅ 10 minutes (600 secondes) - corrigé de 0.600
-    task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
+    task_time_limit=DISPATCH_TASK_TIME_LIMIT_SEC,
+    task_soft_time_limit=DISPATCH_TASK_SOFT_TIME_LIMIT_SEC,
 )
 def autorun_tick() -> Dict[str, Any]:
     start_time = time.time()
@@ -538,8 +547,8 @@ def autorun_tick() -> Dict[str, Any]:
 @shared_task(
     name="tasks.dispatch_tasks.realtime_monitoring_tick",
     acks_late=True,
-    task_time_limit=300,  # ✅ 5 minutes max (300 secondes) - corrigé de 0.300
-    task_soft_time_limit=270,  # ✅ 4.5 minutes soft limit (270 secondes)
+    task_time_limit=150,
+    task_soft_time_limit=120,
 )
 def realtime_monitoring_tick() -> Dict[str, Any]:
     """Tâche Celery périodique pour le monitoring temps réel du dispatch.
@@ -690,7 +699,8 @@ def realtime_monitoring_tick() -> Dict[str, Any]:
 @shared_task(
     bind=True,
     acks_late=True,
-    task_time_limit=300,  # 5 minutes max
+    task_time_limit=150,
+    task_soft_time_limit=120,
     max_retries=2,
     name="tasks.dispatch_tasks.ensure_agents_running",
 )
@@ -775,3 +785,31 @@ def ensure_agents_running(self) -> Dict[str, Any]:  # noqa: ARG001
         except Exception as e:
             logger.exception("[AgentAutoStart] Erreur globale: %s", e)
             raise
+
+
+@shared_task(
+    name="tasks.dispatch_tasks.repair_open_booking_offers_tick",
+    acks_late=True,
+    task_time_limit=150,
+    task_soft_time_limit=120,
+)
+def repair_open_booking_offers_tick() -> Dict[str, Any]:
+    """Retente la création d'offres PROPOSED pour les réservations PENDING sans transporteur ni offre.
+
+    Désactiver : ``DISPATCH_REPAIR_OFFERS_BEAT=0``.
+    """
+    if os.getenv("DISPATCH_REPAIR_OFFERS_BEAT", "1").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        return {"skipped": True, "reason": "DISPATCH_REPAIR_OFFERS_BEAT désactivé"}
+
+    app = get_flask_app()
+    with app.app_context():
+        from services.dispatch.open_booking_offers import (
+            seed_offers_for_pending_without_proposed_offers,
+        )
+
+        return seed_offers_for_pending_without_proposed_offers(limit=100)

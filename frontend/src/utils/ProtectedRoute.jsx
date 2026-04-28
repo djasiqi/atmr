@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
+import { getAuthEnv, getEnvAccessToken, getEnvUser } from './webAuthSession';
 
 // Clés localStorage : snake_case (nouveau) + fallback camelCase pendant migration.
 const STORAGE_KEYS = {
@@ -35,9 +36,6 @@ const STORAGE_KEYS = {
 const getToken = (keys) =>
   localStorage.getItem(keys.token) || (keys.tokenLegacy ? localStorage.getItem(keys.tokenLegacy) : null);
 
-const getCurrentAuthEnv = () =>
-  localStorage.getItem('lirie_auth_env') === 'demo' ? 'demo' : 'app';
-
 const getStorageKeys = (allowedRoles) => {
   if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) return STORAGE_KEYS.legacy;
   const roles = allowedRoles.map((r) => String(r).toLowerCase());
@@ -70,7 +68,7 @@ const clearSession = (keys) => {
 const ProtectedRoute = ({ allowedRoles, children }) => {
   const location = useLocation();
   const keys = getStorageKeys(allowedRoles);
-  const env = getCurrentAuthEnv();
+  const env = getAuthEnv();
   const isDemoDashboardPath =
     location.pathname === '/dashboard' ||
     location.pathname.startsWith('/dashboard/company/') ||
@@ -83,13 +81,16 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
       />
     );
   }
-  const envToken = localStorage.getItem(`${env}_access_token`) || localStorage.getItem('authToken');
+  const envToken = getEnvAccessToken(env, { allowLegacy: true });
   const token = getToken(keys) || envToken;
-  const rawUser =
-    localStorage.getItem(keys.user) ||
-    localStorage.getItem(`${env}_user`) ||
-    localStorage.getItem('user');
-  const user = rawUser ? JSON.parse(rawUser) : null;
+  let scopedUser = null;
+  try {
+    const scopedRaw = localStorage.getItem(keys.user);
+    scopedUser = scopedRaw ? JSON.parse(scopedRaw) : null;
+  } catch (_) {
+    scopedUser = null;
+  }
+  const user = scopedUser || getEnvUser(env);
 
   if (!token && !user) {
     return <Navigate to="/login" replace state={{ from: location }} />;

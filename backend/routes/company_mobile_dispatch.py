@@ -27,7 +27,13 @@ from models import (
     User,
     UserRole,
 )
-from models.enums import AssignmentStatus, BookingStatus, DriverType, SenderRole
+from models.enums import (
+    AssignmentStatus,
+    BookingStatus,
+    DispatchOfferStatus,
+    DriverType,
+    SenderRole,
+)
 
 # ✅ REFACTORING: get_company_from_token() n'est plus importé directement
 # ✅ DDD: Utilisation de GetCurrentCompanyUseCase via _get_current_company_via_use_case()
@@ -61,6 +67,14 @@ logger = logging.getLogger(__name__)
 def _abort_from_company_error(error: dict[str, Any] | None, code: int | None) -> None:
     message = (error or {}).get("error") if isinstance(error, dict) else "Accès refusé"
     company_mobile_dispatch_ns.abort(code or 403, message)
+
+
+class _AssignmentConflictError(Exception):
+    """Conflit métier à l'assignation (chauffeur indisponible, chevauchement, etc.) — exposé en JSON 409."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 def _get_current_company() -> Company:
@@ -194,17 +208,44 @@ def _serialize_driver(driver: Driver | None) -> Dict[str, Any] | None:
     }
 
 
-def _resolve_booking_status(booking: Booking) -> str:
+def _resolve_booking_status(
+    booking: Booking, current_company_id: int | None = None
+) -> str:
     status_value = getattr(booking.status, "value", str(booking.status or "")).upper()
-    if status_value in {"CANCELED", "CANCELLED"}:
-        return "cancelled"
-    if status_value == "RETURN_COMPLETED":
-        return "return_completed"
-    if status_value == "COMPLETED":
-        return "completed"
-    # ✅ Gérer le status PENDING (course en attente d'acceptation/refus)
-    if status_value == "PENDING":
-        return "pending"
+    status_map = {
+        "CANCELED": "cancelled",
+        "CANCELLED": "cancelled",
+        "RETURN_COMPLETED": "return_completed",
+        "COMPLETED": "completed",
+        "AWAITING_CLIENT_PAYMENT": "pending",
+        "ACCEPTED": "accepted",
+        "PENDING": "pending",
+        "EN_ROUTE": "en_route",
+        "IN_PROGRESS": "in_progress",
+        "ASSIGNED": "assigned",
+    }
+    resolved_status = status_map.get(status_value)
+    if resolved_status and status_value != "PENDING":
+        return resolved_status
+    # Offre de dispatch PROPOSED pour l'entreprise courante (marché ouvert)
+    if status_value == "PENDING" and current_company_id is not None:
+        try:
+            offers = getattr(booking, "dispatch_offers", None) or []
+            cid = int(current_company_id)
+            for offer in offers:
+                oc = getattr(offer, "company_id", None)
+                st = getattr(offer, "status", None)
+                if oc is None or st is None:
+                    continue
+                if int(oc) != cid:
+                    continue
+                ostatus = st.value if hasattr(st, "value") else str(st)
+                if str(ostatus).upper() == DispatchOfferStatus.PROPOSED.value:
+                    return "proposed"
+        except (TypeError, ValueError, AttributeError):
+            pass
+    if resolved_status:
+        return resolved_status
     driver_id_value = getattr(booking, "driver_id", None)
     if isinstance(driver_id_value, int):
         return "assigned"
@@ -246,7 +287,7 @@ def _build_ride_summary(
         drop_eta = _format_datetime(active_assignment.eta_dropoff_at)
 
     # ✅ Ne pas calculer le retard pour les courses terminées
-    booking_status = _resolve_booking_status(booking)
+    booking_status = _resolve_booking_status(booking, current_company_id)
     is_completed = booking_status in ("completed", "return_completed")
 
     delay_seconds = 0
@@ -415,7 +456,7 @@ def _build_ride_summary(
             "dropoff_address": booking.dropoff_location or "",
             "distance_km": distance_km,
         },
-        "status": _resolve_booking_status(booking),
+        "status": _resolve_booking_status(booking, current_company_id),
         "driver": _serialize_driver(driver),
         "transfer": transfer_info,  # ✅ Ajouter les informations de transfert
         "flags": {
@@ -672,10 +713,9 @@ def _execute_assignment_action(
     assign_result = tools.assign(job_id=booking_id, driver_id=driver_id)
 
     if not assign_result.get("ok"):
-        error_message = assign_result.get("error") or "Assignation impossible"
+        error_message = str(assign_result.get("error") or "Assignation impossible")
         if assign_result.get("conflict"):
-            company_mobile_dispatch_ns.abort(409, error_message)
-            raise AssertionError("Conflict should abort") from None
+            raise _AssignmentConflictError(error_message) from None
         company_mobile_dispatch_ns.abort(400, error_message)
         raise AssertionError("Assign failure should abort") from None
 
@@ -1045,6 +1085,81 @@ class MobileDispatchRides(Resource):
             BookingStatus.COMPLETED,
             BookingStatus.RETURN_COMPLETED,
         ]
+        # Vue journée : tous les statuts visibles dispatch (incl. attente paiement, annulés).
+        ALL_DAY_STATUSES: list[BookingStatus] = [
+            BookingStatus.AWAITING_CLIENT_PAYMENT,
+            BookingStatus.PENDING,
+            BookingStatus.ACCEPTED,
+            BookingStatus.ASSIGNED,
+            BookingStatus.EN_ROUTE,
+            BookingStatus.IN_PROGRESS,
+            BookingStatus.COMPLETED,
+            BookingStatus.RETURN_COMPLETED,
+            BookingStatus.CANCELED,
+        ]
+
+        if not status_filter or status_filter in ("all", "tout", "total", "any"):
+            statuses_list = list(ALL_DAY_STATUSES)
+        elif status_filter in (
+            "pending",
+            "en_attente",
+            "en-attente",
+            "awaiting",
+        ):
+            statuses_list = [
+                BookingStatus.AWAITING_CLIENT_PAYMENT,
+                BookingStatus.PENDING,
+                BookingStatus.ACCEPTED,
+            ]
+        elif status_filter in (
+            "in_flight",
+            "en_course",
+            "en-route",
+            "active",
+            "on_trip",
+        ):
+            statuses_list = [BookingStatus.EN_ROUTE, BookingStatus.IN_PROGRESS]
+        elif status_filter in (
+            "assigned",
+            "assignes",
+            "affecte",
+            "affectes",
+        ):
+            # Avec chauffeur, mission non clôturée
+            statuses_list = [
+                BookingStatus.ACCEPTED,
+                BookingStatus.ASSIGNED,
+                BookingStatus.EN_ROUTE,
+                BookingStatus.IN_PROGRESS,
+            ]
+        elif status_filter in ("completed", "termines", "termine", "done"):
+            statuses_list = [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+        elif status_filter in (
+            "cancelled",
+            "canceled",
+            "annules",
+            "annulés",
+            "annule",
+        ):
+            statuses_list = [BookingStatus.CANCELED]
+        elif status_filter == "unassigned":
+            statuses_list = [
+                BookingStatus.ACCEPTED,
+                BookingStatus.ASSIGNED,
+                BookingStatus.EN_ROUTE,
+                BookingStatus.IN_PROGRESS,
+            ]
+        elif status_filter == "urgent":
+            statuses_list = [
+                BookingStatus.AWAITING_CLIENT_PAYMENT,
+                BookingStatus.PENDING,
+                BookingStatus.ACCEPTED,
+                BookingStatus.ASSIGNED,
+                BookingStatus.EN_ROUTE,
+                BookingStatus.IN_PROGRESS,
+            ]
+        else:
+            statuses_list = list(ACTIVE_BOOKING_STATUSES)
 
         from repositories.booking_repository import BookingRepository
 
@@ -1054,7 +1169,7 @@ class MobileDispatchRides(Resource):
                 company_id=company_id,
                 start_datetime=window_start,
                 end_datetime=window_end,
-                statuses=ACTIVE_BOOKING_STATUSES,
+                statuses=statuses_list,
             )
             # ✅ Eager load des transferts et partenaires pour éviter les requêtes N+1
             from sqlalchemy.orm import joinedload
@@ -1065,11 +1180,17 @@ class MobileDispatchRides(Resource):
                 joinedload(Booking.transfers).joinedload(
                     BookingTransfer.executing_company
                 ),
+                joinedload(Booking.dispatch_offers),
             )
         except Exception:
             raise
 
-        if status_filter == "assigned":
+        if status_filter in (
+            "assigned",
+            "assignes",
+            "affecte",
+            "affectes",
+        ):
             bookings_query = bookings_query.filter(Booking.driver_id.isnot(None))
         elif status_filter == "unassigned":
             bookings_query = bookings_query.filter(
@@ -1085,10 +1206,6 @@ class MobileDispatchRides(Resource):
             )
         elif status_filter == "urgent":
             bookings_query = bookings_query.filter(Booking.is_urgent.is_(True))
-        elif status_filter == "cancelled":
-            bookings_query = bookings_query.filter(
-                Booking.status.in_([BookingStatus.CANCELED])
-            )
 
         if search_query:
             like_value = f"%{search_query}%"
@@ -1528,12 +1645,18 @@ class MobileRideAssign(Resource):
             company_mobile_dispatch_ns.abort(400, "driver_id invalide (entier attendu)")
             raise AssertionError("Invalid driver_id should abort") from exc
 
-        response_payload = _execute_assignment_action(
-            company_id=company_id,
-            booking_id=booking_id,
-            driver_id=driver_id,
-            action_kind="mobile_assign",
-        )
+        try:
+            response_payload = _execute_assignment_action(
+                company_id=company_id,
+                booking_id=booking_id,
+                driver_id=driver_id,
+                action_kind="mobile_assign",
+            )
+        except _AssignmentConflictError as exc:
+            return {
+                "error": "assignment_conflict",
+                "message": exc.message,
+            }, 409
 
         return response_payload, 200
 
@@ -1563,12 +1686,18 @@ class MobileRideReassign(Resource):
             company_mobile_dispatch_ns.abort(400, "driver_id invalide (entier attendu)")
             raise AssertionError("Invalid driver_id should abort") from exc
 
-        response_payload = _execute_assignment_action(
-            company_id=company_id,
-            booking_id=booking_id,
-            driver_id=driver_id,
-            action_kind="mobile_reassign",
-        )
+        try:
+            response_payload = _execute_assignment_action(
+                company_id=company_id,
+                booking_id=booking_id,
+                driver_id=driver_id,
+                action_kind="mobile_reassign",
+            )
+        except _AssignmentConflictError as exc:
+            return {
+                "error": "assignment_conflict",
+                "message": exc.message,
+            }, 409
 
         return response_payload, 200
 
@@ -2780,7 +2909,11 @@ class MobileCreateRide(Resource):
             map_mobile_ride_payload_to_manual_booking_payload,
         )
 
-        canonical_payload = map_mobile_ride_payload_to_manual_booking_payload(payload)
+        try:
+            canonical_payload = map_mobile_ride_payload_to_manual_booking_payload(payload)
+        except ValueError as exc:
+            company_mobile_dispatch_ns.abort(400, str(exc))
+            raise AssertionError("Invalid structured payload") from exc
 
         # Validation via le même schéma que le web (aucune tolérance supplémentaire)
         from marshmallow import ValidationError
@@ -2937,11 +3070,29 @@ class MobileUpdateRide(Resource):
         old_notes = getattr(booking, "notes_medical", None)
         old_scheduled = getattr(booking, "scheduled_time", None)
 
+        def _extract_address_label(raw_address: object, field_name: str) -> str | None:
+            if isinstance(raw_address, str):
+                return raw_address.strip() or None
+            if isinstance(raw_address, dict):
+                label = raw_address.get("label") or raw_address.get("address")
+                if isinstance(label, str) and label.strip():
+                    return label.strip()
+                company_mobile_dispatch_ns.abort(
+                    400, f"{field_name}.label est requis pour un payload structuré"
+                )
+                raise AssertionError("address label required") from None
+            company_mobile_dispatch_ns.abort(400, f"{field_name} doit être une string ou un objet")
+            raise AssertionError("invalid address payload type") from None
+
         # Mise à jour des adresses
         if "pickup_address" in payload:
-            booking.pickup_location = payload["pickup_address"]
+            pickup_label = _extract_address_label(payload["pickup_address"], "pickup_address")
+            if pickup_label:
+                booking.pickup_location = pickup_label
         if "dropoff_address" in payload:
-            booking.dropoff_location = payload["dropoff_address"]
+            dropoff_label = _extract_address_label(payload["dropoff_address"], "dropoff_address")
+            if dropoff_label:
+                booking.dropoff_location = dropoff_label
 
         # Mise à jour des coordonnées
         if "pickup_lat" in payload and "pickup_lon" in payload:

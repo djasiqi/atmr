@@ -175,6 +175,59 @@ groups:
           summary: "Latence Redis élevée (> 10ms)"
           description: "Latence ping: {{ $value }}s"
 
+  - name: phase4_realtime_and_streaming
+    interval: 30s
+    rules:
+      - alert: Phase4WebSocketConnectionsNearCapacity
+        expr: websocket_connections_total > 90000
+        for: 1m
+        labels:
+          severity: warning
+          component: realtime
+        annotations:
+          summary: "WS connections proches de la capacité cible Phase 4"
+          description: "Nombre de connexions websocket > 90k."
+
+      - alert: Phase4TrackingLagCritical
+        expr: kafka_consumergroup_lag{topic="driver.location.raw"} > 10000
+        for: 2m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Lag tracking critique"
+          description: "Le lag tracking dépasse 10k messages sur driver.location.raw."
+
+      - alert: Phase4TrackingPublishErrorsHigh
+        expr: increase(tracking_kafka_publish_errors_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Erreurs de publish tracking élevées"
+          description: "Le pipeline tracking rencontre >50 erreurs de publication Kafka en 5 minutes."
+
+      - alert: Phase4TrackingDlqGrowthHigh
+        expr: increase(tracking_kafka_dlq_messages_total[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "Croissance rapide de la DLQ tracking"
+          description: "Plus de 20 messages tracking vers DLQ en 5 minutes."
+
+      - alert: Phase4RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: cache
+        annotations:
+          summary: "Redis > 85% de mémoire"
+          description: "Redis approche de la limite mémoire pour la couche présence/fanout."
+
   # ==================== Container Alerts (cAdvisor) ====================
   - name: containers
     interval: 30s

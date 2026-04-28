@@ -212,7 +212,8 @@ class TestXSSInJSONBody:
         """Test que les payloads XSS dans création client sont stockés comme texte."""
         payload = "<script>alert('XSS')</script>"
         data = {
-            "client_type": "PRIVATE",
+            "management_mode": "MANAGED",
+            "gender": "male",
             "first_name": payload,
             "last_name": payload,
             "address": payload,

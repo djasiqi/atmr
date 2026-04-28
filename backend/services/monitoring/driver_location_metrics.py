@@ -69,6 +69,12 @@ _FANOUT = None
 _FALLBACK_INDIVIDUAL = None
 _CLOCK_SKEW = None
 _BATCH_INGEST_SIZE = None
+_PAYLOAD_LEGACY_LNG_USAGE = None
+_TRACKING_KAFKA_PRODUCED = None
+_TRACKING_KAFKA_PUBLISH_ERRORS = None
+_TRACKING_KAFKA_DLQ = None
+_TRACKING_KAFKA_REBALANCE = None
+_TRACKING_KAFKA_E2E_LATENCY = None
 
 if Counter is not None:
     _DEDUP_SKIPPED = Counter(
@@ -109,6 +115,31 @@ if Counter is not None:
         "driver_location_batch_fallback_individual_total",
         "driver_location unitaire après échec batch côté client (flag batch_fallback)",
     )
+    _PAYLOAD_LEGACY_LNG_USAGE = Counter(
+        "company_realtime_payload_legacy_lng_usage_total",
+        "Usage du champ legacy `lng` pour la normalisation payload realtime company",
+        ["client_type", "event_name"],
+    )
+    _TRACKING_KAFKA_PRODUCED = Counter(
+        "tracking_kafka_messages_produced_total",
+        "Messages Kafka publiés par le pipeline tracking",
+        ["topic"],
+    )
+    _TRACKING_KAFKA_PUBLISH_ERRORS = Counter(
+        "tracking_kafka_publish_errors_total",
+        "Erreurs de publication Kafka sur le pipeline tracking",
+        ["topic", "stage"],
+    )
+    _TRACKING_KAFKA_DLQ = Counter(
+        "tracking_kafka_dlq_messages_total",
+        "Messages redirigés vers la DLQ tracking",
+        ["reason"],
+    )
+    _TRACKING_KAFKA_REBALANCE = Counter(
+        "tracking_kafka_rebalance_total",
+        "Nombre de rebalances détectés sur le consumer tracking",
+        ["event"],
+    )
 
 if Histogram is not None:
     _CLOCK_SKEW = Histogram(
@@ -122,8 +153,29 @@ if Histogram is not None:
         "Nombre de points dans driver_location_batch après filtre pipeline",
         buckets=(1, 2, 3, 5, 7, 10, 15, 20, 30, 50),
     )
+    _TRACKING_KAFKA_E2E_LATENCY = Histogram(
+        "tracking_kafka_e2e_latency_seconds",
+        "Latence E2E entre réception raw et publication processed",
+        buckets=(0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5),
+    )
+    _CANONICAL_UPDATE_LATENCY = Histogram(
+        "driver_location_canonical_update_latency_seconds",
+        "Délai client (sent/recorded) → écriture canonical acceptée (réception backend)",
+        ["location_mode", "transport"],
+        buckets=(0.5, 1, 2, 5, 10, 20, 60, 120, 300),
+    )
+    _CANONICAL_STALENESS_READ = Histogram(
+        "driver_location_canonical_staleness_seconds",
+        "Ancienneté last_seen à la lecture dispatch (liste entreprise)",
+        ["location_mode"],
+        buckets=(0.5, 1, 2, 5, 10, 20, 60, 120, 300, 600, 1200),
+    )
 else:
+    _CLOCK_SKEW = None
     _BATCH_INGEST_SIZE = None
+    _TRACKING_KAFKA_E2E_LATENCY = None
+    _CANONICAL_UPDATE_LATENCY = None
+    _CANONICAL_STALENESS_READ = None
 
 
 def inc_dedup_skipped(
@@ -205,6 +257,39 @@ def inc_fanout(*, event: str, accept_status: str) -> None:
     _FANOUT.labels(event=ev, accept_status=st).inc()
 
 
+def observe_canonical_update_latency_seconds(
+    *, location_mode: str, transport: str, seconds: float
+) -> None:
+    """Délai entre horodatage client et acceptation canonical (pipeline GPS)."""
+    if not _metrics_enabled() or _CANONICAL_UPDATE_LATENCY is None:
+        return
+    lm = _norm_mode(location_mode)
+    t = transport if transport in ("http", "socket", "socket_batch") else "http"
+    try:
+        s = float(seconds)
+    except (TypeError, ValueError):
+        return
+    if s < 0 or s > float(MAX_CLOCK_SKEW_RECORD_SEC):
+        return
+    _CANONICAL_UPDATE_LATENCY.labels(location_mode=lm, transport=t).observe(s)
+
+
+def observe_canonical_staleness_seconds(
+    *, location_mode: str, last_seen_seconds: float
+) -> None:
+    """Ancienneté de la position lue côté dispatch (dashboard)."""
+    if not _metrics_enabled() or _CANONICAL_STALENESS_READ is None:
+        return
+    lm = _norm_mode(location_mode)
+    try:
+        sec = float(last_seen_seconds)
+    except (TypeError, ValueError):
+        return
+    if sec < 0 or sec > 86400.0 * 2:
+        return
+    _CANONICAL_STALENESS_READ.labels(location_mode=lm).observe(sec)
+
+
 def observe_clock_skew_seconds(*, location_mode: str, skew_seconds: float) -> None:
     """Horloge mobile vs backend — utile runbook skew (Prometheus / Grafana)."""
     if not _metrics_enabled() or _CLOCK_SKEW is None:
@@ -235,3 +320,47 @@ def inc_batch_fallback_individual() -> None:
     if not _metrics_enabled() or _FALLBACK_INDIVIDUAL is None:
         return
     _FALLBACK_INDIVIDUAL.inc()
+
+
+def inc_payload_legacy_lng_usage(*, client_type: str, event_name: str) -> None:
+    if not _metrics_enabled() or _PAYLOAD_LEGACY_LNG_USAGE is None:
+        return
+    ct = client_type if client_type in ("mobile", "web") else "unknown"
+    ev = (
+        event_name
+        if event_name in ("driver_location_update", "driver_live_state_update")
+        else "_unknown"
+    )
+    _PAYLOAD_LEGACY_LNG_USAGE.labels(client_type=ct, event_name=ev).inc()
+
+
+def inc_tracking_kafka_messages_produced(*, topic: str) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_PRODUCED is None:
+        return
+    _TRACKING_KAFKA_PRODUCED.labels(topic=topic).inc()
+
+
+def inc_tracking_kafka_publish_errors(*, topic: str, stage: str) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_PUBLISH_ERRORS is None:
+        return
+    _TRACKING_KAFKA_PUBLISH_ERRORS.labels(topic=topic, stage=stage or "_unknown").inc()
+
+
+def inc_tracking_kafka_dlq_messages(*, reason: str) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_DLQ is None:
+        return
+    _TRACKING_KAFKA_DLQ.labels(reason=reason or "_unknown").inc()
+
+
+def inc_tracking_kafka_rebalance(*, event: str) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_REBALANCE is None:
+        return
+    _TRACKING_KAFKA_REBALANCE.labels(event=event or "_unknown").inc()
+
+
+def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:
+    if not _metrics_enabled() or _TRACKING_KAFKA_E2E_LATENCY is None:
+        return
+    if latency_ms < 0:
+        return
+    _TRACKING_KAFKA_E2E_LATENCY.observe(float(latency_ms) / 1000.0)

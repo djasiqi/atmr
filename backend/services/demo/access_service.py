@@ -34,6 +34,7 @@ from models.enums import (
     BillingIntent,
     InstitutionRole,
     LocationType,
+    ManagementMode,
     RequestStatus,
     ScheduledTimeType,
 )
@@ -547,7 +548,8 @@ def _seed_transport_demo_workspace(
 
         client.contact_email = patient_user.email
         client.contact_phone = f"+41 79 000 0{idx:02d}"
-        client.client_type = ClientType.PRIVATE
+        client.client_type = ClientType.TRANSPORT
+        client.management_mode = ManagementMode.MANAGED
         client.domicile_address = domicile_address
         client.domicile_city = domicile_city
         client.domicile_zip = domicile_zip
@@ -769,7 +771,8 @@ def _seed_institution_demo_workspace(
             demo_client = Client()
             demo_client.user_id = demo_client_user.id
             demo_client.company_id = demo_company.id
-            demo_client.client_type = ClientType.PRIVATE
+            demo_client.client_type = ClientType.TRANSPORT
+            demo_client.management_mode = ManagementMode.MANAGED
             demo_client.contact_email = demo_client_user.email
             demo_client.domicile_address = DEMO_PICKUP_ADDRESSES[0][0]
             demo_client.domicile_city = "Geneve"

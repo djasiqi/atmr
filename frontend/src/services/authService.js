@@ -1,5 +1,6 @@
 // frontend/src/services/authService.js
 import apiClient, { logoutUser as coreLogoutUser, cleanLocalSession } from '../utils/apiClient';
+import { getAuthEnv, setEnvPublicId, setEnvUser } from '../utils/webAuthSession';
 
 // ✅ Inscription d'un utilisateur
 export const registerUser = async (userData) => {
@@ -28,8 +29,9 @@ export const loginUser = async (credentials) => {
     // ✅ P1-1: Standardisation sur cookies httpOnly uniquement
     // Les tokens sont stockés dans des cookies httpOnly définis par le backend
     // On stocke uniquement les infos utilisateur pour l'affichage (pas les tokens)
-    localStorage.setItem('user', JSON.stringify(user));
-    localStorage.setItem('public_id', user.public_id);
+    const env = getAuthEnv();
+    setEnvUser(user, env, { mirrorLegacy: true });
+    setEnvPublicId(user.public_id, env, { mirrorLegacy: true });
     // ❌ NE PAS stocker authToken ou refreshToken dans localStorage (sécurité)
 
     // ✅ Active automatiquement le Shadow Mode pour les admins

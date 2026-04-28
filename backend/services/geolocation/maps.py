@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple, cast
 
 import requests
-from cachetools import LRUCache  # pyright: ignore[reportMissingModuleSource]
+from cachetools import LRUCache
 
 from ext import app_logger
 from shared.geo_utils import haversine_tuple as _haversine_km
@@ -26,13 +26,73 @@ COORD_PAIR_LENGTH = 2
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 _GOOGLE_TIMEOUT = 10  # s
 _AVG_SPEED_KMH = 40.0  # fallback
+MAPS_CIRCUIT_BREAKER_FAILURE_THRESHOLD = max(
+    1, int(os.getenv("MAPS_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5"))
+)
+MAPS_CIRCUIT_BREAKER_OPEN_SECONDS = max(
+    1, int(os.getenv("MAPS_CIRCUIT_BREAKER_OPEN_SECONDS", "60"))
+)
+
+
+class _InMemoryCircuitBreaker:
+    """Circuit breaker local au process pour API Google Maps."""
+
+    def __init__(self, *, failure_threshold: int, open_seconds: int):  # pyright: ignore[reportMissingSuperCall]
+        self._failure_threshold = failure_threshold
+        self._open_seconds = open_seconds
+        self._lock = threading.Lock()
+        self._opened_until_ts = 0.0
+        self._consecutive_failures = 0
+        self._half_open_probe_in_flight = False
+
+    def allow_request(self) -> bool:
+        now = time.time()
+        with self._lock:
+            if self._opened_until_ts > now:
+                return False
+            if self._opened_until_ts > 0:
+                if self._half_open_probe_in_flight:
+                    return False
+                self._half_open_probe_in_flight = True
+                return True
+            return True
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._opened_until_ts = 0.0
+            self._consecutive_failures = 0
+            self._half_open_probe_in_flight = False
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self._consecutive_failures += 1
+            self._half_open_probe_in_flight = False
+            if self._consecutive_failures >= self._failure_threshold:
+                self._opened_until_ts = time.time() + self._open_seconds
+                self._consecutive_failures = 0
+                app_logger.warning(
+                    "[Google Maps] Circuit breaker OPEN for %ss",
+                    self._open_seconds,
+                )
+
+
+_google_maps_circuit_breaker = _InMemoryCircuitBreaker(
+    failure_threshold=MAPS_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    open_seconds=MAPS_CIRCUIT_BREAKER_OPEN_SECONDS,
+)
 
 
 def _as_origin_str(addr_or_coord: Any) -> str:
     """Accepte une adresse string OU un tuple (lat, lon)
     -> 'lat,lon' ou adresse telle quelle."""
-    # MAGIC_VALUE_2: toujours traiter comme coordonnées
-    return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
+    if isinstance(addr_or_coord, str):
+        return addr_or_coord
+    if (
+        isinstance(addr_or_coord, (list, tuple))
+        and len(addr_or_coord) == COORD_PAIR_LENGTH
+    ):
+        return f"{float(addr_or_coord[0])},{float(addr_or_coord[1])}"
+    return str(addr_or_coord)
 
 
 def get_distance_duration(
@@ -67,7 +127,11 @@ def get_distance_duration(
             )
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
-        msg = "Clé API Google Maps manquante et aucune coordonnée pour fallback."
+        if isinstance(pickup_address, str) and isinstance(dropoff_address, str):
+            return _distance_duration_from_geocoded_strings(
+                pickup_address, dropoff_address, region=region
+            )
+        msg = "Clé API Google Maps manquante et entrées non géocodables."
         raise OSError(msg)
 
     url = "https://maps.googleapis.com/maps/api/distancematrix/json"
@@ -86,6 +150,8 @@ def get_distance_duration(
         params["traffic_model"] = traffic_model
 
     try:
+        if not _google_maps_circuit_breaker.allow_request():
+            raise RuntimeError("google_maps_circuit_open")
         resp = requests.get(url, params=params, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
@@ -111,9 +177,12 @@ def get_distance_duration(
         if "value" not in distance:
             raise RuntimeError("Missing distance value in Google Maps response")
         distance_meters = int(distance["value"])
+        _google_maps_circuit_breaker.record_success()
         return duration_seconds, distance_meters
 
     except Exception as e:
+        if str(e) != "google_maps_circuit_open":
+            _google_maps_circuit_breaker.record_failure()
         app_logger.warning("⚠️ DistanceMatrix single-pair fallback: %s", e)
         if pick_is_coord and drop_is_coord:
             dist_km = _haversine_km(
@@ -122,6 +191,15 @@ def get_distance_duration(
             )
             dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
             return max(1, dur_s), int(dist_km * 1000)
+        if isinstance(pickup_address, str) and isinstance(dropoff_address, str):
+            try:
+                return _distance_duration_from_geocoded_strings(
+                    pickup_address, dropoff_address, region=region
+                )
+            except Exception as e2:
+                app_logger.warning(
+                    "⚠️ Fallback géocode+Haversine après échec Distance Matrix: %s", e2
+                )
         raise
 
 
@@ -230,6 +308,8 @@ def geocode_address(
     def _geocode_request() -> Dict[str, float] | None:
         """Fonction interne pour requête Google Maps avec gestion d'erreurs."""
         try:
+            if not _google_maps_circuit_breaker.allow_request():
+                raise RuntimeError("google_maps_circuit_open")
             resp = requests.get(url, params=params, timeout=_GOOGLE_TIMEOUT)
             resp.raise_for_status()
             data = resp.json()
@@ -252,6 +332,7 @@ def geocode_address(
                         lat = location.get("lat")
                         lng = location.get("lng")
                         if lat is not None and lng is not None:
+                            _google_maps_circuit_breaker.record_success()
                             return {"lat": float(lat), "lon": float(lng)}
             return None
         except requests.Timeout as e:
@@ -272,15 +353,19 @@ def geocode_address(
                 e,
             )
             raise
+        except Exception:
+            raise
 
     try:
-        # ✅ P1: Retry avec backoff (2 retries, 250ms base)
+        # Sprint 2 H13: limiter les retries Google Maps pour préserver la latence.
         result = retry_http_request(
             _geocode_request,
-            max_retries=2,
+            max_retries=1,
             base_delay_ms=250,
         )
     except Exception as e:
+        if str(e) != "google_maps_circuit_open":
+            _google_maps_circuit_breaker.record_failure()
         app_logger.warning(
             "[Google Maps] Échec géocodage après retries pour '%s': %s", address[:50], e
         )
@@ -311,6 +396,32 @@ def geocode_address(
     return result
 
 
+def _distance_duration_from_geocoded_strings(
+    pickup: str,
+    dropoff: str,
+    *,
+    region: str = "CH",
+) -> Tuple[int, int]:
+    """Géocode les deux adresses puis estime durée / distance (Haversine, vitesse moyenne).
+
+    Utilisé quand la Distance Matrix Google n'est pas utilisable (pas de clé, erreur API,
+    réponse invalide). Réutilise ``geocode_address`` (Google ou Nominatim selon config).
+    """
+    pick = (pickup or "").strip()
+    drop = (dropoff or "").strip()
+    if not pick or not drop:
+        raise ValueError("Adresse de départ ou d'arrivée vide")
+    a = geocode_address(pick, country=region)
+    b = geocode_address(drop, country=region)
+    if not a or not b:
+        raise RuntimeError("ZERO_RESULTS")
+    coord_a = (float(a["lat"]), float(a["lon"]))
+    coord_b = (float(b["lat"]), float(b["lon"]))
+    dist_km = _haversine_km(coord_a, coord_b)
+    dur_s = int((dist_km / _AVG_SPEED_KMH) * 3600)
+    return max(1, dur_s), int(dist_km * 1000)
+
+
 # ✅ P1: Cache pour géocodage Nominatim (TTL 24h)
 _NOMINATIM_CACHE_TTL = int(os.getenv("NOMINATIM_CACHE_TTL", "86400"))  # 24h par défaut
 _NOMINATIM_LOCAL_CACHE: LRUCache[str, Dict[str, float] | None] = LRUCache(maxsize=500)
@@ -339,7 +450,7 @@ def _get_redis_for_geocoding():
     try:
         redis_url = os.getenv("REDIS_URL", None)
         if redis_url:
-            import redis  # pyright: ignore[reportMissingImports]
+            import redis
 
             socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "5"))
             socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "5"))
@@ -746,7 +857,7 @@ def _get_redis():
     if not UD_MATRIX_CACHE_USE_REDIS or not REDIS_URL:
         return None
     try:
-        import redis  # pyright: ignore[reportMissingImports]
+        import redis
 
         return redis.from_url(REDIS_URL, decode_responses=False)
     except Exception as e:
@@ -802,7 +913,7 @@ def _dm_request(
     region: str = "CH",
     language: str = "fr",
     timeout: int = 12,
-    max_retries: int = 3,
+    max_retries: int = 1,
     retry_backoff_ms: int = 250,
     rate_limit_per_sec: float = UD_MATRIX_RATE_LIMIT,
 ) -> List[List[int | None]]:
@@ -834,6 +945,8 @@ def _dm_request(
         """Exécute la requête Distance Matrix avec retry uniformisé."""
 
         def _fetch_matrix() -> List[List[int | None]]:
+            if not _google_maps_circuit_breaker.allow_request():
+                raise RuntimeError("google_maps_circuit_open")
             resp = requests.get(url, params=params, timeout=timeout)
             resp.raise_for_status()  # Lève exception pour codes HTTP d'erreur
 
@@ -874,6 +987,7 @@ def _dm_request(
                 out.append(row_vals[: len(dests)])
             while len(out) < len(origins):
                 out.append([None for _ in dests])
+            _google_maps_circuit_breaker.record_success()
             return out[: len(origins)]
 
         # ✅ 2.3: Utiliser retry uniformisé avec fallback gracieux
@@ -885,6 +999,8 @@ def _dm_request(
             )
             return cast(List[List[int | None]], result)
         except Exception as e:
+            if str(e) != "google_maps_circuit_open":
+                _google_maps_circuit_breaker.record_failure()
             app_logger.warning(
                 "⚠️ DistanceMatrix request error (final après retries): %s", e
             )
@@ -1007,7 +1123,7 @@ def build_distance_matrix_google(
     region: str = "CH",
     language: str = "fr",
     timeout: int = 12,
-    max_retries: int = 3,
+    max_retries: int = 1,
     retry_backoff_ms: int = 250,
     rate_limit_per_sec: float | None = None,
 ) -> List[List[int]]:

@@ -18,6 +18,19 @@ import {
 
 const log = getLogger("Version");
 
+/** Comparaison semver simple (x.y.z), suffisante pour les logs de version store. */
+function compareSemver(a: string, b: string): number {
+  const pa = a.split(".").map((p) => parseInt(p.replace(/[^\d].*$/, ""), 10) || 0);
+  const pb = b.split(".").map((p) => parseInt(p.replace(/[^\d].*$/, ""), 10) || 0);
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da !== db) return da > db ? 1 : -1;
+  }
+  return 0;
+}
+
 interface VersionContextType {
     versionInfo: VersionCheckResponse | null;
     status: UpdateStatus;
@@ -41,11 +54,23 @@ export const VersionProvider = ({ children }: { children: ReactNode }) => {
         try {
             const result = await checkVersion();
             setVersionInfo(result);
+            const vsLatest = compareSemver(
+                result.current_version,
+                result.latest_version
+            );
+            const vsMin = compareSemver(
+                result.current_version,
+                result.min_required_version
+            );
             log.info("Version check status", {
                 status: result.status,
                 currentVersion: result.current_version,
                 latestVersion: result.latest_version,
                 minRequiredVersion: result.min_required_version,
+                vsPublishedLatest:
+                    vsLatest === 0 ? "same" : vsLatest > 0 ? "ahead" : "behind",
+                vsMinRequired:
+                    vsMin === 0 ? "same" : vsMin > 0 ? "above" : "below",
             });
         } catch (err) {
             const error =

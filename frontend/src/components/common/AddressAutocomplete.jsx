@@ -1,5 +1,5 @@
 // frontend/src/components/common/AddressAutocomplete.jsx
-import React, { useEffect, useMemo, useRef, useState, useDeferredValue, useTransition, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useTransition, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import apiClient from '../../utils/apiClient';
 import acStyles from './AddressAutocomplete.module.css';
@@ -60,10 +60,25 @@ export default function AddressAutocomplete({
   debounceMs = 350,
   bias, // { lat, lon } optionnel – par défaut centre Genève
   maxResults = 8,
+  prependSuggestions = [],
   inputClassName,
   inputId,
+  /** Sans bordure ni halo : à utiliser quand le parent porte le cadre (fieldGroup, etc.) */
+  flushInput = false,
   ...restProps
 }) {
+  const logTag =
+    name === 'dropoff_location' ? 'DROP_OFF' :
+    name === 'pickup_location' ? 'PICKUP' : 'ADDRESS';
+  const log = useCallback((phase, payload) => {
+    if (process.env.NODE_ENV !== 'development') return;
+    if (payload === undefined) {
+      console.log(`[${logTag}][${phase}]`);
+      return;
+    }
+    console.log(`[${logTag}][${phase}]`, payload);
+  }, [logTag]);
+
   const [query, setQuery] = useState(value || '');
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
@@ -71,9 +86,11 @@ export default function AddressAutocomplete({
   const [loading, setLoading] = useState(false);
   const [justSelected, setJustSelected] = useState(false); // Pour éviter la réouverture après sélection
   const [userIsTyping, setUserIsTyping] = useState(false); // Tracker si l'utilisateur tape activement
+  const quickSuggestions = useMemo(
+    () => (Array.isArray(prependSuggestions) ? prependSuggestions.filter(Boolean) : []),
+    [prependSuggestions]
+  );
 
-  // ✅ PERF: useDeferredValue pour différer les recherches et améliorer l'INP
-  const deferredQuery = useDeferredValue(query);
   const [, startTransition] = useTransition();
 
   const abortRef = useRef(null);
@@ -82,6 +99,7 @@ export default function AddressAutocomplete({
   const dropdownRef = useRef(null);
   const rafIdRef = useRef(null);
   const pendingRef = useRef(false);
+  const requestSeqRef = useRef(0);
 
   // Biais géographique (Genève par défaut) – useMemo pour stabilité des deps useCallback
   const BIAS = useMemo(() => (bias != null ? bias : DEFAULT_BIAS), [bias]);
@@ -90,7 +108,27 @@ export default function AddressAutocomplete({
   const PHOTON_BASE = process.env.REACT_APP_PHOTON_URL || 'https://photon.komoot.io';
 
   // Sync externe -> interne
-  useEffect(() => setQuery(value ? String(value) : ''), [value]);
+  useEffect(() => {
+    const next = value ? String(value) : '';
+    setQuery(next);
+    log('PROP_SYNC', { value: next });
+  }, [value, log]);
+
+  useEffect(() => {
+    log('RENDER', {
+      value,
+      query,
+      open,
+      loading,
+      suggestions: items.length,
+      justSelected,
+      userIsTyping,
+    });
+  }, [value, query, open, loading, items.length, justSelected, userIsTyping, log]);
+
+  useEffect(() => () => {
+    log('UNMOUNT');
+  }, [log]);
 
   // Fermer la liste si on clique à l'extérieur
   useEffect(() => {
@@ -220,7 +258,9 @@ export default function AddressAutocomplete({
     // ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
     const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na', ''];
     if (DEFAULT_VALUES.includes(q.toLowerCase())) {
-      console.log(`[AddressAutocomplete] ⚠️ Ignoré valeur par défaut: "${q}"`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[AddressAutocomplete] ⚠️ Ignoré valeur par défaut: "${q}"`);
+      }
       return [];
     }
 
@@ -243,13 +283,18 @@ export default function AddressAutocomplete({
         const data = res.data || [];
         if (Array.isArray(data)) {
           if (data.length > 0) {
-            console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`[AddressAutocomplete] ✅ Backend retourne ${data.length} résultats pour "${q}"`);
+            }
             if (cacheKey) autocompleteCache.set(cacheKey, data);
             return data;
           } else {
             // Ne pas logger d'avertissement pour les valeurs par défaut
             const DEFAULT_VALUES = ['non spécifié', 'non specifie', 'n/a', 'na'];
-            if (!DEFAULT_VALUES.includes(q.toLowerCase())) {
+            if (
+              process.env.NODE_ENV === 'development' &&
+              !DEFAULT_VALUES.includes(q.toLowerCase())
+            ) {
               console.log(`[AddressAutocomplete] ⚠️ Backend retourne une liste vide pour "${q}"`);
             }
           }
@@ -265,10 +310,10 @@ export default function AddressAutocomplete({
       console.error(`[AddressAutocomplete] ❌ Erreur lors de l'appel backend:`, error);
     }
 
-    // 2) Fallback Photon direct
-    try {
+    // 2) Fallback Photon direct (+ variantes intelligentes)
+    const fetchFromPhoton = async (searchQuery) => {
       const url = new URL('/api', PHOTON_BASE);
-      url.searchParams.set('q', q);
+      url.searchParams.set('q', searchQuery);
       url.searchParams.set('limit', String(maxResults));
       url.searchParams.set('lang', 'fr');
       url.searchParams.set('lat', String(BIAS.lat));
@@ -278,11 +323,47 @@ export default function AddressAutocomplete({
       if (!res.ok) throw new Error(`Photon error: ${res.status}`);
       const data = await res.json();
       const feats = Array.isArray(data?.features) ? data.features : [];
-      const normalized = normalizePhoton(feats);
+      return normalizePhoton(feats);
+    };
+
+    try {
+      let normalized = await fetchFromPhoton(q);
+
+      if (normalized.length === 0) {
+        const fallbackQueries = [];
+        const stripped = q
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[’']/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (stripped && stripped !== q) fallbackQueries.push(stripped);
+        if (stripped && !/geneve|genève/i.test(stripped)) fallbackQueries.push(`${stripped} geneve`);
+        if (!/geneve|genève/i.test(q)) fallbackQueries.push(`${q} geneve`);
+
+        for (const fq of fallbackQueries) {
+          const candidate = await fetchFromPhoton(fq);
+          if (candidate.length > 0) {
+            normalized = candidate;
+            if (process.env.NODE_ENV === 'development') {
+              console.log(
+                `[AddressAutocomplete] ✅ Photon fallback variante "${fq}" -> ${candidate.length} résultats`
+              );
+            }
+            break;
+          }
+        }
+      }
+
       if (normalized.length > 0) {
-        console.log(`[AddressAutocomplete] ✅ Photon fallback retourne ${normalized.length} résultats pour "${q}"`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(
+            `[AddressAutocomplete] ✅ Photon fallback retourne ${normalized.length} résultats pour "${q}"`
+          );
+        }
         if (cacheKey) autocompleteCache.set(cacheKey, normalized);
-      } else {
+      } else if (process.env.NODE_ENV === 'development') {
         console.log(`[AddressAutocomplete] ⚠️ Photon fallback ne trouve aucun résultat pour "${q}"`);
       }
       return normalized;
@@ -303,69 +384,97 @@ export default function AddressAutocomplete({
       return;
     }
 
-    // ✅ PERF: Utiliser deferredQuery pour réduire le travail urgent
-    const queryToUse = deferredQuery;
+    const queryToUse = query;
     if (!queryToUse || (typeof queryToUse === 'string' ? queryToUse.trim().length : 0) < minChars) {
       startTransition(() => {
       setItems([]);
-      setOpen(false);
+      const focused = document.activeElement === inputRef.current;
+      setOpen(focused && quickSuggestions.length > 0);
+      setHighlight(quickSuggestions.length > 0 ? 0 : -1);
       setLoading(false);
       });
       return;
     }
     debounce(async () => {
       try {
-        abortRef.current?.abort();
         const ctl = new AbortController();
         abortRef.current = ctl;
+        const requestSeq = ++requestSeqRef.current;
         startTransition(() => {
         setLoading(true);
         });
 
         const queryStr = String(queryToUse || '');
+        log('FETCH_START', { query: queryStr, requestSeq });
         const next = await fetchSuggestions(queryStr, ctl.signal);
         // Exclure favoris/alias de la saisie automatique
         let enriched = (Array.isArray(next) ? next : []).filter(
           (it) => it?.source !== 'favorite' && it?.source !== 'alias'
         );
+        if (requestSeq !== requestSeqRef.current) {
+          log('FETCH_IGNORED_STALE', { query: queryStr, requestSeq });
+          return;
+        }
+        if (enriched.length > 0) {
+          log('FETCH_SUCCESS', { query: queryStr, count: enriched.length, requestSeq });
+        } else {
+          log('FETCH_EMPTY', { query: queryStr, requestSeq });
+        }
 
         // ✅ PERF: Utiliser startTransition pour les mises à jour non-urgentes
         startTransition(() => {
-        setItems(enriched);
-        // Ne rouvrir le menu que si l'utilisateur tape activement
-        if (userIsTyping && !justSelected) {
-          setOpen(true);
-        }
-        setHighlight(enriched.length ? 0 : -1);
+          setItems(enriched);
+          const focused = document.activeElement === inputRef.current;
+          const hasQuery = queryStr.trim().length >= minChars;
+          setOpen(focused && !justSelected && hasQuery);
+          setHighlight(enriched.length ? 0 : -1);
           setLoading(false);
         });
       } catch (error) {
         // ✅ PHASE 3: Ignorer les erreurs d'annulation (AbortError pour fetch natif, CanceledError pour Axios)
         if (isCanceledError(error)) {
+          log('FETCH_ERROR', { canceled: true });
           return; // Ne pas mettre à jour l'état si la requête a été annulée
         }
+        log('FETCH_ERROR', { canceled: false, message: error?.message || String(error) });
         startTransition(() => {
-        setItems([]);
-        setOpen(false);
+          setItems([]);
+          const focused = document.activeElement === inputRef.current;
+          const hasQuery = String(queryToUse || '').trim().length >= minChars;
+          setOpen(focused && !justSelected && hasQuery);
           setLoading(false);
         });
       } finally {
         setLoading(false);
       }
     }, debounceMs);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    // ✅ PHASE 3: Cleanup function pour annuler les requêtes en cours lors du démontage
+    // ✅ PHASE 3: Cleanup — annuler les requêtes en cours au démontage / avant le prochain effet
     return () => {
       abortRef.current?.abort();
       abortRef.current = null;
     };
-  }, [query, minChars, debounceMs, BIAS.lat, BIAS.lon, PHOTON_BASE, maxResults, justSelected, debounce, deferredQuery, fetchSuggestions, userIsTyping, isCanceledError]);
+  }, [
+    query,
+    minChars,
+    debounceMs,
+    justSelected,
+    debounce,
+    fetchSuggestions,
+    isCanceledError,
+    quickSuggestions.length,
+    log,
+  ]);
 
   function handleInputChange(e) {
     const v = e.target.value;
+    log('CHANGE', { value: v });
     setQuery(v);
     setJustSelected(false); // Réinitialiser le flag si l'utilisateur modifie
     setUserIsTyping(true); // L'utilisateur est en train de taper
+    const focused = document.activeElement === inputRef.current;
+    if ((v || '').trim().length >= minChars && focused) {
+      setOpen(true);
+    }
     onChange?.({ target: { name, value: v } });
     
     // Recalculer la position du dropdown si ouvert (au cas où l'input change de taille)
@@ -388,11 +497,25 @@ export default function AddressAutocomplete({
     [items]
   );
   const visibleItems = useMemo(
-    () => [...googlePlaces, ...others],
-    [googlePlaces, others]
+    () => [...quickSuggestions, ...googlePlaces, ...others],
+    [quickSuggestions, googlePlaces, others]
   );
 
+  useEffect(() => {
+    log('OPEN_STATE', { open });
+  }, [open, log]);
+
+  useEffect(() => {
+    log('SUGGESTIONS', {
+      quick: quickSuggestions.length,
+      google: googlePlaces.length,
+      others: others.length,
+      total: visibleItems.length,
+    });
+  }, [quickSuggestions.length, googlePlaces.length, others.length, visibleItems.length, log]);
+
   async function chooseItem(it) {
+    log('SELECT', { label: it?.label || it?.address || '' });
     // Utiliser directement le label qui est déjà bien formaté
     const fullAddress = it?.label || it?.address || '';
 
@@ -404,11 +527,6 @@ export default function AddressAutocomplete({
     setHighlight(-1);
     setJustSelected(true);
     setUserIsTyping(false);
-
-    // Réinitialiser le flag après un court délai
-    setTimeout(() => {
-      setJustSelected(false);
-    }, 300);
 
     onChange?.({ target: { name, value: fullAddress } });
 
@@ -611,10 +729,20 @@ export default function AddressAutocomplete({
         onChange={handleInputChange}
         onKeyDown={onKeyDown}
         onFocus={() => {
-          // Ne pas rouvrir automatiquement au focus
-          // Le menu s'ouvrira seulement si l'utilisateur commence à taper
+          log('FOCUS', { value: query });
+          const focused = document.activeElement === inputRef.current;
+          if (focused && quickSuggestions.length > 0) {
+            setOpen(true);
+            setHighlight(0);
+            return;
+          }
+          if (focused && items.length > 0) {
+            setOpen(true);
+            setHighlight((h) => (h >= 0 ? h : 0));
+          }
         }}
         onBlur={() => {
+          log('BLUR', { value: query });
           // Réinitialiser le mode typing quand on quitte le champ
           setUserIsTyping(false);
         }}
@@ -626,7 +754,9 @@ export default function AddressAutocomplete({
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         aria-activedescendant={open ? activeId : undefined}
-        className={inputClassName || acStyles.input}
+        className={[flushInput ? acStyles.inputFlush : acStyles.input, inputClassName]
+          .filter(Boolean)
+          .join(' ')}
         {...restProps}
       />
 
@@ -664,11 +794,35 @@ export default function AddressAutocomplete({
 
           {!loading && visibleItems.length > 0 && (
             <>
+              {quickSuggestions.length > 0 && (
+                <>
+                  <div className={acStyles.sectionHeaderGoogle}>Suggestions</div>
+                  {quickSuggestions.map((it, idx) => {
+                    const globalIndex = idx;
+                    const active = globalIndex === highlight;
+                    return (
+                      <div
+                        id={`${name || 'address'}-ac-option-${globalIndex}`}
+                        key={`quick-${it.label || idx}`}
+                        role="option"
+                        aria-selected={active}
+                        onMouseDown={(e) => { e.preventDefault(); chooseItem(it); }}
+                        onMouseEnter={() => setHighlight(globalIndex)}
+                        className={`${acStyles.optionItem} ${acStyles.optionItemGoogle} ${active ? acStyles.optionItemActive : ''}`}
+                      >
+                        <div className={acStyles.optionLabel}>{it.label || 'Suggestion'}</div>
+                        {it.secondary_text && <div className={acStyles.optionSecondary}>{it.secondary_text}</div>}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
               {googlePlaces.length > 0 && (
                 <>
                   <div className={acStyles.sectionHeaderGoogle}>Suggestions</div>
                   {googlePlaces.map((it, idx) => {
-                    const globalIndex = idx;
+                    const globalIndex = quickSuggestions.length + idx;
                     const active = globalIndex === highlight;
                     return (
                       <div
@@ -692,7 +846,7 @@ export default function AddressAutocomplete({
                 <>
                   <div className={acStyles.sectionHeader}>Autres résultats</div>
                   {others.map((it, idx) => {
-                    const globalIndex = googlePlaces.length + idx;
+                    const globalIndex = quickSuggestions.length + googlePlaces.length + idx;
                     const active = globalIndex === highlight;
                     const line =
                       [it.address, it.postcode, it.city, it.country].filter(Boolean).join(' · ') ||

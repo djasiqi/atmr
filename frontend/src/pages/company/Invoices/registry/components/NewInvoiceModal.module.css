@@ -54,6 +54,18 @@
   padding-bottom: 0;
 }
 
+/* V3 : parcours avancé (cohabitation avec « Facturer une période ») */
+.legacyPathBanner {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-text-muted, #5c5c5c);
+  background: var(--color-surface-elevated, #f4f4f5);
+  border: 1px solid var(--color-border-subtle, #e4e4e7);
+  border-radius: 6px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
 .formGroup {
   margin-bottom: var(--spacing-lg);
   min-width: 0;
@@ -709,13 +721,36 @@
   gap: var(--spacing-sm);
 }
 
-/* Responsive : petit écran → modal pleine hauteur/largeur utilisable */
-@media (max-width: 640px), (max-height: 820px) {
+/* Responsive : petit écran → proche 100% viewport (overlay a les safe-area / plein écran) */
+@media (max-width: 640px) {
   .modalInvoice {
-    width: calc(100vw - 16px);
-    height: calc(100vh - 16px);
-    min-height: calc(100vh - 16px);
-    max-height: calc(100vh - 16px);
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 100%;
+    max-height: 100%;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .modalInvoice {
+    width: min(1100px, calc(100vw - 24px));
+    max-height: min(760px, calc(100vh - 24px));
+  }
+}
+
+/* Hauteur réduite : moins de « cadre fixe » sur les laptops courts */
+@media (max-width: 1024px) and (max-height: 800px) {
+  .modalInvoice {
+    min-height: 0;
+  }
+}
+
+/* Ecrans pas trop hauts (hors mobile plein écran) : hauteur utile plafonnée */
+@media (min-width: 641px) and (max-height: 820px) {
+  .modalInvoice {
+    min-height: min(760px, 100vh);
+    max-height: 100vh;
   }
 }
 
@@ -728,6 +763,28 @@
   .s2HeaderClinique {
     max-width: 100%;
     min-width: 0;
+  }
+
+  .s2HeaderRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .s2HeaderLabel {
+    white-space: normal;
+  }
+
+  .modalInvoice :global(.modal-header) {
+    padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
+  }
+
+  .modalInvoice :global(.modal-title) {
+    font-size: var(--font-size-xl, 1.25rem);
+  }
+
+  .modalBody {
+    padding-left: var(--spacing-md);
+    padding-right: var(--spacing-md);
   }
 
   .stickyBillingType .radioGroup {
@@ -769,6 +826,13 @@
 
   .stickyFooterActions .btn {
     flex: 1;
+  }
+}
+
+/* Tablette (hors mobile étroit) : 2 colonnes pour le type de facturation */
+@media (min-width: 641px) and (max-width: 900px) {
+  .stickyBillingType .radioGroup {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

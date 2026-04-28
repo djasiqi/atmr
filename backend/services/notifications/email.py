@@ -6,8 +6,10 @@ Utilisé comme fallback ultime quand push et SMS échouent.
 
 from __future__ import annotations
 
+import html as html_lib
 import logging
 import os
+import re
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,17 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "ATMR Notifications")
 
 # Configuration Brevo
 BREVO_API_KEY = os.getenv("BREVO_API_KEY")
+
+
+def _html_to_text(html_content: str) -> str:
+    """Convertit un HTML simple en texte brut pour améliorer la délivrabilité."""
+    no_style = re.sub(r"<style[\s\S]*?</style>", " ", html_content, flags=re.IGNORECASE)
+    no_script = re.sub(r"<script[\s\S]*?</script>", " ", no_style, flags=re.IGNORECASE)
+    with_newlines = re.sub(r"</(p|div|br|li|h1|h2|h3|tr|table)>", "\n", no_script, flags=re.IGNORECASE)
+    no_tags = re.sub(r"<[^>]+>", " ", with_newlines)
+    normalized = re.sub(r"[ \t\r\f\v]+", " ", no_tags)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+    return html_lib.unescape(normalized).strip()
 
 
 def send_email_notification(
@@ -134,12 +147,15 @@ def _send_via_smtp(
         if reply_to:
             msg["Reply-To"] = reply_to
 
-        # Ajouter le corps (texte ou HTML)
+        # Ajouter le corps (texte + HTML quand disponible) pour une meilleure délivrabilité.
         if html:
-            part = MIMEText(body, "html", "utf-8")
+            text_part = MIMEText(_html_to_text(body), "plain", "utf-8")
+            html_part = MIMEText(body, "html", "utf-8")
+            msg.attach(text_part)
+            msg.attach(html_part)
         else:
             part = MIMEText(body, "plain", "utf-8")
-        msg.attach(part)
+            msg.attach(part)
 
         # Envoyer via SMTP
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
@@ -205,6 +221,7 @@ def _send_via_brevo(
 
         if html:
             payload["htmlContent"] = body
+            payload["textContent"] = _html_to_text(body)
         else:
             payload["textContent"] = body
 

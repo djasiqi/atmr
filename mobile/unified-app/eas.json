@@ -1,0 +1,68 @@
+{
+  "cli": {
+    "version": ">=16.4.8",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
+        "EXPO_PUBLIC_ENABLE_BG_LOCATION": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RESUME_RESYNC": "1",
+        "EXPO_PUBLIC_ENABLE_REALTIME_AUTH_RECONNECT": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_PUSH": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_DRIVER_SOCKET": "1",
+        "EXPO_PUBLIC_ENABLE_BG_LOCATION": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_PERSISTENT_QUEUE": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_HTTP_FALLBACK": "1",
+        "EXPO_PUBLIC_ENABLE_TRACKING_RESUME_RESYNC": "1",
+        "EXPO_PUBLIC_ENABLE_REALTIME_AUTH_RECONNECT": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_PUSH": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_NOTIFICATION_ACTIONS": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_MISSION_BAR": "1",
+        "EXPO_PUBLIC_ENABLE_DRIVER_FCM_NATIVE": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "environment": "production",
+      "channel": "production",
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": true
+      },
+      "ios": {
+        "simulator": false,
+        "autoIncrement": true
+      }
+    }
+  }
+}

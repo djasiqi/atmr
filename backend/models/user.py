@@ -126,7 +126,7 @@ class User(db.Model):
     # ✅ Invitation par email pour institution users
     account_status: Mapped[str | None] = mapped_column(
         String(20), nullable=True, default=None
-    )  # None (legacy/active), "invited", "active", "disabled"
+    )  # None (legacy/active), "pending_activation", "invited", "active", "disabled"
     invite_token_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True
     )  # sha256 du token d'invitation

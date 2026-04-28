@@ -21,7 +21,13 @@ from models import (
     Invoice,
     User,
 )
-from models.enums import BookingStatus, ClientType, InvoiceStatus, UserRole
+from models.enums import (
+    BookingStatus,
+    ClientType,
+    InvoiceStatus,
+    ManagementMode,
+    UserRole,
+)
 
 
 def get_db_dialect(db) -> str:
@@ -120,7 +126,8 @@ def test_client(db, test_company):
     client.last_name = "Client"
     client.email = f"client_{unique_suffix}@test.ch"
     client.phone = "0211234567"
-    client.client_type = ClientType.PRIVATE
+    client.client_type = ClientType.TRANSPORT
+    client.management_mode = ManagementMode.MANAGED
     db.session.add(client)
     db.session.flush()
     return client
@@ -268,6 +275,11 @@ def authenticated_client(client, auth_headers):
             """PUT request avec authentification."""
             kwargs.setdefault("headers", {}).update(self._headers)
             return self._client.put(url, **kwargs)
+
+        def patch(self, url, **kwargs):
+            """PATCH request avec authentification."""
+            kwargs.setdefault("headers", {}).update(self._headers)
+            return self._client.patch(url, **kwargs)
 
         def delete(self, url, **kwargs):
             """DELETE request avec authentification."""

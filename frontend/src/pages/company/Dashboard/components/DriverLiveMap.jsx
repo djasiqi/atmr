@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { GoogleMap } from '@react-google-maps/api';
 import { MarkerClusterer } from '@googlemaps/markerclusterer';
 import { useLirieCompany } from '../../../../hooks/useLirieCompany';
+import { useCompanySocketConnected } from '../../../../hooks/enterprise/useCompanySocketConnected';
 import { useGoogleMapsLoaded } from '../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../components/common/MapPlaceholder';
 import {
@@ -28,8 +29,37 @@ const MAP_DEBUG =
   typeof window !== 'undefined' &&
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
+const STALE_SECONDS_THRESHOLD = 120;
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
+
+function trackStaleMarkers(companyId, staleCount) {
+  if (!staleCount || staleCount <= 0) return;
+  const normalizedCompanyId = companyId == null ? 'unknown' : String(companyId);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent('company_realtime_metric', {
+        detail: {
+          metric: 'company_driver_stale_marker_total',
+          labels: { company_id: normalizedCompanyId },
+          value: staleCount,
+          at: Date.now(),
+        },
+      })
+    );
+  }
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.info(
+      JSON.stringify({
+        metric: 'company_driver_stale_marker_total',
+        company_id: normalizedCompanyId,
+        value: staleCount,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  }
+}
 
 /** LatLng ou littéral pour bounds / setCenter (Marker classique ou AdvancedMarkerElement). */
 function getMarkerLatLngLiteral(marker) {
@@ -104,11 +134,27 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
   const [mapDebugInfo] = useState(null);
   const [showNoGpsBanner, setShowNoGpsBanner] = useState(false);
   const [locatedCount, setLocatedCount] = useState(0);
+  const [mapMarkerCount, setMapMarkerCount] = useState(0);
+  const lastStaleMetricAtRef = useRef(0);
   const { company } = useLirieCompany();
+  const socketConnected = useCompanySocketConnected();
 
   const allDrivers = Array.isArray(propDrivers) ? propDrivers : [];
   const drivers = searchQuery
-    ? allDrivers.filter((d) => d.username?.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? allDrivers.filter((d) => {
+        const q = searchQuery.toLowerCase();
+        const blob = [
+          d.username,
+          d.full_name,
+          d.first_name,
+          d.last_name,
+          d.email,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return blob.includes(q);
+      })
     : allDrivers;
 
   // Coordonnées entreprise comme fallback
@@ -353,6 +399,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (!map || !Array.isArray(drivers)) return;
 
     let placed = 0;
+    let staleMarkersCount = 0;
     const newLocatedIds = new Set();
 
     drivers.forEach((d) => {
@@ -365,19 +412,31 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       const isLocated = !isFallback && freshness !== 'offline';
       if (isLocated) newLocatedIds.add(d.id);
 
+      const lastSeenSecondsNumber = Number(d.last_seen_seconds);
+      const locStat = String(d.location_status || '').toLowerCase();
+      const hasBackendStatus = locStat === 'stale' || locStat === 'offline'
+        || locStat === 'live' || locStat === 'recent';
+      const staleByAge = !d.location_status
+        && Number.isFinite(lastSeenSecondsNumber)
+        && lastSeenSecondsNumber > STALE_SECONDS_THRESHOLD;
+      const staleByStatus = locStat === 'stale' || locStat === 'offline';
+      const isStaleMarker = isFallback
+        || (hasBackendStatus ? staleByStatus : staleByAge);
+      if (isStaleMarker) staleMarkersCount += 1;
+
       const tooltipOpts = isFallback
         ? { status: 'offline', isStale: true, noGps: true }
         : {
             lastSeenSeconds: d.last_seen_seconds,
-            isStale: d.location_status === 'stale' || d.location_status === 'offline',
+            isStale: isStaleMarker,
             clientShort: d.client_short,
             currentBookingId: d.current_booking_id,
           };
       if (!markersRef.current[d.id]) {
-        upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
+        upsertMarker(d.id, coords, status, isStaleMarker, d, tooltipOpts);
         placed++;
       } else {
-        upsertMarker(d.id, coords, status, isFallback, d, tooltipOpts);
+        upsertMarker(d.id, coords, status, isStaleMarker, d, tooltipOpts);
       }
     });
 
@@ -393,6 +452,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       }
     });
 
+    setMapMarkerCount(Object.keys(markersRef.current).length);
+
     const visibleMarkers = Object.values(markersRef.current);
     if (visibleMarkers.length === 1) {
       const pos = getMarkerLatLngLiteral(visibleMarkers[0]);
@@ -404,7 +465,13 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       map.setCenter(companyCoords || SWITZERLAND_CENTER);
       map.setZoom(companyCoords ? 13 : 9);
     }
-  }, [drivers, companyCoords, upsertMarker, removeMarker, fitBoundsToMarkers]);
+
+    const now = Date.now();
+    if (staleMarkersCount > 0 && now - lastStaleMetricAtRef.current >= 60000) {
+      lastStaleMetricAtRef.current = now;
+      trackStaleMarkers(company?.id, staleMarkersCount);
+    }
+  }, [drivers, companyCoords, upsertMarker, removeMarker, fitBoundsToMarkers, company?.id]);
 
   useEffect(() => {
     setShowNoGpsBanner(allDrivers.length > 0 && locatedCount === 0);
@@ -412,6 +479,12 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
 
   // Compteur chauffeurs total
   const totalCount = allDrivers.length;
+  const noGpsTitle = !socketConnected
+    ? 'Temps réel indisponible'
+    : 'Aucun GPS récent';
+  const noGpsDetail = !socketConnected
+    ? 'Données issues du dernier chargement. Vérifiez la connexion réseau.'
+    : 'Aucune position fraîche. Vérifiez l’app chauffeur et le GPS.';
 
   return (
     <div
@@ -424,15 +497,20 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       }}
     >
       {gmLoaded ? (
-        <GoogleMap
-          mapContainerStyle={CONTAINER_STYLE}
-          center={defaultMapCenter}
-          zoom={defaultZoom}
-          options={DEFAULT_MAP_OPTIONS}
-          onLoad={onMapLoad}
-        />
+        <div
+          className="lirie-driver-map-enter"
+          style={{ width: '100%', height: '100%', minHeight: 280 }}
+        >
+          <GoogleMap
+            mapContainerStyle={CONTAINER_STYLE}
+            center={defaultMapCenter}
+            zoom={defaultZoom}
+            options={DEFAULT_MAP_OPTIONS}
+            onLoad={onMapLoad}
+          />
+        </div>
       ) : (
-        <MapPlaceholder style={{ minHeight: 280 }} />
+        <MapPlaceholder style={{ minHeight: 280 }} delayLabelMs={350} />
       )}
 
       {/* Barre de recherche — responsive */}
@@ -462,7 +540,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           </svg>
           <input
             type="text"
-            placeholder="Rechercher..."
+            placeholder="Rechercher sur la carte…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -534,12 +612,25 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
                   animation: locatedCount > 0 ? 'pulse 2s infinite' : 'none',
                 }}
               />
+              <span
+                title={socketConnected ? 'Temps réel (WebSocket) connecté' : 'Temps réel indisponible — snapshot HTTP'}
+                style={{
+                  fontSize: 8,
+                  lineHeight: 1,
+                  color: socketConnected ? '#16a34a' : '#94a3b8',
+                  flexShrink: 0,
+                }}
+              >
+                {socketConnected ? '●' : '○'}
+              </span>
               <div style={{ lineHeight: 1.3, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, color: '#1E293B', fontSize: 11 }}>
                   {locatedCount}/{totalCount} localisés
                 </div>
                 {locatedCount === 0 && totalCount > 0 && (
-                  <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 1 }}>Aucun GPS récent</div>
+                  <div style={{ fontSize: 9, color: '#94A3B8', marginTop: 1 }}>
+                    {!socketConnected ? 'Dernières données en cache' : 'Aucune position fraîche'}
+                  </div>
                 )}
               </div>
             </div>
@@ -569,7 +660,11 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       {mapReady && (
         <button
           type="button"
-          onClick={() => fitBoundsToMarkers(14)}
+          disabled={mapMarkerCount === 0}
+          onClick={() => {
+            if (mapMarkerCount === 0) return;
+            fitBoundsToMarkers(14);
+          }}
           style={{
             position: 'absolute',
             bottom: 8,
@@ -579,17 +674,22 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
             fontSize: 11,
             fontWeight: 600,
             color: '#fff',
-            background: 'linear-gradient(135deg, #00796B 0%, #00695C 100%)',
+            background: mapMarkerCount === 0 ? '#94a3b8' : 'linear-gradient(135deg, #00796B 0%, #00695C 100%)',
             border: 'none',
             borderRadius: 8,
             boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-            cursor: 'pointer',
+            cursor: mapMarkerCount === 0 ? 'not-allowed' : 'pointer',
             fontFamily: "Inter, -apple-system, 'Segoe UI', sans-serif",
             transition: 'opacity 0.2s',
+            opacity: mapMarkerCount === 0 ? 0.75 : 1,
           }}
-          title="Recadrer sur les chauffeurs"
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.9'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
+          title={mapMarkerCount === 0 ? 'Aucun marqueur sur la carte' : 'Recadrer sur les chauffeurs'}
+          onMouseEnter={(e) => {
+            if (mapMarkerCount > 0) e.currentTarget.style.opacity = '0.9';
+          }}
+          onMouseLeave={(e) => {
+            if (mapMarkerCount > 0) e.currentTarget.style.opacity = '1';
+          }}
         >
           Recentrer
         </button>
@@ -617,7 +717,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
             fontFamily: "Inter, -apple-system, 'Segoe UI', sans-serif",
           }}
         >
-          Aucune position reçue. Vérifiez que les chauffeurs ont activé le GPS.
+          <div style={{ color: '#334155', fontWeight: 600 }}>{noGpsTitle}</div>
+          <div style={{ fontSize: 11, fontWeight: 400, marginTop: 4, lineHeight: 1.35 }}>{noGpsDetail}</div>
         </div>
       )}
 
@@ -656,11 +757,20 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
         </div>
       )}
 
-      {/* Pulse animation */}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        .lirie-driver-map-enter {
+          animation: lirieMapSoftIn 0.45s ease-out;
+        }
+        @keyframes lirieMapSoftIn {
+          from { opacity: 0.86; }
+          to { opacity: 1; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .lirie-driver-map-enter { animation: none; }
         }
       `}</style>
     </div>

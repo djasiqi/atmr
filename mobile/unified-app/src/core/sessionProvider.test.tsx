@@ -1,0 +1,362 @@
+import React from "react";
+import { describe, expect, it, jest, beforeEach } from "@jest/globals";
+import { act, create } from "react-test-renderer";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type {
+  fetchBootstrap,
+  hasAuthToken,
+  hasStoredRefreshToken,
+  login,
+  logoutSession,
+  refreshAuthTokenNow,
+  switchContext,
+} from "./api/client";
+import { SessionProvider, useSession } from "./sessionProvider";
+
+const mockFetchBootstrap = jest.fn() as jest.MockedFunction<typeof fetchBootstrap>;
+const mockHasAuthToken = jest.fn() as jest.MockedFunction<typeof hasAuthToken>;
+const mockHasStoredRefreshToken = jest.fn() as jest.MockedFunction<typeof hasStoredRefreshToken>;
+const mockLogin = jest.fn() as jest.MockedFunction<typeof login>;
+const mockLogoutSession = jest.fn() as jest.MockedFunction<typeof logoutSession>;
+const mockRefreshAuthTokenNow = jest.fn() as jest.MockedFunction<typeof refreshAuthTokenNow>;
+const mockSwitchContext = jest.fn() as jest.MockedFunction<typeof switchContext>;
+const mockOnContextSwitch = jest.fn() as jest.MockedFunction<(nextContextId: string | null) => void>;
+const mockDisconnect = jest.fn() as jest.MockedFunction<() => void>;
+const mockOnAuthExhausted = jest.fn().mockReturnValue(() => undefined);
+const mockClearContextScopedCache = jest.fn() as jest.MockedFunction<
+  (queryClient: QueryClient, contextId: string | null) => void
+>;
+const mockClearAllContextCache = jest.fn() as jest.MockedFunction<(queryClient: QueryClient) => void>;
+const mockPurgeDriverProfileCache = jest.fn() as jest.Mock<any>;
+
+jest.mock("./api/client", () => ({
+  fetchBootstrap: (activeContextId?: string | null) => mockFetchBootstrap(activeContextId),
+  hasAuthToken: () => mockHasAuthToken(),
+  hasStoredRefreshToken: () => mockHasStoredRefreshToken(),
+  login: (email: string, password: string) => mockLogin(email, password),
+  logoutSession: () => mockLogoutSession(),
+  refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
+  switchContext: (targetContextId: string) => mockSwitchContext(targetContextId),
+  setActiveContextIdForApi: jest.fn(),
+}));
+
+jest.mock("./realtime/realtimeManager", () => ({
+  realtimeManager: {
+    onContextSwitch: (nextContextId: string | null) => mockOnContextSwitch(nextContextId),
+    disconnect: () => mockDisconnect(),
+    onAuthExhausted: (
+      cb: (reason: "exhausted" | "terminal", code?: string) => void
+    ) => mockOnAuthExhausted(cb),
+  },
+}));
+
+jest.mock("./cache/contextCache", () => ({
+  clearContextScopedCache: (queryClient: QueryClient, contextId: string | null) =>
+    mockClearContextScopedCache(queryClient, contextId),
+  clearAllContextCache: (queryClient: QueryClient) => mockClearAllContextCache(queryClient),
+}));
+
+jest.mock("../features/driver/services/driverProfileCache", () => ({
+  purgeDriverProfileCache: () => mockPurgeDriverProfileCache(),
+}));
+
+function buildBootstrap(activeContextId: string | null = "driver:42") {
+  return {
+    bootstrap_version: "1.0.0",
+    is_authenticated: true,
+    user: { id: "u-1", email: "driver@lirie.ch", full_name: "Driver Test" },
+    account_status: "active" as const,
+    onboarding_status: { required: false },
+    available_contexts: [
+      {
+        context_id: "driver:42",
+        context_type: "driver" as const,
+        label: "Driver",
+        permissions: ["mission:read", "mission:update_status"],
+        is_default: activeContextId === "driver:42",
+      },
+      {
+        context_id: "client:self",
+        context_type: "client" as const,
+        label: "Client",
+        permissions: ["booking:read"],
+        is_default: activeContextId === "client:self",
+      },
+    ],
+    active_context_id: activeContextId,
+    feature_flags: {},
+    min_supported_app_version: "0.1.0",
+    maintenance_mode: false,
+    degraded_mode: false,
+    server_time: new Date().toISOString(),
+    request_id: "req-12345678",
+  };
+}
+
+function buildUnauthenticatedBootstrap() {
+  return {
+    ...buildBootstrap(null),
+    is_authenticated: false,
+    available_contexts: [],
+    active_context_id: null,
+  };
+}
+
+type SessionHandle = ReturnType<typeof useSession>;
+
+async function buildHarness(handle: { current: SessionHandle | null }) {
+  const queryClient = new QueryClient();
+  function Capture() {
+    handle.current = useSession();
+    return null;
+  }
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          <Capture />
+        </SessionProvider>
+      </QueryClientProvider>
+    );
+  });
+  return { renderer, queryClient };
+}
+
+describe("session provider gates", () => {
+  beforeEach(() => {
+    mockFetchBootstrap.mockReset();
+    mockHasAuthToken.mockReset();
+    mockHasStoredRefreshToken.mockReset();
+    mockLogin.mockReset();
+    mockLogoutSession.mockReset();
+    mockRefreshAuthTokenNow.mockReset();
+    mockSwitchContext.mockReset();
+    mockOnContextSwitch.mockReset();
+    mockDisconnect.mockReset();
+    mockClearContextScopedCache.mockReset();
+    mockClearAllContextCache.mockReset();
+    mockPurgeDriverProfileCache.mockReset();
+    mockPurgeDriverProfileCache.mockResolvedValue(undefined);
+    mockHasAuthToken.mockReturnValue(false);
+    mockHasStoredRefreshToken.mockResolvedValue(false);
+    mockRefreshAuthTokenNow.mockResolvedValue(false);
+  });
+
+  it("handles cold start bootstrap and resolves active context", async () => {
+    mockFetchBootstrap.mockResolvedValue(buildBootstrap("driver:42"));
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockFetchBootstrap).toHaveBeenCalledWith(null);
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext?.context_id).toBe("driver:42");
+    expect(mockOnContextSwitch).toHaveBeenCalledWith("driver:42");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("tries refresh on cold start when access token is missing", async () => {
+    mockHasAuthToken.mockReturnValue(false);
+    mockHasStoredRefreshToken.mockResolvedValue(true);
+    mockRefreshAuthTokenNow.mockResolvedValue(true);
+    mockFetchBootstrap.mockResolvedValue(buildBootstrap("driver:42"));
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockHasStoredRefreshToken).toHaveBeenCalled();
+    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext?.context_id).toBe("driver:42");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("keeps ready status when no refresh token exists and bootstrap is unauthenticated", async () => {
+    mockHasAuthToken.mockReturnValue(false);
+    mockHasStoredRefreshToken.mockResolvedValue(false);
+    mockFetchBootstrap.mockResolvedValue(buildUnauthenticatedBootstrap());
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockRefreshAuthTokenNow).not.toHaveBeenCalled();
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext).toBeNull();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("keeps ready status when refresh fails and backend returns unauthenticated bootstrap", async () => {
+    mockHasAuthToken.mockReturnValue(false);
+    mockHasStoredRefreshToken.mockResolvedValue(true);
+    mockRefreshAuthTokenNow.mockResolvedValue(false);
+    mockFetchBootstrap.mockResolvedValue(buildUnauthenticatedBootstrap());
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext).toBeNull();
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("guards against concurrent bootstrap cycles", async () => {
+    mockHasAuthToken.mockReturnValue(true);
+    mockFetchBootstrap.mockImplementation(async () => {
+      await Promise.resolve();
+      return buildBootstrap("driver:42");
+    });
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    let firstPromise: Promise<void> = Promise.resolve();
+    let secondPromise: Promise<void> = Promise.resolve();
+    await act(async () => {
+      firstPromise = handle.current?.bootstrapSession() ?? Promise.resolve();
+      secondPromise = handle.current?.bootstrapSession() ?? Promise.resolve();
+    });
+
+    await act(async () => {
+      await Promise.all([firstPromise, secondPromise]);
+    });
+
+    expect(mockFetchBootstrap).toHaveBeenCalledTimes(1);
+    expect(handle.current?.status).toBe("ready");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("switches context and clears scoped cache for previous context", async () => {
+    mockFetchBootstrap.mockResolvedValue(buildBootstrap("driver:42"));
+    mockSwitchContext.mockResolvedValue({
+      success: true,
+      active_context_id: "client:self",
+      available_contexts: buildBootstrap("client:self").available_contexts,
+      feature_flags: {},
+      request_id: "req-switch",
+    });
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer, queryClient } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+    await act(async () => {
+      await handle.current?.changeContext("client:self");
+    });
+
+    expect(mockSwitchContext).toHaveBeenCalledWith("client:self");
+    expect(mockClearContextScopedCache).toHaveBeenCalledWith(queryClient, "driver:42");
+    expect(handle.current?.activeContext?.context_id).toBe("client:self");
+    expect(mockOnContextSwitch).toHaveBeenLastCalledWith("client:self");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("keeps session coherent across login/logout and resume bootstrap", async () => {
+    mockFetchBootstrap.mockImplementation(async (contextId?: string | null) => {
+      if (!contextId) return buildBootstrap("driver:42");
+      return buildBootstrap(contextId);
+    });
+    mockLogin.mockResolvedValue(undefined);
+    mockLogoutSession.mockResolvedValue(undefined);
+
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+    await act(async () => {
+      await handle.current?.login("driver@lirie.ch", "secret");
+    });
+    await act(async () => {
+      handle.current?.logout();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(mockLogin).toHaveBeenCalledWith("driver@lirie.ch", "secret");
+    expect(mockLogoutSession).toHaveBeenCalled();
+    expect(mockPurgeDriverProfileCache).toHaveBeenCalled();
+    expect(mockDisconnect).toHaveBeenCalled();
+    expect(mockClearAllContextCache).toHaveBeenCalled();
+    expect(mockFetchBootstrap).toHaveBeenLastCalledWith(null);
+    expect(handle.current?.status).toBe("ready");
+    expect(handle.current?.activeContext?.context_id).toBe("driver:42");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("rejects invalid company context invariant during bootstrap", async () => {
+    mockFetchBootstrap.mockResolvedValue({
+      ...buildBootstrap(null),
+      available_contexts: [
+        {
+          context_id: "company:",
+          context_type: "company" as const,
+          label: "Company",
+          organization_id: null,
+          permissions: ["company:dashboard:read"],
+          is_default: true,
+        },
+      ],
+      active_context_id: "company:",
+    });
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(handle.current?.status).toBe("error");
+    expect(handle.current?.error).toContain("company context requires company_id");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+
+  it("sets error status on bootstrap transport failure", async () => {
+    mockHasAuthToken.mockReturnValue(true);
+    mockFetchBootstrap.mockRejectedValue(new Error("network error"));
+    const handle: { current: SessionHandle | null } = { current: null };
+    const { renderer } = await buildHarness(handle);
+
+    await act(async () => {
+      await handle.current?.bootstrapSession();
+    });
+
+    expect(handle.current?.status).toBe("error");
+    expect(handle.current?.error).toContain("network error");
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
+});

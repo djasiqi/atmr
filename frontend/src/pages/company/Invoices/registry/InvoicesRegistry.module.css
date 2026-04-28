@@ -163,6 +163,24 @@
 }
 
 /* Alerts bar */
+.opportunitiesBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--color-surface-elevated, #f0f9ff);
+  border: 1px solid var(--color-border-subtle, #bae6fd);
+  color: var(--color-text, #0c4a6e);
+}
+
+.opportunitiesBar strong {
+  font-weight: 600;
+}
+
 .alertsBar {
   display: flex;
   flex-wrap: wrap;
@@ -236,6 +254,78 @@
 
 .error button:hover {
   background: var(--danger-bg-hover, rgba(220, 38, 38, 0.1));
+}
+
+.errorRetryBtn {
+  margin-left: 8px;
+  text-decoration: underline;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Contenu liste (table) : rechargement sans masquer le tableau */
+.listBlock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+}
+
+.listBlockRefreshing {
+  transition: opacity 0.2s ease;
+  opacity: 0.88;
+}
+
+.listRefreshBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 20;
+  overflow: hidden;
+  border-radius: var(--radius-lg, 12px) var(--radius-lg, 12px) 0 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.listRefreshBar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--brand-primary) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: listRefreshPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes listRefreshPulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listBlockRefreshing {
+    transition: none;
+  }
+
+  .listRefreshBar::after {
+    animation: none;
+    background: var(--brand-primary);
+    opacity: 0.7;
+  }
 }
 
 /* ===== Bulk action bar ===== */

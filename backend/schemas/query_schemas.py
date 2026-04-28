@@ -3,10 +3,12 @@
 Fournit des schémas communs pour pagination, filtres, dates, recherche, etc.
 """
 
-from marshmallow import (  # pyright: ignore[reportMissingImports]
+from marshmallow import (
     Schema,
+    ValidationError,
     fields,
     validate,
+    validates_schema,
 )
 
 from schemas.validation_utils import ISO8601_DATE_REGEX
@@ -44,6 +46,17 @@ class DateRangeQuerySchema(Schema):
         ),
         allow_none=True,
     )
+
+    @validates_schema
+    def validate_date_order(self, data, **_kwargs):
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+        if not start_date or not end_date:
+            return
+        if start_date > end_date:
+            raise ValidationError(
+                {"end_date": ["end_date doit être postérieure ou égale à start_date"]}
+            )
 
 
 class SearchQuerySchema(Schema):

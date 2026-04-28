@@ -16,11 +16,16 @@ import os
 import time
 from typing import Any, Dict
 
+from services.region_router import kafka_partition_key
+
 logger = logging.getLogger(__name__)
 
 # Configuration Kafka
 KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
-KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+KAFKA_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
+)
 KAFKA_TOPIC_NOTIFICATIONS = os.getenv("KAFKA_TOPIC_NOTIFICATIONS", "notifications.push")
 KAFKA_TOPIC_SMS = os.getenv("KAFKA_TOPIC_SMS", "notifications.sms")
 KAFKA_TOPIC_EMAIL = os.getenv("KAFKA_TOPIC_EMAIL", "notifications.email")
@@ -33,7 +38,31 @@ KAFKA_BATCH_SIZE = int(os.getenv("KAFKA_BATCH_SIZE", "16384"))  # 16KB
 KAFKA_LINGER_MS = int(os.getenv("KAFKA_LINGER_MS", "10"))  # Attendre 10ms pour batcher
 KAFKA_BUFFER_MEMORY = int(os.getenv("KAFKA_BUFFER_MEMORY", "33554432"))  # 32MB
 KAFKA_MAX_IN_FLIGHT = int(os.getenv("KAFKA_MAX_IN_FLIGHT", "5"))
-KAFKA_ACKS = os.getenv("KAFKA_ACKS", "1")  # 0=no ack, 1=leader ack, all=all replicas
+KAFKA_ACKS = os.getenv("KAFKA_ACKS", "all")  # 0=no ack, 1=leader ack, all=all replicas
+KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
+KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
+KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
+KAFKA_SASL_PASSWORD = os.getenv("KAFKA_SASL_PASSWORD", "")
+KAFKA_SSL_CAFILE = os.getenv("KAFKA_SSL_CAFILE", "")
+KAFKA_SSL_CERTFILE = os.getenv("KAFKA_SSL_CERTFILE", "")
+KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
+
+
+def _kafka_security_config() -> Dict[str, Any]:
+    cfg: Dict[str, Any] = {"security_protocol": KAFKA_SECURITY_PROTOCOL}
+    if KAFKA_SASL_MECHANISM:
+        cfg["sasl_mechanism"] = KAFKA_SASL_MECHANISM
+    if KAFKA_SASL_USERNAME:
+        cfg["sasl_plain_username"] = KAFKA_SASL_USERNAME
+    if KAFKA_SASL_PASSWORD:
+        cfg["sasl_plain_password"] = KAFKA_SASL_PASSWORD
+    if KAFKA_SSL_CAFILE:
+        cfg["ssl_cafile"] = KAFKA_SSL_CAFILE
+    if KAFKA_SSL_CERTFILE:
+        cfg["ssl_certfile"] = KAFKA_SSL_CERTFILE
+    if KAFKA_SSL_KEYFILE:
+        cfg["ssl_keyfile"] = KAFKA_SSL_KEYFILE
+    return cfg
 
 
 class KafkaProducer:
@@ -50,7 +79,7 @@ class KafkaProducer:
     def _init_producer(self) -> None:
         """Initialise le producer Kafka."""
         try:
-            from kafka import KafkaProducer as KP  # type: ignore
+            from kafka import KafkaProducer as KP
 
             logger.info(
                 "[kafka] Initializing Kafka producer: %s",
@@ -74,6 +103,7 @@ class KafkaProducer:
                 max_block_ms=10000,  # Timeout si queue pleine
                 # Idempotence pour éviter duplications
                 enable_idempotence=True,
+                **_kafka_security_config(),
             )
 
             self._initialized = True
@@ -128,7 +158,15 @@ class KafkaProducer:
             }
 
             # Utiliser driver_id comme clé pour garantir l'ordre par driver
-            key = f"driver_{driver_id}"
+            data_region_id_obj = (data or {}).get("region_id")
+            data_company_id_obj = (data or {}).get("company_id")
+            region_id = data_region_id_obj if isinstance(data_region_id_obj, str) else None
+            company_id = data_company_id_obj if isinstance(data_company_id_obj, int) else None
+            key = kafka_partition_key(
+                region_id=region_id,
+                company_id=company_id,
+                driver_id=driver_id,
+            )
 
             # Envoyer de manière asynchrone
             assert self._producer is not None  # Type narrowing for pyright
@@ -185,7 +223,11 @@ class KafkaProducer:
                 "timestamp": int(time.time() * 1000),
             }
 
-            key = f"driver_{driver_id}"
+            key = kafka_partition_key(
+                region_id=None,
+                company_id=None,
+                driver_id=driver_id,
+            )
 
             assert self._producer is not None  # Type narrowing for pyright
             future = self._producer.send(
@@ -239,7 +281,11 @@ class KafkaProducer:
                 "timestamp": int(time.time() * 1000),
             }
 
-            key = f"driver_{driver_id}"
+            key = kafka_partition_key(
+                region_id=None,
+                company_id=None,
+                driver_id=driver_id,
+            )
 
             assert self._producer is not None  # Type narrowing for pyright
             future = self._producer.send(

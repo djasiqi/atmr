@@ -15,6 +15,7 @@ import {
   useCreatePermissionRequest,
 } from '../../../../hooks/useInstitutionData';
 import { isAdmin, getRoleLabel, getRoleBadgeColor } from '../../../../utils/institutionPermissions';
+import { getAuthEnv } from '../../../../utils/webAuthSession';
 import { toast } from 'sonner';
 import styles from '../InstitutionSettings.module.css';
 
@@ -40,7 +41,7 @@ const MyProfileTab = () => {
   const user = meData?.user;
   const isDemoEnv = (() => {
     try {
-      return localStorage.getItem('lirie_auth_env') === 'demo';
+      return getAuthEnv() === 'demo';
     } catch {
       return false;
     }

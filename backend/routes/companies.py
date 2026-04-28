@@ -348,13 +348,13 @@ client_create_model = companies_ns.model(
     {
         "client_type": fields.String(
             required=True,
-            enum=["SELF_SERVICE", "PRIVATE", "CORPORATE"],
-            description="Type de client",
+            enum=["TRANSPORT"],
+            description="Type de client (toujours TRANSPORT pour les clients entreprise)",
         ),
-        "email": fields.String(description="Email (requis pour SELF_SERVICE)"),
+        "email": fields.String(description="Email (requis pour management_mode SELF_SERVICE)"),
         "first_name": fields.String(
             required=True,
-            description="Prénom (requis pour PRIVATE/CORPORATE)",
+            description="Prénom (requis pour MANAGED/CORPORATE)",
             min_length=1,
             max_length=100,
         ),
@@ -2190,6 +2190,19 @@ class AcceptReservation(Resource):
             )
 
             invalidate_summary_cache_for_booking(company_id, booking)
+            try:
+                from services.notifications.end_client_booking_notify import (
+                    notify_end_client_booking_milestone,
+                )
+
+                notify_end_client_booking_milestone(
+                    booking, milestone="company_accepted", send_push=True
+                )
+            except Exception:
+                logger.debug(
+                    "[AcceptReservation] End-client company_accepted notify failed (non-critical)",
+                    exc_info=True,
+                )
             return {
                 "message": "Réservation acceptée avec succès.",
                 "reservation": cast("Any", booking).serialize,
@@ -2305,24 +2318,15 @@ class AssignDriver(Resource):
             )
 
         booking_repo = BookingRepository()
-        booking_dto = booking_repo.find_by_id(reservation_id)
-        # ✅ Vérifier si la course appartient à l'entreprise (company_id) OU si elle est transférée à l'entreprise (executing_company_id)
-        if not booking_dto or company_id not in {
-            booking_dto.company_id,
-            booking_dto.executing_company_id,
-        }:
-            booking = None
-        else:
-            # Utiliser le repository pour récupérer le modèle SQLAlchemy
-            booking = booking_repo.find_model_by_id(booking_dto.id)
+        booking = booking_repo.find_model_by_id_with_visibility_for_update(
+            reservation_id, company_id
+        )
 
         if not booking:
             logger.warning(
-                "❌ Booking ID %s introuvable ou non lié à la société ID %s (company_id=%s, executing_company_id=%s)",
+                "❌ Booking ID %s introuvable ou non visible pour la société ID %s",
                 reservation_id,
                 company_id,
-                booking_dto.company_id if booking_dto else None,
-                booking_dto.executing_company_id if booking_dto else None,
             )
             return APIErrorHandler.handle_validation_error(
                 "Reservation not found",
@@ -2337,18 +2341,22 @@ class AssignDriver(Resource):
             booking.executing_company_id,
         )
 
-        # Autoriser seulement les statuts ACCEPTED et ASSIGNED
-        if booking.status not in [BookingStatus.ACCEPTED, BookingStatus.ASSIGNED]:
+        status_value = booking.status.value if hasattr(booking.status, "value") else str(booking.status)
+        status_lower = status_value.lower()
+        is_terminal = status_lower in {"canceled", "completed", "return_completed"}
+        is_assignable = status_lower in {"accepted", "assigned"}
+        if is_terminal or not is_assignable:
             warning_msg = (
-                "❌ Statut invalide pour assignation : %s. "
-                + "Doit être ACCEPTED ou ASSIGNED."
+                "❌ Statut invalide pour assignation atomique : %s"
             )
             logger.warning(
                 warning_msg,
                 booking.status,
             )
-            return APIErrorHandler.handle_validation_error(
+            return APIErrorHandler.handle_conflict_error(
                 "Reservation cannot be assigned in current state",
+                resource_type="Reservation",
+                resource_id=reservation_id,
                 logger_instance=logger,
             )
 
@@ -2502,6 +2510,7 @@ class CompleteReservation(Resource):
         from application.companies.reservations.complete_reservation import (
             CompleteCompanyReservationUseCase,
         )
+        from application.companies.reservations._status import status_value
 
         if not booking:
             return APIErrorHandler.handle_validation_error(
@@ -2509,8 +2518,13 @@ class CompleteReservation(Resource):
                 logger_instance=logger,
             )
 
+        payload = request.get_json(silent=True) or {}
+        reason_raw = payload.get("reason")
+        reason = reason_raw if isinstance(reason_raw, str) else None
+
+        status_before_complete = status_value(getattr(booking, "status", None)).lower()
         uc = CompleteCompanyReservationUseCase()
-        uc_result = uc.execute(booking)
+        uc_result = uc.execute(booking, reason=reason)
         if not uc_result.ok:
             return APIErrorHandler.handle_validation_error(
                 (uc_result.error or {}).get(
@@ -2526,6 +2540,58 @@ class CompleteReservation(Resource):
             )
 
             invalidate_summary_cache_for_booking(company_id, booking)
+
+            if status_before_complete in ("en_route", "accepted", "assigned"):
+                try:
+                    from security.audit_log import AuditLogger
+                    from models.user import User
+
+                    public_id = get_jwt_identity()
+                    actor = (
+                        User.query.filter_by(public_id=public_id).first()
+                        if public_id
+                        else None
+                    )
+                    reason_clean = (reason or "").strip()
+                    from_label = {
+                        "en_route": "en_route",
+                        "accepted": "acceptée (sans parcours chauffeur démarré)",
+                        "assigned": "assignée (sans clôture depuis l’app)",
+                    }.get(
+                        status_before_complete, status_before_complete
+                    )
+                    result_msg = (
+                        f"Réservation clôturée manuellement — statut d’origine: {from_label}"
+                    )
+                    if uc_result.from_en_route_manual:
+                        result_msg = "Réservation clôturée manuellement depuis en_route"
+                    AuditLogger.log_action(
+                        action_type="company_manual_completion",
+                        action_category="company",
+                        user_id=actor.id if actor else None,
+                        user_type=(actor.role.value if actor and actor.role else "company"),
+                        result_status="success",
+                        result_message=result_msg,
+                        company_id=company_id,
+                        booking_id=booking.id,
+                        action_details={
+                            "booking_id": booking.id,
+                            "from_status": status_before_complete,
+                            "to_status": str(
+                                getattr(booking.status, "value", booking.status)
+                            ),
+                            "reason": reason_clean,
+                            "manual_completion": True,
+                        },
+                        driver_id=booking.driver_id,
+                        ip_address=request.remote_addr,
+                        user_agent=request.headers.get("User-Agent"),
+                    )
+                except Exception as audit_err:
+                    logger.warning(
+                        "[CompleteReservation] Audit company_manual_completion: %s",
+                        audit_err,
+                    )
             # ✅ 3.5.1: Résoudre retards lors complétion
             DelayEvent.resolve_delays_for_booking(booking.id, booking.completed_at)
             # ✅ Clean Architecture: Publier événement au lieu d'appel direct
@@ -2560,6 +2626,119 @@ class CompleteReservation(Resource):
             # sentry_sdk.capture_exception(e)  # Si tu as Sentry
             db.session.rollback()
 
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# ======================================================
+# 5b. Ajustement facturation (montant / facture à) — PATCH dédié
+# ======================================================
+
+
+@companies_ns.route(
+    "/me/reservations/<int:reservation_id>/billing-adjustment", strict_slashes=False
+)
+class ReservationBillingAdjustment(Resource):
+    @jwt_required()
+    @role_required(UserRole.company)
+    @limiter.limit("200 per hour")
+    def patch(self, reservation_id: int):  # noqa: PLR0911
+        from application.companies.reservations.billing_adjustment import (
+            CompanyBookingBillingAdjustmentUseCase,
+        )
+        from marshmallow import ValidationError
+        from repositories.booking_repository import BookingRepository
+        from schemas.booking_schemas import CompanyBookingBillingAdjustmentSchema
+        from schemas.validation_utils import handle_validation_error, validate_request
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response:
+            return error_response, status_code
+
+        cid_obj = getattr(company, "id", None)
+        try:
+            cid = int(cid_obj) if cid_obj is not None else None
+        except Exception:
+            cid = None
+        if cid is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Entreprise introuvable (ID invalide)."),
+                logger,
+            )
+
+        booking_repo = BookingRepository()
+        booking = booking_repo.find_model_by_id_with_visibility(reservation_id, cid)
+        if not booking:
+            return APIErrorHandler.handle_not_found("Réservation", reservation_id, logger)
+
+        raw = request.get_json(silent=True) or {}
+        try:
+            validated = validate_request(
+                CompanyBookingBillingAdjustmentSchema(), raw, strict=False
+            )
+        except ValidationError as e:
+            return handle_validation_error(e)
+
+        keys_present = set(raw.keys())
+        uc = CompanyBookingBillingAdjustmentUseCase()
+        uc_result = uc.execute(booking, data=validated, keys_present=keys_present)
+        if not uc_result.ok:
+            return uc_result.error or {"error": "Requête invalide"}, (
+                uc_result.status_code or 400
+            )
+
+        try:
+            db.session.commit()
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking,
+            )
+
+            invalidate_summary_cache_for_booking(cid, booking)
+
+            try:
+                from models.user import User
+                from security.audit_log import AuditLogger
+
+                public_id = get_jwt_identity()
+                actor = (
+                    User.query.filter_by(public_id=public_id).first() if public_id else None
+                )
+                reason_clean = (validated.get("override_reason") or "").strip()
+                AuditLogger.log_action(
+                    action_type="company_booking_billing_adjusted",
+                    action_category="company",
+                    user_id=actor.id if actor else None,
+                    user_type=actor.role.value
+                    if actor and actor.role
+                    else "company",
+                    result_status="success",
+                    company_id=cid,
+                    booking_id=booking.id,
+                    action_details={
+                        "booking_id": booking.id,
+                        "override_reason": reason_clean,
+                        "before": uc_result.before,
+                        "after": uc_result.after,
+                    },
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get("User-Agent"),
+                )
+            except Exception as audit_err:
+                logger.warning(
+                    "[ReservationBillingAdjustment] Audit: %s",
+                    audit_err,
+                )
+
+            return {
+                "message": "Facturation mise à jour",
+                "reservation": booking.serialize,
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error(
+                "Erreur PATCH billing-adjustment réservation #%s: %s",
+                reservation_id,
+                e,
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -3790,8 +3969,8 @@ class CompanyClients(Resource):
     @companies_ns.response(500, "Erreur serveur", api_error_model)
     def post(self):  # noqa: PLR0911
         """POST /companies/me/clients
-        Crée un nouveau client (SELF_SERVICE, PRIVATE ou CORPORATE)
-        pour l'entreprise courante, avec date de naissance optionnelle.
+        Crée un nouveau client TRANSPORT pour l'entreprise courante,
+        avec management_mode (SELF_SERVICE, MANAGED ou CORPORATE).
 
         ✅ P0: Support idempotency-key pour éviter les doublons.
         """
@@ -3880,10 +4059,13 @@ class CompanyClients(Resource):
         )
         uc_result = uc.execute(input_data)
         if not uc_result.success:
+            err = uc_result.error or {}
+            msg = err.get("error") or err.get("message") or "Erreur de validation"
+            code = getattr(uc_result, "status_code", None) or 400
+            if code == 409:
+                return {"success": False, "error": msg}, 409
             return APIErrorHandler.handle_validation_error(
-                uc_result.error.get("message", "Erreur de validation")
-                if uc_result.error
-                else "Erreur de validation",
+                msg,
                 logger_instance=logger,
             )
 
@@ -4279,7 +4461,10 @@ class CreateDriver(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("20 per hour")  # ✅ 2.8: Rate limiting création chauffeur
-    @companies_ns.expect(create_driver_model, validate=True)
+    # validate=False : évite flask_restx/resource.py qui appelle request.get_json()
+    # sans silent=True (400 « JSON invalide » si corps vide / parse fragile).
+    # La validation réelle est faite via DriverCreateSchema + validate_request ci-dessous.
+    @companies_ns.expect(create_driver_model, validate=False)
     def post(self):
         """Crée un nouvel utilisateur avec le rôle chauffeur
         et l'associe à l'entreprise.

@@ -5,13 +5,12 @@ import apiClient from 'utils/apiClient';
 // Mock apiClient
 jest.mock('utils/apiClient');
 
-// Mock window.alert
-global.alert = jest.fn();
-
 describe('bookingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.alert.mockClear();
+    global.URL.createObjectURL = jest.fn(() => 'blob:mock-url');
+    global.URL.revokeObjectURL = jest.fn();
+    document.body.innerHTML = '';
   });
 
   describe('fetchBookings', () => {
@@ -31,7 +30,9 @@ describe('bookingService', () => {
           dropoff_location: 'Grangettes',
           status: 'COMPLETED',
           company_id: 5,
+          company_name: 'Taxi Test',
           driver_id: 12,
+          driver_name: 'Marie Conductrice',
         },
       ];
 
@@ -42,7 +43,23 @@ describe('bookingService', () => {
       expect(apiClient.get).toHaveBeenCalledWith('/clients/client-123/bookings');
       expect(result).toHaveLength(2);
       expect(result[0].company_name).toBe('Entreprise 5');
-      expect(result[1].driver_name).toBe('Chauffeur 12');
+      expect(result[1].company_name).toBe('Taxi Test');
+      expect(result[1].driver_name).toBe('Marie Conductrice');
+    });
+
+    it('complète driver_name depuis driver.full_name si absent', async () => {
+      const mockBookings = [
+        {
+          id: 3,
+          status: 'ASSIGNED',
+          company_id: 1,
+          driver_id: 99,
+          driver: { full_name: 'Khalid Alaoui' },
+        },
+      ];
+      apiClient.get.mockResolvedValue({ data: mockBookings });
+      const result = await fetchBookings('client-xyz');
+      expect(result[0].driver_name).toBe('Khalid Alaoui');
     });
 
     it('devrait gérer les données non-array', async () => {
@@ -53,46 +70,22 @@ describe('bookingService', () => {
       expect(result).toEqual([]);
     });
 
-    it("devrait retourner un tableau vide en cas d'erreur", async () => {
+    it("devrait propager l'erreur en cas d'échec API", async () => {
       apiClient.get.mockRejectedValue(new Error('Network error'));
-
-      const result = await fetchBookings('client-789');
-
-      expect(result).toEqual([]);
+      await expect(fetchBookings('client-789')).rejects.toThrow('Network error');
     });
   });
 
   describe('cancelBooking', () => {
-    const API_URL = process.env.REACT_APP_API_URL;
-
-    beforeEach(() => {
-      localStorage.setItem('authToken', 'fake-token');
-      global.fetch = jest.fn();
-    });
-
-    afterEach(() => {
-      localStorage.clear();
-    });
-
     it('devrait annuler une réservation avec succès', async () => {
-      const mockResponse = {
-        ok: true,
-        json: async () => ({ message: 'Booking canceled', booking_id: 123 }),
-      };
-
-      global.fetch.mockResolvedValue(mockResponse);
+      apiClient.delete.mockResolvedValue({ data: { message: 'Booking canceled', booking_id: 123 } });
 
       const result = await cancelBooking(123);
 
-      expect(global.fetch).toHaveBeenCalledWith(
-        `${API_URL}/bookings/123`,
+      expect(apiClient.delete).toHaveBeenCalledWith(
+        '/bookings/123',
         expect.objectContaining({
-          method: 'DELETE',
-          headers: {
-            Authorization: 'Bearer fake-token',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ status: 'canceled' }),
+          data: { status: 'canceled' },
         })
       );
 
@@ -100,45 +93,87 @@ describe('bookingService', () => {
     });
 
     it('devrait lever une erreur si la requête échoue', async () => {
-      const mockResponse = {
-        ok: false,
-        json: async () => ({ message: 'Cannot cancel completed booking' }),
-      };
-
-      global.fetch.mockResolvedValue(mockResponse);
-
+      apiClient.delete.mockRejectedValue(new Error('Cannot cancel completed booking'));
       await expect(cancelBooking(456)).rejects.toThrow('Cannot cancel completed booking');
     });
 
     it('devrait gérer les erreurs réseau', async () => {
-      global.fetch.mockRejectedValue(new Error('Network failure'));
-
+      apiClient.delete.mockRejectedValue(new Error('Network failure'));
       await expect(cancelBooking(789)).rejects.toThrow('Network failure');
     });
   });
 
   describe('exportBookingsPDF', () => {
-    it('devrait afficher une alerte si aucune réservation', async () => {
-      await exportBookingsPDF('Janvier', [], {}, {});
-
-      expect(global.alert).toHaveBeenCalledWith('Aucune réservation trouvée pour ce mois.');
+    it('devrait échouer si la période est vide', async () => {
+      await expect(exportBookingsPDF('this_month', [], {}, {})).rejects.toMatchObject({
+        code: 'empty_period',
+      });
     });
 
-    it("devrait logger un message TODO pour l'export PDF", async () => {
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    it('devrait télécharger un blob PDF', async () => {
+      const appendSpy = jest.spyOn(document.body, 'appendChild');
+      const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-      const bookings = [{ id: 1 }, { id: 2 }];
-      const client = { id: 5, first_name: 'Jean' };
-      const company = { id: 10, name: 'ATMR' };
+      apiClient.post.mockResolvedValue({
+        data: new Blob(['fake-pdf'], { type: 'application/pdf' }),
+        headers: {
+          'content-type': 'application/pdf',
+          'x-period-label': 'Ce mois',
+          'x-total-amount': '120.00',
+          'x-rows-count': '2',
+        },
+      });
 
-      await exportBookingsPDF('Février', bookings, client, company);
+      const bookings = [{ scheduled_time: new Date().toISOString() }];
+      const result = await exportBookingsPDF('this_month', bookings, { id: 5 }, null);
 
-      expect(consoleSpy).toHaveBeenCalledWith('📂 Génération PDF en cours sur le frontend...');
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'PDF generation moved to backend API - To be implemented'
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/bookings/clients/me/bookings/export-pdf',
+        expect.objectContaining({ period: 'this_month' }),
+        expect.objectContaining({ responseType: 'blob' })
       );
+      expect(appendSpy).toHaveBeenCalled();
+      expect(clickSpy).toHaveBeenCalled();
+      expect(result).toMatchObject({ periodLabel: 'Ce mois', totalAmount: '120.00', rowsCount: '2' });
+      clickSpy.mockRestore();
+    });
 
-      consoleSpy.mockRestore();
+    it('devrait gérer une réponse JSON avec pdf_url', async () => {
+      const dataBlob = {
+        text: async () =>
+          JSON.stringify({
+            pdf_url: 'https://example.com/export.pdf',
+            period_label: 'Cette année',
+            total_amount: 100.5,
+            rows_count: 4,
+          }),
+      };
+      apiClient.post.mockResolvedValue({
+        data: dataBlob,
+        headers: { 'content-type': 'application/json' },
+      });
+      const bookings = [{ scheduled_time: new Date().toISOString() }];
+      const result = await exportBookingsPDF('this_year', bookings, { id: 5 }, null);
+      expect(result.pdfUrl).toBe('https://example.com/export.pdf');
+      expect(result.rowsCount).toBe(4);
+    });
+
+    it('propage une erreur backend 404', async () => {
+      const error = new Error('Not found');
+      error.response = { status: 404 };
+      apiClient.post.mockRejectedValue(error);
+      const bookings = [{ scheduled_time: new Date().toISOString() }];
+      await expect(exportBookingsPDF('this_month', bookings, { id: 5 }, null)).rejects.toMatchObject(
+        {
+          response: { status: 404 },
+        }
+      );
+    });
+
+    it('devrait échouer si période custom invalide', async () => {
+      await expect(
+        exportBookingsPDF('custom', [{ scheduled_time: 'invalid-date' }], { id: 5 }, null)
+      ).rejects.toMatchObject({ code: 'custom_period_invalid' });
     });
   });
 });

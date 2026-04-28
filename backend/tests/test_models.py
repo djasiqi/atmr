@@ -7,6 +7,7 @@ from models.enums import BookingStatus, PaymentStatus, UserRole
 
 def test_booking_status_values():
     """BookingStatus contient toutes les valeurs attendues."""
+    assert hasattr(BookingStatus, "AWAITING_CLIENT_PAYMENT")
     assert hasattr(BookingStatus, "PENDING")
     assert hasattr(BookingStatus, "ACCEPTED")
     assert hasattr(BookingStatus, "COMPLETED")
@@ -41,5 +42,6 @@ def test_booking_status_choices():
     """BookingStatus.choices() retourne toutes les valeurs."""
     choices = BookingStatus.choices()
     assert isinstance(choices, list)
+    assert "AWAITING_CLIENT_PAYMENT" in choices
     assert "PENDING" in choices
     assert "COMPLETED" in choices

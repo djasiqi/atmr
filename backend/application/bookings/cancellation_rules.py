@@ -51,6 +51,7 @@ CANCELLATION_REASON_LABELS: dict[str, str] = {
     "VEHICLE_ISSUE": "Problème véhicule",
     "OTHER": "Autre raison",
     "OUTBOUND_CANCELLED": "Retour annulé (aller annulé)",
+    "PAYMENT_TIMEOUT": "Paiement en ligne non finalisé dans le délai (15 min)",
 }
 
 # Motifs facturables (annulation facturée à la clinique/client)
@@ -112,14 +113,14 @@ class CancellationFeeResult:
 _ZERO = Decimal("0")
 
 
-def compute_cancellation_fee(
+def compute_cancellation_fee(  # noqa: PLR0911
     booking: Any,
     *,
     status_at_cancel: str,
     cancelled_at: datetime,
     reason_code: str | None,
     cancel_source: str | None = None,
-    policy: dict | None = None,
+    policy: dict[str, Any] | None = None,
 ) -> CancellationFeeResult:
     """Compute cancellation fee based on company policy.
 
@@ -176,7 +177,7 @@ def compute_cancellation_fee(
         )
 
     tiers = policy.get("tiers") or []
-    selected_tier: dict | None = None
+    selected_tier: dict[str, Any] | None = None
     status_upper = (status_at_cancel or "").upper()
 
     if status_upper == "EN_ROUTE":
@@ -232,7 +233,7 @@ def compute_cancellation_fields(
     cancelled_by_role: str,
     now: datetime | None = None,
     booking: Any | None = None,
-    policy: dict | None = None,
+    policy: dict[str, Any] | None = None,
     cancel_source: str | None = None,
     status_at_cancel: str | None = None,
 ) -> dict[str, Any]:

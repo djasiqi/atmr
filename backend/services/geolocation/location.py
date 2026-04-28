@@ -64,7 +64,11 @@ def _trip_tracking_min_interval_sec() -> float:
     return float(os.getenv("TRIP_TRACKING_MIN_INTERVAL_SEC", "15"))
 
 
-ARBITRATION_CLOSE_WINDOW_SEC = 3
+# Points légèrement plus vieux que le canon (désordre réseau / batch) : fenêtre élargie
+# pour limiter accepted_observability_only inutile. Surchargeable en env.
+ARBITRATION_CLOSE_WINDOW_SEC = int(
+    os.getenv("DRIVER_LOCATION_ARBITRATION_CLOSE_WINDOW_SEC", "10")
+)
 MISSION_TOO_OLD_SEC = 120
 AVAILABILITY_TOO_OLD_SEC = 600
 LOW_ACCURACY_THRESHOLD_M = 1500.0
@@ -252,6 +256,7 @@ class LocationService:
             db_session=db_session,
             degraded_context=degraded_context,
             company_id=company_id,
+            transport=transport,
         )
         should_fanout = accept_status == "accepted_canonical"
         should_persist_db = accept_status == "accepted_canonical"
@@ -490,6 +495,7 @@ class LocationService:
         *,
         degraded_context: bool = False,
         company_id: int | None = None,
+        transport: str = "http",
     ) -> tuple[str, str, str]:
         """Stocke la position dans Redis et DB.
 
@@ -626,6 +632,22 @@ class LocationService:
                     # Compatibilité transitoire: maintenir l'ancienne clé.
                     self.redis_client.hset(legacy_key, mapping=canonical_mapping)
                     self.redis_client.expire(legacy_key, DEFAULT_DRIVER_LOC_TTL_SEC)
+                    try:
+                        from services.monitoring.driver_location_metrics import (
+                            MAX_CLOCK_SKEW_RECORD_SEC,
+                            observe_canonical_update_latency_seconds,
+                        )
+
+                        sa = sent_at if sent_at.tzinfo else sent_at.replace(tzinfo=UTC)
+                        lat_pipe = max(0.0, (received_dt - sa).total_seconds())
+                        if lat_pipe <= float(MAX_CLOCK_SKEW_RECORD_SEC):
+                            observe_canonical_update_latency_seconds(
+                                location_mode=location_mode,
+                                transport=transport,
+                                seconds=lat_pipe,
+                            )
+                    except Exception:
+                        pass
 
                 # P2: GEO index Redis — index spatial par entreprise pour GEORADIUS/GEOSEARCH
                 if company_id is not None and accept_status == "accepted_canonical":

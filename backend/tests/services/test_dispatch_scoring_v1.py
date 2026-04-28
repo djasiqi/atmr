@@ -119,3 +119,37 @@ def test_declined_company_not_reproposed(db, sample_client):
         booking_id=booking.id, candidates=candidates, threshold=100
     )
     assert created == []
+
+
+def test_c_intra_inter_canton_matches_pickup_canton_carrier(db):
+    """C_INTRA_ONLY : trajet GE → VD reste proposé aux entreprises canton GE (prise en charge)."""
+    country = GeoUnit(type=GeoUnitType.COUNTRY, code="CH", name="Suisse")
+    canton_ge = GeoUnit(type=GeoUnitType.CANTON, code="GE", name="Genève", parent=country)
+    canton_vd = GeoUnit(type=GeoUnitType.CANTON, code="VD", name="Vaud", parent=country)
+    commune_lancy = GeoUnit(
+        type=GeoUnitType.COMMUNE, code="1213", name="Petit-Lancy", parent=canton_ge
+    )
+    commune_nyon = GeoUnit(
+        type=GeoUnitType.COMMUNE, code="1260", name="Nyon", parent=canton_vd
+    )
+    db.session.add_all([country, canton_ge, canton_vd, commune_lancy, commune_nyon])
+    db.session.flush()
+
+    company_ge = _create_company(db, 40)
+    db.session.add(
+        ServiceArea(
+            company_id=company_ge.id,
+            geo_unit_id=canton_ge.id,
+            coverage_mode=ServiceCoverageMode.C_INTRA_ONLY,
+            weight=0,
+            is_active=True,
+        )
+    )
+    db.session.flush()
+
+    candidates = compute_candidates(
+        pickup_geo_unit=commune_lancy,
+        drop_geo_unit=commune_nyon,
+    )
+    ids = {c.company_id for c in candidates}
+    assert company_ge.id in ids

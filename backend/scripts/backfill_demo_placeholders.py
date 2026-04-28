@@ -5,9 +5,7 @@ from sqlalchemy import or_
 import manage
 from ext import db
 from models import Booking, Client, Company, User
-from models.enums import GenderEnum
-from models.enums import ClientType
-
+from models.enums import ClientType, GenderEnum, ManagementMode
 
 NAMES: list[tuple[str, str]] = [
     ("Aline", "Morel"),
@@ -123,8 +121,9 @@ def run() -> dict[str, int]:
         if demo_company_ids:
             clients = Client.query.filter(Client.company_id.in_(demo_company_ids)).all()
             for idx, client in enumerate(clients):
-                if client.client_type is None or client.client_type == ClientType.SELF_SERVICE:
-                    client.client_type = ClientType.PRIVATE
+                if client.client_type is None:
+                    client.client_type = ClientType.TRANSPORT
+                    client.management_mode = ManagementMode.MANAGED
                     updated_clients += 1
                 if not bool(getattr(client, "is_active", True)):
                     client.is_active = True

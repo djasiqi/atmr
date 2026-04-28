@@ -2,7 +2,9 @@
 # Script pour redémarrer tous les services de production
 # Usage: ./scripts/restart_production_services.sh
 
-SERVER="${1:-deploy@138.201.155.201}"
+: "${SERVER_HOST:?Définir SERVER_HOST. Voir docs/deployment-ssh.md.}"
+SERVER_USER="${SERVER_USER:-deploy}"
+SERVER="${1:-${SERVER_USER}@${SERVER_HOST}}"
 
 echo "🔄 Redémarrage des services de production..."
 echo "Serveur: $SERVER"
@@ -35,12 +37,12 @@ docker compose -f docker-compose.production.yml ps
 echo ""
 echo "📊 5. Statut des conteneurs principaux..."
 echo "========================================"
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "atmr-backend|atmr-celery|atmr-flower|atmr-postgres|atmr-redis" || echo "Aucun conteneur trouvé"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -Ei "atmr-.*(backend|api|celery|flower|postgres|redis)|backend" || echo "Aucun conteneur trouvé"
 
 echo ""
 echo "🔍 6. Logs récents du backend..."
 echo "================================"
-docker logs atmr-backend --tail 20 2>&1 | tail -10
+docker compose -f docker-compose.production.yml logs --tail=20 backend 2>&1 | tail -10
 
 echo ""
 echo "✅ Redémarrage terminé!"

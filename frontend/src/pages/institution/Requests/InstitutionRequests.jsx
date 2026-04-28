@@ -17,6 +17,7 @@ import {
 } from '../../../hooks/useInstitutionData';
 import { canEditBilling } from '../../../utils/institutionPermissions';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 import RequestDetailPanel from './RequestDetailPanel';
 import s from './InstitutionRequests.module.css';
 
@@ -174,7 +175,7 @@ const InstitutionRequests = () => {
 
   const panelOpen = selectedId !== null;
   const fallbackDemoMission = useMemo(() => {
-    const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+    const isDemoEnv = getAuthEnv() === 'demo';
     if (!isDemoEnv) return null;
     return (
       localStorage.getItem('demo_recommended_journey') ||

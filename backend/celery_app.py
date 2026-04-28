@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote_plus
 
 from celery import Celery
+from celery.schedules import crontab
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -75,6 +76,10 @@ else:
     CELERY_RESULT_BACKEND = _result_backend_env if _result_backend_env else REDIS_URL
 CELERY_TIMEZONE = os.getenv("CELERY_TIMEZONE", "Europe/Zurich")
 DISPATCH_AUTORUN_INTERVAL_SEC = int(os.getenv("DISPATCH_AUTORUN_INTERVAL_SEC", "300"))
+CELERY_TASK_TIME_LIMIT = int(os.getenv("CELERY_TASK_TIME_LIMIT", "900"))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv("CELERY_TASK_SOFT_TIME_LIMIT", "840"))
+if CELERY_TASK_SOFT_TIME_LIMIT >= CELERY_TASK_TIME_LIMIT:
+    CELERY_TASK_SOFT_TIME_LIMIT = max(1, CELERY_TASK_TIME_LIMIT - 60)
 
 # Guard fail-fast pour worker/beat demo (pas de fallback vers prod)
 enforce_demo_environment_or_raise(build_demo_environment_snapshot())
@@ -106,8 +111,9 @@ celery: Celery = Celery(
         "tasks.security_tasks",  # ✅ Security Tab V2: purge audit logs
         "tasks.demo_access_tasks",  # ✅ Demo 24h: expiration automatique des acces demo
         "tasks.platform_billing_tasks",  # Facturation plateforme LIRIE V1
-        "tasks.worldline_webhook_tasks",  # Webhooks Worldline (mode async optionnel)
-        "tasks.worldline_reconciliation_tasks",  # PENDING Worldline stagnants (beat)
+        "tasks.saferpay_reconciliation_tasks",  # Paiements Saferpay PENDING (beat)
+        "tasks.invoice_pdf_tasks",  # V2 : PDF facture transport async (file d'attente)
+        "tasks.transport_invoicing_automation",  # V3 : rappel mensuel / batch (stubs)
     ],
 )
 
@@ -140,22 +146,24 @@ celery.conf.update(
     accept_content=["json"],
     result_serializer="json",
     task_track_started=True,
-    task_time_limit=600,  # ✅ 10 minutes max per task (600 secondes)
-    # - corrigé de 0.600
-    task_soft_time_limit=540,  # ✅ 9 minutes soft limit (540 secondes)
-    # - corrigé de 0.540
+    task_time_limit=CELERY_TASK_TIME_LIMIT,
+    task_soft_time_limit=CELERY_TASK_SOFT_TIME_LIMIT,
     worker_max_tasks_per_child=_max_tasks,  # None ou int > 0 (0 converti en None)
     worker_max_memory_per_child=_max_mem,  # None ou Ko > 0 (0 = désactivé)
     worker_prefetch_multiplier=1,  # One task at a time
     task_acks_late=True,  # Acknowledge task after execution
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
-    # ✅ A3: Configuration des queues (default, realtime, dlq, notifications)
+    # ✅ Sprint 2 H5: Routage explicite par domaines pour isolation des workloads
     task_routes={
-        "tasks.dispatch_tasks.*": {"queue": "default"},
+        "tasks.dispatch_tasks.*": {"queue": "dispatch"},
         "tasks.dispatch_tasks.realtime_monitoring_tick": {"queue": "realtime"},
-        "tasks.dispatch_tasks.autorun_tick": {"queue": "default"},
-        "tasks.planning_tasks.*": {"queue": "default"},
-        "tasks.rl_tasks.*": {"queue": "default"},
+        "tasks.dispatch_tasks.autorun_tick": {"queue": "dispatch"},
+        "tasks.planning_tasks.*": {"queue": "dispatch"},
+        "tasks.geocoding_tasks.*": {"queue": "geocoding"},
+        "tasks.rl_tasks.*": {"queue": "rl"},
+        "tasks.rl_*": {"queue": "rl"},
+        "tasks.billing_tasks.*": {"queue": "billing"},
+        "tasks.platform_billing_tasks.*": {"queue": "billing"},
         "tasks.notification_tasks.*": {
             "queue": "notifications"
         },  # Queue dédiée pour notifications
@@ -296,13 +304,22 @@ celery.conf.beat_schedule = {
             "jitter": 300,  # Jitter jusqu'à 5 min
         },
     },
-    # Worldline: PENDING avec hosted checkout non finalisés depuis 30+ min (logs / alerting)
-    "worldline-stale-pending-scan": {
-        "task": "worldline.reconcile_stale_pending",
+    # Saferpay: PENDING avec session non finalisée depuis 30+ min (logs / alerting)
+    "saferpay-stale-pending-scan": {
+        "task": "saferpay.reconcile_stale_pending",
         "schedule": 3600.0,
         "options": {
             "expires": 1800,
             "jitter": 120,
+        },
+    },
+    # Marché ouvert : PENDING sans entreprise et sans offre PROPOSED (rattrapage centralisé)
+    "dispatch-repair-open-offers": {
+        "task": "tasks.dispatch_tasks.repair_open_booking_offers_tick",
+        "schedule": 300.0,
+        "options": {
+            "expires": 240,
+            "jitter": 45,
         },
     },
     # ✅ 3.3: Purge automatique données RGPD (hebdomadaire)
@@ -421,6 +438,15 @@ celery.conf.beat_schedule = {
         "options": {
             "expires": 6 * 3600,
             "jitter": 1800,
+        },
+    },
+    # V3 : rappel mensuel (aucune facture créée — emplacement notif / futur auto)
+    "monthly-transport-billing-reminder": {
+        "task": "tasks.transport_invoicing_automation.monthly_transport_billing_reminder_task",
+        "schedule": crontab(day_of_month="1", hour="5", minute="30"),
+        "options": {
+            "expires": 4 * 3600,
+            "jitter": 600,
         },
     },
 }
@@ -758,7 +784,16 @@ def update_celery_queue_length_metric():
 
         # Réinitialiser les queues qui n'ont plus de tâches
         # (pour éviter que les métriques restent à l'ancienne valeur)
-        known_queues = {"default", "realtime", "dlq"}
+        known_queues = {
+            "default",
+            "dispatch",
+            "realtime",
+            "notifications",
+            "billing",
+            "rl",
+            "geocoding",
+            "dlq",
+        }
         for queue_name in known_queues:
             if queue_name not in queue_lengths:
                 gauge.labels(queue_name=queue_name).set(0)

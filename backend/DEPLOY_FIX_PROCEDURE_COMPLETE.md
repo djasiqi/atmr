@@ -90,7 +90,7 @@ docker push docker.io/djasiqi/atmr-backend:1.0.0
 
 ```bash
 # Option 1 : Via SSH manuel
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 cd /home/deploy/atmr
 
 # Pull la nouvelle image depuis Docker Hub
@@ -268,7 +268,7 @@ Aller sur GitHub → Settings → Secrets and variables → Actions → New repo
 Ajouter :
 - DOCKER_USERNAME : votre username Docker Hub
 - DOCKER_PASSWORD : votre token Docker Hub
-- SERVER_HOST : 138.201.155.201
+- SERVER_HOST : (défini en local, voir docs/deployment-ssh.md)
 - SERVER_USER : deploy
 - SSH_PRIVATE_KEY : votre clé SSH privée
 ```
@@ -379,7 +379,7 @@ git push origin main
 
 ```bash
 # SSH au serveur
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 
 cd /srv/atmr
 
@@ -418,7 +418,7 @@ curl -I https://api.lirie.ch/health
 # ✅ Attendu : HTTP/2 200
 
 # Vérifier les logs backend
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 cd /srv/atmr
 docker-compose -f docker-compose.production.yml logs --tail=50 backend
 
@@ -580,7 +580,7 @@ docker manifest inspect djasiqi/atmr-backend:latest
 #   2. Run workflow → skip_deploy: false → Run workflow
 
 # Option B : Via SSH manuel sur le serveur
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 cd /srv/atmr
 docker-compose -f docker-compose.production.yml pull backend celery-worker celery-beat flower
 docker-compose -f docker-compose.production.yml up -d --force-recreate

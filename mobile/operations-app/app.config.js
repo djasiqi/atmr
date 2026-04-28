@@ -191,7 +191,7 @@ module.exports = withAndroidR8Enabled(
     "expo-document-picker",
   ],
 
-  experiments: { typedRoutes: false }, // Désactivé: @expo/router-server requiert Expo 55+
+  experiments: { typedRoutes: false },
 
   extra: {
     APP_VARIANT: APP_VARIANT, // Passer APP_VARIANT pour détection runtime

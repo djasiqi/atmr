@@ -32,11 +32,16 @@ import { Chip, Tooltip } from '@mui/material';
 
 import useCompanySocket from '../../hooks/useCompanySocket';
 import useDispatchStatus from '../../hooks/useDispatchStatus';
+import { useHybridDataSync } from '../../hooks/useHybridDataSync';
 import {
   runDispatchForDay,
   fetchDispatchRunById,
   fetchDispatchDelays,
 } from '../../services/companyService';
+import {
+  canonicalRealtimeTimeMs,
+  shouldAcceptRealtimeEvent,
+} from '../../utils/realtimeEventGuard';
 
 // Utilitaires locaux simples
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -98,6 +103,15 @@ const VirtualizedDispatchTable = ({
   const useUnifiedDispatchWs =
     process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === '1' ||
     process.env.REACT_APP_LIRIE_DISPATCH_WS_UNIFIED === 'true';
+  const acceptRealtime = useCallback(
+    (payload, entityKey = null) =>
+      shouldAcceptRealtimeEvent({
+        eventId: payload?.event_id,
+        entityKey,
+        canonicalTimeMs: canonicalRealtimeTimeMs(payload),
+      }),
+    []
+  );
 
   const handleOptimizeDay = async () => {
     if (!dispatchDay) return;
@@ -197,6 +211,9 @@ const VirtualizedDispatchTable = ({
     };
 
     const onDispatchRunCompleted = (data) => {
+      if (!acceptRealtime(data, data?.dispatch_run_id ? `dispatch-run:${data.dispatch_run_id}` : null)) {
+        return;
+      }
       console.log('Dispatch run completed:', data);
       if (data && (data.dispatch_run_id || data.date)) {
         handleDispatchCompleted(data);
@@ -210,11 +227,10 @@ const VirtualizedDispatchTable = ({
     return () => {
       socket.off('dispatch_run_completed', onDispatchRunCompleted);
     };
-  }, [socket, reload, dispatchDay]);
+  }, [socket, reload, dispatchDay, acceptRealtime]);
 
   // --- "dernière mise à jour" ---
   const [updatedAt, setUpdatedAt] = useState(Date.now());
-  const [lastDelayUpdate, setLastDelayUpdate] = useState(Date.now());
   const [relativeNow, setRelativeNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setRelativeNow(Date.now()), 60_000);
@@ -247,85 +263,64 @@ const VirtualizedDispatchTable = ({
     setRows(normalizeAndSort(dispatches));
   }, [dispatches]);
 
-  // Charger les retards calculés par le backend pour la journée sélectionnée
+  const processDelayData = useCallback((data) => {
+    const map = {};
+    for (const d of data || []) {
+      const bid = d.booking_id;
+      if (!bid) continue;
+      const prev = map[bid]?.delay_minutes ?? 0;
+      const cur = Number(d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0);
+      if (!map[bid] || cur > prev) {
+        map[bid] = {
+          booking_id: bid,
+          delay_minutes: cur,
+          is_dropoff: d.is_dropoff || false,
+          estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
+          scheduled_time: d.scheduled_time || null,
+        };
+      }
+    }
+    setDelays(map);
+  }, []);
+
+  // Chargement initial des retards pour la journée sélectionnée
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
         const data = await fetchDispatchDelays(dispatchDay);
         if (cancelled) return;
-        const map = {};
-        for (const d of data || []) {
-          const bid = d.booking_id;
-          if (!bid) continue;
-          const prev = map[bid]?.delay_minutes ?? 0;
-          const cur = Number(
-            d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
-          );
-          if (!map[bid] || cur > prev) {
-            map[bid] = {
-              booking_id: bid,
-              delay_minutes: cur,
-              is_dropoff: d.is_dropoff || false,
-              estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
-              scheduled_time: d.scheduled_time || null,
-            };
-          }
-        }
-        setDelays(map);
-        setLastDelayUpdate(Date.now());
+        processDelayData(data);
       } catch {}
     };
     load();
-    const id = setInterval(load, 30000);
     return () => {
       cancelled = true;
-      clearInterval(id);
     };
-  }, [dispatchDay]);
+  }, [dispatchDay, processDelayData]);
 
-  // Polling de secours
-  useEffect(() => {
-    const pollingInterval = setInterval(() => {
-      const socketDead = !socket?.connected;
-      const delaysStale = Date.now() - lastDelayUpdate > 60000;
-
-      if (socketDead || delaysStale) {
-        fetchDispatchDelays(dispatchDay)
-          .then((data) => {
-            const map = {};
-            for (const d of data || []) {
-              const bid = d.booking_id;
-              if (!bid) continue;
-              const prev = map[bid]?.delay_minutes ?? 0;
-              const cur = Number(
-                d.delay_minutes ?? d.pickup_delay_minutes ?? d.dropoff_delay_minutes ?? 0
-              );
-              if (!map[bid] || cur > prev) {
-                map[bid] = {
-                  booking_id: bid,
-                  delay_minutes: cur,
-                  is_dropoff: d.is_dropoff || false,
-                  estimated_arrival: d.estimated_arrival || d.pickup_eta || d.dropoff_eta || null,
-                  scheduled_time: d.scheduled_time || null,
-                };
-              }
-            }
-            setDelays(map);
-            setLastDelayUpdate(Date.now());
-          })
-          .catch((err) => {
-            console.warn(JSON.stringify({
-              event: 'dispatch_polling_error',
-              error: err?.message || String(err),
-              timestamp: new Date().toISOString()
-            }));
-          });
-      }
-    }, 60000);
-
-    return () => clearInterval(pollingInterval);
-  }, [socket, lastDelayUpdate, dispatchDay]);
+  // Polling hybride socket-first : poll seulement si socket indisponible ou flux stale
+  useHybridDataSync({
+    fetchFn: async () => {
+      const data = await fetchDispatchDelays(dispatchDay);
+      processDelayData(data);
+      return data;
+    },
+    socket,
+    staleThreshold: 120000,
+    pollIntervalConnected: 180000,
+    pollIntervalDisconnected: 45000,
+    onUpdate: (timestamp) => {
+      console.log(
+        JSON.stringify({
+          event: 'hybrid_poll_update',
+          timestamp: new Date(timestamp).toISOString(),
+          socket_connected: socket?.connected || false,
+        })
+      );
+    },
+    dependencies: [dispatchDay],
+  });
 
   // --- Abonnement Socket pour la date sélectionnée + évènements temps réel ---
   useEffect(() => {
@@ -336,6 +331,7 @@ const VirtualizedDispatchTable = ({
     } catch (_) {}
 
     const onAssignmentCreated = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) =>
           b.id === data.booking_id
@@ -355,6 +351,7 @@ const VirtualizedDispatchTable = ({
     };
 
     const onAssignmentUpdated = (data) => {
+      if (!acceptRealtime(data, data?.assignment_id ? `assignment:${data.assignment_id}` : null)) return;
       const patch = data.updates || data.fields || {};
       setRows((prev) =>
         prev.map((b) =>
@@ -366,12 +363,14 @@ const VirtualizedDispatchTable = ({
     };
 
     const onAssignmentCancelled = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, assignment: null } : b))
       );
     };
 
     const onDispatchStatePatch = (data) => {
+      if (!acceptRealtime(data, data?.reservation_id ? `booking:${data.reservation_id}` : null)) return;
       const op = data?.op;
       if (op === 'assignment_created') {
         onAssignmentCreated({
@@ -390,6 +389,7 @@ const VirtualizedDispatchTable = ({
     };
 
     const onDelayDetected = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setDelays((prev) => ({
         ...prev,
         [data.booking_id]: {
@@ -411,6 +411,7 @@ const VirtualizedDispatchTable = ({
     };
 
     const _onBookingStatusChanged = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
       setRows((prev) =>
         prev.map((b) => (b.id === data.booking_id ? { ...b, status: data.status } : b))
       );
@@ -424,7 +425,8 @@ const VirtualizedDispatchTable = ({
     };
 
     let locTimer;
-    const onDriverLocationUpdated = (_data) => {
+    const onDriverLocationUpdated = (data) => {
+      if (!acceptRealtime(data, data?.driver_id ? `driver:${data.driver_id}` : null)) return;
       if (locTimer) clearTimeout(locTimer);
       locTimer = setTimeout(async () => {
         try {
@@ -478,7 +480,7 @@ const VirtualizedDispatchTable = ({
         socket.emit('unsubscribe:date', dispatchDay);
       } catch (_) {}
     };
-  }, [socket, dispatchDay, useUnifiedDispatchWs]);
+  }, [socket, dispatchDay, useUnifiedDispatchWs, acceptRealtime]);
 
   // --- Réassignation ---
   const [reModalOpen, setReModalOpen] = useState(false);

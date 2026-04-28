@@ -1,0 +1,83 @@
+{
+  "dashboard": {
+    "title": "Scalability Gate Overview",
+    "timezone": "browser",
+    "refresh": "30s",
+    "tags": ["scalability", "gate", "sre"],
+    "panels": [
+      {
+        "id": 1,
+        "title": "API p95 latency (ms)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "WebSocket active connections",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "socketio_active_connections",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "DB pool wait p95 (ms)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(db_pool_wait_seconds_bucket[5m])) by (le)) * 1000",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Kafka consumer lag",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(kafka_consumergroup_lag)",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Redis memory usage",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Error rate (%)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "version": 1
+  }
+}

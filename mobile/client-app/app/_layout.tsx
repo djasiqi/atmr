@@ -8,6 +8,8 @@ import 'react-native-reanimated';
 
 import { AuthProvider } from '@/hooks/useAuth';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { PaymentDeepLinkProvider } from '@/providers/PaymentDeepLinkProvider';
+import { AppQueryClientProvider } from '@/providers/QueryClientProvider';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -31,14 +33,18 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(client)" options={{ headerShown: false }} />
-          <Stack.Screen name="(institution)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-        <StatusBar style="auto" />
+        <AppQueryClientProvider>
+          <PaymentDeepLinkProvider>
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(client)" options={{ headerShown: false }} />
+              <Stack.Screen name="(institution)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+            <StatusBar style="auto" />
+          </PaymentDeepLinkProvider>
+        </AppQueryClientProvider>
       </AuthProvider>
     </ThemeProvider>
   );

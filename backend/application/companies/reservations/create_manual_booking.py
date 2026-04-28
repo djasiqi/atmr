@@ -701,12 +701,15 @@ class CreateManualBookingUseCase:
             if is_rt:
                 return_booking = Booking()
                 return_booking.parent_booking_id = outbound.id
+                return_booking.is_return = True
+                # Avant scheduled_time : le validateur scheduled_time exige is_return=True si heure absente.
+                return_booking.time_confirmed = (
+                    bool(return_time_confirmed) if occurrence_return_dt is not None else False
+                )
                 return_booking.customer_name = outbound.customer_name
                 return_booking.client_id = client.id
                 return_booking.scheduled_time = occurrence_return_dt
                 return_booking.status = BookingStatus.ACCEPTED
-                return_booking.is_return = True
-                return_booking.time_confirmed = return_time_confirmed
                 return_booking.pickup_location = outbound.dropoff_location
                 return_booking.dropoff_location = outbound.pickup_location
                 return_booking.amount = amount_to_use

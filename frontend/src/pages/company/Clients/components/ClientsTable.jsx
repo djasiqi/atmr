@@ -49,19 +49,20 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
 
   return (
     <div className={styles.tableContainer}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Contact</th>
-            <th>Adresse</th>
-            <th>Statut</th>
-            <th>Cree le</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {clients.map((client) => {
+      <div className={styles.tableScroll}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Contact</th>
+              <th>Adresse</th>
+              <th>Statut</th>
+              <th>Cree le</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((client) => {
             const displayName = getClientDisplayName(client);
             const isSelected = selectedClientId === client.id;
             const contact = getContactDisplay(client);
@@ -113,7 +114,7 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                   </span>
                 </td>
                 <td className={styles.dateCell}>{formatDate(client.created_at)}</td>
-                <td onClick={(e) => e.stopPropagation()}>
+                <td className={styles.tdActions} onClick={(e) => e.stopPropagation()}>
                   <ClientTableRowActions
                     client={client}
                     onEdit={onEdit}
@@ -123,9 +124,10 @@ const ClientsTable = ({ clients, onSelect, onEdit, onDelete, selectedClientId, o
                 </td>
               </tr>
             );
-          })}
-        </tbody>
-      </table>
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../utils/apiClient';
+import { getActiveUser, setEnvUser } from '../../utils/webAuthSession';
 
 const ResetPassword = () => {
   const { token, userId } = useParams();
@@ -14,7 +15,7 @@ const ResetPassword = () => {
   const [isForced, setIsForced] = useState(false);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user'));
+    const user = getActiveUser();
     if (user && user.force_password_change) {
       console.log('⚠️ Réinitialisation forcée du mot de passe requise.');
       setIsForced(true);
@@ -71,10 +72,10 @@ const ResetPassword = () => {
         setMessage('Mot de passe réinitialisé avec succès !');
 
         // Mise à jour du localStorage, si on a un user forcé
-        const updatedUser = JSON.parse(localStorage.getItem('user'));
+        const updatedUser = getActiveUser();
         if (updatedUser) {
           updatedUser.force_password_change = false;
-          localStorage.setItem('user', JSON.stringify(updatedUser));
+          setEnvUser(updatedUser);
 
           // Redirection vers le dashboard (ou autre)
           setTimeout(() => {

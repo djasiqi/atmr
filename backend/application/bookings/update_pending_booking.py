@@ -14,6 +14,22 @@ def _status_value(status: Any) -> str:
     return str(status)
 
 
+def _normalized_booking_status(booking: Any) -> str:
+    """Statut en minuscules (aligné sur `Booking.serialize` côté API)."""
+    return _status_value(getattr(booking, "status", None)).strip().lower()
+
+
+# Statuts où le client peut encore ajuster trajet / horaire / notes (hors en route / terminé).
+_CLIENT_EDITABLE_STATUSES = frozenset(
+    {
+        "awaiting_client_payment",
+        "pending",
+        "accepted",
+        "assigned",
+    }
+)
+
+
 def _set_status(obj: Any, status_str: str) -> None:
     """Assigne un statut sans dépendre de l'Enum ORM.
 
@@ -87,8 +103,9 @@ class UpdatePendingBookingOutput:
 
 
 class UpdatePendingBookingUseCase:
-    """Use-case Application: mise à jour d'une réservation **PENDING**.
+    """Use-case Application: mise à jour d'une réservation côté client (avant départ).
 
+    Autorisé tant que le dossier n'est pas en route / en cours / terminé / annulé.
     La couche Application ne commit pas et ne déclenche pas d'effets de bord:
     - la route décide quand commit/rollback
     - l'invalidation cache / dispatch est pilotée à l'extérieur via le résultat.
@@ -100,11 +117,16 @@ class UpdatePendingBookingUseCase:
         booking = input_data.booking
         validated_data = input_data.validated_data
 
-        if _status_value(getattr(booking, "status", None)) != "pending":
+        norm = _normalized_booking_status(booking)
+        if norm not in _CLIENT_EDITABLE_STATUSES:
             return UpdatePendingBookingOutput(
                 success=False,
                 error={
-                    "error": "Seules les réservations en attente peuvent être modifiées"
+                    "error": (
+                        "Cette réservation ne peut plus être modifiée en ligne "
+                        "(course en route, terminée ou annulée). "
+                        "Contactez le transporteur ou le support."
+                    )
                 },
                 status_code=400,
             )
@@ -147,8 +169,9 @@ class UpdatePendingBookingUseCase:
             # ignorer silencieusement
             pass
 
-        # Réaffirme le statut pending (en cas de payload incohérent côté client).
-        _set_status(booking, "pending")
+        # Réaffirme uniquement le statut « pending » (ne pas altérer paiement en attente / acceptée / assignée).
+        if norm == "pending":
+            _set_status(booking, "pending")
 
         return UpdatePendingBookingOutput(
             success=True,

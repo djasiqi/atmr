@@ -16,11 +16,6 @@ const Header = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleComingSoon = (event) => {
-    event.preventDefault();
-    showComingSoonToast();
-  };
-
   const handleSignUpClick = (event) => {
     event.preventDefault();
     showComingSoonToast();
@@ -30,7 +25,7 @@ const Header = () => {
     <header className={styles.header}>
       {/* Logo */}
       <Link to="/" className={styles.logo}>
-        <img src="/logo-lirie.png" alt="Lirie" className={styles.logoImg} />
+        <img src="/logo-lirie.png" alt="Lirie" className={styles.logoImg} width="120" height="30" />
       </Link>
 
       {/* Navigation menu */}
@@ -39,27 +34,27 @@ const Header = () => {
           className={`${styles.navList} ${isMenuOpen ? styles.navListOpen : styles.navListClosed}`}
         >
           <li>
-            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
+            <Link to="/deplacez-vous" className={styles.navLink}>
               Déplacez-vous
             </Link>
           </li>
           <li>
-            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
+            <Link to="/conduire" className={styles.navLink}>
               Conduire
             </Link>
           </li>
           <li>
-            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
+            <Link to="/professionnel" className={styles.navLink}>
               Professionnel
             </Link>
           </li>
           <li>
-            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
+            <Link to="/a-propos" className={styles.navLink}>
               À propos
             </Link>
           </li>
           <li>
-            <Link to="#" className={styles.navLink} onClick={handleComingSoon}>
+            <Link to="/aide" className={styles.navLink}>
               Aide
             </Link>
           </li>

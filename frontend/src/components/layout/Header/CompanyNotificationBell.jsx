@@ -23,16 +23,10 @@ import {
 } from '../../../services/companyService';
 import useCompanySocket from '../../../hooks/useCompanySocket';
 import { getCurrentAuthEnv } from '../../../utils/apiClient';
+import { hasCompanyScopedAccessToken } from '../../../utils/webAuthSession';
 import styles from './CompanyNotificationBell.module.css';
 
-const hasCompanyToken = () =>
-  getCurrentAuthEnv() === 'demo'
-    ? !!localStorage.getItem('demo_access_token')
-    : !!(
-      localStorage.getItem('company_access_token') ||
-      localStorage.getItem('company_authToken') ||
-      localStorage.getItem('app_access_token')
-    );
+const hasCompanyToken = () => hasCompanyScopedAccessToken(getCurrentAuthEnv());
 
 const EVENT_ICONS = {
   booking_message: FaCommentDots,

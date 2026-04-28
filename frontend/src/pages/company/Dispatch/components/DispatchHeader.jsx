@@ -34,6 +34,7 @@ const DispatchHeader = ({
   dispatchProgress = 0,
   dispatchLabel = '',
   dispatchMode = 'semi_auto',
+  modeLoading = false,
   styles = {},
   onShowAdvancedSettings,
   hasOverrides = false,
@@ -42,6 +43,10 @@ const DispatchHeader = ({
 }) => {
   const isManual = dispatchMode === 'manual';
   const isFullyAuto = dispatchMode === 'fully_auto';
+  const modeLabel =
+    modeLoading && dispatchMode == null
+      ? null
+      : (MODE_BADGE[dispatchMode] || '—');
 
   return (
     <div className={styles.headerSection}>
@@ -49,8 +54,21 @@ const DispatchHeader = ({
         <div className={styles.titleRow}>
           <div className={styles.titleGroup}>
             <h1 className={styles.dispatchTitle}>Dispatch</h1>
-            <span className={styles.modeBadge} data-tour-id="dispatch-mode-badge">
-              {MODE_BADGE[dispatchMode] || 'Manuel'}
+            <span
+              className={styles.modeBadge}
+              data-tour-id="dispatch-mode-badge"
+              data-mode-loading={modeLoading && dispatchMode == null ? 'true' : undefined}
+              title={modeLoading && dispatchMode == null ? 'Chargement du mode' : modeLabel}
+            >
+              {modeLoading && dispatchMode == null ? (
+                <FiLoader
+                  className={styles.spinIcon}
+                  size={15}
+                  aria-label="Chargement du mode de dispatch"
+                />
+              ) : (
+                modeLabel
+              )}
             </span>
           </div>
           <div className={styles.headerActions}>
@@ -76,7 +94,9 @@ const DispatchHeader = ({
           </div>
         </div>
         <p className={styles.modeSubtitle}>
-          {MODE_SUBTITLE[dispatchMode] || MODE_SUBTITLE.manual}
+          {modeLoading && dispatchMode == null
+            ? 'Chargement du mode de dispatch...'
+            : (MODE_SUBTITLE[dispatchMode] || MODE_SUBTITLE.manual)}
         </p>
       </div>
 

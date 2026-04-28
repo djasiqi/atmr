@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Usage: DRIVER_ID=3 python3 _redis_driver_loc_snap.py (inside atmr-backend, REDIS_URL set)."""
+"""Usage: DRIVER_ID=3 python3 _redis_driver_loc_snap.py (dans le conteneur service backend, REDIS_URL set)."""
 import os
 import sys
 import time

@@ -1,6 +1,11 @@
 // hooks/useEnterpriseSocket.ts
 import { useEffect, useRef, useState } from "react";
-import { connectSocket, onTeamChatMessage } from "@/services/socket";
+import {
+  connectSocket,
+  disconnectSocket,
+  getSocketRole,
+  onTeamChatMessage,
+} from "@/services/socket";
 import type { Socket } from "socket.io-client";
 import { secureStorage } from "@/services/storage";
 import { getLogger } from "@/utils/logger";
@@ -46,6 +51,9 @@ export const useEnterpriseSocket = (
     return () => {
       isMountedRef.current = false;
       unsubscribeTeamMessage?.();
+      if (getSocketRole() === "enterprise") {
+        disconnectSocket();
+      }
     };
   }, []);
 

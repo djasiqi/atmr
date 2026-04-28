@@ -9,6 +9,7 @@ Valide :
 
 from __future__ import annotations
 
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from reportlab.lib.pagesizes import A4
@@ -22,9 +23,12 @@ from services.documents.pdf import (  # noqa: I001
     DEST_ADDR_ZONE_HEIGHT_MM,
     _build_recipient_block_flowable,
     _compute_c5_zone_canvas_coords,
+    _dedupe_postal_and_city_line,
     _name_with_uppercase_last_name,
+    _sum_positive_billed_lines_excluding_global_discount,
     _wrap_line_by_words,
 )
+from models.enums import InvoiceLineType
 
 
 class TestNameWithUppercaseLastName:
@@ -274,3 +278,29 @@ class TestBuildRecipientBlockFlowable:
                     assert w <= max_width_pt + 2, (
                         f"Ligne dépasse: {line[:50]!r}... = {w:.1f}pt > {max_width_pt:.1f}pt"
                     )
+
+
+class TestDedupePostalAndGlobalDiscountPdfHelpers:
+    """Cohérence adresse NPA/ville + sous-total détail / remise globale (PDF)."""
+
+    def test_dedupe_duplicate_npa_ville(self):
+        assert _dedupe_postal_and_city_line("1247 Anières 1247 Anières") == "1247 Anières"
+        assert _dedupe_postal_and_city_line("1247 , Anières 1247 Anières") == "1247 Anières"
+        assert (
+            _dedupe_postal_and_city_line("1247 Anières 1247 Anières, Suisse")
+            == "1247 Anières, Suisse"
+        )
+
+    def test_sum_positive_excludes_custom_negative_discount(self):
+        l1 = MagicMock()
+        l1.type = InvoiceLineType.RIDE
+        l1.line_total = Decimal("50")
+        l2 = MagicMock()
+        l2.type = InvoiceLineType.CUSTOM
+        l2.line_total = Decimal("45")
+        l3 = MagicMock()
+        l3.type = InvoiceLineType.CUSTOM
+        l3.line_total = Decimal("-8")
+        inv = MagicMock()
+        inv.lines = [l1, l2, l3]
+        assert _sum_positive_billed_lines_excluding_global_discount(inv) == 95.0

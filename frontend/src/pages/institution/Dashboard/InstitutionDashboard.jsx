@@ -31,6 +31,7 @@ import {
   useInstitutionRequests,
 } from '../../../hooks/useInstitutionData';
 import DemoInteractiveGuide from '../../../components/demo/DemoInteractiveGuide';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 import s from './InstitutionDashboard.module.css';
 
 // ─── Status config ──────────────────────────────────────────
@@ -113,7 +114,7 @@ const InstitutionDashboard = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const isDemoEnv = getAuthEnv() === 'demo';
   const fallbackDemoMission = isDemoEnv
     ? (
         localStorage.getItem('demo_recommended_journey') ||

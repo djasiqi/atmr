@@ -1,0 +1,204 @@
+# docker-compose.redis-cluster.yml
+# Redis Cluster 3 nœuds Phase 4 (sans réplication intra-cluster).
+#
+# Ce fichier définit uniquement les nœuds. Pour l'activation complète
+# (remplacement du Redis single + mise à jour des services), utiliser :
+#   docker compose \
+#     -f docker-compose.production.yml \
+#     -f docker-compose.redis-cluster.yml \
+#     -f docker-compose.redis-cluster-override.yml \
+#     up -d
+#
+# Authentification : chaque nœud utilise REDIS_PASSWORD depuis l'environnement.
+# Le redis-cluster-init passe le mot de passe lors de la création du cluster.
+
+services:
+  redis-node-1:
+    image: redis:7-alpine
+    container_name: atmr-redis-node-1
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        AUTH_ARG=""
+        if [ -n "$${REDIS_PASSWORD}" ]; then
+          AUTH_ARG="--requirepass $${REDIS_PASSWORD} --masterauth $${REDIS_PASSWORD}"
+        fi
+        redis-server \
+          --port 7001 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly yes \
+          --maxmemory 1gb \
+          --maxmemory-policy allkeys-lru \
+          --tcp-backlog 511 \
+          --tcp-keepalive 60 \
+          --bind 0.0.0.0 \
+          --protected-mode yes \
+          $${AUTH_ARG}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-atmr_redis_password}
+    expose:
+      - "7001"
+    volumes:
+      - redis-node-1-data:/data
+    networks:
+      - atmr-network
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'if [ -n "$${REDIS_PASSWORD}" ]; then redis-cli -p 7001 -a "$${REDIS_PASSWORD}" ping | grep -q PONG; else redis-cli -p 7001 ping | grep -q PONG; fi'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "0.5"
+        reservations:
+          memory: 512M
+
+  redis-node-2:
+    image: redis:7-alpine
+    container_name: atmr-redis-node-2
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        AUTH_ARG=""
+        if [ -n "$${REDIS_PASSWORD}" ]; then
+          AUTH_ARG="--requirepass $${REDIS_PASSWORD} --masterauth $${REDIS_PASSWORD}"
+        fi
+        redis-server \
+          --port 7002 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly yes \
+          --maxmemory 1gb \
+          --maxmemory-policy allkeys-lru \
+          --tcp-backlog 511 \
+          --tcp-keepalive 60 \
+          --bind 0.0.0.0 \
+          --protected-mode yes \
+          $${AUTH_ARG}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-atmr_redis_password}
+    expose:
+      - "7002"
+    volumes:
+      - redis-node-2-data:/data
+    networks:
+      - atmr-network
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'if [ -n "$${REDIS_PASSWORD}" ]; then redis-cli -p 7002 -a "$${REDIS_PASSWORD}" ping | grep -q PONG; else redis-cli -p 7002 ping | grep -q PONG; fi'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "0.5"
+        reservations:
+          memory: 512M
+
+  redis-node-3:
+    image: redis:7-alpine
+    container_name: atmr-redis-node-3
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        AUTH_ARG=""
+        if [ -n "$${REDIS_PASSWORD}" ]; then
+          AUTH_ARG="--requirepass $${REDIS_PASSWORD} --masterauth $${REDIS_PASSWORD}"
+        fi
+        redis-server \
+          --port 7003 \
+          --cluster-enabled yes \
+          --cluster-config-file nodes.conf \
+          --cluster-node-timeout 5000 \
+          --appendonly yes \
+          --maxmemory 1gb \
+          --maxmemory-policy allkeys-lru \
+          --tcp-backlog 511 \
+          --tcp-keepalive 60 \
+          --bind 0.0.0.0 \
+          --protected-mode yes \
+          $${AUTH_ARG}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-atmr_redis_password}
+    expose:
+      - "7003"
+    volumes:
+      - redis-node-3-data:/data
+    networks:
+      - atmr-network
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'if [ -n "$${REDIS_PASSWORD}" ]; then redis-cli -p 7003 -a "$${REDIS_PASSWORD}" ping | grep -q PONG; else redis-cli -p 7003 ping | grep -q PONG; fi'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "0.5"
+        reservations:
+          memory: 512M
+
+  redis-cluster-init:
+    image: redis:7-alpine
+    container_name: atmr-redis-cluster-init
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        AUTH_ARG=""
+        if [ -n "$${REDIS_PASSWORD}" ]; then
+          AUTH_ARG="-a $${REDIS_PASSWORD}"
+        fi
+        redis-cli $${AUTH_ARG} --cluster create \
+          redis-node-1:7001 \
+          redis-node-2:7002 \
+          redis-node-3:7003 \
+          --cluster-replicas 0 \
+          --cluster-yes
+        echo "[redis-cluster-init] Cluster creation complete."
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-atmr_redis_password}
+    networks:
+      - atmr-network
+    restart: "no"
+
+volumes:
+  redis-node-1-data:
+    driver: local
+  redis-node-2-data:
+    driver: local
+  redis-node-3-data:
+    driver: local
+
+networks:
+  atmr-network:
+    external: true

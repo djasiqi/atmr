@@ -82,6 +82,11 @@
   align-items: flex-start;
 }
 
+.messageRowClient {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
 .senderLabel {
   font-size: 10px;
   color: var(--text-muted, #94A3B8);
@@ -104,6 +109,11 @@
 
 .bubbleInstitution {
   background: var(--bg-muted, #F8FAFC);
+}
+
+.bubbleClient {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
 }
 
 .timestamp {

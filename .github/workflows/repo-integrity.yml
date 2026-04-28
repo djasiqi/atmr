@@ -1,0 +1,29 @@
+# Vérifications d’inventaire (plan v4.1) : pas d’IPv4 publique en dur dans le dépôt
+name: Repository integrity
+
+on:
+  push:
+    branches: [main, develop, audit/**]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-integrity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-public-ip-hardcoded:
+    name: No leaked public IPv4
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check tracked files
+        run: python3 scripts/check_no_production_leaks.py

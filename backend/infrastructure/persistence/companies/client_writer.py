@@ -15,6 +15,7 @@ from models import (
     ClientType,
     ClinicBillingPartyMapping,
     Company,
+    ManagementMode,
     User,
     UserRole,
 )
@@ -67,13 +68,23 @@ class SqlAlchemyClientWriter:
         db.session.add(user)
         db.session.flush()
 
-        ct = client_attrs.get("client_type") or "PRIVATE"
+        ct = client_attrs.get("client_type") or "TRANSPORT"
         ct_upper = str(ct).upper()
         client_type = (
             ClientType[ct_upper]
             if ct_upper in ClientType.__members__
-            else ClientType.PRIVATE
+            else ClientType.TRANSPORT
         )
+
+        mm = client_attrs.get("management_mode")
+        management_mode = None
+        if mm:
+            mm_upper = str(mm).upper()
+            management_mode = (
+                ManagementMode[mm_upper]
+                if mm_upper in ManagementMode.__members__
+                else ManagementMode.MANAGED
+            )
 
         preferential_rate = client_attrs.get("preferential_rate")
         if preferential_rate not in (None, ""):
@@ -88,6 +99,7 @@ class SqlAlchemyClientWriter:
         client.user_id = user.id
         client.company_id = company_id
         client.client_type = client_type
+        client.management_mode = management_mode
         client.billing_address = client_attrs.get("billing_address")
         client.billing_lat = client_attrs.get("billing_lat")
         client.billing_lon = client_attrs.get("billing_lon")

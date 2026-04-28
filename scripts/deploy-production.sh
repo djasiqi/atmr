@@ -149,7 +149,8 @@ echo "🧹 Arrêt des conteneurs de la stack production (conservation des donné
 docker compose -f docker-compose.production.yml down --remove-orphans || true
 
 # Supprimer d'éventuels résidus **uniquement** pour les services prod (pas atmr-grafana, etc.)
-for _c in atmr-backend atmr-postgres atmr-redis atmr-osrm atmr-celery-worker atmr-celery-beat atmr-flower; do
+# atmr-backend retiré : le service s'appelle backend sans container_name fixe; compose down le gère
+for _c in atmr-postgres atmr-redis atmr-osrm atmr-celery-worker atmr-celery-beat atmr-flower; do
   docker rm -f "${_c}" 2>/dev/null || true
 done
 
@@ -367,7 +368,12 @@ echo "✅ Migrations appliquées"
 echo "⏳ Attente du healthcheck backend (jusqu'à 2 minutes)..."
 BACKEND_HEALTHY=false
 for i in $(seq 1 120); do
-  BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-backend 2>/dev/null || echo "none")
+  BACKEND_CID=$(docker compose -f docker-compose.production.yml ps -q backend 2>/dev/null)
+  if [ -n "$BACKEND_CID" ]; then
+    BACKEND_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "$BACKEND_CID" 2>/dev/null || echo "none")
+  else
+    BACKEND_HEALTH="none"
+  fi
   if [ "$BACKEND_HEALTH" = "healthy" ]; then
     echo "✅ Backend healthy (healthcheck Docker passé)"
     BACKEND_HEALTHY=true

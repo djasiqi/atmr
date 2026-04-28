@@ -4,6 +4,7 @@ import { fetchCompanyInfo } from '../services/companyService';
 import { joinCompanyRoom } from '../services/companySocket';
 import { getAccessToken } from './useAuthToken';
 import { lirieKeys } from '../queryKeys/lirie';
+import { getActiveUser } from '../utils/webAuthSession';
 
 /**
  * Profil entreprise uniquement (TanStack Query + room Socket.IO).
@@ -21,7 +22,7 @@ export function useLirieCompany() {
     queryFn: async () => {
       const token = getAccessToken();
       const hasToken = !!token;
-      const hasUser = typeof localStorage !== 'undefined' && !!localStorage.getItem('user');
+      const hasUser = !!getActiveUser();
       if (!hasToken && !hasUser) {
         throw new Error('AUTH_REQUIRED');
       }

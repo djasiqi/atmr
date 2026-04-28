@@ -767,6 +767,80 @@ else:
     INVOICE_PDF_ROWS = None
     INVOICE_PDF_WARNING_TOTAL = None
 
+# ==================== Booking audit / Notifications Kafka (PR-2 / PR-3) ====================
+
+if PROMETHEUS_AVAILABLE and Counter and Histogram:
+    BOOKING_AUDIT_WRITE_FAILED_TOTAL = _get_or_create_metric(
+        Counter,
+        "booking_audit_write_failed_total",
+        "Échec persistance audit booking après succès métier",
+        ["action_type"],
+    )
+    NOTIFICATION_KAFKA_SKIP_TOTAL = _get_or_create_metric(
+        Counter,
+        "notification_kafka_skip_total",
+        "Messages notifications Kafka ignorés (skip + commit)",
+        ["reason"],
+    )
+    NOTIFICATION_KAFKA_ENQUEUE_TOTAL = _get_or_create_metric(
+        Counter,
+        "notification_kafka_enqueue_total",
+        "Tentatives publication push via Kafka depuis Celery",
+        ["status"],
+    )
+    NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS = _get_or_create_metric(
+        Histogram,
+        "notification_kafka_enqueue_latency_seconds",
+        "Latence de la tentative d'enqueue Kafka (task send_push_via_kafka)",
+        ["status"],
+        buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0),
+    )
+else:
+    BOOKING_AUDIT_WRITE_FAILED_TOTAL = None
+    NOTIFICATION_KAFKA_SKIP_TOTAL = None
+    NOTIFICATION_KAFKA_ENQUEUE_TOTAL = None
+    NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS = None
+
+
+def inc_booking_audit_write_failed(*, action_type: str) -> None:
+    """Incrémente l'échec d'écriture audit booking (PR-2)."""
+    if not PROMETHEUS_AVAILABLE or not BOOKING_AUDIT_WRITE_FAILED_TOTAL:
+        return
+    try:
+        BOOKING_AUDIT_WRITE_FAILED_TOTAL.labels(action_type=action_type).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] booking_audit_write_failed: %s", e)
+
+
+def inc_notification_kafka_skip(*, reason: str) -> None:
+    """Skip métier consumer notifications Kafka (PR-1)."""
+    if not PROMETHEUS_AVAILABLE or not NOTIFICATION_KAFKA_SKIP_TOTAL:
+        return
+    try:
+        NOTIFICATION_KAFKA_SKIP_TOTAL.labels(reason=reason).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] notification_kafka_skip: %s", e)
+
+
+def inc_notification_kafka_enqueue(*, status: str) -> None:
+    """Enqueue push via Kafka depuis la task (PR-3) — status success|fallback|exception."""
+    if not PROMETHEUS_AVAILABLE or not NOTIFICATION_KAFKA_ENQUEUE_TOTAL:
+        return
+    try:
+        NOTIFICATION_KAFKA_ENQUEUE_TOTAL.labels(status=status).inc()
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] notification_kafka_enqueue: %s", e)
+
+
+def observe_notification_kafka_enqueue_latency(*, status: str, seconds: float) -> None:
+    """Histogramme latence send_push_via_kafka (task) — status success|fallback|exception."""
+    if not PROMETHEUS_AVAILABLE or not NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS:
+        return
+    try:
+        NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS.labels(status=status).observe(seconds)
+    except Exception as e:
+        logger.debug("[PrometheusMetrics] notification_kafka_enqueue_latency: %s", e)
+
 
 # ==================== Invoice PDF Helper Functions ====================
 

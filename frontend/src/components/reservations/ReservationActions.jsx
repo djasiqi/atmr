@@ -107,7 +107,15 @@ const ReservationActions = ({
   // Si aucune action à afficher
   if (!showSchedule && !showUrgent && !showAssign && !showEdit && !showTransfer && !showDelete && !showAll) {
     if (process.env.NODE_ENV === 'development') {
-      console.warn(`⚠️ [ReservationActions] Aucune action pour réservation #${reservation?.id}`);
+      // En « pending », Accepter / Rejeter (et parfois l'assignation inline) sont souvent gérés par le parent
+      // (ReservationTable, DispatchTable) : pas d'actions dans ce composant = cas normal, pas un warning.
+      if (status === 'pending') {
+        console.debug(
+          `[ReservationActions] Aucune action secondaire pour #${reservation?.id} (pending : voir boutons parent)`
+        );
+      } else {
+        console.warn(`⚠️ [ReservationActions] Aucune action pour réservation #${reservation?.id}`);
+      }
     }
     return null;
   }

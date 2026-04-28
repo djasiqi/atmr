@@ -39,6 +39,20 @@ export default function ClientTabLayout() {
         }}
       />
       <Tabs.Screen
+        name="booking/[bookingId]"
+        options={{
+          href: null,
+          title: 'Détail course',
+        }}
+      />
+      <Tabs.Screen
+        name="payment"
+        options={{
+          href: null,
+          title: 'Paiement',
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: 'Compte',

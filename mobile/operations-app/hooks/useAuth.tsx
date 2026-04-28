@@ -20,6 +20,7 @@ import {
   fetchUserInfo,
   loginDriver,
   invalidateInterceptorCache,
+  persistAuthMeBootstrapSideEffects,
 } from "@/services/api";
 import {
   invalidateDriverProfileCacheIfUserMismatch,
@@ -88,8 +89,9 @@ import {
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
 import { pushSessionEvent } from "@/services/sessionJournal";
 import { setLogoutMarker, shouldShowLogoutBanner } from "@/services/logoutMarker";
-import { connectSocket, disconnectSocket } from "@/services/socket";
-import { ensureBackgroundTrackingStopped } from "@/services/locationTracker";
+import { connectSocket } from "@/services/socket";
+import { runRoleTransition } from "@/services/sessionModeTransition";
+import { setAuthSurfaceRole } from "@/services/authSurface";
 // ✅ PHASE 2 : Import de l'authentification biométrique
 import {
   autoLoginWithBiometric,
@@ -285,6 +287,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     () => getAuthBootstrapState()
   );
 
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+
+  /** Garde-fous runtime : surface alignée sur le mode (y compris bootstrap sans storeMode). */
+  useEffect(() => {
+    setAuthSurfaceRole(mode);
+  }, [mode]);
+
   /** Sync état → cache module (survit remount StrictMode / hot reload). */
   useEffect(() => {
     authStateCache = {
@@ -313,8 +323,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const enterpriseProactiveRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const storeMode = useCallback(async (nextMode: AuthMode) => {
+    const prev = modeRef.current;
+    if (prev !== nextMode) {
+      await runRoleTransition({
+        fromRole: prev,
+        toRole: nextMode,
+        reason: "auth_store_mode",
+        options: {
+          preserveMissionState: nextMode === "driver",
+        },
+      });
+    }
     setModeState(nextMode);
     await AsyncStorage.setItem(MODE_KEY, nextMode);
+    modeRef.current = nextMode;
   }, []);
 
   const ensureDeviceId = useCallback(async (): Promise<string> => {
@@ -361,7 +383,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           log.warn("forceLogout driver metadata missing in callback", { reason });
         }
         assertSessionPurgeAllowed(reason);
-        await ensureBackgroundTrackingStopped("logout");
+        await runRoleTransition({
+          fromRole: "driver",
+          toRole: "driver",
+          reason: `driver_force_logout:${reason}`,
+          options: {
+            forceDriverInfrastructureTeardown: true,
+            preserveMissionState: false,
+          },
+        });
         if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "driver", reason, ts: Date.now() });
         }
@@ -389,7 +419,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         invalidateInterceptorCache();
         await purgeDriverProfileCache();
-        disconnectSocket();
         setDriver(null);
         setDriverToken(null);
       } finally {
@@ -411,6 +440,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         notifyAuthNotReady();
         assertSessionPurgeAllowed(reason);
+        await runRoleTransition({
+          fromRole: "enterprise",
+          toRole: "enterprise",
+          reason: `enterprise_force_logout:${reason}`,
+          options: { forceSocketDisconnect: true },
+        });
         if (shouldShowLogoutBanner(reason)) {
           await setLogoutMarker({ route: "enterprise", reason, ts: Date.now() });
         }
@@ -473,6 +508,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           throw new Error("Profil chauffeur indisponible (AUTH_NOT_READY)");
         }
         await asyncStorage.setDriverId(profile.id);
+        await asyncStorage.setDriverCompanyId(profile.company_id);
         setDriver(profile);
         await setActiveAuthNamespace({
           role: "driver",
@@ -1263,6 +1299,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             for (let attempt = 1; attempt <= 2; attempt++) {
               try {
                 const me = await fetchUserInfo();
+                await persistAuthMeBootstrapSideEffects(me);
                 await invalidateDriverProfileCacheIfUserMismatch(me.id);
                 break;
               } catch (e) {
@@ -1597,6 +1634,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const profile = await fetchDriverProfile({ force: false });
           await asyncStorage.setDriverId(profile.id);
+          await asyncStorage.setDriverCompanyId(profile.company_id);
           setDriver(profile);
           await setActiveAuthNamespace({
             role: "driver",

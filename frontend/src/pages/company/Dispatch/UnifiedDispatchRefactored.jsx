@@ -9,7 +9,6 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Toaster } from 'sonner';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
 import CompanySidebar from '../../../components/layout/Sidebar/CompanySidebar/CompanySidebar';
 import useCompanySocket from '../../../hooks/useCompanySocket';
@@ -44,6 +43,7 @@ import { toast } from 'sonner';
 // Composants
 import DispatchHeader from './components/DispatchHeader';
 import ManualModePanel from './components/ManualModePanel';
+import DispatchTableSkeleton from '../../../components/SkeletonLoaders/DispatchTableSkeleton';
 import SemiAutoPanel from './components/SemiAutoPanel';
 import FullyAutoPanel from './components/FullyAutoPanel';
 import AdvancedSettings from './components/AdvancedSettings';
@@ -166,7 +166,7 @@ const UnifiedDispatchRefactored = () => {
   const socket = useCompanySocket();
 
   // Hooks personnalisés
-  const { dispatchMode, loadDispatchMode } = useDispatchMode();
+  const { dispatchMode, loading: dispatchModeLoading } = useDispatchMode();
   const {
     dispatches: allDispatches,
     loading: dispatchesLoading,
@@ -940,12 +940,15 @@ const UnifiedDispatchRefactored = () => {
     }
   };
 
-  // Chargement initial
+  // Chargement : les dispatches n’ont pas de sens tant que le mode n’est pas connu (évite mauvaise API + flash)
+  // Le mode est déjà chargé par useDispatchMode() au montage.
   useEffect(() => {
-    loadDispatches();
     loadDelays();
-    loadDispatchMode();
-  }, [loadDispatches, loadDelays, loadDispatchMode]);
+    if (dispatchMode == null) {
+      return;
+    }
+    loadDispatches();
+  }, [loadDispatches, loadDelays, dispatchMode]);
 
   // P3 : pas de polling 30s si socket connecté (delay_live_invalidate + scheduleLoadDelays).
   // Socket absent : fallback 3 min. Socket présent mais déconnecté / reconnexion : 2 min.
@@ -1090,12 +1093,18 @@ const UnifiedDispatchRefactored = () => {
     };
   }, [socket, loadDispatches, loadDelays, scheduleLoadDelays, date, dispatchMode]);
 
+  const dispatchListLoading = dispatchModeLoading || dispatchesLoading;
+
   // Rendu du panneau selon le mode
   const renderModePanel = () => {
+    if (dispatchMode == null || dispatchModeLoading) {
+      return <DispatchTableSkeleton rows={8} />;
+    }
+
     const commonProps = {
       dispatches: dispatches || [],
       delays: delays || [],
-      loading: dispatchesLoading,
+      loading: dispatchListLoading,
       error: dispatchesError,
       styles,
       currentCompanyId: company?.id,
@@ -1151,16 +1160,18 @@ const UnifiedDispatchRefactored = () => {
             onDispatchNow={onDispatchNow}
           />
         );
-      default:
-        return <div>Mode non reconnu: {dispatchMode}</div>;
+      default: {
+        return (
+          <div className={commonStyles.errorMessage} role="alert">
+            Mode non reconnu : {String(dispatchMode)}. Vérifiez les paramètres entreprise.
+          </div>
+        );
+      }
     }
   };
 
   return (
     <div className={styles.container} data-tour-id="dispatch-page">
-      {/* Toast notifications provider */}
-      <Toaster position="top-right" richColors />
-
       <CompanyHeader />
       <div className={`${styles.mainContent} ${selectedDispatch ? styles.mainContentWithPanel : ''}`}>
         <CompanySidebar />
@@ -1191,6 +1202,7 @@ const UnifiedDispatchRefactored = () => {
             dispatchProgress={dispatchProgress}
             dispatchLabel={dispatchLabel}
             dispatchMode={dispatchMode}
+            modeLoading={dispatchModeLoading}
             styles={styles}
             onShowAdvancedSettings={() => setShowAdvancedSettings(true)} // 🆕
             hasOverrides={overrides !== null} // 🆕
@@ -1262,6 +1274,10 @@ const UnifiedDispatchRefactored = () => {
                 loadDispatches();
               }}
               onDelete={onDeleteReservationClick}
+              onReservationUpdated={(updated) => {
+                if (updated?.id) setSelectedDispatch(updated);
+                loadDispatches();
+              }}
             />
           </aside>
         )}

@@ -58,12 +58,8 @@ def test_nested_transaction(db):
 import importlib.util
 import os
 
-# Mock JSONB → JSON AVANT tout import (SQLite ne supporte pas JSONB)
-from sqlalchemy import JSON
-from sqlalchemy.dialects import postgresql
-
-postgresql.JSONB = JSON
-
+# Note: Les tests backend utilisent PostgreSQL par défaut (voir DATABASE_URL plus bas),
+# on conserve donc le type JSONB natif pour préserver les index GIN en migrations.
 import pytest  # noqa: E402
 from flask import Flask  # noqa: E402
 
@@ -1511,3 +1507,24 @@ def mock_now_local(monkeypatch):
 
     monkeypatch.setattr("shared.time_utils.now_local", mock_now)
     return FIXED_DATE
+
+
+@pytest.fixture
+def requires_postgresql(db):
+    """Skip si le dialecte n'est pas PostgreSQL (tests finalize / expire réalistes)."""
+    try:
+        bind = db.session.get_bind()
+        dialect = bind.dialect.name if bind else "unknown"
+    except Exception:
+        dialect = "unknown"
+    if dialect != "postgresql":
+        pytest.skip(
+            f"PostgreSQL requis (dialecte actuel: {dialect}). "
+            + "Démarrer postgres_test ou définir DATABASE_URL vers une instance Postgres."
+        )
+    try:
+        from sqlalchemy import text
+
+        db.session.execute(text("SELECT 1"))
+    except Exception as exc:
+        pytest.skip(f"PostgreSQL injoignable pour ce test: {exc}")

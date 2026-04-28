@@ -123,6 +123,7 @@ class RegisterUserUseCase:
             user.email = input_data.email
             user.set_password(input_data.password)
             user.role = UserRole.CLIENT  # Par défaut, rôle client
+            user.account_status = "pending_activation"
 
             if input_data.first_name:
                 user.first_name = input_data.first_name

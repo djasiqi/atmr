@@ -18,6 +18,11 @@
   --brand-primary-lighter: #4db6ac; /* Backgrounds légers */
   --brand-primary-lightest: #e0f2f1; /* Badges/Alertes */
 
+  /* Guide Lirie — couleurs secondaires (accents numériques, liens, hiérarchie) */
+  --brand-secondary-blue: #0a88ef;
+  --brand-secondary-soft: #67a5ce;
+  --brand-neutral-gray-cyan: #91a3a0;
+
   /* ============ COULEURS FOND ============ */
   --bg-primary: #ffffff; /* Fond principal (cartes, panels) */
   --bg-secondary: #f4f7fc; /* Fond de page */

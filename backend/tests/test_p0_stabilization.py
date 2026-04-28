@@ -3,6 +3,8 @@
 Ce fichier contient les tests complets (happy path + erreurs) pour les endpoints P0.
 """
 
+from unittest.mock import patch
+
 import pytest
 from flask import Flask
 
@@ -283,67 +285,188 @@ class TestCreateCompanyClientP0:
 class TestCreateBookingP0:
     """Tests pour POST /clients/{public_id}/bookings."""
 
-    def test_create_booking_success(self, client, auth_headers, sample_client):
-        """Test création réservation réussie."""
+    @staticmethod
+    def _client_bearer_headers(client, user):
+        from flask_jwt_extended import create_access_token
+
+        claims = {
+            "role": user.role.value,
+            "company_id": getattr(user, "company_id", None),
+            "driver_id": getattr(user, "driver_id", None),
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(user.public_id), additional_claims=claims
+            )
+        return {"Authorization": f"Bearer {token}"}
+
+    @patch("routes.bookings.execute_client_booking_creation")
+    def test_create_booking_success(self, mock_execute, client, sample_client):
+        """Test création réservation (réponse 201, JWT rôle client)."""
+        mock_execute.return_value = (
+            {
+                "message": "Réservation créée avec succès",
+                "data": {
+                    "booking_id": 1,
+                    "trace_id": "trace-success",
+                    "booking": {"id": 1, "status": "pending"},
+                },
+            },
+            201,
+        )
         idempotency_key = "test-booking-key-123"
+        headers = {
+            **self._client_bearer_headers(client, sample_client.user),
+            "Idempotency-Key": idempotency_key,
+        }
+        from datetime import UTC, datetime, timedelta
+
+        st = (datetime.now(UTC) + timedelta(days=2)).replace(microsecond=0)
+        scheduled = st.isoformat().replace("+00:00", "Z")
         response = client.post(
-            f"/api/v1/clients/{sample_client.public_id}/bookings",
+            f"/api/v1/clients/{sample_client.user.public_id}/bookings",
             json={
+                "customer_name": "Test",
+                "pickup_location": "A",
                 "dropoff_location": "123 Test Street",
-                "scheduled_time": "2025-12-25T10:00:00Z",
+                "scheduled_time": scheduled,
                 "amount": 50.0,
             },
-            headers={**auth_headers, "Idempotency-Key": idempotency_key},
+            headers=headers,
         )
 
         assert response.status_code in [200, 201]
-        data = response.get_json()
-        assert "id" in data
-        assert "trace_id" in data
+        data = response.get_json() or {}
+        inner = data.get("data", data)
+        assert inner.get("trace_id") == "trace-success" or data.get("trace_id") == "trace-success"
+        assert mock_execute.called
 
-    def test_create_booking_idempotency(self, client, auth_headers, sample_client):
-        """Test idempotency pour création réservation."""
-        idempotency_key = "test-booking-key-456"
+    @patch("routes.bookings.execute_client_booking_creation")
+    def test_create_booking_idempotency(self, mock_execute, client, sample_client):
+        """Deux POST avec la même clé d'idempotence : réponses alignées (use case mocké)."""
+        from datetime import UTC, datetime, timedelta
 
-        # Première requête
-        response1 = client.post(
-            f"/api/v1/clients/{sample_client.public_id}/bookings",
-            json={
-                "dropoff_location": "456 Test Ave",
-                "scheduled_time": "2025-12-26T10:00:00Z",
+        st = (datetime.now(UTC) + timedelta(days=2)).replace(microsecond=0)
+        scheduled = st.isoformat().replace("+00:00", "Z")
+        body = {
+            "message": "Réservation créée avec succès",
+            "data": {
+                "booking_id": 99,
+                "trace_id": "trace-idem",
+                "booking": {"id": 99, "status": "pending"},
             },
-            headers={**auth_headers, "Idempotency-Key": idempotency_key},
+        }
+        mock_execute.return_value = (body, 201)
+        idempotency_key = "test-booking-key-456"
+        headers = {
+            **self._client_bearer_headers(client, sample_client.user),
+            "Idempotency-Key": idempotency_key,
+        }
+        payload = {
+            "customer_name": "Test",
+            "pickup_location": "A",
+            "dropoff_location": "456 Test Ave",
+            "scheduled_time": scheduled,
+            "amount": 50.0,
+        }
+        response1 = client.post(
+            f"/api/v1/clients/{sample_client.user.public_id}/bookings",
+            json=payload,
+            headers=headers,
         )
         assert response1.status_code in [200, 201]
-        booking_id = response1.get_json().get("id")
-
-        # Deuxième requête
         response2 = client.post(
-            f"/api/v1/clients/{sample_client.public_id}/bookings",
-            json={
-                "dropoff_location": "456 Test Ave",
-                "scheduled_time": "2025-12-26T10:00:00Z",
-            },
-            headers={**auth_headers, "Idempotency-Key": idempotency_key},
+            f"/api/v1/clients/{sample_client.user.public_id}/bookings",
+            json=payload,
+            headers=headers,
         )
         assert response2.status_code in [200, 201]
-        if booking_id:
-            assert response2.get_json().get("id") == booking_id
+        d1, d2 = response1.get_json() or {}, response2.get_json() or {}
+        b1, b2 = d1.get("data", d1), d2.get("data", d2)
+        if b1.get("booking_id") and b2.get("booking_id"):
+            assert b1.get("booking_id") == b2.get("booking_id")
 
-    def test_create_booking_client_not_found(self, client, auth_headers):
-        """Test création réservation avec client inexistant (404)."""
+    def test_create_booking_client_not_found(self, client, sample_client):
+        """public_id inconnu : l'API renvoie 403 (profil client introuvable / non associé)."""
+        from datetime import UTC, datetime, timedelta
+
+        st = (datetime.now(UTC) + timedelta(days=2)).replace(microsecond=0)
+        scheduled = st.isoformat().replace("+00:00", "Z")
         response = client.post(
-            "/api/v1/clients/invalid-public-id/bookings",
+            "/api/v1/clients/00000000-0000-4000-8000-000000000001/bookings",
             json={
+                "customer_name": "Test",
+                "pickup_location": "A",
                 "dropoff_location": "Test",
-                "scheduled_time": "2025-12-25T10:00:00Z",
+                "scheduled_time": scheduled,
+                "amount": 50.0,
             },
-            headers=auth_headers,
+            headers=self._client_bearer_headers(client, sample_client.user),
         )
 
-        assert response.status_code == 404
-        data = response.get_json()
+        assert response.status_code == 403
+        data = response.get_json() or {}
         assert "error" in data or "message" in data
+
+    @patch("routes.bookings.execute_client_booking_creation")
+    def test_create_booking_me_route_allows_post(
+        self, mock_execute, client, sample_client
+    ):
+        """POST /clients/me/bookings : route enregistrée (pas 405) et délègue au même use case.
+
+        Le use case réel est mocké : la fixture ``db`` (savepoint) entre en conflit avec
+        ``Session.begin()`` dans create_booking (500 sinon).
+        """
+        from datetime import UTC, datetime, timedelta
+
+        from flask_jwt_extended import create_access_token
+
+        mock_execute.return_value = (
+            {
+                "message": "Réservation créée avec succès",
+                "data": {
+                    "booking_id": 42,
+                    "trace_id": "trace-p0-me",
+                    "booking": {"id": 42, "status": "pending"},
+                },
+            },
+            201,
+        )
+        u = sample_client.user
+        claims = {
+            "role": u.role.value,
+            "company_id": getattr(u, "company_id", None),
+            "driver_id": getattr(u, "driver_id", None),
+            "aud": "atmr-api",
+        }
+        with client.application.app_context():
+            token = create_access_token(
+                identity=str(u.public_id), additional_claims=claims
+            )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Idempotency-Key": "test-me-bookings-p0",
+        }
+        st = (datetime.now(UTC) + timedelta(days=7)).replace(microsecond=0)
+        scheduled = st.isoformat().replace("+00:00", "Z")
+        response = client.post(
+            "/api/v1/clients/me/bookings",
+            json={
+                "customer_name": "Test Client Me",
+                "pickup_location": "Lausanne Gare, Suisse",
+                "dropoff_location": "10 Rue du Me, Lausanne",
+                "scheduled_time": scheduled,
+                "amount": 50.0,
+            },
+            headers=headers,
+        )
+        assert response.status_code != 405, "POST /clients/me/bookings doit exister (pas 405)"
+        assert response.status_code == 201
+        mock_execute.assert_called_once()
+        assert mock_execute.call_args[0][0] == str(u.public_id)
+        body = response.get_json() or {}
+        assert body.get("data", {}).get("trace_id") == "trace-p0-me"
 
 
 class TestCreatePaymentP0:

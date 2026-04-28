@@ -1,12 +1,15 @@
 #!/bin/bash
 # Script pour redémarrer le backend avec la connexion au réseau RL
 
+: "${SERVER_HOST:?Définir SERVER_HOST. Voir docs/deployment-ssh.md.}"
+SERVER_USER="${SERVER_USER:-deploy}"
+
 echo "🔄 Redémarrage du backend avec connexion au réseau RL..."
-echo "📍 Serveur: 138.201.155.201"
+echo "📍 Serveur: ${SERVER_USER}@${SERVER_HOST}"
 echo ""
 
 # Commande SSH pour redémarrer le backend
-ssh deploy@138.201.155.201 << 'EOF'
+ssh "${SERVER_USER}@${SERVER_HOST}" << 'EOF'
 cd /srv/atmr
 
 echo "📦 Vérification de la configuration docker-compose..."
@@ -39,7 +42,12 @@ docker compose -f docker-compose.production.yml ps backend
 
 echo ""
 echo "🔍 Vérification des réseaux connectés au backend..."
-docker inspect atmr-backend --format='{{range $net, $conf := .NetworkSettings.Networks}}{{printf "  - %s\n" $net}}{{end}}' | head -10
+BACKEND_CID=$(docker compose -f docker-compose.production.yml ps -q backend 2>/dev/null)
+if [ -n "$BACKEND_CID" ]; then
+  docker inspect "$BACKEND_CID" --format='{{range $net, $conf := .NetworkSettings.Networks}}{{printf "  - %s\n" $net}}{{end}}' | head -10
+else
+  echo "  (conteneur backend introuvable — docker compose ps backend)"
+fi
 
 echo ""
 echo "✅ Backend redémarré avec la nouvelle configuration!"

@@ -92,3 +92,42 @@ class TestMapMobileRidePayloadToManualBookingPayload:
         result = map_mobile_ride_payload_to_manual_booking_payload(payload)
         assert result.get("return_date") == "2026-03-15"
         assert result.get("return_time") == "2026-03-15T16:30:00"
+
+    def test_structured_addresses_are_mapped_to_location_and_coordinates(self):
+        payload = {
+            "client_id": 1,
+            "pickup_address": {
+                "label": "Rue de la Gare 1, 1000 Lausanne",
+                "place_id": "pickup-place",
+                "lat": 46.5197,
+                "lon": 6.6323,
+            },
+            "dropoff_address": {
+                "label": "Avenue de la Sallaz 10, 1010 Lausanne",
+                "place_id": "dropoff-place",
+                "lat": 46.5402,
+                "lon": 6.6582,
+            },
+            "scheduled_time": "2026-03-15T10:00:00",
+        }
+        result = map_mobile_ride_payload_to_manual_booking_payload(payload)
+        assert result["pickup_location"] == "Rue de la Gare 1, 1000 Lausanne"
+        assert result["dropoff_location"] == "Avenue de la Sallaz 10, 1010 Lausanne"
+        assert result["pickup_lat"] == pytest.approx(46.5197)
+        assert result["pickup_lon"] == pytest.approx(6.6323)
+        assert result["dropoff_lat"] == pytest.approx(46.5402)
+        assert result["dropoff_lon"] == pytest.approx(6.6582)
+        assert result["pickup_place_id"] == "pickup-place"
+        assert result["dropoff_place_id"] == "dropoff-place"
+
+    def test_structured_address_mode_can_enforce_object_shape(self):
+        payload = {
+            "client_id": 1,
+            "pickup_address": "Adresse legacy",
+            "dropoff_address": {"label": "Adresse B"},
+            "scheduled_time": "2026-03-15T10:00:00",
+        }
+        with pytest.raises(ValueError, match=r"pickup_address\.label est requis"):
+            map_mobile_ride_payload_to_manual_booking_payload(
+                payload, enforce_structured_address=True
+            )

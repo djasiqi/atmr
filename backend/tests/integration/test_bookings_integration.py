@@ -49,7 +49,7 @@ class TestBookingsIntegration:
             assert booking is not None
             assert booking.company_id == test_company.id
             assert booking.client_id == test_client.id
-            assert booking.status == BookingStatus.PENDING
+            assert booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT
 
     def test_get_booking_with_relations(
         self, authenticated_client, test_company, test_booking

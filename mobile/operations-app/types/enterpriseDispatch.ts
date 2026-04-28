@@ -307,3 +307,12 @@ export interface ClientOption {
   domicile_lat?: number | null;
   domicile_lon?: number | null;
 }
+
+/** Compte chauffeur lié au profil entreprise (paramètres / switch). */
+export interface DriverAccountInfo {
+  has_driver_account: boolean;
+  driver_id?: number;
+  driver_type?: "REGULAR" | "EMERGENCY";
+  is_active?: boolean;
+  is_available?: boolean;
+}

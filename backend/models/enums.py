@@ -144,7 +144,29 @@ class LocationType(str, PyEnum):
         return [e.value for e in cls]
 
 
+class BookingCreatedVia(str, PyEnum):
+    """Origine métier de la réservation (analytics, support, acquisition)."""
+
+    LEGACY = "legacy"
+    PUBLIC_GUEST = "public_guest"
+    CLIENT_APP = "client_app"
+    DISPATCHER = "dispatcher"
+    INSTITUTION_PORTAL = "institution_portal"
+    API_PARTNER = "api_partner"
+
+    @classmethod
+    def choices(cls):
+        return [e.value for e in cls]
+
+
 class BookingStatus(str, PyEnum):
+    """PENDING = demande prise en compte par l'entreprise.
+
+    AWAITING_CLIENT_PAYMENT = créée côté client ; pas encore visible dispatch tant que
+    le paiement Worldline n'est pas confirmé (clients facturés en direct / patient).
+    """
+
+    AWAITING_CLIENT_PAYMENT = "AWAITING_CLIENT_PAYMENT"
     PENDING = "PENDING"
     ACCEPTED = "ACCEPTED"
     ASSIGNED = "ASSIGNED"
@@ -179,8 +201,13 @@ class GenderEnum(str, PyEnum):
 
 
 class ClientType(str, PyEnum):
+    PORTAL = "PORTAL"
+    TRANSPORT = "TRANSPORT"
+
+
+class ManagementMode(str, PyEnum):
     SELF_SERVICE = "SELF_SERVICE"
-    PRIVATE = "PRIVATE"
+    MANAGED = "MANAGED"
     CORPORATE = "CORPORATE"
 
 
@@ -384,7 +411,7 @@ class PlatformBillingLineType(str, PyEnum):
 
 
 class PlatformSupportEntryCategory(str, PyEnum):
-    """Catégorie d’entrée support facturable plateforme."""
+    """Catégorie d'entrée support facturable plateforme."""
 
     SUPPORT = "support"
     TRAINING = "training"

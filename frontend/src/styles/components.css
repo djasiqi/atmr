@@ -200,20 +200,6 @@
   margin-right: var(--spacing-sm);
   cursor: pointer;
   accent-color: var(--brand-primary);
-  outline: none !important;
-}
-
-.form-checkbox:hover,
-.form-checkbox:focus,
-.form-checkbox:focus-visible,
-.form-checkbox:active,
-.form-checkbox:checked,
-.form-radio:hover,
-.form-radio:focus,
-.form-radio:focus-visible,
-.form-radio:active,
-.form-radio:checked {
-  outline: none !important;
 }
 
 .form-check-label {
@@ -221,6 +207,30 @@
   align-items: center;
   cursor: pointer;
   user-select: none;
+}
+
+/* ============================================================
+   NIVEAUX DE CONTRASTE INFORMATIONNEL (V9)
+   ============================================================ */
+.info-level-1-action {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.info-level-2-active {
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.info-level-3-secondary {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+.info-level-4-context {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
 }
 
 /* ============================================================
@@ -244,9 +254,34 @@
 /* Modals : au-dessus de la sidebar (z-index 1100) */
 .modal-overlay.modal-booking,
 .modal-overlay.modal-xl.modal-booking,
-.modal-overlay.modal-client,
-.modal-overlay.modal-invoice {
+.modal-overlay.modal-client {
   z-index: 1200;
+}
+
+/* Facture (souvent en portail body) : au-dessus sidebar + notches (safe area) */
+.modal-overlay.modal-invoice {
+  z-index: 10050;
+  box-sizing: border-box;
+  padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px))
+    max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+}
+
+@media (max-width: 640px) {
+  .modal-overlay.modal-invoice {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0) 0;
+  }
+
+  .modal-overlay.modal-invoice .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+  }
 }
 
 .modal-overlay.modal-booking {

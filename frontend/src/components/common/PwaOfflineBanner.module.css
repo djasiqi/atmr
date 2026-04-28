@@ -1,0 +1,27 @@
+.banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: calc(var(--z-header, 1000) + 2);
+  padding: 0.5rem 1rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  background: #b45309;
+  color: #fff;
+  font-size: 0.875rem;
+  text-align: center;
+  line-height: 1.35;
+  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.text {
+  display: inline-block;
+  max-width: 52rem;
+}
+
+@media (min-width: 769px) {
+  .banner {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}

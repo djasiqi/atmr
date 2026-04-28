@@ -15,7 +15,7 @@ const upperLastName = (str) => (str ? str.toUpperCase() : '');
 
 const NewClientModal = ({ onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    // client_type et email supprimés - tous les clients sont PRIVATE
+    // Tous les clients entreprise sont TRANSPORT/MANAGED
     first_name: '',
     last_name: '',
     phone: '',
@@ -374,9 +374,7 @@ const NewClientModal = ({ onClose, onSave }) => {
         : fullDomicile || domicileAddress || manualAddress;
 
       const payload = {
-        // TOUS les clients créés depuis le Dashboard sont PRIVATE
-        // (pas de compte SELF_SERVICE, pas de connexion app mobile)
-        client_type: 'PRIVATE',
+        management_mode: 'MANAGED',
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
         // Civilité obligatoire

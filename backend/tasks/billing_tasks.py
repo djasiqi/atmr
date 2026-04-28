@@ -41,7 +41,8 @@ celery_app = Celery("billing")
 @celery_app.task(
     bind=True,
     acks_late=True,
-    task_time_limit=0.300,
+    task_time_limit=240,
+    task_soft_time_limit=180,
     max_retries=2,
     autoretry_for=(Exception,),
 )
@@ -90,7 +91,8 @@ def check_overdues_and_trigger_reminders():
 @celery_app.task(
     bind=True,
     acks_late=True,
-    task_time_limit=0.600,
+    task_time_limit=240,
+    task_soft_time_limit=180,
     max_retries=2,
     autoretry_for=(Exception,),
 )
@@ -203,7 +205,8 @@ def send_reminder_notifications() -> None:
 @celery_app.task(
     bind=True,
     acks_late=True,
-    task_time_limit=0.900,  # 15 min (peut générer beaucoup de factures)
+    task_time_limit=240,
+    task_soft_time_limit=180,
     max_retries=1,
     autoretry_for=(Exception,),
 )
@@ -436,7 +439,8 @@ def generate_monthly_invoices():
 @celery_app.task(
     bind=True,
     acks_late=True,
-    task_time_limit=0.600,
+    task_time_limit=240,
+    task_soft_time_limit=180,
     max_retries=1,
     autoretry_for=(Exception,),
 )
@@ -488,7 +492,8 @@ def cleanup_old_invoices():
 @celery_app.task(
     bind=True,
     acks_late=True,
-    task_time_limit=0.300,
+    task_time_limit=240,
+    task_soft_time_limit=180,
     max_retries=2,
     autoretry_for=(Exception,),
 )

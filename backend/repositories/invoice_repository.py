@@ -8,7 +8,7 @@ from typing import Any, Protocol, cast
 from sqlalchemy.orm import joinedload
 
 from domain.invoice_dto import InvoiceDTO, InvoiceLineDTO
-from models import Booking, Invoice, InvoiceStatus
+from models import Invoice, InvoiceStatus
 
 logger = __import__("logging").getLogger(__name__)
 
@@ -164,6 +164,15 @@ class InvoiceRepository:
         )
         if invoice is None:
             return None
+        # Brouillon : corriger TTC ligne à 0 avec HT ≠ 0 (anciennes données / bug) pour total cohérent.
+        if invoice.status == InvoiceStatus.DRAFT:
+            from application.invoices.edit_draft_invoice import (
+                repair_draft_invoice_if_line_totals_inconsistent,
+            )
+            from ext import db
+
+            if repair_draft_invoice_if_line_totals_inconsistent(invoice):
+                db.session.commit()
         return self._to_dto(invoice, include_lines=True)
 
     def find_by_client_id_and_company(
@@ -195,10 +204,11 @@ class InvoiceRepository:
         Returns:
             Liste de Invoice avec lines chargées
         """
+        # Filtrage direct par Invoice.company_id pour éviter les jointures ambiguës
+        # (SQLAlchemy ne peut pas inférer un chemin unique vers Booking ici).
         return (
             Invoice.query.options(joinedload(Invoice.lines))
-            .join(Booking)
-            .filter(Booking.company_id == company_id)
+            .filter(Invoice.company_id == company_id)
             .all()
         )
 

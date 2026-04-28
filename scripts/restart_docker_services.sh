@@ -52,13 +52,13 @@ fi
 # 5. Vérifier l'état des services
 echo ""
 echo "5️⃣  Vérification de l'état des services..."
-docker ps | grep -E "atmr-backend|atmr-flower|atmr-celery-beat|atmr-rl-worker" || true
+docker ps | grep -Ei "atmr-.*(backend|flower|celery|rl)|backend" || true
 
 echo ""
 echo "✅ Redémarrage terminé !"
 echo ""
 echo "📊 Vérifier les logs avec :"
-echo "   docker logs atmr-backend --tail 50"
+echo "   docker compose -f docker-compose.production.yml logs --tail=50 backend"
 echo "   docker logs atmr-celery-beat --tail 50"
 echo "   docker logs atmr-flower --tail 50"
 

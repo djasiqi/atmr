@@ -1,0 +1,39 @@
+.banner {
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: #e8f5f2;
+  border: 1px solid #b2dfdb;
+  color: #004d40;
+}
+
+.title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  font-size: 0.88rem;
+}
+
+.text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .banner {
+    padding: 0.4rem 0.55rem;
+  }
+  .title {
+    font-size: 0.82rem;
+  }
+  .text {
+    font-size: 0.75rem;
+  }
+}
+
+.link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  color: #00796b;
+}

@@ -1,0 +1,127 @@
+export type DriverTelemetryEventName =
+  | "auth.refresh.failure"
+  | "auth.refresh.endpoint_used"
+  | "auth.bootstrap.failure"
+  | "realtime.socket.disconnect"
+  | "realtime.socket.reconnect"
+  | "realtime.auth.retry"
+  | "realtime.auth.exhausted"
+  | "realtime.transport.state"
+  | "realtime.transport.authority"
+  | "realtime.degraded.entered"
+  | "realtime.degraded.exited"
+  | "realtime.reconnect.cap_reached"
+  | "realtime.transport.mismatch"
+  | "tracking.permission.denied"
+  | "tracking.queue.enqueued"
+  | "tracking.queue.flush"
+  | "tracking.queue.dropped"
+  | "tracking.queue.expired"
+  | "tracking.ingest.ack"
+  | "tracking.queue.compacted"
+  | "tracking.socket.emit_without_backend_ack"
+  | "tracking.bridge.health"
+  | "tracking.stale_fallback.timeout"
+  | "tracking.batch.ack"
+  | "tracking.send.backoff"
+  | "tracking.send.failure"
+  | "tracking.send.recovered"
+  | "tracking.watch.started"
+  | "tracking.watch.unavailable"
+  | "tracking.background.task.tick"
+  | "tracking.background.task.registered"
+  | "tracking.background.task.unavailable"
+  | "tracking.background.task.error"
+  | "tracking.background.task.skipped"
+  | "tracking.background.task.flush"
+  | "tracking.background.task.started"
+  | "tracking.background.task.stopped"
+  | "realtime.event.ignored"
+  | "realtime.event.sequence_gap"
+  | "realtime.polling.failure"
+  | "realtime.polling.full_refetch"
+  | "realtime.polling.skipped"
+  | "realtime.reconcile.since"
+  | "realtime.reconcile.full_refetch_guarded"
+  | "realtime.mission.freshness"
+  | "driver.network.tick"
+  | "driver.network.tick.skipped"
+  | "driver.network.wake"
+  | "driver.network.profile"
+  | "driver.http.timeout"
+  | "driver.http.circuit_breaker"
+  | "driver.sync_engine.flush.skipped"
+  | "driver.foreground.resume.resync"
+  | "driver.foreground.resume.resync.coalesced"
+  | "realtime.drift.detected"
+  | "transition.queue.retry"
+  | "transition.queue.flush"
+  | "transition.queue.failure"
+  | "push.token.registered"
+  | "push.token.refresh"
+  | "push.notification.route_failed"
+  | "push.notification.route_timeout"
+  | "push.notification.received"
+  | "push.notification.opened"
+  | "push.notification.ignored"
+  | "push.notification.silent_sync"
+  | "push.quick_action.dispatch"
+  | "push.quick_action.success"
+  | "push.quick_action.failure"
+  | "driver.runtime.resume.start"
+  | "driver.runtime.resume.success"
+  | "driver.runtime.resume.failure"
+  | "driver.runtime.heartbeat"
+  | "driver.runtime.resync"
+  | "driver.availability.updated"
+  | "driver.gate.unified_evaluated"
+  | "driver.runtime.reconcile"
+  | "driver.runtime.reconcile.failure"
+  | "driver.sync_engine.heartbeat"
+  | "driver.battery_optimization.unavailable"
+  | "driver.biometric.unavailable"
+  | "driver.push.fcm.token"
+  | "driver.push.fcm.unavailable"
+  | "driver.mission_bar.android.unavailable"
+  | "driver.mission_bar.background_event"
+  | "driver.mission_bar.background.unavailable"
+  | "driver.mission_bar.ios.unavailable"
+  | "driver.mission_bar.ios.live_activity_unavailable";
+
+export type DriverTelemetryPayload = {
+  source: string;
+  context_id?: string | null;
+  driver_id?: string | null;
+  mission_id?: number | null;
+  app_state?: string | null;
+  network_state?: string | null;
+  reason?: string | null;
+  retry_count?: number;
+  [key: string]: unknown;
+};
+
+type DriverTelemetrySink = (
+  event: DriverTelemetryEventName,
+  payload: DriverTelemetryPayload
+) => void;
+
+const defaultSink: DriverTelemetrySink = (event, payload) => {
+  console.info(`[driver-telemetry] ${event}`, payload);
+};
+
+let sink: DriverTelemetrySink = defaultSink;
+
+export function emitDriverTelemetry(
+  event: DriverTelemetryEventName,
+  payload: DriverTelemetryPayload
+) {
+  sink(event, payload);
+}
+
+export function setDriverTelemetrySink(customSink: DriverTelemetrySink | null) {
+  sink = customSink ?? defaultSink;
+}
+
+export function setDriverTelemetrySinkForTests(customSink: DriverTelemetrySink | null) {
+  setDriverTelemetrySink(customSink);
+}

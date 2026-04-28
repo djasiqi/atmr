@@ -1,0 +1,145 @@
+{
+  "expo": {
+    "name": "lirie-unified-app",
+    "slug": "lirie-unified-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "lirie",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "googleServicesFile": "./google-services.json",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
+      "package": "com.drinjasiqi.lirieunifiedapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.lirie.ch",
+              "pathPrefix": "/activate-account"
+            },
+            {
+              "scheme": "https",
+              "host": "app.lirie.ch",
+              "pathPrefix": "/reset-password"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "ios": {
+      "associatedDomains": [
+        "applinks:app.lirie.ch"
+      ],
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "remote-notification",
+          "fetch"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Location is used to provide real-time mission tracking during active transport.",
+        "NSLocationAlwaysUsageDescription": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Location is used to provide real-time mission tracking during active transport, including in background while a mission is running.",
+        "NSPhotoLibraryUsageDescription": "Photo access is required to send attachments.",
+        "NSCameraUsageDescription": "Camera access is required for mission/photo capture.",
+        "NSMicrophoneUsageDescription": "Le micro sert a enregistrer des messages vocaux dans le chat."
+      }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "classpath": "com.google.gms:google-services:4.4.2"
+          },
+          "ios": {
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBMessaging"
+            ]
+          }
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "foregroundService": {
+            "title": "Lirie Unified est active",
+            "body": "Suivi de la localisation en cours pour votre mission active.",
+            "color": "#0A7F59",
+            "notificationId": "driver-tracking-service",
+            "notificationTitle": "Lirie Unified est active",
+            "notificationBody": "Suivi de la localisation en cours pour votre mission active.",
+            "notificationColor": "#0A7F59"
+          }
+        }
+      ],
+      "expo-task-manager",
+      "expo-background-fetch",
+      "expo-secure-store",
+      "expo-local-authentication",
+      "expo-web-browser",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Photo library access is required to send attachments.",
+          "cameraPermission": "Camera access is required to capture mission photos."
+        }
+      ],
+      "expo-document-picker",
+      "expo-updates",
+      "@sentry/react-native/expo"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "37d90599-2944-4007-b3b5-ee626ae93f56"
+      }
+    },
+    "owner": "drinjasiqi",
+    "updates": {
+      "url": "https://u.expo.dev/37d90599-2944-4007-b3b5-ee626ae93f56"
+    }
+  }
+}

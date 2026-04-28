@@ -163,9 +163,38 @@ export const assignDriver = async (reservationId, driverId) => {
   return data;
 };
 
-export const completeReservation = async (reservationId) => {
-  const { data } = await apiClient.post(`/companies/me/reservations/${reservationId}/complete`);
+/**
+ * Clôture manuelle côté entreprise. Depuis en_route, le backend exige un motif (reason).
+ * @param {number} reservationId
+ * @param {{ reason?: string }|null} [options]
+ */
+export const completeReservation = async (reservationId, options = null) => {
+  const reason = options?.reason;
+  const body =
+    reason != null && String(reason).trim() !== '' ? { reason: String(reason).trim() } : {};
+  const { data } = await apiClient.post(
+    `/companies/me/reservations/${reservationId}/complete`,
+    body,
+  );
   return data;
+};
+
+/**
+ * Ajuste montant / facturation (PATCH dédié — pas le PUT opérationnel).
+ * @param {number} reservationId
+ * @param {{ amount?: number, billed_to_type?: string, billed_to_company_id?: number|null, override_reason: string }} payload
+ */
+export const patchBillingAdjustment = async (reservationId, payload) => {
+  try {
+    const { data } = await apiClient.patch(
+      `/companies/me/reservations/${reservationId}/billing-adjustment`,
+      payload,
+    );
+    return data;
+  } catch (error) {
+    console.error('[CompanyService] patchBillingAdjustment:', error);
+    throw error;
+  }
 };
 
 /**
@@ -1156,7 +1185,12 @@ export const fetchAssignedReservations = async (forDate) => {
             is_return: !!b.is_return,
             parent_booking_id: b.parent_booking_id || b.outbound_booking_id || null,
             time_confirmed: b.time_confirmed,
-            status: b.status || 'scheduled',
+            status:
+              b.status != null && b.status !== ''
+                ? b.status
+                : b.driver_id || a?.driver_id
+                  ? 'assigned'
+                  : 'scheduled',
             driver_username: b.driver_username || b.driver?.username,
             driver_id: b.driver_id || a?.driver_id || null,
             driver: b.driver || null,

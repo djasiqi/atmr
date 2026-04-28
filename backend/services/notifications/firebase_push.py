@@ -10,11 +10,78 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import threading
+import time
 from typing import Any
 
 from ext import app_logger
 
 _firebase_initialized = False
+
+FCM_RETRY_MAX_ATTEMPTS = max(1, int(os.getenv("FCM_RETRY_MAX_ATTEMPTS", "3")))
+FCM_RETRY_BASE_DELAY_MS = max(100, int(os.getenv("FCM_RETRY_BASE_DELAY_MS", "2000")))
+FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD = max(
+    1, int(os.getenv("FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "5"))
+)
+FCM_CIRCUIT_BREAKER_OPEN_SECONDS = max(
+    1, int(os.getenv("FCM_CIRCUIT_BREAKER_OPEN_SECONDS", "60"))
+)
+
+
+class _InMemoryCircuitBreaker:
+    """Circuit breaker local au process pour appels FCM."""
+
+    def __init__(self, *, failure_threshold: int, open_seconds: int):
+        self._failure_threshold = failure_threshold
+        self._open_seconds = open_seconds
+        self._lock = threading.Lock()
+        self._opened_until_ts = 0.0
+        self._consecutive_retryable_failures = 0
+        self._half_open_probe_in_flight = False
+
+    def allow_request(self) -> bool:
+        now = time.time()
+        with self._lock:
+            if self._opened_until_ts > now:
+                return False
+            if self._opened_until_ts > 0:
+                # Passage en half-open (max 1 probe simultané)
+                if self._half_open_probe_in_flight:
+                    return False
+                self._half_open_probe_in_flight = True
+                return True
+            return True
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._opened_until_ts = 0.0
+            self._consecutive_retryable_failures = 0
+            self._half_open_probe_in_flight = False
+
+    def record_retryable_failure(self) -> None:
+        now = time.time()
+        with self._lock:
+            if self._half_open_probe_in_flight:
+                self._half_open_probe_in_flight = False
+            self._consecutive_retryable_failures += 1
+            if self._consecutive_retryable_failures >= self._failure_threshold:
+                self._opened_until_ts = now + self._open_seconds
+                self._consecutive_retryable_failures = 0
+                app_logger.warning(
+                    "[fcm] Circuit breaker OPEN for %ss after retryable failures",
+                    self._open_seconds,
+                )
+
+    def record_non_retryable_failure(self) -> None:
+        with self._lock:
+            self._half_open_probe_in_flight = False
+
+
+_fcm_circuit_breaker = _InMemoryCircuitBreaker(
+    failure_threshold=FCM_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+    open_seconds=FCM_CIRCUIT_BREAKER_OPEN_SECONDS,
+)
 
 
 def _fcm_generic_error_result(exc: BaseException) -> dict[str, Any]:
@@ -39,6 +106,93 @@ def _fcm_generic_error_result(exc: BaseException) -> dict[str, Any]:
     ):
         out["token_invalid"] = True
     return out
+
+
+def _is_retryable_fcm_exception(exc: BaseException) -> bool:
+    """Détermine si l'erreur FCM est transitoire et éligible au retry."""
+    name = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    retryable_names = {
+        "quotaexceedederror",
+        "internalerror",
+        "unavailableerror",
+        "deadlineexceedederror",
+    }
+    if name in retryable_names:
+        return True
+    retryable_hints = (
+        "timeout",
+        "timed out",
+        "temporarily unavailable",
+        "unavailable",
+        "deadline exceeded",
+        "internal error",
+        "connection reset",
+        "connection aborted",
+        "503",
+        "500",
+    )
+    return any(hint in msg for hint in retryable_hints)
+
+
+def _send_with_retry(msg: Any, *, platform: str) -> dict[str, Any]:
+    from firebase_admin import messaging
+
+    if not _fcm_circuit_breaker.allow_request():
+        return {
+            "ok": False,
+            "error": "circuit_breaker_open",
+            "circuit_breaker_open": True,
+        }
+
+    last_exception: BaseException | None = None
+    for attempt in range(FCM_RETRY_MAX_ATTEMPTS):
+        try:
+            message_id = messaging.send(msg)
+            _fcm_circuit_breaker.record_success()
+            app_logger.info("[fcm] %s push sent: %s", platform, message_id)
+            return {"ok": True, "message_id": message_id}
+        except messaging.UnregisteredError:
+            _fcm_circuit_breaker.record_non_retryable_failure()
+            return {"ok": False, "error": "token_unregistered", "token_invalid": True}
+        except messaging.SenderIdMismatchError:
+            _fcm_circuit_breaker.record_non_retryable_failure()
+            return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
+        except Exception as e:
+            last_exception = e
+            retryable = _is_retryable_fcm_exception(e)
+            if not retryable:
+                _fcm_circuit_breaker.record_non_retryable_failure()
+                app_logger.exception("[fcm] %s push failed (non retryable)", platform)
+                return _fcm_generic_error_result(e)
+
+            is_last_attempt = attempt >= (FCM_RETRY_MAX_ATTEMPTS - 1)
+            if is_last_attempt:
+                _fcm_circuit_breaker.record_retryable_failure()
+                app_logger.warning(
+                    "[fcm] %s push failed after %s retry attempts: %s",
+                    platform,
+                    FCM_RETRY_MAX_ATTEMPTS,
+                    type(e).__name__,
+                )
+                break
+
+            delay_seconds = (FCM_RETRY_BASE_DELAY_MS / 1000.0) * (2**attempt)
+            jitter = random.uniform(0.0, delay_seconds * 0.2)
+            sleep_seconds = delay_seconds + jitter
+            app_logger.warning(
+                "[fcm] %s retry attempt %s/%s in %.2fs (%s)",
+                platform,
+                attempt + 2,
+                FCM_RETRY_MAX_ATTEMPTS,
+                sleep_seconds,
+                type(e).__name__,
+            )
+            time.sleep(sleep_seconds)
+
+    if last_exception is not None:
+        return _fcm_generic_error_result(last_exception)
+    return {"ok": False, "error": "fcm_send_error"}
 
 
 def _init_firebase() -> bool:
@@ -124,22 +278,12 @@ def send_fcm_android(
         data=str_data,
         android=messaging.AndroidConfig(priority="high"),
     )
-    try:
-        message_id = messaging.send(msg)
-        app_logger.info("[fcm] Android push sent: %s", message_id)
-        return {"ok": True, "message_id": message_id}
-    except messaging.UnregisteredError:
+    result = _send_with_retry(msg, platform="Android")
+    if result.get("error") == "token_unregistered":
         app_logger.warning("[fcm] Android token unregistered: %s...", token[:20])
-        return {"ok": False, "error": "token_unregistered", "token_invalid": True}
-    except messaging.SenderIdMismatchError:
+    elif result.get("error") == "sender_id_mismatch":
         app_logger.warning("[fcm] Sender ID mismatch for token: %s...", token[:20])
-        return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
-    except messaging.QuotaExceededError:
-        app_logger.warning("[fcm] FCM quota exceeded")
-        return {"ok": False, "error": "quota_exceeded"}
-    except Exception as e:
-        app_logger.exception("[fcm] Android push failed")
-        return _fcm_generic_error_result(e)
+    return result
 
 
 def send_fcm_ios(
@@ -167,22 +311,12 @@ def send_fcm_ios(
             ),
         ),
     )
-    try:
-        message_id = messaging.send(msg)
-        app_logger.info("[fcm] iOS push sent: %s", message_id)
-        return {"ok": True, "message_id": message_id}
-    except messaging.UnregisteredError:
+    result = _send_with_retry(msg, platform="iOS")
+    if result.get("error") == "token_unregistered":
         app_logger.warning("[fcm] iOS token unregistered: %s...", token[:20])
-        return {"ok": False, "error": "token_unregistered", "token_invalid": True}
-    except messaging.SenderIdMismatchError:
+    elif result.get("error") == "sender_id_mismatch":
         app_logger.warning("[fcm] Sender ID mismatch for iOS token: %s...", token[:20])
-        return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
-    except messaging.QuotaExceededError:
-        app_logger.warning("[fcm] FCM quota exceeded")
-        return {"ok": False, "error": "quota_exceeded"}
-    except Exception as e:
-        app_logger.exception("[fcm] iOS push failed")
-        return _fcm_generic_error_result(e)
+    return result
 
 
 def send_fcm_silent(
@@ -221,19 +355,9 @@ def send_fcm_silent(
         android=android_config,
         apns=apns_config,
     )
-    try:
-        message_id = messaging.send(msg)
-        app_logger.info("[fcm] Silent push sent (%s): %s", platform, message_id)
-        return {"ok": True, "message_id": message_id}
-    except messaging.UnregisteredError:
+    result = _send_with_retry(msg, platform=f"Silent-{platform}")
+    if result.get("error") == "token_unregistered":
         app_logger.warning("[fcm] Silent push token unregistered: %s...", token[:20])
-        return {"ok": False, "error": "token_unregistered", "token_invalid": True}
-    except messaging.SenderIdMismatchError:
+    elif result.get("error") == "sender_id_mismatch":
         app_logger.warning("[fcm] Silent push sender ID mismatch: %s...", token[:20])
-        return {"ok": False, "error": "sender_id_mismatch", "token_invalid": True}
-    except messaging.QuotaExceededError:
-        app_logger.warning("[fcm] Silent push quota exceeded")
-        return {"ok": False, "error": "quota_exceeded"}
-    except Exception as e:
-        app_logger.exception("[fcm] Silent push failed (%s)", platform)
-        return _fcm_generic_error_result(e)
+    return result

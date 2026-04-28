@@ -20,21 +20,50 @@ class CompleteCompanyReservationResult:
     ok: bool
     error: dict[str, str] | None = None
     status_code: int | None = None
+    # True when transition was en_route → completed (company manual completion; requires audit in route)
+    from_en_route_manual: bool = False
 
 
 class CompleteCompanyReservationUseCase:
     """Use-case Application: complétion d'une réservation
-    (IN_PROGRESS -> COMPLETED/RETURN_COMPLETED).
+    (IN_PROGRESS ou EN_ROUTE -> COMPLETED/RETURN_COMPLETED).
+
+    - ``in_progress`` : flux historique.
+    - ``accepted`` / ``assigned`` : clôture sans course démarrée côté chauffeur
+      (ex. client self-service / invité déjà payé) ; pas de motif requis.
+    - ``en_route`` : clôture manuelle entreprise ; **reason** requis (non vide après trim)
+      — audit « manual completion » côté route.
+    - Autres statuts : refus explicite.
 
     ✅ Valide automatiquement les transferts ACCEPTED associés lors de la complétion.
     """
 
-    def execute(self, booking: _BookingLike) -> CompleteCompanyReservationResult:
+    def execute(
+        self,
+        booking: _BookingLike,
+        *,
+        reason: str | None = None,
+    ) -> CompleteCompanyReservationResult:
         st = status_value(getattr(booking, "status", None)).lower()
-        if st != "in_progress":
+        allowed = ("accepted", "assigned", "in_progress", "en_route")
+        if st in allowed:
+            if st == "en_route":
+                r = (reason or "").strip()
+                if not r:
+                    return CompleteCompanyReservationResult(
+                        ok=False,
+                        error={"error": "Un motif (reason) est requis pour clôturer une course en route."},
+                        status_code=400,
+                    )
+        else:
             return CompleteCompanyReservationResult(
                 ok=False,
-                error={"error": "Réservation introuvable ou pas en cours"},
+                error={
+                    "error": (
+                        f"Clôture entreprise : statut actuel « {st} » non autorisé "
+                        f"(autorisés : {', '.join(allowed)})."
+                    )
+                },
                 status_code=400,
             )
 
@@ -48,7 +77,10 @@ class CompleteCompanyReservationUseCase:
         # ✅ Validation automatique des transferts ACCEPTED
         self._auto_validate_transfers(booking)
 
-        return CompleteCompanyReservationResult(ok=True)
+        return CompleteCompanyReservationResult(
+            ok=True,
+            from_en_route_manual=st == "en_route",
+        )
 
     def _auto_validate_transfers(self, booking: _BookingLike) -> None:
         """Valide automatiquement les transferts ACCEPTED associés à la course.

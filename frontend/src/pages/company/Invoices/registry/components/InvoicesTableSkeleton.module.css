@@ -1,0 +1,117 @@
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.row {
+  pointer-events: none;
+}
+
+.bar {
+  display: block;
+  height: 9px;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary, #e2e8f0) 0%,
+    var(--bg-hover, #f1f5f9) 50%,
+    var(--bg-tertiary, #e2e8f0) 100%
+  );
+  background-size: 200% 100%;
+  animation: invSk 1.1s ease-in-out infinite;
+}
+
+.invoiceStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  max-width: 180px;
+}
+
+.wNumber {
+  width: 80%;
+  max-width: 140px;
+  height: 12px;
+}
+
+.wPeriod {
+  width: 44px;
+  height: 8px;
+}
+
+.wClient {
+  width: 72%;
+  max-width: 120px;
+}
+
+.wDate {
+  width: 64px;
+}
+
+.wAmount {
+  width: 56px;
+  margin-left: auto;
+}
+
+.paymentCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.wPayLine {
+  width: 88px;
+  height: 7px;
+}
+
+.wBadge {
+  width: 52px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.wReminder {
+  width: 64px;
+  height: 18px;
+  border-radius: 6px;
+}
+
+.wMenu {
+  width: 32px;
+  height: 28px;
+  border-radius: 6px;
+  margin-left: auto;
+}
+
+.wCheckbox {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  margin: 0 auto;
+}
+
+@keyframes invSk {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+    background: var(--bg-tertiary, #e2e8f0);
+  }
+}

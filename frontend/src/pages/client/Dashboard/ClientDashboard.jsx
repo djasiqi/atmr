@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import apiClient from '../../../utils/apiClient';
-import { startWorldlineHostedCheckout } from '../../../services/clientWorldlinePaymentService';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import homeFieldStyles from '../../Home/Home.module.css';
 import institutionStyles from '../../institution/Requests/InstitutionRequestForm.module.css';
 import './ClientDashboard.css';
 import { useMutation } from '@tanstack/react-query';
 import { useHybridDataSync } from '../../../hooks/useHybridDataSync';
+import { useClientBookingSocketRefresh } from '../../../hooks/useClientBookingSocketRefresh';
 
 // Google Maps
 import { GoogleMap, Polyline } from '@react-google-maps/api';
@@ -26,10 +26,14 @@ import Footer from '../../../components/layout/Footer/Footer';
 import AddressAutocomplete from '../../../components/common/AddressAutocomplete';
 import { getApiErrorMessage } from '../../../utils/apiErrorMessage';
 import { toast } from 'sonner';
-import { toastWorldlineCheckoutError } from '../../../utils/worldlinePaymentUi';
+import { toastSaferpayCheckoutError } from '../../../utils/saferpayPaymentUi';
+import { readAndConsumeSaferpayPayResume } from '../../../utils/clientSaferpayPayResume';
+import { startSaferpayHostedCheckout } from '../../../services/clientSaferpayPaymentService';
 import {
   getClientBookingToneClass,
   getClientBookingUx,
+  getEffectiveClientBookingActions,
+  resolveClientBookingDisplayStatus,
 } from '../../../utils/clientBookingUx';
 import { trackClientKpiEvent } from '../../../utils/clientKpi';
 import {
@@ -38,6 +42,10 @@ import {
   hasActiveSession,
 } from '../../../utils/webAuthSession';
 import { requiresPrivateOnlinePaymentAtBooking } from '../../../utils/clientBookingPayment';
+import {
+  CLIENT_SURFACE_CONTRACTS,
+  reportContractMismatch,
+} from '../../../utils/clientSurfaceContracts';
 
 const CONTAINER_STYLE = { width: '100%', height: '100%' };
 
@@ -70,6 +78,18 @@ const RECURRENCE_WEEK_DAYS = [
 /** Plancher affiché / envoyé à l’API pour l’indicatif client (CHF). */
 const MIN_CLIENT_INDICATIVE_FARE_CHF = 45;
 
+/**
+ * Désactivé par défaut : toute l’indicative vient de POST /clients/me/indicative-fare/estimate.
+ * N’activer (temporaire) qu’après ticket + retrait planifié — évite double logique locale/serveur.
+ */
+const LOCAL_INDICATIVE_FARE_FALLBACK_ENABLED =
+  process.env.REACT_APP_CLIENT_INDICATIVE_FARE_LOCAL_FALLBACK === 'true' ||
+  process.env.REACT_APP_CLIENT_INDICATIVE_FARE_LOCAL_FALLBACK === '1';
+
+/** Message UX unique (web + mobile) pour indisponibilité côté configuration / estimation. */
+export const INDICATIVE_FARE_UNAVAILABLE_UX =
+  "L'estimation indicative est momentanément indisponible.";
+
 /** Arrondi CHF au 5 centimes (rapen), ex. 48,26 → 48,25. */
 function roundChfToFiveRappen(value) {
   const x = Number(value);
@@ -97,6 +117,7 @@ const INDICATIVE_PER_KM_CHF =
  * Devis indicatif (CHF) à partir du trajet OSRM (/ai/optimized-route).
  * Brut = base + coef_km×km + 0,35×min (coef_km calibré pour ~45 CHF à 13,5 km et 20 min).
  * Puis max(brut, 45 CHF). Au-delà de ce palier-distance, le montant suit le trajet réel.
+ * — uniquement si le feature flag de repli explicite est actif côté build.
  * Pas un tarif contractuel (confirmé par le transporteur).
  */
 function computeIndicativeFareChf(distanceM, durationS) {
@@ -286,10 +307,24 @@ function destinationHasDoctorHint(value) {
   return ['docteur', 'dr', 'dr.', 'dr med', 'dr méd', 'médecin'].some((k) => lower.includes(k));
 }
 
+/** Normalise la destination pour repérer la plus utilisée dans l’historique. */
+function normalizeRecentTripDestination(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isBookingCanceledForRecent(b) {
+  const s = String(b?.status || '').toLowerCase();
+  return s === 'canceled' || s === 'cancelled';
+}
+
 const ClientDashboard = () => {
   const { isLoaded: gmLoaded } = useGoogleMapsLoaded();
   const { id: clientId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const mapRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
@@ -300,7 +335,7 @@ const ClientDashboard = () => {
   const [loadError, setLoadError] = useState(null);
   const [formError, setFormError] = useState(null);
   const [payOfferBookingId, setPayOfferBookingId] = useState(null);
-  const [payingWorldline, setPayingWorldline] = useState(false);
+  const [payingSaferpay, setPayingSaferpay] = useState(false);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [asapMode, setAsapMode] = useState(false);
@@ -321,7 +356,15 @@ const ClientDashboard = () => {
   const [pickupSelection, setPickupSelection] = useState(null);
   const [destinationSelection, setDestinationSelection] = useState(null);
   const [routeLatLngs, setRouteLatLngs] = useState([]);
-  const [routeMetrics, setRouteMetrics] = useState(null);
+  /** Métriques itinéraire côté OSRM (carte uniquement) — jamais source du montant affiché sauf repli drapeau. */
+  const [visualRouteMetrics, setVisualRouteMetrics] = useState(null);
+  /**
+   * Indicatif serveur (même moteur route que l’affichage carte).
+   * Champs: distance_m, duration_s, indicative_amount_chf, config_version (ou erreur d’indispo).
+   */
+  const [indicativeServer, setIndicativeServer] = useState(null);
+  const [indicativeServerLoading, setIndicativeServerLoading] = useState(false);
+  const [indicativeUnavailability, setIndicativeUnavailability] = useState('');
 
   const [medicalFacility, setMedicalFacility] = useState('');
   const [doctorName, setDoctorName] = useState('');
@@ -341,6 +384,34 @@ const ClientDashboard = () => {
     () => (accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined),
     [accessToken]
   );
+
+  useEffect(() => {
+    const saved = readAndConsumeSaferpayPayResume();
+    if (!saved) return;
+    setPayOfferBookingId(saved.bookingId);
+    setPayOffer({
+      bookingId: saved.bookingId,
+      payerLabel: saved.payerLabel || 'Client',
+      finalAmount: saved.finalAmount,
+      paymentRequired: true,
+      lifecycleLabel:
+        saved.lifecycleLabel || getClientBookingUx('awaiting_client_payment').label,
+      checkoutError: null,
+    });
+  }, []);
+
+  /** Préremplissage départ / destination (ex. « Recommander » ou « Modifier » depuis Mes courses). */
+  useEffect(() => {
+    const pb = location.state?.prefillFromBooking;
+    if (!pb || typeof pb !== 'object') return;
+    const pu = String(pb.pickup_location || '').trim();
+    const dd = String(pb.dropoff_location || '').trim();
+    if (!pu && !dd) return;
+    if (pu) setPickup(pu);
+    if (dd) setDestination(dd);
+    setFormError(null);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -440,9 +511,9 @@ const ClientDashboard = () => {
         const dm = data?.distance_m ?? data?.distance_meters ?? data?.route?.distance_m;
         const ds = data?.duration_s ?? data?.duration_seconds ?? data?.route?.duration_s;
         if (dm != null && Number(dm) > 0) {
-          setRouteMetrics({ distance_m: Number(dm), duration_s: ds != null ? Number(ds) : 0 });
+          setVisualRouteMetrics({ distance_m: Number(dm), duration_s: ds != null ? Number(ds) : 0 });
         } else {
-          setRouteMetrics(null);
+          setVisualRouteMetrics(null);
         }
       } catch (e) {
         console.error('Parsing itinéraire:', e);
@@ -450,13 +521,13 @@ const ClientDashboard = () => {
           'Impossible d’estimer ce trajet pour le moment. Vous pouvez tout de même envoyer votre demande.'
         );
         setRouteLatLngs([]);
-        setRouteMetrics(null);
+        setVisualRouteMetrics(null);
       }
     },
     onError: (error) => {
       setEstimateNotice(deriveAddressErrorMessage(error));
       setRouteLatLngs([]);
-      setRouteMetrics(null);
+      setVisualRouteMetrics(null);
     },
   });
 
@@ -469,6 +540,61 @@ const ClientDashboard = () => {
     }, 2000);
     return () => clearTimeout(t);
   }, [pickup, destination, triggerOptimizeRoute]);
+
+  // Indicatif CHF 100 % serveur (débounced comme la carte) — ne pas en déduire de /ai/optimized-route.
+  useEffect(() => {
+    if (!pickup || !destination) {
+      setIndicativeServer(null);
+      setIndicativeUnavailability('');
+      setIndicativeServerLoading(false);
+      return;
+    }
+
+    // Paire d'adresses modifiée : invalider l'indicatif précédent
+    // (évite un montant obsolète pendant le debounce).
+    setIndicativeServer(null);
+    setIndicativeUnavailability('');
+
+    const t = setTimeout(() => {
+      (async () => {
+        if (!authHeaders) {
+          setIndicativeServer(null);
+          setIndicativeUnavailability('');
+          return;
+        }
+        setIndicativeServerLoading(true);
+        setIndicativeUnavailability('');
+        try {
+          const response = await apiClient.post(
+            '/clients/me/indicative-fare/estimate',
+            { pickup_location: pickup, dropoff_location: destination },
+            authHeaders
+          );
+          setIndicativeServer(response.data);
+        } catch (err) {
+          setIndicativeServer(null);
+          const st = err?.response?.status;
+          const code = err?.response?.data?.error;
+          if (st === 412 && code === 'indicative_fare_disabled') {
+            setIndicativeUnavailability(INDICATIVE_FARE_UNAVAILABLE_UX);
+            return;
+          }
+          if (st === 503) {
+            setIndicativeUnavailability(INDICATIVE_FARE_UNAVAILABLE_UX);
+            return;
+          }
+          if (st === 400 && (code === 'indicative_fare_route_error' || code)) {
+            setIndicativeUnavailability(INDICATIVE_FARE_UNAVAILABLE_UX);
+            return;
+          }
+          setIndicativeUnavailability(INDICATIVE_FARE_UNAVAILABLE_UX);
+        } finally {
+          setIndicativeServerLoading(false);
+        }
+      })();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [pickup, destination, authHeaders]);
 
   const toggleRecurrenceDay = useCallback((dayId) => {
     setRecurrenceDays((prev) =>
@@ -536,6 +662,8 @@ const ClientDashboard = () => {
     dependencies: [effectiveClientId],
   });
 
+  useClientBookingSocketRefresh(loadBookings, Boolean(effectiveClientId));
+
   const nearestUpcomingBooking = useMemo(
     () =>
       [...upcomingBookings].sort(
@@ -557,10 +685,54 @@ const ClientDashboard = () => {
 
   const nextBooking = nearestOngoingBooking || nearestUpcomingBooking || null;
   const hasActiveOrFutureBooking = Boolean(nextBooking);
+  /** Dernier trajet passé + trajet le plus récent vers la destination la plus fréquente (max 2, sans doublon). */
   const recentTrips = useMemo(() => {
-    return [...pastBookings]
-      .sort((a, b) => Date.parse(b.scheduled_time) - Date.parse(a.scheduled_time))
-      .slice(0, 3);
+    const list = pastBookings.filter(
+      (b) => b && !isBookingCanceledForRecent(b) && String(b.dropoff_location || '').trim()
+    );
+    if (list.length === 0) return [];
+
+    const sortedByTime = [...list].sort(
+      (a, b) => Date.parse(b.scheduled_time) - Date.parse(a.scheduled_time)
+    );
+    const lastTrip = sortedByTime[0];
+
+    /** @type {Map<string, { count: number, best: (typeof list)[0] }>} */
+    const byDest = new Map();
+    for (const b of list) {
+      const key = normalizeRecentTripDestination(b.dropoff_location);
+      if (!key) continue;
+      const ts = Date.parse(b.scheduled_time);
+      const cur = byDest.get(key);
+      if (!cur) {
+        byDest.set(key, { count: 1, best: b });
+      } else {
+        cur.count += 1;
+        if (Number.isFinite(ts) && ts > Date.parse(cur.best.scheduled_time)) {
+          cur.best = b;
+        }
+      }
+    }
+
+    let favoriteTrip = null;
+    let bestCount = -1;
+    let bestLatestTs = -Infinity;
+    for (const { count, best } of byDest.values()) {
+      const ts = Date.parse(best.scheduled_time);
+      if (
+        count > bestCount ||
+        (count === bestCount && Number.isFinite(ts) && ts > bestLatestTs)
+      ) {
+        bestCount = count;
+        favoriteTrip = best;
+        bestLatestTs = Number.isFinite(ts) ? ts : bestLatestTs;
+      }
+    }
+
+    const out = [];
+    if (lastTrip) out.push(lastTrip);
+    if (favoriteTrip && favoriteTrip.id !== lastTrip?.id) out.push(favoriteTrip);
+    return out;
   }, [pastBookings]);
   const hasRecentTrips = recentTrips.length > 0;
 
@@ -648,9 +820,33 @@ const ClientDashboard = () => {
   }, [destination]);
 
   const indicativeAmount = useMemo(() => {
-    if (!routeMetrics?.distance_m) return null;
-    return computeIndicativeFareChf(routeMetrics.distance_m, routeMetrics.duration_s);
-  }, [routeMetrics]);
+    if (indicativeServer && typeof indicativeServer.indicative_amount_chf === 'number') {
+      return indicativeServer.indicative_amount_chf;
+    }
+    if (LOCAL_INDICATIVE_FARE_FALLBACK_ENABLED) {
+      const m = visualRouteMetrics;
+      if (m?.distance_m) {
+        return computeIndicativeFareChf(m.distance_m, m.duration_s);
+      }
+    }
+    return null;
+  }, [indicativeServer, visualRouteMetrics]);
+
+  const serverIndicativeLineMetrics = useMemo(() => {
+    if (indicativeServer?.distance_m != null && Number(indicativeServer.distance_m) > 0) {
+      return {
+        distance_m: Number(indicativeServer.distance_m),
+        duration_s:
+          indicativeServer.duration_s != null && Number.isFinite(Number(indicativeServer.duration_s))
+            ? Number(indicativeServer.duration_s)
+            : 0,
+      };
+    }
+    if (LOCAL_INDICATIVE_FARE_FALLBACK_ENABLED && visualRouteMetrics?.distance_m) {
+      return visualRouteMetrics;
+    }
+    return null;
+  }, [indicativeServer, visualRouteMetrics]);
 
   /** Multiplicateur indicatif : date de fin prioritaire sur le nombre de répétitions. */
   const recurrenceSeriesMultiplier = useMemo(() => {
@@ -700,8 +896,12 @@ const ClientDashboard = () => {
           : 'série indiquée'
       );
     }
-    if (!chunks.length) return 'Indicatif avant validation transporteur.';
-    return `Indicatif : ${chunks.join(' · ')}, ordre de grandeur avant validation transporteur.`;
+    const tail =
+      " Indicatif, non contractuel. Le prix final est confirmé à la prévisualisation (avant demande de transport).";
+    if (!chunks.length) {
+      return `Indicatif avant validation transporteur.${tail}`;
+    }
+    return `Indicatif : ${chunks.join(' · ')}, ordre de grandeur${tail}`;
   }, [
     indicativeAmount,
     roundTripEnabled,
@@ -804,8 +1004,13 @@ const ClientDashboard = () => {
       }
     }
 
+    /** Même logique que `indicativeAmountForDisplay` / encadré « Estimation transport » (total indicatif payé). */
     const baseAmount = indicativeAmount != null ? indicativeAmount : MIN_CLIENT_INDICATIVE_FARE_CHF;
-    const amountForApi = roundChfToFiveRappen(baseAmount * (roundTripEnabled ? 2 : 1));
+    let amountCalc = baseAmount * (roundTripEnabled ? 2 : 1);
+    if (recurrenceEnabled && recurrenceSeriesMultiplier > 1) {
+      amountCalc *= recurrenceSeriesMultiplier;
+    }
+    const amountForApi = roundChfToFiveRappen(amountCalc);
     const seriesLen = recurrenceEndTrim
       ? estimatedOccurrencesForRecurrence({
           startYmd: recurrenceStartForSeries,
@@ -828,6 +1033,9 @@ const ClientDashboard = () => {
       doctor_name: doctorName,
       ...(clientNotePayload ? { client_note: clientNotePayload } : {}),
       is_round_trip: roundTripEnabled,
+      ...(roundTripEnabled && returnDate && String(returnDate).trim()
+        ? { return_date: String(returnDate).trim() }
+        : {}),
       ...(returnTimeIso ? { return_time: returnTimeIso } : {}),
       is_recurring: recurrenceEnabled,
       ...(recurrenceEnabled
@@ -844,20 +1052,100 @@ const ClientDashboard = () => {
 
     setBookingSubmitting(true);
     try {
-      const response = await apiClient.post(`/clients/${effectiveClientId}/bookings`, bookingData, {
+      const previewPayload = {
+        ...bookingData,
+      };
+      delete previewPayload.customer_name;
+      const previewResponse = await apiClient.post('/clients/me/bookings/preview', previewPayload, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const previewRoot = previewResponse.data || {};
+      const previewContracts = previewRoot.contracts || {};
+      if (
+        previewContracts.status_dictionary_version &&
+        previewContracts.status_dictionary_version !==
+          CLIENT_SURFACE_CONTRACTS.statusDictionaryVersion
+      ) {
+        reportContractMismatch({
+          contract: 'status',
+          expected: CLIENT_SURFACE_CONTRACTS.statusDictionaryVersion,
+          received: previewContracts.status_dictionary_version,
+        });
+      }
+      if (
+        previewContracts.pricing_contract_version &&
+        previewContracts.pricing_contract_version !==
+          CLIENT_SURFACE_CONTRACTS.pricingContractVersion
+      ) {
+        reportContractMismatch({
+          contract: 'pricing',
+          expected: CLIENT_SURFACE_CONTRACTS.pricingContractVersion,
+          received: previewContracts.pricing_contract_version,
+        });
+      }
+      if (
+        previewContracts.canonical_address_contract_version &&
+        previewContracts.canonical_address_contract_version !==
+          CLIENT_SURFACE_CONTRACTS.canonicalAddressContractVersion
+      ) {
+        reportContractMismatch({
+          contract: 'canonical_address',
+          expected: CLIENT_SURFACE_CONTRACTS.canonicalAddressContractVersion,
+          received: previewContracts.canonical_address_contract_version,
+        });
+      }
+      const previewPricing = previewRoot.pricing || {};
+      const previewCanonical = previewRoot.canonical_addresses || {};
+      const previewWorkflow = previewRoot.workflow || {};
+      const canonicalPickup = previewCanonical.pickup?.label || bookingData.pickup_location;
+      const canonicalDropoff = previewCanonical.dropoff?.label || bookingData.dropoff_location;
+      const previewAmount = Number(previewPricing.amount);
+      if (!Number.isFinite(previewAmount) || previewAmount <= 0) {
+        setFormError('Prévisualisation tarifaire indisponible. Réessayez dans quelques instants.');
+        return;
+      }
+      const blockedPrecisionLevels = new Set(['locality', 'approximate']);
+      const pickupPrecision = String(previewCanonical.pickup?.precision_level || '').toLowerCase();
+      const dropoffPrecision = String(previewCanonical.dropoff?.precision_level || '').toLowerCase();
+      if (
+        !previewCanonical.pickup?.canonical_hash ||
+        !previewCanonical.dropoff?.canonical_hash ||
+        blockedPrecisionLevels.has(pickupPrecision) ||
+        blockedPrecisionLevels.has(dropoffPrecision)
+      ) {
+        setFormError(
+          "Les adresses doivent être canonisées avec une précision suffisante avant la soumission."
+        );
+        return;
+      }
+
+      const response = await apiClient.post(`/clients/${effectiveClientId}/bookings`, {
+        ...bookingData,
+        pickup_location: canonicalPickup,
+        dropoff_location: canonicalDropoff,
+        amount: previewAmount,
+        preview_amount: previewAmount,
+      }, {
         headers: { 'Content-Type': 'application/json' },
       });
       const root = response.data || {};
       const payload = root.data !== undefined ? root.data : root;
       const bookingId = payload.booking_id ?? root.booking_id;
       const resolvedBooking = payload.booking || root.booking || {};
-      const needPrivateWorldline =
-        Boolean(bookingId) && requiresPrivateOnlinePaymentAtBooking(resolvedBooking);
+      const previewPaymentRequired = Boolean(previewWorkflow.payment_required);
+      const needPrivateOnlinePay =
+        Boolean(bookingId) &&
+        (previewPaymentRequired || requiresPrivateOnlinePaymentAtBooking(resolvedBooking));
 
-      if (needPrivateWorldline) {
-        toast.success('Réservation enregistrée. Ouverture du paiement sécurisé Worldline…', {
-          duration: 6000,
+      if (needPrivateOnlinePay) {
+        toast.success('Demande enregistrée. Finalisez le paiement Saferpay dans le formulaire ci-dessous.', {
+          duration: 7000,
         });
+      } else if (previewWorkflow.transmission_requires_client_action) {
+        toast.success(
+          "Demande enregistrée. Une action de votre part est encore requise avant transmission à l'entreprise.",
+          { duration: 8000 }
+        );
       } else {
         toast.success(
           "Demande enregistrée. Votre course est en attente de confirmation par l'entreprise de transport.",
@@ -902,14 +1190,16 @@ const ClientDashboard = () => {
       setClientNoteDeparture('');
       setClientNoteArrival('');
       setRouteLatLngs([]);
-      setRouteMetrics(null);
+      setVisualRouteMetrics(null);
+      setIndicativeServer(null);
+      setIndicativeUnavailability('');
       trackClientKpiEvent('booking_created', {
         clientPublicId: effectiveClientId,
         bookingId: bookingId ? Number(bookingId) : null,
       });
       await loadBookings(true).catch(() => {});
 
-      if (needPrivateWorldline && bookingId) {
+      if (needPrivateOnlinePay && bookingId) {
         trackClientKpiEvent('payment_required_seen', {
           clientPublicId: effectiveClientId,
           bookingId: Number(bookingId),
@@ -918,21 +1208,35 @@ const ClientDashboard = () => {
           clientPublicId: effectiveClientId,
           bookingId: Number(bookingId),
         });
+        const bid = Number(bookingId);
+        const fallbackAmount = Number(resolvedBooking.amount ?? previewAmount);
+        const payerLabel =
+          resolvedBooking.payer_label || resolvedBooking.coverage_label || 'Client';
+        setPayOfferBookingId(bid);
+        setPayOffer({
+          bookingId: bid,
+          payerLabel,
+          finalAmount: fallbackAmount,
+          paymentRequired: true,
+          lifecycleLabel: getClientBookingUx('awaiting_client_payment').label,
+          checkoutError: null,
+        });
+        setPayingSaferpay(true);
         try {
-          await startWorldlineHostedCheckout(Number(bookingId));
+          await startSaferpayHostedCheckout(bid);
         } catch (pe) {
-          toastWorldlineCheckoutError(toast, pe);
-          const fallbackAmount = resolvedBooking.amount ?? amountForApi;
-          const payerLabel =
-            resolvedBooking.payer_label || resolvedBooking.coverage_label || 'Client';
-          setPayOfferBookingId(Number(bookingId));
-          setPayOffer({
-            bookingId: Number(bookingId),
-            payerLabel,
-            finalAmount: fallbackAmount,
-            paymentRequired: true,
-            lifecycleLabel: getClientBookingUx('awaiting_client_payment').label,
-          });
+          toastSaferpayCheckoutError(toast, pe);
+          setPayOffer((prev) =>
+            prev && prev.bookingId === bid
+              ? {
+                  ...prev,
+                  checkoutError:
+                    pe?.message || "Le paiement sécurisé n'a pas pu s'ouvrir. Réessayez ci-dessous.",
+                }
+              : prev
+          );
+        } finally {
+          setPayingSaferpay(false);
         }
       }
     } catch (err) {
@@ -946,20 +1250,30 @@ const ClientDashboard = () => {
   };
 
   const handlePayNowOffer = () => {
-    if (!payOfferBookingId || payingWorldline) return;
+    if (!payOfferBookingId || !payOffer || payingSaferpay) return;
     const id = payOfferBookingId;
     trackClientKpiEvent('pay_now_clicked', {
       clientPublicId: effectiveClientId,
       bookingId: id,
     });
-    setPayingWorldline(true);
     setFormError(null);
-    startWorldlineHostedCheckout(id)
+    setPayOffer((prev) => (prev ? { ...prev, checkoutError: null } : prev));
+    setPayingSaferpay(true);
+    startSaferpayHostedCheckout(id)
       .catch((pe) => {
-        toastWorldlineCheckoutError(toast, pe);
+        toastSaferpayCheckoutError(toast, pe);
+        setPayOffer((prev) =>
+          prev && prev.bookingId === id
+            ? {
+                ...prev,
+                checkoutError:
+                  pe?.message || "Le paiement sécurisé n'a pas pu s'ouvrir. Réessayez ci-dessous.",
+              }
+            : prev
+        );
       })
       .finally(() => {
-        setPayingWorldline(false);
+        setPayingSaferpay(false);
       });
   };
 
@@ -997,10 +1311,17 @@ const ClientDashboard = () => {
     destinationSelection?.lat != null && destinationSelection?.lon != null
       ? { lat: Number(destinationSelection.lat), lng: Number(destinationSelection.lon) }
       : parseCoordInput(destination);
-  const bookingUx = useMemo(() => getClientBookingUx(nextBooking?.status), [nextBooking?.status]);
+  const displayBookingStatus = useMemo(
+    () => resolveClientBookingDisplayStatus(nextBooking),
+    [nextBooking]
+  );
+  const bookingUx = useMemo(() => getClientBookingUx(displayBookingStatus), [displayBookingStatus]);
   const nextTripKindMeta = useMemo(() => getBookingTripKindMeta(nextBooking), [nextBooking]);
   const currentStatusLabel = bookingUx.label;
-  const actionsByStatus = bookingUx.actions;
+  const actionsByStatus = useMemo(
+    () => getEffectiveClientBookingActions(nextBooking),
+    [nextBooking]
+  );
   const statusToneClass = useMemo(
     () =>
       getClientBookingToneClass(bookingUx.label, {
@@ -1026,17 +1347,6 @@ const ClientDashboard = () => {
       iso: d.toISOString(),
     };
   }, []);
-  const payerLine = useMemo(() => {
-    if (!payOffer) return null;
-    if (String(payOffer.payerLabel || '').toLowerCase().includes('assur')) {
-      return 'Pris en charge par : Assurance';
-    }
-    if (String(payOffer.payerLabel || '').toLowerCase().includes('instit')) {
-      return 'Pris en charge par : Institution';
-    }
-    return `À payer : ${formatPrice(payOffer.finalAmount)}`;
-  }, [payOffer]);
-
   const [estimateAmountPulse, setEstimateAmountPulse] = useState(false);
   const prevIndicativeAmountRef = useRef(null);
 
@@ -1137,10 +1447,14 @@ const ClientDashboard = () => {
   const estimateInlineParts = useMemo(() => {
     if (indicativeAmount == null) return null;
     const parts = [];
-    if (routeMetrics?.duration_s) parts.push(`≈ ${Math.round(routeMetrics.duration_s / 60)} min`);
-    if (routeMetrics?.distance_m != null) parts.push(`${(routeMetrics.distance_m / 1000).toFixed(1)} km`);
+    if (serverIndicativeLineMetrics?.duration_s) {
+      parts.push(`≈ ${Math.round(serverIndicativeLineMetrics.duration_s / 60)} min`);
+    }
+    if (serverIndicativeLineMetrics?.distance_m != null) {
+      parts.push(`${(serverIndicativeLineMetrics.distance_m / 1000).toFixed(1)} km`);
+    }
     return parts;
-  }, [indicativeAmount, routeMetrics?.duration_s, routeMetrics?.distance_m]);
+  }, [indicativeAmount, serverIndicativeLineMetrics]);
 
   const estimateMetaJoined = useMemo(() => {
     if (!estimateInlineParts?.length) return null;
@@ -1189,14 +1503,23 @@ const ClientDashboard = () => {
         return <HeaderDashboard userName={userName} />;
       })()}
 
-      {loadingProfile && <p>Chargement du profil…</p>}
-      {loadingBookings && <div className="loadingSkeleton" aria-hidden />}
-      {loadError && (
-        <p className="error" role="alert">
-          {loadError}
-        </p>
-      )}
-      <main className={`clientDashboardPage${gmLoaded ? ' clientDashboardPage--mapBackdrop' : ''}`}>
+      <div
+        className="mobileCanonWebHint"
+        role="status"
+        title="Réservations et suivi : l’application mobile LIRIE complète ce portail web (canon multi-surface)."
+      >
+        Astuce : l&apos;app mobile LIRIE complète ce portail pour le suivi au quotidien.
+      </div>
+
+      <div className="clientDashboardContentStack">
+        {loadingProfile && <p>Chargement du profil…</p>}
+        {loadingBookings && <div className="loadingSkeleton" aria-hidden />}
+        {loadError && (
+          <p className="error" role="alert">
+            {loadError}
+          </p>
+        )}
+        <main className={`clientDashboardPage${gmLoaded ? ' clientDashboardPage--mapBackdrop' : ''}`}>
         {gmLoaded ? (
           <div className="clientDashboardMapBackdrop" aria-hidden="true">
             <div className="clientDashboardMapBackdropMap">
@@ -1263,14 +1586,31 @@ const ClientDashboard = () => {
               <div className="cardBody">
                 <form className="form formDense">
                   {reservationFeedback ? (
-                    <div className="successBox" role="status" aria-live="polite">
-                      <strong>Demande envoyée</strong>
-                      <p>
-                        {reservationFeedback.pickup} {'->'} {reservationFeedback.destination}
-                      </p>
-                      <p>Horaire: {reservationFeedback.scheduledLabel}</p>
-                      <p>Statut: {reservationFeedback.statusLabel}</p>
-                      <p>{reservationFeedback.billingLabel}</p>
+                    <div className="bookingFeedback" role="status" aria-live="polite">
+                      <div className="bookingFeedbackTop">
+                        <span className="bookingFeedbackKicker">Demande envoyée</span>
+                        <span className="bookingFeedbackPill">{reservationFeedback.statusLabel}</span>
+                      </div>
+                      <dl className="bookingFeedbackGrid">
+                        <div className="bookingFeedbackItem">
+                          <dt>Trajet</dt>
+                          <dd>
+                            <span className="bookingFeedbackRoute">{reservationFeedback.pickup}</span>
+                            <span className="bookingFeedbackArrow" aria-hidden="true">
+                              →
+                            </span>
+                            <span className="bookingFeedbackRoute">{reservationFeedback.destination}</span>
+                          </dd>
+                        </div>
+                        <div className="bookingFeedbackItem">
+                          <dt>Horaire</dt>
+                          <dd>{reservationFeedback.scheduledLabel}</dd>
+                        </div>
+                        <div className="bookingFeedbackItem">
+                          <dt>Couverture</dt>
+                          <dd>{reservationFeedback.billingLabel}</dd>
+                        </div>
+                      </dl>
                     </div>
                   ) : null}
 
@@ -1772,23 +2112,52 @@ const ClientDashboard = () => {
                   ) : null}
 
                   {payOfferBookingId != null && payOffer ? (
-                    <div className="payPrompt" role="region" aria-label="Paiement en ligne">
-                      <p className="payPromptLifecycle">{payOffer.lifecycleLabel}</p>
-                      <p className="payPromptText">
-                        Le paiement sécurisé n’a pas pu s’ouvrir. Réessayez pour finaliser votre réservation
-                        (règlement client obligatoire).
-                      </p>
-                      <p className="payPromptMeta">{payerLine}</p>
-                      <p className="payPromptMeta">Montant à régler : {formatPrice(payOffer.finalAmount)}</p>
-                      <div className="payPromptActions">
+                    <div
+                      className={`bookingPaymentPanel${
+                        payOffer.checkoutError ? ' bookingPaymentPanel--error' : ''
+                      }`}
+                      role="region"
+                      aria-labelledby="client-booking-pay-title"
+                    >
+                      <div className="bookingPaymentPanelTop">
+                        <div className="bookingPaymentPanelHeading">
+                          <h2 id="client-booking-pay-title" className="bookingPaymentPanelTitle">
+                            Paiement sécurisé
+                          </h2>
+                          <span className="bookingPaymentPanelVendor">Saferpay</span>
+                        </div>
+                        <span className="bookingPaymentLifecycle">{payOffer.lifecycleLabel}</span>
+                      </div>
+                      {payingSaferpay ? (
+                        <p className="bookingPaymentStatus" role="status">
+                          Redirection vers la page de paiement sécurisée…
+                        </p>
+                      ) : payOffer.checkoutError ? (
+                        <p className="bookingPaymentError">{payOffer.checkoutError}</p>
+                      ) : (
+                        <p className="bookingPaymentLead">
+                          Finalisez le règlement en ligne via le bouton ci-dessous.
+                        </p>
+                      )}
+                      <dl className="bookingPaymentFacts">
+                        {payOffer.payerLabel ? (
+                          <>
+                            <dt>Payeur</dt>
+                            <dd>{payOffer.payerLabel}</dd>
+                          </>
+                        ) : null}
+                        <dt>Montant</dt>
+                        <dd className="bookingPaymentAmount">{formatPrice(payOffer.finalAmount)}</dd>
+                      </dl>
+                      <div className="bookingPaymentActions">
                         <button
                           type="button"
                           className="primaryButton"
                           onClick={handlePayNowOffer}
-                          disabled={payingWorldline}
-                          aria-busy={payingWorldline}
+                          disabled={payingSaferpay}
+                          aria-busy={payingSaferpay}
                         >
-                          {payingWorldline ? 'Redirection…' : 'Réessayer le paiement Worldline'}
+                          {payingSaferpay ? 'Redirection…' : 'Ouvrir le paiement'}
                         </button>
                       </div>
                     </div>
@@ -1799,9 +2168,19 @@ const ClientDashboard = () => {
                       {formError}
                     </p>
                   ) : null}
+                  {indicativeUnavailability ? (
+                    <p className="networkHint" role="status">
+                      {indicativeUnavailability}
+                    </p>
+                  ) : null}
                   {estimateNotice ? (
                     <p className="networkHint" role="status">
                       {estimateNotice}
+                    </p>
+                  ) : null}
+                  {indicativeServerLoading ? (
+                    <p className="networkHint" role="status" aria-live="polite">
+                      Indicatif en cours de calcul…
                     </p>
                   ) : null}
 
@@ -1888,7 +2267,7 @@ const ClientDashboard = () => {
                         </span>
                         <span className="tripSummaryProHeaderTitle">Trajet sélectionné</span>
                       </header>
-                      <ul className="tripSummaryProPath" role="list">
+                      <ul className="tripSummaryProPath">
                         <li className="tripSummaryProLeg">
                           <span className="tripSummaryProLegMark" aria-hidden="true" />
                           <div className="tripSummaryProLegBody">
@@ -1935,28 +2314,51 @@ const ClientDashboard = () => {
                       {recentTrips.map((trip) => {
                         const tripKindMeta = getBookingTripKindMeta(trip);
                         return (
-                        <div key={trip.id} className="recentTripCard recentTripCardCompact">
-                          <div className="recentTripInfo">
-                            {tripKindMeta ? (
-                              <span
-                                className={`bookingTripKindChip bookingTripKindChip--${tripKindMeta.variant}`}
-                              >
-                                {tripKindMeta.label}
-                              </span>
-                            ) : null}
-                            <p className="recentTripRoute">
-                              {trip.pickup_location} → {trip.dropoff_location}
-                            </p>
-                            <p className="recentTripWhen">{formatTripResumeWhen(trip.scheduled_time)}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="secondaryButton"
-                            onClick={() => handleBookingAction('Recommander', trip)}
+                          <article
+                            key={trip.id}
+                            className="recentTripCard recentTripCardCompact"
                           >
-                            Réutiliser ce trajet
-                          </button>
-                        </div>
+                            <div className="recentTripCardInner">
+                              <div className="recentTripInfo">
+                                <div className="recentTripCardTop">
+                                  {tripKindMeta ? (
+                                    <span
+                                      className={`bookingTripKindChip bookingTripKindChip--${tripKindMeta.variant}`}
+                                    >
+                                      {tripKindMeta.label}
+                                    </span>
+                                  ) : null}
+                                  <time
+                                    className="recentTripWhenLine"
+                                    dateTime={
+                                      Number.isFinite(Date.parse(trip.scheduled_time))
+                                        ? new Date(trip.scheduled_time).toISOString()
+                                        : undefined
+                                    }
+                                  >
+                                    {formatTripResumeWhen(trip.scheduled_time)}
+                                  </time>
+                                </div>
+                                <div className="recentTripRouteStack" aria-label="Trajet enregistré">
+                                  <div className="recentTripLeg">
+                                    <span className="recentTripLegDot" aria-hidden />
+                                    <span className="recentTripLegText">{trip.pickup_location}</span>
+                                  </div>
+                                  <div className="recentTripLeg recentTripLeg--arrival">
+                                    <span className="recentTripLegDot" aria-hidden />
+                                    <span className="recentTripLegText">{trip.dropoff_location}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="secondaryButton recentTripReuseBtnSober"
+                                onClick={() => handleBookingAction('Recommander', trip)}
+                              >
+                                Réutiliser ce trajet
+                              </button>
+                            </div>
+                          </article>
                         );
                       })}
                     </div>
@@ -1982,13 +2384,13 @@ const ClientDashboard = () => {
             </aside>
           </div>
           {hasActiveOrFutureBooking && nextBooking ? (
-            <section className="activityContainer card clientDashboardBelowRow">
-              <div className="cardHeader">
+            <section className="activityContainer card clientDashboardBelowRow nextBookingCard">
+              <div className="cardHeader nextBookingCardHeader">
                 <h2 className="cardTitle">Prochaine course</h2>
               </div>
-              <div className="cardBody">
-                <div className="activityFocus">
-                  <div className="activityStatusRow">
+              <div className="cardBody nextBookingCardBody">
+                <div className="nextBookingInner">
+                  <div className="nextBookingTopRow">
                     <p className={`activityLabel ${statusToneClass}`}>{currentStatusLabel}</p>
                     {nextTripKindMeta ? (
                       <span
@@ -1998,20 +2400,56 @@ const ClientDashboard = () => {
                       </span>
                     ) : null}
                   </div>
-                  <div className="activityMeta">
-                    <p><strong>Trajet :</strong> {nextBooking.pickup_location} {'->'} {nextBooking.dropoff_location}</p>
-                    <p><strong>Date :</strong> {formatBookingDate(nextBooking.scheduled_time)}</p>
-                    <p><strong>Montant :</strong> {formatPrice(nextBooking.amount)}</p>
-                    {nextBooking.eta_minutes != null ? (
-                      <p><strong>ETA chauffeur :</strong> {Math.max(0, Number(nextBooking.eta_minutes))} min</p>
-                    ) : null}
+
+                  <div className="nextBookingRoute" aria-label="Trajet">
+                    <div className="nextBookingLeg">
+                      <span className="nextBookingLegRail" aria-hidden="true">
+                        <span className="nextBookingLegDot nextBookingLegDot--pickup" />
+                        <span className="nextBookingLegLine" />
+                        <span className="nextBookingLegDot nextBookingLegDot--dropoff" />
+                      </span>
+                      <div className="nextBookingLegStack">
+                        <div className="nextBookingLegBlock">
+                          <span className="nextBookingLegEyebrow">Départ</span>
+                          <span className="nextBookingLegAddr">{nextBooking.pickup_location}</span>
+                        </div>
+                        <div className="nextBookingLegBlock">
+                          <span className="nextBookingLegEyebrow">Arrivée</span>
+                          <span className="nextBookingLegAddr">{nextBooking.dropoff_location}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="activityActions">
+
+                  <dl className="nextBookingStats">
+                    <div className="nextBookingStat">
+                      <dt>Date</dt>
+                      <dd>{formatBookingDate(nextBooking.scheduled_time)}</dd>
+                    </div>
+                    <div className="nextBookingStat">
+                      <dt>Montant</dt>
+                      <dd>{formatPrice(nextBooking.amount)}</dd>
+                    </div>
+                    {nextBooking.eta_minutes != null ? (
+                      <div className="nextBookingStat nextBookingStat--eta">
+                        <dt>ETA chauffeur</dt>
+                        <dd>{Math.max(0, Number(nextBooking.eta_minutes))} min</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+
+                  <div className="nextBookingActions">
                     {actionsByStatus.map((action) => (
                       <button
                         key={action}
                         type="button"
-                        className={action === 'Voir' ? 'secondaryButton' : 'primaryButton'}
+                        className={
+                          action === 'Voir'
+                            ? 'secondaryButton nextBookingActionBtn'
+                            : action === 'Annuler'
+                              ? 'nextBookingActionBtn nextBookingActionBtnAnnuler'
+                              : 'primaryButton nextBookingActionBtn'
+                        }
                         onClick={() => handleBookingAction(action, nextBooking)}
                       >
                         {action}
@@ -2022,7 +2460,8 @@ const ClientDashboard = () => {
               </div>
             </section>
           ) : null}
-      </main>
+        </main>
+      </div>
 
       <Footer />
     </div>

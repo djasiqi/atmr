@@ -37,9 +37,11 @@ class TestA01BrokenAccessControl:
         response = client.post(
             "/api/companies/me/clients",
             json={
-                "client_type": "PRIVATE",
+                "management_mode": "MANAGED",
+                "gender": "male",
                 "first_name": "Test",
                 "last_name": "Client",
+                "address": "1 rue Test, 1000 Lausanne",
             },
             headers=auth_headers,
         )

@@ -1,0 +1,102 @@
+# docker-compose.redis-cluster-override.yml
+# Override Phase 4 — Active le Redis Cluster et met à jour tous les services
+# pour pointer vers le cluster à la place du Redis single.
+#
+# Activation :
+#   docker compose \
+#     -f docker-compose.production.yml \
+#     -f docker-compose.redis-cluster.yml \
+#     -f docker-compose.redis-cluster-override.yml \
+#     up -d
+#
+# Ce fichier :
+# 1. Désactive le Redis single (commande no-op, pas de trafic)
+# 2. Met à jour backend, celery, ws-service pour utiliser le cluster
+# 3. Active REDIS_CLUSTER_MODE=true dans le ws-service
+#
+# URLs cluster :
+#   REDIS_URL (backend/celery) : redis://redis-node-1:7001
+#     → redis-py >= 3.x résout automatiquement le cluster via MOVED/ASK
+#   REDIS_CLUSTER_URL (ws-service) : redis://redis-node-1:7001
+#     → ws-service utilise RedisCluster.from_url pour discovery automatique
+#
+# Note : Celery ne supporte pas Redis Cluster nativement (broker).
+#   Solution : utiliser le nœud 1 comme broker (Celery n'utilise qu'un seul
+#   hash slot pour les queues → un seul nœud suffit pour le broker).
+#   Pour un vrai HA Celery, passer à RabbitMQ ou utiliser redis-py-cluster avec
+#   un proxy Twemproxy devant le cluster.
+
+services:
+
+  # ── Désactivation Redis single ────────────────────────────────────────────
+  # On remplace la commande par un sleep infini qui répond PONG au healthcheck.
+  # Cela évite de supprimer le service (impossible en override compose) tout en
+  # le rendant inactif. Les autres services dépendent de redis:condition:healthy
+  # donc ils attendront le cluster nodes à la place.
+  redis:
+    command:
+      - sh
+      - -c
+      - |
+        echo "[redis-single-disabled] Redis single remplacé par Redis Cluster."
+        echo "[redis-single-disabled] Ce conteneur est inactif (placeholder)."
+        # Répond PONG pour satisfaire les healthchecks des services dépendants.
+        # Le trafic réel va vers redis-node-{1,2,3}.
+        redis-server --port 6379 --bind 0.0.0.0 --protected-mode no \
+          --maxmemory 1mb --save ""
+    depends_on: {}
+
+  # ── Backend : pointer vers le nœud 1 du cluster ──────────────────────────
+  # redis-py détecte automatiquement le cluster via les réponses MOVED/ASK.
+  # REDIS_URL pointe sur le nœud 1 comme point d'entrée ; le client redirige
+  # automatiquement selon le hash slot.
+  backend:
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      REDIS_HOST: redis-node-1
+      REDIS_PORT: "7001"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+
+  # ── Celery worker : même point d'entrée cluster ───────────────────────────
+  celery-worker:
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+
+  celery-beat:
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+    environment:
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      CELERY_BROKER_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      CELERY_RESULT_BACKEND: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+
+  # ── WS service : mode cluster activé ────────────────────────────────────
+  ws-service:
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+    environment:
+      # Nœud de bootstrap — RedisCluster.from_url découvre les autres nœuds.
+      REDIS_CLUSTER_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001/0"
+      REDIS_CLUSTER_STARTUP_NODE_URL: "redis://:${REDIS_PASSWORD:-atmr_redis_password}@redis-node-1:7001"
+      # Active le client RedisCluster dans le ws-service (P0-4).
+      REDIS_CLUSTER_MODE: "true"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-atmr_redis_password}

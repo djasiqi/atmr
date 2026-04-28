@@ -217,7 +217,7 @@ vercel --prod
 
 ```bash
 # Se connecter au serveur
-ssh deploy@138.201.155.201
+ssh deploy@$SERVER_HOST
 
 # Aller dans le dossier atmr
 cd /srv/atmr

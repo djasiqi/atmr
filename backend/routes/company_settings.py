@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from http import HTTPStatus
-from typing import Any
+from typing import Any, Optional
 
 from flask import request
 from flask_jwt_extended import jwt_required
@@ -1526,16 +1526,26 @@ class ClinicBillingMappings(Resource):
             clinic = Company.query.filter_by(id=m.clinic_company_id).first()
             bp = BillingParty.query.filter_by(id=m.billing_party_id).first()
             clinic_display_name = clinic.name if clinic else None
+            linked_client: Optional[Client] = None
             if clinic and company:
+                # `clinic` = Company (entité facturation clinique), pas la table institutions
                 linked_client = Client.query.filter_by(
                     company_id=company.id,
                     is_institution=True,
-                    linked_institution_id=clinic.id,
+                    default_billed_to_company_id=clinic.id,
                 ).first()
                 if linked_client and linked_client.institution_name:
                     # Préfère le nom institution "source of truth" côté transporteur.
                     # Utile quand certains vieux enregistrements Company ont un nom encodé (ex: "Ani??res").
                     clinic_display_name = linked_client.institution_name
+            preferential_rate_chf: float | None = None
+            if clinic and clinic.preferential_rate is not None:
+                preferential_rate_chf = float(clinic.preferential_rate)
+            elif (
+                linked_client
+                and linked_client.preferential_rate is not None
+            ):
+                preferential_rate_chf = float(linked_client.preferential_rate)
             payload.append(
                 {
                     "id": m.id,
@@ -1544,6 +1554,7 @@ class ClinicBillingMappings(Resource):
                     "billing_party_id": m.billing_party_id,
                     "billing_party_name": bp.display_name if bp else None,
                     "is_active": bool(m.is_active),
+                    "preferential_rate_chf": preferential_rate_chf,
                 }
             )
         return {"success": True, "data": payload}, 200
@@ -1655,14 +1666,23 @@ class ClinicBillingMappingByClinic(Resource):
         clinic = Company.query.filter_by(id=mapping.clinic_company_id).first()
         bp = BillingParty.query.filter_by(id=mapping.billing_party_id).first()
         clinic_display_name = clinic.name if clinic else None
+        linked_client: Optional[Client] = None
         if clinic and company:
             linked_client = Client.query.filter_by(
                 company_id=company.id,
                 is_institution=True,
-                linked_institution_id=clinic.id,
+                default_billed_to_company_id=clinic.id,
             ).first()
             if linked_client and linked_client.institution_name:
                 clinic_display_name = linked_client.institution_name
+        preferential_rate_chf: float | None = None
+        if clinic and clinic.preferential_rate is not None:
+            preferential_rate_chf = float(clinic.preferential_rate)
+        elif (
+            linked_client
+            and linked_client.preferential_rate is not None
+        ):
+            preferential_rate_chf = float(linked_client.preferential_rate)
 
         payload = {
             "id": mapping.id,
@@ -1671,6 +1691,7 @@ class ClinicBillingMappingByClinic(Resource):
             "billing_party_id": mapping.billing_party_id,
             "billing_party_name": bp.display_name if bp else None,
             "is_active": bool(mapping.is_active),
+            "preferential_rate_chf": preferential_rate_chf,
         }
 
         return {"success": True, "data": payload}, 200

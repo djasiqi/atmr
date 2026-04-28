@@ -109,20 +109,22 @@ class CreateCompanyClientUseCase:
         self, input_data: CreateCompanyClientInput
     ) -> CreateCompanyClientOutput:
         validated_data = input_data.validated_data
-        client_type = _norm_str(validated_data.get("client_type"))
-        if not client_type:
+        mgmt_mode = _norm_str(validated_data.get("management_mode"))
+        if not mgmt_mode:
             return CreateCompanyClientOutput(
-                success=False, error={"error": "client_type requis"}, status_code=400
+                success=False,
+                error={"error": "management_mode requis"},
+                status_code=400,
             )
 
-        ct_upper = str(client_type).upper()
-        if ct_upper not in {"SELF_SERVICE", "PRIVATE", "CORPORATE"}:
+        mm_upper = str(mgmt_mode).upper()
+        if mm_upper not in {"SELF_SERVICE", "MANAGED", "CORPORATE"}:
             return CreateCompanyClientOutput(
                 success=False,
                 error={
                     "error": (
-                        "client_type invalide. Valeurs possibles: "
-                        "SELF_SERVICE, PRIVATE, CORPORATE"
+                        "management_mode invalide. Valeurs possibles: "
+                        "SELF_SERVICE, MANAGED, CORPORATE"
                     )
                 },
                 status_code=400,
@@ -132,24 +134,23 @@ class CreateCompanyClientUseCase:
         first_name = _norm_str(validated_data.get("first_name")) or ""
         last_name = _norm_str(validated_data.get("last_name")) or ""
         address = _norm_str(validated_data.get("address"))
-        # ✅ Validation du genre obligatoire
         gender = _norm_str(validated_data.get("gender"))
 
-        if ct_upper == "SELF_SERVICE" and not email:
+        if mm_upper == "SELF_SERVICE" and not email:
             return CreateCompanyClientOutput(
                 success=False,
                 error={"error": "email requis pour self-service"},
                 status_code=400,
             )
 
-        if ct_upper != "SELF_SERVICE":
+        if mm_upper != "SELF_SERVICE":
             missing = [
                 f
                 for f, v in (
                     ("first_name", first_name),
                     ("last_name", last_name),
                     ("address", address),
-                    ("gender", gender),  # ✅ Le genre est maintenant obligatoire
+                    ("gender", gender),
                 )
                 if not v
             ]
@@ -164,7 +165,6 @@ class CreateCompanyClientUseCase:
                     status_code=400,
                 )
 
-        # username (comportement identique à l'existant)
         if email:
             username = email.split("@")[0]
         else:
@@ -174,7 +174,7 @@ class CreateCompanyClientUseCase:
             ln = last_name.strip().lower()
             username = f"{fn}.{ln}-{uuid.uuid4().hex[:6]}"
 
-        pwd = _generate_password(length=16 if ct_upper == "SELF_SERVICE" else 20)
+        pwd = _generate_password(length=16 if mm_upper == "SELF_SERVICE" else 20)
 
         user_attrs: dict[str, Any] = {
             "public_id": self._make_public_id(),
@@ -192,7 +192,8 @@ class CreateCompanyClientUseCase:
         }
 
         client_attrs: dict[str, Any] = {
-            "client_type": ct_upper,
+            "client_type": "TRANSPORT",
+            "management_mode": mm_upper,
             "billing_address": validated_data.get("billing_address")
             or validated_data.get("address"),
             "billing_lat": validated_data.get("billing_lat"),
@@ -229,6 +230,37 @@ class CreateCompanyClientUseCase:
             "default_billed_to_contact": validated_data.get("default_billed_to_contact"),
             "is_active": validated_data.get("is_active", True),
         }
+
+        if bool(validated_data.get("is_institution", False)):
+            raw_lid = validated_data.get("linked_institution_id")
+            if raw_lid is not None:
+                try:
+                    lid_int = int(raw_lid)
+                except (TypeError, ValueError):
+                    lid_int = None
+                if lid_int is not None:
+                    from models import Client
+
+                    existing = (
+                        Client.query.filter(
+                            Client.company_id == input_data.company_id,
+                            Client.is_institution.is_(True),
+                            Client.linked_institution_id == lid_int,
+                        )
+                        .first()
+                    )
+                    if existing is not None:
+                        return CreateCompanyClientOutput(
+                            success=False,
+                            error={
+                                "error": (
+                                    "Un client établissement existe déjà pour cette institution "
+                                    f"(fiche n°{existing.id}). Ouvrez cette fiche ou supprimez "
+                                    "le doublon avant d’en créer une nouvelle."
+                                )
+                            },
+                            status_code=409,
+                        )
 
         try:
             user, client = self._writer.create_client_for_company(

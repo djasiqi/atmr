@@ -1,0 +1,31 @@
+# Contrat d'application du canon multi-surface (LIRIE) — semi-automatique.
+# Si une PR touche ≥2 zones parmi operations-app, chauffeur web, dispatch web,
+# le titre ou le corps doit mentionner le canon, docs/adr/, ou API_CANON_RULES.
+name: Canon multi-surface
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/operations-app/**'
+      - 'frontend/src/pages/driver/**'
+      - 'frontend/src/pages/company/**/Dispatch/**'
+      - 'frontend/src/pages/company/Dispatch/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier référence canon / ADR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/check-canon-multi-surface.sh

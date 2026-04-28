@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from functools import wraps
+from io import BytesIO
 from typing import Any
 
 import sentry_sdk
 from flask import (
     request,
+    send_file,
     url_for,
 )
 from flask_jwt_extended import jwt_required
@@ -20,6 +23,7 @@ from ext import db, limiter, role_required
 from infrastructure.dispatch import queue_adapter as queue
 from middleware.trace_id import get_trace_id
 from models.enums import UserRole
+from models.payment import Payment
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
 from repositories.driver_repository import DriverRepository
@@ -30,11 +34,22 @@ from routes.api_error_models import (
     create_permission_error_model,
     create_validation_error_model,
 )
+from routes.api_error_utils import api_error
 from schemas.booking_schemas import BookingCreateSchema
 from schemas.validation_utils import handle_validation_error, validate_request
+from services.booking.expire_unpaid_client_bookings import (
+    expire_awaiting_client_payment_bookings,
+)
 from services.platform_exceptions import PlatformTenantSuspended
 from services.platform_governance_constants import ERROR_TENANT_PLATFORM_SUSPENDED
+from services.saferpay.config import saferpay_configured
+from services.saferpay.finalize_payment import finalize_saferpay_payment
+from services.saferpay.payment_page import create_saferpay_payment_page_initialize
 from services.security.idempotency import IdempotencyService
+from shared.client_surface_contracts import (
+    PRICING_CONTRACT_VERSION,
+    PRICING_STATUS_VALUES,
+)
 from shared.constants import PaginationConstants
 from shared.error_handlers import APIErrorHandler
 from shared.response_helpers import created_response, success_response
@@ -43,6 +58,10 @@ from shared.time_utils import to_utc
 # ✅ REFACTORING: Utilisation de constantes centralisées
 # Alias pour compatibilité avec le code existant
 PAGE_ONE = PaginationConstants.PAGE_ONE
+
+_MONTH_DECEMBER = 12
+_PDF_NEW_PAGE_Y_THRESHOLD = 70
+_PRICING_ADJUSTMENT_EPSILON = 0.01
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +100,12 @@ booking_create_model = bookings_ns.model(
             required=True,
             description=(
                 "ISO 8601 (ex: 2024-01-15T14:30:00). "
-                "Note: Les dates passées sont normalement rejetées, sauf si "
-                "time_confirmed=False (permis pour imports historiques)."
+                "Si asap=true, peut être omis ou null : l'API fixe une heure proche."
             ),
+        ),
+        "asap": fields.Boolean(
+            description="« Dès que possible » : scheduled_time dérivé côté serveur",
+            default=False,
         ),
         "amount": fields.Float(
             required=True, min=0, description="Montant de la réservation"
@@ -93,6 +115,11 @@ booking_create_model = bookings_ns.model(
         ),
         "doctor_name": fields.String(
             description="Nom du médecin", default="", max_length=200
+        ),
+        "hospital_service": fields.String(
+            description="Service ou unité (ex. urgences, cardiologie)",
+            default="",
+            max_length=100,
         ),
         "is_round_trip": fields.Boolean(
             description="Créer également un retour", default=False
@@ -118,6 +145,19 @@ booking_update_model = bookings_ns.model(
         "doctor_name": fields.String(max_length=200),
         "is_round_trip": fields.Boolean(),
         "notes_medical": fields.String(max_length=1000),
+    },
+)
+
+booking_export_pdf_model = bookings_ns.model(
+    "BookingExportPdfRequest",
+    {
+        "client_public_id": fields.String(required=False),
+        "period": fields.String(
+            required=True,
+            enum=["this_month", "previous_month", "this_year", "custom"],
+        ),
+        "from": fields.String(required=False, description="ISO 8601 pour période custom"),
+        "to": fields.String(required=False, description="ISO 8601 pour période custom"),
     },
 )
 
@@ -390,6 +430,134 @@ def _handle_geocoding_error(error: RuntimeError) -> tuple[dict[str, str], int]:
     }, 400
 
 
+def _parse_iso_or_none(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _period_bounds(period: str, custom_from: datetime | None, custom_to: datetime | None) -> tuple[datetime, datetime] | None:
+    now = datetime.now(UTC)
+    if period == "this_month":
+        start = datetime(now.year, now.month, 1, tzinfo=UTC)
+        if now.month == _MONTH_DECEMBER:
+            end = datetime(now.year + 1, 1, 1, tzinfo=UTC)
+        else:
+            end = datetime(now.year, now.month + 1, 1, tzinfo=UTC)
+        return start, end
+    if period == "previous_month":
+        first_this_month = datetime(now.year, now.month, 1, tzinfo=UTC)
+        end = first_this_month
+        start = datetime(end.year, end.month, 1, tzinfo=UTC) - timedelta(days=1)
+        start = datetime(start.year, start.month, 1, tzinfo=UTC)
+        return start, end
+    if period == "this_year":
+        start = datetime(now.year, 1, 1, tzinfo=UTC)
+        end = datetime(now.year + 1, 1, 1, tzinfo=UTC)
+        return start, end
+    if period == "custom" and custom_from and custom_to and custom_from <= custom_to:
+        return custom_from, custom_to
+    return None
+
+
+_STATUS_LABEL_RULES: list[tuple[frozenset[str], str]] = [
+    (frozenset({"awaiting_client_payment"}), "En attente de paiement"),
+    (frozenset({"pending", "requested", "awaiting", "waiting"}), "En attente"),
+    (frozenset({"confirmed", "accepted", "validated", "assigned"}), "Confirmée"),
+    (
+        frozenset(
+            {
+                "driver_on_the_way",
+                "driver_en_route",
+                "driver_arriving",
+                "en_route",
+            }
+        ),
+        "Chauffeur en route",
+    ),
+    (frozenset({"in_progress", "ongoing", "started"}), "En cours"),
+    (frozenset({"completed", "done", "finished", "terminated"}), "Terminée"),
+    (frozenset({"cancelled", "canceled", "rejected"}), "Annulée"),
+]
+
+
+def _status_label(status_value: Any) -> str:
+    s = str(getattr(status_value, "value", status_value) or "").lower()
+    for keys, label in _STATUS_LABEL_RULES:
+        if s in keys:
+            return label
+    return "En attente"
+
+
+def _build_client_bookings_pdf(bookings: list[Any], period_label: str) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    _, height = A4
+    y = height - 40
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(40, y, f"Export courses client - {period_label}")
+    y -= 24
+
+    headers = [
+        "Date",
+        "Heure",
+        "Trajet",
+        "Transporteur",
+        "Montant",
+        "Statut",
+        "Référence",
+        "Adresse départ",
+        "Adresse arrivée",
+    ]
+    pdf.setFont("Helvetica-Bold", 8)
+    pdf.drawString(40, y, " | ".join(headers))
+    y -= 14
+    pdf.setFont("Helvetica", 8)
+
+    total_amount = 0.0
+    for booking in bookings:
+        scheduled = getattr(booking, "scheduled_time", None)
+        if isinstance(scheduled, datetime):
+            date_str = scheduled.strftime("%d/%m/%Y")
+            time_str = scheduled.strftime("%H:%M")
+        else:
+            date_str = "-"
+            time_str = "-"
+        amount = float(getattr(booking, "amount", 0) or 0)
+        total_amount += amount
+        reference = f"BK-{getattr(booking, 'id', '-')}"
+        row = [
+            date_str,
+            time_str,
+            f"{getattr(booking, 'pickup_location', '')} -> {getattr(booking, 'dropoff_location', '')}",
+            getattr(getattr(booking, "company", None), "name", None) or "Non assignée",
+            f"{amount:.2f} CHF",
+            _status_label(getattr(booking, "status", None)),
+            reference,
+            str(getattr(booking, "pickup_location", "") or ""),
+            str(getattr(booking, "dropoff_location", "") or ""),
+        ]
+        pdf.drawString(40, y, " | ".join(row)[:220])
+        y -= 12
+        if y < _PDF_NEW_PAGE_Y_THRESHOLD:
+            pdf.showPage()
+            y = height - 40
+            pdf.setFont("Helvetica", 8)
+
+    y -= 8
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawString(40, y, f"Total période: {total_amount:.2f} CHF")
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def _validate_booking_request(
     data: dict[str, Any], public_id: str
 ) -> tuple[Any | None, Any | None, tuple[dict[str, str], int] | None]:
@@ -406,11 +574,15 @@ def _validate_booking_request(
     from marshmallow import ValidationError
 
     try:
-        validate_request(BookingCreateSchema(), data)
+        validated = validate_request(BookingCreateSchema(), data)
     except ValidationError as e:
         # Retourner None pour user/client et l'erreur de validation
         # La route gérera le return
         return None, None, handle_validation_error(e)
+
+    # Données normalisées (ex. scheduled_time rempli si asap=true)
+    data.clear()
+    data.update(validated)
 
     # Validation utilisateur et client
     user, client, auth_error = _validate_user_and_client(public_id)
@@ -429,6 +601,179 @@ def _validate_booking_request(
         return None, None, error_response
 
     return user, client, None
+
+
+def _booking_creation_client_brief(booking: Any) -> dict[str, Any]:
+    """Résumé minimal pour le portail client (POST création, sans sérialisation complète)."""
+    status_val = getattr(booking.status, "value", booking.status)
+    preview_amount = getattr(booking, "price_amount", None)
+    raw_breakdown = getattr(booking, "price_breakdown_json", None)
+    breakdown = raw_breakdown if isinstance(raw_breakdown, dict) else {}
+    recalculation_reason = None
+    pricing_status = "confirmed"
+    if breakdown.get("overridden_by_preferential"):
+        source = str(breakdown.get("preferential_source") or "policy").strip().lower()
+        if source == "clinic":
+            recalculation_reason = "Tarif recalculé selon la convention clinique active."
+        elif source == "client":
+            recalculation_reason = "Tarif recalculé selon le tarif préférentiel client."
+        else:
+            recalculation_reason = (
+                "Tarif recalculé selon une règle métier de tarification serveur."
+            )
+        pricing_status = "adjusted"
+    elif breakdown.get("pricing_amount_applied"):
+        recalculation_reason = (
+            "Tarif recalculé à la création selon le moteur de pricing backend."
+        )
+        pricing_status = "adjusted"
+    if pricing_status not in PRICING_STATUS_VALUES:
+        pricing_status = "confirmed"
+    return {
+        "id": booking.id,
+        "amount": float(getattr(booking, "amount", 0) or 0),
+        "price_amount": float(preview_amount or 0) if preview_amount is not None else None,
+        "pricing_adjustment_reason": recalculation_reason,
+        "pricing_status": pricing_status,
+        "pricing_contract_version": PRICING_CONTRACT_VERSION,
+        "billed_to_type": (str(getattr(booking, "billed_to_type", None) or "patient"))
+        .strip()
+        .lower(),
+        "status": str(status_val).lower() if status_val is not None else "pending",
+    }
+
+
+def execute_client_booking_creation(public_id: str) -> Any:  # noqa: PLR0911
+    """Création réservation pour `public_id` utilisateur — partagé entre
+    `POST /bookings/clients/<id>/bookings` et `POST /clients/<id>/bookings`."""
+    try:
+        idempotency_key = IdempotencyService.get_idempotency_key_from_request()
+        if idempotency_key:
+            cached_response = IdempotencyService.check_key(idempotency_key)
+            if cached_response[0]:
+                logger.info(
+                    "Idempotency key found, returning cached response",
+                    extra={
+                        "trace_id": get_trace_id(),
+                        "idempotency_key": idempotency_key,
+                    },
+                )
+                return cached_response[1], 201
+
+        data = request.get_json(silent=True) or {}
+
+        user, client, validation_error = _validate_booking_request(data, public_id)
+        if validation_error:
+            return validation_error
+
+        if user is None or client is None:
+            return APIErrorHandler.handle_exception(
+                Exception("Erreur interne d'authentification"),
+                logger,
+            )
+
+        from bookings.infrastructure.adapters.booking_service_adapter import (
+            create_booking_via_use_case,
+        )
+
+        try:
+            new_booking = create_booking_via_use_case(
+                user_id=user.id, client_id=client.id, data=data
+            )
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e),
+                logger_instance=logger,
+            )
+        except PlatformTenantSuspended as e:
+            trace_id = get_trace_id()
+            return {
+                "error": e.message,
+                "error_code": ERROR_TENANT_PLATFORM_SUSPENDED,
+                "reason_code": ERROR_TENANT_PLATFORM_SUSPENDED,
+                "human_reason": e.message,
+                "retryable": False,
+                "trace_id": trace_id,
+            }, 403
+        except RuntimeError as e:
+            return _handle_geocoding_error(e)
+
+        booking_id = getattr(new_booking, "id", None)
+        if new_booking is not None:
+            from models.enums import BookingStatus
+
+            billed = (
+                str(getattr(new_booking, "billed_to_type", None) or "patient")
+                .strip()
+                .lower()
+            )
+            if billed == "patient":
+                new_booking.status = BookingStatus.AWAITING_CLIENT_PAYMENT
+                db.session.commit()
+
+        if new_booking is not None and getattr(new_booking, "company_id", None) is None:
+            try:
+                from services.dispatch.open_booking_offers import (
+                    seed_dispatch_offers_for_unassigned_booking,
+                )
+
+                seed_dispatch_offers_for_unassigned_booking(int(new_booking.id))
+            except Exception:
+                logger.exception(
+                    "[Bookings] Échec seed offres dispatch pour booking ouvert id=%s",
+                    getattr(new_booking, "id", None),
+                )
+
+        trace_id = get_trace_id()
+        logger.info(
+            "✅ Réservation créée avec succès: booking_id=%s, client_id=%s",
+            booking_id,
+            client.id,
+            extra={
+                "trace_id": trace_id,
+                "booking_id": booking_id,
+                "client_id": client.id,
+            },
+        )
+
+        booking_brief = _booking_creation_client_brief(new_booking) if new_booking is not None else None
+        requested_amount = data.get("amount")
+        preview_amount = data.get("preview_amount")
+        if booking_brief is not None:
+            final_amount = booking_brief.get("amount")
+            provided_reference_amount = (
+                preview_amount if isinstance(preview_amount, (float, int)) else requested_amount
+            )
+            if (
+                isinstance(provided_reference_amount, (float, int))
+                and isinstance(final_amount, (float, int))
+                and abs(float(final_amount) - float(provided_reference_amount))
+                >= _PRICING_ADJUSTMENT_EPSILON
+                and not booking_brief.get("pricing_adjustment_reason")
+            ):
+                booking_brief["pricing_adjustment_reason"] = (
+                    "Le prix a été recalculé à la création en raison d'une mise à jour "
+                    "des règles de tarification ou du contexte opérationnel."
+                )
+                booking_brief["pricing_status"] = "adjusted"
+        response_data, status_code = created_response(
+            data={
+                "booking_id": booking_id,
+                "trace_id": trace_id,
+                "booking": booking_brief,
+            },
+            location=f"/api/bookings/{booking_id}" if booking_id else None,
+            message="Réservation créée avec succès",
+        )
+
+        if idempotency_key:
+            IdempotencyService.store_response(idempotency_key, response_data, 201)
+
+        return response_data, status_code
+
+    except Exception as e:
+        db.session.rollback()
+        return APIErrorHandler.handle_exception(e, logger)
 
 
 @bookings_ns.route("/clients/<string:public_id>/bookings")
@@ -451,114 +796,91 @@ class CreateBooking(Resource):
         409, "Réservation déjà existante (idempotency)", api_error_model
     )
     @bookings_ns.response(500, "Erreur serveur", api_error_model)
-    def post(self, public_id):  # noqa: PLR0911
+    def post(self, public_id):
         """Créer une réservation pour un client (statut PENDING).
 
         ✅ P0: Support idempotency-key pour éviter les doublons.
         """
+        return execute_client_booking_creation(public_id)
+
+
+@bookings_ns.route("/clients/me/bookings/export-pdf")
+class ClientBookingsExportPdf(Resource):
+    @jwt_required()
+    @role_required(UserRole.client)
+    @bookings_ns.expect(booking_export_pdf_model, validate=False)
+    @limiter.limit("30 per hour")
+    def post(self):  # noqa: PLR0911
         try:
-            # ✅ P0: Vérifier idempotency-key
-            idempotency_key = IdempotencyService.get_idempotency_key_from_request()
-            if idempotency_key:
-                cached_response = IdempotencyService.check_key(idempotency_key)
-                if cached_response[0]:  # Key exists
-                    logger.info(
-                        "Idempotency key found, returning cached response",
-                        extra={
-                            "trace_id": get_trace_id(),
-                            "idempotency_key": idempotency_key,
-                        },
-                    )
-                    return cached_response[1], 201
-
-            data = request.get_json() or {}
-
-            # Validation de la requête
-            user, client, validation_error = _validate_booking_request(data, public_id)
-            if validation_error:
-                return validation_error
-
-            # Défense en profondeur : vérification explicite pour le type checker
-            if user is None or client is None:
-                return APIErrorHandler.handle_exception(
-                    Exception("Erreur interne d'authentification"),
-                    logger,
-                )
-
-            # ✅ DDD: Utiliser directement le use-case au lieu du service
-            from bookings.infrastructure.adapters.booking_service_adapter import (
-                create_booking_via_use_case,
+            from models import Booking
+            from shared.infrastructure.adapters.auth_adapter import (
+                get_current_user_via_use_case,
             )
 
-            try:
-                new_booking = create_booking_via_use_case(
-                    user_id=user.id, client_id=client.id, data=data
-                )
-            except ValueError as e:
-                # Erreur de validation (date, adresse, etc.)
-                return APIErrorHandler.handle_validation_error(
-                    str(e),
-                    logger_instance=logger,
-                )
-            except PlatformTenantSuspended as e:
-                trace_id = get_trace_id()
-                return {
-                    "error": e.message,
-                    "error_code": ERROR_TENANT_PLATFORM_SUSPENDED,
-                    "reason_code": ERROR_TENANT_PLATFORM_SUSPENDED,
-                    "human_reason": e.message,
-                    "retryable": False,
-                    "trace_id": trace_id,
-                }, 403
-            except RuntimeError as e:
-                # Erreur de géocodage (adresse invalide, service indisponible, etc.)
-                return _handle_geocoding_error(e)
+            user = get_current_user_via_use_case()
+            if not user:
+                return {"message": "Utilisateur non authentifié"}, 401
 
-            # ⚠️ Pas de dispatch ici (PENDING seulement).
-            # L'entreprise acceptera -> ACCEPTED.
-            booking_id = getattr(new_booking, "id", None)
+            client = client_repo.find_by_user_id(user.id)
+            if not client:
+                return {"message": "Profil client introuvable"}, 404
 
-            # ✅ P0: Ajouter trace_id dans la réponse
-            trace_id = get_trace_id()
-            logger.info(
-                "✅ Réservation créée avec succès: booking_id=%s, client_id=%s",
-                booking_id,
-                client.id,
-                extra={
-                    "trace_id": trace_id,
-                    "booking_id": booking_id,
-                    "client_id": client.id,
-                },
+            data = request.get_json(silent=True) or {}
+            period = str(data.get("period") or "").strip().lower()
+            if period not in {"this_month", "previous_month", "this_year", "custom"}:
+                return {"message": "Période invalide"}, 400
+
+            custom_from = _parse_iso_or_none(data.get("from"))
+            custom_to = _parse_iso_or_none(data.get("to"))
+            bounds = _period_bounds(period, custom_from, custom_to)
+            if bounds is None:
+                return {"message": "Période personnalisée invalide"}, 400
+            start_dt, end_dt = bounds
+
+            bookings = (
+                Booking.query.filter(Booking.client_id == client.id)
+                .filter(Booking.scheduled_time >= start_dt)
+                .filter(Booking.scheduled_time < end_dt)
+                .order_by(Booking.scheduled_time.asc())
+                .all()
             )
+            if not bookings:
+                return {"message": "Aucune donnée exportable pour la période sélectionnée."}, 404
 
-            response_data, status_code = created_response(
-                data={"booking_id": booking_id, "trace_id": trace_id},
-                location=f"/api/bookings/{booking_id}" if booking_id else None,
-                message="Réservation créée avec succès",
+            period_label_map = {
+                "this_month": "Ce mois",
+                "previous_month": "Mois précédent",
+                "this_year": "Cette année",
+                "custom": "Période personnalisée",
+            }
+            period_label = period_label_map.get(period, "Période")
+            pdf_bytes = _build_client_bookings_pdf(bookings, period_label)
+
+            total_amount = sum(float(getattr(item, "amount", 0) or 0) for item in bookings)
+            filename = f"courses_{period}.pdf"
+            response = send_file(
+                BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=filename,
             )
-
-            # ✅ P0: Stocker la réponse pour idempotency
-            if idempotency_key:
-                IdempotencyService.store_response(idempotency_key, response_data, 201)
-
-            return response_data, status_code
-
+            response.headers["X-Period-Label"] = period_label
+            response.headers["X-Total-Amount"] = f"{total_amount:.2f}"
+            response.headers["X-Rows-Count"] = str(len(bookings))
+            return response
         except Exception as e:
-            db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
 
 
-@bookings_ns.route("/<int:booking_id>/worldline/hosted-checkout")
-class BookingWorldlineHostedCheckout(Resource):
-    """Démarre un paiement Worldline (MyCheckout) pour une réservation client."""
+@bookings_ns.route("/<int:booking_id>/saferpay/initialize")
+class BookingSaferpayInitialize(Resource):
+    """Démarre un paiement Saferpay (Payment Page) pour une réservation client."""
 
     @require_booking_ownership("read")
     @limiter.limit("30 per hour")
-    def post(self, booking_id, booking, user):
-        from services.worldline.client_factory import worldline_configured
-        from services.worldline.hosted_checkout_service import (
-            create_worldline_hosted_checkout,
-        )
+    def post(self, booking_id, booking, user):  # noqa: PLR0911
+        _ = booking_id
+        from services.saferpay.config import saferpay_configured
 
         role_val = str(getattr(user.role, "value", user.role))
         if role_val != UserRole.client.value:
@@ -574,17 +896,17 @@ class BookingWorldlineHostedCheckout(Resource):
                 logger_instance=logger,
             )
 
-        if not worldline_configured():
+        if not saferpay_configured():
             return {
                 "error": "payment_unavailable",
-                "message": "Paiement Worldline non configuré sur ce serveur",
+                "message": "Paiement Saferpay non configuré sur ce serveur",
             }, 503
 
         payload = request.get_json(silent=True) or {}
         return_url = payload.get("return_url")
 
         try:
-            out = create_worldline_hosted_checkout(
+            out = create_saferpay_payment_page_initialize(
                 booking=booking,
                 user=user,
                 client=client,
@@ -595,16 +917,105 @@ class BookingWorldlineHostedCheckout(Resource):
                 str(e),
                 logger_instance=logger,
             )
-        except RuntimeError as e:
+        except Exception as e:
+            db.session.rollback()
+            if isinstance(e, RuntimeError):
+                return api_error(
+                    "saferpay_initialize_failed",
+                    str(e),
+                    503,
+                )
+            return APIErrorHandler.handle_exception(e, logger)
+
+        return success_response(data=out)
+
+
+@bookings_ns.route("/<int:booking_id>/saferpay/assert")
+class BookingSaferpayAssert(Resource):
+    """Finalise le paiement (Assert + Capture) après retour depuis Saferpay."""
+
+    @require_booking_ownership("read")
+    @limiter.limit("60 per hour")
+    def post(self, booking_id, booking, user):  # noqa: PLR0911
+        _ = booking_id
+        role_val = str(getattr(user.role, "value", user.role))
+        if role_val != UserRole.client.value:
+            return APIErrorHandler.handle_permission_error(
+                "Le paiement en ligne est réservé aux comptes client",
+                logger_instance=logger,
+            )
+
+        client = client_repo.find_by_user_id(user.id)
+        if not client:
+            return APIErrorHandler.handle_permission_error(
+                "Profil client introuvable",
+                logger_instance=logger,
+            )
+
+        if not saferpay_configured():
             return {
-                "error": "worldline_configuration",
-                "message": str(e),
+                "error": "payment_unavailable",
+                "message": "Paiement Saferpay non configuré sur ce serveur",
             }, 503
+
+        payload = request.get_json(silent=True) or {}
+        raw_payment_id = payload.get("payment_id")
+        if raw_payment_id is None:
+            return APIErrorHandler.handle_validation_error(
+                "payment_id requis (entier)",
+                logger_instance=logger,
+            )
+        try:
+            payment_id_int = int(raw_payment_id)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "payment_id requis (entier)",
+                logger_instance=logger,
+            )
+
+        payment_row = Payment.query.filter_by(
+            id=payment_id_int,
+            booking_id=booking.id,
+            client_id=client.id,
+            payment_provider="saferpay",
+        ).first()
+        if not payment_row:
+            return APIErrorHandler.handle_not_found("Payment", payment_id_int, logger)
+
+        try:
+            out = finalize_saferpay_payment(payment_row)
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
         except Exception as e:
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
 
-        return success_response(data=out)
+        assert_status = str(out.get("status", "")).strip().lower()
+        payment_status = "pending_verification"
+        if assert_status in {"completed", "already_completed"}:
+            payment_status = "paid"
+        elif assert_status in {"payment_failed", "assert_failed", "unexpected_tx_status"}:
+            payment_status = "failed"
+        else:
+            persisted_payment_status = str(
+                getattr(payment_row.status, "value", payment_row.status)
+            ).strip().upper()
+            if persisted_payment_status == "FAILED":
+                payment_status = "failed"
+            elif persisted_payment_status == "COMPLETED":
+                payment_status = "paid"
+
+        booking_status = str(getattr(booking.status, "value", booking.status)).strip().lower()
+        payload = {
+            **out,
+            "booking_id": booking.id,
+            "payment_id": payment_row.id,
+            "payment_provider": "saferpay",
+            "payment_status": payment_status,
+            "booking_status": booking_status,
+            "pending_verification": payment_status == "pending_verification",
+        }
+        return success_response(data=payload)
 
 
 # =====================================================
@@ -642,13 +1053,13 @@ class BookingResource(Resource):
     @limiter.limit("100 per hour")  # ✅ 2.8: Rate limiting modification réservation
     @bookings_ns.expect(booking_update_model, validate=False)
     def put(self, booking_id, booking, user):  # booking et user injectés par décorateur
-        """Met à jour une réservation (si PENDING). Déclenche queue si utile."""
+        """Met à jour une réservation côté client (en attente, acceptée ou assignée, hors en route)."""
         try:
             # booking et user sont déjà chargés et vérifiés par le décorateur
             # booking_id est requis par Flask mais non utilisé ici
             _ = booking_id, user  # Marquer comme utilisé pour éviter warning
 
-            data = request.get_json() or {}
+            data = request.get_json(silent=True) or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
             from marshmallow import ValidationError
@@ -777,6 +1188,9 @@ class BookingResource(Resource):
             from application.bookings import CancelBookingInput
             from application.bookings.cancel_booking import CancelBookingUseCase
 
+            st_before = getattr(booking.status, "value", booking.status)
+            previous_status = str(st_before or "")
+
             uc = CancelBookingUseCase()
             input_data = CancelBookingInput(booking=booking)
             uc_result = uc.execute(input_data)
@@ -789,6 +1203,45 @@ class BookingResource(Resource):
                 )
 
             db.session.commit()
+
+            try:
+                from middleware.trace_id import get_trace_id
+                from security.audit_log import AuditLogger
+
+                role = getattr(user, "role", None)
+                user_type_str = str(
+                    getattr(role, "value", role) if role is not None else "user"
+                ).lower()
+                AuditLogger.log_action(
+                    action_type="booking_cancelled",
+                    action_category="booking",
+                    user_id=getattr(user, "id", None),
+                    user_type=user_type_str,
+                    company_id=getattr(booking, "company_id", None),
+                    booking_id=getattr(booking, "id", None),
+                    correlation_id=get_trace_id(),
+                    action_details={
+                        "source": "routes.bookings.delete",
+                        "previous_status": previous_status,
+                        "new_status": "canceled",
+                        "trigger": "user",
+                    },
+                )
+            except Exception as audit_exc:
+                logger.critical(
+                    "[booking] audit booking_cancelled failed booking_id=%s: %s",
+                    getattr(booking, "id", None),
+                    audit_exc,
+                    exc_info=True,
+                )
+                try:
+                    from services.monitoring.prometheus import (
+                        inc_booking_audit_write_failed,
+                    )
+
+                    inc_booking_audit_write_failed(action_type="booking_cancelled")
+                except Exception:
+                    pass
 
             if uc_result.should_trigger_dispatch:
                 _queue_trigger(uc_result.company_id, "cancel")
@@ -848,6 +1301,8 @@ def _get_client_bookings(
     ✅ Clean Architecture: Délègue au use-case ListBookingsUseCase.
     """
     from application.bookings import ListBookingsInput, ListBookingsUseCase
+
+    expire_awaiting_client_payment_bookings()
 
     uc = ListBookingsUseCase(booking_repo=booking_repo, client_repo=client_repo)
     input_data = ListBookingsInput(

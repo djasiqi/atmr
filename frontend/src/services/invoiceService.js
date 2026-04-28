@@ -396,6 +396,75 @@ export const invoiceService = {
     );
     return response.data;
   },
+
+  /** Prévisualisation V1 (payeur + mois) — GET period-preview */
+  async fetchPeriodPreview(companyId, { year, month, clientId, clinicCompanyId }) {
+    const params = new URLSearchParams();
+    params.append('year', year);
+    params.append('month', month);
+    if (clientId) params.append('client_id', clientId);
+    if (clinicCompanyId) params.append('clinic_company_id', clinicCompanyId);
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/period-preview?${params}`
+    );
+    return response.data;
+  },
+
+  /** V2 : agrégat des payeurs avec courses à facturer sur la période (dashboard) */
+  async fetchBillingOpportunities(companyId, year, month) {
+    const params = new URLSearchParams();
+    params.append('year', year);
+    params.append('month', month);
+    const response = await apiClient.get(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/billing-opportunities?${params}`
+    );
+    return response.data;
+  },
+
+  async removeDraftInvoiceLine(companyId, invoiceId, lineId) {
+    const response = await apiClient.delete(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`
+    );
+    return response.data;
+  },
+
+  async updateDraftInvoiceLine(companyId, invoiceId, lineId, body) {
+    const response = await apiClient.patch(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`,
+      body
+    );
+    return response.data;
+  },
+
+  async applyDraftGlobalDiscount(companyId, invoiceId, payload) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/apply-global-discount`,
+      payload
+    );
+    return response.data;
+  },
+
+  async removeDraftGlobalDiscount(companyId, invoiceId) {
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/remove-global-discount`
+    );
+    return response.data;
+  },
+
+  async addDraftCustomLine(
+    companyId,
+    invoiceId,
+    { description, line_total, qty = 1, custom_mode, time_unit }
+  ) {
+    const body = { description, line_total, qty };
+    if (custom_mode) body.custom_mode = custom_mode;
+    if (time_unit) body.time_unit = time_unit;
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/custom-line`,
+      body
+    );
+    return response.data;
+  },
 };
 
 // Fonctions utilitaires pour les composants
@@ -465,33 +534,44 @@ export const getReminderColor = (level) => {
   return reminderColors[level] || '#6c757d';
 };
 
+/** Statut facture normalisé (liste + détail API peuvent varier). */
+export const invoiceStatusLower = (invoice) => {
+  const s = invoice?.status;
+  return typeof s === 'string' ? s.toLowerCase() : '';
+};
+
+export const canEditDraft = (invoice) => {
+  return invoiceStatusLower(invoice) === 'draft';
+};
+
 export const canSendInvoice = (invoice) => {
-  return invoice.status === 'draft';
+  return invoiceStatusLower(invoice) === 'draft';
 };
 
 export const canAddPayment = (invoice) => {
-  return !['paid', 'cancelled'].includes(invoice.status);
+  return !['paid', 'cancelled'].includes(invoiceStatusLower(invoice));
 };
 
 export const canGenerateReminder = (invoice) => {
-  return !['paid', 'cancelled'].includes(invoice.status) && invoice.balance_due > 0;
+  return (
+    !['paid', 'cancelled'].includes(invoiceStatusLower(invoice)) && invoice.balance_due > 0
+  );
 };
 
 export const canRegeneratePdf = (invoice) => {
   // Les factures payées ne peuvent plus être régénérées, seule la visualisation est possible
-  return invoice.status !== 'cancelled' && invoice.status !== 'paid';
+  const s = invoiceStatusLower(invoice);
+  return s !== 'cancelled' && s !== 'paid';
 };
 
 export const canCancelInvoice = (invoice) => {
-  return invoice.status === 'draft' && invoice.amount_paid === 0;
+  return invoiceStatusLower(invoice) === 'draft' && invoice.amount_paid === 0;
 };
 
 export const canDuplicateInvoice = (invoice) => {
   // Les factures payées ne peuvent plus avoir de correctif
-  return (
-    ['sent', 'partially_paid', 'overdue'].includes(invoice.status) ||
-    invoice.status === 'cancelled'
-  );
+  const s = invoiceStatusLower(invoice);
+  return ['sent', 'partially_paid', 'overdue'].includes(s) || s === 'cancelled';
 };
 
 export const duplicateInvoice = async (companyId, invoiceId) => {
@@ -531,4 +611,11 @@ export const {
   updateBillingSettings,
   exportInvoicesCSV,
   exportPaymentsCSV,
+  fetchPeriodPreview,
+  fetchBillingOpportunities,
+  removeDraftInvoiceLine,
+  updateDraftInvoiceLine,
+  applyDraftGlobalDiscount,
+  removeDraftGlobalDiscount,
+  addDraftCustomLine,
 } = invoiceService;

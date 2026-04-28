@@ -26,6 +26,7 @@ import {
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
 } from '../../../hooks/useInstitutionData';
+import { getAuthEnv } from '../../../utils/webAuthSession';
 import styles from './NotificationBell.module.css';
 
 // Icônes par type d'événement
@@ -71,7 +72,7 @@ function timeAgo(dateString) {
 const NotificationBell = () => {
   const { public_id } = useParams();
   const navigate = useNavigate();
-  const isDemoEnv = (localStorage.getItem('lirie_auth_env') || '').toLowerCase() === 'demo';
+  const isDemoEnv = getAuthEnv() === 'demo';
   const dashboardRoot = isDemoEnv ? '/demo/dashboard' : '/dashboard';
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);

@@ -400,3 +400,30 @@ def test_scope_reservation_parent_completed_child_accepted_cancels_only_child() 
     assert 51 in res.response.get("skipped_booking_ids", [])
     assert child.status == BookingStatus.CANCELED
     assert parent.status == BookingStatus.COMPLETED
+
+
+def test_arrived_idempotent_en_route() -> None:
+    booking = _Booking(id=1, company_id=1, driver_id=10, status=BookingStatus.EN_ROUTE)
+    db = _Db()
+    uc = UpdateDriverBookingStatusUseCase(
+        booking_repo=_BookingRepo(booking),
+        assignment_repo=_AssignmentRepo(None),
+        db_session=db,
+        notify_booking_update_fn=lambda _d, _b: None,
+        resolve_delays_fn=lambda _bid, _dt: None,
+        emit_assignment_cancelled_fn=lambda _c, _a, _b, _d: None,
+        maybe_trigger_dispatch_fn=None,
+        now_utc_fn=lambda: datetime(2025, 12, 12, 10, 0, 0, tzinfo=UTC),
+    )
+    res = uc.execute(
+        UpdateDriverBookingStatusCommand(
+            booking_id=1,
+            driver_id=10,
+            payload={"status": "ARRIVED"},
+        )
+    )
+    assert res.status_code == 200
+    assert res.response.get("unchanged") is True
+    assert res.response.get("mission_milestone") == "ARRIVED"
+    assert booking.status == BookingStatus.EN_ROUTE
+    assert db.commits == 0

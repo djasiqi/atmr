@@ -10,14 +10,20 @@ import { mockDispatches, mockDrivers, mockDelays } from './fixtures/dispatchData
 // Mock react-window
 jest.mock('react-window', () => {
   const mockReact = require('react');
+  const MockList = ({ children, itemCount, itemData }) => {
+    const items = Array.from({ length: itemCount }, (_, i) => {
+      const child = children({ index: i, style: { height: 60, top: i * 60 }, data: itemData });
+      return mockReact.cloneElement(child, { key: i, 'data-testid': `virtualized-item-${i}` });
+    });
+    return mockReact.createElement(
+      'div',
+      { 'data-testid': 'virtualized-list', 'data-item-count': itemCount },
+      items
+    );
+  };
   return {
-    VariableSizeList: ({ children, itemCount, itemData }) => {
-      const items = Array.from({ length: itemCount }, (_, i) => {
-        const child = children({ index: i, style: { height: 60, top: i * 60 }, data: itemData });
-        return mockReact.cloneElement(child, { key: i, 'data-testid': `virtualized-item-${i}` });
-      });
-      return mockReact.createElement('div', { 'data-testid': 'virtualized-list', 'data-item-count': itemCount }, items);
-    },
+    List: MockList,
+    VariableSizeList: MockList,
   };
 });
 
@@ -43,6 +49,15 @@ jest.mock('../../../hooks/useDispatchStatus', () => ({
     isRunning: false,
     setUpdatedAt: jest.fn(),
     handleDispatchJobResponse: jest.fn(),
+  })),
+}));
+
+jest.mock('../../../hooks/useHybridDataSync', () => ({
+  useHybridDataSync: jest.fn(() => ({
+    lastUpdate: Date.now(),
+    isPolling: false,
+    pollError: null,
+    forcePoll: jest.fn(),
   })),
 }));
 

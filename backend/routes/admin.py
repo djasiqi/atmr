@@ -17,10 +17,19 @@ from flask_restx import (
     Resource,
     fields,
 )
+from marshmallow import ValidationError
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from ext import db, limiter, redis_client, role_required
-from models import Booking, BookingStatus, User, UserRole
+from models import (
+    Booking,
+    BookingStatus,
+    Payment,
+    PlatformClientIndicativeFareConfig,
+    User,
+    UserRole,
+)
 from repositories.autonomous_action_repository import (
     AutonomousActionRepository,
 )
@@ -28,14 +37,9 @@ from repositories.booking_repository import BookingRepository
 from repositories.company_repository import CompanyRepository
 from repositories.invoice_repository import InvoiceRepository
 from repositories.user_repository import UserRepository
+from routes.admin_platform_billing import register_platform_billing_routes
 from security.ip_whitelist import ip_whitelist_required
 from services.admin_dashboard_summary import build_admin_dashboard_summary
-from services.admin_platform_bookings import (
-    build_admin_booking_detail,
-    export_admin_bookings_csv,
-    list_admin_platform_bookings,
-    parse_admin_booking_request_args,
-)
 from services.admin_platform_billing_pilotage import (
     build_pilotage_summary,
     export_pilotage_csv,
@@ -44,6 +48,17 @@ from services.admin_platform_billing_pilotage import (
     parse_pilotage_detail_args,
     parse_pilotage_list_args,
     parse_pilotage_request_args,
+)
+from services.admin_platform_bookings import (
+    build_admin_booking_detail,
+    export_admin_bookings_csv,
+    list_admin_platform_bookings,
+    parse_admin_booking_request_args,
+)
+from services.client_surface.indicative_fare import (
+    IndicativeFareValidationError,
+    config_to_public_dict,
+    merge_admin_update,
 )
 from services.monitoring.websocket_metrics import ws_metrics
 from shared.error_handlers import APIErrorHandler
@@ -55,6 +70,8 @@ logger = logging.getLogger(__name__)
 
 MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
+# Longueur minimale pour la recherche support par ref. Saferpay (évite requêtes trop larges)
+SAFERPAY_SUPPORT_REF_MIN_LEN = 4
 
 
 def _is_synthetic_demo_email_expr(column):
@@ -197,6 +214,51 @@ class AdminStats(Resource):
             admin_ns.abort(500, "Une erreur interne est survenue.")
 
 
+@admin_ns.route("/support/saferpay-payment-lookup")
+class AdminSaferpayPaymentLookup(Resource):
+    """Recherche support par référence Saferpay (transaction id partiel ou complet)."""
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("120 per hour")
+    def get(self):
+        ref = str(request.args.get("ref") or "").strip()
+        if len(ref) < SAFERPAY_SUPPORT_REF_MIN_LEN:
+            return {
+                "error": "ref_too_short",
+                "message": f"ref doit faire au moins {SAFERPAY_SUPPORT_REF_MIN_LEN} caractères",
+            }, 400
+        like = f"%{ref}%"
+        rows = (
+            Payment.query.filter(Payment.payment_provider == "saferpay")
+            .filter(
+                or_(
+                    Payment.saferpay_transaction_id == ref,
+                    Payment.saferpay_transaction_id.ilike(like),
+                )
+            )
+            .order_by(Payment.id.desc())
+            .limit(20)
+            .all()
+        )
+        return {
+            "results": [
+                {
+                    "payment_id": p.id,
+                    "booking_id": p.booking_id,
+                    "amount": float(p.amount),
+                    "status": (
+                        p.status.value if hasattr(p.status, "value") else str(p.status)
+                    ),
+                    "saferpay_transaction_id": p.saferpay_transaction_id,
+                    "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+                }
+                for p in rows
+            ]
+        }, 200
+
+
 @admin_ns.route("/dashboard-summary")
 class AdminDashboardSummary(Resource):
     """GET /admin/dashboard-summary — agrégat léger pour le tableau de bord admin (orientation)."""
@@ -258,6 +320,9 @@ class AdminPlatformBookingsList(Resource):
                 **params,
             )
             return payload, 200
+        except ValidationError as e:
+            logger.warning("Validation filtres admin bookings échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_admin_platform_bookings: %s", e)
@@ -287,6 +352,9 @@ class AdminPlatformBookingsExport(Resource):
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },
             )
+        except ValidationError as e:
+            logger.warning("Validation export admin bookings échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR export_admin_bookings: %s", e)
@@ -305,6 +373,9 @@ class AdminBillingPilotageSummary(Resource):
         try:
             params = parse_pilotage_request_args(request.args)
             return build_pilotage_summary(**params), 200
+        except ValidationError as e:
+            logger.warning("Validation pilotage summary échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_billing_pilotage_summary: %s", e)
@@ -333,6 +404,9 @@ class AdminBillingPilotageCompanies(Resource):
                 order=order,
                 **raw,
             ), 200
+        except ValidationError as e:
+            logger.warning("Validation pilotage companies échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_billing_pilotage_companies: %s", e)
@@ -358,6 +432,9 @@ class AdminBillingPilotageCompanyDetail(Resource):
             if payload is None:
                 admin_ns.abort(404, "Entreprise introuvable ou hors périmètre.")
             return payload, 200
+        except ValidationError as e:
+            logger.warning("Validation pilotage detail échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR get_billing_pilotage_company_detail: %s", e)
@@ -383,6 +460,9 @@ class AdminBillingPilotageExport(Resource):
                     "Content-Disposition": f'attachment; filename="{filename}"',
                 },
             )
+        except ValidationError as e:
+            logger.warning("Validation export pilotage échouée: %s", e.messages)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             logger.exception("❌ ERREUR export_billing_pilotage: %s", e)
@@ -615,15 +695,66 @@ class ManageUser(Resource):
             user = user_repo.find_by_id_with_clients_and_company(user_id)
             if not user:
                 admin_ns.abort(404, "User not found")
+            assert user is not None  # abort ne revient pas (narrowing type checker)
+
+            # Certains transferts partenaires conservent l'admin validateur sans ON DELETE.
+            # On neutralise la FK avant suppression pour éviter un blocage en base.
+            from models.booking_transfer import BookingTransfer
+            from models.refresh_token import RefreshToken
+
+            (
+                db.session.query(BookingTransfer)
+                .filter(BookingTransfer.validated_by == user.id)
+                .update({BookingTransfer.validated_by: None}, synchronize_session=False)
+            )
+            # Les refresh tokens ont user_id NOT NULL; on les purge explicitement
+            # pour éviter un UPDATE user_id=NULL lors du flush SQLAlchemy.
+            (
+                db.session.query(RefreshToken)
+                .filter(RefreshToken.user_id == user.id)
+                .delete(synchronize_session=False)
+            )
+
+            # Si l'utilisateur porte une company avec des transferts historiques liés,
+            # la suppression physique peut être bloquée (FK owner/executing_company_id).
+            user_company = getattr(user, "company", None)
+            if user_company is not None:
+                linked_transfers = (
+                    db.session.query(func.count(BookingTransfer.id))
+                    .filter(
+                        or_(
+                            BookingTransfer.owner_company_id == user_company.id,
+                            BookingTransfer.executing_company_id == user_company.id,
+                        )
+                    )
+                    .scalar()
+                    or 0
+                )
+                if linked_transfers > 0:
+                    return APIErrorHandler.handle_conflict_error(
+                        (
+                            "Suppression impossible: cet utilisateur est rattache a une entreprise "
+                            "ayant des transferts historiques."
+                        ),
+                        resource_type="booking_transfers",
+                        resource_id=user_company.id,
+                        logger_instance=logger,
+                    )
+
             db.session.delete(user)
             db.session.commit()
             logger.info("✅ Utilisateur {user_id} supprimé avec succès.")
             return {"message": f"User {user_id} deleted successfully"}, 200
+        except IntegrityError as e:
+            sentry_sdk.capture_exception(e)
+            db.session.rollback()
+            logger.exception("❌ ERREUR manage_user DELETE (integrity): %s", e)
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             sentry_sdk.capture_exception(e)
             db.session.rollback()
             logger.exception("❌ ERREUR manage_user DELETE: %s", e)
-            admin_ns.abort(500, "Une erreur interne est survenue.")
+            return APIErrorHandler.handle_exception(e, logger)
 
 
 def _setup_driver_role(
@@ -726,8 +857,6 @@ class UpdateUserRole(Resource):
             data = request.get_json(silent=True) or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
-
             from schemas.admin_schemas import UserRoleUpdateSchema
             from schemas.validation_utils import (
                 handle_validation_error,
@@ -1026,8 +1155,6 @@ class AutonomousActionsList(Resource):
 
         try:
             # ✅ 2.4: Validation Marshmallow des query parameters
-            from marshmallow import ValidationError
-
             from schemas.admin_schemas import AutonomousActionsListQuerySchema
             from schemas.validation_utils import (
                 handle_validation_error,
@@ -1050,8 +1177,19 @@ class AutonomousActionsList(Resource):
             action_type = validated_params.get("action_type")
             success = validated_params.get("success")
             reviewed = validated_params.get("reviewed")
-            start_date = validated_params.get("start_date")
-            end_date = validated_params.get("end_date")
+            start_date_raw = validated_params.get("start_date")
+            end_date_raw = validated_params.get("end_date")
+            start_date = None
+            end_date = None
+            try:
+                if start_date_raw:
+                    start_date = datetime.fromisoformat(f"{start_date_raw}T00:00:00+00:00")
+                if end_date_raw:
+                    end_date = datetime.fromisoformat(f"{end_date_raw}T23:59:59.999999+00:00")
+            except ValueError as err:
+                raise ValidationError(
+                    {"start_date": ["Format de date invalide (YYYY-MM-DD attendu)"]}
+                ) from err
 
             # Convertir string en bool pour success et reviewed
             success_bool = None
@@ -1090,6 +1228,8 @@ class AutonomousActionsList(Resource):
                 },
             }, 200
 
+        except ValidationError as e:
+            return APIErrorHandler.handle_exception(e, logger)
         except Exception as e:
             logger.exception("❌ ERREUR list_autonomous_actions: %s", e)
             return {"message": "Erreur lors de la récupération des actions"}, 500
@@ -1272,8 +1412,6 @@ class AutonomousActionReview(Resource):
             data = request.get_json() or {}
 
             # ✅ 2.4: Validation Marshmallow avec erreurs 400 détaillées
-            from marshmallow import ValidationError
-
             from schemas.admin_schemas import AutonomousActionReviewSchema
             from schemas.validation_utils import (
                 handle_validation_error,
@@ -1306,9 +1444,10 @@ class AutonomousActionReview(Resource):
                 "action": action.to_dict(),
             }, 200
 
-        except Exception:
+        except Exception as e:
             db.session.rollback()
-            logger.exception("❌ ERREUR review_action: {e!s}")
+            sentry_sdk.capture_exception(e)
+            logger.exception("❌ ERREUR review_action: %s", e)
             return {"message": "Erreur lors de la review"}, 500
 
 
@@ -1835,7 +1974,11 @@ class WebSocketMetricsResource(Resource):
                         )
                     else:
                         stats["drivers_online_count"] = 0
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        "Impossible de récupérer les connexions Redis websocket: %s",
+                        e,
+                    )
                     stats["drivers_online_count"] = 0
             else:
                 stats["drivers_online_count"] = 0
@@ -2078,7 +2221,54 @@ class RateLimitConfig(Resource):
             }, 500
 
 
-# --- Facturation plateforme LIRIE V1 (distinct Invoice / pilotage) ---
-from routes.admin_platform_billing import register_platform_billing_routes
+@admin_ns.route("/client-indicative-fare")
+class AdminClientIndicativeFareConfig(Resource):
+    """Calibration globale (plateforme) de l'indicatif portail client — non contractuel."""
 
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("60 per hour")
+    def get(self) -> Any:
+        try:
+            row = db.session.get(PlatformClientIndicativeFareConfig, 1)
+            if not row:
+                return {
+                    "error": "indicative_fare_unconfigured",
+                    "message": "Aucune configuration en base.",
+                }, 404
+            return config_to_public_dict(row), 200
+        except Exception as e:
+            return APIErrorHandler.handle_exception(e, logger)
+
+    @jwt_required()
+    @role_required(UserRole.admin)
+    @ip_whitelist_required()
+    @limiter.limit("20 per hour")
+    def put(self) -> Any:
+        try:
+            current_user = get_current_user_via_use_case()
+            row = db.session.get(PlatformClientIndicativeFareConfig, 1)
+            if not row:
+                return {
+                    "error": "indicative_fare_unconfigured",
+                    "message": "Aucune configuration en base. Appliquer la migration.",
+                }, 404
+            body = request.get_json(silent=True) or {}
+            try:
+                prev = int(row.config_version or 0)
+                merge_admin_update(row, body)
+                row.config_version = prev + 1
+                if current_user:
+                    row.updated_by_user_id = int(current_user.id)
+            except IndicativeFareValidationError as e:
+                return {"error": e.code, "message": e.message}, 400
+            db.session.add(row)
+            db.session.commit()
+            return config_to_public_dict(row), 200
+        except Exception as e:
+            return APIErrorHandler.handle_exception(e, logger)
+
+
+# --- Facturation plateforme LIRIE V1 (distinct Invoice / pilotage) ---
 register_platform_billing_routes(admin_ns)

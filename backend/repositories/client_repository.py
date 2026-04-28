@@ -121,7 +121,9 @@ class ClientRepository:
             id=client.id,
             user_id=client.user_id,
             company_id=client.company_id,
+            default_billed_to_company_id=client.default_billed_to_company_id,
             client_type=client.client_type,
+            management_mode=getattr(client, "management_mode", None),
             billing_address=client.billing_address,
             billing_lat=client.billing_lat,
             billing_lon=client.billing_lon,
@@ -224,7 +226,7 @@ class ClientRepository:
 
         query = Client.query.options(joinedload(Client.user)).filter(
             Client.company_id == company_id,
-            Client.client_type != ClientType.SELF_SERVICE,
+            Client.client_type != ClientType.PORTAL,
         )
 
         patterns = _build_search_patterns(search or "")
@@ -292,7 +294,7 @@ class ClientRepository:
             joinedload(Client.default_billed_to_company)
         ).filter(
             Client.company_id == company_id,
-            Client.client_type != ClientType.SELF_SERVICE,
+            Client.client_type != ClientType.PORTAL,
         )
 
         patterns = _build_search_patterns(search or "")
@@ -349,7 +351,7 @@ class ClientRepository:
             joinedload(Client.default_billed_to_company),
         ).filter(
             Client.company_id == company_id,
-            Client.client_type != ClientType.SELF_SERVICE,
+            Client.client_type != ClientType.PORTAL,
         )
 
         patterns = _build_search_patterns(search or "")

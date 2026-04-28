@@ -6,9 +6,11 @@ import csv
 import io
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from marshmallow import ValidationError
 from sqlalchemy import and_, exists, func, not_, or_, select
 from sqlalchemy.orm import joinedload
 
@@ -16,6 +18,7 @@ from ext import db
 from models import Booking, BookingStatus, Client, Company, Institution
 from models.booking_transfer import BookingTransfer
 from models.enums import TransferStatus
+from schemas.validation_utils import ISO8601_DATE_REGEX
 from security.audit_log import AuditLog
 from services.admin_booking_billing_kernel import build_pilotage_payload_for_booking
 from services.admin_booking_labels import booking_status_label_fr
@@ -24,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 MAX_PER_PAGE = 100
 EXPORT_MAX_ROWS = 5000
+ISO_DATE_PATTERN = re.compile(ISO8601_DATE_REGEX)
 
 
 def _parse_bool_arg(raw: str | None) -> bool | None:
@@ -37,22 +41,44 @@ def _parse_bool_arg(raw: str | None) -> bool | None:
     return None
 
 
-def _parse_date_start(s: str | None):
+def _parse_date_start(s: str | None, field_name: str):
     if not s or not str(s).strip():
         return None
-    return datetime.fromisoformat(f"{str(s).strip()}T00:00:00+00:00")
+    value = str(s).strip()
+    if not ISO_DATE_PATTERN.fullmatch(value):
+        raise ValidationError({field_name: ["Date invalide (format attendu YYYY-MM-DD)"]})
+    return datetime.fromisoformat(f"{value}T00:00:00+00:00")
 
 
-def _parse_date_end(s: str | None):
+def _parse_date_end(s: str | None, field_name: str):
     if not s or not str(s).strip():
         return None
-    return datetime.fromisoformat(f"{str(s).strip()}T23:59:59.999999+00:00")
+    value = str(s).strip()
+    if not ISO_DATE_PATTERN.fullmatch(value):
+        raise ValidationError({field_name: ["Date invalide (format attendu YYYY-MM-DD)"]})
+    return datetime.fromisoformat(f"{value}T23:59:59.999999+00:00")
 
 
 def parse_admin_booking_request_args(args) -> dict[str, Any]:
     """Transforme request.args en kwargs pour `list_admin_platform_bookings` / export."""
     institution_id = args.get("institution_id", type=int)
     company_id = args.get("company_id", type=int)
+    created_from = _parse_date_start(args.get("created_from"), "created_from")
+    created_to = _parse_date_end(args.get("created_to"), "created_to")
+    scheduled_from = _parse_date_start(args.get("scheduled_from"), "scheduled_from")
+    scheduled_to = _parse_date_end(args.get("scheduled_to"), "scheduled_to")
+    if created_from and created_to and created_from > created_to:
+        raise ValidationError(
+            {"created_to": ["created_to doit être postérieure ou égale à created_from"]}
+        )
+    if scheduled_from and scheduled_to and scheduled_from > scheduled_to:
+        raise ValidationError(
+            {
+                "scheduled_to": [
+                    "scheduled_to doit être postérieure ou égale à scheduled_from"
+                ]
+            }
+        )
     return {
         "page": max(1, args.get("page", default=1, type=int) or 1),
         "per_page": args.get("per_page", default=25, type=int) or 25,
@@ -60,10 +86,10 @@ def parse_admin_booking_request_args(args) -> dict[str, Any]:
         "order": (args.get("order") or "desc").strip(),
         "q": (args.get("q") or "").strip() or None,
         "status": (args.get("status") or "").strip() or None,
-        "created_from": _parse_date_start(args.get("created_from")),
-        "created_to": _parse_date_end(args.get("created_to")),
-        "scheduled_from": _parse_date_start(args.get("scheduled_from")),
-        "scheduled_to": _parse_date_end(args.get("scheduled_to")),
+        "created_from": created_from,
+        "created_to": created_to,
+        "scheduled_from": scheduled_from,
+        "scheduled_to": scheduled_to,
         "institution_id": institution_id,
         "company_id": company_id,
         "institution_q": (args.get("institution_q") or "").strip() or None,
@@ -326,9 +352,10 @@ def _serialize_created_by(booking: Booking) -> dict[str, Any]:
 def _serialize_cancelled_by(booking: Booking) -> dict[str, Any] | None:
     if booking.status != BookingStatus.CANCELED:
         return None
+    cancelled_at = getattr(booking, "cancelled_at", None)
     return {
         "role": booking.cancelled_by_role,
-        "cancelled_at": booking.cancelled_at.isoformat() if booking.cancelled_at else None,
+        "cancelled_at": cancelled_at.isoformat() if cancelled_at is not None else None,
         "reason_code": booking.cancellation_reason_code,
     }
 
@@ -358,13 +385,16 @@ def admin_booking_list_item(
         if booking.executing_company
         else (booking.company.name if booking.company else None)
     )
+    created_at = getattr(booking, "created_at", None)
+    scheduled_time = getattr(booking, "scheduled_time", None)
+    amount = getattr(booking, "amount", None)
 
     return {
         "id": booking.id,
-        "created_at": booking.created_at.isoformat() if booking.created_at else None,
-        "scheduled_at": booking.scheduled_time.isoformat()
-        if booking.scheduled_time
-        else None,
+        "created_at": created_at.isoformat() if created_at is not None else None,
+        "scheduled_at": (
+            scheduled_time.isoformat() if scheduled_time is not None else None
+        ),
         "client_name": booking.customer_full_name,
         "institution_name": inst_name,
         "current_company_name": current_company_name,
@@ -374,7 +404,7 @@ def admin_booking_list_item(
         "has_transfer": (
             bool(booking._is_transferred()) if has_transfer is None else has_transfer
         ),
-        "amount_chf": float(booking.amount) if booking.amount is not None else None,
+        "amount_chf": float(amount) if amount is not None else None,
         "pickup_label": (booking.pickup_location or "")[:120],
         "dropoff_label": (booking.dropoff_location or "")[:120],
         "created_by": _serialize_created_by(booking),
@@ -571,11 +601,12 @@ def build_admin_booking_detail(
 
     timeline: list[dict[str, Any]] = []
 
-    if booking.created_at:
+    created_at = getattr(booking, "created_at", None)
+    if created_at is not None:
         timeline.append(
             {
                 "type": "booking_created",
-                "at": booking.created_at.isoformat(),
+                "at": created_at.isoformat(),
                 "label": "Réservation créée",
             }
         )
@@ -603,11 +634,12 @@ def build_admin_booking_detail(
                 }
             )
 
-    if booking.cancelled_at:
+    cancelled_at = getattr(booking, "cancelled_at", None)
+    if cancelled_at is not None:
         timeline.append(
             {
                 "type": "cancelled",
-                "at": booking.cancelled_at.isoformat(),
+                "at": cancelled_at.isoformat(),
                 "label": "Annulation",
                 "detail": booking.cancelled_by_role,
             }

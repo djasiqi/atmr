@@ -19,7 +19,7 @@ def get_current_user_via_use_case() -> Any | None:
     """Helper function pour récupérer l'utilisateur courant via use-case.
 
     Returns:
-        User model si trouvé, None sinon.
+        ``UserDTO`` (via ``UserRepository.find_by_public_id``) si trouvé, ``None`` sinon.
 
     Raises:
         Peut lever des exceptions si l'authentification échoue.

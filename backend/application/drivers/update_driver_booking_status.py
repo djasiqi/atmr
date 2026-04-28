@@ -127,7 +127,15 @@ class UpdateDriverBookingStatusUseCase:
             # Orthographe UK "cancelled" → traiter comme "canceled" (US, enum PG)
             if new_status_str == "cancelled":
                 new_status_str = "canceled"
+            # Surface driver: FAILED → annulation côté booking (aligné CANCELED) avec raison
+            if new_status_str == "failed":
+                new_status_str = "canceled"
+                if data is not None and not data.get("cancel_reason") and not data.get(
+                    "reason_code"
+                ):
+                    data = {**data, "cancel_reason": "FAILED"}
             valid_statuses = {
+                "arrived",
                 "en_route",
                 "in_progress",
                 "completed",
@@ -175,6 +183,29 @@ class UpdateDriverBookingStatusUseCase:
                     else:
                         _set_status(booking, "EN_ROUTE")
                         should_commit = True
+
+                elif new_status_str == "arrived":
+                    # Étape intermédiaire (contrat `MISSION_STATUS_VALUES.ARRIVED`) : le
+                    # `Booking` reste EN_ROUTE ; pas d'autre statut de réservation.
+                    status_val = _status_value(booking)
+                    if status_val in (BOOKING_STATUS_IN_PROGRESS, BOOKING_STATUS_EN_ROUTE):
+                        response = {
+                            "booking_id": booking.id,
+                            "status": status_val,
+                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "unchanged": True,
+                            "mission_milestone": "ARRIVED",
+                        }
+                    else:
+                        logger.info(
+                            "invalid_transition arrived booking_id=%s current=%s",
+                            cmd.booking_id,
+                            status_val,
+                        )
+                        response = {
+                            "error": "Booking must be en_route before marking arrived"
+                        }
+                        status_code = 400
 
                 elif new_status_str == "in_progress":
                     status_val = _status_value(booking)

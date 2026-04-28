@@ -89,7 +89,7 @@ def test_company_clients_pagination(
 ):
     """GET /companies/me/clients?page=1&per_page=5 renvoie pagination."""
     from ext import bcrypt
-    from models import ClientType
+    from models import ClientType, ManagementMode
 
     # Créer 12 clients de test pour l'entreprise
     for i in range(12):
@@ -109,7 +109,8 @@ def test_company_clients_pagination(
         client_obj = Client(
             user_id=user.id,
             company_id=sample_company.id,
-            client_type=ClientType.PRIVATE,  # Pas SELF_SERVICE
+            client_type=ClientType.TRANSPORT,
+            management_mode=ManagementMode.MANAGED,
             billing_address=f"Rue Test {i}, 1000 Lausanne",
             contact_email=f"client{i}@example.com",
             contact_phone=f"07912345{i:02d}",
@@ -159,7 +160,7 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
     """GET /companies/me/clients?search=Client&page=1&per_page=3
     combine recherche et pagination."""
     from ext import bcrypt
-    from models import ClientType
+    from models import ClientType, ManagementMode
 
     # Créer 8 clients dont 5 commencent par "Client"
     for i in range(5):
@@ -178,7 +179,8 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
         client_obj = Client(
             user_id=user.id,
             company_id=sample_company.id,
-            client_type=ClientType.PRIVATE,
+            client_type=ClientType.TRANSPORT,
+            management_mode=ManagementMode.MANAGED,
             billing_address=f"Rue Test {i}",
             contact_email=f"clientsearch{i}@example.com",
             contact_phone=f"07912346{i:02d}",
@@ -202,7 +204,8 @@ def test_company_clients_search_pagination(client, auth_headers, db, sample_comp
         client_obj = Client(
             user_id=user.id,
             company_id=sample_company.id,
-            client_type=ClientType.PRIVATE,
+            client_type=ClientType.TRANSPORT,
+            management_mode=ManagementMode.MANAGED,
             billing_address=f"Rue Other {i}",
             contact_email=f"other{i}@example.com",
             contact_phone=f"07912347{i:02d}",

@@ -1,0 +1,43 @@
+{
+  "artifact": "committee-kpi-lock",
+  "status": "to_be_locked",
+  "kpis": [
+    {
+      "id": "KPI-W1-4",
+      "name": "Reconnect convergence",
+      "window": "2 consecutive tests per platform",
+      "target": "<=60s",
+      "sourceOfTruth": "app telemetry + api timestamps",
+      "arbiterRole": "backend_then_mobile"
+    },
+    {
+      "id": "KPI-W1-5",
+      "name": "Location duplication after ingest",
+      "window": "15m per driver",
+      "target": "<=5% or <=10 duplicates",
+      "sourceOfTruth": "backend ingest metrics",
+      "arbiterRole": "product_plus_backend"
+    },
+    {
+      "id": "KPI-W2-1",
+      "name": "Post-kill mission reconvergence",
+      "window": "single restart scenario",
+      "target": "<=120s",
+      "sourceOfTruth": "session journal + API mission state",
+      "arbiterRole": "mobile_or_backend"
+    },
+    {
+      "id": "KPI-W2-2",
+      "name": "Resume divergence duration",
+      "window": "foreground resume",
+      "target": "<=90s or <=2 sync cycles",
+      "sourceOfTruth": "FSM logs + API responses",
+      "arbiterRole": "mobile_or_backend"
+    }
+  ],
+  "waiverPolicy": {
+    "required": true,
+    "fields": ["reason", "scope", "reviewDate", "decisionOwner"]
+  }
+}
+

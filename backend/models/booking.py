@@ -3,6 +3,7 @@
 # Constantes pour éviter les valeurs magiques
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -28,9 +29,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from ext import db
 from shared.time_utils import (
+    api_scheduled_iso_to_naive_geneva,
     iso_utc_z,
     now_local,
-    parse_local_naive,
     split_date_time_local,
     to_geneva_local,
     to_utc_from_db,
@@ -39,12 +40,14 @@ from shared.time_utils import (
 from .base import _as_bool, _as_dt, _as_float, _as_int, _as_str
 from .enums import BillingReviewStatus, BillingSource, BookingStatus
 
+logger = logging.getLogger(__name__)
+
 USER_ID_ZERO = 0
 AMOUNT_ZERO = 0
 VALUE_ZERO = 0
 COMPANY_ID_ZERO = 0
-CUSTOMER_NAME_MAX_LENGTH = 100
-LOCATION_MAX_LENGTH = 200
+CUSTOMER_NAME_MAX_LENGTH = 200
+LOCATION_MAX_LENGTH = 500
 
 # Constantes pour règles d'arrondi métier
 AMOUNT_MINIMUM = 0.5
@@ -108,9 +111,9 @@ class Booking(db.Model):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    pickup_location: Mapped[str] = mapped_column(String(200), nullable=False)
-    dropoff_location: Mapped[str] = mapped_column(String(200), nullable=False)
+    customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    pickup_location: Mapped[str] = mapped_column(String(500), nullable=False)
+    dropoff_location: Mapped[str] = mapped_column(String(500), nullable=False)
     booking_type = Column(String(200), nullable=False, server_default="standard")
 
     # ✅ Livraison matériel : type de mission (transport patient vs livraison)
@@ -143,7 +146,7 @@ class Booking(db.Model):
     distance_meters = Column(Integer)
 
     client_id = Column(
-        Integer, ForeignKey("client.id", ondelete="CASCADE"), nullable=True, index=True
+        Integer, ForeignKey("client.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     company_id = Column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=True, index=True
@@ -404,6 +407,7 @@ class Booking(db.Model):
         updated_dt = _as_dt(self.updated_at)
         boarded_dt = _as_dt(self.boarded_at)
         completed_dt = _as_dt(self.completed_at)
+        billing_locked_at_dt = _as_dt(getattr(self, "billing_locked_at", None))
         cancelled_dt = cast("datetime | None", _as_dt(self.cancelled_at))
         pickup_admin_resolved_dt = cast(
             "datetime | None", _as_dt(getattr(self, "pickup_admin_resolved_at", None))
@@ -464,10 +468,15 @@ class Booking(db.Model):
             "price_breakdown_json": self.price_breakdown_json,
             "pricing_profile_id": self.pricing_profile_id,
             "pricing_profile_version_id": self.pricing_profile_version_id,
-            "scheduled_time": scheduled_dt.isoformat() if scheduled_dt else None,
+            "scheduled_time": (
+                iso_utc_z(to_utc_from_db(scheduled_dt)) if scheduled_dt else None
+            ),
             "date_formatted": date_local or "Non spécifié",
             "time_formatted": time_local or "Non spécifié",
             "status": getattr(status_val, "value", "unknown").lower(),
+            "created_via": getattr(
+                getattr(self, "created_via", None), "value", "legacy"
+            ),
             "client": {
                 "id": getattr(cli, "id", None),
                 "first_name": getattr(cli_user, "first_name", "") if cli_user else "",
@@ -496,6 +505,9 @@ class Booking(db.Model):
             # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
             "company_id": self.company_id,
             "company_name": self.company.name if self.company else None,
+            "company_contact_phone": (
+                getattr(self.company, "contact_phone", None) if self.company else None
+            ),
             # ✅ Informations de transfert partenaire
             "executing_company_id": self.executing_company_id,
             "executing_company_name": (
@@ -579,6 +591,14 @@ class Booking(db.Model):
                 else None,
                 "billed_to_contact": self.billed_to_contact,
             },
+            "billed_to_type": (_as_str(self.billed_to_type) or "patient"),
+            "billed_to_company_id": self.billed_to_company_id,
+            "billing_locked_at": (
+                iso_utc_z(to_utc_from_db(billing_locked_at_dt))
+                if billing_locked_at_dt
+                else None
+            ),
+            "invoice_line_id": self.invoice_line_id,
             # ✅ Traçabilité de la décision de facturation
             "billing_source": (
                 self.billing_source.value if self.billing_source else None
@@ -605,31 +625,44 @@ class Booking(db.Model):
             "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
             # ✅ Timeline institution (si booking issu d'une demande institution)
             "institution_timeline": self._get_institution_timeline(),
-            "worldline_payment": self._worldline_client_payment_brief(),
+            "online_payment": self._online_client_payment_brief(),
         }
 
-    def _worldline_client_payment_brief(self):
-        """Résumé du dernier paiement Worldline pour le portail client."""
+    def _online_client_payment_brief(self):
+        """Résumé du dernier paiement en ligne (Saferpay ou ancien Worldline) pour le portail client."""
         try:
-            from sqlalchemy import desc
-
-            from models.payment import Payment
-
-            row = (
-                Payment.query.filter_by(booking_id=self.id, payment_provider="worldline")
-                .order_by(desc(Payment.id))
-                .first()
-            )
+            payments = list(getattr(self, "payments", []) or [])
+            candidate_rows = [
+                p
+                for p in payments
+                if str(getattr(p, "payment_provider", "")).strip().lower()
+                in {"saferpay", "worldline"}
+            ]
+            row = max(candidate_rows, key=lambda p: int(getattr(p, "id", 0)), default=None)
             if not row:
                 return None
             st = row.status.value if hasattr(row.status, "value") else str(row.status)
+            prov = (row.payment_provider or "").strip().lower()
+            pending_session = False
+            if st.lower() == "pending":
+                if prov == "worldline":
+                    pending_session = bool(row.worldline_hosted_checkout_id)
+                elif prov == "saferpay":
+                    pending_session = bool(row.saferpay_token) or bool(
+                        getattr(row, "saferpay_transaction_id", None)
+                    )
             return {
                 "payment_id": row.id,
                 "status": st.lower(),
-                "hosted_checkout_id": row.worldline_hosted_checkout_id,
-                "worldline_payment_id": row.worldline_payment_id,
+                "provider": prov or None,
+                "has_pending_session": pending_session,
             }
         except Exception:
+            logger.warning(
+                "online_payment brief indisponible booking_id=%s",
+                getattr(self, "id", None),
+                exc_info=True,
+            )
             return None
 
     def _get_institution_timeline(self):
@@ -641,9 +674,7 @@ class Booking(db.Model):
         try:
             reqs = getattr(self, "source_request", None)
             if not reqs and getattr(self, "is_return", False) and self.parent_booking_id:  # type: ignore[truthy-bool]
-                from ext import db
-
-                parent = db.session.get(type(self), self.parent_booking_id)
+                parent = getattr(self, "return_trip", None)
                 if parent:
                     reqs = getattr(parent, "source_request", None)
             if not reqs:
@@ -746,6 +777,8 @@ class Booking(db.Model):
     # Validations
     @validates("user_id")
     def validate_user_id(self, _key, user_id):
+        if user_id is None:
+            return None
         if not isinstance(user_id, int) or user_id <= USER_ID_ZERO:
             msg = "L'ID utilisateur doit être un entier positif."
             raise ValueError(msg)
@@ -759,7 +792,12 @@ class Booking(db.Model):
     def validate_amount(self, _key, amount):
         if amount is None:
             return None
-        if amount < AMOUNT_MINIMUM:
+        amt = float(amount)
+        # Aller-retour : le segment retour est créé avec amount=0 (tarif porté par l'aller).
+        # Placer is_return avant amount dans le constructeur pour que ce cas soit reconnu.
+        if getattr(self, "is_return", False) and amt == 0:
+            return 0.0
+        if amt < AMOUNT_MINIMUM:
             msg = f"Le montant minimum accepté est {AMOUNT_MINIMUM}"
             raise ValueError(msg)
         # Règles d'arrondi métier
@@ -767,16 +805,16 @@ class Booking(db.Model):
         # - 0.75-0.8 → 0.8
         # - 39.98-40.0 → 40.0
         if (
-            AMOUNT_MINIMUM <= amount < AMOUNT_ROUNDING_THRESHOLD_1
-            or AMOUNT_ROUNDING_THRESHOLD_1 <= amount < AMOUNT_ROUNDING_THRESHOLD_2
+            AMOUNT_MINIMUM <= amt < AMOUNT_ROUNDING_THRESHOLD_1
+            or AMOUNT_ROUNDING_THRESHOLD_1 <= amt < AMOUNT_ROUNDING_THRESHOLD_2
         ):
             return AMOUNT_ROUNDING_TARGET_1
-        if AMOUNT_ROUNDING_THRESHOLD_2 <= amount < AMOUNT_ROUNDING_THRESHOLD_3:
+        if AMOUNT_ROUNDING_THRESHOLD_2 <= amt < AMOUNT_ROUNDING_THRESHOLD_3:
             return AMOUNT_ROUNDING_TARGET_2
-        if AMOUNT_ROUNDING_THRESHOLD_4 <= amount < AMOUNT_ROUNDING_TARGET_3:
+        if AMOUNT_ROUNDING_THRESHOLD_4 <= amt < AMOUNT_ROUNDING_TARGET_3:
             return AMOUNT_ROUNDING_TARGET_3
         # Arrondi standard à 2 décimales pour les autres cas
-        return round(amount, 2)
+        return round(amt, 2)
 
     @validates("scheduled_time")
     def validate_scheduled_time(self, _key, scheduled_time):
@@ -788,10 +826,13 @@ class Booking(db.Model):
             if is_return:
                 # ✅ Permettre scheduled_time=None pour les courses retour
                 # L'heure pourra être définie plus tard via l'endpoint /schedule
+                # (instancier is_return=True avant scheduled_time dans le constructeur.)
                 return None
             msg = "scheduled_time est obligatoire. Le dispatch nécessite cette valeur."
             raise ValueError(msg)
-        st = parse_local_naive(scheduled_time)
+        st = api_scheduled_iso_to_naive_geneva(scheduled_time)
+        if st is None:
+            raise ValueError("Format de scheduled_time invalide.")
         # ⚠️ IMPORTANT : Validation désactivée si time_confirmed=False
         # Cela permet d'importer des bookings historiques avec des dates passées.
         # Lorsque time_confirmed=False :
@@ -799,16 +840,10 @@ class Booking(db.Model):
         #   - Le booking est exclu du dispatch automatique (voir get_bookings_for_dispatch)
         #   - Utile pour les retours avec heure à confirmer ou imports de données anciennes
         # ✅ Sentinelle 00:00:00 = "heure à définir" : ne pas valider "dans le passé"
-        is_sentinel_midnight = (
-            st is not None
-            and st.hour == 0
-            and st.minute == 0
-            and st.second == 0
-        )
+        is_sentinel_midnight = st.hour == 0 and st.minute == 0 and st.second == 0
         time_confirmed = getattr(self, "time_confirmed", True)
         if (
-            st
-            and not is_sentinel_midnight
+            not is_sentinel_midnight
             and st < now_local()
             and time_confirmed
         ):
@@ -923,6 +958,10 @@ class Booking(db.Model):
 
         # Définir les transitions autorisées
         ALLOWED_TRANSITIONS: dict[BookingStatus, list[BookingStatus]] = {
+            BookingStatus.AWAITING_CLIENT_PAYMENT: [
+                BookingStatus.PENDING,
+                BookingStatus.CANCELED,
+            ],
             BookingStatus.PENDING: [
                 BookingStatus.ACCEPTED,
                 BookingStatus.ASSIGNED,

@@ -68,6 +68,7 @@ import {
 import { getSyncEngine } from "@/services/syncEngine";
 import { initLogContext } from "@/services/logContext";
 import { getAuthKpiSnapshot, logAuthEvent } from "@/services/authLogging";
+import { WebIoniconsFontGate } from "@/components/web/WebIoniconsFontGate";
 import { OfflineBanner } from "@/components/common/OfflineBanner";
 import { PushFailureBanner } from "@/components/common/PushFailureBanner";
 import { GpsDisabledBanner } from "@/components/common/GpsDisabledBanner";
@@ -200,13 +201,15 @@ Sentry.init({
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
-      <VersionProvider>
-        <AuthProvider>
-          <AppAlertProvider>
-            <RootNav />
-          </AppAlertProvider>
-        </AuthProvider>
-      </VersionProvider>
+      <WebIoniconsFontGate>
+        <VersionProvider>
+          <AuthProvider>
+            <AppAlertProvider>
+              <RootNav />
+            </AppAlertProvider>
+          </AuthProvider>
+        </VersionProvider>
+      </WebIoniconsFontGate>
     </GestureHandlerRootView>
   );
 }
@@ -480,9 +483,16 @@ function RootNav() {
     return () => clearInterval(interval);
   }, []);
 
-  // 🔔 Config + enregistrement push (quand prêt)
+  // 🔔 Config + enregistrement push (quand prêt) — ownership chauffeur uniquement en surface driver
   useEffect(() => {
-    if (splashBlocking || versionLoading || !isDriverAuthenticated || !driver) return;
+    if (
+      splashBlocking ||
+      versionLoading ||
+      mode !== "driver" ||
+      !isDriverAuthenticated ||
+      !driver
+    )
+      return;
     const currentUserId = driver.id;
     if (pushInitForDriverRef.current === currentUserId) {
       return;
@@ -572,6 +582,7 @@ function RootNav() {
             token: tokenToUse,
             driverId: currentUserId,
             provider,
+            clientAuthSurface: "driver",
           });
           await AsyncStorage.setItem(key, tokenToUse);
           pushInitForDriverRef.current = currentUserId;
@@ -606,19 +617,19 @@ function RootNav() {
         pushInitForDriverRef.current = null;
       }
     };
-  }, [driver, isDriverAuthenticated, splashBlocking, versionLoading]);
+  }, [driver, isDriverAuthenticated, splashBlocking, versionLoading, mode]);
 
   useEffect(() => {
     if (splashBlocking || versionLoading) return;
-    if (!isDriverAuthenticated) {
+    if (!isDriverAuthenticated || mode !== "driver") {
       pushInitForDriverRef.current = null;
     }
-  }, [splashBlocking, versionLoading, isDriverAuthenticated]);
+  }, [splashBlocking, versionLoading, isDriverAuthenticated, mode]);
 
   // FCM: register foreground handler, deep link handlers, token refresh
   useEffect(() => {
     if (Platform.OS === "web") return;
-    if (splashBlocking || !isDriverAuthenticated || !driver) return;
+    if (splashBlocking || mode !== "driver" || !isDriverAuthenticated || !driver) return;
 
     const currentUserId = driver?.id;
 
@@ -640,6 +651,7 @@ function RootNav() {
           token: newToken,
           driverId: currentUserId,
           provider: "fcm",
+          clientAuthSurface: "driver",
         });
         log.success("FCM token refreshed and registered", { driverId: currentUserId });
       } catch (e: any) {
@@ -653,7 +665,7 @@ function RootNav() {
       unsubNotifee();
       unsubTokenRefresh();
     };
-  }, [driver, isDriverAuthenticated, splashBlocking]);
+  }, [driver, isDriverAuthenticated, splashBlocking, mode]);
 
   // A1: Modal batterie désactivé — jugé inutile (réapparaissait à chaque démarrage malgré "Ne plus afficher").
   // Le guide reste disponible dans le code si besoin futur (BatteryOptimizationGuide, batteryOptimization).
@@ -1013,6 +1025,7 @@ function SessionRecoveryBanner({ state }: { state: "RECOVERING" | "DEGRADED" }) 
 function BrandedLoadingScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(18)).current;
+  const shouldUseNativeDriver = Platform.OS !== "web";
 
   useEffect(() => {
     Animated.parallel([
@@ -1020,16 +1033,16 @@ function BrandedLoadingScreen() {
         toValue: 1,
         duration: 600,
         delay: 200,
-        useNativeDriver: true,
+        useNativeDriver: shouldUseNativeDriver,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 600,
         delay: 200,
-        useNativeDriver: true,
+        useNativeDriver: shouldUseNativeDriver,
       }),
     ]).start();
-  }, [fadeAnim, slideAnim]);
+  }, [fadeAnim, slideAnim, shouldUseNativeDriver]);
 
   return (
     <View style={styles.loadingContainer}>

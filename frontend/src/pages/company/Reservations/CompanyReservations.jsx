@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { FiPlus, FiDownload, FiInbox, FiChevronLeft, FiChevronRight, FiChevronDown } from 'react-icons/fi';
 import CompanyHeader from '../../../components/layout/Header/CompanyHeader';
@@ -15,6 +16,7 @@ import {
   updateReservation,
 } from '../../../services/companyService';
 import ReservationTable from '../Dashboard/components/ReservationTable';
+import ReservationTableSkeleton from '../Dashboard/components/ReservationTableSkeleton';
 import ReservationDetailPanel from './components/ReservationDetailPanel';
 import CancellationModal from '../../../components/reservations/CancellationModal';
 import ReservationStats from './components/ReservationStats';
@@ -28,6 +30,7 @@ import Modal from '../../../components/common/Modal';
 import { toast } from 'sonner';
 import { isCompletedStatus } from '../../../utils/reservationStatusUtils';
 import { exportReservationsExcel } from '../../../utils/exportReservationsExcel';
+import { lirieKeys, lirieInvalidateCompanyReservationLists } from '../../../queryKeys/lirie';
 import styles from './CompanyReservations.module.css';
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
@@ -75,19 +78,16 @@ function PerPageChip({ value, onChange }) {
 
 const CompanyReservations = () => {
   const { company } = useLirieCompany();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Data states
-  const [reservations, setReservations] = useState([]);
+  // Data / filtres (réservations via TanStack Query — cache, stale-while-revalidate, pas de reflash total)
   const [selectedDay, setSelectedDay] = useState('all');
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [reservationsPerPage, setReservationsPerPage] = useState(25);
-  const [totalReservations, setTotalReservations] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
 
   // Modal states
   const [selectedReservation, setSelectedReservation] = useState(null);
@@ -125,6 +125,59 @@ const CompanyReservations = () => {
     () => Boolean(selectedDay && selectedDay !== 'all' && !selectedDay.includes(':')),
     [selectedDay]
   );
+
+  const listQueryFilterScope = useMemo(
+    () => ({
+      selectedDay,
+      currentPage,
+      reservationsPerPage,
+      statusFilter,
+      activeTab,
+      searchTerm: searchTerm?.trim() || '',
+      sortOrder,
+    }),
+    [selectedDay, currentPage, reservationsPerPage, statusFilter, activeTab, searchTerm, sortOrder]
+  );
+
+  const canLoadReservations = Boolean(company?.id);
+
+  const {
+    data: listPayload,
+    isLoading: listInitialLoading,
+    isRefetching: listRefetching,
+    refetch: refetchReservations,
+  } = useQuery({
+    queryKey: canLoadReservations
+      ? lirieKeys.companyReservationsPaginated(company.id, listQueryFilterScope)
+      : ['lirie', 'company-reservations-paginated', 'disabled'],
+    enabled: canLoadReservations,
+    queryFn: async () => {
+      const isDateRange = selectedDay && selectedDay.includes(':');
+      const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
+      const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
+      return fetchCompanyReservationsPaginated({
+        date: apiParam,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page: currentPage,
+        perPage: reservationsPerPage,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        tab: activeTab !== 'all' ? activeTab : undefined,
+        search: searchTerm ? searchTerm.trim() || undefined : undefined,
+        sortOrder,
+        excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
+      });
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const reservations = useMemo(
+    () => (Array.isArray(listPayload?.reservations) ? listPayload.reservations : []),
+    [listPayload]
+  );
+  const totalReservations = listPayload?.total ?? 0;
+  const totalPages = listPayload?.total_pages ?? 0;
 
   // Force table mode for date ranges
   useEffect(() => {
@@ -189,66 +242,31 @@ const CompanyReservations = () => {
     setAlerts(newAlerts);
   };
 
-  // Load reservations
-  const loadReservations = useCallback(async () => {
-    try {
-      setLoading(true);
-      const isDateRange = selectedDay && selectedDay.includes(':');
-      const apiParam = selectedDay === 'all' || isDateRange ? null : selectedDay;
-      const [startDate, endDate] = isDateRange ? selectedDay.split(':') : [null, null];
-
-      const params = {
-        date: apiParam,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        page: currentPage,
-        perPage: reservationsPerPage,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        tab: activeTab !== 'all' ? activeTab : undefined,
-        search: searchTerm ? searchTerm.trim() || undefined : undefined,
-        sortOrder,
-        excludeCanceled: activeTab === 'all' && statusFilter !== 'canceled',
-      };
-
-      const data = await fetchCompanyReservationsPaginated(params);
-      const reservationsData = Array.isArray(data?.reservations) ? data.reservations : [];
-
-      setReservations(reservationsData);
-      setTotalReservations(data?.total ?? reservationsData.length);
-      setTotalPages(data?.total_pages ?? 0);
-
-      if (data?.stats) {
-        setStats(data.stats);
-      } else if (!isSingleDay) {
-        calculateStats(reservationsData);
-      }
-
-      generateAlerts(reservationsData);
-    } catch (err) {
-      console.error('Erreur lors du chargement des reservations :', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    selectedDay,
-    calculateStats,
-    currentPage,
-    reservationsPerPage,
-    statusFilter,
-    searchTerm,
-    sortOrder,
-    activeTab,
-    isSingleDay,
-  ]);
-
   useEffect(() => {
-    loadReservations();
-  }, [loadReservations]);
+    if (!listPayload) return;
+    const reservationsData = Array.isArray(listPayload.reservations) ? listPayload.reservations : [];
+    if (listPayload.stats) {
+      setStats(listPayload.stats);
+    } else if (!isSingleDay) {
+      calculateStats(reservationsData);
+    }
+    generateAlerts(reservationsData);
+  }, [listPayload, isSingleDay, calculateStats]);
+
+  const afterListMutation = useCallback(() => {
+    void lirieInvalidateCompanyReservationLists(queryClient);
+  }, [queryClient]);
+
+  const refetchListOnly = useCallback(() => {
+    void refetchReservations();
+  }, [refetchReservations]);
+
+  const showListSkeleton = !canLoadReservations || listInitialLoading;
 
   // Auto-open reservation from ?booking= query param (e.g. from notification click)
   useEffect(() => {
     const bookingIdParam = searchParams.get('booking');
-    if (!bookingIdParam || loading) return;
+    if (!bookingIdParam || showListSkeleton) return;
 
     const bookingId = Number(bookingIdParam);
     if (!bookingId) return;
@@ -287,7 +305,7 @@ const CompanyReservations = () => {
       }
     };
     fetchAndOpen();
-  }, [searchParams, reservations, loading, setSearchParams]);
+  }, [searchParams, reservations, showListSkeleton, setSearchParams]);
 
   useEffect(() => {
     if (!initialized) return;
@@ -416,17 +434,14 @@ const CompanyReservations = () => {
     const id = reservationId || reservationToDelete?.id;
     if (!id) return;
     await deleteReservation(id, reasonCode, reasonText);
-    setReservations((prev) => prev.filter((r) => r.id !== id));
     handleCloseConfirmModal();
+    afterListMutation();
   };
 
   const handleAccept = async (reservationId) => {
     try {
       await acceptReservation(reservationId);
-      setReservations((prev) =>
-        prev.map((r) => (r.id === reservationId ? { ...r, status: 'accepted' } : r))
-      );
-      loadReservations();
+      afterListMutation();
     } catch (err) {
       console.error("Erreur lors de l'acceptation:", err);
     }
@@ -435,10 +450,7 @@ const CompanyReservations = () => {
   const handleReject = async (reservationId) => {
     try {
       await rejectReservation(reservationId);
-      setReservations((prev) =>
-        prev.map((r) => (r.id === reservationId ? { ...r, status: 'rejected' } : r))
-      );
-      loadReservations();
+      afterListMutation();
     } catch (err) {
       console.error('Erreur lors du rejet:', err);
     }
@@ -459,7 +471,7 @@ const CompanyReservations = () => {
       await updateReservation(editModalReservation.id, updatedData);
       setEditModalOpen(false);
       setEditModalReservation(null);
-      loadReservations();
+      afterListMutation();
     } catch (err) {
       console.error("Erreur lors de l'edition:", err);
       throw err;
@@ -491,7 +503,7 @@ const CompanyReservations = () => {
       }
 
       await scheduleReservation(scheduleModalReservation.id, isoDatetime);
-      loadReservations();
+      afterListMutation();
       setScheduleModalReservation(null);
     } catch (err) {
       console.error('Erreur lors de la planification:', err);
@@ -511,14 +523,14 @@ const CompanyReservations = () => {
   };
 
   const handleTransferSuccess = () => {
-    loadReservations();
+    afterListMutation();
     toast.success('Course transferee avec succes');
   };
 
   const handleDispatchNow = async (reservation) => {
     try {
       await dispatchNowForReservation(reservation.id, 15);
-      loadReservations();
+      afterListMutation();
     } catch (err) {
       console.error('Erreur lors du dispatch urgent:', err);
     }
@@ -588,7 +600,7 @@ const CompanyReservations = () => {
                 type="button"
                 className={styles.btnSecondary}
                 onClick={handleExport}
-                disabled={exporting || (totalReservations === 0 && !loading)}
+                disabled={exporting || (totalReservations === 0 && showListSkeleton)}
                 title={totalReservations === 0 ? 'Aucune donnee a exporter' : 'Exporter en Excel'}
               >
                 <FiDownload size={16} className={exporting ? styles.exportSpin : ''} />
@@ -610,7 +622,7 @@ const CompanyReservations = () => {
             setViewMode={setViewMode}
             alertFilter={alertFilter}
             onClearAlertFilter={handleClearAlertFilter}
-            onRefresh={loadReservations}
+            onRefresh={refetchListOnly}
             totalResults={totalReservations}
             alerts={alerts}
             onFilterByAlert={handleFilterByAlert}
@@ -636,12 +648,9 @@ const CompanyReservations = () => {
             ))}
           </div>
 
-          {/* Main content */}
-          {loading ? (
-            <div className={styles.loadingState}>
-              <div className={styles.spinner} />
-              <p>Chargement des reservations...</p>
-            </div>
+          {/* Main content : premier chargement = squelette tableau ; rechargements = contenu + barre d’activité */}
+          {showListSkeleton ? (
+            <ReservationTableSkeleton rowCount={Math.min(12, Math.max(6, reservationsPerPage))} />
           ) : totalReservations === 0 && !alertFilter ? (
             <div className={styles.emptyState}>
               <FiInbox size={40} className={styles.emptyIcon} />
@@ -659,7 +668,11 @@ const CompanyReservations = () => {
               </button>
             </div>
           ) : (
-            <>
+            <div
+              className={listRefetching ? styles.listBlockRefreshing : styles.listBlock}
+              aria-busy={listRefetching}
+            >
+              {listRefetching && <div className={styles.listRefreshBar} role="status" aria-label="Mise à jour des réservations" />}
               {viewMode === 'table' ? (
                 <>
                   <ReservationTable
@@ -727,7 +740,7 @@ const CompanyReservations = () => {
               ) : (
                 <ReservationMapView reservations={mapReservations} />
               )}
-            </>
+            </div>
           )}
 
           {/* Top clients collapsible */}
@@ -785,7 +798,7 @@ const CompanyReservations = () => {
               <ManualBookingForm
                 onSuccess={() => {
                   setNewBookingOpen(false);
-                  loadReservations();
+                  afterListMutation();
                   toast.success('Réservation créée');
                 }}
                 onClose={() => setNewBookingOpen(false)}
@@ -802,9 +815,13 @@ const CompanyReservations = () => {
               onClose={() => setSelectedReservation(null)}
               onSave={async (id, data) => {
                 await updateReservation(id, data);
-                loadReservations();
+                afterListMutation();
               }}
               onDelete={handleDeleteRequest}
+              onReservationUpdated={(updated) => {
+                if (updated?.id) setSelectedReservation(updated);
+                afterListMutation();
+              }}
             />
           </aside>
         )}

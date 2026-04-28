@@ -1450,7 +1450,7 @@ class EligibleClients(Resource):
             .options(joinedload(Client.user))
             .filter(
                 Client.company_id == company_id,
-                Client.client_type != ClientType.SELF_SERVICE,
+                Client.client_type != ClientType.PORTAL,
             )
         )
 
@@ -1617,7 +1617,7 @@ class EligibleClients(Resource):
                 .filter(
                     Client.company_id == company_id,
                     Client.is_institution.is_(False),
-                    Client.client_type != ClientType.SELF_SERVICE,
+                    Client.client_type != ClientType.PORTAL,
                 )
             )
             if seen_client_ids:
@@ -2007,6 +2007,347 @@ class ClinicMonthlyTotals(Resource):
                 "Erreur inattendue lors de la récupération des totaux clinique mensuelle"
             )
             return APIErrorHandler.handle_exception(e, logger)
+
+
+@invoices_ns.route("/companies/<int:company_id>/invoices/period-preview")
+class PeriodInvoicePreview(Resource):
+    """Prévisualisation (V1) : un seul de client_id ou clinic_company_id + période."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.period_invoice_preview import (
+            build_period_invoice_preview,
+            preview_to_dict,
+        )
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+
+        y = request.args.get("year", type=int) or request.args.get("period_year", type=int)
+        m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
+        c_id = request.args.get("client_id", type=int)
+        cc_id = request.args.get("clinic_company_id", type=int)
+        if not y or not m or not (1 <= m <= 12):
+            return APIErrorHandler.handle_validation_error(
+                "Paramètres year (ou period_year) et month (1-12) requis",
+                logger_instance=logger,
+            )
+        if bool(c_id) == bool(cc_id) or (not c_id and not cc_id):
+            return APIErrorHandler.handle_validation_error(
+                "Fournir exactement un de client_id ou clinic_company_id",
+                logger_instance=logger,
+            )
+        try:
+            prev = build_period_invoice_preview(
+                company_id=company_id,
+                period_year=y,
+                period_month=m,
+                client_id=c_id,
+                clinic_company_id=cc_id,
+            )
+            return success_response(data=preview_to_dict(prev))
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/billing-opportunities"
+)
+class BillingOpportunities(Resource):
+    """V2 : vue agrégée « factures à générer » (payeurs + période, read-only)."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int):
+        from application.invoices.billing_opportunities import (
+            list_billing_opportunities,
+            opportunities_to_dict,
+        )
+        from routes.companies import _get_current_company_via_use_case
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+
+        y = request.args.get("year", type=int) or request.args.get("period_year", type=int)
+        m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
+        if not y or not m or not (1 <= m <= 12):
+            return APIErrorHandler.handle_validation_error(
+                "Paramètres year (ou period_year) et month (1-12) requis",
+                logger_instance=logger,
+            )
+        try:
+            res = list_billing_opportunities(
+                company_id=company_id, period_year=y, period_month=m
+            )
+            return success_response(data=opportunities_to_dict(res))
+        except ValueError as e:
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/celery-tasks/<string:task_id>"
+)
+class InvoiceCeleryTaskStatus(Resource):
+    """Statut tâche Celery (ex. PDF async) — résultat via backend Redis."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def get(self, company_id: int, task_id: str):
+        from routes.companies import _get_current_company_via_use_case
+
+        from celery_app import celery
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+
+        r = celery.AsyncResult(task_id)
+        data: dict = {
+            "task_id": task_id,
+            "state": r.state,
+            "ready": r.ready(),
+        }
+        if r.ready():
+            if r.successful():
+                data["result"] = r.result
+            else:
+                data["error"] = str(r.result) if r.result is not None else "FAILURE"
+        return success_response(data=data)
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/batch-generate-drafts-for-period"
+)
+class BatchGenerateDraftsForPeriod(Resource):
+    """V3 : enfile un batch (stub) — exige BATCH_TRANSPORT_INVOICING_ENABLED=1."""
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def post(self, company_id: int):
+        if os.getenv("BATCH_TRANSPORT_INVOICING_ENABLED", "").lower() not in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return APIErrorHandler.handle_permission_error(
+                "Génération batch indisponible (variable BATCH_TRANSPORT_INVOICING_ENABLED).",
+                logger_instance=logger,
+            )
+        from routes.companies import _get_current_company_via_use_case
+
+        from tasks.transport_invoicing_automation import (
+            batch_generate_drafts_for_period_task,
+        )
+
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+        cid = int(getattr(company, "id", 0) or 0)
+        if cid != company_id:
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
+        body = request.get_json(silent=True) or {}
+        y = int(body.get("year") or body.get("period_year") or 0)
+        m = int(body.get("month") or body.get("period_month") or 0)
+        if not y or not m or not (1 <= m <= 12):
+            return APIErrorHandler.handle_validation_error(
+                "Corps JSON : year (ou period_year) et month (1-12) requis",
+                logger_instance=logger,
+            )
+        ar = batch_generate_drafts_for_period_task.apply_async(
+            args=[company_id, y, m]
+        )
+        return success_response(
+            data={
+                "async": True,
+                "task_id": ar.id,
+                "message": "Batch de brouillons en file d’attente (implémentation progressive).",
+            },
+            status_code=202,
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/lines/<int:line_id>"
+)
+class DraftInvoiceLineEdit(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def delete(self, company_id, invoice_id, line_id):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.edit_draft_invoice import remove_draft_invoice_line
+
+        company, err, code = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        r = remove_draft_invoice_line(company_id, invoice_id, line_id)
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
+
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    def patch(self, company_id, invoice_id, line_id):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.edit_draft_invoice import update_draft_invoice_line
+
+        company, err, code = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        body = request.get_json() or {}
+        r = update_draft_invoice_line(
+            company_id,
+            invoice_id,
+            line_id,
+            line_total=body.get("line_total"),
+            adjustment_note=body.get("adjustment_note"),
+        )
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/apply-global-discount"
+)
+class ApplyGlobalDiscountDraftInvoice(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @limiter.limit("20 per minute")
+    def post(self, company_id, invoice_id):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.edit_draft_invoice import apply_draft_global_discount
+
+        company, err, code = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        body = request.get_json() or {}
+        pct = body.get("global_discount_percent")
+        note = body.get("global_discount_note")
+        if pct is None:
+            return APIErrorHandler.handle_validation_error(
+                "global_discount_percent requis", logger_instance=logger
+            )
+        try:
+            pf = float(pct)
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error(
+                "global_discount_percent invalide", logger_instance=logger
+            )
+        r = apply_draft_global_discount(
+            company_id,
+            invoice_id,
+            global_discount_percent=pf,
+            global_discount_note=note if isinstance(note, str) else None,
+        )
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/remove-global-discount"
+)
+class RemoveGlobalDiscountDraftInvoice(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @limiter.limit("20 per minute")
+    def post(self, company_id, invoice_id):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.edit_draft_invoice import remove_draft_global_discount
+
+        company, err, code = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        r = remove_draft_global_discount(company_id, invoice_id)
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/custom-line"
+)
+class AddCustomLineDraftInvoice(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @limiter.limit("30 per minute")
+    def post(self, company_id, invoice_id):
+        from routes.companies import _get_current_company_via_use_case
+
+        from application.invoices.edit_draft_invoice import add_draft_custom_line
+
+        company, err, code = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        body = request.get_json() or {}
+        desc = body.get("description")
+        tot = body.get("line_total")
+        qty = body.get("qty", 1.0)
+        if not isinstance(desc, str) or not desc.strip():
+            return APIErrorHandler.handle_validation_error("description requis", logger_instance=logger)
+        if tot is None:
+            return APIErrorHandler.handle_validation_error("line_total requis", logger_instance=logger)
+        try:
+            tf = float(tot)
+            qf = float(qty) if qty is not None else 1.0
+        except (TypeError, ValueError):
+            return APIErrorHandler.handle_validation_error("line_total ou qty invalide", logger_instance=logger)
+        custom_mode = body.get("custom_mode")
+        time_unit = body.get("time_unit")
+        if custom_mode is not None and custom_mode not in ("time", "quantity"):
+            return APIErrorHandler.handle_validation_error("custom_mode invalide", logger_instance=logger)
+        if time_unit is not None and time_unit not in ("min", "h", "d", "mois"):
+            return APIErrorHandler.handle_validation_error("time_unit invalide", logger_instance=logger)
+        r = add_draft_custom_line(
+            company_id,
+            invoice_id,
+            description=desc,
+            line_total=tf,
+            qty=qf,
+            custom_mode=custom_mode if isinstance(custom_mode, str) else None,
+            time_unit=time_unit if isinstance(time_unit, str) else None,
+        )
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
 
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/generate")
@@ -3490,6 +3831,27 @@ class RegenerateInvoicePdf(Resource):
                         "et ne peut plus être modifiée."
                     ),
                     logger_instance=logger,
+                )
+
+            # V2 : file d'attente Celery (même use case, hors thread HTTP)
+            _body = request.get_json(silent=True) or {}
+            _q = (request.args.get("async") or "").strip().lower()
+            want_async = _q in ("1", "true", "yes") or bool(_body.get("async"))
+            if want_async:
+                from tasks.invoice_pdf_tasks import (
+                    regenerate_standard_invoice_pdf_task,
+                )
+
+                async_result = regenerate_standard_invoice_pdf_task.apply_async(
+                    args=[company_id, invoice_id]
+                )
+                return success_response(
+                    data={
+                        "async": True,
+                        "task_id": async_result.id,
+                        "message": "Régénération PDF en file d'attente (Celery).",
+                    },
+                    status_code=202,
                 )
 
             # ✅ DDD: Régénérer le PDF via use case (force_regenerate=True pour écraser l'ancien)

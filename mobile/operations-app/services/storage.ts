@@ -5,10 +5,24 @@ import * as SecureStore from "expo-secure-store";
 import { Platform, AppState, type AppStateStatus } from "react-native";
 import { getLogger } from "@/utils/logger";
 import { debugAuthLog, isDebugAuthEnabled } from "@/services/authDebug";
-import { logAuthEvent } from "@/services/authLogging";
 import { setAuthStateDegraded } from "@/services/authSync";
 
 const log = getLogger("Storage");
+
+/** require différé : évite le cycle storage → authLogging → logContext → storage. */
+function logAuthCommitEventDeferred(
+  event: "AUTH_COMMIT_SUCCESS" | "AUTH_COMMIT_PARTIAL_FAILURE",
+  payload: Record<string, unknown>
+): void {
+  try {
+    const { logAuthEvent } = require("@/services/authLogging") as {
+      logAuthEvent: (e: string, p?: Record<string, unknown>) => void;
+    };
+    logAuthEvent(event, payload);
+  } catch {
+    /* logger indisponible au chargement */
+  }
+}
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // iOS Keychain : AFTER_FIRST_UNLOCK garantit l'accès aux tokens
@@ -43,7 +57,7 @@ const secureGet = async (key: string): Promise<string | null> => {
 };
 
 import * as Crypto from "expo-crypto";
-import type { DriverAccountInfo } from "@/services/enterpriseDispatch";
+import type { DriverAccountInfo } from "@/types/enterpriseDispatch";
 import {
   DRIVER_AUTH_KEYS,
   ENTERPRISE_AUTH_KEYS,
@@ -197,6 +211,8 @@ const METRICS_LOG_INTERVAL = 100; // Log toutes les 100 lectures
 // ============ Clés de stockage non-sécurisé (AsyncStorage) ============
 const ASYNC_KEYS = {
   DRIVER_ID: "driver_id",
+  /** Aligné sur socket.ts — resync messages entreprise */
+  DRIVER_COMPANY_ID: "driver_company_id",
   DRIVER_ACCOUNT_INFO: "enterprise.driver_account_info", // Info du compte chauffeur associé
   // ✅ Device correlation (stable): utilisé pour X-Device-ID + push token multi-device
   // Note: clé historique, utilisée aussi côté enterprise
@@ -854,7 +870,7 @@ export async function commitSessionTokensAtomically(
       await AsyncStorage.setItem(params.sessionStorageKey, JSON.stringify(payload));
     }
 
-    logAuthEvent("AUTH_COMMIT_SUCCESS", {
+    logAuthCommitEventDeferred("AUTH_COMMIT_SUCCESS", {
       route: params.scope,
       trigger_source: params.trigger_source || "unknown",
       has_refresh: Boolean(params.refreshToken),
@@ -867,7 +883,7 @@ export async function commitSessionTokensAtomically(
     });
   } catch (error) {
     setAuthStateDegraded();
-    logAuthEvent("AUTH_COMMIT_PARTIAL_FAILURE", {
+    logAuthCommitEventDeferred("AUTH_COMMIT_PARTIAL_FAILURE", {
       route: params.scope,
       trigger_source: params.trigger_source || "unknown",
       has_refresh: Boolean(params.refreshToken),
@@ -939,6 +955,24 @@ export const asyncStorage = {
   },
 
   /**
+   * Stocke le company_id chauffeur (bootstrap /auth/me) pour resync messages socket.
+   */
+  async setDriverCompanyId(companyId: number | null): Promise<void> {
+    if (companyId == null || Number.isNaN(companyId)) {
+      await AsyncStorage.removeItem(ASYNC_KEYS.DRIVER_COMPANY_ID);
+      return;
+    }
+    await AsyncStorage.setItem(ASYNC_KEYS.DRIVER_COMPANY_ID, String(companyId));
+  },
+
+  async getDriverCompanyId(): Promise<number | null> {
+    const raw = await AsyncStorage.getItem(ASYNC_KEYS.DRIVER_COMPANY_ID);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  },
+
+  /**
    * Stocke l'info du compte chauffeur associé (pour éviter de refaire l'appel API)
    */
   async setDriverAccountInfo(info: DriverAccountInfo): Promise<void> {
@@ -970,6 +1004,7 @@ export const asyncStorage = {
   async clearAuth(): Promise<void> {
     await AsyncStorage.multiRemove([
       ASYNC_KEYS.DRIVER_ID,
+      ASYNC_KEYS.DRIVER_COMPANY_ID,
       ASYNC_KEYS.DRIVER_ACCOUNT_INFO,
     ]);
   },

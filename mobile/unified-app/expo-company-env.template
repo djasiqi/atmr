@@ -1,0 +1,31 @@
+# Gabarit pour le flux company « temps réel » (à copier vers .env local, non versionné).
+# Si le bandeau reste « Hors ligne », vérifier la chaîne (chacun bloque les suivants) :
+#
+# Blocage 1 — company_dispatch_enabled
+#   EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1 (remplace l’ancien static false ; en prod, ne pas
+#   définir). Peut être surchargé à la connexion (feature_flags / MOBILE_FEATURE_FLAGS).
+# Blocage 2 — company_realtime_enabled
+#   Active le bridge côté app ; EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1
+# Blocage 3 — URL Socket.IO
+#   EXPO_PUBLIC_COMPANY_SOCKET_URL (sinon repli sur EXPO_PUBLIC_DRIVER_SOCKET_URL).
+#   Repli : si ni COMPANY ni DRIVER n’est définie, l’appli utilise l’origine de
+#   EXPO_PUBLIC_API_BASE_URL (même hôte:port que l’API, ex. http://IP:5000).
+# Si le bandeau reste indéfiniment sur « Connexion… » (HTTP et synchro OK) :
+#   - Téléphone / tablette : EXPO_PUBLIC_API_BASE_URL doit viser l’IP LAN du PC
+#     (ex. http://192.168.0.12:5000), jamais localhost/127.0.0.1.
+#   - Émulateur Android : plutôt http://10.0.2.2:5000 que localhost.
+#   - Côté API (Docker) : lire `docker compose logs atmr_api` (token rejeté, rate limit, etc.) ;
+#     en doute, tester GUNICORN_WORKERS=1 dans backend/.env (multi-workers + Socket.IO).
+#   - Metro : le warn [CompanyRealtimeBridge] connect_error affiche la cause côté client.
+# Optionnel (chat) — EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET=1
+#   Active l’exigence d’un WebSocket sain sur l’écran chat. Absent/0 = chat en
+#   requêtes périodiques, sans bandeau « connexion directe » lié au bridge.
+
+# ——— Développement local (décommenter les 2 lignes) ———
+# EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH=1
+# EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1
+# Même hôte:port que l’API = pas besoin d’URL si EXPO_PUBLIC_API_BASE_URL pointe vers le service Socket.IO
+# (sinon) EXPO_PUBLIC_COMPANY_SOCKET_URL=http://192.168.x.x:5000
+
+# CTA semi-auto : écran propositions
+# EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN=1

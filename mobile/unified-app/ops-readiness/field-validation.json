@@ -1,0 +1,24 @@
+{
+  "artifact": "field-validation-transverse",
+  "promotionFlow": ["shadow", "production"],
+  "shadowRequirements": {
+    "minDevices": 5,
+    "minWorkingDays": 5,
+    "minTrips": 20,
+    "requiredDeviceCoverage": ["D1", "D2", "D3"]
+  },
+  "scenarios": [
+    "mission active with tracking",
+    "screen locked background period",
+    "network offline then reconnect",
+    "notification tap cold-start quick-action",
+    "process kill then app relaunch"
+  ],
+  "sourceOfTruth": [
+    "signed QA checklist",
+    "driver telemetry logs",
+    "backend ingest metrics",
+    "session diagnostics"
+  ]
+}
+

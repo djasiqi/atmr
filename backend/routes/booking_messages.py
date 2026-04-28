@@ -12,14 +12,15 @@ from __future__ import annotations
 import logging
 
 from flask import abort, request as flask_request
-from flask_jwt_extended import get_jwt, verify_jwt_in_request
+from flask_jwt_extended import get_jwt, get_jwt_identity, verify_jwt_in_request
 from flask_restx import Namespace, Resource
 
 from ext import db
 from models.booking import Booking
 from models.booking_transfer import BookingTransfer
 from models.booking_message import BookingMessage, BookingMessageSender
-from models.enums import TransferStatus
+from models.client import Client
+from models.enums import TransferStatus, UserRole
 from models.transport_request import TransportRequest
 from models.user import User
 
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 booking_messages_ns = Namespace(
     "booking_messages",
-    description="Messages booking (institution <-> entreprise)",
+    description="Messages booking (institution <-> entreprise, client <-> entreprise)",
 )
 
 
@@ -80,6 +81,10 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     # Resolve user display name from JWT
     user_id = claims.get("user_id")
     user = User.query.get(user_id) if user_id else None
+    if user is None:
+        pub = get_jwt_identity()
+        if pub:
+            user = User.query.filter_by(public_id=str(pub)).first()
     if user:
         first = (getattr(user, "first_name", None) or "").strip()
         last = (getattr(user, "last_name", None) or "").strip()
@@ -116,7 +121,7 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     # Institution user
     user_institution_id = claims.get("institution_id")
     if user_institution_id and institution_id and int(user_institution_id) == institution_id:
-        inst = source_req.institution
+        inst = source_req.institution if source_req else None
         label = user_display or (inst.name if inst else "Institution")
         return (
             booking,
@@ -126,6 +131,25 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
             request_id,
             None,
         )
+
+    # Client portail (course avec entreprise retenue)
+    if user and getattr(user, "role", None) == UserRole.client:
+        client_profile = Client.query.filter_by(user_id=user.id).first()
+        if (
+            client_profile
+            and booking.client_id
+            and int(client_profile.id) == int(booking.client_id)
+            and booking.company_id
+        ):
+            label = user_display or "Client"
+            return (
+                booking,
+                BookingMessageSender.CLIENT,
+                label,
+                institution_id,
+                request_id,
+                None,
+            )
 
     if not source_req and not transfer:
         abort(404, description="Pas de canal de communication pour cette reservation")

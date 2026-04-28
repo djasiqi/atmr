@@ -1,5 +1,5 @@
 // src/components/layout/DriverSidebar/DriverSidebar.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   FaHome,
@@ -10,9 +10,28 @@ import {
   FaBars,
   FaTimes,
 } from 'react-icons/fa';
+import { getDriverPublicId } from '../../../../utils/webAuthSession';
 import styles from './DriverSidebar.module.css';
 
+function readDriverHomePath() {
+  const pid = getDriverPublicId() || '';
+  return pid ? `/dashboard/driver/${pid}` : '/dashboard';
+}
+
 const DriverSidebar = () => {
+  const [driverHomePath, setDriverHomePath] = useState(() => readDriverHomePath());
+
+  useEffect(() => {
+    const sync = () => setDriverHomePath(readDriverHomePath());
+    window.addEventListener('storage', sync);
+    window.addEventListener('auth-changed', sync);
+    sync();
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('auth-changed', sync);
+    };
+  }, []);
+
   // État du toggle (sauvegardé dans localStorage)
   const [isExpanded, setIsExpanded] = useState(() => {
     const saved = localStorage.getItem('driverSidebarExpanded');
@@ -40,11 +59,12 @@ const DriverSidebar = () => {
     setIsExpanded(!isExpanded);
   };
 
-  const menuItems = [
+  const menuItems = useMemo(
+    () => [
     {
       icon: FaHome,
       label: 'Tableau de bord',
-      to: '/driver/dashboard',
+      to: driverHomePath,
     },
     {
       icon: FaCalendarAlt,
@@ -66,7 +86,9 @@ const DriverSidebar = () => {
       label: 'Paramètres',
       to: '/driver/settings',
     },
-  ];
+    ],
+    [driverHomePath]
+  );
 
   return (
     <nav className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed}`}>

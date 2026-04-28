@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"KAFKA_TOPIC\" /c/Users/jasiq/atmr/backend --include=\"*.py\" ! -path \"*/__pycache__*\" ! -path \"*/venv/*\")",
+      "Bash(grep -r \"notifications\\\\.push\\\\|notifications\\\\.sms\\\\|notifications\\\\.email\\\\|driver\\\\.location\" /c/Users/jasiq/atmr --include=\"*.py\" ! -path \"*/__pycache__*\" ! -path \"*/venv/*\" ! -path \"*/.claude/*\")",
+      "Bash(xargs grep *)"
+    ]
+  }
+}

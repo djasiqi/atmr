@@ -194,7 +194,7 @@ class TestSchemaValidationE2E:
         test_client.company_id = (
             sample_company.id
         )  # Utiliser sample_company pour garantir company_id non-None
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -256,7 +256,7 @@ class TestSchemaValidationE2E:
         test_client.company_id = (
             sample_company.id
         )  # Utiliser sample_company pour garantir company_id non-None
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -346,7 +346,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -437,7 +437,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -561,7 +561,7 @@ class TestSchemaValidationE2E:
         test_client = Client()
         test_client.user_id = client_user.id
         test_client.company_id = sample_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -642,7 +642,7 @@ class TestSchemaValidationE2E:
         test_client = Client()
         test_client.user_id = client_user.id
         test_client.company_id = sample_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -816,7 +816,7 @@ class TestSchemaValidationE2E:
         test_client = Client()
         test_client.user_id = client_user.id
         test_client.company_id = sample_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -880,7 +880,11 @@ class TestSchemaValidationE2E:
         unique_email = f"selfservice_{uuid.uuid4().hex[:8]}@example.com"
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={"client_type": "SELF_SERVICE", "email": unique_email},
+            json={
+                "management_mode": "SELF_SERVICE",
+                "email": unique_email,
+                "gender": "male",
+            },
             headers=company_headers,
         )
         # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
@@ -895,7 +899,7 @@ class TestSchemaValidationE2E:
 
     def test_create_client_valid_schema_private(self, client, db, sample_company):
         """✅ Test E2E POST /api/companies/me/clients
-        avec ClientCreateSchema valide (PRIVATE)."""
+        avec ClientCreateSchema valide (MANAGED, ex-PRIVATE)."""
         from models import User, UserRole
 
         # Authentification: générer un JWT company directement
@@ -916,11 +920,12 @@ class TestSchemaValidationE2E:
         )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
-        # Test création client PRIVATE (first_name, last_name, address requis)
+        # Test création client MANAGED (first_name, last_name, address requis)
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "PRIVATE",
+                "management_mode": "MANAGED",
+                "gender": "male",
                 "first_name": "Jean",
                 "last_name": "Dupont",
                 "address": "Rue de Test 1, 1000 Lausanne",
@@ -962,7 +967,8 @@ class TestSchemaValidationE2E:
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "CORPORATE",
+                "management_mode": "CORPORATE",
+                "gender": "female",
                 "first_name": "Marie",
                 "last_name": "Martin",
                 "address": "Avenue Corporate 10, 1000 Lausanne",
@@ -1001,10 +1007,14 @@ class TestSchemaValidationE2E:
         )
         company_headers = {"Authorization": f"Bearer {company_token}"}
 
-        # Test avec client_type manquant (requis)
+        # Test avec management_mode manquant (requis)
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={"first_name": "Jean", "last_name": "Dupont"},
+            json={
+                "first_name": "Jean",
+                "last_name": "Dupont",
+                "gender": "male",
+            },
             headers=company_headers,
         )
         # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
@@ -1016,19 +1026,19 @@ class TestSchemaValidationE2E:
         # Si c'est 404, on ne vérifie pas le message d'erreur
         if response.status_code not in [404, 429]:
             assert ("message" in data) or ("errors" in data) or ("error" in data)
-            # Vérifier que l'erreur mentionne client_type seulement si c'est
+            # Vérifier que l'erreur mentionne management_mode seulement si c'est
             # une erreur de validation (400)
             if response.status_code == 400:
                 error_str = str(data).lower()
-                assert "client_type" in error_str or "errors" in error_str, (
-                    f"Erreur de validation devrait mentionner client_type ou errors, "
+                assert "management_mode" in error_str or "errors" in error_str, (
+                    f"Erreur de validation devrait mentionner management_mode ou errors, "
                     f"mais reçu: {data}"
                 )
 
-        # Test avec client_type invalide
+        # Test avec management_mode invalide
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={"client_type": "INVALID_TYPE"},
+            json={"management_mode": "INVALID_TYPE", "gender": "male"},
             headers=company_headers,
         )
         # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
@@ -1045,7 +1055,8 @@ class TestSchemaValidationE2E:
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "SELF_SERVICE"
+                "management_mode": "SELF_SERVICE",
+                "gender": "male",
                 # email manquant
             },
             headers=company_headers,
@@ -1054,11 +1065,12 @@ class TestSchemaValidationE2E:
         # ou retourne 400/201/500 selon l'implémentation
         assert response.status_code in [400, 201, 404, 500]
 
-        # Test PRIVATE sans first_name/last_name/address (requis pour ce type)
+        # Test MANAGED sans first_name/last_name/address (requis pour ce type)
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "PRIVATE"
+                "management_mode": "MANAGED",
+                "gender": "male",
                 # first_name, last_name, address manquants
             },
             headers=company_headers,
@@ -1076,7 +1088,11 @@ class TestSchemaValidationE2E:
         # Test avec email invalide
         response = client.post(
             "/api/v1/companies/me/clients",
-            json={"client_type": "SELF_SERVICE", "email": "invalid-email-format"},
+            json={
+                "management_mode": "SELF_SERVICE",
+                "gender": "male",
+                "email": "invalid-email-format",
+            },
             headers=company_headers,
         )
         # ✅ FIX: Accepter 404 si la route n'est pas trouvée ou si
@@ -1098,7 +1114,8 @@ class TestSchemaValidationE2E:
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "PRIVATE",
+                "management_mode": "MANAGED",
+                "gender": "male",
                 "first_name": "a" * 101,  # Max 100
                 "last_name": "Dupont",
                 "address": "Rue de Test 1, 1000 Lausanne",
@@ -1119,7 +1136,8 @@ class TestSchemaValidationE2E:
         response = client.post(
             "/api/v1/companies/me/clients",
             json={
-                "client_type": "PRIVATE",
+                "management_mode": "MANAGED",
+                "gender": "male",
                 "first_name": "Jean",
                 "last_name": "Dupont",
                 "address": "Rue de Test 1, 1000 Lausanne",
@@ -1172,7 +1190,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -1272,7 +1290,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -1463,7 +1481,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -1588,7 +1606,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()
 
@@ -1735,7 +1753,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         test_client.phone = "+41211234567"
         test_client.address = "Old Address"
         db.session.add(test_client)
@@ -1825,7 +1843,7 @@ class TestSchemaValidationE2E:
         db.session.add(temp_company)
         db.session.flush()
         test_client.company_id = temp_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -2623,7 +2641,7 @@ class TestSchemaValidationE2E:
         test_client = Client()
         test_client.user_id = client_user.id
         test_client.company_id = sample_company.id
-        test_client.client_type = "PRIVATE"
+        test_client.client_type = "TRANSPORT"
         db.session.add(test_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
 
@@ -2676,10 +2694,13 @@ class TestSchemaValidationE2E:
         db.session.add(institution_user)
         db.session.flush()
 
+        from models.enums import ManagementMode
+
         institution_client = Client()
         institution_client.user_id = institution_user.id
         institution_client.company_id = sample_company.id
-        institution_client.client_type = "CORPORATE"
+        institution_client.client_type = "TRANSPORT"
+        institution_client.management_mode = ManagementMode.CORPORATE
         institution_client.is_institution = True
         db.session.add(institution_client)
         db.session.flush()  # Utiliser flush au lieu de commit pour savepoints
@@ -3996,7 +4017,7 @@ class TestCompaniesClients:
         # Charge incomplète -> devrait déclencher 400 (ou 429 RL)
         payload = {
             # "user_id": 1,
-            # "client_type": "PRIVATE",
+            # "management_mode": "MANAGED",
         }
         resp = client.post(
             "/api/v1/companies/me/clients", json=payload, headers=headers

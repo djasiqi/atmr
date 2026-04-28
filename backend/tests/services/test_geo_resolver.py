@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from services.geo.geo_resolver import PickupAdminResolution, resolve_pickup_admin
+from services.geo.geo_resolver import (
+    PickupAdminResolution,
+    resolve_legacy_service_area_to_canton_codes,
+    resolve_pickup_admin,
+)
 
 
 def test_resolve_pickup_admin_uses_db_fallback(monkeypatch) -> None:
@@ -48,3 +52,8 @@ def test_resolve_pickup_admin_returns_unknown_without_signals(monkeypatch) -> No
 
     assert payload["token"] is None
     assert payload["source"] == "unknown"
+
+
+def test_resolve_legacy_service_area_json_tokens() -> None:
+    raw = '{"v":1,"mode":"canton","tokens":["canton:GE","canton:VD"]}'
+    assert resolve_legacy_service_area_to_canton_codes(raw) == ["GE", "VD"]

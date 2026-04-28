@@ -30,6 +30,7 @@ from models import (
     UserRole,
     Vehicle,
 )
+from models.enums import ManagementMode
 from services.demo.seed_spec import PROFILES, build_relative_transport_slots
 from services.demo.utils import get_demo_default_password
 
@@ -398,7 +399,8 @@ def reset_and_seed_demo_dataset(
         )
         client.contact_email = user.email
         client.contact_phone = f"+41 79 500 0{idx:02d}"
-        client.client_type = ClientType.PRIVATE
+        client.client_type = ClientType.TRANSPORT
+        client.management_mode = ManagementMode.MANAGED
         client.is_active = True
         client.domicile_address = domicile_address
         client.domicile_city = domicile_city
@@ -629,8 +631,9 @@ def ensure_demo_reference_dataset(
     touched = 0
     for idx, client in enumerate(demo_clients):
         user = getattr(client, "user", None)
-        if client.client_type is None or client.client_type == ClientType.SELF_SERVICE:
-            client.client_type = ClientType.PRIVATE
+        if client.client_type is None:
+            client.client_type = ClientType.TRANSPORT
+            client.management_mode = ManagementMode.MANAGED
             touched += 1
         if not bool(getattr(client, "is_active", True)):
             client.is_active = True

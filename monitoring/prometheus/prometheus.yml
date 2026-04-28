@@ -28,11 +28,15 @@ rule_files:
 # Scrape configurations
 scrape_configs:
   # ==================== Backend Flask / Socket.IO ====================
+  # Cible selon le compose (un seul job : ce fichier est le stack « monitoring / prod »).
+  #   - PROD (ex. docker-compose.monitoring + compose prod) : service = backend -> backend:5000
+  #   - DEV (docker-compose.yml, profile monitoring) : utiliser ./prometheus/prometheus.yml du repo
+  #     (cible atmr_api:5000) — le service "backend" n’existe pas sur le réseau default dev.
   - job_name: "atmr-backend"
     metrics_path: "/api/v1/prometheus/metrics"
     static_configs:
       - targets:
-          - "atmr-backend:5000"
+          - "backend:5000"
         labels:
           service: "atmr-backend"
           component: "api"

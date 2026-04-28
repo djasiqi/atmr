@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from services.company_driver_location_freshness import (
+    last_seen_seconds_from_db_last_position_update,
     last_seen_seconds_from_location_fields,
     resolve_location_freshness_timestamp,
 )
@@ -62,3 +63,20 @@ def test_last_seen_seconds_prefers_recorded_over_received() -> None:
         "received_at": "2026-01-01T11:00:00Z",
     }
     assert last_seen_seconds_from_location_fields(loc, now=fixed) == 2 * 3600
+
+
+def test_last_seen_from_db_position_none() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    assert last_seen_seconds_from_db_last_position_update(None, now=now) is None
+
+
+def test_last_seen_from_db_position_age() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    lpu = datetime(2026, 1, 1, 11, 55, 0, tzinfo=UTC)
+    assert last_seen_seconds_from_db_last_position_update(lpu, now=now) == 300
+
+
+def test_last_seen_from_db_position_naive_treated_utc() -> None:
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    lpu = datetime(2026, 1, 1, 11, 59, 0)  # naive
+    assert last_seen_seconds_from_db_last_position_update(lpu, now=now) == 60

@@ -128,6 +128,16 @@ class SaveDriverPushTokenUseCase:
                 status_code = 404
             else:
                 assert token is not None
+                # Métadonnée client (Phase 4A mobile) — ignorée pour la persistance, loguée pour corrélation / 4B.
+                _surf = payload.get("client_auth_surface") or payload.get(
+                    "clientAuthSurface"
+                )
+                if _surf is not None:
+                    app_logger.info(
+                        "[push-token] client_auth_surface=%r driver_id=%s",
+                        _surf,
+                        driver_id,
+                    )
                 # ✅ CORRECTIF #3: Enregistrer dans DeviceToken (support multi-device)
                 from ext import db
                 from models import DeviceToken
@@ -157,14 +167,13 @@ class SaveDriverPushTokenUseCase:
                         provider,
                     )
                 else:
-                    device_token = DeviceToken(
-                        driver_id=driver_id,
-                        token=token,
-                        device_id=device_id,
-                        platform=platform,
-                        provider=provider,
-                        is_active=True,
-                    )
+                    device_token = DeviceToken()
+                    device_token.driver_id = driver_id
+                    device_token.token = token
+                    device_token.device_id = device_id
+                    device_token.platform = platform
+                    device_token.provider = provider
+                    device_token.is_active = True
                     db.session.add(device_token)
                     app_logger.info(
                         "[push-token] Nouveau token enregistré pour driver %s (device: %s, platform: %s, provider: %s)",

@@ -7,6 +7,8 @@ en retournant des DTOs au lieu de modèles SQLAlchemy directs.
 from datetime import datetime, timedelta
 from typing import Any
 
+from sqlalchemy.orm import joinedload
+
 from domain.booking_dto import BookingDTO
 from models import Booking, BookingStatus
 
@@ -35,7 +37,8 @@ class BookingRepository:
         from sqlalchemy import and_, exists, or_
 
         from models.booking_transfer import BookingTransfer
-        from models.enums import TransferStatus
+        from models.enums import DispatchOfferStatus, TransferStatus
+        from models.service_area_pricing import DispatchOffer
 
         # Seuls ACCEPTED/COMPLETED : exclut PENDING (pas encore accepté) et REJECTED (refusé/annulé)
         owner_via_transfer = exists().where(
@@ -70,6 +73,23 @@ class BookingRepository:
                             BookingStatus.COMPLETED,
                             BookingStatus.RETURN_COMPLETED,
                         ]
+                    )
+                ),
+            ),
+            # Demande ouverte : pas encore de transporteur, mais offre PROPOSED pour cette entreprise
+            and_(
+                Booking.company_id.is_(None),
+                Booking.status.in_(
+                    [
+                        BookingStatus.PENDING,
+                        BookingStatus.AWAITING_CLIENT_PAYMENT,
+                    ]
+                ),
+                exists().where(
+                    and_(
+                        DispatchOffer.booking_id == Booking.id,
+                        DispatchOffer.company_id == company_id,
+                        DispatchOffer.status == DispatchOfferStatus.PROPOSED,
                     )
                 ),
             ),
@@ -311,6 +331,22 @@ class BookingRepository:
             self._company_visibility_filter(company_id),
         ).first()
 
+    def find_model_by_id_with_visibility_for_update(
+        self, booking_id: int, company_id: int
+    ) -> Booking | None:
+        """Trouve un booking visible et verrouille la ligne pour mise à jour atomique.
+
+        Utilisé pour les opérations critiques concurrentes (ex: assignation chauffeur).
+        """
+        return (
+            Booking.query.filter(
+                Booking.id == booking_id,
+                self._company_visibility_filter(company_id),
+            )
+            .with_for_update()
+            .first()
+        )
+
     def find_models_by_company_with_filters(
         self,
         company_id: int,
@@ -476,8 +512,10 @@ class BookingRepository:
         Returns:
             Liste de Booking triées par scheduled_time décroissant
         """
-        query = Booking.query.filter_by(client_id=client_id).order_by(
-            Booking.scheduled_time.desc()
+        query = (
+            Booking.query.options(joinedload(Booking.return_trip))
+            .filter_by(client_id=client_id)
+            .order_by(Booking.scheduled_time.desc())
         )
         if limit:
             query = query.limit(limit)
@@ -980,6 +1018,7 @@ class BookingRepository:
                 selectinload(Booking.client).selectinload(Client.user),
                 selectinload(Booking.company),
                 selectinload(Booking.executing_company),
+                selectinload(Booking.return_trip),
             )
             .first()
         )
@@ -993,14 +1032,28 @@ class BookingRepository:
         Returns:
             Query SQLAlchemy avec eager loading
         """
-        from sqlalchemy.orm import selectinload
+        from sqlalchemy.orm import joinedload, selectinload
 
         from models import Client, Driver
+        from models.transport_request import TransportRequest
 
         query = Booking.query.options(
-            selectinload(Booking.driver).selectinload(Driver.user),
-            selectinload(Booking.client).selectinload(Client.user),
-            selectinload(Booking.company),
+            joinedload(Booking.driver).joinedload(Driver.user),
+            joinedload(Booking.client).joinedload(Client.user),
+            joinedload(Booking.company),
+            joinedload(Booking.executing_company),
+            joinedload(Booking.billed_to_company),
+            selectinload(Booking.return_trip),
+            selectinload(Booking.payments),
+            selectinload(Booking.source_request).selectinload(
+                TransportRequest.accepted_by_company
+            ),
+            selectinload(Booking.source_request).selectinload(
+                TransportRequest.created_by
+            ),
+            selectinload(Booking.source_request).selectinload(
+                TransportRequest.institution
+            ),
         )
         if status_filter:
             query = query.filter_by(status=status_filter)
@@ -1018,15 +1071,29 @@ class BookingRepository:
         Returns:
             Query SQLAlchemy avec eager loading, triée par scheduled_time desc
         """
-        from sqlalchemy.orm import joinedload
+        from sqlalchemy.orm import joinedload, selectinload
 
         from models import Client, Driver
+        from models.transport_request import TransportRequest
 
         query = (
             Booking.query.options(
                 joinedload(Booking.client).joinedload(Client.user),
                 joinedload(Booking.driver).joinedload(Driver.user),
                 joinedload(Booking.company),
+                joinedload(Booking.executing_company),
+                joinedload(Booking.billed_to_company),
+                selectinload(Booking.return_trip),
+                selectinload(Booking.payments),
+                selectinload(Booking.source_request).selectinload(
+                    TransportRequest.accepted_by_company
+                ),
+                selectinload(Booking.source_request).selectinload(
+                    TransportRequest.created_by
+                ),
+                selectinload(Booking.source_request).selectinload(
+                    TransportRequest.institution
+                ),
             )
             .filter_by(client_id=client_id)
             .order_by(Booking.scheduled_time.desc())

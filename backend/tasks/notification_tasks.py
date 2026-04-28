@@ -12,6 +12,9 @@ Features:
 from __future__ import annotations
 
 import logging
+import os
+import time
+from contextlib import suppress
 from typing import Any, ClassVar, Dict
 
 from celery import Task
@@ -69,8 +72,8 @@ class NotificationTask(Task):
     bind=True,
     base=NotificationTask,
     acks_late=True,
-    task_time_limit=30,  # 30 secondes max
-    task_soft_time_limit=25,
+    task_time_limit=20,
+    task_soft_time_limit=10,
     max_retries=MAX_PUSH_RETRIES,
 )
 def send_push_notification_task(  # noqa: PLR0911
@@ -115,6 +118,67 @@ def send_push_notification_task(  # noqa: PLR0911
                 driver_id,
                 notification_type,
             )
+
+            if os.getenv("NOTIFICATIONS_KAFKA_PUBLISH_ENABLED", "false").lower() == "true":
+                from services.monitoring.prometheus import (
+                    inc_notification_kafka_enqueue,
+                    observe_notification_kafka_enqueue_latency,
+                )
+                from services.notifications.kafka_producer import send_push_via_kafka
+
+                publish_ok = False
+                fail_reason = "returned_false"
+                t0 = time.perf_counter()
+                try:
+                    publish_ok = bool(
+                        send_push_via_kafka(
+                            driver_id,
+                            title,
+                            body,
+                            data=data,
+                            notification_type=notification_type,
+                            bypass_rate_limit=bypass_rate_limit,
+                        )
+                    )
+                except Exception as enqueue_exc:
+                    fail_reason = "exception"
+                    _elapsed = time.perf_counter() - t0
+                    with suppress(Exception):
+                        observe_notification_kafka_enqueue_latency(
+                            status="exception", seconds=_elapsed
+                        )
+                    with suppress(Exception):
+                        inc_notification_kafka_enqueue(status="exception")
+                    logger.warning(
+                        "notification_kafka_enqueue_failed fallback=direct reason=%s err=%s",
+                        fail_reason,
+                        enqueue_exc,
+                    )
+                else:
+                    _elapsed = time.perf_counter() - t0
+                    with suppress(Exception):
+                        observe_notification_kafka_enqueue_latency(
+                            status="success" if publish_ok else "fallback",
+                            seconds=_elapsed,
+                        )
+
+                if publish_ok:
+                    with suppress(Exception):
+                        inc_notification_kafka_enqueue(status="success")
+                    return {
+                        "ok": True,
+                        "channel": "kafka",
+                        "notification_type": notification_type,
+                    }
+
+                if fail_reason != "exception":
+                    logger.warning(
+                        "notification_kafka_enqueue_failed fallback=direct reason=%s",
+                        fail_reason,
+                    )
+                    with suppress(Exception):
+                        inc_notification_kafka_enqueue(status="fallback")
+
             # Récupérer le driver
             driver = db.session.get(Driver, driver_id)
             if not driver:
@@ -393,8 +457,8 @@ def send_push_notification_task(  # noqa: PLR0911
     retry_backoff_max=600,
     retry_jitter=True,
     acks_late=True,
-    task_time_limit=30,
-    task_soft_time_limit=25,
+    task_time_limit=20,
+    task_soft_time_limit=10,
 )
 def send_push_company_notification_task(
     _self,
@@ -458,6 +522,85 @@ def send_push_company_notification_task(
                 e,
             )
             return {"ok": False, "error": str(e), "company_id": company_id}
+
+
+@celery.task(
+    name="tasks.notification_tasks.send_activation_email",
+    bind=True,
+    acks_late=True,
+    task_time_limit=20,
+    task_soft_time_limit=10,
+    max_retries=2,
+    autoretry_for=(ConnectionError, TimeoutError),
+    default_retry_delay=2,
+)
+def send_activation_email_task(
+    self,
+    *,
+    user_id: int,
+    email: str,
+    verification_link: str,
+) -> Dict[str, Any]:
+    """Envoie l'email d'activation en asynchrone via Celery."""
+    from celery_app import get_flask_app
+
+    app = get_flask_app()
+    with app.app_context():
+        try:
+            from datetime import UTC, datetime
+
+            from flask import render_template
+
+            from services.notifications.email import send_email_notification
+
+            html_body = ""
+            try:
+                html_body = render_template(
+                    "emails/activation_email.html",
+                    activation_link=verification_link,
+                    product_name="ATMR",
+                    company_name="LIRIE",
+                    current_year=datetime.now(UTC).year,
+                )
+            except Exception:
+                html_body = ""
+
+            text_body = (
+                "Bienvenue sur ATMR.\n\n"
+                "Cliquez sur ce lien pour confirmer votre email:\n"
+                f"{verification_link}\n\n"
+                "Ce lien expire rapidement. Si vous n'etes pas a l'origine de cette action, ignorez cet email."
+            )
+
+            send_result = send_email_notification(
+                email=str(email).strip(),
+                subject="Activation de votre compte",
+                body=html_body or text_body,
+                html=bool(html_body),
+                notification_type="activation_signup",
+            )
+            if not bool(send_result.get("ok")):
+                error_message = str(send_result.get("error") or "Email provider error")
+                logger.warning(
+                    "[notification_task] Activation email failed for user_id=%s: %s",
+                    user_id,
+                    error_message,
+                )
+                raise RuntimeError(error_message)
+
+            logger.info(
+                "[notification_task] Activation email sent for user_id=%s task_id=%s",
+                user_id,
+                getattr(self.request, "id", None),
+            )
+            return {"ok": True, "channel": "email", "user_id": user_id}
+        except Exception as e:
+            logger.exception(
+                "[notification_task] send_activation_email_task failed for user_id=%s: %s",
+                user_id,
+                e,
+            )
+            return {"ok": False, "error": str(e), "user_id": user_id}
 
 
 def _send_sms_fallback(

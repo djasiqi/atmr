@@ -1,0 +1,57 @@
+name: Mobile unified-app (Lint + Jest)
+
+on:
+  pull_request:
+    paths:
+      - "mobile/unified-app/**"
+      - ".github/workflows/mobile-unified-app-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/unified-app/**"
+      - ".github/workflows/mobile-unified-app-tests.yml"
+
+jobs:
+  check-unified-boundaries:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/unified-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/unified-app/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: no-legacy-imports
+        run: npm run no-legacy-imports
+      - name: check-instrumentation-events
+        run: npm run check-instrumentation-events
+      - name: Prefill pilot execution log
+        run: npm run prefill-pilot-log
+
+  lint-and-test:
+    runs-on: ubuntu-latest
+    needs: check-unified-boundaries
+    defaults:
+      run:
+        working-directory: mobile/unified-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: mobile/unified-app/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --watchAll=false
+      - name: Phase 2 close authorization (strict)
+        run: npm run phase2:close-auth:strict
