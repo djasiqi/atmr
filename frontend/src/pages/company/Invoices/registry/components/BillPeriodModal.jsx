@@ -92,12 +92,12 @@ const BillPeriodModal = ({
   const selectedClinic = institutions.find((i) => String(i.id) === clinicKey);
   const clinicCompanyId = selectedClinic?.clinic_company_id ?? null;
 
-  const canPreview = () => {
+  const canPreview = useCallback(() => {
     if (payerType === 'patient') return Boolean(clientId);
     if (payerType === 'clinic') return Boolean(clinicKey && clinicCompanyId);
     if (payerType === 'partner') return Boolean(partnershipId);
     return false;
-  };
+  }, [payerType, clientId, clinicKey, clinicCompanyId, partnershipId]);
 
   const footerHint = useMemo(() => {
     if (loadingLists) return null;
@@ -132,6 +132,7 @@ const BillPeriodModal = ({
     previewLoading,
     generateLoading,
     partnershipId,
+    canPreview,
   ]);
 
   const runPreview = async () => {

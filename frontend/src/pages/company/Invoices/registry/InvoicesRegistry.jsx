@@ -480,7 +480,7 @@ const InvoicesRegistry = () => {
     }
   };
 
-  const handleNewInvoiceGenerated = (invoice) => {
+  const handleNewInvoiceGenerated = (_invoice) => {
     loadInvoices();
   };
 
