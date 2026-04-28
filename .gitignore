@@ -177,6 +177,9 @@ backend/.cursor-server/
 **/.cursor/
 **/.cursor-server/
 
+# ===== Claude Code (worktrees locaux, non versionnés — évite erreurs submodule sur Vercel/CI) =====
+.claude/
+
 # ===== Fichiers système et locaux =====
 backend/.local/
 backend/.bash_history
