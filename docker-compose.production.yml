@@ -552,7 +552,7 @@ services:
 
   tracking-processed-fanout:
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
-    container_name: atmr-tracking-processed-fanout
+    # Pas de container_name : incompatible avec deploy.replicas > 1 (noms de conteneurs uniques par instance).
     restart: unless-stopped
     env_file:
       - .env.production
