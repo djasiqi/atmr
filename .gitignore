@@ -132,6 +132,9 @@ backend/celerybeat-schedule*
 
 # ===== Documentation temporaire / Audits =====
 docs/
+# Exception: journal pilote requis par CI (prefill-pilot-log)
+!mobile/unified-app/docs/
+!mobile/unified-app/docs/PILOT_EXECUTION_LOG.md
 *_AUDIT*.md
 *_CHECKLIST*.md
 *_RAPPORT*.md
