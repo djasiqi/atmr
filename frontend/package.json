@@ -127,11 +127,11 @@
   "overrides": {
     "socket.io-parser": "4.2.6",
     "flatted": ">=3.4.2",
-    "serialize-javascript": "7.0.3",
+    "serialize-javascript": "7.0.5",
     "underscore": ">=1.13.8",
     "qs": "6.14.2",
     "nth-check": "^2.1.1",
-    "postcss": "^8.4.49",
+    "postcss": "8.5.10",
     "js-yaml": "^4.1.0",
     "webpack-dev-server": "^5.2.2",
     "rollup": "^2.80.0",
@@ -144,7 +144,8 @@
     "axios": "^1.16.0",
     "follow-redirects": "^1.16.0",
     "lodash": "4.18.1",
-    "path-to-regexp": "0.1.13"
+    "path-to-regexp": "0.1.13",
+    "uuid": "14.0.0"
   },
   "_comment": {
     "glob-override": "Override glob to ^11.1.0 to fix GHSA-ww39-953v-wcq6 (command injection in CLI -c/--cmd option). This forces all transitive dependencies (react-scripts, etc.) to use the patched version. See: https://github.com/isaacs/node-glob/security/advisories/GHSA-ww39-953v-wcq6",
