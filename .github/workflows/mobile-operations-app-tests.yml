@@ -12,6 +12,9 @@ on:
       - "mobile/operations-app/**"
       - ".github/workflows/mobile-operations-app-tests.yml"
 
+permissions:
+  contents: read
+
 jobs:
   jest:
     runs-on: ubuntu-latest

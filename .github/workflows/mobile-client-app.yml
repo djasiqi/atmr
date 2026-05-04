@@ -12,6 +12,9 @@ on:
       - "mobile/client-app/**"
       - ".github/workflows/mobile-client-app.yml"
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest

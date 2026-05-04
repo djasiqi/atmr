@@ -12,6 +12,9 @@ on:
       - "mobile/unified-app/**"
       - ".github/workflows/mobile-unified-app-tests.yml"
 
+permissions:
+  contents: read
+
 jobs:
   check-unified-boundaries:
     runs-on: ubuntu-latest
