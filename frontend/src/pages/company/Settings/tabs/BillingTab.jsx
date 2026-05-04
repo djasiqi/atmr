@@ -1049,7 +1049,14 @@ const BillingTab = forwardRef(({ companyId, isEditing }, ref) => {
                 <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-primary, #e5e7eb)' }}>
                   <div className={styles.formGroup}>
                     <label htmlFor="legal_footer">Pied de page</label>
-                    <textarea id="legal_footer" name="legal_footer" value={form.legal_footer ?? ''} onChange={handleChange} rows={3} placeholder="En votre aimable reglement net sous {payment_terms_days} {jours}..." />
+                    <textarea
+                      id="legal_footer"
+                      name="legal_footer"
+                      value={form.legal_footer ?? ''}
+                      onChange={handleChange}
+                      rows={3}
+                      placeholder="Laisser vide pour le texte par défaut (PDF). Sinon : placeholders ci-dessous."
+                    />
                     <small className={styles.hint}>Placeholders : {'{payment_terms_days}'}, {'{overdue_fee}'}, {'{jours}'}</small>
                   </div>
                 </div>

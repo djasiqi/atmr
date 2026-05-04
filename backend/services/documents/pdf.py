@@ -90,6 +90,16 @@ FONT_COMPANY_CONTACT = 9
 COLOR_TEXT_PDF = "#000000"
 COLOR_MUTED_PDF = "#64748b"
 
+# Marges horizontales page facture A4 (contenu = frames ReportLab)
+INVOICE_PAGE_LEFT_MARGIN_CM = 1.9
+INVOICE_PAGE_RIGHT_MARGIN_CM = 1.9
+
+# Pied de page : mention plateforme (sous le trait, au bas de la marge)
+FOOTER_PLATFORM_TAGLINE = (
+    "Facturation et gestion des prestations via LIRIE — "
+    "solution digitale dédiée au transport médical · www.lirie.ch"
+)
+
 
 def _make_invoice_doc_with_qrbill_page(
     buffer: Any,
@@ -250,31 +260,117 @@ def _on_first_page_debug_envelope(canvas: Any, doc: Any) -> None:
     canvas.restoreState()
 
 
+def _format_company_contact_footer_bar(
+    company_name: str,
+    email: str,
+    phone: str,
+    uid: str,
+) -> str:
+    """Ligne de rappel d’identité en pied de page : « Société | email | tél | IDE/UID : … »."""
+    parts: list[str] = []
+    n = (company_name or "").strip()
+    if n:
+        parts.append(n)
+    e = (email or "").strip()
+    if e:
+        parts.append(e)
+    p = (phone or "").strip()
+    if p:
+        parts.append(p)
+    u = (uid or "").strip()
+    if u:
+        parts.append(f"IDE/UID : {u}")
+    return " | ".join(parts)
+
+
 def _make_legal_footer_page_callback(
     footer_message: str,
     mention: str | None,
     centered_style: Any,
+    contact_bar: str | None = None,
+    platform_tagline: str | None = None,
 ) -> Any:
     """Crée un callback pour dessiner le pied de page légal en bas de page (zone fixe).
 
     Le pied de page est dessiné dans la marge inférieure, pas dans le flux du contenu.
+    Texte légal + IBAN et barre identité : **centrés** ; barre identité **à la ligne** sous le bloc légal ; mention LIRIE **centrée**.
+    ``platform_tagline`` : ``None`` = ``FOOTER_PLATFORM_TAGLINE`` ; ``\"\"`` = masquer.
     """
 
     def _draw_footer(canvas: Any, doc: Any) -> None:
-        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.lib.units import cm, mm
 
         from reportlab.platypus import Paragraph
 
         canvas.saveState()
         page_w = doc.pagesize[0]
-        avail_width = page_w - 2 * cm
+        left_x = doc.leftMargin
+        right_x = page_w - doc.rightMargin
+        avail_width = right_x - left_x
+        # Même typo (8 pt, gris) : bloc légal + barre identité + LIRIE, tout **centré** sur la largeur utile.
+        # Pas de spaceAfter du parent (centered_style).
+        muted_footer_tagline_style = ParagraphStyle(
+            "FooterTaglineMuted",
+            parent=centered_style,
+            fontSize=FONT_SECONDARY,
+            leading=int(round(FONT_SECONDARY * 1.28)),
+            textColor=colors.HexColor(COLOR_MUTED_PDF),
+            spaceBefore=0,
+            spaceAfter=0,
+            alignment=TA_CENTER,
+        )
+        # y augmente vers le haut. Bas de page : mention LIRIE, puis trait, puis un bloc unique
+        # (légal + IBAN + barre identité), puis mention rappel éventuelle.
         y_pos = 1.2 * cm
 
-        if footer_message:
-            p = Paragraph(_reportlab_safe_footer_html(footer_message), centered_style)
-            w, h = p.wrap(avail_width, 150)
-            p.drawOn(canvas, (page_w - w) / 2, y_pos)
-            y_pos += h + 6
+        tag_src = (
+            FOOTER_PLATFORM_TAGLINE if platform_tagline is None else platform_tagline
+        )
+        tag = (tag_src or "").strip()
+
+        upper_after_tag = bool(
+            (contact_bar or "").strip()
+            or (footer_message or "").strip()
+            or (mention or "").strip()
+        )
+
+        if tag:
+            p_tag = Paragraph(
+                _xml_escape_for_paragraph(tag),
+                muted_footer_tagline_style,
+            )
+            w_t, h_t = p_tag.wrap(avail_width, 100)
+            p_tag.drawOn(canvas, left_x, y_pos)
+            y_pos += h_t + 1.5 * mm
+
+        if tag and upper_after_tag:
+            canvas.setStrokeColor(colors.HexColor("#e2e8f0"))
+            canvas.setLineWidth(0.35)
+            canvas.line(left_x, y_pos, right_x, y_pos)
+            y_pos += 2 * mm
+
+        fm = (footer_message or "").strip()
+        bar = (contact_bar or "").strip()
+        combined_legal_identity = ""
+        if fm and bar:
+            combined_legal_identity = (
+                _reportlab_safe_footer_html(fm)
+                + "<br/>"
+                + _xml_escape_for_paragraph(bar)
+            )
+        elif fm:
+            combined_legal_identity = _reportlab_safe_footer_html(fm)
+        elif bar:
+            combined_legal_identity = _xml_escape_for_paragraph(bar)
+
+        if combined_legal_identity:
+            p_body = Paragraph(combined_legal_identity, muted_footer_tagline_style)
+            w_b, h_b = p_body.wrap(avail_width, 260)
+            p_body.drawOn(canvas, left_x, y_pos)
+            y_pos += h_b + 4
 
         if mention:
             p2 = Paragraph(
@@ -1304,6 +1400,69 @@ def _resolve_legal_footer_placeholders(
         .replace("{overdue_fee}", fee_str)
         .replace("{jours}", jours_text)
     )
+
+
+def _format_iban_for_footer_display(iban: str) -> str:
+    """Groupe l’IBAN par blocs de 4 si compact ; espaces insécables entre groupes (évite coupure milieu PDF)."""
+    raw = (iban or "").strip()
+    if not raw:
+        return ""
+    compact = raw.replace(" ", "")
+    if len(compact) >= 15:
+        # U+00A0 : même rendu visuel qu’un espace, moins de césure au milieu de l’IBAN dans Paragraph
+        nbsp = "\u00a0"
+        return nbsp.join(compact[i : i + 4] for i in range(0, len(compact), 4))
+    return raw
+
+
+def _footer_chf_amount_no_break(fee_str: str) -> str:
+    """« CHF » + espace insécable + montant : évite une coupure entre CHF et le nombre au pied de page."""
+    return f"CHF\u00a0{(fee_str or '').strip()}"
+
+
+def _build_default_legal_footer_html(
+    payment_terms_days: int,
+    overdue_fee: Any,
+    iban_value: str | None,
+) -> str:
+    """Pied de page par défaut si ``legal_footer`` est vide ; texte et IBAN sur un flux unique (pas de ``<br/>``)."""
+    try:
+        fee_str = f"{float(overdue_fee):.2f}"
+    except (TypeError, ValueError):
+        fee_str = "15.00"
+    try:
+        n_days = int(payment_terms_days)
+    except (TypeError, ValueError):
+        try:
+            n_days = int(float(payment_terms_days))
+        except (TypeError, ValueError):
+            n_days = 30
+
+    if n_days < 1:
+        n_days = 30
+
+    if n_days <= 1:
+        delai_phrase = (
+            "Merci de régler cette facture dans un délai d'un jour "
+            "suivant la date d'émission."
+        )
+    else:
+        delai_phrase = (
+            f"Merci de régler cette facture dans les {n_days} jours "
+            "suivant la date d'émission."
+        )
+
+    core = (
+        f"{delai_phrase} En cas de retard, des frais de rappel de "
+        f"{_footer_chf_amount_no_break(fee_str)} "
+        "peuvent s'appliquer (cf. conditions générales)."
+    )
+    if (iban_value or "").strip():
+        return (
+            f"{core} IBAN : "
+            f"{_format_iban_for_footer_display((iban_value or '').strip())}"
+        )
+    return core
 
 
 def _get_reminder_footer_message(level: int) -> str:
@@ -4476,25 +4635,29 @@ class PDFService:
         recipient_left_padding_mm = 15.0  # déplace le bloc destinataire vers la droite (pas d'espace volé à l'expéditeur)
         dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
         page_width_pt = A4[0]
-        usable_width_pt = page_width_pt - 2 * cm - 2 * cm
+        usable_width_pt = (
+            page_width_pt
+            - INVOICE_PAGE_LEFT_MARGIN_CM * cm
+            - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+        )
         company_width_pt = (
             usable_width_pt - dest_width_pt
         )  # expéditeur garde toute sa largeur
 
         vat_line = (
-            f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
+            f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
+            f"{_xml_escape_for_paragraph(vat_status_text)}</font>"
             if vat_status_text
             else ""
         )
         company_info_left = (
             f'<font size="{FONT_HEADER_COMPANY}"><b>'
             f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
-            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font><br/>'
-            f'<font size="{FONT_COMPANY_CONTACT}" color="{COLOR_MUTED_PDF}">'
-            f"{_xml_escape_for_paragraph(company_email)}<br/>"
-            f"{_xml_escape_for_paragraph(company_phone)}<br/>"
-            f"IDE/UID : {_xml_escape_for_paragraph(company_uid)}{vat_line}"
-            f"</font>"
+            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+            f"{vat_line}"
+        )
+        contact_bar = _format_company_contact_footer_bar(
+            company_name, company_email, company_phone, company_uid
         )
         company_para = Paragraph(company_info_left, normal_style)
 
@@ -4679,7 +4842,7 @@ class PDFService:
 
         invoice_info_table = Table(
             [[Paragraph(invoice_info_left, normal_style)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt],
         )
         invoice_info_table.setStyle(
             TableStyle(
@@ -4792,7 +4955,7 @@ class PDFService:
                         )
                     ]
                 ],
-                colWidths=[17 * cm],
+                colWidths=[usable_width_pt],
             )
             reminder_line.setStyle(
                 TableStyle(
@@ -4810,7 +4973,7 @@ class PDFService:
 
         detail_title = Table(
             [[_detail_lines_heading_paragraph(styles, font_name_bold)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt],
         )
         detail_title.setStyle(
             TableStyle(
@@ -4923,19 +5086,10 @@ class PDFService:
             )
             footer_message = _sanitize_legal_footer_for_iban(raw_footer)
         else:
-            base = (
-                f"En votre aimable règlement net sous {payment_terms_days} "
-                f"{jours_text} avec nos remerciements anticipés. "
-                f"En cas de retard de paiement, des frais de rappel d'un montant "
-                f"de CHF {overdue_fee:.2f} vous seront facturés, "
-                f"conformément à nos conditions générales."
+            footer_message = _build_default_legal_footer_html(
+                payment_terms_days, overdue_fee, iban_value
             )
-            if iban_value:
-                footer_message = (
-                    f"{base} Paiement par virement bancaire : IBAN : {iban_value}"
-                )
-            else:
-                footer_message = base
+            if not iban_value:
                 app_logger.warning(
                     "PDF (standard): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
                 )
@@ -4943,7 +5097,10 @@ class PDFService:
         # Pied de page légal : dessiné en zone fixe (marge inférieure), pas dans le flux
         mention = None
         footer_cb = _make_legal_footer_page_callback(
-            footer_message, mention, centered_style
+            footer_message,
+            mention,
+            centered_style,
+            contact_bar=contact_bar,
         )
 
         def _on_first_page(canvas: Any, doc: Any) -> None:
@@ -4955,8 +5112,8 @@ class PDFService:
             buffer,
             top_margin_cm=2,
             bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
-            left_margin_cm=2,
-            right_margin_cm=2,
+            left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
+            right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
             on_first_page=_on_first_page,
         )
 
@@ -5062,8 +5219,8 @@ class PDFService:
             pagesize=A4,
             topMargin=1.5 * cm,
             bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
-            leftMargin=1.5 * cm,
-            rightMargin=1.5 * cm,
+            leftMargin=INVOICE_PAGE_LEFT_MARGIN_CM * cm,
+            rightMargin=INVOICE_PAGE_RIGHT_MARGIN_CM * cm,
         )
 
         styles = getSampleStyleSheet()
@@ -5131,10 +5288,32 @@ class PDFService:
         # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
         company_name = company.name or "[Nom entreprise non configuré]"
         company_address = self._get_company_address_for_pdf(company)
+        company_phone = company.contact_phone or "[Téléphone non configuré]"
+        company_email = (
+            company.billing_email or company.contact_email or "[Email non configuré]"
+        )
+        company_uid = company.uid_ide or "[IDE/UID non configuré]"
+        vat_status_text_m = ""
+        if billing_settings and billing_settings.vat_applicable:
+            vat_number = billing_settings.vat_number or ""
+            if vat_number:
+                vat_status_text_m = f"N° TVA : {vat_number}"
+            else:
+                vat_status_text_m = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
+        vat_line_m = (
+            f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
+            f"{_xml_escape_for_paragraph(vat_status_text_m)}</font>"
+            if vat_status_text_m
+            else ""
+        )
         company_info = (
             f'<font size="{FONT_HEADER_COMPANY}"><b>'
             f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
             f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+            f"{vat_line_m}"
+        )
+        contact_bar_min = _format_company_contact_footer_bar(
+            company_name, company_email, company_phone, company_uid
         )
         company_para_min = Paragraph(company_info, normal_style)
 
@@ -5222,7 +5401,7 @@ class PDFService:
             invoice_info += f" - Rappel: {datetime.now(UTC).strftime('%d.%m.%Y')}"
         invoice_info_table_m = Table(
             [[Paragraph(invoice_info, normal_style)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt_min],
         )
         invoice_info_table_m.setStyle(
             TableStyle(
@@ -5255,7 +5434,7 @@ class PDFService:
                         )
                     ]
                 ],
-                colWidths=[17 * cm],
+                colWidths=[usable_width_pt_min],
             )
             reminder_line_m.setStyle(
                 TableStyle(
@@ -5292,7 +5471,7 @@ class PDFService:
         )
         detail_title_min = Table(
             [[_detail_lines_heading_paragraph(styles, font_name_bold)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt_min],
         )
         detail_title_min.setStyle(
             TableStyle(
@@ -5711,10 +5890,10 @@ class PDFService:
                 if billing_settings and billing_settings.iban
                 else None
             )
-            if iban_value_min:
-                footer_message = f"Merci de votre règlement. IBAN: {iban_value_min}"
-            else:
-                footer_message = "Merci de votre règlement."
+            footer_message = _build_default_legal_footer_html(
+                payment_terms_days, overdue_fee, iban_value_min
+            )
+            if not iban_value_min:
                 app_logger.warning(
                     "PDF (minimal): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
                 )
@@ -5722,7 +5901,10 @@ class PDFService:
         # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
         footer_cb_min = _make_legal_footer_page_callback(
-            footer_message, mention, centered_style
+            footer_message,
+            mention,
+            centered_style,
+            contact_bar=contact_bar_min,
         )
 
         def _on_first_page_min(canvas: Any, doc: Any) -> None:
@@ -5799,8 +5981,8 @@ class PDFService:
             pagesize=A4,
             topMargin=2 * cm,
             bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
-            leftMargin=2 * cm,
-            rightMargin=2 * cm,
+            leftMargin=INVOICE_PAGE_LEFT_MARGIN_CM * cm,
+            rightMargin=INVOICE_PAGE_RIGHT_MARGIN_CM * cm,
         )
 
         styles = getSampleStyleSheet()
@@ -5912,19 +6094,19 @@ class PDFService:
                 vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
         vat_line_d = (
-            f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
+            f'<br/><font size="{FONT_BODY}" color="{COLOR_MUTED_PDF}">'
+            f"{_xml_escape_for_paragraph(vat_status_text)}</font>"
             if vat_status_text
             else ""
         )
         company_info_detailed = (
             f'<font size="{FONT_HEADER_COMPANY}"><b>'
             f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
-            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font><br/>'
-            f'<font size="{FONT_COMPANY_CONTACT}" color="{COLOR_MUTED_PDF}">'
-            f"{_xml_escape_for_paragraph(company_phone)}<br/>"
-            f"{_xml_escape_for_paragraph(company_email)}<br/>"
-            f"IDE/UID: {_xml_escape_for_paragraph(company_uid)}{vat_line_d}"
-            f"</font>"
+            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+            f"{vat_line_d}"
+        )
+        contact_bar_det = _format_company_contact_footer_bar(
+            company_name, company_email, company_phone, company_uid
         )
         company_para = Paragraph(company_info_detailed, normal_style)
 
@@ -6111,7 +6293,7 @@ class PDFService:
             )
         invoice_info_table_d = Table(
             [[Paragraph(invoice_info_detailed, normal_style)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt],
         )
         invoice_info_table_d.setStyle(
             TableStyle(
@@ -6198,7 +6380,7 @@ class PDFService:
                         )
                     ]
                 ],
-                colWidths=[17 * cm],
+                colWidths=[usable_width_pt],
             )
             reminder_line_d.setStyle(
                 TableStyle(
@@ -6216,7 +6398,7 @@ class PDFService:
 
         detail_title_d = Table(
             [[_detail_lines_heading_paragraph(styles, font_name_bold)]],
-            colWidths=[17 * cm],
+            colWidths=[usable_width_pt],
         )
         detail_title_d.setStyle(
             TableStyle(
@@ -6334,27 +6516,21 @@ class PDFService:
                     f"<br/>Paiement par virement bancaire : IBAN : {iban_value}"
                 )
         else:
-            payment_info = ""
-            if iban_value:
-                payment_info = f"<br/><br/><b>Paiement par virement bancaire :</b><br/>IBAN : {iban_value}"
-            else:
+            footer_message = _build_default_legal_footer_html(
+                payment_terms_days, overdue_fee, iban_value
+            )
+            if not iban_value:
                 app_logger.warning(
                     "PDF (detailed): IBAN non affiché (absent ou illisible, ex. erreur déchiffrement)."
                 )
-            footer_message = (
-                f"<b>Modalités de paiement</b><br/>"
-                f"En votre aimable règlement net sous {payment_terms_days} "
-                f"{jours_text} avec nos remerciements anticipés.<br/>"
-                f"En cas de retard de paiement, des frais de rappel d'un montant "
-                f"de CHF {overdue_fee:.2f} vous seront facturés, "
-                f"conformément à nos conditions générales."
-                f"{payment_info}"
-            )
 
         # Pied de page légal : dessiné en zone fixe (marge inférieure)
         mention = None
         footer_cb_det = _make_legal_footer_page_callback(
-            footer_message, mention, centered_style
+            footer_message,
+            mention,
+            centered_style,
+            contact_bar=contact_bar_det,
         )
 
         def _on_first_page_det(canvas: Any, doc: Any) -> None:

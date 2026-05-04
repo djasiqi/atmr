@@ -39,7 +39,11 @@ from models import CompanyBillingSettings
 from models.booking_transfer import BookingTransfer
 from models.partner_invoice import PartnerInvoice
 from services.documents.pdf import (
+    INVOICE_PAGE_LEFT_MARGIN_CM,
+    INVOICE_PAGE_RIGHT_MARGIN_CM,
     QR_BILL_SPACER_PT,
+    _build_default_legal_footer_html,
+    _format_company_contact_footer_bar,
     _load_logo_ratio_safe,
     _make_invoice_doc_with_qrbill_page,
     _make_legal_footer_page_callback,
@@ -70,7 +74,6 @@ MIN_ADDRESS_PARTS_POSTAL = 3
 MIN_ADDRESS_PARTS_CITY = 4
 MONTHS_PER_YEAR = 12
 MAX_CLIENT_NAME_LENGTH = 20
-MIN_IBAN_LENGTH = 21
 
 app_logger = logging.getLogger("partner_invoice_pdf_service")
 
@@ -269,36 +272,31 @@ def generate_partner_invoice_pdf_content(
     if billing_settings and billing_settings.overdue_fee:
         overdue_fee = float(billing_settings.overdue_fee)
 
-    jours_text = "jours" if payment_terms_days > 1 else "jour"
-
     # IBAN depuis billing_settings
     iban_value = None
     if billing_settings and billing_settings.iban:
         iban_value = billing_settings.iban
 
-    footer_message = (
-        f"En votre aimable règlement net sous {payment_terms_days} {jours_text} "
-        f"avec nos remerciements anticipés.<br/>"
-        f"En cas de retard de paiement, des frais de rappel d'un montant de CHF {overdue_fee:.2f} "
-        f"vous seront facturés, conformément à nos conditions générales."
+    footer_message = _build_default_legal_footer_html(
+        payment_terms_days, overdue_fee, iban_value
     )
 
-    if iban_value:
-        # Formater IBAN pour lisibilité
-        iban_formatted = iban_value
-        if len(iban_value) >= MIN_IBAN_LENGTH and " " not in iban_value:
-            iban_formatted = " ".join(
-                [iban_value[i : i + 4] for i in range(0, len(iban_value), 4)]
-            )
-        footer_message += (
-            f"<br/>Paiement par virement bancaire : IBAN : {iban_formatted}"
-        )
+    _emit_name = executing_company.name or "[Nom entreprise non configuré]"
+    _emit_email = (
+        executing_company.billing_email or executing_company.contact_email or ""
+    )
+    _emit_phone = executing_company.contact_phone or ""
+    _emit_uid = executing_company.uid_ide or ""
+    contact_bar = _format_company_contact_footer_bar(
+        _emit_name, _emit_email, _emit_phone, _emit_uid
+    )
 
     # Créer le callback footer (IDENTIQUE à pdf.py)
     footer_cb = _make_legal_footer_page_callback(
         footer_message,
         mention=None,  # Pas de mention spéciale pour les factures partenaires
         centered_style=centered_style,
+        contact_bar=contact_bar,
     )
 
     # Callback pour la première page (footer + debug envelope si activé)
@@ -310,8 +308,8 @@ def generate_partner_invoice_pdf_content(
         buffer,
         top_margin_cm=2,
         bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
-        left_margin_cm=2,
-        right_margin_cm=2,
+        left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
+        right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
         on_first_page=_on_first_page,
     )
 
@@ -338,19 +336,13 @@ def generate_partner_invoice_pdf_content(
         else:
             vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
-    vat_line = (
-        f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
-        if vat_status_text
-        else ""
-    )
     _addr_emit = _escape_multiline_address_html(company_address)
     company_info_html = (
         f"{_xml_escape_for_paragraph(company_name)}<br/>"
-        f"{_addr_emit}<br/>"
-        f"{_xml_escape_for_paragraph(company_email)}<br/>"
-        f"{_xml_escape_for_paragraph(company_phone)}<br/>"
-        f"IDE/UID : {_xml_escape_for_paragraph(company_uid)}{vat_line}"
+        f"{_addr_emit}"
     )
+    if vat_status_text:
+        company_info_html += f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
     company_para = Paragraph(company_info_html, normal_style)
 
     # Informations destinataire (partenaire)
@@ -397,7 +389,11 @@ def generate_partner_invoice_pdf_content(
 
     # Construire cellule gauche (logo + entreprise)
     page_width_pt = A4[0]
-    usable_width_pt = page_width_pt - 2 * cm - 2 * cm
+    usable_width_pt = (
+        page_width_pt
+        - INVOICE_PAGE_LEFT_MARGIN_CM * cm
+        - INVOICE_PAGE_RIGHT_MARGIN_CM * cm
+    )
     company_width_pt = usable_width_pt - dest_width_pt
 
     left_cell_content: list[Any] = []
@@ -534,10 +530,17 @@ def generate_partner_invoice_pdf_content(
             amount = "0.00"
         table_data.append([date_str, client_name, departure, arrival, amount])
 
-    # Style tableau IDENTIQUE à pdf.py (pas de couleurs de fond)
+    # Style tableau IDENTIQUE à pdf.py (pas de couleurs de fond) ; largeur totale = zone utile
+    _cols_scale = usable_width_pt / (17 * cm)
     services_table = Table(
         table_data,
-        colWidths=[2 * cm, 3.5 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm],
+        colWidths=[
+            2 * cm * _cols_scale,
+            3.5 * cm * _cols_scale,
+            4.5 * cm * _cols_scale,
+            4.5 * cm * _cols_scale,
+            2.5 * cm * _cols_scale,
+        ],
     )
     services_table.setStyle(
         TableStyle(
@@ -572,7 +575,7 @@ def generate_partner_invoice_pdf_content(
     subtotal_amount = float(partner_invoice.subtotal_amount)
 
     # Ligne de séparation
-    total_separator = Table([[""]], colWidths=[17 * cm])
+    total_separator = Table([[""]], colWidths=[usable_width_pt])
     total_separator.setStyle(
         TableStyle([("LINEBELOW", (0, 0), (0, 0), 1, colors.black)])
     )
@@ -594,7 +597,13 @@ def generate_partner_invoice_pdf_content(
 
     total_table = Table(
         total_data,
-        colWidths=[2 * cm, 3.5 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm],
+        colWidths=[
+            2 * cm * _cols_scale,
+            3.5 * cm * _cols_scale,
+            4.5 * cm * _cols_scale,
+            4.5 * cm * _cols_scale,
+            2.5 * cm * _cols_scale,
+        ],
     )
     total_table.setStyle(
         TableStyle(
