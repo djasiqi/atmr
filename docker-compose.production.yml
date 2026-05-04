@@ -347,10 +347,9 @@ services:
           memory: 2G # ✅ AUDIT 100 USERS: Augmenté de 1G à 2G
           cpus: "5.0" # ✅ AUDIT 100 USERS: Augmenté de 1.0 à 5.0
 
+  # Image construite et poussée par CI (services/ws-service) — pas de contexte local sur /srv/atmr
   ws-service:
-    build:
-      context: ./services/ws-service
-      dockerfile: Dockerfile
+    image: ${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}:${DOCKER_TAG:-latest}
     container_name: atmr-ws-service
     restart: unless-stopped
     environment:

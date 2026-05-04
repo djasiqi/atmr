@@ -43,6 +43,15 @@ export GOOGLE_MAPS_API_KEY="${11}"
 export MASTER_ENCRYPTION_KEY="${12}"
 export DOCKER_IMAGE="${13}"
 export DOCKER_TAG="${14}"
+# ws-service : même tag que le backend ; nom d’image = …/atmr-ws-service (aligné Docker Hub CI)
+case "${DOCKER_IMAGE}" in
+  *atmr-backend)
+    export WS_SERVICE_IMAGE="${DOCKER_IMAGE/%atmr-backend/atmr-ws-service}"
+    ;;
+  *)
+    export WS_SERVICE_IMAGE="${WS_SERVICE_IMAGE:-docker.io/djasiqi/atmr-ws-service}"
+    ;;
+esac
 export GRAFANA_ADMIN_USER="${15}"
 export GRAFANA_ADMIN_PASSWORD="${16}"
 export GRAFANA_ROOT_URL="${17}"
@@ -176,6 +185,7 @@ echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes prése
   echo "MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-}"
   echo "DOCKER_IMAGE=${DOCKER_IMAGE}"
   echo "DOCKER_TAG=${DOCKER_TAG}"
+  echo "WS_SERVICE_IMAGE=${WS_SERVICE_IMAGE}"
   echo "MAIL_PASSWORD=${MAIL_PASSWORD:-}"
   echo "SENTRY_DSN=${SENTRY_DSN:-}"
   echo "PDF_BASE_URL=${PDF_BASE_URL:-}"

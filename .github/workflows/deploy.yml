@@ -186,6 +186,44 @@ jobs:
           cache-to: type=gha,mode=max
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
 
+      - name: Derive ws-service Docker image name
+        id: ws_service_image
+        env:
+          DOCKER_IMAGE_REF: ${{ secrets.DOCKER_IMAGE }}
+        run: |
+          DI="${DOCKER_IMAGE_REF}"
+          case "$DI" in
+            *atmr-backend) WS="${DI/%atmr-backend/atmr-ws-service}" ;;
+            *) WS="docker.io/djasiqi/atmr-ws-service" ;;
+          esac
+          echo "name=${WS}" >> "$GITHUB_OUTPUT"
+          echo "📦 WS_SERVICE_IMAGE dérivé pour push CI"
+
+      - name: Build & push ws-service image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./services/ws-service
+          file: ./services/ws-service/Dockerfile
+          push: true
+          tags: ${{ steps.ws_service_image.outputs.name }}:${{ env.DOCKER_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
+
+      - name: Verify ws-service image was pushed
+        run: |
+          WS_TAG="${{ steps.ws_service_image.outputs.name }}:${{ env.DOCKER_TAG }}"
+          for i in {1..5}; do
+            if docker manifest inspect "${WS_TAG}" > /dev/null 2>&1; then
+              echo "✅ Image ws-service ${WS_TAG} trouvée sur Docker Hub"
+              exit 0
+            fi
+            echo "  Tentative $i/5: ws-service non visible, attente 5s..."
+            sleep 5
+          done
+          echo "❌ Image ws-service ${WS_TAG} introuvable sur Docker Hub"
+          exit 1
+
       - name: Verify image was pushed
         id: verify_push
         run: |
