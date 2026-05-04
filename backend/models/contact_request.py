@@ -17,7 +17,9 @@ class ContactRequest(db.Model):
         Index("ix_contact_requests_category_status", "category", "status"),
         Index("ix_contact_requests_email", "email"),
         Index("ix_contact_requests_trace_id", "trace_id"),
-        Index("ix_contact_requests_dedupe_hash_created_at", "dedupe_hash", "created_at"),
+        Index(
+            "ix_contact_requests_dedupe_hash_created_at", "dedupe_hash", "created_at"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -29,7 +31,9 @@ class ContactRequest(db.Model):
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     message_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
     dedupe_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    dedupe_window_bucket: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dedupe_window_bucket: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     client_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     payload_json: Mapped[dict[str, Any] | None] = mapped_column(db.JSON, nullable=True)
 
@@ -46,8 +50,12 @@ class ContactRequest(db.Model):
     company_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     institution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="new")
-    priority: Mapped[str] = mapped_column(String(16), nullable=False, server_default="standard")
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="new"
+    )
+    priority: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="standard"
+    )
     assigned_channel: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email_delivery_status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="pending"

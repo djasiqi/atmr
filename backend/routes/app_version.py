@@ -40,8 +40,7 @@ version_check_request = app_version_ns.model(
         "current_version": fields.String(
             required=True,
             description=(
-                "Version actuelle de l'application (format semver: "
-                "MAJOR.MINOR.PATCH)"
+                "Version actuelle de l'application (format semver: MAJOR.MINOR.PATCH)"
             ),
             example="1.2.3",
         ),

@@ -44,12 +44,29 @@ def upgrade():
         sa.Column("company_id", sa.Integer(), nullable=True),
         sa.Column("institution_id", sa.Integer(), nullable=True),
         sa.Column("status", sa.String(length=32), server_default="new", nullable=False),
-        sa.Column("priority", sa.String(length=16), server_default="standard", nullable=False),
+        sa.Column(
+            "priority", sa.String(length=16), server_default="standard", nullable=False
+        ),
         sa.Column("assigned_channel", sa.String(length=120), nullable=True),
-        sa.Column("email_delivery_status", sa.String(length=32), server_default="pending", nullable=False),
+        sa.Column(
+            "email_delivery_status",
+            sa.String(length=32),
+            server_default="pending",
+            nullable=False,
+        ),
         sa.Column("trace_id", sa.String(length=64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     if has_users_table:
@@ -61,16 +78,27 @@ def upgrade():
             ["id"],
             ondelete="SET NULL",
         )
-    op.create_index("ix_contact_requests_created_at", "contact_requests", ["created_at"], unique=False)
+    op.create_index(
+        "ix_contact_requests_created_at",
+        "contact_requests",
+        ["created_at"],
+        unique=False,
+    )
     op.create_index(
         "ix_contact_requests_category_status",
         "contact_requests",
         ["category", "status"],
         unique=False,
     )
-    op.create_index("ix_contact_requests_email", "contact_requests", ["email"], unique=False)
-    op.create_index("ix_contact_requests_trace_id", "contact_requests", ["trace_id"], unique=False)
-    op.create_index("ix_contact_requests_user_id", "contact_requests", ["user_id"], unique=False)
+    op.create_index(
+        "ix_contact_requests_email", "contact_requests", ["email"], unique=False
+    )
+    op.create_index(
+        "ix_contact_requests_trace_id", "contact_requests", ["trace_id"], unique=False
+    )
+    op.create_index(
+        "ix_contact_requests_user_id", "contact_requests", ["user_id"], unique=False
+    )
     op.create_index(
         "ix_contact_requests_dedupe_hash_created_at",
         "contact_requests",
@@ -89,7 +117,9 @@ def downgrade():
             "contact_requests",
             type_="foreignkey",
         )
-    op.drop_index("ix_contact_requests_dedupe_hash_created_at", table_name="contact_requests")
+    op.drop_index(
+        "ix_contact_requests_dedupe_hash_created_at", table_name="contact_requests"
+    )
     op.drop_index("ix_contact_requests_user_id", table_name="contact_requests")
     op.drop_index("ix_contact_requests_trace_id", table_name="contact_requests")
     op.drop_index("ix_contact_requests_email", table_name="contact_requests")

@@ -68,11 +68,7 @@ def _json_safe_filter_value(v: Any) -> Any:
 
 
 def _serialize_filters_applied(params: dict[str, Any]) -> dict[str, Any]:
-    return {
-        k: _json_safe_filter_value(v)
-        for k, v in params.items()
-        if v is not None
-    }
+    return {k: _json_safe_filter_value(v) for k, v in params.items() if v is not None}
 
 
 def _dt_iso_maybe(v: Any) -> str | None:
@@ -163,7 +159,9 @@ def parse_pilotage_detail_args(args) -> dict[str, Any]:
     return base
 
 
-def _default_period_if_needed(kwargs: dict[str, Any]) -> tuple[datetime | None, datetime | None]:
+def _default_period_if_needed(
+    kwargs: dict[str, Any],
+) -> tuple[datetime | None, datetime | None]:
     """Si aucune borne temporelle : période glissante 30 jours sur created_at."""
     cf, ct = kwargs.get("created_from"), kwargs.get("created_to")
     sf, st = kwargs.get("scheduled_from"), kwargs.get("scheduled_to")
@@ -454,7 +452,11 @@ def list_pilotage_companies(
     order: str = "desc",
     **params: Any,
 ) -> dict[str, Any]:
-    params = {k: v for k, v in params.items() if k not in ("page", "per_page", "sort", "order")}
+    params = {
+        k: v
+        for k, v in params.items()
+        if k not in ("page", "per_page", "sort", "order")
+    }
     fk = _prepare_filter_kwargs(params)
     base = _build_pilotage_query(**fk)
     kpis_global, by_company, fam_global = _scan_bookings(base)
@@ -494,7 +496,9 @@ def list_pilotage_companies(
                 "page": page,
                 "per_page": per_page,
                 "total_items": total_items,
-                "total_pages": (total_items + per_page - 1) // per_page if total_items else 0,
+                "total_pages": (total_items + per_page - 1) // per_page
+                if total_items
+                else 0,
             },
         }
     )
@@ -607,7 +611,9 @@ def get_pilotage_company_detail(
         src_breakdown[classify_booking_source(b)] += 1
 
     payload = {
-        "filters_applied": _serialize_filters_applied({**params, "company_id": company_id}),
+        "filters_applied": _serialize_filters_applied(
+            {**params, "company_id": company_id}
+        ),
         "period": _period_from_filters(fk),
         "classification_version": CLASSIFICATION_VERSION,
         "qualification_version": QUALIFICATION_VERSION,
@@ -632,7 +638,9 @@ def get_pilotage_company_detail(
             "page": page,
             "per_page": per_page,
             "total_items": total_items,
-            "total_pages": (total_items + per_page - 1) // per_page if total_items else 0,
+            "total_pages": (total_items + per_page - 1) // per_page
+            if total_items
+            else 0,
         },
     }
     return _pilotage_json_sanitize(payload)
@@ -679,5 +687,6 @@ def export_pilotage_csv(**params: Any) -> tuple[bytes, str]:
                 1 if st == "ambiguous" else 0,
             ]
         )
-    return buf.getvalue().encode("utf-8-sig"), f"pilotage_export_{datetime.now(UTC).date()}.csv"
-
+    return buf.getvalue().encode(
+        "utf-8-sig"
+    ), f"pilotage_export_{datetime.now(UTC).date()}.csv"

@@ -82,7 +82,9 @@ class TestInstitutionPatientsCRUD:
         api_key._raw_key = raw_key
         return api_key
 
-    def test_create_patient_jwt(self, client, db, admin_auth_headers, sample_institution):
+    def test_create_patient_jwt(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
         """Test: création d'un patient avec JWT."""
         response = client.post(
             "/api/v1/institutions/patients",
@@ -104,7 +106,9 @@ class TestInstitutionPatientsCRUD:
         assert "id" in data
         assert "public_id" in data
 
-    def test_create_patient_api_key(self, client, db, sample_api_key, sample_institution):
+    def test_create_patient_api_key(
+        self, client, db, sample_api_key, sample_institution
+    ):
         """Test: création d'un patient avec API Key."""
         response = client.post(
             "/api/v1/institutions/patients",
@@ -173,7 +177,9 @@ class TestInstitutionPatientsCRUD:
         assert len(data["patients"]) >= 3
         assert "total" in data
 
-    def test_list_patients_search(self, client, db, admin_auth_headers, sample_institution):
+    def test_list_patients_search(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
         """Test: recherche de patients par nom."""
         # Créer un patient spécifique
         patient = InstitutionPatient()
@@ -194,7 +200,9 @@ class TestInstitutionPatientsCRUD:
         assert len(data["patients"]) >= 1
         assert any(p["first_name"] == "UniqueFirstName" for p in data["patients"])
 
-    def test_get_patient_by_id(self, client, db, admin_auth_headers, sample_institution):
+    def test_get_patient_by_id(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
         """Test: récupération d'un patient par ID."""
         patient = InstitutionPatient()
         patient.institution_id = sample_institution.id

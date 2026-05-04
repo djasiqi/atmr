@@ -40,8 +40,10 @@ def test_replay_contract_shape(admin_tenant_client, sample_company, db):
     assert rv2.status_code == 200
     rep = rv2.get_json()
     assert rep["correlation_id"] == cid
-    assert "count" in rep and isinstance(rep["count"], int)
-    assert "events" in rep and isinstance(rep["events"], list)
+    assert "count" in rep
+    assert isinstance(rep["count"], int)
+    assert "events" in rep
+    assert isinstance(rep["events"], list)
     if rep["events"]:
         ev0 = rep["events"][0]
         for k in (

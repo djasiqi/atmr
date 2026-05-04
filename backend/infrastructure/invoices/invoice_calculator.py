@@ -150,7 +150,9 @@ class InvoiceCalculator:
         return subtotal, vat_total, total, vat_breakdown
 
 
-def recompute_invoice_totals(invoice_id: int, commit: bool = True) -> dict[str, object] | None:
+def recompute_invoice_totals(
+    invoice_id: int, commit: bool = True
+) -> dict[str, object] | None:
     """Recalcule et met à jour les totaux d'une facture à partir de ses lignes.
 
     Filet de sécurité pour réparer les factures dont les totaux sont désynchronisés

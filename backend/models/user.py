@@ -74,9 +74,7 @@ class User(db.Model):
         String(255), nullable=True, index=True
     )
     # 🔔 Mode discret push : "detailed" (nom client sur lockscreen) | "discreet" (pas de nom)
-    push_privacy_mode: Mapped[str | None] = mapped_column(
-        String(20), nullable=True
-    )
+    push_privacy_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
@@ -97,10 +95,14 @@ class User(db.Model):
 
     # ✅ Security V2: TOTP 2FA
     totp_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
-    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    totp_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     totp_enabled_at = Column(DateTime(timezone=True), nullable=True)
     recovery_codes_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
-    recovery_codes_remaining: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    recovery_codes_remaining: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
 
     # ✅ D2: Colonnes chiffrées (stockage)
     phone_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)

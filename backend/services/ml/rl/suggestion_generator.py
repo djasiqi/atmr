@@ -70,7 +70,7 @@ _model_loaded = False
 
 def _lazy_import_rl():
     """Import RL modules only when needed."""
-    global _dqn_agent, _dispatch_env, ImprovedDQNAgent  # noqa: PLW0603
+    global _dqn_agent, _dispatch_env, ImprovedDQNAgent
     if _dqn_agent is None:
         try:
             from services.ml.rl.improved_dqn_agent import (
@@ -112,7 +112,7 @@ class RLSuggestionGenerator:
 
     def _load_model(self):
         """Charge le modèle DQN entraîné."""
-        global _model_loaded  # noqa: PLW0603
+        global _model_loaded
 
         if _model_loaded and self.agent is not None:
             return
@@ -646,7 +646,7 @@ ImprovedDQNAgent = None
 
 def get_suggestion_generator() -> RLSuggestionGenerator:
     """Retourne le générateur de suggestions (singleton)."""
-    global _generator  # noqa: PLW0603
+    global _generator
     if _generator is None:
         _generator = RLSuggestionGenerator()
     return _generator

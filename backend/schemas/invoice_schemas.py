@@ -137,4 +137,6 @@ class InvoiceGenerateSchema(Schema):
         allow_none=True,
         load_default=None,
     )
-    global_discount_note = fields.Str(validate=validate.Length(max=500), allow_none=True)
+    global_discount_note = fields.Str(
+        validate=validate.Length(max=500), allow_none=True
+    )

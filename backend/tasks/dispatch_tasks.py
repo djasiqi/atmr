@@ -20,7 +20,9 @@ from services.unified_dispatch import engine
 
 logger = logging.getLogger(__name__)
 DISPATCH_TASK_TIME_LIMIT_SEC = int(
-    os.getenv("DISPATCH_TASK_TIME_LIMIT_SEC", os.getenv("CELERY_TASK_TIME_LIMIT", "150"))
+    os.getenv(
+        "DISPATCH_TASK_TIME_LIMIT_SEC", os.getenv("CELERY_TASK_TIME_LIMIT", "150")
+    )
 )
 DISPATCH_TASK_SOFT_TIME_LIMIT_SEC = int(
     os.getenv(

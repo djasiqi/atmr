@@ -54,7 +54,9 @@ def in_cooldown(ip_hash: str, category: str) -> bool:
     count = _incr_counter(burst_key, SPAM_BURST_WINDOW_SECONDS)
     if count and count > SPAM_BURST_THRESHOLD:
         cooldown_key = _counter_key(ip_hash, category, "cooldown")
-        redis_client.set(cooldown_key, str(int(time.time())), ex=SPAM_BURST_WINDOW_SECONDS)
+        redis_client.set(
+            cooldown_key, str(int(time.time())), ex=SPAM_BURST_WINDOW_SECONDS
+        )
     cooldown_key = _counter_key(ip_hash, category, "cooldown")
     return bool(redis_client.get(cooldown_key))
 

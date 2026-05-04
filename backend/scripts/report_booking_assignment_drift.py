@@ -87,7 +87,9 @@ def run_report(days: int) -> list[dict[str, Any]]:
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Rapport dérive Booking vs Assignment")
-    p.add_argument("--days", type=int, default=7, help="Fenêtre depuis maintenant (jours)")
+    p.add_argument(
+        "--days", type=int, default=7, help="Fenêtre depuis maintenant (jours)"
+    )
     args = p.parse_args()
 
     rows = run_report(args.days)

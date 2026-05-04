@@ -36,7 +36,8 @@ def test_refresh_token_contract_shape(client, sample_user):
     assert login_response.status_code == 200
     login_data = login_response.get_json()
     refresh_token = login_data.get("refresh_token")
-    assert isinstance(refresh_token, str) and refresh_token
+    assert isinstance(refresh_token, str)
+    assert refresh_token
 
     refresh_response = client.post(
         "/api/v1/auth/refresh-token",
@@ -45,11 +46,16 @@ def test_refresh_token_contract_shape(client, sample_user):
     )
     assert refresh_response.status_code == 200
     data = refresh_response.get_json()
-    assert isinstance(data.get("access_token"), str) and data["access_token"]
-    assert isinstance(data.get("refresh_token"), str) and data["refresh_token"]
-    assert isinstance(data.get("token_type"), str) and data["token_type"].lower() == "bearer"
-    assert isinstance(data.get("expires_in"), int) and data["expires_in"] > 0
-    assert isinstance(data.get("trace_id"), str) and data["trace_id"]
+    assert isinstance(data.get("access_token"), str)
+    assert data["access_token"]
+    assert isinstance(data.get("refresh_token"), str)
+    assert data["refresh_token"]
+    assert isinstance(data.get("token_type"), str)
+    assert data["token_type"].lower() == "bearer"
+    assert isinstance(data.get("expires_in"), int)
+    assert data["expires_in"] > 0
+    assert isinstance(data.get("trace_id"), str)
+    assert data["trace_id"]
 
 
 def test_driver_location_ack_contract(client, db):
@@ -72,9 +78,16 @@ def test_driver_location_ack_contract(client, db):
     )
     assert response.status_code == 200
     data = response.get_json()
-    assert data.get("ack_status") in {"accepted", "duplicate", "stale", "ignored", "rejected"}
+    assert data.get("ack_status") in {
+        "accepted",
+        "duplicate",
+        "stale",
+        "ignored",
+        "rejected",
+    }
     assert data.get("tracking_event_id") == "evt-contract-001"
-    assert isinstance(data.get("trace_id"), str) and data["trace_id"]
+    assert isinstance(data.get("trace_id"), str)
+    assert data["trace_id"]
 
 
 def test_bookings_since_include_terminal_returns_terminal_states(client, db):
@@ -133,5 +146,6 @@ def test_driver_status_transition_errors_are_structured(client, db):
     )
     assert response.status_code == 400
     data = response.get_json()
-    assert isinstance(data.get("error_code"), str) and data["error_code"]
+    assert isinstance(data.get("error_code"), str)
+    assert data["error_code"]
     assert isinstance(data.get("retryable"), bool)

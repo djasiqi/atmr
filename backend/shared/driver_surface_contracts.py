@@ -27,4 +27,3 @@ DRIVER_SOCKET_EVENT_TYPES = {
     "mission_status_changed",
     "driver_location_required",
 }
-

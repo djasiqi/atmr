@@ -6,6 +6,7 @@ Endpoints:
 - GET  /api/v1/bookings/<booking_id>/messages  — Historique paginé (before_id)
 - POST /api/v1/bookings/<booking_id>/messages  — Envoyer un message (1-500 chars)
 """
+
 # ruff: noqa: I001
 from __future__ import annotations
 
@@ -58,7 +59,9 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     verify_jwt_in_request()
     claims = get_jwt()
 
-    source_req = TransportRequest.query.filter_by(booking_id=effective_booking_id).first()
+    source_req = TransportRequest.query.filter_by(
+        booking_id=effective_booking_id
+    ).first()
     institution_id = source_req.institution_id if source_req else None
     request_id = source_req.id if source_req else None
 
@@ -95,7 +98,9 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
     # Company user
     user_company_id = claims.get("company_id")
     if user_company_id and int(user_company_id) == booking.company_id:
-        label = user_display or (booking.company.name if booking.company else "Entreprise")
+        label = user_display or (
+            booking.company.name if booking.company else "Entreprise"
+        )
         peer_company_id = transfer.executing_company_id if transfer else None
         return (
             booking,
@@ -107,7 +112,11 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
         )
 
     # Executing company (partenaire) sur booking transféré
-    if transfer and user_company_id and int(user_company_id) == transfer.executing_company_id:
+    if (
+        transfer
+        and user_company_id
+        and int(user_company_id) == transfer.executing_company_id
+    ):
         label = user_display or "Partenaire"
         return (
             booking,
@@ -120,7 +129,11 @@ def _get_booking_with_auth(booking_id: int):  # noqa: RET503
 
     # Institution user
     user_institution_id = claims.get("institution_id")
-    if user_institution_id and institution_id and int(user_institution_id) == institution_id:
+    if (
+        user_institution_id
+        and institution_id
+        and int(user_institution_id) == institution_id
+    ):
         inst = source_req.institution if source_req else None
         label = user_display or (inst.name if inst else "Institution")
         return (
@@ -175,7 +188,9 @@ class BookingMessageList(Resource):
     def get(self, booking_id):
         """Retourne les messages du booking (ASC)."""
         try:
-            booking, _sender_type, _label, _inst_id, _req_id, _peer_company_id = _get_booking_with_auth(booking_id)
+            booking, _sender_type, _label, _inst_id, _req_id, _peer_company_id = (
+                _get_booking_with_auth(booking_id)
+            )
 
             limit = min(int(flask_request.args.get("limit", 30)), 100)
             before_id = flask_request.args.get("before_id", type=int)
@@ -210,9 +225,14 @@ class BookingMessageList(Resource):
     def post(self, booking_id):
         """Cree un nouveau message."""
         try:
-            booking, sender_type, sender_label, institution_id, request_id, peer_company_id = _get_booking_with_auth(
-                booking_id
-            )
+            (
+                booking,
+                sender_type,
+                sender_label,
+                institution_id,
+                request_id,
+                peer_company_id,
+            ) = _get_booking_with_auth(booking_id)
 
             # Bloquer l'envoi si le booking est terminé ou annulé
             closed_statuses = {"COMPLETED", "RETURN_COMPLETED", "CANCELED", "CANCELLED"}
@@ -254,13 +274,17 @@ class BookingMessageList(Resource):
             if peer_company_id:
                 # Canal partenaire: diffuser aussi au partenaire transféré
                 from ext import socketio
-                from services.events.institution_events import persist_company_notification
+                from services.events.institution_events import (
+                    persist_company_notification,
+                )
 
                 payload = {
                     "booking_id": booking.id,
                     "message": msg.serialize,
                 }
-                socketio.emit("booking_message", payload, to=f"company_{peer_company_id}")
+                socketio.emit(
+                    "booking_message", payload, to=f"company_{peer_company_id}"
+                )
 
                 verify_jwt_in_request()
                 claims = get_jwt()

@@ -113,7 +113,7 @@ class CancellationFeeResult:
 _ZERO = Decimal("0")
 
 
-def compute_cancellation_fee(  # noqa: PLR0911
+def compute_cancellation_fee(
     booking: Any,
     *,
     status_at_cancel: str,
@@ -139,41 +139,60 @@ def compute_cancellation_fee(  # noqa: PLR0911
 
     if cancel_source == "cascade_from_outbound":
         return CancellationFeeResult(
-            is_billable=False, percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Cascade A/R",
+            is_billable=False,
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Cascade A/R",
         )
 
     if not policy or not policy.get("enabled"):
         return CancellationFeeResult(
             is_billable=(code in BILLABLE_REASONS),
-            percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Legacy",
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Legacy",
         )
 
     overrides = policy.get("reason_overrides") or {}
     if code in overrides:
         if not overrides[code].get("billable", True):
             return CancellationFeeResult(
-                is_billable=False, percent=None, tier_id=None,
-                fee_amount=_ZERO, fee_label="Override non facturable",
+                is_billable=False,
+                percent=None,
+                tier_id=None,
+                fee_amount=_ZERO,
+                fee_label="Override non facturable",
             )
     elif code not in BILLABLE_REASONS:
         return CancellationFeeResult(
-            is_billable=False, percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Motif non facturable",
+            is_billable=False,
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Motif non facturable",
         )
 
-    if policy.get("apply_when_driver_assigned_only") and not getattr(booking, "driver_id", None):
+    if policy.get("apply_when_driver_assigned_only") and not getattr(
+        booking, "driver_id", None
+    ):
         return CancellationFeeResult(
-            is_billable=False, percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Pas de chauffeur assigné",
+            is_billable=False,
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Pas de chauffeur assigné",
         )
 
     amount = getattr(booking, "amount", None)
     if amount is None or float(amount) <= 0:
         return CancellationFeeResult(
-            is_billable=False, percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Tarif non défini",
+            is_billable=False,
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Tarif non défini",
         )
 
     tiers = policy.get("tiers") or []
@@ -182,7 +201,11 @@ def compute_cancellation_fee(  # noqa: PLR0911
 
     if status_upper == "EN_ROUTE":
         selected_tier = next(
-            (t for t in tiers if t.get("type") == "status" and t.get("status") == "EN_ROUTE"),
+            (
+                t
+                for t in tiers
+                if t.get("type") == "status" and t.get("status") == "EN_ROUTE"
+            ),
             None,
         )
     else:
@@ -201,8 +224,11 @@ def compute_cancellation_fee(  # noqa: PLR0911
 
     if selected_tier is None:
         return CancellationFeeResult(
-            is_billable=False, percent=None, tier_id=None,
-            fee_amount=_ZERO, fee_label="Aucun palier applicable",
+            is_billable=False,
+            percent=None,
+            tier_id=None,
+            fee_amount=_ZERO,
+            fee_label="Aucun palier applicable",
         )
 
     base = Decimal(str(amount))
@@ -222,7 +248,8 @@ def compute_cancellation_fee(  # noqa: PLR0911
         percent=pct,
         tier_id=selected_tier.get("id"),
         fee_amount=fee,
-        fee_label=selected_tier.get("label") or f"< {selected_tier.get('hours_before', '?')}h",
+        fee_label=selected_tier.get("label")
+        or f"< {selected_tier.get('hours_before', '?')}h",
     )
 
 
@@ -288,9 +315,7 @@ def get_all_reason_codes() -> list[str]:
     return list(CANCELLATION_REASON_LABELS.keys())
 
 
-def log_cancellation_persisted(
-    booking: Any, cancel_fields: Mapping[str, Any]
-) -> None:
+def log_cancellation_persisted(booking: Any, cancel_fields: Mapping[str, Any]) -> None:
     """Log structuré après persistance d'une annulation (observabilité / litiges).
 
     À appeler une fois par annulation, uniquement quand on vient d'écrire les 6 champs
@@ -337,18 +362,22 @@ def log_cancellation_persisted(
 STATUS_ALWAYS_BILLABLE: frozenset[str] = frozenset({"EN_ROUTE", "IN_PROGRESS"})
 
 # Statuts où l'annulation est impossible (course terminée)
-STATUS_NOT_CANCELLABLE: frozenset[str] = frozenset({
-    "COMPLETED",
-    "RETURN_COMPLETED",
-    "CANCELED",  # Déjà annulé
-})
+STATUS_NOT_CANCELLABLE: frozenset[str] = frozenset(
+    {
+        "COMPLETED",
+        "RETURN_COMPLETED",
+        "CANCELED",  # Déjà annulé
+    }
+)
 
 # Statuts annulables librement (selon motif)
-STATUS_FREE_CANCELLATION: frozenset[str] = frozenset({
-    "PENDING",
-    "ACCEPTED",
-    "ASSIGNED",
-})
+STATUS_FREE_CANCELLATION: frozenset[str] = frozenset(
+    {
+        "PENDING",
+        "ACCEPTED",
+        "ASSIGNED",
+    }
+)
 
 
 def is_booking_cancellable(status: str | None) -> bool:
@@ -467,7 +496,9 @@ def compute_cancellation_fields_with_status(
         base_fields["is_cancellation_billable"] = True
         # Adapter le label si besoin
         if billing_info["billing_description"]:
-            base_fields["cancellation_display_label"] = billing_info["billing_description"]
+            base_fields["cancellation_display_label"] = billing_info[
+                "billing_description"
+            ]
 
     # Ajouter les infos de billing
     base_fields["billing_info"] = billing_info

@@ -23,7 +23,9 @@ from services.billing.billing_party_linker import (
     get_or_create_billing_party_for_legacy_bill_to_client,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -86,4 +88,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -54,6 +54,7 @@ def _get_trace_id() -> str:
     """Récupère le trace_id pour corrélation (safe hors contexte requête)."""
     try:
         from middleware.trace_id import get_trace_id
+
         return get_trace_id()
     except Exception:
         return "-"
@@ -151,12 +152,17 @@ def _clean_text(value: Any, *, max_len: int) -> str | None:
     return raw[:max_len]
 
 
-def _normalize_seed_context(raw_context: Any, demo_request: DemoRequest) -> dict[str, Any]:
+def _normalize_seed_context(
+    raw_context: Any, demo_request: DemoRequest
+) -> dict[str, Any]:
     context = raw_context if isinstance(raw_context, dict) else {}
     return {
-        "volume_range": str(context.get("volume_range") or demo_request.volume_range or "").strip()
+        "volume_range": str(
+            context.get("volume_range") or demo_request.volume_range or ""
+        ).strip()
         or None,
-        "timing": str(context.get("timing") or demo_request.timing or "").strip() or None,
+        "timing": str(context.get("timing") or demo_request.timing or "").strip()
+        or None,
         "preferred_slot": str(
             context.get("preferred_slot") or demo_request.preferred_slot or ""
         ).strip()
@@ -166,7 +172,9 @@ def _normalize_seed_context(raw_context: Any, demo_request: DemoRequest) -> dict
         ).strip()
         or None,
         "integration_required": str(
-            context.get("integration_required") or demo_request.integration_required or ""
+            context.get("integration_required")
+            or demo_request.integration_required
+            or ""
         ).strip()
         or None,
     }
@@ -186,8 +194,12 @@ def _normalize_provision_profile(
     ).lower()
     if organization_type == "curatelle":
         organization_type = "curatorship"
-    if organization_type not in INSTITUTION_TYPES.union(TRANSPORT_TYPES).union({"other"}):
-        organization_type = str(demo_request.organization_type or "institution").strip().lower()
+    if organization_type not in INSTITUTION_TYPES.union(TRANSPORT_TYPES).union(
+        {"other"}
+    ):
+        organization_type = (
+            str(demo_request.organization_type or "institution").strip().lower()
+        )
 
     user_first_name, user_last_name = _split_person_name(
         _clean_text(profile.get("user_first_name"), max_len=100)
@@ -195,16 +207,22 @@ def _normalize_provision_profile(
         or demo_request.name
     )
     if _clean_text(profile.get("user_first_name"), max_len=100):
-        user_first_name = _clean_text(profile.get("user_first_name"), max_len=100) or user_first_name
+        user_first_name = (
+            _clean_text(profile.get("user_first_name"), max_len=100) or user_first_name
+        )
     if _clean_text(profile.get("user_last_name"), max_len=100):
-        user_last_name = _clean_text(profile.get("user_last_name"), max_len=100) or user_last_name
+        user_last_name = (
+            _clean_text(profile.get("user_last_name"), max_len=100) or user_last_name
+        )
 
     request_comment = _clean_text(demo_request.comment, max_len=1200)
     visible_demo_notes = _clean_text(profile.get("visible_demo_notes"), max_len=1200)
     if not visible_demo_notes and request_comment:
         visible_demo_notes = request_comment
 
-    workspace_seed_notes = _clean_text(profile.get("workspace_seed_notes"), max_len=1200)
+    workspace_seed_notes = _clean_text(
+        profile.get("workspace_seed_notes"), max_len=1200
+    )
     if not workspace_seed_notes:
         workspace_seed_notes = (
             f"timing={demo_request.timing}; volume={demo_request.volume_range or '-'}; "
@@ -216,7 +234,9 @@ def _normalize_provision_profile(
         persona = (
             "institution"
             if organization_type in INSTITUTION_TYPES
-            else "transport_company" if organization_type in TRANSPORT_TYPES else "generic"
+            else "transport_company"
+            if organization_type in TRANSPORT_TYPES
+            else "generic"
         )
 
     return {
@@ -224,7 +244,9 @@ def _normalize_provision_profile(
         or _clean_text(demo_request.organization, max_len=200)
         or f"Demo Workspace {demo_request.id}",
         "organization_type": organization_type,
-        "organization_address": _clean_text(profile.get("organization_address"), max_len=255),
+        "organization_address": _clean_text(
+            profile.get("organization_address"), max_len=255
+        ),
         "organization_contact_phone": _clean_text(
             profile.get("organization_contact_phone") or demo_request.phone, max_len=50
         ),
@@ -232,12 +254,15 @@ def _normalize_provision_profile(
             profile.get("organization_contact_email") or demo_request.email, max_len=255
         ),
         "workspace_display_name": _clean_text(
-            profile.get("workspace_display_name") or demo_request.organization, max_len=200
+            profile.get("workspace_display_name") or demo_request.organization,
+            max_len=200,
         ),
         "demo_login_email": demo_login_email,
         "user_first_name": user_first_name,
         "user_last_name": user_last_name,
-        "user_phone": _clean_text(profile.get("user_phone") or demo_request.phone, max_len=50),
+        "user_phone": _clean_text(
+            profile.get("user_phone") or demo_request.phone, max_len=50
+        ),
         "user_role": ROLE_ALIASES.get(
             str(profile.get("user_role") or "").strip().lower(),
             str(profile.get("user_role") or "").strip().lower() or None,
@@ -259,8 +284,12 @@ def _normalize_provision_profile(
             if persona == "transport_company"
             else "generic_quickstart"
         ),
-        "seed_context": _normalize_seed_context(profile.get("seed_context"), demo_request),
-        "internal_admin_notes": _clean_text(profile.get("internal_admin_notes"), max_len=1200),
+        "seed_context": _normalize_seed_context(
+            profile.get("seed_context"), demo_request
+        ),
+        "internal_admin_notes": _clean_text(
+            profile.get("internal_admin_notes"), max_len=1200
+        ),
         "visible_demo_notes": visible_demo_notes,
         "workspace_seed_notes": workspace_seed_notes,
     }
@@ -298,7 +327,11 @@ def _hash_magic_token(token: str) -> str:
 
 def _new_magic_token() -> tuple[str, str, datetime]:
     plain = secrets.token_urlsafe(32)
-    return plain, _hash_magic_token(plain), _utc_now() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
+    return (
+        plain,
+        _hash_magic_token(plain),
+        _utc_now() + timedelta(minutes=MAGIC_LINK_TTL_MINUTES),
+    )
 
 
 def _build_demo_user_email(raw_email: str | None) -> str:
@@ -326,7 +359,9 @@ def _create_or_reuse_demo_user(
     demo_request: DemoRequest, provision_profile: dict[str, Any] | None = None
 ) -> User:
     profile = provision_profile or {}
-    demo_email = _build_demo_user_email(profile.get("demo_login_email") or demo_request.email)
+    demo_email = _build_demo_user_email(
+        profile.get("demo_login_email") or demo_request.email
+    )
     first_name = str(
         profile.get("user_first_name") or _split_person_name(demo_request.name)[0]
     ).strip()[:100]
@@ -410,7 +445,9 @@ def _apply_demo_profile(
             db.session.add(company)
             db.session.flush()
         else:
-            company.name = (org_name or company.name or f"Demo Transport {demo_request.id}")[:100]
+            company.name = (
+                org_name or company.name or f"Demo Transport {demo_request.id}"
+            )[:100]
             company.contact_email = demo_contact_email
             company.contact_phone = demo_contact_phone
             company.is_approved = True
@@ -432,7 +469,9 @@ def _apply_demo_profile(
             institution = Institution()
             institution.name = (org_name or f"Demo Institution {demo_request.id}")[:200]
             institution.institution_type = str(
-                profile.get("organization_type") or demo_request.organization_type or "institution"
+                profile.get("organization_type")
+                or demo_request.organization_type
+                or "institution"
             )[:50]
             institution.contact_email = demo_contact_email
             institution.contact_phone = demo_contact_phone
@@ -442,7 +481,9 @@ def _apply_demo_profile(
             db.session.flush()
             demo_user.institution_id = institution.id
         else:
-            institution.name = (org_name or institution.name or f"Demo Institution {demo_request.id}")[:200]
+            institution.name = (
+                org_name or institution.name or f"Demo Institution {demo_request.id}"
+            )[:200]
             institution.contact_email = demo_contact_email
             institution.contact_phone = demo_contact_phone
             if org_address:
@@ -490,7 +531,9 @@ def _seed_transport_demo_workspace(
         if not driver_user:
             driver_user = User()
             driver_user.email = driver_email
-            driver_user.username = f"demo_driver_{company.id}_{idx + 1}_{secrets.token_hex(2)}"[:100]
+            driver_user.username = (
+                f"demo_driver_{company.id}_{idx + 1}_{secrets.token_hex(2)}"[:100]
+            )
         driver_user.role = UserRole.DRIVER
         driver_user.first_name = driver_first_name
         driver_user.last_name = driver_last_name
@@ -526,7 +569,9 @@ def _seed_transport_demo_workspace(
         if not patient_user:
             patient_user = User()
             patient_user.email = patient_email
-            patient_user.username = f"demo_patient_{company.id}_{idx + 1}_{secrets.token_hex(2)}"[:100]
+            patient_user.username = (
+                f"demo_patient_{company.id}_{idx + 1}_{secrets.token_hex(2)}"[:100]
+            )
         patient_user.role = UserRole.CLIENT
         patient_user.first_name = patient_first_name
         patient_user.last_name = patient_last_name
@@ -535,7 +580,9 @@ def _seed_transport_demo_workspace(
         db.session.add(patient_user)
         db.session.flush()
 
-        client = Client.query.filter_by(user_id=patient_user.id, company_id=company.id).first()
+        client = Client.query.filter_by(
+            user_id=patient_user.id, company_id=company.id
+        ).first()
         if not client:
             client = Client()
             client.user_id = patient_user.id
@@ -564,9 +611,7 @@ def _seed_transport_demo_workspace(
         client.gp_name = f"Dr {patient_last_name}"
         client.gp_phone = "+41 22 555 00 00"
         client.default_billed_to_type = "patient"
-        client.default_billed_to_contact = (
-            f"{patient_user.first_name or 'Patient'} {patient_user.last_name or ''}".strip()
-        )
+        client.default_billed_to_contact = f"{patient_user.first_name or 'Patient'} {patient_user.last_name or ''}".strip()
         client.residence_facility = f"Residence Les Tilleuls {((idx % 3) + 1)}"
         client.is_active = True
         db.session.add(client)
@@ -591,14 +636,20 @@ def _seed_transport_demo_workspace(
     ]
     for idx, status in enumerate(statuses):
         client = clients[idx % len(clients)]
-        driver = drivers[idx % len(drivers)] if status != BookingStatus.PENDING else None
-        scheduled = (now + timedelta(hours=(idx - 2))).replace(tzinfo=None, second=0, microsecond=0)
+        driver = (
+            drivers[idx % len(drivers)] if status != BookingStatus.PENDING else None
+        )
+        scheduled = (now + timedelta(hours=(idx - 2))).replace(
+            tzinfo=None, second=0, microsecond=0
+        )
         booking = Booking()
         booking.user_id = client.user_id
         booking.client_id = client.id
         booking.company_id = company.id
         booking.driver_id = driver.id if driver else None
-        booking.customer_name = f"{client.user.first_name} {client.user.last_name}".strip()
+        booking.customer_name = (
+            f"{client.user.first_name} {client.user.last_name}".strip()
+        )
         booking.pickup_location = client.domicile_address
         booking.dropoff_location = DEMO_DROPOFF_LOCATIONS[
             idx % len(DEMO_DROPOFF_LOCATIONS)
@@ -647,7 +698,9 @@ def _seed_institution_demo_workspace(
     base_email = str(demo_request.email or "").strip().lower()
     local_part = base_email.split("@", 1)[0] or "demo.user"
     _drivers_target, patients_target = _seed_scale_from_context(seed_context)
-    identity_count = max(1, min(patients_target, len(DEMO_INSTITUTION_PATIENT_IDENTITIES)))
+    identity_count = max(
+        1, min(patients_target, len(DEMO_INSTITUTION_PATIENT_IDENTITIES))
+    )
 
     patients: list[InstitutionPatient] = []
     for idx, (first_name, last_name) in enumerate(
@@ -756,7 +809,9 @@ def _seed_institution_demo_workspace(
         if not demo_client_user:
             demo_client_user = User()
             demo_client_user.email = demo_client_email
-            demo_client_user.username = f"demo_inst_client_{institution.id}_{secrets.token_hex(4)}"[:100]
+            demo_client_user.username = (
+                f"demo_inst_client_{institution.id}_{secrets.token_hex(4)}"[:100]
+            )
             demo_client_user.role = UserRole.CLIENT
             demo_client_user.first_name = "Patient"
             demo_client_user.last_name = "Demo Institution"
@@ -826,8 +881,12 @@ def _seed_institution_demo_workspace(
             continue  # Idempotence: ne pas réinsérer une external_reference existante
 
         patient = patients[idx % len(patients)]
-        pickup = DEMO_PICKUP_ADDRESSES[payload["pickup_idx"] % len(DEMO_PICKUP_ADDRESSES)]
-        scheduled = (now + timedelta(hours=payload["hours_offset"])).replace(second=0, microsecond=0)
+        pickup = DEMO_PICKUP_ADDRESSES[
+            payload["pickup_idx"] % len(DEMO_PICKUP_ADDRESSES)
+        ]
+        scheduled = (now + timedelta(hours=payload["hours_offset"])).replace(
+            second=0, microsecond=0
+        )
 
         booking = None
         if payload["booking_status"] is not None and demo_client is not None:
@@ -838,7 +897,9 @@ def _seed_institution_demo_workspace(
             booking.driver_id = demo_driver.id if demo_driver else None
             booking.customer_name = f"{patient.first_name} {patient.last_name}"
             booking.pickup_location = pickup[0]
-            booking.dropoff_location = DEMO_DROPOFF_LOCATIONS[payload["dropoff_idx"] % len(DEMO_DROPOFF_LOCATIONS)]
+            booking.dropoff_location = DEMO_DROPOFF_LOCATIONS[
+                payload["dropoff_idx"] % len(DEMO_DROPOFF_LOCATIONS)
+            ]
             booking.scheduled_time = scheduled.replace(tzinfo=None)
             booking.amount = float(Decimal("62.00") + Decimal(idx))
             booking.status = payload["booking_status"]
@@ -857,13 +918,19 @@ def _seed_institution_demo_workspace(
         request_obj.scheduled_time_type = ScheduledTimeType.DEPARTURE.value
         request_obj.pickup_location = pickup[0]
         request_obj.pickup_type = LocationType.DOMICILE.value
-        request_obj.dropoff_location = DEMO_DROPOFF_LOCATIONS[payload["dropoff_idx"] % len(DEMO_DROPOFF_LOCATIONS)]
+        request_obj.dropoff_location = DEMO_DROPOFF_LOCATIONS[
+            payload["dropoff_idx"] % len(DEMO_DROPOFF_LOCATIONS)
+        ]
         request_obj.dropoff_type = LocationType.INSTITUTION.value
         request_obj.billing_intent = payload["billing_intent"]
         request_obj.status = payload["status"]
-        request_obj.notes = "Demande virtuelle prechargee pour presentation institution."
+        request_obj.notes = (
+            "Demande virtuelle prechargee pour presentation institution."
+        )
         request_obj.booking_id = booking.id if booking else None
-        request_obj.accepted_by_company_id = demo_company.id if booking and demo_company else None
+        request_obj.accepted_by_company_id = (
+            demo_company.id if booking and demo_company else None
+        )
         if payload["status"] == RequestStatus.SENT.value:
             request_obj.sent_at = now - timedelta(hours=1)
         if payload.get("created_hours_ago"):
@@ -897,8 +964,10 @@ def _ensure_demo_workspace_seeded(
             demo_user.id,
         )
         company = Company.query.filter_by(user_id=demo_user.id).first()
-    if role == "institution" and institution is None and getattr(
-        demo_user, "institution_id", None
+    if (
+        role == "institution"
+        and institution is None
+        and getattr(demo_user, "institution_id", None)
     ):
         logger.warning(
             (
@@ -1003,7 +1072,7 @@ def _canonical_request_email_from_demo_login(email: str | None) -> str:
     return f"{local}@{domain}" if local else value
 
 
-def enforce_demo_user_access_validity(  # noqa: PLR0911
+def enforce_demo_user_access_validity(
     user: User | None,
 ) -> tuple[bool, str | None]:
     """Garantit qu'un compte demo-* reste valide uniquement pendant sa fenêtre d'accès.
@@ -1057,9 +1126,7 @@ def enforce_demo_user_access_validity(  # noqa: PLR0911
         # Ne pas désactiver brutalement le compte sur un simple mismatch de binding.
         return False, "Acces demo introuvable ou invalide."
 
-    if (
-        access.status == "active"
-    ):
+    if access.status == "active":
         # Tolérance legacy: si demo_expires_at est absent, on le régénère.
         if access.demo_expires_at is None:
             base = access.provisioned_at or now
@@ -1078,7 +1145,10 @@ def enforce_demo_user_access_validity(  # noqa: PLR0911
                 active_access.demo_user_id = user.id
                 db.session.add(active_access)
                 db.session.commit()
-            if active_access.demo_expires_at is None or active_access.demo_expires_at > now:
+            if (
+                active_access.demo_expires_at is None
+                or active_access.demo_expires_at > now
+            ):
                 return True, None
 
     if access.status == "active":
@@ -1122,9 +1192,13 @@ def _get_active_access_for_request(demo_request_id: int) -> DemoAccess | None:
 
 def _ensure_access_is_active(access: DemoAccess) -> None:
     if access.status == "expired":
-        raise DemoAccessError("access_expired", "Cet acces demo est expire.", status_code=409)
+        raise DemoAccessError(
+            "access_expired", "Cet acces demo est expire.", status_code=409
+        )
     if access.status == "revoked":
-        raise DemoAccessError("access_revoked", "Cet acces demo a ete revoque.", status_code=409)
+        raise DemoAccessError(
+            "access_revoked", "Cet acces demo a ete revoque.", status_code=409
+        )
     if access.status != "active":
         raise DemoAccessError(
             "no_active_access",
@@ -1132,7 +1206,9 @@ def _ensure_access_is_active(access: DemoAccess) -> None:
             status_code=409,
         )
     if access.demo_expires_at and access.demo_expires_at <= _utc_now():
-        raise DemoAccessError("access_expired", "Cet acces demo est expire.", status_code=409)
+        raise DemoAccessError(
+            "access_expired", "Cet acces demo est expire.", status_code=409
+        )
 
 
 def _apply_expiration(access: DemoAccess, *, source: str = "scheduler") -> DemoAccess:
@@ -1179,7 +1255,9 @@ def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
                     },
                 )
             else:
-                logger.exception("[demo_access] full demo reset failed on session start")
+                logger.exception(
+                    "[demo_access] full demo reset failed on session start"
+                )
                 raise DemoAccessError(
                     "demo_reset_failed",
                     "Reinitialisation de l'environnement demo impossible.",
@@ -1206,7 +1284,9 @@ def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
                 status_code=500,
             ) from exc
 
-    demo_request = db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
+    demo_request = (
+        db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
+    )
     if not demo_request:
         raise DemoAccessError(
             "request_not_found",
@@ -1260,7 +1340,9 @@ def _reset_demo_dataset_on_session_start(access: DemoAccess) -> None:
 
 def _ensure_demo_user_alignment_for_access(access: DemoAccess) -> User:
     """Garantit qu'un accès démo pointe vers un compte démo cohérent."""
-    demo_request = db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
+    demo_request = (
+        db.session.get(DemoRequest, access.demo_request_id) or access.demo_request
+    )
     if not demo_request:
         raise DemoAccessError(
             "request_not_found",
@@ -1298,8 +1380,12 @@ def _build_provision_summary(
         "organization_name": provision_profile.get("organization_name"),
         "organization_type": provision_profile.get("organization_type"),
         "demo_login_email": demo_user.email,
-        "organization_contact_email": provision_profile.get("organization_contact_email"),
-        "organization_contact_phone": provision_profile.get("organization_contact_phone"),
+        "organization_contact_email": provision_profile.get(
+            "organization_contact_email"
+        ),
+        "organization_contact_phone": provision_profile.get(
+            "organization_contact_phone"
+        ),
         "user_full_name": f"{demo_user.first_name or ''} {demo_user.last_name or ''}".strip(),
         "user_role": provision_profile.get("user_role") or role_value,
         "provision_template": provision_profile.get("provision_template"),
@@ -1344,7 +1430,9 @@ def provision_demo_access(
         )
 
     active_access = _get_active_access_for_request(demo_request_id)
-    if active_access and (not active_access.demo_expires_at or active_access.demo_expires_at > _utc_now()):
+    if active_access and (
+        not active_access.demo_expires_at or active_access.demo_expires_at > _utc_now()
+    ):
         logger.info(
             "[demo_access] provision reused existing access",
             extra={
@@ -1411,7 +1499,9 @@ def provision_demo_access(
         access.access_sent_at = now
         access.last_access_email_error = None
     else:
-        access.last_access_email_error = str(email_result.get("error") or "email_error")[:1000]
+        access.last_access_email_error = str(
+            email_result.get("error") or "email_error"
+        )[:1000]
 
     # Validation metier: une demande provisionnee devient qualifiee.
     demo_request.status = "qualified"
@@ -1445,7 +1535,9 @@ def provision_demo_access(
     )
 
 
-def resend_demo_access(*, access_id: int, actor_id: int | None = None) -> DemoProvisionResult:
+def resend_demo_access(
+    *, access_id: int, actor_id: int | None = None
+) -> DemoProvisionResult:
     access = _assert_access_exists(access_id)
     _ensure_access_is_active(access)
     plain_token, token_hash, token_expires_at = _new_magic_token()
@@ -1463,7 +1555,9 @@ def resend_demo_access(*, access_id: int, actor_id: int | None = None) -> DemoPr
         access.access_sent_at = _utc_now()
         access.last_access_email_error = None
     else:
-        access.last_access_email_error = str(email_result.get("error") or "email_error")[:1000]
+        access.last_access_email_error = str(
+            email_result.get("error") or "email_error"
+        )[:1000]
 
     db.session.commit()
     logger.info(
@@ -1537,19 +1631,15 @@ def consume_magic_link(token: str) -> dict[str, Any]:
     # (première consommation du magic link), puis l'appel reste idempotent.
     now = _utc_now()
     already_consumed = access.magic_token_used_at is not None
-    if (
-        not already_consumed
-        and (not access.magic_token_expires_at or access.magic_token_expires_at <= now)
+    if not already_consumed and (
+        not access.magic_token_expires_at or access.magic_token_expires_at <= now
     ):
         raise DemoAccessError("token_expired", "Token expire.", status_code=409)
 
-    should_reset_session = (
-        (not already_consumed)
-        or (
-            access.magic_token_used_at is not None
-            and (now - access.magic_token_used_at)
-            > timedelta(seconds=SESSION_RESET_DEBOUNCE_SECONDS)
-        )
+    should_reset_session = (not already_consumed) or (
+        access.magic_token_used_at is not None
+        and (now - access.magic_token_used_at)
+        > timedelta(seconds=SESSION_RESET_DEBOUNCE_SECONDS)
     )
 
     if should_reset_session:

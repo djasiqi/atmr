@@ -128,8 +128,12 @@ class Driver(db.Model):
     # Identite & Urgence
     avs_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
     nationality: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    emergency_contact_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    emergency_contact_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    emergency_contact_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True
+    )
+    emergency_contact_phone: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )
 
     # Relations
     user = relationship("User", back_populates="driver", passive_deletes=True)
@@ -206,7 +210,9 @@ class Driver(db.Model):
                     else None
                 ),
                 "vehicle_id": getattr(self, "vehicle_id", None),
-                "vehicle": self.vehicle.serialize if getattr(self, "vehicle", None) else None,
+                "vehicle": self.vehicle.serialize
+                if getattr(self, "vehicle", None)
+                else None,
                 "vehicle_assigned": getattr(self, "vehicle_assigned", None),
                 "brand": getattr(self, "brand", None),
                 "license_plate": getattr(self, "license_plate", None),
@@ -234,7 +240,9 @@ class Driver(db.Model):
                 "avs_number": getattr(self, "avs_number", None),
                 "nationality": getattr(self, "nationality", None),
                 "emergency_contact_name": getattr(self, "emergency_contact_name", None),
-                "emergency_contact_phone": getattr(self, "emergency_contact_phone", None),
+                "emergency_contact_phone": getattr(
+                    self, "emergency_contact_phone", None
+                ),
                 "phone": getattr(user, "phone", None) if user else None,
                 "birth_date": (
                     bd.isoformat()

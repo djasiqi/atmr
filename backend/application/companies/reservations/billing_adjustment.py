@@ -13,6 +13,8 @@ from models.enums import BookingCreatedVia, InvoiceStatus
 
 from ._status import status_value
 
+_MIN_NONZERO_ADJUSTMENT_CHF = 0.5
+
 
 def _active_invoice_line_exists(booking_id: int) -> bool:
     return (
@@ -29,7 +31,10 @@ def _active_invoice_line_exists(booking_id: int) -> bool:
 
 def booking_billing_is_locked(booking: Booking) -> tuple[bool, str | None]:
     if getattr(booking, "billing_locked_at", None) is not None:
-        return True, "La facturation de cette réservation est verrouillée (billing_locked_at)."
+        return (
+            True,
+            "La facturation de cette réservation est verrouillée (billing_locked_at).",
+        )
     if getattr(booking, "invoice_line_id", None) is not None:
         return (
             True,
@@ -89,7 +94,7 @@ class CompanyBookingBillingAdjustmentUseCase:
         }
     )
 
-    def execute(  # noqa: PLR0911 — validations métier explicites
+    def execute(
         self,
         booking: Booking,
         *,
@@ -100,7 +105,9 @@ class CompanyBookingBillingAdjustmentUseCase:
         if st in self._TERMINAL_EXCLUDE:
             return BookingBillingAdjustmentResult(
                 ok=False,
-                error={"error": "Impossible d'ajuster la facturation d'une réservation annulée."},
+                error={
+                    "error": "Impossible d'ajuster la facturation d'une réservation annulée."
+                },
                 status_code=400,
             )
 
@@ -108,7 +115,9 @@ class CompanyBookingBillingAdjustmentUseCase:
         if not allow_origin:
             return BookingBillingAdjustmentResult(
                 ok=False,
-                error={"error": origin_msg or "Ajustement de facturation non autorisé."},
+                error={
+                    "error": origin_msg or "Ajustement de facturation non autorisé."
+                },
                 status_code=400,
             )
 
@@ -129,7 +138,9 @@ class CompanyBookingBillingAdjustmentUseCase:
             )
 
         has_amount = "amount" in keys_present and data.get("amount") is not None
-        has_btype = "billed_to_type" in keys_present and data.get("billed_to_type") is not None
+        has_btype = (
+            "billed_to_type" in keys_present and data.get("billed_to_type") is not None
+        )
         has_bcomp = "billed_to_company_id" in keys_present
 
         if not (has_amount or has_btype or has_bcomp):
@@ -159,7 +170,9 @@ class CompanyBookingBillingAdjustmentUseCase:
         if target_btype not in ("patient", "clinic", "insurance"):
             return BookingBillingAdjustmentResult(
                 ok=False,
-                error={"error": "billed_to_type invalide (patient, clinic, insurance)."},
+                error={
+                    "error": "billed_to_type invalide (patient, clinic, insurance)."
+                },
                 status_code=400,
             )
 
@@ -184,12 +197,16 @@ class CompanyBookingBillingAdjustmentUseCase:
             if has_bcomp and target_bcomp is not None:
                 return BookingBillingAdjustmentResult(
                     ok=False,
-                    error={"error": "billed_to_company_id doit être absent ou null si billed_to_type vaut patient."},
+                    error={
+                        "error": "billed_to_company_id doit être absent ou null si billed_to_type vaut patient."
+                    },
                     status_code=400,
                 )
             target_bcomp = None
         else:
-            if target_bcomp is None or (isinstance(target_bcomp, int) and target_bcomp <= 0):
+            if target_bcomp is None or (
+                isinstance(target_bcomp, int) and target_bcomp <= 0
+            ):
                 return BookingBillingAdjustmentResult(
                     ok=False,
                     error={
@@ -201,7 +218,9 @@ class CompanyBookingBillingAdjustmentUseCase:
             if c is None:
                 return BookingBillingAdjustmentResult(
                     ok=False,
-                    error={"error": "billed_to_company_id : entreprise cible introuvable."},
+                    error={
+                        "error": "billed_to_company_id : entreprise cible introuvable."
+                    },
                     status_code=400,
                 )
 
@@ -214,7 +233,7 @@ class CompanyBookingBillingAdjustmentUseCase:
                     error={"error": "amount invalide."},
                     status_code=400,
                 )
-            if amt < 0 or (amt > 0 and amt < 0.5):  # noqa: PLR2004 — aligné schéma réservation
+            if amt < 0 or (amt > 0 and amt < _MIN_NONZERO_ADJUSTMENT_CHF):
                 return BookingBillingAdjustmentResult(
                     ok=False,
                     error={"error": "Le montant doit être nul ou au moins 0,50 CHF."},

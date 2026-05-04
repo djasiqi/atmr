@@ -85,4 +85,3 @@ def build_relative_transport_slots(
         slots.append((dt, BookingStatus.PENDING))
 
     return slots
-

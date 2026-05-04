@@ -7,6 +7,7 @@ Create Date: 2026-02-01
 Supprime l'index unique S2. Permet plusieurs factures (annulées ou non)
 pour la même clinique+période, comme pour les factures client.
 """
+
 from alembic import op
 import sqlalchemy as sa
 

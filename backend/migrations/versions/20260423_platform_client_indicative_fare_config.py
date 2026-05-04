@@ -21,13 +21,17 @@ def upgrade() -> None:
     op.create_table(
         "platform_client_indicative_fare_config",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("is_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "is_enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column("min_fare_chf", sa.Numeric(12, 4), nullable=False),
         sa.Column("base_chf", sa.Numeric(12, 4), nullable=False),
         sa.Column("per_minute_chf", sa.Numeric(12, 4), nullable=False),
         sa.Column("ref_km", sa.Numeric(12, 4), nullable=False),
         sa.Column("ref_min", sa.Numeric(12, 4), nullable=False),
-        sa.Column("config_version", sa.Integer(), nullable=False, server_default=sa.text("1")),
+        sa.Column(
+            "config_version", sa.Integer(), nullable=False, server_default=sa.text("1")
+        ),
         sa.Column("calibration_note", sa.Text(), nullable=True),
         sa.Column(
             "updated_at",
@@ -68,5 +72,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_platform_client_indicative_fare_config_updated_by", table_name="platform_client_indicative_fare_config")
+    op.drop_index(
+        "ix_platform_client_indicative_fare_config_updated_by",
+        table_name="platform_client_indicative_fare_config",
+    )
     op.drop_table("platform_client_indicative_fare_config")

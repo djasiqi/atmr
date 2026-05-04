@@ -140,10 +140,9 @@ def saferpay_configured() -> bool:
 
 
 def saferpay_api_base_url() -> str:
-    return (
-        (os.getenv("SAFERPAY_API_BASE_URL") or "").strip().rstrip("/")
-        or "https://test.saferpay.com/api"
-    )
+    return (os.getenv("SAFERPAY_API_BASE_URL") or "").strip().rstrip(
+        "/"
+    ) or "https://test.saferpay.com/api"
 
 
 def saferpay_spec_version() -> str:

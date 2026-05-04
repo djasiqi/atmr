@@ -86,9 +86,7 @@ class UpdateCompanyReservationUseCase:
 
         if "scheduled_time" in validated_data:
             try:
-                scheduled_local = parse_local_naive(
-                    validated_data["scheduled_time"]
-                )
+                scheduled_local = parse_local_naive(validated_data["scheduled_time"])
             except Exception as e:
                 return UpdateCompanyReservationResult(
                     ok=False,

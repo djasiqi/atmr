@@ -95,7 +95,9 @@ def mark_token_rotated(old_token: str, new_token: str) -> bool:
     ).first()
 
     if not token_record:
-        logger.warning("mark_token_rotated: old token not found (hash: %s)", old_hash[:8])
+        logger.warning(
+            "mark_token_rotated: old token not found (hash: %s)", old_hash[:8]
+        )
         return False
 
     token_record.rotated_to_hash = new_hash

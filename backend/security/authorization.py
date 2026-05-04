@@ -354,13 +354,15 @@ class AuthorizationService:
                 "[Authorization] ⚠️ IDOR attempt: Institution user %s (institution_id=%s) "
                 "a tenté d'accéder à une ressource de institution_id=%s"
             )
-            logger.warning(msg, user.public_id, user_institution_id, resource_institution_id)
+            logger.warning(
+                msg, user.public_id, user_institution_id, resource_institution_id
+            )
             return False, ({"error": "Accès non autorisé à cette ressource"}, 403)
 
         return False, ({"error": "Accès non autorisé"}, 403)
 
     @staticmethod
-    def check_booking_ownership(  # noqa: PLR0911
+    def check_booking_ownership(
         booking: Booking,
         user: User,
         action: Literal["read", "modify", "delete"] = "read",

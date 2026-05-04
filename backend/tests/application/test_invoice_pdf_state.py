@@ -90,9 +90,27 @@ def test_mark_pdf_failed_preserves_pdf_url():
 
 
 def test_is_pdf_sendable_only_ready():
-    inv = _inv(meta={"pdf": {"status": "stale", "generated_at": None, "content_updated_at": None, "error": None}})
+    inv = _inv(
+        meta={
+            "pdf": {
+                "status": "stale",
+                "generated_at": None,
+                "content_updated_at": None,
+                "error": None,
+            }
+        }
+    )
     assert is_pdf_sendable(inv) is False
-    inv2 = _inv(meta={"pdf": {"status": "ready", "generated_at": "2020-01-01T00:00:00+00:00", "content_updated_at": None, "error": None}})
+    inv2 = _inv(
+        meta={
+            "pdf": {
+                "status": "ready",
+                "generated_at": "2020-01-01T00:00:00+00:00",
+                "content_updated_at": None,
+                "error": None,
+            }
+        }
+    )
     assert is_pdf_sendable(inv2) is True
 
 

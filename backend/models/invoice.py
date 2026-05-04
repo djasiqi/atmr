@@ -288,8 +288,7 @@ class Invoice(db.Model):
             from models.client import Client as ClientModel
 
             client = (
-                ClientModel.query
-                .options(_jl(ClientModel.user))
+                ClientModel.query.options(_jl(ClientModel.user))
                 .filter_by(id=self.client_id)
                 .first()
             )
@@ -463,9 +462,7 @@ class Invoice(db.Model):
             else None,
             "payer_resolution": {
                 "primary": (
-                    "billing_party"
-                    if self.billing_party_id is not None
-                    else "legacy"
+                    "billing_party" if self.billing_party_id is not None else "legacy"
                 ),
                 "billing_party_id": self.billing_party_id,
                 "legacy_bill_to_client_id": self.bill_to_client_id,
@@ -804,7 +801,9 @@ class CompanyBillingSettings(db.Model):
         Numeric(10, 2), nullable=True, default=None
     )
     cancellation_policy = Column(
-        JSONB, nullable=True, server_default=None,
+        JSONB,
+        nullable=True,
+        server_default=None,
         comment="Policy d'annulation parametrable: tiers, min/max, overrides",
     )
 

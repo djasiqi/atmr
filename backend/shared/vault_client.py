@@ -287,7 +287,7 @@ _vault_client: VaultClient | None = None
 
 def get_vault_client() -> VaultClient:
     """Récupère ou crée l'instance globale du client Vault."""
-    global _vault_client  # noqa: PLW0603
+    global _vault_client
     if _vault_client is None:
         _vault_client = VaultClient()
     return _vault_client
@@ -295,5 +295,5 @@ def get_vault_client() -> VaultClient:
 
 def reset_vault_client() -> None:
     """Réinitialise le client Vault (utile pour tests)."""
-    global _vault_client  # noqa: PLW0603
+    global _vault_client
     _vault_client = None

@@ -26,9 +26,7 @@ class TestPartnershipStatsService:
             company_id = 42
 
             with pytest.raises(StatsComputationError) as exc_info:
-                PartnershipStatsService.get_partnership_stats(
-                    partnership, company_id
-                )
+                PartnershipStatsService.get_partnership_stats(partnership, company_id)
 
         assert "Impossible de calculer les statistiques du partenariat" in str(
             exc_info.value

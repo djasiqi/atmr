@@ -1,4 +1,5 @@
 """Public platform statistics endpoint — no auth required, cached."""
+
 from __future__ import annotations
 
 import json
@@ -95,7 +96,9 @@ def _codes_from_token_string(token: str, name_to_code: dict[str, str]) -> set[st
     return out
 
 
-def _cantons_from_service_area(raw: str | None, name_to_code: dict[str, str]) -> set[str]:
+def _cantons_from_service_area(
+    raw: str | None, name_to_code: dict[str, str]
+) -> set[str]:
     """Extrait les codes canton (ISO) depuis service_area JSON V1 ou legacy CSV."""
     out: set[str] = set()
     s = (raw or "").strip()
@@ -117,7 +120,10 @@ def _cantons_from_service_area(raw: str | None, name_to_code: dict[str, str]) ->
             out.update(_codes_from_token_string(part.strip(), name_to_code))
     return out
 
-public_stats_ns = Namespace("public_stats", description="Statistiques publiques de la plateforme")
+
+public_stats_ns = Namespace(
+    "public_stats", description="Statistiques publiques de la plateforme"
+)
 
 _cache: dict | None = None
 _cache_ts: float = 0.0
@@ -126,17 +132,26 @@ CACHE_TTL = 300  # 5 minutes
 
 
 def _fetch_stats() -> dict:
-    completed = db.session.query(func.count(Booking.id)).filter(
-        Booking.status == BookingStatus.COMPLETED
-    ).scalar() or 0
+    completed = (
+        db.session.query(func.count(Booking.id))
+        .filter(Booking.status == BookingStatus.COMPLETED)
+        .scalar()
+        or 0
+    )
 
-    active_companies = db.session.query(func.count(Company.id)).filter(
-        Company.is_approved.is_(True)
-    ).scalar() or 0
+    active_companies = (
+        db.session.query(func.count(Company.id))
+        .filter(Company.is_approved.is_(True))
+        .scalar()
+        or 0
+    )
 
-    active_drivers = db.session.query(func.count(Driver.id)).filter(
-        Driver.is_active.is_(True)
-    ).scalar() or 0
+    active_drivers = (
+        db.session.query(func.count(Driver.id))
+        .filter(Driver.is_active.is_(True))
+        .scalar()
+        or 0
+    )
 
     name_to_code = _swiss_canton_name_to_code()
     cantons_served: set[str] = set()

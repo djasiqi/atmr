@@ -9,9 +9,15 @@ from sqlalchemy import text
 
 from ext import db
 
-ZONE_TRAVERSAL_CORRIDOR_METERS = float(os.getenv("PRICING_ZONE_TRAVERSAL_CORRIDOR_M", "25"))
-ZONE_TRAVERSAL_SAMPLE_STEP_METERS = float(os.getenv("PRICING_ZONE_TRAVERSAL_SAMPLE_STEP_M", "200"))
-ZONE_TRAVERSAL_SIMPLIFY_TOLERANCE = float(os.getenv("PRICING_ZONE_TRAVERSAL_SIMPLIFY_DEG", "0.0001"))
+ZONE_TRAVERSAL_CORRIDOR_METERS = float(
+    os.getenv("PRICING_ZONE_TRAVERSAL_CORRIDOR_M", "25")
+)
+ZONE_TRAVERSAL_SAMPLE_STEP_METERS = float(
+    os.getenv("PRICING_ZONE_TRAVERSAL_SAMPLE_STEP_M", "200")
+)
+ZONE_TRAVERSAL_SIMPLIFY_TOLERANCE = float(
+    os.getenv("PRICING_ZONE_TRAVERSAL_SIMPLIFY_DEG", "0.0001")
+)
 MIN_LINESTRING_COORDS = 2
 
 
@@ -29,9 +35,15 @@ def _to_geojson_linestring(route_geometry: dict[str, Any] | None) -> str | None:
         return None
     gtype = str(route_geometry.get("type") or "")
     coords = route_geometry.get("coordinates")
-    if gtype != "LineString" or not isinstance(coords, list) or len(coords) < MIN_LINESTRING_COORDS:
+    if (
+        gtype != "LineString"
+        or not isinstance(coords, list)
+        or len(coords) < MIN_LINESTRING_COORDS
+    ):
         return None
-    return json.dumps({"type": "LineString", "coordinates": coords}, separators=(",", ":"))
+    return json.dumps(
+        {"type": "LineString", "coordinates": coords}, separators=(",", ":")
+    )
 
 
 def _has_geo_unit_geom_column() -> bool:
@@ -162,7 +174,9 @@ def compute_zone_traversal(
                 "route_geojson": route_geojson,
                 "corridor_meters": max(float(corridor_meters or 0), 1.0),
                 "sample_step_m": max(float(ZONE_TRAVERSAL_SAMPLE_STEP_METERS), 25.0),
-                "simplify_tolerance": max(float(ZONE_TRAVERSAL_SIMPLIFY_TOLERANCE), 0.00001),
+                "simplify_tolerance": max(
+                    float(ZONE_TRAVERSAL_SIMPLIFY_TOLERANCE), 0.00001
+                ),
                 "zone_set_key": key_value,
             },
         ).fetchall()
@@ -198,4 +212,3 @@ def compute_zone_traversal(
         blocking_reasons=[],
         source="postgis_corridor",
     )
-

@@ -62,8 +62,7 @@ def init_or_update_config(
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Initialise ou met à jour les configurations de version "
-            "d'application"
+            "Initialise ou met à jour les configurations de version d'application"
         )
     )
     parser.add_argument(

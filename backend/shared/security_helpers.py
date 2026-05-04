@@ -23,7 +23,11 @@ def mask_ip(ip: str | None) -> str:
         return ""
 
     if IP_MASK_MODE == "full_mask":
-        return "***.***.***.***" if "." in ip else "****:****:****:****:****:****:****:****"
+        return (
+            "***.***.***.***"
+            if "." in ip
+            else "****:****:****:****:****:****:****:****"
+        )
 
     if ":" in ip:
         first_block = ip.split(":")[0]

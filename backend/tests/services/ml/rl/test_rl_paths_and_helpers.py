@@ -13,8 +13,9 @@ from services.ml.rl.rl_paths import (
 
 
 def test_rl_paths_defaults():
-    assert "dqn_agent" in get_inference_model_path() or get_inference_model_path().endswith(
-        ".pth"
+    assert (
+        "dqn_agent" in get_inference_model_path()
+        or get_inference_model_path().endswith(".pth")
     )
     assert get_training_checkpoint_load_path().endswith(".pth")
     assert "training" in get_training_checkpoint_dir()

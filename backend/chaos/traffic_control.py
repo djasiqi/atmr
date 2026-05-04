@@ -100,7 +100,7 @@ class TrafficControlManager:
             return False
         return 0.0 <= float(percent) <= MAX_PERCENT
 
-    def add_latency(self, ms: int, jitter_ms: int = 0) -> bool:  # noqa: PLR0911
+    def add_latency(self, ms: int, jitter_ms: int = 0) -> bool:
         """Ajoute de la latence réseau via TC.
 
         Args:

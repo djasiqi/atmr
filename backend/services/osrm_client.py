@@ -5,6 +5,7 @@ Ce module ré-exporte les symboles utilisés par les tests qui patchent
 (test_osrm_fallback, test_dispatch). Le code réel est dans
 services.geolocation.osrm.
 """
+
 from services.geolocation import osrm as _osrm
 
 # Symboles utilisés par les patches (tests/integration/test_osrm_fallback.py,

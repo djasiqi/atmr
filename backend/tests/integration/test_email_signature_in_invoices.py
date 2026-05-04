@@ -272,7 +272,7 @@ class TestEmailSignatureInInvoices:
             db.session.commit()
 
         html_template = (
-            '<table><tr><td><strong>{{ name }}</strong><br>{{ phone }}</td>'
+            "<table><tr><td><strong>{{ name }}</strong><br>{{ phone }}</td>"
             '<td style="border-left: 2px solid #1b4b7a;">Colonne droite</td></tr></table>'
         )
         billing_settings.email_signature_mode = "html"
@@ -421,9 +421,16 @@ class TestEmailSignatureInInvoices:
             if logo_attachment:
                 # Vérifier que c'est bien un inline (pas une pièce jointe normale)
                 assert logo_attachment.get("cid") == "company_logo"  # CID strict
-                assert logo_attachment.get("mime_type") in ["image/png", "image/jpeg", "image/gif"]
+                assert logo_attachment.get("mime_type") in [
+                    "image/png",
+                    "image/jpeg",
+                    "image/gif",
+                ]
                 assert "content" in logo_attachment
                 # Vérifier que le HTML référence bien cid:company_logo strict
-                assert 'src="cid:company_logo"' in html_sent or "cid:company_logo" in html_sent
+                assert (
+                    'src="cid:company_logo"' in html_sent
+                    or "cid:company_logo" in html_sent
+                )
                 # Note: Le payload Brevo avec inlineImage est construit dans brevo_provider
                 # et utilise contentId="company_logo" (vérifié dans le code)

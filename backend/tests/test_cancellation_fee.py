@@ -19,9 +19,27 @@ SAMPLE_POLICY = {
     "apply_when_driver_assigned_only": True,
     "tiers": [
         {"id": "t1", "type": "time", "hours_before": 2, "percent": 60, "label": "< 2h"},
-        {"id": "t2", "type": "time", "hours_before": 12, "percent": 40, "label": "< 12h"},
-        {"id": "t3", "type": "time", "hours_before": 24, "percent": 20, "label": "< 24h"},
-        {"id": "t4", "type": "status", "status": "EN_ROUTE", "percent": 70, "label": "Chauffeur en route"},
+        {
+            "id": "t2",
+            "type": "time",
+            "hours_before": 12,
+            "percent": 40,
+            "label": "< 12h",
+        },
+        {
+            "id": "t3",
+            "type": "time",
+            "hours_before": 24,
+            "percent": 20,
+            "label": "< 24h",
+        },
+        {
+            "id": "t4",
+            "type": "status",
+            "status": "EN_ROUTE",
+            "percent": 70,
+            "label": "Chauffeur en route",
+        },
     ],
     "min_fee_chf": 0,
     "max_fee_chf": None,
@@ -54,8 +72,10 @@ class TestComputeCancellationFee:
         """policy=None -> legacy reason-based, fee=0."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=datetime.now(UTC), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=datetime.now(UTC),
+            reason_code="LAST_MINUTE",
             policy=None,
         )
         assert r.is_billable is True
@@ -66,8 +86,10 @@ class TestComputeCancellationFee:
         """policy=None, non-billable reason -> is_billable=False."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=datetime.now(UTC), reason_code="COMPANY_ISSUE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=datetime.now(UTC),
+            reason_code="COMPANY_ISSUE",
             policy=None,
         )
         assert r.is_billable is False
@@ -77,8 +99,10 @@ class TestComputeCancellationFee:
         """policy.enabled=false -> same as None."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=datetime.now(UTC), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=datetime.now(UTC),
+            reason_code="LAST_MINUTE",
             policy={"enabled": False, "tiers": []},
         )
         assert r.is_billable is True
@@ -89,8 +113,10 @@ class TestComputeCancellationFee:
         """No driver + apply_when_driver_assigned_only -> is_billable=False, fee=0."""
         b = _booking(driver_id=None)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 10), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 10),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False
@@ -100,8 +126,10 @@ class TestComputeCancellationFee:
         """booking.amount=None -> is_billable=False, fee=0."""
         b = _booking(amount=None)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 10), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 10),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False
@@ -111,8 +139,10 @@ class TestComputeCancellationFee:
         """booking.amount=0 -> is_billable=False."""
         b = _booking(amount=0)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 10), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 10),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False
@@ -121,8 +151,10 @@ class TestComputeCancellationFee:
         """Cancel 30h before -> no tier matches -> fee=0, is_billable=False."""
         b = _booking(scheduled_hours_from_now=30)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 30), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 30),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False
@@ -133,8 +165,10 @@ class TestComputeCancellationFee:
         """Cancel 20h before -> tier 24h (20%) -> fee = 100 * 0.20 = 20."""
         b = _booking(amount=100, scheduled_hours_from_now=20)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 20), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 20),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is True
@@ -146,8 +180,10 @@ class TestComputeCancellationFee:
         """Cancel 10h before -> tier 12h (40%) -> fee = 100 * 0.40 = 40."""
         b = _booking(amount=100, scheduled_hours_from_now=10)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 10), reason_code="CLIENT_REQUEST",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 10),
+            reason_code="CLIENT_REQUEST",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is True
@@ -159,8 +195,10 @@ class TestComputeCancellationFee:
         """Cancel 1h before -> tier 2h (60%) -> fee = 100 * 0.60 = 60."""
         b = _booking(amount=100, scheduled_hours_from_now=5)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 1), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 1),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is True
@@ -173,8 +211,10 @@ class TestComputeCancellationFee:
         b = _booking(amount=100, scheduled_hours_from_now=-1)
         cancel_time = b.scheduled_time + timedelta(hours=1)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=cancel_time, reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=cancel_time,
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is True
@@ -185,8 +225,10 @@ class TestComputeCancellationFee:
         """EN_ROUTE -> status tier (70%) -> fee = 100 * 0.70 = 70."""
         b = _booking(amount=100, status="EN_ROUTE")
         r = compute_cancellation_fee(
-            b, status_at_cancel="EN_ROUTE",
-            cancelled_at=datetime.now(UTC), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="EN_ROUTE",
+            cancelled_at=datetime.now(UTC),
+            reason_code="LAST_MINUTE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is True
@@ -199,8 +241,10 @@ class TestComputeCancellationFee:
         policy = {**SAMPLE_POLICY, "min_fee_chf": 30}
         b = _booking(amount=100, scheduled_hours_from_now=20)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 20), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 20),
+            reason_code="LAST_MINUTE",
             policy=policy,
         )
         assert r.fee_amount == Decimal("30.00")
@@ -210,8 +254,10 @@ class TestComputeCancellationFee:
         policy = {**SAMPLE_POLICY, "max_fee_chf": 25}
         b = _booking(amount=100, scheduled_hours_from_now=10)
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 10), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 10),
+            reason_code="LAST_MINUTE",
             policy=policy,
         )
         assert r.fee_amount == Decimal("25.00")
@@ -220,8 +266,10 @@ class TestComputeCancellationFee:
         """MAJOR_DELAY override -> non-billable, fee=0."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 5), reason_code="MAJOR_DELAY",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 5),
+            reason_code="MAJOR_DELAY",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False
@@ -231,8 +279,10 @@ class TestComputeCancellationFee:
         """Cascade -> non-billable, fee=0 regardless of policy."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=datetime.now(UTC), reason_code="LAST_MINUTE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=datetime.now(UTC),
+            reason_code="LAST_MINUTE",
             cancel_source="cascade_from_outbound",
             policy=SAMPLE_POLICY,
         )
@@ -243,8 +293,10 @@ class TestComputeCancellationFee:
         """COMPANY_ISSUE (not in BILLABLE_REASONS, no override) -> non-billable."""
         b = _booking()
         r = compute_cancellation_fee(
-            b, status_at_cancel="ASSIGNED",
-            cancelled_at=_cancel_at(b, 5), reason_code="COMPANY_ISSUE",
+            b,
+            status_at_cancel="ASSIGNED",
+            cancelled_at=_cancel_at(b, 5),
+            reason_code="COMPANY_ISSUE",
             policy=SAMPLE_POLICY,
         )
         assert r.is_billable is False

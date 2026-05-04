@@ -67,7 +67,9 @@ def authenticate_api_key() -> InstitutionApiKey | None:
     if not api_key:
         logger.warning(
             "[API Key Auth] Clé invalide ou révoquée: prefix=%s",
-            raw_key[:API_KEY_PREFIX_LOG_LENGTH] if len(raw_key) > API_KEY_PREFIX_LOG_LENGTH else raw_key,
+            raw_key[:API_KEY_PREFIX_LOG_LENGTH]
+            if len(raw_key) > API_KEY_PREFIX_LOG_LENGTH
+            else raw_key,
         )
         return None
 

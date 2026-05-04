@@ -51,7 +51,9 @@ class TestInstitutionMe:
         return user
 
     @pytest.fixture
-    def institution_auth_headers(self, client, sample_institution_user, sample_institution):
+    def institution_auth_headers(
+        self, client, sample_institution_user, sample_institution
+    ):
         """Génère un token JWT valide pour un utilisateur institution."""
         claims = {
             "role": sample_institution_user.role.value,
@@ -67,7 +69,12 @@ class TestInstitutionMe:
         return {"Authorization": f"Bearer {token}"}
 
     def test_institution_me_success(
-        self, client, db, sample_institution, sample_institution_user, institution_auth_headers
+        self,
+        client,
+        db,
+        sample_institution,
+        sample_institution_user,
+        institution_auth_headers,
     ):
         """Test: un user institution peut accéder à /api/institutions/me."""
         response = client.get(

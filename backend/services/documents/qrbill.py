@@ -177,7 +177,10 @@ class QRBillService:
                         raise ValueError(error_msg)
 
                     # Vérifier format QR-IBAN (CH..3…)
-                    if not qr_iban.startswith("CH") or len(qr_iban) < QRR_MIN_IBAN_LENGTH:
+                    if (
+                        not qr_iban.startswith("CH")
+                        or len(qr_iban) < QRR_MIN_IBAN_LENGTH
+                    ):
                         error_msg = (
                             f"QR-IBAN invalide pour mode QRR: {qr_iban}. "
                             f"Un QR-IBAN doit commencer par 'CH' et avoir au moins 5 caractères. "
@@ -269,9 +272,15 @@ class QRBillService:
                 clinic = getattr(invoice, "billed_to_company", None)
                 if clinic is not None:
                     debtor_name = (getattr(clinic, "name", None) or "Clinique").strip()
-                    line1 = (getattr(clinic, "domicile_address_line1", None) or "").strip()
-                    line2 = (getattr(clinic, "domicile_address_line2", None) or "").strip()
-                    debtor_street = f"{line1} {line2}".strip() or "Adresse non renseignée"
+                    line1 = (
+                        getattr(clinic, "domicile_address_line1", None) or ""
+                    ).strip()
+                    line2 = (
+                        getattr(clinic, "domicile_address_line2", None) or ""
+                    ).strip()
+                    debtor_street = (
+                        f"{line1} {line2}".strip() or "Adresse non renseignée"
+                    )
                     debtor_pcode = getattr(clinic, "domicile_zip", None) or "1200"
                     debtor_city = getattr(clinic, "domicile_city", None) or "Genève"
 
@@ -284,10 +293,7 @@ class QRBillService:
             }
 
         # Facturation tierce : institution (bill_to_client_id)
-        if (
-            invoice.bill_to_client_id
-            and invoice.bill_to_client_id != invoice.client_id
-        ):
+        if invoice.bill_to_client_id and invoice.bill_to_client_id != invoice.client_id:
             from models import Client as ClientModel
 
             institution = ClientModel.query.get(invoice.bill_to_client_id)
@@ -321,9 +327,7 @@ class QRBillService:
             return self._get_debtor_for_institution_patient(invoice, client)
 
         debtor_name = (
-            (
-                f"{client.user.first_name or ''} {client.user.last_name or ''}"
-            ).strip()
+            (f"{client.user.first_name or ''} {client.user.last_name or ''}").strip()
             or client.user.username
             or "Client"
         )
@@ -387,15 +391,26 @@ class QRBillService:
                 from models.institution_patient import InstitutionPatient
                 from models.transport_request import TransportRequest
 
-                tr = TransportRequest.query.filter_by(
-                    institution_id=linked_inst_id,
-                ).order_by(TransportRequest.id.desc()).first()
+                tr = (
+                    TransportRequest.query.filter_by(
+                        institution_id=linked_inst_id,
+                    )
+                    .order_by(TransportRequest.id.desc())
+                    .first()
+                )
                 if tr and tr.patient_id:
                     ip = InstitutionPatient.query.get(tr.patient_id)
                     if ip:
                         if debtor_name == "Patient":
-                            debtor_name = f"{ip.first_name or ''} {ip.last_name or ''}".strip() or "Patient"
-                        addr_parts = [ip.address or "", ip.postal_code or "", ip.city or ""]
+                            debtor_name = (
+                                f"{ip.first_name or ''} {ip.last_name or ''}".strip()
+                                or "Patient"
+                            )
+                        addr_parts = [
+                            ip.address or "",
+                            ip.postal_code or "",
+                            ip.city or "",
+                        ]
                         addr_str = ", ".join(p for p in addr_parts if p)
                         if addr_str:
                             debtor_street, debtor_pcode, debtor_city = (
@@ -526,7 +541,11 @@ class QRBillService:
                 return None
 
             # Créer le QR-Bill avec la vraie bibliothèque qrbill
-            qr_amount = str(override_amount) if override_amount is not None else str(invoice.total_amount)
+            qr_amount = (
+                str(override_amount)
+                if override_amount is not None
+                else str(invoice.total_amount)
+            )
             qr_bill = QRBill(
                 account=iban_to_use,
                 creditor=creditor_data,

@@ -62,7 +62,7 @@ class SendInvoiceByEmailUseCase:
         self.brevo_provider = BrevoEmailProvider()
         self.pdf_service = PDFService()
 
-    def execute(self, input_data: SendInvoiceByEmailInput) -> SendInvoiceByEmailResult:  # noqa: PLR0911
+    def execute(self, input_data: SendInvoiceByEmailInput) -> SendInvoiceByEmailResult:
         """
         Envoie une facture par email.
 
@@ -153,9 +153,13 @@ class SendInvoiceByEmailUseCase:
                     return None
                 return str(uploads_dir / relative_path)
 
-            if invoice.status == InvoiceStatus.DRAFT and input_data.force_regenerate_pdf:
+            if (
+                invoice.status == InvoiceStatus.DRAFT
+                and input_data.force_regenerate_pdf
+            ):
                 logger.info(
-                    "Génération forcée du PDF pour la facture %s", invoice.invoice_number
+                    "Génération forcée du PDF pour la facture %s",
+                    invoice.invoice_number,
                 )
                 try:
                     pdf_url = self.pdf_service.generate_invoice_pdf(
@@ -380,7 +384,9 @@ class SendInvoiceByEmailUseCase:
 
             if billing_party:
                 recipient_name = billing_party.display_name or client_name
-                recipient_type = getattr(billing_party.type, "value", billing_party.type)
+                recipient_type = getattr(
+                    billing_party.type, "value", billing_party.type
+                )
             elif billed_company:
                 recipient_name = billed_company.name or client_name
                 recipient_type = "clinic"

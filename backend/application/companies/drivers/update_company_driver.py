@@ -119,7 +119,9 @@ class UpdateCompanyDriverUseCase:
                         try:
                             user.birth_date = _date.fromisoformat(bd_raw)
                         except ValueError:
-                            validation_error = {"error": "Format de date invalide (AAAA-MM-JJ)"}
+                            validation_error = {
+                                "error": "Format de date invalide (AAAA-MM-JJ)"
+                            }
                             validation_status = 400
                     elif isinstance(bd_raw, _date):
                         user.birth_date = bd_raw
@@ -143,7 +145,11 @@ class UpdateCompanyDriverUseCase:
         # Champs HR
         if not validation_error:
             if "contract_type" in data:
-                driver.contract_type = str(data["contract_type"]).strip() if data["contract_type"] else "CDI"
+                driver.contract_type = (
+                    str(data["contract_type"]).strip()
+                    if data["contract_type"]
+                    else "CDI"
+                )
             if "weekly_hours" in data:
                 wh = data["weekly_hours"]
                 driver.weekly_hours = int(wh) if wh else None
@@ -211,10 +217,11 @@ class UpdateCompanyDriverUseCase:
                                 company_id
                             )
                             for d in all_drivers:
-                                if (
-                                    getattr(d, "vehicle_id", None) == vehicle_id_int
-                                    and getattr(d, "id", None) != getattr(driver, "id", None)
-                                ):
+                                if getattr(
+                                    d, "vehicle_id", None
+                                ) == vehicle_id_int and getattr(
+                                    d, "id", None
+                                ) != getattr(driver, "id", None):
                                     d.vehicle_id = None
                                     d.vehicle_assigned = None
                                     d.brand = None

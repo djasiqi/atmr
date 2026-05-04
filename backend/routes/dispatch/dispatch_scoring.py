@@ -69,8 +69,12 @@ class DispatchScoringDispatchResource(Resource):
         pickup_at = booking.scheduled_time
         should_run_urgency = False
         if pickup_at:
-            pickup_at_aware = pickup_at.replace(tzinfo=UTC) if pickup_at.tzinfo is None else pickup_at
-            should_run_urgency = (pickup_at_aware - datetime.now(UTC)).total_seconds() <= 15 * 60
+            pickup_at_aware = (
+                pickup_at.replace(tzinfo=UTC) if pickup_at.tzinfo is None else pickup_at
+            )
+            should_run_urgency = (
+                pickup_at_aware - datetime.now(UTC)
+            ).total_seconds() <= 15 * 60
 
         if not created_total and should_run_urgency:
             urgent_candidates = compute_urgency_override_candidates(
@@ -88,12 +92,16 @@ class DispatchScoringDispatchResource(Resource):
                     "id": offer.id,
                     "company_id": offer.company_id,
                     "score": offer.score,
-                    "status": offer.status.value if hasattr(offer.status, "value") else offer.status,
+                    "status": offer.status.value
+                    if hasattr(offer.status, "value")
+                    else offer.status,
                     "reason_json": offer.reason_json,
                 }
                 for offer in created_total
             ],
-            "existing_offers": DispatchOffer.query.filter_by(booking_id=booking_id).count(),
+            "existing_offers": DispatchOffer.query.filter_by(
+                booking_id=booking_id
+            ).count(),
         }, HTTPStatus.OK
 
 
@@ -169,10 +177,15 @@ class DispatchOfferDeclineResource(Resource):
     @role_required(UserRole.company)
     def post(self, offer_id: int):
         company = _get_current_company()
-        offer = DispatchOffer.query.filter_by(id=offer_id, company_id=company.id).first()
+        offer = DispatchOffer.query.filter_by(
+            id=offer_id, company_id=company.id
+        ).first()
         if not offer:
             return {"error": "Offer introuvable"}, HTTPStatus.NOT_FOUND
         offer.status = DispatchOfferStatus.DECLINED
         db.session.commit()
-        return {"success": True, "offer_id": offer.id, "status": "DECLINED"}, HTTPStatus.OK
-
+        return {
+            "success": True,
+            "offer_id": offer.id,
+            "status": "DECLINED",
+        }, HTTPStatus.OK

@@ -57,7 +57,12 @@ _DEMO_USE_CASE_MAP = {
     "hospital": "reporting",
     "curatorship": "multi_company_coordination",
 }
-_DEMO_TIMING_ALLOWED = {"immediate", "one_three_months", "three_plus_months", "exploration"}
+_DEMO_TIMING_ALLOWED = {
+    "immediate",
+    "one_three_months",
+    "three_plus_months",
+    "exploration",
+}
 _DEMO_SLOT_ALLOWED = {"this_week", "next_week", "to_define"}
 _DEMO_VOLUME_ALLOWED = {"1_5", "5_20", "20_100", "100_plus"}
 
@@ -109,8 +114,12 @@ def _mirror_demo_contact_to_demo_request(
     )
     use_case = _normalize_demo_use_case(organization_type)
     timing = _normalize_demo_timing(cast(str | None, sanitized_data.get("timing")))
-    preferred_slot = _normalize_demo_slot(cast(str | None, sanitized_data.get("preferred_slot")))
-    volume_range = _normalize_demo_volume(cast(str | None, sanitized_data.get("volume_range")))
+    preferred_slot = _normalize_demo_slot(
+        cast(str | None, sanitized_data.get("preferred_slot"))
+    )
+    volume_range = _normalize_demo_volume(
+        cast(str | None, sanitized_data.get("volume_range"))
+    )
     preferred_period = "flexible"
     integration_required = "evaluate"
 
@@ -159,6 +168,7 @@ def _mirror_demo_contact_to_demo_request(
         setattr(demo_request, key, value)
     db.session.add(demo_request)
     db.session.commit()
+
 
 contact_request_model = contact_ns.model(
     "ContactRequest",
@@ -233,7 +243,9 @@ def _sanitize_payload(data: dict[str, Any]) -> dict[str, Any]:
         ),
         "organization": strip_control_characters(
             sanitize_string(
-                data.get("organization") or data.get("company"), max_length=180, strip_html=True
+                data.get("organization") or data.get("company"),
+                max_length=180,
+                strip_html=True,
             )
         ),
         "message": strip_control_characters(
@@ -252,10 +264,14 @@ def _sanitize_payload(data: dict[str, Any]) -> dict[str, Any]:
         ),
         "integration_required": data.get("integration_required"),
         "integration_system": strip_control_characters(
-            sanitize_string(data.get("integration_system"), max_length=120, strip_html=True)
+            sanitize_string(
+                data.get("integration_system"), max_length=120, strip_html=True
+            )
         ),
         "fleet_size_range": strip_control_characters(
-            sanitize_string(data.get("fleet_size_range"), max_length=64, strip_html=True)
+            sanitize_string(
+                data.get("fleet_size_range"), max_length=64, strip_html=True
+            )
         ),
         "service_area": strip_control_characters(
             sanitize_string(data.get("service_area"), max_length=160, strip_html=True)
@@ -270,7 +286,9 @@ def _sanitize_payload(data: dict[str, Any]) -> dict[str, Any]:
             sanitize_string(data.get("website"), max_length=256, strip_html=True)
         ),
         "client_request_id": strip_control_characters(
-            sanitize_string(data.get("client_request_id"), max_length=64, strip_html=True)
+            sanitize_string(
+                data.get("client_request_id"), max_length=64, strip_html=True
+            )
         ),
     }
 
@@ -288,7 +306,9 @@ def _acquire_email_send_lock(dedupe_hash: str | None, trace_id: str) -> bool:
     return bool(redis_client.set(lock_key, trace_id, ex=120, nx=True))
 
 
-def _has_sent_for_hash(dedupe_hash: str, current_id: int, within_minutes: int = 5) -> bool:
+def _has_sent_for_hash(
+    dedupe_hash: str, current_id: int, within_minutes: int = 5
+) -> bool:
     window_start = datetime.now(UTC) - timedelta(minutes=within_minutes)
     existing = (
         ContactRequest.query.filter(ContactRequest.dedupe_hash == dedupe_hash)
@@ -323,7 +343,7 @@ class ContactRequests(Resource):
     @contact_ns.response(400, "Requete invalide")
     @contact_ns.response(429, "Trop de requetes")
     @limiter.limit("30 per day")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         payload = request.get_json(silent=True) or {}
 
         try:
@@ -336,12 +356,17 @@ class ContactRequests(Resource):
         ip_address = _get_ip_address()
         ip_hash = _hash_ip(ip_address)
         category = str(data.get("category"))
-        if ip_hash and (hit_rate_limit(ip_hash, category) or in_cooldown(ip_hash, category)):
+        if ip_hash and (
+            hit_rate_limit(ip_hash, category) or in_cooldown(ip_hash, category)
+        ):
             return {"error": "rate_limited", "message": "Trop de requetes."}, 429
 
         sanitized_data = _sanitize_payload(data)
         if not sanitized_data["email"]:
-            return {"error": "validation_error", "message": "Adresse email invalide."}, 400
+            return {
+                "error": "validation_error",
+                "message": "Adresse email invalide.",
+            }, 400
 
         trace_id = _generate_trace_id()
         auth_context = _extract_optional_auth_context()
@@ -441,9 +466,9 @@ class ContactRequests(Resource):
             db.session.add(contact_request)
             db.session.commit()
 
-            if _has_sent_for_hash(dedupe_hash, contact_request.id) or not _acquire_email_send_lock(
-                dedupe_hash, trace_id
-            ):
+            if _has_sent_for_hash(
+                dedupe_hash, contact_request.id
+            ) or not _acquire_email_send_lock(dedupe_hash, trace_id):
                 contact_request.email_delivery_status = "suppressed_duplicate"
                 contact_request.status = "triaged"
                 db.session.commit()

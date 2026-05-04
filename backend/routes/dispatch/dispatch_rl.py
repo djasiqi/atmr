@@ -237,9 +237,7 @@ class RLDispatchSuggestions(Resource):
                                     metric.company_id = int(company.id)
                                     metric.suggestion_id = suggestion_id
                                     metric.booking_id = suggestion["booking_id"]
-                                    metric.assignment_id = suggestion[
-                                        "assignment_id"
-                                    ]
+                                    metric.assignment_id = suggestion["assignment_id"]
                                     metric.current_driver_id = suggestion[
                                         "current_driver_id"
                                     ]

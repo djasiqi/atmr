@@ -72,4 +72,3 @@ class ClinicBillingPartyMapping(db.Model):
             name="uq_clinic_billing_party_mapping_company_clinic",
         ),
     )
-

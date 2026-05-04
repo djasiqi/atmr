@@ -1,4 +1,3 @@
-
 """add_preferential_rate_to_company
 
 Revision ID: b59281cc564a
@@ -6,6 +5,7 @@ Revises: c9d8e7f6a5b4
 Create Date: 2026-01-23 13:54:18.784885
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -329,4 +329,3 @@ def downgrade():
 
     """
     # ### end Alembic commands ###
-

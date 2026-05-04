@@ -114,8 +114,7 @@ class ListInvoicesUseCase:
                 success=False,
                 error={
                     "per_page": (
-                        f"Le nombre par page doit être entre 1 et "
-                        f"{self.MAX_PER_PAGE}"
+                        f"Le nombre par page doit être entre 1 et {self.MAX_PER_PAGE}"
                     )
                 },
                 status_code=400,

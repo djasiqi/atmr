@@ -112,9 +112,9 @@ def _ensure_client(company: Company, email: str) -> Client:
         role=UserRole.CLIENT,
         password="Client1234!",
     )
-    client = (
-        Client.query.filter(Client.user_id == user.id, Client.company_id == company.id).first()
-    )
+    client = Client.query.filter(
+        Client.user_id == user.id, Client.company_id == company.id
+    ).first()
     if client:
         return client
     client = Client(
@@ -207,7 +207,9 @@ def _print_summary(company: Company, reviewer_user: User) -> None:
     print(f"- Company: {company.name} (id={company.id})")
     print(f"- Reviewer: {reviewer_user.email}")
     print("- MFA mobile company: disabled")
-    print(f"- Dataset: {clients_count} client(s), {drivers_count} driver(s), {bookings_count} booking(s)")
+    print(
+        f"- Dataset: {clients_count} client(s), {drivers_count} driver(s), {bookings_count} booking(s)"
+    )
     print("Vérification J+7 recommandée: J0/J+1/J+3/J+7 (login + rides + action).")
 
 
@@ -274,7 +276,9 @@ def verify_only() -> int:
         print("Reviewer company introuvable.")
         return 1
     security = company.get_autonomous_config().get("security", {})
-    mobile_mfa_required = bool((security.get("mobile_mfa") or {}).get("required", False))
+    mobile_mfa_required = bool(
+        (security.get("mobile_mfa") or {}).get("required", False)
+    )
     if mobile_mfa_required:
         print("Reviewer company invalide: mobile_mfa.required=true.")
         return 1
@@ -284,7 +288,9 @@ def verify_only() -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Provision reviewer company + dataset")
-    parser.add_argument("--verify-only", action="store_true", help="Vérifie la configuration existante")
+    parser.add_argument(
+        "--verify-only", action="store_true", help="Vérifie la configuration existante"
+    )
     args = parser.parse_args()
 
     app = create_app()

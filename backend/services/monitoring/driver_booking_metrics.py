@@ -23,11 +23,11 @@ _BOOKINGS_SINCE_TRIGGERS: frozenset[str] = frozenset(
     }
 )
 
-_BOOKINGS_SINCE_REQUESTS: "Counter | None" = None
-_BOOKINGS_SINCE_DURATION: "Histogram | None" = None
+_BOOKINGS_SINCE_REQUESTS: Counter | None = None
+_BOOKINGS_SINCE_DURATION: Histogram | None = None
 
 
-def _get_bookings_since_metrics() -> tuple["Counter | None", "Histogram | None"]:
+def _get_bookings_since_metrics() -> tuple[Counter | None, Histogram | None]:
     global _BOOKINGS_SINCE_REQUESTS, _BOOKINGS_SINCE_DURATION
     if Counter is None or Histogram is None:
         return None, None
@@ -57,7 +57,9 @@ def normalize_bookings_since_trigger(header_val: str | None) -> str:
     return "unknown"
 
 
-def observe_driver_bookings_since_request(*, trigger_reason: str, duration_seconds: float) -> None:
+def observe_driver_bookings_since_request(
+    *, trigger_reason: str, duration_seconds: float
+) -> None:
     """Compteur + histogramme pour une requête GET /me/bookings/since terminée."""
     tr = trigger_reason if trigger_reason in _BOOKINGS_SINCE_TRIGGERS else "unknown"
     c, h = _get_bookings_since_metrics()
@@ -66,10 +68,11 @@ def observe_driver_bookings_since_request(*, trigger_reason: str, duration_secon
     if h is not None:
         h.labels(trigger_reason=tr).observe(max(0.0, float(duration_seconds)))
 
-_DRIVER_BOOKING_STATUS_FORBIDDEN: "Counter | None" = None
+
+_DRIVER_BOOKING_STATUS_FORBIDDEN: Counter | None = None
 
 
-def _get_forbidden_counter() -> "Counter | None":
+def _get_forbidden_counter() -> Counter | None:
     global _DRIVER_BOOKING_STATUS_FORBIDDEN
     if Counter is None:
         return None
@@ -90,10 +93,10 @@ def inc_driver_booking_status_forbidden(code: str) -> None:
     c.labels(code=code).inc()
 
 
-_REASSIGN_FANOUT: "Counter | None" = None
+_REASSIGN_FANOUT: Counter | None = None
 
 
-def _get_reassign_fanout_counter() -> "Counter | None":
+def _get_reassign_fanout_counter() -> Counter | None:
     global _REASSIGN_FANOUT
     if Counter is None:
         return None

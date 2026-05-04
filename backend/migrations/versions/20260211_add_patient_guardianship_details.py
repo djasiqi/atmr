@@ -51,8 +51,7 @@ def upgrade():
         "IS 'Organisation du curateur (OPAD Genève, Étude Me. Dupont, etc.)';"
     )
     op.execute(
-        "COMMENT ON COLUMN institution_patients.guardian_email "
-        "IS 'Email du curateur';"
+        "COMMENT ON COLUMN institution_patients.guardian_email IS 'Email du curateur';"
     )
     op.execute(
         "COMMENT ON COLUMN institution_patients.guardian_address "
@@ -61,7 +60,13 @@ def upgrade():
 
 
 def downgrade():
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardianship_type;")
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_organization;")
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardianship_type;"
+    )
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_organization;"
+    )
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_email;")
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_address;")
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_address;"
+    )

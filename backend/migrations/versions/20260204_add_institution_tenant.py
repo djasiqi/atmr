@@ -47,9 +47,7 @@ def upgrade():
 
     # 2. Ajouter les colonnes institution_id et institution_role à la table user
     with op.batch_alter_table("user", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("institution_id", sa.Integer(), nullable=True)
-        )
+        batch_op.add_column(sa.Column("institution_id", sa.Integer(), nullable=True))
         batch_op.add_column(
             sa.Column("institution_role", sa.String(length=50), nullable=True)
         )

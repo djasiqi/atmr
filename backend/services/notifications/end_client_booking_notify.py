@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 _EndClientMilestone = Literal["company_accepted", "driver_assigned", "en_route"]
 
 
-def _client_user_public_id_for_booking(booking: Any) -> str | None:  # noqa: PLR0911
+def _client_user_public_id_for_booking(booking: Any) -> str | None:
     from models import Client, User
 
     cid = getattr(booking, "client_id", None)

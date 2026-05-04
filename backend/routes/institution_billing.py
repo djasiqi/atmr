@@ -223,7 +223,9 @@ class RequestBillingUpdate(Resource):
                 "success": True,
                 "billing_intent": transport_req.billing_intent,
                 "billing_details": transport_req.billing_details,
-                "updated_at": transport_req.updated_at.isoformat() if transport_req.updated_at else None,
+                "updated_at": transport_req.updated_at.isoformat()
+                if transport_req.updated_at
+                else None,
             }
 
         except Exception as e:

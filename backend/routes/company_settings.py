@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from http import HTTPStatus
-from typing import Any, Optional
+from typing import Any
 
 from flask import request
 from flask_jwt_extended import jwt_required
@@ -74,7 +74,8 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
     version = profile.current_version
     if not version:
         version = (
-            profile.versions and sorted(profile.versions, key=lambda v: int(v.version), reverse=True)[0]
+            profile.versions
+            and sorted(profile.versions, key=lambda v: int(v.version), reverse=True)[0]
         ) or None
     if not version:
         return {
@@ -88,7 +89,9 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
         }
 
     rules = version.rules_json or {}
-    model = str(rules.get("model") or (profile.model_type.value if profile.model_type else "")).lower()
+    model = str(
+        rules.get("model") or (profile.model_type.value if profile.model_type else "")
+    ).lower()
     currency = profile.currency or "CHF"
 
     details: dict[str, object] = {}
@@ -98,7 +101,9 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
         label = "Prix fixe (canton/zone)"
         if isinstance(rules.get("components"), dict):
             details = {
-                "base_fee": _to_float_or_none((rules.get("components") or {}).get("base", {}).get("amount")),
+                "base_fee": _to_float_or_none(
+                    (rules.get("components") or {}).get("base", {}).get("amount")
+                ),
                 "minimum": _to_float_or_none((rules.get("caps") or {}).get("minimum")),
                 "zone_set_id": rules.get("zone_set_id"),
             }
@@ -109,7 +114,8 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
             }
     elif model in {"zone", "zone_matrix"}:
         if model == "zone_matrix" or (
-            isinstance(rules.get("zones"), list) and isinstance(rules.get("matrix"), dict)
+            isinstance(rules.get("zones"), list)
+            and isinstance(rules.get("matrix"), dict)
         ):
             matrix_summary = build_zone_matrix_summary(rules)
             label = "Matrice de zones"
@@ -117,7 +123,9 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
                 "zones_count": matrix_summary.get("zones_count", 0),
                 "transitions_count": matrix_summary.get("transitions_count", 0),
                 "matrix_symmetry": bool(rules.get("matrix_symmetry", False)),
-                "default_same_zone_price": _to_float_or_none(rules.get("default_same_zone_price")),
+                "default_same_zone_price": _to_float_or_none(
+                    rules.get("default_same_zone_price")
+                ),
                 "minimum": _to_float_or_none(rules.get("minimum")),
             }
             model = "zone_matrix"
@@ -128,17 +136,25 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
             label = "Prix par zone"
             details = {
                 "weekday_one_way": _to_float_or_none((weekday or {}).get("one_way")),
-                "weekday_round_trip": _to_float_or_none((weekday or {}).get("round_trip")),
+                "weekday_round_trip": _to_float_or_none(
+                    (weekday or {}).get("round_trip")
+                ),
                 "weekend_one_way": _to_float_or_none((weekend or {}).get("one_way")),
-                "weekend_round_trip": _to_float_or_none((weekend or {}).get("round_trip")),
+                "weekend_round_trip": _to_float_or_none(
+                    (weekend or {}).get("round_trip")
+                ),
                 "minimum": _to_float_or_none(rules.get("minimum")),
             }
     elif model == "distance":
         label = "Prix au km"
         if isinstance(rules.get("components"), dict):
             details = {
-                "base_fee": _to_float_or_none((rules.get("components") or {}).get("base", {}).get("amount")),
-                "per_km": _to_float_or_none((rules.get("components") or {}).get("distance", {}).get("per_km")),
+                "base_fee": _to_float_or_none(
+                    (rules.get("components") or {}).get("base", {}).get("amount")
+                ),
+                "per_km": _to_float_or_none(
+                    (rules.get("components") or {}).get("distance", {}).get("per_km")
+                ),
                 "minimum": _to_float_or_none((rules.get("caps") or {}).get("minimum")),
                 "zone_set_id": rules.get("zone_set_id"),
             }
@@ -151,9 +167,15 @@ def _build_pricing_summary(company_id: int) -> dict[str, object] | None:
     elif model in {"zone_count", "hybrid_stack"}:
         label = "Tarification par zones admin"
         details = {
-            "base_fee": _to_float_or_none((rules.get("components") or {}).get("base", {}).get("amount")),
-            "zone_unit": _to_float_or_none((rules.get("components") or {}).get("zone_count", {}).get("unit_price")),
-            "per_km": _to_float_or_none((rules.get("components") or {}).get("distance", {}).get("per_km")),
+            "base_fee": _to_float_or_none(
+                (rules.get("components") or {}).get("base", {}).get("amount")
+            ),
+            "zone_unit": _to_float_or_none(
+                (rules.get("components") or {}).get("zone_count", {}).get("unit_price")
+            ),
+            "per_km": _to_float_or_none(
+                (rules.get("components") or {}).get("distance", {}).get("per_km")
+            ),
             "minimum": _to_float_or_none((rules.get("caps") or {}).get("minimum")),
             "zone_set_id": rules.get("zone_set_id"),
         }
@@ -222,7 +244,9 @@ def _validate_service_area_value(value: object) -> str:
     if not text:
         return ""
     if len(text) > SERVICE_AREA_MAX_LENGTH:
-        raise ValueError(f"service_area dépasse la taille maximale ({SERVICE_AREA_MAX_LENGTH}).")
+        raise ValueError(
+            f"service_area dépasse la taille maximale ({SERVICE_AREA_MAX_LENGTH})."
+        )
 
     # Legacy: accepter en lecture/écriture, sans normalisation forcée côté backend.
     try:
@@ -249,16 +273,31 @@ def _validate_service_area_value(value: object) -> str:
     if any(not SERVICE_AREA_TOKEN_PATTERN.match(token) for token in norm_tokens):
         raise ValueError("service_area JSON invalide: token non canonique.")
     if mode in {"canton", "district"} and len(norm_tokens) != 1:
-        raise ValueError("service_area JSON invalide: canton/district accepte un seul token.")
-    if mode == "commune" and any(not token.startswith("commune:") for token in norm_tokens):
-        raise ValueError("service_area JSON invalide: mode commune incompatible avec tokens.")
-    if mode == "canton" and any(not token.startswith("canton:") for token in norm_tokens):
-        raise ValueError("service_area JSON invalide: mode canton incompatible avec tokens.")
-    if mode == "district" and any(not token.startswith("district:") for token in norm_tokens):
-        raise ValueError("service_area JSON invalide: mode district incompatible avec tokens.")
+        raise ValueError(
+            "service_area JSON invalide: canton/district accepte un seul token."
+        )
+    if mode == "commune" and any(
+        not token.startswith("commune:") for token in norm_tokens
+    ):
+        raise ValueError(
+            "service_area JSON invalide: mode commune incompatible avec tokens."
+        )
+    if mode == "canton" and any(
+        not token.startswith("canton:") for token in norm_tokens
+    ):
+        raise ValueError(
+            "service_area JSON invalide: mode canton incompatible avec tokens."
+        )
+    if mode == "district" and any(
+        not token.startswith("district:") for token in norm_tokens
+    ):
+        raise ValueError(
+            "service_area JSON invalide: mode district incompatible avec tokens."
+        )
 
     canonical = {"v": SERVICE_AREA_JSON_VERSION, "mode": mode, "tokens": norm_tokens}
     return json.dumps(canonical, ensure_ascii=False, separators=(",", ":"))
+
 
 settings_ns = Namespace("company-settings", description="Paramètres avancés entreprise")
 
@@ -343,7 +382,8 @@ billing_settings_model = settings_ns.model(
             description="Résumé du pricing actif (flat/zone/distance)", allow_null=True
         ),
         "rules_json": fields.Raw(
-            description="Règles de tarification complètes (pricing profile version)", allow_null=True
+            description="Règles de tarification complètes (pricing profile version)",
+            allow_null=True,
         ),
         "active_pricing_profile_id": fields.Integer(
             description="ID du pricing profile actif", allow_null=True
@@ -395,7 +435,8 @@ service_area_create_model = settings_ns.model(
     {
         "geo_unit_id": fields.Integer(required=True),
         "coverage_mode": fields.String(
-            required=True, enum=["A_STRICT", "B_PICKUP_ONLY", "C_INTRA_ONLY", "D_NATIONAL"]
+            required=True,
+            enum=["A_STRICT", "B_PICKUP_ONLY", "C_INTRA_ONLY", "D_NATIONAL"],
         ),
         "weight": fields.Integer(required=False),
         "is_active": fields.Boolean(required=False),
@@ -448,7 +489,9 @@ def _get_or_create_active_pricing_profile(company_id: int) -> PricingProfile:
     return profile
 
 
-def _get_current_pricing_version(profile: PricingProfile) -> PricingProfileVersion | None:
+def _get_current_pricing_version(
+    profile: PricingProfile,
+) -> PricingProfileVersion | None:
     if profile.current_version:
         return profile.current_version
     if profile.versions:
@@ -456,7 +499,9 @@ def _get_current_pricing_version(profile: PricingProfile) -> PricingProfileVersi
     return None
 
 
-def _build_default_zone_matrix_rules(existing: dict[str, Any] | None = None) -> dict[str, Any]:
+def _build_default_zone_matrix_rules(
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     base = dict(existing or {})
     base.setdefault("model", "zone_matrix")
     base.setdefault("zones", [])
@@ -547,7 +592,9 @@ class OperationalSettings(Resource):
 
         try:
             if "service_area" in data:
-                company.service_area = _validate_service_area_value(data["service_area"])
+                company.service_area = _validate_service_area_value(
+                    data["service_area"]
+                )
             if "max_daily_bookings" in data:
                 company.max_daily_bookings = int(data["max_daily_bookings"])
             if "dispatch_enabled" in data:
@@ -565,7 +612,13 @@ class OperationalSettings(Resource):
             )
 
             from shared.audit_helpers import audit_log
-            audit_log("settings_updated", "settings", resource_type="operational_settings", resource_id=company.id)
+
+            audit_log(
+                "settings_updated",
+                "settings",
+                resource_type="operational_settings",
+                resource_id=company.id,
+            )
 
             return {
                 "success": True,
@@ -580,7 +633,9 @@ class OperationalSettings(Resource):
             }, 200
         except ValueError as exc:
             db.session.rollback()
-            return APIErrorHandler.handle_validation_error(str(exc), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(exc), logger_instance=logger
+            )
         except Exception as e:
             db.session.rollback()
             logger.error("[Settings] Error updating operational settings: %s", e)
@@ -611,13 +666,17 @@ class ServiceAreasResource(Resource):
     def get(self):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
         items = (
             ServiceArea.query.filter_by(company_id=company.id)
             .order_by(ServiceArea.id.desc())
             .all()
         )
-        return {"items": [_serialize_service_area(item) for item in items]}, HTTPStatus.OK
+        return {
+            "items": [_serialize_service_area(item) for item in items]
+        }, HTTPStatus.OK
 
     @jwt_required()
     @role_required(UserRole.company)
@@ -625,12 +684,16 @@ class ServiceAreasResource(Resource):
     def post(self):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
         payload = request.get_json(silent=True) or {}
         try:
             data = validate_request(ServiceAreaCreateSchema(), payload)
         except Exception as exc:
-            return APIErrorHandler.handle_validation_error(str(exc), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(exc), logger_instance=logger
+            )
 
         geo_unit = GeoUnit.query.filter_by(id=data["geo_unit_id"]).first()
         if not geo_unit:
@@ -665,15 +728,21 @@ class ServiceAreaByIdResource(Resource):
     def put(self, service_area_id: int):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
-        item = ServiceArea.query.filter_by(id=service_area_id, company_id=company.id).first()
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
+        item = ServiceArea.query.filter_by(
+            id=service_area_id, company_id=company.id
+        ).first()
         if not item:
             return {"error": "ServiceArea introuvable"}, HTTPStatus.NOT_FOUND
         payload = request.get_json(silent=True) or {}
         try:
             data = validate_request(ServiceAreaUpdateSchema(), payload)
         except Exception as exc:
-            return APIErrorHandler.handle_validation_error(str(exc), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(exc), logger_instance=logger
+            )
 
         if "coverage_mode" in data:
             item.coverage_mode = data["coverage_mode"]
@@ -689,8 +758,12 @@ class ServiceAreaByIdResource(Resource):
     def delete(self, service_area_id: int):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
-        item = ServiceArea.query.filter_by(id=service_area_id, company_id=company.id).first()
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
+        item = ServiceArea.query.filter_by(
+            id=service_area_id, company_id=company.id
+        ).first()
         if not item:
             return {"error": "ServiceArea introuvable"}, HTTPStatus.NOT_FOUND
         db.session.delete(item)
@@ -705,11 +778,15 @@ class PricingZonesSettingsResource(Resource):
     def get(self):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
 
         profile = _get_or_create_active_pricing_profile(company.id)
         version = _get_current_pricing_version(profile)
-        rules = _build_default_zone_matrix_rules(version.rules_json if version else None)
+        rules = _build_default_zone_matrix_rules(
+            version.rules_json if version else None
+        )
         if version and version.rules_json:
             rules = dict(version.rules_json)
         rules = _build_default_zone_matrix_rules(rules)
@@ -727,18 +804,26 @@ class PricingZonesSettingsResource(Resource):
     def put(self):
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
 
         payload = request.get_json(silent=True) or {}
         try:
             data = validate_request(PricingZoneMatrixSettingsSchema(), payload)
             normalized_rules = validate_zone_matrix_rules(data)
         except Exception as exc:
-            return APIErrorHandler.handle_validation_error(str(exc), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(exc), logger_instance=logger
+            )
 
         profile = _get_or_create_active_pricing_profile(company.id)
         current_version = _get_current_pricing_version(profile)
-        existing_rules = current_version.rules_json if current_version and current_version.rules_json else {}
+        existing_rules = (
+            current_version.rules_json
+            if current_version and current_version.rules_json
+            else {}
+        )
         merged_rules = dict(existing_rules or {})
         merged_rules.update(normalized_rules)
 
@@ -940,12 +1025,14 @@ class BillingSettings(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @settings_ns.expect(billing_settings_model, validate=False)
-    def put(self):  # noqa: PLR0911
+    def put(self):
         """Mettre à jour les paramètres de facturation."""
         logger.info("[Settings] PUT /billing handler entered")
         company, err, code = get_company_from_token()
         if err:
-            logger.warning("[Settings] PUT /billing company error: %s (code=%s)", err, code)
+            logger.warning(
+                "[Settings] PUT /billing company error: %s (code=%s)", err, code
+            )
             error_msg = err.get("error", "Company not found")
             error_response, status_code = (
                 APIErrorHandler.handle_not_found(
@@ -1122,9 +1209,13 @@ class BillingSettings(Resource):
                 elif raw_policy is None:
                     billing.cancellation_policy = None
                     from sqlalchemy.orm.attributes import flag_modified
+
                     flag_modified(billing, "cancellation_policy")
                 else:
-                    from marshmallow import ValidationError as MarshmallowValidationError  # noqa: I001
+                    from marshmallow import (
+                        ValidationError as MarshmallowValidationError,
+                    )
+
                     from application.bookings.cancellation_policy_schema import (
                         CancellationPolicySchema,
                     )
@@ -1144,6 +1235,7 @@ class BillingSettings(Resource):
                         }, 400
 
                     from sqlalchemy.orm.attributes import flag_modified
+
                     flag_modified(billing, "cancellation_policy")
 
             for field in updatable_fields:
@@ -1195,7 +1287,14 @@ class BillingSettings(Resource):
                     # (doit être un dict)
                     if field == "reminder_schedule_days" and isinstance(value, dict):
                         existing = billing.reminder_schedule_days or {}
-                        merged = {**existing, **{str(k): int(v) for k, v in value.items() if v is not None}}  # type: ignore[arg-type]
+                        merged = {
+                            **existing,
+                            **{
+                                str(k): int(v)
+                                for k, v in value.items()
+                                if v is not None
+                            },
+                        }  # type: ignore[arg-type]
                         setattr(billing, field, merged)
                     else:
                         setattr(billing, field, value)
@@ -1203,15 +1302,22 @@ class BillingSettings(Resource):
             rules_payload = data.get("rules_json")
             if rules_payload is not None:
                 if not isinstance(rules_payload, dict):
-                    return {"success": False, "error": "rules_json doit être un objet JSON"}, 400
+                    return {
+                        "success": False,
+                        "error": "rules_json doit être un objet JSON",
+                    }, 400
                 try:
                     normalized_rules = validate_company_pricing_rules(rules_payload)
                 except Exception as exc:
-                    return APIErrorHandler.handle_validation_error(str(exc), logger_instance=logger)
+                    return APIErrorHandler.handle_validation_error(
+                        str(exc), logger_instance=logger
+                    )
 
                 profile = _get_or_create_active_pricing_profile(company.id)
                 current_version = _get_current_pricing_version(profile)
-                next_version = int(current_version.version) + 1 if current_version else 1
+                next_version = (
+                    int(current_version.version) + 1 if current_version else 1
+                )
                 model_value = str(normalized_rules.get("model") or "").lower()
                 if model_value == "flat":
                     profile.model_type = PricingModelType.FLAT
@@ -1274,9 +1380,15 @@ class BillingSettings(Resource):
             # Log structure des champs mis a jour (toujours actif)
             all_tracked = [
                 *updatable_fields,
-                "iban", "qr_iban", "esr_ref_base", "smtp_password",
-                "cancellation_policy", "vat_applicable", "vat_rate",
-                "vat_label", "vat_number",
+                "iban",
+                "qr_iban",
+                "esr_ref_base",
+                "smtp_password",
+                "cancellation_policy",
+                "vat_applicable",
+                "vat_rate",
+                "vat_label",
+                "vat_number",
             ]
             fields_received = [f for f in all_tracked if f in data]
             logger.info(
@@ -1319,7 +1431,9 @@ class BillingSettings(Resource):
 
             # ✅ Aligner company.iban + CompanyBillingProfile (QR) sur les paramètres billing
             if "iban" in data or "qr_iban" in data:
-                from services.billing.banking_identifiers_sync import sync_banking_identifiers
+                from services.billing.banking_identifiers_sync import (
+                    sync_banking_identifiers,
+                )
 
                 sync_banking_identifiers(company, source="billing_settings")
 
@@ -1369,7 +1483,13 @@ class BillingSettings(Resource):
                 )
 
             from shared.audit_helpers import audit_log
-            audit_log("settings_updated", "settings", resource_type="billing_settings", resource_id=company.id)
+
+            audit_log(
+                "settings_updated",
+                "settings",
+                resource_type="billing_settings",
+                resource_id=company.id,
+            )
 
             return {
                 "success": True,
@@ -1526,7 +1646,7 @@ class ClinicBillingMappings(Resource):
             clinic = Company.query.filter_by(id=m.clinic_company_id).first()
             bp = BillingParty.query.filter_by(id=m.billing_party_id).first()
             clinic_display_name = clinic.name if clinic else None
-            linked_client: Optional[Client] = None
+            linked_client: Client | None = None
             if clinic and company:
                 # `clinic` = Company (entité facturation clinique), pas la table institutions
                 linked_client = Client.query.filter_by(
@@ -1541,10 +1661,7 @@ class ClinicBillingMappings(Resource):
             preferential_rate_chf: float | None = None
             if clinic and clinic.preferential_rate is not None:
                 preferential_rate_chf = float(clinic.preferential_rate)
-            elif (
-                linked_client
-                and linked_client.preferential_rate is not None
-            ):
+            elif linked_client and linked_client.preferential_rate is not None:
                 preferential_rate_chf = float(linked_client.preferential_rate)
             payload.append(
                 {
@@ -1561,7 +1678,7 @@ class ClinicBillingMappings(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    def put(self):  # noqa: PLR0911
+    def put(self):
         """Créer/mettre à jour un mapping clinique → billing_party (upsert)."""
         company, err, code = get_company_from_token()
         if err:
@@ -1666,7 +1783,7 @@ class ClinicBillingMappingByClinic(Resource):
         clinic = Company.query.filter_by(id=mapping.clinic_company_id).first()
         bp = BillingParty.query.filter_by(id=mapping.billing_party_id).first()
         clinic_display_name = clinic.name if clinic else None
-        linked_client: Optional[Client] = None
+        linked_client: Client | None = None
         if clinic and company:
             linked_client = Client.query.filter_by(
                 company_id=company.id,
@@ -1678,10 +1795,7 @@ class ClinicBillingMappingByClinic(Resource):
         preferential_rate_chf: float | None = None
         if clinic and clinic.preferential_rate is not None:
             preferential_rate_chf = float(clinic.preferential_rate)
-        elif (
-            linked_client
-            and linked_client.preferential_rate is not None
-        ):
+        elif linked_client and linked_client.preferential_rate is not None:
             preferential_rate_chf = float(linked_client.preferential_rate)
 
         payload = {
@@ -1730,7 +1844,7 @@ class BillingParties(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Créer un BillingParty (V1) depuis le backoffice."""
         company, err, code = get_company_from_token()
         if err:

@@ -688,7 +688,9 @@ def track_driver_booking_status_update(idempotency_status: str) -> None:
     if not PROMETHEUS_AVAILABLE or not DRIVER_BOOKING_STATUS_UPDATES:
         return
     try:
-        DRIVER_BOOKING_STATUS_UPDATES.labels(idempotency_status=idempotency_status).inc()
+        DRIVER_BOOKING_STATUS_UPDATES.labels(
+            idempotency_status=idempotency_status
+        ).inc()
     except Exception as e:
         logger.debug("[PrometheusMetrics] Error tracking status update: %s", e)
 
@@ -837,7 +839,9 @@ def observe_notification_kafka_enqueue_latency(*, status: str, seconds: float) -
     if not PROMETHEUS_AVAILABLE or not NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS:
         return
     try:
-        NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS.labels(status=status).observe(seconds)
+        NOTIFICATION_KAFKA_ENQUEUE_LATENCY_SECONDS.labels(status=status).observe(
+            seconds
+        )
     except Exception as e:
         logger.debug("[PrometheusMetrics] notification_kafka_enqueue_latency: %s", e)
 

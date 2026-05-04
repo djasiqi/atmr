@@ -43,8 +43,7 @@ from models import Invoice
 from models.enums import InvoiceStatus
 
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -60,10 +59,18 @@ def parse_args():
     parser.add_argument("--company-id", type=int, help="ID de la company")
     parser.add_argument("--from-date", type=str, help="Date de début (YYYY-MM-DD)")
     parser.add_argument("--to-date", type=str, help="Date de fin (YYYY-MM-DD)")
-    parser.add_argument("--invoice-ids", type=str, help="IDs spécifiques (ex: 342,345,350)")
-    parser.add_argument("--fix", action="store_true", help="Exécuter les corrections (sinon dry-run)")
-    parser.add_argument("--include-sent", action="store_true", help="Inclure les factures SENT (risqué)")
-    parser.add_argument("--limit", type=int, default=100, help="Nombre max de factures à corriger")
+    parser.add_argument(
+        "--invoice-ids", type=str, help="IDs spécifiques (ex: 342,345,350)"
+    )
+    parser.add_argument(
+        "--fix", action="store_true", help="Exécuter les corrections (sinon dry-run)"
+    )
+    parser.add_argument(
+        "--include-sent", action="store_true", help="Inclure les factures SENT (risqué)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=100, help="Nombre max de factures à corriger"
+    )
     parser.add_argument("--export", type=str, help="Exporter le rapport en JSON")
     return parser.parse_args()
 
@@ -212,7 +219,11 @@ def repair_invoice_totals(invoice_id: int, dry_run: bool = True) -> dict[str, An
     """
     invoice = db.session.get(Invoice, invoice_id)
     if not invoice:
-        return {"status": "error", "invoice_id": invoice_id, "reason": "invoice_not_found"}
+        return {
+            "status": "error",
+            "invoice_id": invoice_id,
+            "reason": "invoice_not_found",
+        }
 
     old_values = {
         "subtotal_amount": float(invoice.subtotal_amount or Decimal("0")),
@@ -225,7 +236,11 @@ def repair_invoice_totals(invoice_id: int, dry_run: bool = True) -> dict[str, An
     result = recompute_invoice_totals(invoice_id, commit=not dry_run)
 
     if result is None:
-        return {"status": "error", "invoice_id": invoice_id, "reason": "recompute_failed"}
+        return {
+            "status": "error",
+            "invoice_id": invoice_id,
+            "reason": "recompute_failed",
+        }
 
     new_values = {
         "subtotal_amount": float(result["subtotal"]),
@@ -260,7 +275,11 @@ def repair_balance_due(invoice_id: int, dry_run: bool = True) -> dict[str, Any]:
     """Corrige le balance_due d'une facture."""
     invoice = db.session.get(Invoice, invoice_id)
     if not invoice:
-        return {"status": "error", "invoice_id": invoice_id, "reason": "invoice_not_found"}
+        return {
+            "status": "error",
+            "invoice_id": invoice_id,
+            "reason": "invoice_not_found",
+        }
 
     old_balance = float(invoice.balance_due or Decimal("0"))
     amount_paid = invoice.amount_paid or Decimal("0")
@@ -305,7 +324,9 @@ def main():
         print("RÉPARATION D'INTÉGRITÉ DES FACTURES")
         print("=" * 80)
         print(f"Mode: {'🔴 EXÉCUTION' if args.fix else '🟡 DRY-RUN (preview)'}")
-        print(f"Inclure SENT: {'Oui ⚠️' if args.include_sent else 'Non (DRAFT uniquement)'}")
+        print(
+            f"Inclure SENT: {'Oui ⚠️' if args.include_sent else 'Non (DRAFT uniquement)'}"
+        )
         print(f"Limite: {args.limit} factures max")
 
         # Construire les filtres
@@ -317,7 +338,9 @@ def main():
         if args.to_date:
             filters["to_date"] = args.to_date
         if args.invoice_ids:
-            filters["invoice_ids"] = [int(x.strip()) for x in args.invoice_ids.split(",")]
+            filters["invoice_ids"] = [
+                int(x.strip()) for x in args.invoice_ids.split(",")
+            ]
 
         print(f"Filtres: {filters or 'Aucun'}")
 
@@ -336,7 +359,7 @@ def main():
             "repairs": {
                 "totals": [],
                 "balance": [],
-            }
+            },
         }
 
         # 1. Réparer les totaux à 0
@@ -353,9 +376,11 @@ def main():
             result = repair_invoice_totals(invoice_id, dry_run=dry_run)
             report["repairs"]["totals"].append(result)
             if result["status"] == "preview":
-                print(f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
-                      f"{result.get('old', {}).get('total_amount', 0):.2f} → "
-                      f"{result.get('new', {}).get('total_amount', 0):.2f}")
+                print(
+                    f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
+                    f"{result.get('old', {}).get('total_amount', 0):.2f} → "
+                    f"{result.get('new', {}).get('total_amount', 0):.2f}"
+                )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
             else:
@@ -375,9 +400,11 @@ def main():
             result = repair_invoice_totals(invoice_id, dry_run=dry_run)
             report["repairs"]["totals"].append(result)
             if result["status"] == "preview":
-                print(f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
-                      f"subtotal {result.get('old', {}).get('subtotal_amount', 0):.2f} → "
-                      f"{result.get('new', {}).get('subtotal_amount', 0):.2f}")
+                print(
+                    f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
+                    f"subtotal {result.get('old', {}).get('subtotal_amount', 0):.2f} → "
+                    f"{result.get('new', {}).get('subtotal_amount', 0):.2f}"
+                )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
             else:
@@ -397,9 +424,11 @@ def main():
             result = repair_balance_due(invoice_id, dry_run=dry_run)
             report["repairs"]["balance"].append(result)
             if result["status"] == "preview":
-                print(f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
-                      f"balance_due {result.get('old_balance_due', 0):.2f} → "
-                      f"{result.get('new_balance_due', 0):.2f}")
+                print(
+                    f"  [PREVIEW] #{result.get('invoice_number', invoice_id)}: "
+                    f"balance_due {result.get('old_balance_due', 0):.2f} → "
+                    f"{result.get('new_balance_due', 0):.2f}"
+                )
             elif result["status"] == "repaired":
                 print(f"  [✅ REPAIRED] #{result.get('invoice_number', invoice_id)}")
             else:
@@ -408,15 +437,18 @@ def main():
         # Résumé
         print("\n" + "=" * 80)
         total_repaired = sum(
-            1 for r in report["repairs"]["totals"] + report["repairs"]["balance"]
+            1
+            for r in report["repairs"]["totals"] + report["repairs"]["balance"]
             if r.get("status") == "repaired"
         )
         total_preview = sum(
-            1 for r in report["repairs"]["totals"] + report["repairs"]["balance"]
+            1
+            for r in report["repairs"]["totals"] + report["repairs"]["balance"]
             if r.get("status") == "preview"
         )
         total_errors = sum(
-            1 for r in report["repairs"]["totals"] + report["repairs"]["balance"]
+            1
+            for r in report["repairs"]["totals"] + report["repairs"]["balance"]
             if r.get("status") == "error"
         )
 

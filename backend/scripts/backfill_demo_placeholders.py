@@ -135,16 +135,22 @@ def run() -> dict[str, int]:
                         f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}"
                     ).strip()
 
-                if _is_placeholder_text(
-                    client.default_billed_to_contact, ("patient demo", "demo ", "patient ")
-                ) and user_full_name:
+                if (
+                    _is_placeholder_text(
+                        client.default_billed_to_contact,
+                        ("patient demo", "demo ", "patient "),
+                    )
+                    and user_full_name
+                ):
                     client.default_billed_to_contact = user_full_name
                     updated_clients += 1
 
                 if _is_placeholder_text(
                     client.residence_facility, ("residence demo", "etablissement demo")
                 ):
-                    client.residence_facility = f"Residence Les Tilleuls {((idx % 4) + 1)}"
+                    client.residence_facility = (
+                        f"Residence Les Tilleuls {((idx % 4) + 1)}"
+                    )
                     updated_clients += 1
 
                 if _is_placeholder_text(client.gp_name, ("dr demo", "dr seed")):

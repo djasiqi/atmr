@@ -9,6 +9,7 @@ Responsabilités :
 - Générer des suggestions de lien pour les patients sans AVS
 - Anti-cascade via contextvars (compatible Flask + Celery)
 """
+
 from __future__ import annotations
 
 import contextvars
@@ -65,15 +66,17 @@ SYNCABLE_FIELDS: list[str] = [
 ]
 
 # Champs qui acceptent le vidage forcé via force_clear_fields
-FORCE_CLEARABLE_FIELDS: frozenset[str] = frozenset({
-    "insurance_name",
-    "insurance_number",
-    "guardian_phone",
-    "guardian_email",
-    "guardian_address",
-    "phone",
-    "notes",
-})
+FORCE_CLEARABLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "insurance_name",
+        "insurance_number",
+        "guardian_phone",
+        "guardian_email",
+        "guardian_address",
+        "phone",
+        "notes",
+    }
+)
 
 
 def ensure_identity_and_link(
@@ -137,17 +140,19 @@ def ensure_identity_and_link(
         db.session.add(link)
         db.session.flush()
 
-        db.session.add(PatientAuditLog(
-            actor_user_id=user_id,
-            action="LINK_CONFIRMED",
-            entity_type="institution_patient",
-            entity_id=patient.id,
-            metadata_json={
-                "identity_id": identity.id,
-                "link_method": "avs_exact",
-                "avs_last4": avs_l4,
-            },
-        ))
+        db.session.add(
+            PatientAuditLog(
+                actor_user_id=user_id,
+                action="LINK_CONFIRMED",
+                entity_type="institution_patient",
+                entity_id=patient.id,
+                metadata_json={
+                    "identity_id": identity.id,
+                    "link_method": "avs_exact",
+                    "avs_last4": avs_l4,
+                },
+            )
+        )
 
     # Chercher les Client (transporteur) avec le même AVS et les lier
     _auto_link_clients_by_avs(identity, patient.avs_number, user_id)
@@ -174,7 +179,10 @@ def compute_changed_fields(
             new_serialized = _serialize_val(new_val)
             if _is_empty(new_serialized) and field not in force_clear:
                 continue
-            changed[field] = {"before": _serialize_val(old_val), "after": new_serialized}
+            changed[field] = {
+                "before": _serialize_val(old_val),
+                "after": new_serialized,
+            }
     return changed
 
 
@@ -228,17 +236,19 @@ def create_sync_event(
     db.session.add(event)
     identity.version += 1
 
-    db.session.add(PatientAuditLog(
-        actor_user_id=user_id,
-        action="SYNC_TRIGGERED",
-        entity_type="institution_patient",
-        entity_id=patient.id,
-        metadata_json={
-            "identity_id": identity.id,
-            "changed_fields": list(changed_fields.keys()),
-            "event_version": identity.version - 1,
-        },
-    ))
+    db.session.add(
+        PatientAuditLog(
+            actor_user_id=user_id,
+            action="SYNC_TRIGGERED",
+            entity_type="institution_patient",
+            entity_id=patient.id,
+            metadata_json={
+                "identity_id": identity.id,
+                "changed_fields": list(changed_fields.keys()),
+                "event_version": identity.version - 1,
+            },
+        )
+    )
 
     db.session.flush()
     logger.info(
@@ -305,17 +315,19 @@ def trigger_sync_on_create(
         if not identity:
             return {"status": "none", "suggestions_count": 0, "identity_id": None}
 
-        db.session.add(PatientAuditLog(
-            actor_user_id=user_id,
-            action="IDENTITY_LINK_CREATED",
-            entity_type="institution_patient",
-            entity_id=patient.id,
-            metadata_json={
-                "identity_id": identity.id,
-                "link_method": "avs_exact",
-                "trigger": "on_create",
-            },
-        ))
+        db.session.add(
+            PatientAuditLog(
+                actor_user_id=user_id,
+                action="IDENTITY_LINK_CREATED",
+                entity_type="institution_patient",
+                entity_id=patient.id,
+                metadata_json={
+                    "identity_id": identity.id,
+                    "link_method": "avs_exact",
+                    "trigger": "on_create",
+                },
+            )
+        )
 
         changed = compute_creation_delta(patient)
         if changed:
@@ -370,13 +382,16 @@ def generate_link_suggestions(
         if identity_id:
             identity = PatientIdentity.query.get(identity_id)
             if identity:
-                _create_link_and_sync(identity, patient, "name_dob_auto_unique", user_id)
+                _create_link_and_sync(
+                    identity, patient, "name_dob_auto_unique", user_id
+                )
                 return []
 
     created: list[PatientLinkSuggestion] = []
     for match in matches:
         target_type = (
-            "institution_patient" if match["type"] in ("identity", "cross_patient")
+            "institution_patient"
+            if match["type"] in ("identity", "cross_patient")
             else "client"
         )
         target_id = match.get("patient_id") or match.get("identity_id", 0)
@@ -410,7 +425,7 @@ def generate_link_suggestions(
     return created
 
 
-def _can_auto_link(  # noqa: PLR0911
+def _can_auto_link(
     matches: list[dict[str, Any]],
     patient: InstitutionPatient,
 ) -> bool:
@@ -486,17 +501,19 @@ def _create_link_and_sync(
         db.session.add(link)
         db.session.flush()
 
-    db.session.add(PatientAuditLog(
-        actor_user_id=user_id,
-        action="IDENTITY_LINK_CREATED",
-        entity_type="institution_patient",
-        entity_id=patient.id,
-        metadata_json={
-            "identity_id": identity.id,
-            "link_method": link_method,
-            "trigger": "on_create_auto_unique",
-        },
-    ))
+    db.session.add(
+        PatientAuditLog(
+            actor_user_id=user_id,
+            action="IDENTITY_LINK_CREATED",
+            entity_type="institution_patient",
+            entity_id=patient.id,
+            metadata_json={
+                "identity_id": identity.id,
+                "link_method": link_method,
+                "trigger": "on_create_auto_unique",
+            },
+        )
+    )
 
     changed = compute_creation_delta(patient)
     if changed:
@@ -526,7 +543,11 @@ def apply_sync_to_institution_patient(
     dob_allowed = False
     if source_identity_id:
         identity = PatientIdentity.query.get(source_identity_id)
-        if identity and identity.avs_status == "valid" and identity.source_institution_id:
+        if (
+            identity
+            and identity.avs_status == "valid"
+            and identity.source_institution_id
+        ):
             src_inst = Institution.query.get(identity.source_institution_id)
             if src_inst and (src_inst.institution_type or "").lower() == "curatelle":
                 dob_allowed = True
@@ -615,14 +636,15 @@ def _sync_guardianship_to_client(
         return
 
     existing_link = (
-        ClientBillingParty.query
-        .join(BillingParty)
+        ClientBillingParty.query.join(BillingParty)
         .filter(
             ClientBillingParty.client_id == client.id,
-            BillingParty.type.in_([
-                BillingPartyType.OPAD,
-                BillingPartyType.CURATORSHIP,
-            ]),
+            BillingParty.type.in_(
+                [
+                    BillingPartyType.OPAD,
+                    BillingPartyType.CURATORSHIP,
+                ]
+            ),
         )
         .first()
     )
@@ -669,7 +691,9 @@ def _sync_guardianship_to_client(
 
     logger.info(
         "[PatientSync] Curatelle synced to client %s: %s (%s)",
-        client.id, display_name, bp_type.value,
+        client.id,
+        display_name,
+        bp_type.value,
     )
 
 
@@ -711,17 +735,19 @@ def _auto_link_clients_by_avs(
         db.session.add(link)
         db.session.flush()
 
-        db.session.add(PatientAuditLog(
-            actor_user_id=user_id,
-            action="IDENTITY_LINK_CREATED",
-            entity_type="client",
-            entity_id=client.id,
-            metadata_json={
-                "identity_id": identity.id,
-                "link_method": "avs_exact",
-                "trigger": "auto_link_by_avs",
-            },
-        ))
+        db.session.add(
+            PatientAuditLog(
+                actor_user_id=user_id,
+                action="IDENTITY_LINK_CREATED",
+                entity_type="client",
+                entity_id=client.id,
+                metadata_json={
+                    "identity_id": identity.id,
+                    "link_method": "avs_exact",
+                    "trigger": "auto_link_by_avs",
+                },
+            )
+        )
         logger.info(
             "[PatientSync] Auto-linked client %s to identity %s (avs match)",
             client.id,

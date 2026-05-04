@@ -54,7 +54,7 @@ class RejectOfferResult:
 class RejectOfferUseCase:
     """Use case: Rejeter une offre de transport."""
 
-    def execute(self, input_data: RejectOfferInput) -> RejectOfferResult:  # noqa: PLR0911
+    def execute(self, input_data: RejectOfferInput) -> RejectOfferResult:
         """
         Rejette une offre de transport.
 
@@ -232,4 +232,3 @@ class RejectOfferUseCase:
                 error=f"Erreur inattendue: {e!s}",
                 status_code=500,
             )
-

@@ -89,7 +89,9 @@ class TestEmailSignatureFormValidation:
         assert "Rue" in result
         # Vérifier qu'elle n'est pas trop longue (approximatif)
         address_in_result = result[result.find("Rue") : result.find("Rue") + 250]
-        assert len(address_in_result) <= 250  # Avec échappement HTML, un peu plus que 200
+        assert (
+            len(address_in_result) <= 250
+        )  # Avec échappement HTML, un peu plus que 200
 
     def test_strip_all_fields(self):
         """Test que tous les champs sont strippés."""
@@ -146,6 +148,7 @@ class TestEmailSignatureFormValidation:
 
     def test_outlook_compatible_logo_styles(self):
         """Test que le logo a les styles Outlook-safe."""
+
         # Créer un mock company avec logo_url
         class MockCompany:
             def __init__(self):
@@ -162,7 +165,10 @@ class TestEmailSignatureFormValidation:
         assert 'height="26"' in result
         assert "width:auto" in result
         assert "max-width:100%" in result
-        assert 'style="display:block;border:0;outline:none;text-decoration:none;height:26px;width:auto;max-width:100%;"' in result
+        assert (
+            'style="display:block;border:0;outline:none;text-decoration:none;height:26px;width:auto;max-width:100%;"'
+            in result
+        )
         assert "<img" in result
         # Vérifier CID strict: exactement "company_logo"
         assert 'src="cid:company_logo"' in result or "cid:company_logo" in result
@@ -187,6 +193,7 @@ class TestEmailSignatureFormValidation:
 
     def test_outlook_compatible_horizontal_line_with_logo(self):
         """Test que la ligne horizontale avec logo utilise aussi une mini-table."""
+
         # Créer un mock company avec logo_url
         class MockCompany:
             def __init__(self):

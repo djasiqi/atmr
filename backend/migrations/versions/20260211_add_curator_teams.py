@@ -82,7 +82,9 @@ def upgrade():
 
 
 def downgrade():
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS data_source_flags")
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS data_source_flags"
+    )
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS curator_team_id")
     op.execute("DROP TABLE IF EXISTS curator_team_members")
     op.execute("DROP TABLE IF EXISTS curator_teams")

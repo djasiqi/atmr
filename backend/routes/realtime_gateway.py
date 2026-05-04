@@ -50,4 +50,3 @@ class RealtimeGatewayCanary(Resource):
             "enabled": _canary_enabled(),
             "flag": "REALTIME_GATEWAY_CANARY_ENABLED",
         }, 200
-

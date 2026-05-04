@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 
+from models.enums import InvoiceLineType
 from services.documents.pdf import (  # noqa: I001
     DEST_ADDR_LINE_HEIGHT_MM,
     DEST_ADDR_MAX_WIDTH_MM,
@@ -28,7 +29,6 @@ from services.documents.pdf import (  # noqa: I001
     _sum_positive_billed_lines_excluding_global_discount,
     _wrap_line_by_words,
 )
-from models.enums import InvoiceLineType
 
 
 class TestNameWithUppercaseLastName:
@@ -284,8 +284,13 @@ class TestDedupePostalAndGlobalDiscountPdfHelpers:
     """Cohérence adresse NPA/ville + sous-total détail / remise globale (PDF)."""
 
     def test_dedupe_duplicate_npa_ville(self):
-        assert _dedupe_postal_and_city_line("1247 Anières 1247 Anières") == "1247 Anières"
-        assert _dedupe_postal_and_city_line("1247 , Anières 1247 Anières") == "1247 Anières"
+        assert (
+            _dedupe_postal_and_city_line("1247 Anières 1247 Anières") == "1247 Anières"
+        )
+        assert (
+            _dedupe_postal_and_city_line("1247 , Anières 1247 Anières")
+            == "1247 Anières"
+        )
         assert (
             _dedupe_postal_and_city_line("1247 Anières 1247 Anières, Suisse")
             == "1247 Anières, Suisse"

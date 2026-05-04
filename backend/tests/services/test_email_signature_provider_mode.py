@@ -60,7 +60,9 @@ class TestSmtpMimeContainsRelatedAndContentId:
     """Vérifie que l'envoi SMTP produit un MIME multipart/related avec Content-ID company_logo."""
 
     @patch("services.email.brevo_provider.smtplib.SMTP")
-    def test_smtp_mime_contains_related_and_content_id(self, mock_smtp_class, monkeypatch):
+    def test_smtp_mime_contains_related_and_content_id(
+        self, mock_smtp_class, monkeypatch
+    ):
         """Vérifie multipart/related + Content-ID <company_logo> + src=\"cid:company_logo\" dans le HTML."""
         monkeypatch.setenv("EMAIL_PROVIDER_MODE", "brevo_smtp")
         mock_smtp = mock_smtp_class.return_value.__enter__.return_value
@@ -71,7 +73,9 @@ class TestSmtpMimeContainsRelatedAndContentId:
 
         mock_smtp.sendmail.side_effect = capture_sendmail
 
-        html_content = '<html><body><p>Test</p><img src="cid:company_logo" /></body></html>'
+        html_content = (
+            '<html><body><p>Test</p><img src="cid:company_logo" /></body></html>'
+        )
         logo_bytes = b"\x89PNG\r\n\x1a\n"
         attachments = [
             {
@@ -118,7 +122,11 @@ class TestSmtpMimeContainsRelatedAndContentId:
             if "text/html" in pct:
                 payload = part.get_payload(decode=True)
                 if payload:
-                    html_has_cid = b"cid:company_logo" in payload or "cid:company_logo" in (payload.decode("utf-8", errors="replace"))
+                    html_has_cid = (
+                        b"cid:company_logo" in payload
+                        or "cid:company_logo"
+                        in (payload.decode("utf-8", errors="replace"))
+                    )
 
         assert related_found, "Une part multipart/related doit être présente"
         assert content_id_found, "Content-ID <company_logo> doit être présent"

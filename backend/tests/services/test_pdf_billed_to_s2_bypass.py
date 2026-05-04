@@ -220,12 +220,8 @@ class TestGetBilledToS2Bypass:
         name, _addr = _get_billed_to(invoice)
 
         # Assert: doit utiliser l'EMS
-        assert "EMS" in name or "Tilleuls" in name, (
-            f"Expected EMS name, got: {name}"
-        )
-        assert "LUGASSY" not in name.upper(), (
-            f"Patient name should NOT appear: {name}"
-        )
+        assert "EMS" in name or "Tilleuls" in name, f"Expected EMS name, got: {name}"
+        assert "LUGASSY" not in name.upper(), f"Patient name should NOT appear: {name}"
 
     def test_get_billed_to_other_type_falls_back_to_client_when_no_link(
         self, db, sample_company, sample_client, other_billing_party

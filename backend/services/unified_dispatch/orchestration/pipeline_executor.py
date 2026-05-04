@@ -447,9 +447,7 @@ class PipelineExecutor:
                             logger.info(
                                 "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=fast_mode"
                             )
-                        elif not getattr(
-                            settings.features, "enable_rl_postopt", False
-                        ):
+                        elif not getattr(settings.features, "enable_rl_postopt", False):
                             logger.info(
                                 "[PipelineExecutor] RL_POSTOPT_SKIPPED reason=feature_disabled (enable_rl_postopt=false)"
                             )
@@ -461,9 +459,7 @@ class PipelineExecutor:
                         and len(final_assignments) > 0
                     ):
                         try:
-                            if getattr(
-                                settings.features, "enable_rl_postopt", False
-                            ):
+                            if getattr(settings.features, "enable_rl_postopt", False):
                                 from services.unified_dispatch.ml.rl_optimizer import (
                                     RLDispatchOptimizer,
                                 )

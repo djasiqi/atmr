@@ -55,7 +55,7 @@ class AcceptOfferResult:
 class AcceptOfferUseCase:
     """Use case: Accepter une offre de transport et créer le booking."""
 
-    def execute(self, input_data: AcceptOfferInput) -> AcceptOfferResult:  # noqa: PLR0911
+    def execute(self, input_data: AcceptOfferInput) -> AcceptOfferResult:
         """
         Accepte une offre de transport (atomique: first accept wins).
 
@@ -697,7 +697,9 @@ class AcceptOfferUseCase:
         if not entry_point:
             routing = (transport_request.billing_details or {}).get("routing", {})
             entry_point = (
-                routing.get("pickup_entry_point", "") if isinstance(routing, dict) else ""
+                routing.get("pickup_entry_point", "")
+                if isinstance(routing, dict)
+                else ""
             )
         if entry_point:
             parts.append(f"Accueil: {entry_point}")
@@ -741,7 +743,9 @@ class AcceptOfferUseCase:
         if not entry_point:
             routing = (transport_request.billing_details or {}).get("routing", {})
             entry_point = (
-                routing.get("dropoff_entry_point", "") if isinstance(routing, dict) else ""
+                routing.get("dropoff_entry_point", "")
+                if isinstance(routing, dict)
+                else ""
             )
         if entry_point:
             parts.append(f"Accueil: {entry_point}")

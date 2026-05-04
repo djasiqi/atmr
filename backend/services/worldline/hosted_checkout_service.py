@@ -48,7 +48,9 @@ def create_worldline_hosted_checkout(
 
     booking_status = getattr(booking, "status", None)
     if booking_status != BookingStatus.PENDING:
-        raise ValueError("Seules les réservations en attente peuvent être payées en ligne")
+        raise ValueError(
+            "Seules les réservations en attente peuvent être payées en ligne"
+        )
     booking_client_id = getattr(booking, "client_id", None)
     if not booking_client_id or booking_client_id != client.id:
         raise ValueError("Cette réservation n'appartient pas à ce client")
@@ -148,7 +150,9 @@ def create_worldline_hosted_checkout(
     hid = resp.hosted_checkout_id
     partial = resp.partial_redirect_url
     if not hid or not partial:
-        raise RuntimeError("Réponse Worldline incomplète (hostedCheckoutId / partialRedirectUrl)")
+        raise RuntimeError(
+            "Réponse Worldline incomplète (hostedCheckoutId / partialRedirectUrl)"
+        )
 
     payment_row.worldline_hosted_checkout_id = hid
     payment_row.worldline_partial_redirect_url = partial

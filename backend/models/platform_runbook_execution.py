@@ -33,7 +33,9 @@ class PlatformRunbookExecution(db.Model):
         nullable=True,
         index=True,
     )
-    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -43,13 +45,19 @@ class PlatformRunbookExecution(db.Model):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     triggered_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"),
         nullable=True,
     )
-    preview_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    preview_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     rollback_of_execution_id: Mapped[str | None] = mapped_column(

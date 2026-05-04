@@ -171,7 +171,9 @@ def test_runtime_celery_section_ok(mock_redis_cls, mock_celery_inspect):
 
 @patch("celery_app.celery.control.inspect")
 @patch("redis.Redis")
-def test_runtime_celery_stats_empty_per_worker_degraded(mock_redis_cls, mock_celery_inspect):
+def test_runtime_celery_stats_empty_per_worker_degraded(
+    mock_redis_cls, mock_celery_inspect
+):
     """Ping OK mais stats vides par worker → degraded (pas de ok trop optimiste)."""
     mock_r = MagicMock()
     mock_r.ping.return_value = True
@@ -196,7 +198,9 @@ def test_runtime_celery_stats_empty_per_worker_degraded(mock_redis_cls, mock_cel
 
 @patch("celery_app.celery.control.inspect")
 @patch("redis.Redis")
-def test_runtime_celery_stats_worker_key_mismatch_degraded(mock_redis_cls, mock_celery_inspect):
+def test_runtime_celery_stats_worker_key_mismatch_degraded(
+    mock_redis_cls, mock_celery_inspect
+):
     """Stats non vides mais sans recoupement avec les workers du ping → degraded."""
     mock_r = MagicMock()
     mock_r.ping.return_value = True

@@ -207,7 +207,9 @@ def validate_required_env_vars(config_name: str) -> None:
             )
 
         # Admin Ops : GET /api/v1/platform/status — whitelist IP obligatoire si demandé
-        wl_required = os.getenv("ADMIN_IP_WHITELIST_REQUIRED", "false").strip().lower() in (
+        wl_required = os.getenv(
+            "ADMIN_IP_WHITELIST_REQUIRED", "false"
+        ).strip().lower() in (
             "true",
             "1",
             "yes",
@@ -335,14 +337,11 @@ def _is_maintenance_sane_bypass_path() -> bool:
     from flask import request
 
     p = request.path or ""
-    return (
-        p in ("/health", "/api/health", "/api/v1/health")
-        or (
-            request.method == "OPTIONS"
-            and (
-                p.startswith(("/static/", "/swaggerui/", "/uploads/"))
-                or p in ("/favicon.ico", "/robots.txt")
-            )
+    return p in ("/health", "/api/health", "/api/v1/health") or (
+        request.method == "OPTIONS"
+        and (
+            p.startswith(("/static/", "/swaggerui/", "/uploads/"))
+            or p in ("/favicon.ico", "/robots.txt")
         )
     )
 
@@ -356,7 +355,11 @@ _UNAUTHORIZED_ACCESS_USER_ID_MAX = 256
 
 def _prune_unauthorized_access_user_id_cache(now: float) -> None:
     c = _UNAUTHORIZED_ACCESS_USER_ID_CACHE
-    expired = [k for k, (_, ts) in c.items() if now - ts >= _UNAUTHORIZED_ACCESS_USER_ID_TTL_SEC]
+    expired = [
+        k
+        for k, (_, ts) in c.items()
+        if now - ts >= _UNAUTHORIZED_ACCESS_USER_ID_TTL_SEC
+    ]
     for k in expired:
         del c[k]
     while len(c) > _UNAUTHORIZED_ACCESS_USER_ID_MAX // 2:
@@ -1222,7 +1225,11 @@ def create_app(config_name: str | None = None):
             internal_header = request.headers.get("X-Internal-Gateway-Auth") == "1"
             remote = (request.remote_addr or "").strip()
             host = (request.host or "").lower()
-            if internal_header or remote in ("127.0.0.1", "::1", "localhost") or "backend" in host:
+            if (
+                internal_header
+                or remote in ("127.0.0.1", "::1", "localhost")
+                or "backend" in host
+            ):
                 request.environ["wsgi.url_scheme"] = "https"
 
     # ✅ FIX RC1: Intercepter /api/v1/prometheus/metrics avant Talisman
@@ -2036,10 +2043,12 @@ def create_app(config_name: str | None = None):
                     error_code = "bad_request"
                 error_message = original_message
 
-            return jsonify({
-                "error": error_code,
-                "message": error_message,
-            }), 400
+            return jsonify(
+                {
+                    "error": error_code,
+                    "message": error_message,
+                }
+            ), 400
 
         @app.errorhandler(HTTPException)
         def handle_http_exception(e: HTTPException):  # pyright: ignore
@@ -2054,12 +2063,16 @@ def create_app(config_name: str | None = None):
 
             # Convertir le nom HTTP en code machine (snake_case)
             # Ex: "Bad Request" -> "bad_request", "Not Found" -> "not_found"
-            error_code = e.name.lower().replace(" ", "_") if e.name else f"http_{status_code}"
+            error_code = (
+                e.name.lower().replace(" ", "_") if e.name else f"http_{status_code}"
+            )
 
-            return jsonify({
-                "error": error_code,
-                "message": e.description or f"HTTP {status_code} error",
-            }), status_code
+            return jsonify(
+                {
+                    "error": error_code,
+                    "message": e.description or f"HTTP {status_code} error",
+                }
+            ), status_code
 
         @app.errorhandler(Exception)
         def handle_exception(e: Exception):  # pyright: ignore[reportUnusedFunction]

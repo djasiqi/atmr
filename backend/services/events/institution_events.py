@@ -499,7 +499,9 @@ def emit_booking_message(
             socketio.emit("booking_message", payload, to=f"company_{company_id}")
             emitted = True
         if institution_id:
-            socketio.emit("booking_message", payload, to=f"institution_{institution_id}")
+            socketio.emit(
+                "booking_message", payload, to=f"institution_{institution_id}"
+            )
             emitted = True
 
         # Propriétaire du booking (portail client) — reçoit aussi les réponses entreprise / institution
@@ -509,7 +511,9 @@ def emit_booking_message(
 
             b_row = db.session.get(BookingRow, booking_id)
             if b_row and getattr(b_row, "client_id", None):
-                cli_row = getattr(b_row, "client", None) or ClientRow.query.get(b_row.client_id)
+                cli_row = getattr(b_row, "client", None) or ClientRow.query.get(
+                    b_row.client_id
+                )
                 u_row = getattr(cli_row, "user", None) if cli_row else None
                 pub = (getattr(u_row, "public_id", None) or "").strip()
                 if pub:

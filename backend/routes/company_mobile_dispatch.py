@@ -1370,7 +1370,11 @@ class MobileDispatchRides(Resource):
                 amount_val = float(raw_amount) if raw_amount not in (None, "") else None
             except (TypeError, ValueError):
                 amount_val = None
-            booking.amount = amount_val if amount_val is not None and amount_val >= AMOUNT_MINIMUM else AMOUNT_MINIMUM
+            booking.amount = (
+                amount_val
+                if amount_val is not None and amount_val >= AMOUNT_MINIMUM
+                else AMOUNT_MINIMUM
+            )
             booking.status = BookingStatus.ACCEPTED
             booking.company_id = company_id
             booking.booking_type = "manual"
@@ -1851,9 +1855,7 @@ class MobileRideUrgent(Resource):
         #   montrer 00:00 comme une vraie heure utilisateur.
         # -----------------------------------------------------------------------
         st = booking.scheduled_time
-        st_naive = (
-            st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
-        )
+        st_naive = st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
         is_sentinel = (
             st_naive is not None
             and st_naive.hour == 0
@@ -2910,7 +2912,9 @@ class MobileCreateRide(Resource):
         )
 
         try:
-            canonical_payload = map_mobile_ride_payload_to_manual_booking_payload(payload)
+            canonical_payload = map_mobile_ride_payload_to_manual_booking_payload(
+                payload
+            )
         except ValueError as exc:
             company_mobile_dispatch_ns.abort(400, str(exc))
             raise AssertionError("Invalid structured payload") from exc
@@ -3023,11 +3027,11 @@ class MobileCreateRide(Resource):
 
         # Réponse au format attendu par le mobile
         if not first_outbound:
-            company_mobile_dispatch_ns.abort(500, "Erreur lors de la création de la course")
+            company_mobile_dispatch_ns.abort(
+                500, "Erreur lors de la création de la course"
+            )
             raise AssertionError("No outbound created") from None
-        summary = _build_ride_summary(
-            first_outbound, current_company_id=company_id
-        )
+        summary = _build_ride_summary(first_outbound, current_company_id=company_id)
         result_dict = {"summary": summary}
         if created_returns:
             return_summary = _build_ride_summary(
@@ -3081,16 +3085,22 @@ class MobileUpdateRide(Resource):
                     400, f"{field_name}.label est requis pour un payload structuré"
                 )
                 raise AssertionError("address label required") from None
-            company_mobile_dispatch_ns.abort(400, f"{field_name} doit être une string ou un objet")
+            company_mobile_dispatch_ns.abort(
+                400, f"{field_name} doit être une string ou un objet"
+            )
             raise AssertionError("invalid address payload type") from None
 
         # Mise à jour des adresses
         if "pickup_address" in payload:
-            pickup_label = _extract_address_label(payload["pickup_address"], "pickup_address")
+            pickup_label = _extract_address_label(
+                payload["pickup_address"], "pickup_address"
+            )
             if pickup_label:
                 booking.pickup_location = pickup_label
         if "dropoff_address" in payload:
-            dropoff_label = _extract_address_label(payload["dropoff_address"], "dropoff_address")
+            dropoff_label = _extract_address_label(
+                payload["dropoff_address"], "dropoff_address"
+            )
             if dropoff_label:
                 booking.dropoff_location = dropoff_label
 
@@ -3107,11 +3117,15 @@ class MobileUpdateRide(Resource):
             try:
                 booking.scheduled_time = parse_local_naive(payload["scheduled_time"])
                 is_return_value = getattr(booking, "is_return", False)
-                is_return_trip = is_return_value if isinstance(is_return_value, bool) else False
+                is_return_trip = (
+                    is_return_value if isinstance(is_return_value, bool) else False
+                )
                 if is_return_trip:
                     st = booking.scheduled_time
                     st_naive = (
-                        st.replace(tzinfo=None) if st and getattr(st, "tzinfo", None) else st
+                        st.replace(tzinfo=None)
+                        if st and getattr(st, "tzinfo", None)
+                        else st
                     )
                     is_sentinel_midnight = (
                         st_naive is not None
@@ -3303,7 +3317,9 @@ class MobileCancelRide(Resource):
         payload = request.get_json(silent=True) or {}
         # Phase 1 : reason_code absent → None (compute_cancellation_fields mappe → Annulation historique)
         reason_code = payload.get("reason_code")
-        reason_text = (payload.get("reason_text") or payload.get("note") or "").strip() or None
+        reason_text = (
+            payload.get("reason_text") or payload.get("note") or ""
+        ).strip() or None
         note = (payload.get("note") or "").strip()
 
         # ✅ Annulation standardisée : persister motif + facturation
@@ -3321,10 +3337,16 @@ class MobileCancelRide(Resource):
         if hasattr(status_at_cancel, "value"):
             status_at_cancel = status_at_cancel.value
 
-        billing = CompanyBillingSettings.query.filter_by(
-            company_id=booking.company_id
-        ).first() if getattr(booking, "company_id", None) else None
-        cancellation_policy = getattr(billing, "cancellation_policy", None) if billing else None
+        billing = (
+            CompanyBillingSettings.query.filter_by(
+                company_id=booking.company_id
+            ).first()
+            if getattr(booking, "company_id", None)
+            else None
+        )
+        cancellation_policy = (
+            getattr(billing, "cancellation_policy", None) if billing else None
+        )
 
         already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
         cancel_fields = compute_cancellation_fields(
@@ -3373,7 +3395,9 @@ class MobileCancelRide(Resource):
             payload={
                 "booking_id": booking_id,
                 "reason_code": reason_code,
-                "cancellation_reason_code": cancel_fields.get("cancellation_reason_code"),
+                "cancellation_reason_code": cancel_fields.get(
+                    "cancellation_reason_code"
+                ),
                 "source": "mobile_enterprise",
             },
             reasoning=f"Annulation course mobile {booking_id} ({reason_code or 'legacy'})",

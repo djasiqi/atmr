@@ -59,6 +59,8 @@ TRIP_TRACKING_ASSIGNMENT_STATUSES: frozenset[AssignmentStatus] = frozenset(
     }
 )
 DEFAULT_GEOFENCE_RADIUS_M = 50.0  # 50m pour détection arrivée pickup/dropoff
+
+
 def _trip_tracking_min_interval_sec() -> float:
     """Intervalle minimal entre points `trip_tracking` (mission active). Défaut 15 s (alignement mobile)."""
     return float(os.getenv("TRIP_TRACKING_MIN_INTERVAL_SEC", "15"))
@@ -73,7 +75,9 @@ MISSION_TOO_OLD_SEC = 120
 AVAILABILITY_TOO_OLD_SEC = 600
 LOW_ACCURACY_THRESHOLD_M = 1500.0
 # v21 : normalisation ``location_mode`` ; sans v21 le backend force ``mission_live`` (arbitrage plus dur).
-LOCATION_V21_ENABLED = os.getenv("DRIVER_LOCATION_V21_ENABLED", "true").lower() != "false"
+LOCATION_V21_ENABLED = (
+    os.getenv("DRIVER_LOCATION_V21_ENABLED", "true").lower() != "false"
+)
 TRIP_HISTORY_REPLAY_ENABLED = (
     os.getenv("TRIP_HISTORY_REPLAY_ENABLED", "true").lower() != "false"
 )
@@ -184,7 +188,9 @@ class LocationService:
         driver_dto = driver_repo.find_by_id(driver_id)
         company_id = driver_dto.company_id if driver_dto else None
         v21_enabled = self._is_v21_enabled_for_company(company_id)
-        normalized_mode = normalize_location_mode(location_mode) if v21_enabled else "mission_live"
+        normalized_mode = (
+            normalize_location_mode(location_mode) if v21_enabled else "mission_live"
+        )
         degraded_context = normalized_mode == "mission_live" and mission_id is None
 
         # 1. Validation
@@ -722,7 +728,9 @@ class LocationService:
             )
             if self.redis_client:
                 with contextlib.suppress(Exception):
-                    self.redis_client.incr("driver_location:mission_live_missing_mission_id:global")
+                    self.redis_client.incr(
+                        "driver_location:mission_live_missing_mission_id:global"
+                    )
                     if company_id:
                         self.redis_client.incr(
                             f"driver_location:mission_live_missing_mission_id:company:{company_id}"
@@ -808,7 +816,7 @@ class LocationService:
         age_sec = max(0.0, (now - ra).total_seconds())
         return age_sec <= float(TRIP_HISTORY_MAX_RECORDED_AGE_SEC)
 
-    def _arbitrate_update(  # noqa: PLR0911
+    def _arbitrate_update(
         self,
         *,
         existing: dict[str, str],
@@ -826,7 +834,11 @@ class LocationService:
 
         now = datetime.now(UTC)
         age_sec = max(0, int((now - recorded_at).total_seconds()))
-        max_age = MISSION_TOO_OLD_SEC if location_mode == "mission_live" else AVAILABILITY_TOO_OLD_SEC
+        max_age = (
+            MISSION_TOO_OLD_SEC
+            if location_mode == "mission_live"
+            else AVAILABILITY_TOO_OLD_SEC
+        )
         if age_sec > max_age:
             return "accepted_observability_only", "too_old_for_mode"
 
@@ -866,7 +878,7 @@ class LocationService:
 
         return "accepted_observability_only", "older_than_canonical"
 
-    def _log_trip_tracking(  # noqa: PLR0911
+    def _log_trip_tracking(
         self,
         driver_id: int,
         latitude: float,
@@ -961,7 +973,13 @@ class LocationService:
                 session.commit()
 
             return True
-        except (OperationalError, DBAPIError, ValueError, TypeError, AttributeError) as e:
+        except (
+            OperationalError,
+            DBAPIError,
+            ValueError,
+            TypeError,
+            AttributeError,
+        ) as e:
             # DB (connexion, timeout) ou validation
             logger.debug(
                 "[LocationService] Trip tracking log failed (%s): %s",
@@ -984,7 +1002,7 @@ _location_service_instance: LocationService | None = None
 
 def get_location_service() -> LocationService:
     """Retourne l'instance singleton du LocationService."""
-    global _location_service_instance  # noqa: PLW0603
+    global _location_service_instance
     if _location_service_instance is None:
         osrm_url = os.getenv("UD_OSRM_BASE_URL", DEFAULT_OSRM_BASE_URL)
         _location_service_instance = LocationService(osrm_base_url=osrm_url)

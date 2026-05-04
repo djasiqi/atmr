@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 class SqlSessionBootstrapReader:
     """Charge `User` + relations strictement nécessaires en une requête."""
 
-    def load_user_for_bootstrap(self, public_id: str) -> tuple[SessionBootstrapSnapshot, User] | None:
+    def load_user_for_bootstrap(
+        self, public_id: str
+    ) -> tuple[SessionBootstrapSnapshot, User] | None:
         user = (
             User.query.options(
                 joinedload(cast("Any", User.driver)),
@@ -34,7 +36,9 @@ class SqlSessionBootstrapReader:
 
         drv = user.driver
         driver_id = drv.id if drv is not None else None
-        driver_company_id = cast(int | None, drv.company_id) if drv is not None else None
+        driver_company_id = (
+            cast(int | None, drv.company_id) if drv is not None else None
+        )
         driver_is_active = bool(drv.is_active) if drv is not None else None
 
         company_rel = user.company

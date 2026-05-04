@@ -4,6 +4,7 @@ Modèle A (défaut produit) : vérité « officielle » = canon Redis (cf. ``dri
 Option D (cible structurelle future) : aligner la projection REST sur la même vérité affichable
 que le fanout — évolution coordonnée, pas un changement local isolé.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,9 +51,7 @@ def build_company_driver_locations_items(
     """Construit la liste `locations` (même sémantique que l'ancien handler Flask)."""
     # selectinload(user) : évite N+1 sur driver.user (first_name, email demo) dans la boucle ci-dessous
     drivers = (
-        Driver.query.options(selectinload(Driver.user))
-        .filter_by(company_id=cid)
-        .all()
+        Driver.query.options(selectinload(Driver.user)).filter_by(company_id=cid).all()
     )
     if not drivers:
         return []
@@ -131,8 +130,8 @@ def build_company_driver_locations_items(
                     else pickup
                 )
                 raw_status = getattr(b, "status", None)
-                mission_status_val = (
-                    getattr(raw_status, "value", None) or str(raw_status or "")
+                mission_status_val = getattr(raw_status, "value", None) or str(
+                    raw_status or ""
                 )
                 active_bookings_map[driver_id_val] = {
                     "current_booking_id": getattr(b, "id", None),
@@ -182,7 +181,9 @@ def build_company_driver_locations_items(
         last_seen_seconds = None
         is_stale = True
         if loc_data:
-            last_seen_seconds = last_seen_seconds_from_location_fields(loc_data, now=now)
+            last_seen_seconds = last_seen_seconds_from_location_fields(
+                loc_data, now=now
+            )
         elif used_db_fallback:
             driver_email = str(
                 getattr(getattr(driver, "user", None), "email", "") or ""
@@ -394,7 +395,9 @@ def merge_drivers_with_locations(
             "mission_status": loc.get("mission_status")
             if loc.get("mission_status") is not None
             else drv.get("mission_status"),
-            "status": loc.get("status") if loc.get("status") is not None else drv.get("status"),
+            "status": loc.get("status")
+            if loc.get("status") is not None
+            else drv.get("status"),
             "current_booking_id": loc.get("current_booking_id")
             if loc.get("current_booking_id") is not None
             else drv.get("current_booking_id"),

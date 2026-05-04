@@ -58,12 +58,10 @@ def apply_client_urgent_return_dispatch(
 
     ret = getattr(outbound, "return_trip", None)
     if ret is None:
-        ret = (
-            Booking.query.filter_by(
-                parent_booking_id=outbound.id,
-                is_return=True,
-            ).first()
-        )
+        ret = Booking.query.filter_by(
+            parent_booking_id=outbound.id,
+            is_return=True,
+        ).first()
     if ret is None:
         return False, "return_segment_missing", None
 
@@ -161,9 +159,7 @@ def apply_client_urgent_return_dispatch(
         "scheduled_time": sched_iso,
         "time_confirmed": bool(ret.time_confirmed),
         "status": (
-            ret.status.value
-            if hasattr(ret.status, "value")
-            else str(ret.status or "")
+            ret.status.value if hasattr(ret.status, "value") else str(ret.status or "")
         ).lower(),
     }
     if assigned_driver is not None:

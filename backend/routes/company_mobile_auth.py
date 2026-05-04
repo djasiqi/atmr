@@ -492,7 +492,9 @@ def _handle_oidc_login(
     if not jwks_url:
         jwks_url = OIDC_JWKS_URL
     if not jwks_url:
-        logger.error("[AUTH][Enterprise] OIDC_JWKS_URL/OIDC_JWKS_BY_ISSUER non configuré")
+        logger.error(
+            "[AUTH][Enterprise] OIDC_JWKS_URL/OIDC_JWKS_BY_ISSUER non configuré"
+        )
         raise ValueError("Configuration OIDC incomplète (JWKS manquant).")
 
     alg = str(unverified_header.get("alg") or "")
@@ -755,9 +757,9 @@ class EnterpriseMobileRefresh(Resource):
         payload = request.get_json() or {}
         normalized_payload = dict(payload)
         if not normalized_payload.get("refresh_token"):
-            normalized_payload["refresh_token"] = (
-                payload.get("refreshToken") or payload.get("token")
-            )
+            normalized_payload["refresh_token"] = payload.get(
+                "refreshToken"
+            ) or payload.get("token")
         try:
             data = EnterpriseRefreshSchema().load(normalized_payload)
         except ValidationError as exc:
@@ -774,7 +776,9 @@ class EnterpriseMobileRefresh(Resource):
             reason: str, status: int = HTTP_UNAUTHORIZED
         ) -> Tuple[Dict[str, Any], int]:
             error = (
-                "refresh_rejected" if status == HTTP_UNAUTHORIZED else "access_forbidden"
+                "refresh_rejected"
+                if status == HTTP_UNAUTHORIZED
+                else "access_forbidden"
             )
             return (
                 {

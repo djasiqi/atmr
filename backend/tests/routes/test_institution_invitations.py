@@ -310,7 +310,9 @@ class TestInstitutionInvitation:
     # POST /institutions/users/<id>/disable
     # ================================================================
 
-    def test_disable_user_success(self, client, db, institution, admin_user, admin_headers):
+    def test_disable_user_success(
+        self, client, db, institution, admin_user, admin_headers
+    ):
         """Test: un admin peut désactiver un autre utilisateur."""
         uid = str(uuid.uuid4())[:8]
         target = User()

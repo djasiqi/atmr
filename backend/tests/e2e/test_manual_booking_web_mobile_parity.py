@@ -34,9 +34,10 @@ def _company_headers(app, company):
 
     from models import User, UserRole
 
-    user = getattr(company, "user", None) or User.query.filter_by(
-        id=company.user_id
-    ).first()
+    user = (
+        getattr(company, "user", None)
+        or User.query.filter_by(id=company.user_id).first()
+    )
     claims = {
         "role": UserRole.company.value,
         "company_id": company.id,
@@ -86,7 +87,9 @@ def _base_mobile_payload(client_id: int, scheduled_time: str):
     }
 
 
-@patch("application.companies.reservations.create_manual_booking._geocode_with_nominatim")
+@patch(
+    "application.companies.reservations.create_manual_booking._geocode_with_nominatim"
+)
 @patch("services.geolocation.osrm._route")
 @pytest.mark.e2e
 class TestManualBookingWebMobileParity:
@@ -108,7 +111,9 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
         canonical = _base_canonical_payload(customer.id, scheduled)
         mobile = _base_mobile_payload(customer.id, scheduled)
 
@@ -158,9 +163,15 @@ class TestManualBookingWebMobileParity:
         assert mobile_booking is not None
 
         fields_to_compare = [
-            "pickup_location", "dropoff_location",
-            "pickup_lat", "pickup_lon", "dropoff_lat", "dropoff_lon",
-            "client_id", "company_id", "status",
+            "pickup_location",
+            "dropoff_location",
+            "pickup_lat",
+            "pickup_lon",
+            "dropoff_lat",
+            "dropoff_lon",
+            "client_id",
+            "company_id",
+            "status",
         ]
         for f in fields_to_compare:
             v_web = getattr(web_booking, f, None)
@@ -185,8 +196,12 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
-        return_time = (datetime.now(UTC) + timedelta(days=1, hours=3)).strftime("%Y-%m-%dT13:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
+        return_time = (datetime.now(UTC) + timedelta(days=1, hours=3)).strftime(
+            "%Y-%m-%dT13:00:00"
+        )
 
         canonical = _base_canonical_payload(customer.id, scheduled)
         canonical["is_round_trip"] = True
@@ -247,7 +262,9 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
         notes_medical = "Patient sous anticoagulants, prévoir accompagnant"
 
         canonical = _base_canonical_payload(customer.id, scheduled)
@@ -306,7 +323,9 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
         lat_p, lon_p = 46.5197, 6.6323
         lat_d, lon_d = 46.5160, 6.6328
 
@@ -368,7 +387,9 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
         canonical = _base_canonical_payload(customer.id, scheduled)
         canonical["is_recurring"] = True
         canonical["recurrence_type"] = "weekly"
@@ -422,7 +443,9 @@ class TestManualBookingWebMobileParity:
             )
             .count()
         )
-        assert mobile_count >= 3, f"Mobile attendu >= 3 courses récurrentes, obtenu {mobile_count}"
+        assert mobile_count >= 3, (
+            f"Mobile attendu >= 3 courses récurrentes, obtenu {mobile_count}"
+        )
 
     def test_case6_alias_conversion_no_data_loss(
         self, mock_route, mock_geocode, app, db, client
@@ -439,7 +462,9 @@ class TestManualBookingWebMobileParity:
         db.session.commit()
         db.session.refresh(customer)
 
-        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT10:00:00")
+        scheduled = (datetime.now(UTC) + timedelta(days=1)).strftime(
+            "%Y-%m-%dT10:00:00"
+        )
         mobile = _base_mobile_payload(customer.id, scheduled)
         mobile["is_return"] = False
 
@@ -456,7 +481,9 @@ class TestManualBookingWebMobileParity:
         assert mobile_booking.pickup_location == "Rue de la Gare 1, 1000 Lausanne"
         assert mobile_booking.dropoff_location == "Avenue de la Plage 10, 1000 Lausanne"
 
-    def test_mobile_rejects_without_client_id(self, mock_route, mock_geocode, app, db, client):
+    def test_mobile_rejects_without_client_id(
+        self, mock_route, mock_geocode, app, db, client
+    ):
         """Mobile rejette si client_id absent (400)."""
         _requires_postgres(db)
 

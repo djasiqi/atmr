@@ -31,7 +31,9 @@ def test_compose_truncates_client_note_preserves_meta() -> None:
     meta = "Occurrences demandées (même trajet) : 2"
     room = NOTES_MEDICAL_ASSEMBLED_PORTAL_MAX_LENGTH - len(meta) - 1
     long_note = "N" * (room + 80)
-    out = compose_client_portal_notes_medical({"occurrences": 2, "client_note": long_note})
+    out = compose_client_portal_notes_medical(
+        {"occurrences": 2, "client_note": long_note}
+    )
     assert out is not None
     assert out.startswith(meta)
     assert "NNN" in out

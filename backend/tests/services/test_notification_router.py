@@ -138,9 +138,7 @@ def test_should_skip_push_for_driver_when_driver_progress_status():
     assert should_skip_push_for_driver(
         "BOOKING_UPDATED", "in_progress", "company", 42, 101
     )
-    assert should_skip_push_for_driver(
-        "BOOKING_UPDATED", "completed", None, None, 101
-    )
+    assert should_skip_push_for_driver("BOOKING_UPDATED", "completed", None, None, 101)
 
 
 def test_should_skip_push_for_driver_when_actor_is_driver():
@@ -224,9 +222,7 @@ def test_check_dedup_and_throttle_returns_deduped(mock_get_redis):
     mock_redis = pytest.importorskip("unittest.mock").MagicMock()
     mock_redis.get.return_value = b"1"
     mock_get_redis.return_value = mock_redis
-    skip, reason = check_dedup_and_throttle(
-        "driver", 101, "dedupe_key", "scope", 60, 1
-    )
+    skip, reason = check_dedup_and_throttle("driver", 101, "dedupe_key", "scope", 60, 1)
     assert skip is True
     assert reason == "deduped"
 

@@ -61,6 +61,7 @@ class Alert:
             "metadata": self.metadata or {},
         }
 
+
 class AlertingService:
     """Service d'alertes proactives."""
 
@@ -553,7 +554,7 @@ _alerting_service_instance: AlertingService | None = None
 
 def get_alerting_service() -> AlertingService:
     """Retourne l'instance singleton du service d'alertes."""
-    global _alerting_service_instance  # noqa: PLW0603
+    global _alerting_service_instance
     if _alerting_service_instance is None:
         _alerting_service_instance = AlertingService()
     return _alerting_service_instance

@@ -43,13 +43,15 @@ API_KEY_RANDOM_BYTES = 32
 API_KEY_HMAC_SECRET = os.getenv("API_KEY_HMAC_SECRET", "dev-secret-change-in-prod")
 
 # Scopes autorisés pour les clés API
-VALID_SCOPES = frozenset({
-    "patients:read",
-    "patients:write",
-    "requests:read",
-    "requests:write",
-    "requests:cancel",
-})
+VALID_SCOPES = frozenset(
+    {
+        "patients:read",
+        "patients:write",
+        "requests:read",
+        "requests:write",
+        "requests:cancel",
+    }
+)
 
 
 def generate_api_key() -> tuple[str, str, str]:

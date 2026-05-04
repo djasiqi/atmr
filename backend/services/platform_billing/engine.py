@@ -40,14 +40,18 @@ _SUBSCRIPTION_LINE_LABEL = (
 )
 
 
-def _dispatch_mode_for_company(company: Company, cfg: CompanyPlatformBillingConfig | None) -> str:
+def _dispatch_mode_for_company(
+    company: Company, cfg: CompanyPlatformBillingConfig | None
+) -> str:
     if cfg and cfg.dispatch_mode_override:
         return cfg.dispatch_mode_override
     dm = company.dispatch_mode
     return dm.value if hasattr(dm, "value") else str(dm)
 
 
-def _active_config(company_id: int, at: datetime) -> CompanyPlatformBillingConfig | None:
+def _active_config(
+    company_id: int, at: datetime
+) -> CompanyPlatformBillingConfig | None:
     cfg = (
         CompanyPlatformBillingConfig.query.filter(
             CompanyPlatformBillingConfig.company_id == company_id,
@@ -106,7 +110,9 @@ def select_subscription_tier(
     return None
 
 
-def _commission_bookings_for_month(company_id: int, year: int, month: int) -> list[Booking]:
+def _commission_bookings_for_month(
+    company_id: int, year: int, month: int
+) -> list[Booking]:
     start, end = zurich_month_bounds_utc(year, month)
     return (
         Booking.query.filter(
@@ -114,7 +120,9 @@ def _commission_bookings_for_month(company_id: int, year: int, month: int) -> li
             Booking.completed_at.isnot(None),
             Booking.completed_at >= start,
             Booking.completed_at <= end,
-            Booking.status.in_([BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]),
+            Booking.status.in_(
+                [BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED]
+            ),
         )
         .order_by(Booking.id.asc())
         .all()
@@ -233,17 +241,14 @@ def _build_invoice_for_company(
     )
 
     support_total = Decimal("0")
-    support_rows = (
-        PlatformSupportEntry.query.filter(
-            PlatformSupportEntry.company_id == cid,
-            PlatformSupportEntry.validated_at.isnot(None),
-            or_(
-                PlatformSupportEntry.billing_period_id.is_(None),
-                PlatformSupportEntry.billing_period_id == period.id,
-            ),
-        )
-        .all()
-    )
+    support_rows = PlatformSupportEntry.query.filter(
+        PlatformSupportEntry.company_id == cid,
+        PlatformSupportEntry.validated_at.isnot(None),
+        or_(
+            PlatformSupportEntry.billing_period_id.is_(None),
+            PlatformSupportEntry.billing_period_id == period.id,
+        ),
+    ).all()
     for se in support_rows:
         support_total += se.amount
         se.billing_period_id = period.id

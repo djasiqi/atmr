@@ -20,7 +20,9 @@ class TransportVoucherCreateSchema(Schema):
     )
     status = fields.Str(
         allow_none=True,
-        validate=validate.OneOf(["draft", "submitted", "validated", "rejected", "expired"]),
+        validate=validate.OneOf(
+            ["draft", "submitted", "validated", "rejected", "expired"]
+        ),
     )
     valid_from = fields.DateTime(allow_none=True)
     valid_to = fields.DateTime(allow_none=True)
@@ -39,7 +41,9 @@ class TransportVoucherUpdateSchema(Schema):
     )
     status = fields.Str(
         allow_none=True,
-        validate=validate.OneOf(["draft", "submitted", "validated", "rejected", "expired"]),
+        validate=validate.OneOf(
+            ["draft", "submitted", "validated", "rejected", "expired"]
+        ),
     )
     valid_from = fields.DateTime(allow_none=True)
     valid_to = fields.DateTime(allow_none=True)

@@ -112,7 +112,9 @@ class TestReminderPdfInvoiceIntact:
 
         # Act: Générer un rappel niveau 1
         use_case = GenerateInvoiceReminderUseCase()
-        result = use_case.execute(GenerateInvoiceReminderInput(invoice_id=invoice_id, level=1))
+        result = use_case.execute(
+            GenerateInvoiceReminderInput(invoice_id=invoice_id, level=1)
+        )
 
         # Assert: Vérifier que le rappel a été créé
         assert result.success, "La génération du rappel a échoué"
@@ -160,7 +162,9 @@ class TestReminderPdfInvoiceIntact:
             f"Reçu: {invoice.reminder_level}"
         )
 
-    def test_generate_multiple_reminders_creates_distinct_pdfs(self, db, sample_company, sample_client):
+    def test_generate_multiple_reminders_creates_distinct_pdfs(
+        self, db, sample_company, sample_client
+    ):
         """Test que plusieurs rappels génèrent des PDFs distincts."""
         if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
@@ -192,10 +196,16 @@ class TestReminderPdfInvoiceIntact:
         reminder_urls = []
 
         for level in [1, 2, 3]:
-            result = use_case.execute(GenerateInvoiceReminderInput(invoice_id=invoice_id, level=level))
+            result = use_case.execute(
+                GenerateInvoiceReminderInput(invoice_id=invoice_id, level=level)
+            )
             assert result.success, f"La génération du rappel niveau {level} a échoué"
-            assert result.reminder is not None, f"Le rappel niveau {level} n'a pas été créé"
-            assert result.reminder.pdf_url is not None, f"Le rappel niveau {level} n'a pas de PDF"
+            assert result.reminder is not None, (
+                f"Le rappel niveau {level} n'a pas été créé"
+            )
+            assert result.reminder.pdf_url is not None, (
+                f"Le rappel niveau {level} n'a pas de PDF"
+            )
             reminder_urls.append(result.reminder.pdf_url)
 
             # Vérifier que invoice.pdf_url reste inchangé après chaque rappel
@@ -206,8 +216,7 @@ class TestReminderPdfInvoiceIntact:
 
         # Assert: Vérifier que tous les PDFs sont distincts
         assert len(set(reminder_urls)) == 3, (
-            f"Les 3 rappels doivent avoir des PDFs distincts ! "
-            f"Reçu: {reminder_urls}"
+            f"Les 3 rappels doivent avoir des PDFs distincts ! Reçu: {reminder_urls}"
         )
         assert invoice.pdf_url not in reminder_urls, (
             "Le PDF de la facture ne doit pas être dans les PDFs des rappels !"
@@ -220,7 +229,9 @@ class TestReminderPdfInvoiceIntact:
                 f"Reçu: {url}"
             )
 
-    def test_generate_reminder_pdf_service_does_not_modify_invoice(self, db, sample_company, sample_client):
+    def test_generate_reminder_pdf_service_does_not_modify_invoice(
+        self, db, sample_company, sample_client
+    ):
         """Test que PDFService.generate_reminder_pdf ne modifie pas l'invoice."""
         if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
@@ -253,7 +264,9 @@ class TestReminderPdfInvoiceIntact:
 
         # Act: Appeler directement generate_reminder_pdf
         pdf_service = PDFService()
-        reminder_pdf_url = pdf_service.generate_reminder_pdf(invoice, level=1, reminder=None)
+        reminder_pdf_url = pdf_service.generate_reminder_pdf(
+            invoice, level=1, reminder=None
+        )
 
         # Assert: Vérifier que l'invoice n'a pas été modifié
         db.session.refresh(invoice)
@@ -277,7 +290,9 @@ class TestReminderPdfInvoiceIntact:
             "Le PDF du rappel doit avoir un filename commençant par 'reminder_' !"
         )
 
-    def test_reminder_pdf_uses_invoice_template(self, db, sample_company, sample_client):
+    def test_reminder_pdf_uses_invoice_template(
+        self, db, sample_company, sample_client
+    ):
         """Test que le PDF rappel utilise le template facture avec DÉTAIL DES PRESTATIONS."""
         if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
@@ -322,7 +337,9 @@ class TestReminderPdfInvoiceIntact:
 
         # Act: Générer un rappel niveau 1
         use_case = GenerateInvoiceReminderUseCase()
-        result = use_case.execute(GenerateInvoiceReminderInput(invoice_id=invoice_id, level=1))
+        result = use_case.execute(
+            GenerateInvoiceReminderInput(invoice_id=invoice_id, level=1)
+        )
 
         # Assert: Vérifier que le rappel a été créé
         assert result.success, "La génération du rappel a échoué"
@@ -354,7 +371,10 @@ class TestReminderPdfInvoiceIntact:
         )
 
         # Vérifier que le PDF rappel contient la ligne de frais de rappel
-        if result.reminder.reminder_fee_amount and result.reminder.reminder_fee_amount > 0:
+        if (
+            result.reminder.reminder_fee_amount
+            and result.reminder.reminder_fee_amount > 0
+        ):
             assert "Frais de rappel" in pdf_text, (
                 "Le PDF rappel doit contenir 'Frais de rappel' si des frais sont appliqués"
             )

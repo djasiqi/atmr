@@ -19,4 +19,3 @@ def test_demo_analytics_rejects_unknown_event(client):
     data = response.get_json()
     assert data["ok"] is False
     assert data["code"] == "invalid_event"
-

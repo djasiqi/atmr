@@ -30,8 +30,12 @@ class NotificationTargets:
     notify_driver_push: bool
     notify_company_socket: bool
     notify_company_push: bool
-    exclude_driver_id: int | None  # Si driver_id == exclude_driver_id, skip push/socket driver
-    exclude_company_id: int | None  # Si company_id == exclude_company_id, skip push company (actor)
+    exclude_driver_id: (
+        int | None
+    )  # Si driver_id == exclude_driver_id, skip push/socket driver
+    exclude_company_id: (
+        int | None
+    )  # Si company_id == exclude_company_id, skip push company (actor)
 
 
 def compute_notification_targets(
@@ -55,7 +59,12 @@ def compute_notification_targets(
            n'est pas un "driver progress" (en_route, in_progress, completed, return_completed)
     """
     status_lower = (status or "").lower()
-    driver_progress_statuses = {"en_route", "in_progress", "completed", "return_completed"}
+    driver_progress_statuses = {
+        "en_route",
+        "in_progress",
+        "completed",
+        "return_completed",
+    }
 
     is_driver_actor = (
         actor_role == "driver"
@@ -295,7 +304,9 @@ def compute_all_notification_targets(
     if event_type == "booking_reassigned":
         return _targets_booking_reassigned(ctx)
     if event_type == "booking_updated":
-        return _targets_booking_updated(ctx, effective_actor_role, actor_id, status_lower)
+        return _targets_booking_updated(
+            ctx, effective_actor_role, actor_id, status_lower
+        )
     if event_type == "booking_cancelled":
         return _targets_booking_cancelled(ctx, effective_actor_role)
 
@@ -311,7 +322,9 @@ def compute_all_notification_targets(
     )
 
 
-def _targets_booking_assigned(ctx: BookingNotificationContext) -> FullNotificationTargets:
+def _targets_booking_assigned(
+    ctx: BookingNotificationContext,
+) -> FullNotificationTargets:
     return FullNotificationTargets(
         notify_driver_socket=ctx.driver_id is not None,
         notify_driver_push=ctx.driver_id is not None,
@@ -328,7 +341,9 @@ def _targets_booking_assigned(ctx: BookingNotificationContext) -> FullNotificati
     )
 
 
-def _targets_booking_reassigned(ctx: BookingNotificationContext) -> FullNotificationTargets:
+def _targets_booking_reassigned(
+    ctx: BookingNotificationContext,
+) -> FullNotificationTargets:
     return FullNotificationTargets(
         notify_driver_socket=True,
         notify_driver_push=True,
@@ -367,7 +382,9 @@ def _targets_booking_updated(
     notify_owner_push = not is_company_actor
 
     # Institution : en_route + completed (skip in_progress)
-    inst_notify = ctx.is_institution_sourced and status_lower in _INSTITUTION_NOTIFY_STATUSES
+    inst_notify = (
+        ctx.is_institution_sourced and status_lower in _INSTITUTION_NOTIFY_STATUSES
+    )
 
     # Executing : toujours socket, push seulement completed/cancelled
     exec_push = ctx.is_subcontracted and status_lower in _EXECUTING_PUSH_STATUSES
@@ -408,8 +425,10 @@ def _targets_booking_cancelled(
         notify_owner_push=not is_company_actor,
         owner_company_id=ctx.owner_company_id,
         # Institution : notifiée sauf si elle est l'acteur
-        notify_institution_socket=ctx.is_institution_sourced and not is_institution_actor,
-        notify_institution_persist=ctx.is_institution_sourced and not is_institution_actor,
+        notify_institution_socket=ctx.is_institution_sourced
+        and not is_institution_actor,
+        notify_institution_persist=ctx.is_institution_sourced
+        and not is_institution_actor,
         institution_id=(
             ctx.institution_id
             if ctx.is_institution_sourced and not is_institution_actor

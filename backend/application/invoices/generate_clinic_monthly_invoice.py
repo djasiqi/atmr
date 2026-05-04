@@ -147,7 +147,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
         self.description_builder = description_builder or InvoiceDescriptionBuilder()
         self.pdf_service = pdf_service or PDFService()
 
-    def execute(  # noqa: PLR0911
+    def execute(
         self, input_data: GenerateClinicMonthlyInvoiceInput
     ) -> GenerateClinicMonthlyInvoiceOutput:
         """Génère une facture clinique mensuelle unique (S2).
@@ -817,9 +817,12 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 # Annulation facturable : utiliser cancellation_fee_amount si disponible
                 if (
                     str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-                    and getattr(reservation, "cancellation_fee_amount", None) is not None
+                    and getattr(reservation, "cancellation_fee_amount", None)
+                    is not None
                 ):
-                    base_amount = Decimal(str(reservation.cancellation_fee_amount)).quantize(two_places)
+                    base_amount = Decimal(
+                        str(reservation.cancellation_fee_amount)
+                    ).quantize(two_places)
 
                 # Arrondir base_amount à 5 centimes avant de calculer la TVA
                 base_amount = round_to_5_cents(base_amount)
@@ -958,6 +961,7 @@ class GenerateClinicMonthlyInvoiceUseCase:
                 )
                 # Réparation : retrouver la ligne par reservation_id
                 from models import InvoiceLine as ILModel
+
                 for bid in unfixed:
                     il = ILModel.query.filter_by(
                         reservation_id=bid, invoice_id=invoice.id
@@ -968,7 +972,8 @@ class GenerateClinicMonthlyInvoiceUseCase:
                             bk.invoice_line_id = il.id
                             logger.info(
                                 "  Repaired booking %s → invoice_line_id=%s",
-                                bid, il.id,
+                                bid,
+                                il.id,
                             )
                 db.session.commit()
 

@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 from ext import db
 from models.platform_change_request import PlatformChangeRequest
-
 from services.platform_governance_constants import (
     CHANGE_REQUEST_COMPLETED,
     CHANGE_REQUEST_EXECUTING,

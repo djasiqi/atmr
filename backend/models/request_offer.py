@@ -50,8 +50,9 @@ class RequestOffer(db.Model):
     __table_args__ = (
         # Une seule offre par (request, company)
         UniqueConstraint(
-            "transport_request_id", "company_id",
-            name="uq_request_offer_request_company"
+            "transport_request_id",
+            "company_id",
+            name="uq_request_offer_request_company",
         ),
         # Index pour requêtes côté company
         Index("ix_request_offers_company_status", "company_id", "status"),
@@ -173,12 +174,14 @@ class RequestOffer(db.Model):
     def accept(self) -> None:
         """Marque l'offre comme acceptée."""
         from datetime import UTC
+
         self.status = OfferStatus.ACCEPTED.value
         self.responded_at = datetime.now(UTC)
 
     def reject(self, reason: str | None = None) -> None:
         """Marque l'offre comme refusée."""
         from datetime import UTC
+
         self.status = OfferStatus.REJECTED.value
         self.responded_at = datetime.now(UTC)
         self.rejection_reason = reason
@@ -186,12 +189,14 @@ class RequestOffer(db.Model):
     def mark_unavailable(self) -> None:
         """Marque l'offre comme indisponible (une autre entreprise a accepté)."""
         from datetime import UTC
+
         self.status = OfferStatus.UNAVAILABLE.value
         self.responded_at = datetime.now(UTC)
 
     def mark_expired(self) -> None:
         """Marque l'offre comme expirée."""
         from datetime import UTC
+
         self.status = OfferStatus.EXPIRED.value
         self.responded_at = datetime.now(UTC)
 
@@ -227,7 +232,9 @@ class RequestOffer(db.Model):
                 "public_id": request.public_id,
                 "external_reference": request.external_reference,
                 "institution_id": request.institution_id,
-                "institution_name": request.institution.name if request.institution else None,
+                "institution_name": request.institution.name
+                if request.institution
+                else None,
                 "patient_name": (
                     f"{request.patient.first_name} {request.patient.last_name}"
                     if request.patient
@@ -242,8 +249,12 @@ class RequestOffer(db.Model):
                 "pickup_lat": float(request.pickup_lat) if request.pickup_lat else None,
                 "pickup_lng": float(request.pickup_lng) if request.pickup_lng else None,
                 "dropoff_location": request.dropoff_location,
-                "dropoff_lat": float(request.dropoff_lat) if request.dropoff_lat else None,
-                "dropoff_lng": float(request.dropoff_lng) if request.dropoff_lng else None,
+                "dropoff_lat": float(request.dropoff_lat)
+                if request.dropoff_lat
+                else None,
+                "dropoff_lng": float(request.dropoff_lng)
+                if request.dropoff_lng
+                else None,
                 "is_round_trip": request.is_round_trip,
                 "return_time": _iso(request.return_time),
                 "mobility": request.get_mobility(),

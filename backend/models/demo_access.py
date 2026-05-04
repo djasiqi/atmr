@@ -16,7 +16,9 @@ class DemoAccess(db.Model):
         Index("ix_demo_accesses_status", "status"),
         Index("ix_demo_accesses_demo_expires_at", "demo_expires_at"),
         Index("ix_demo_accesses_demo_request_id", "demo_request_id"),
-        Index("ix_demo_accesses_demo_request_created_at", "demo_request_id", "created_at"),
+        Index(
+            "ix_demo_accesses_demo_request_created_at", "demo_request_id", "created_at"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -24,7 +26,9 @@ class DemoAccess(db.Model):
         ForeignKey("demo_requests.id", ondelete="CASCADE"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="pending"
+    )
 
     magic_token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     magic_token_expires_at: Mapped[datetime | None] = mapped_column(
@@ -43,8 +47,12 @@ class DemoAccess(db.Model):
     provisioned_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expired_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     demo_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"),

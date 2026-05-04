@@ -107,7 +107,9 @@ def log_push_recipient_proof(
 
         app_logger.info(
             "[PUSH_RECIPIENT_PROOF] %s",
-            json.dumps({k: v for k, v in payload.items() if v is not None}, default=str),
+            json.dumps(
+                {k: v for k, v in payload.items() if v is not None}, default=str
+            ),
         )
     except Exception:
         pass

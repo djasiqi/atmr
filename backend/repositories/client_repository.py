@@ -239,10 +239,14 @@ class ClientRepository:
                 User.username,
                 cast(User.birth_date, String),
                 func.concat(
-                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                    func.coalesce(User.first_name, ""),
+                    " ",
+                    func.coalesce(User.last_name, ""),
                 ),
                 func.concat(
-                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                    func.coalesce(User.last_name, ""),
+                    " ",
+                    func.coalesce(User.first_name, ""),
                 ),
             ]
             client_fields = [
@@ -290,8 +294,7 @@ class ClientRepository:
 
         # Charger user et default_billed_to_company pour que serialize inclue default_billing
         query = Client.query.options(
-            joinedload(Client.user),
-            joinedload(Client.default_billed_to_company)
+            joinedload(Client.user), joinedload(Client.default_billed_to_company)
         ).filter(
             Client.company_id == company_id,
             Client.client_type != ClientType.PORTAL,
@@ -307,10 +310,14 @@ class ClientRepository:
                 User.username,
                 cast(User.birth_date, String),
                 func.concat(
-                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                    func.coalesce(User.first_name, ""),
+                    " ",
+                    func.coalesce(User.last_name, ""),
                 ),
                 func.concat(
-                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                    func.coalesce(User.last_name, ""),
+                    " ",
+                    func.coalesce(User.first_name, ""),
                 ),
             ]
             client_fields = [
@@ -364,10 +371,14 @@ class ClientRepository:
                 User.username,
                 cast(User.birth_date, String),
                 func.concat(
-                    func.coalesce(User.first_name, ""), " ", func.coalesce(User.last_name, "")
+                    func.coalesce(User.first_name, ""),
+                    " ",
+                    func.coalesce(User.last_name, ""),
                 ),
                 func.concat(
-                    func.coalesce(User.last_name, ""), " ", func.coalesce(User.first_name, "")
+                    func.coalesce(User.last_name, ""),
+                    " ",
+                    func.coalesce(User.first_name, ""),
                 ),
             ]
             client_fields = [

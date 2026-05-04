@@ -6,7 +6,9 @@ from datetime import datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
-from application.invoices.round_trip_booking_pairs import find_round_trip_merge_booking_pairs
+from application.invoices.round_trip_booking_pairs import (
+    find_round_trip_merge_booking_pairs,
+)
 
 
 def _booking(

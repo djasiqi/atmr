@@ -4,6 +4,7 @@ Revision ID: 20260218_drv_vehicle
 Revises: 20260217_drv_identity
 Create Date: 2026-02-18
 """
+
 from alembic import op
 import sqlalchemy as sa
 

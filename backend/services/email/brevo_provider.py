@@ -125,7 +125,11 @@ class BrevoEmailProvider:
         Returns:
             EmailResult avec succès/erreur
         """
-        provider_mode = (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api").strip().lower()
+        provider_mode = (
+            (os.getenv("EMAIL_PROVIDER_MODE", "brevo_api") or "brevo_api")
+            .strip()
+            .lower()
+        )
         if provider_mode == "brevo_smtp":
             return self._send_invoice_email_via_smtp(
                 from_email=from_email,
@@ -179,12 +183,14 @@ class BrevoEmailProvider:
                                 "CID normalisé inattendu: %s (attendu: company_logo)",
                                 cid_normalized,
                             )
-                        brevo_inline_images.append({
-                            "name": filename,
-                            "content": content_b64,
-                            "contentId": cid_normalized,  # Doit être "company_logo" (sans chevrons) pour correspondre à src="cid:company_logo"
-                            "contentType": mime_type,
-                        })
+                        brevo_inline_images.append(
+                            {
+                                "name": filename,
+                                "content": content_b64,
+                                "contentId": cid_normalized,  # Doit être "company_logo" (sans chevrons) pour correspondre à src="cid:company_logo"
+                                "contentType": mime_type,
+                            }
+                        )
                         if EMAIL_SIGNATURE_DEBUG:
                             logger.info(
                                 (
@@ -206,7 +212,9 @@ class BrevoEmailProvider:
                                 )
                     else:
                         # Pièce jointe normale
-                        brevo_attachments.append({"name": filename, "content": content_b64})
+                        brevo_attachments.append(
+                            {"name": filename, "content": content_b64}
+                        )
 
             # Construire la requête Brevo
             payload = {
@@ -255,9 +263,7 @@ class BrevoEmailProvider:
 
             # Envoi via API Brevo
             logger.info(
-                (
-                    "Envoi email via Brevo : %s -> %s (sujet: %s)"
-                ),
+                ("Envoi email via Brevo : %s -> %s (sujet: %s)"),
                 from_email,
                 to_email,
                 subject,
@@ -269,7 +275,9 @@ class BrevoEmailProvider:
                 if "inlineImage" in payload_debug:
                     for img in payload_debug["inlineImage"]:
                         img_debug = img.copy()
-                        img_debug["content"] = f"[BASE64_LEN={len(img.get('content', ''))}]"
+                        img_debug["content"] = (
+                            f"[BASE64_LEN={len(img.get('content', ''))}]"
+                        )
                         logger.info(
                             "[EMAIL_SIGNATURE_DEBUG] Brevo payload.inlineImage: %s",
                             img_debug,
@@ -344,7 +352,9 @@ class BrevoEmailProvider:
 
             # Texte brut (fallback pour clients non-HTML)
             plain_text = re.sub(r"<[^>]+>", " ", html_content)
-            plain_text = " ".join(plain_text.split()).strip() or "Voir le message en HTML."
+            plain_text = (
+                " ".join(plain_text.split()).strip() or "Voir le message en HTML."
+            )
 
             # multipart/related
             related = MIMEMultipart("related")
@@ -355,7 +365,11 @@ class BrevoEmailProvider:
             related.attach(alt)
 
             # Image inline Content-ID: <company_logo> Content-Disposition: inline
-            if logo_inline and logo_inline.get("content") and logo_inline.get("cid") == "company_logo":
+            if (
+                logo_inline
+                and logo_inline.get("content")
+                and logo_inline.get("cid") == "company_logo"
+            ):
                 logo_bytes = logo_inline["content"]
                 mime_type = logo_inline.get("mime_type", "image/png")
                 if isinstance(logo_bytes, str):
@@ -369,7 +383,9 @@ class BrevoEmailProvider:
                 else:
                     img = MIMEImage(logo_bytes, _subtype="png")
                 img.add_header("Content-ID", "<company_logo>")
-                img.add_header("Content-Disposition", "inline", filename="company_logo.png")
+                img.add_header(
+                    "Content-Disposition", "inline", filename="company_logo.png"
+                )
                 related.attach(img)
 
             # Racine: mixed si pièces jointes, sinon related
@@ -605,11 +621,10 @@ class BrevoEmailProvider:
         """
         result = self.verify_domain(domain)
         if result.spf_record or result.dkim_record:
-            dns_dict = {
+            return {
                 "spf": result.spf_record or "Aucun enregistrement SPF trouvé",
                 "dkim": result.dkim_record or "Aucun enregistrement DKIM trouvé",
             }
-            return dns_dict
         return None
 
     def test_connection(self) -> bool:

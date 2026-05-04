@@ -67,6 +67,7 @@ notifications_list_model = institution_notifications_ns.model(
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
+
 @institution_notifications_ns.route("")
 class NotificationList(Resource):
     """Liste des notifications de l'institution."""
@@ -95,31 +96,25 @@ class NotificationList(Resource):
             cutoff = datetime.now(UTC) - timedelta(hours=24)
 
             # Notifications des dernières 24h OU non lues (même > 24h)
-            base_filter = (
-                InstitutionNotification.query
-                .filter(
-                    InstitutionNotification.institution_id == institution_id,
-                    or_(
-                        InstitutionNotification.created_at >= cutoff,
-                        InstitutionNotification.is_read.is_(False),
-                    ),
-                )
+            base_filter = InstitutionNotification.query.filter(
+                InstitutionNotification.institution_id == institution_id,
+                or_(
+                    InstitutionNotification.created_at >= cutoff,
+                    InstitutionNotification.is_read.is_(False),
+                ),
             )
 
             notifications = (
-                base_filter
-                .order_by(InstitutionNotification.created_at.desc())
+                base_filter.order_by(InstitutionNotification.created_at.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
             )
 
             # Compteur non-lues (toutes, pas juste 24h)
-            unread_count = (
-                InstitutionNotification.query
-                .filter_by(institution_id=institution_id, is_read=False)
-                .count()
-            )
+            unread_count = InstitutionNotification.query.filter_by(
+                institution_id=institution_id, is_read=False
+            ).count()
 
             total = base_filter.count()
 
@@ -185,11 +180,9 @@ class NotificationReadAll(Resource):
         try:
             institution_id = _get_institution_id()
 
-            updated = (
-                InstitutionNotification.query
-                .filter_by(institution_id=institution_id, is_read=False)
-                .update({"is_read": True})
-            )
+            updated = InstitutionNotification.query.filter_by(
+                institution_id=institution_id, is_read=False
+            ).update({"is_read": True})
             db.session.commit()
 
             logger.info(

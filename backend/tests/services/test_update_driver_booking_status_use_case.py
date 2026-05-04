@@ -131,10 +131,13 @@ def test_release_cancels_assignment_and_triggers_dispatch() -> None:
 
     # Mock publish_event pour qu'il échoue, forçant l'appel à emit_assignment_cancelled
     # Mock ext.db.session.no_autoflush (évite app context dans test unitaire)
-    with patch(
-        "application.events.event_bus.publish_event",
-        side_effect=Exception("Event publish failed"),
-    ), patch("ext.db.session") as mock_session:
+    with (
+        patch(
+            "application.events.event_bus.publish_event",
+            side_effect=Exception("Event publish failed"),
+        ),
+        patch("ext.db.session") as mock_session,
+    ):
         mock_session.no_autoflush = nullcontext()
         res = uc.execute(
             UpdateDriverBookingStatusCommand(

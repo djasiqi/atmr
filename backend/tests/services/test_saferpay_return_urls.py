@@ -9,7 +9,9 @@ from services.saferpay.payment_page import _return_urls_with_outcome_override
 
 
 def test_validate_return_url_override_ok(monkeypatch):
-    monkeypatch.setenv("SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "https://legacy.example.org")
+    monkeypatch.setenv(
+        "SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "https://legacy.example.org"
+    )
     u = ru.validate_return_url_override("https://legacy.example.org/cb?x=1")
     assert u.startswith("https://legacy.example.org")
 
@@ -36,14 +38,18 @@ def test_validate_return_url_override_allows_app_scheme(monkeypatch):
 
 
 def test_validate_return_url_override_rejects_forbidden_scheme(monkeypatch):
-    monkeypatch.setenv("SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "javascript://payment-return")
+    monkeypatch.setenv(
+        "SAFERPAY_ALLOWED_RETURN_URL_PREFIXES", "javascript://payment-return"
+    )
     with pytest.raises(ValueError, match="schéma interdit"):
         ru.validate_return_url_override("javascript://payment-return?bookingId=1")
 
 
 def test_default_saferpay_return_urls_prefers_public_base(monkeypatch):
     monkeypatch.delenv("CLIENT_WEB_BASE_URL", raising=False)
-    monkeypatch.setenv("SAFERPAY_CHECKOUT_PUBLIC_BASE_URL", "https://tunnel.example.com")
+    monkeypatch.setenv(
+        "SAFERPAY_CHECKOUT_PUBLIC_BASE_URL", "https://tunnel.example.com"
+    )
     a, b, c = ru.default_saferpay_return_urls(booking_id=42, payment_id=7)
     assert "bookingId=42" in a
     assert "paymentId=7" in a
@@ -83,9 +89,7 @@ def test_default_localhost_allowed_with_flag(monkeypatch):
 
 def test_return_url_override_adds_outcome_and_ids():
     base = "https://app.example.com/client/payment/saferpay/return"
-    s, f, a = _return_urls_with_outcome_override(
-        base, booking_id=9, payment_id=88
-    )
+    s, f, a = _return_urls_with_outcome_override(base, booking_id=9, payment_id=88)
     assert "outcome=success" in s
     assert "outcome=fail" in f
     assert "outcome=abort" in a
@@ -95,8 +99,6 @@ def test_return_url_override_adds_outcome_and_ids():
 
 def test_return_url_override_preserves_existing_query():
     base = "https://app.example.com/return?foo=1"
-    s, _, _ = _return_urls_with_outcome_override(
-        base, booking_id=1, payment_id=2
-    )
+    s, _, _ = _return_urls_with_outcome_override(base, booking_id=1, payment_id=2)
     assert "foo=1" in s
     assert "outcome=success" in s

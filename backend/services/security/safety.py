@@ -423,7 +423,7 @@ _safety_guards_instance: SafetyGuards | None = None
 
 def get_safety_guards() -> SafetyGuards:
     """Retourne l'instance globale des Safety Guards."""
-    global _safety_guards_instance  # noqa: PLW0603
+    global _safety_guards_instance
     if _safety_guards_instance is None:
         _safety_guards_instance = SafetyGuards()
     return _safety_guards_instance
@@ -431,5 +431,5 @@ def get_safety_guards() -> SafetyGuards:
 
 def reset_safety_guards() -> None:
     """Remet à zéro l'instance globale des Safety Guards."""
-    global _safety_guards_instance  # noqa: PLW0603
+    global _safety_guards_instance
     _safety_guards_instance = None

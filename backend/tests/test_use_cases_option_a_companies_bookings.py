@@ -91,7 +91,9 @@ def test_update_booking_rejects_en_route():
     booking = FakeBooking(status=BookingStatusEnum.EN_ROUTE)
     uc = UpdatePendingBookingUseCase()
     res = uc.execute(
-        UpdatePendingBookingInput(booking=booking, validated_data={"pickup_location": "Z"})
+        UpdatePendingBookingInput(
+            booking=booking, validated_data={"pickup_location": "Z"}
+        )
     )
     assert res.success is False
     assert res.status_code == 400

@@ -55,21 +55,32 @@ class InstitutionMetricsSnapshot:
     def to_dict(self) -> dict[str, Any]:
         """Convertit en dictionnaire pour logging/API."""
         return {
-            "period_start": self.period_start.isoformat() if self.period_start else None,
+            "period_start": self.period_start.isoformat()
+            if self.period_start
+            else None,
             "period_end": self.period_end.isoformat() if self.period_end else None,
             "requests": {
                 "sent": self.total_requests_sent,
                 "converted": self.total_requests_converted,
                 "conversion_rate_percent": (
-                    round(self.total_requests_converted / self.total_requests_sent * 100, 2)
+                    round(
+                        self.total_requests_converted / self.total_requests_sent * 100,
+                        2,
+                    )
                     if self.total_requests_sent > 0
                     else 0
                 ),
             },
             "send_to_accept": {
-                "avg_seconds": round(self.avg_send_to_accept_seconds, 2) if self.avg_send_to_accept_seconds else None,
-                "min_seconds": round(self.min_send_to_accept_seconds, 2) if self.min_send_to_accept_seconds else None,
-                "max_seconds": round(self.max_send_to_accept_seconds, 2) if self.max_send_to_accept_seconds else None,
+                "avg_seconds": round(self.avg_send_to_accept_seconds, 2)
+                if self.avg_send_to_accept_seconds
+                else None,
+                "min_seconds": round(self.min_send_to_accept_seconds, 2)
+                if self.min_send_to_accept_seconds
+                else None,
+                "max_seconds": round(self.max_send_to_accept_seconds, 2)
+                if self.max_send_to_accept_seconds
+                else None,
                 "avg_human": _format_duration(self.avg_send_to_accept_seconds),
             },
             "offers": {
@@ -149,7 +160,11 @@ class InstitutionMetricsService:
                     if delta > 0:  # Ignorer les valeurs aberrantes
                         send_to_accept_times.append(delta)
 
-            avg_time = sum(send_to_accept_times) / len(send_to_accept_times) if send_to_accept_times else None
+            avg_time = (
+                sum(send_to_accept_times) / len(send_to_accept_times)
+                if send_to_accept_times
+                else None
+            )
             min_time = min(send_to_accept_times) if send_to_accept_times else None
             max_time = max(send_to_accept_times) if send_to_accept_times else None
 
@@ -168,7 +183,9 @@ class InstitutionMetricsService:
                 RequestOffer.status == OfferStatus.EXPIRED.value
             ).count()
 
-            expiration_rate = (expired_offers / total_offers * 100) if total_offers > 0 else 0.0
+            expiration_rate = (
+                (expired_offers / total_offers * 100) if total_offers > 0 else 0.0
+            )
 
             # 4. Escalades (offres en mode SEQUENTIAL avec order > 0)
             # Une escalade = une offre séquentielle créée après la première (order > 0)
@@ -186,13 +203,12 @@ class InstitutionMetricsService:
 
             # 5. Fallback broadcast (offres BROADCAST sur requests qui avaient des préférences)
             # Identifié par: mode=BROADCAST mais des offres SEQUENTIAL existent aussi
-            fallback_query = (
-                db.session.query(func.count(func.distinct(RequestOffer.transport_request_id)))
-                .filter(
-                    RequestOffer.sent_at >= period_start,
-                    RequestOffer.sent_at <= now,
-                    RequestOffer.mode == OfferMode.BROADCAST.value,
-                )
+            fallback_query = db.session.query(
+                func.count(func.distinct(RequestOffer.transport_request_id))
+            ).filter(
+                RequestOffer.sent_at >= period_start,
+                RequestOffer.sent_at <= now,
+                RequestOffer.mode == OfferMode.BROADCAST.value,
             )
             # Sous-requête: requests qui ont aussi des offres SEQUENTIAL
             sequential_request_ids = (
@@ -231,7 +247,9 @@ class InstitutionMetricsService:
         period_hours: int = 24,
     ) -> None:
         """Calcule et logge les métriques (pour monitoring)."""
-        metrics = InstitutionMetricsService.compute_metrics(institution_id, period_hours)
+        metrics = InstitutionMetricsService.compute_metrics(
+            institution_id, period_hours
+        )
         metrics_dict = metrics.to_dict()
 
         log_msg = (
@@ -256,7 +274,9 @@ class InstitutionMetricsService:
         )
 
 
-def track_send_event(transport_request_id: int, institution_id: int, mode: str, offers_created: int) -> None:
+def track_send_event(
+    transport_request_id: int, institution_id: int, mode: str, offers_created: int
+) -> None:
     """Tracke un événement d'envoi (appelé depuis SendTransportRequestUseCase)."""
     logger.info(
         "📤 [Metric:Send] request_id=%d institution_id=%d mode=%s offers=%d",

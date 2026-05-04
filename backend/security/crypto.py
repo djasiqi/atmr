@@ -242,7 +242,7 @@ def get_encryption_service() -> EncryptionService:
 
     ✅ 2.5: Charge aussi les clés legacy depuis LEGACY_ENCRYPTION_KEYS.
     """
-    global _encryption_service  # noqa: PLW0603
+    global _encryption_service
 
     if _encryption_service is None:
         # Charger la clé maître depuis variable d'environnement
@@ -287,5 +287,5 @@ def get_encryption_service() -> EncryptionService:
 
 def reset_encryption_service() -> None:
     """Reset le service (pour tests)."""
-    global _encryption_service  # noqa: PLW0603
+    global _encryption_service
     _encryption_service = None

@@ -93,7 +93,9 @@ def compose_client_portal_notes_medical(validated_data: dict[str, Any]) -> str |
     sep = "\n"
     overhead = len(meta_block) + (len(sep) if client_note else 0)
     room_for_note = max_total - overhead
-    trimmed_note = _truncate_with_ellipsis(client_note, room_for_note) if client_note else ""
+    trimmed_note = (
+        _truncate_with_ellipsis(client_note, room_for_note) if client_note else ""
+    )
 
     if trimmed_note and len(client_note) > len(trimmed_note):
         logger.info(

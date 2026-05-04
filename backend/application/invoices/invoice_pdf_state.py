@@ -33,7 +33,9 @@ def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _sanitize_error_for_meta(message: str, *, max_len: int = _MAX_META_ERROR_LEN) -> str:
+def _sanitize_error_for_meta(
+    message: str, *, max_len: int = _MAX_META_ERROR_LEN
+) -> str:
     msg = (message or "").strip().replace("\n", " ")
     if len(msg) > max_len:
         return msg[: max_len - 1] + "…"
@@ -105,14 +107,20 @@ def get_pdf_state(invoice: Invoice) -> PdfState:
 
     # Inférence conservative sans persistance
     if pdf_url and _locked_non_draft(invoice):
-        return PdfState(status="ready", generated_at=None, content_updated_at=None, error=None)
+        return PdfState(
+            status="ready", generated_at=None, content_updated_at=None, error=None
+        )
 
     if pdf_url and _invoice_status_value(invoice) == InvoiceStatus.DRAFT.value:
         # Legacy sans meta.pdf : prêt par défaut ; mark_pdf_stale après mutations reprend la main.
-        return PdfState(status="ready", generated_at=None, content_updated_at=None, error=None)
+        return PdfState(
+            status="ready", generated_at=None, content_updated_at=None, error=None
+        )
 
     if not pdf_url and _invoice_status_value(invoice) == InvoiceStatus.DRAFT.value:
-        return PdfState(status="stale", generated_at=None, content_updated_at=None, error=None)
+        return PdfState(
+            status="stale", generated_at=None, content_updated_at=None, error=None
+        )
 
     if not pdf_url and _locked_non_draft(invoice):
         return PdfState(
@@ -122,7 +130,9 @@ def get_pdf_state(invoice: Invoice) -> PdfState:
             error="MISSING_PDF",
         )
 
-    return PdfState(status="ready", generated_at=None, content_updated_at=None, error=None)
+    return PdfState(
+        status="ready", generated_at=None, content_updated_at=None, error=None
+    )
 
 
 def is_pdf_stale(invoice: Invoice) -> bool:
@@ -138,8 +148,12 @@ def mark_pdf_stale(invoice: Invoice, *, content_changed: bool = True) -> None:
     prev = _persisted_pdf_blob(invoice) or {}
     pdf_meta: dict[str, Any] = {
         "status": "stale",
-        "generated_at": prev.get("generated_at") if isinstance(prev.get("generated_at"), str) else None,
-        "content_updated_at": now if content_changed else prev.get("content_updated_at"),
+        "generated_at": prev.get("generated_at")
+        if isinstance(prev.get("generated_at"), str)
+        else None,
+        "content_updated_at": now
+        if content_changed
+        else prev.get("content_updated_at"),
         "error": None,
     }
     if not content_changed and isinstance(prev.get("content_updated_at"), str):
@@ -172,7 +186,9 @@ def mark_pdf_failed(invoice: Invoice, error: str) -> None:
         invoice,
         {
             "status": "failed",
-            "generated_at": prev.get("generated_at") if isinstance(prev.get("generated_at"), str) else None,
+            "generated_at": prev.get("generated_at")
+            if isinstance(prev.get("generated_at"), str)
+            else None,
             "content_updated_at": prev.get("content_updated_at")
             if isinstance(prev.get("content_updated_at"), str)
             else None,
@@ -181,7 +197,7 @@ def mark_pdf_failed(invoice: Invoice, error: str) -> None:
     )
 
 
-def ensure_draft_pdf_ready_for_send(invoice: Invoice) -> tuple[bool, str | None]:  # noqa: PLR0911
+def ensure_draft_pdf_ready_for_send(invoice: Invoice) -> tuple[bool, str | None]:
     """Brouillon : refuse si ``failed`` ; régénère si nécessaire. Ne fait pas ``commit``."""
     if _invoice_status_value(invoice) != InvoiceStatus.DRAFT.value:
         return True, None

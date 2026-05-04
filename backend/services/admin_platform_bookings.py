@@ -46,7 +46,9 @@ def _parse_date_start(s: str | None, field_name: str):
         return None
     value = str(s).strip()
     if not ISO_DATE_PATTERN.fullmatch(value):
-        raise ValidationError({field_name: ["Date invalide (format attendu YYYY-MM-DD)"]})
+        raise ValidationError(
+            {field_name: ["Date invalide (format attendu YYYY-MM-DD)"]}
+        )
     return datetime.fromisoformat(f"{value}T00:00:00+00:00")
 
 
@@ -55,7 +57,9 @@ def _parse_date_end(s: str | None, field_name: str):
         return None
     value = str(s).strip()
     if not ISO_DATE_PATTERN.fullmatch(value):
-        raise ValidationError({field_name: ["Date invalide (format attendu YYYY-MM-DD)"]})
+        raise ValidationError(
+            {field_name: ["Date invalide (format attendu YYYY-MM-DD)"]}
+        )
     return datetime.fromisoformat(f"{value}T23:59:59.999999+00:00")
 
 
@@ -284,9 +288,7 @@ def build_admin_bookings_query(
     if needs_investigation is True:
         query = query.filter(_needs_investigation_condition(datetime.now(UTC)))
     elif needs_investigation is False:
-        query = query.filter(
-            not_(_needs_investigation_condition(datetime.now(UTC)))
-        )
+        query = query.filter(not_(_needs_investigation_condition(datetime.now(UTC))))
 
     return query
 
@@ -310,10 +312,14 @@ def _batch_list_transfer_flags(bookings: list[Booking]) -> dict[int, tuple[bool,
         has_pending = any(t.status == TransferStatus.PENDING for t in transfers)
         has_transfer = False
         for t in transfers:
-            if t.status in (
-                TransferStatus.ACCEPTED,
-                TransferStatus.COMPLETED,
-            ) and t.owner_company_id != b.company_id:
+            if (
+                t.status
+                in (
+                    TransferStatus.ACCEPTED,
+                    TransferStatus.COMPLETED,
+                )
+                and t.owner_company_id != b.company_id
+            ):
                 has_transfer = True
                 break
         out[b.id] = (has_transfer, has_pending)
@@ -366,11 +372,7 @@ def admin_booking_list_item(
     has_transfer: bool | None = None,
 ) -> dict[str, Any]:
     status_val = booking.status
-    key = (
-        status_val.value
-        if hasattr(status_val, "value")
-        else str(status_val).upper()
-    )
+    key = status_val.value if hasattr(status_val, "value") else str(status_val).upper()
     inst_name = None
     if booking.client:
         li = getattr(booking.client, "linked_institution", None)
@@ -465,9 +467,7 @@ def admin_booking_list_item_fixed(
     base["needs_investigation"] = _compute_needs_investigation_booking(
         booking, has_pending_transfer=has_pending_transfer
     )
-    ht = (
-        bool(booking._is_transferred()) if has_transfer is None else has_transfer
-    )
+    ht = bool(booking._is_transferred()) if has_transfer is None else has_transfer
     hp = has_pending_transfer
     if hp is None:
         hp = _batch_list_transfer_flags([booking]).get(booking.id, (False, False))[1]
@@ -590,11 +590,7 @@ def build_admin_booking_detail(
     """Payload GET /admin/bookings/:id."""
     full = booking.serialize
     status_val = booking.status
-    key = (
-        status_val.value
-        if hasattr(status_val, "value")
-        else str(status_val).upper()
-    )
+    key = status_val.value if hasattr(status_val, "value") else str(status_val).upper()
 
     current = booking.executing_company or booking.company
     previous = _previous_company_from_transfers(booking.id)
@@ -775,4 +771,6 @@ def export_admin_bookings_csv(**filter_kwargs: Any) -> tuple[bytes, str]:
                 ota if ota is not None else "",
             ]
         )
-    return buf.getvalue().encode("utf-8-sig"), f"bookings_export_{datetime.now(UTC).date()}.csv"
+    return buf.getvalue().encode(
+        "utf-8-sig"
+    ), f"bookings_export_{datetime.now(UTC).date()}.csv"

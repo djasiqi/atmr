@@ -57,5 +57,7 @@ def upgrade():
 
 def downgrade():
     op.drop_index("ix_comp_notif_company_created", table_name="company_notifications")
-    op.drop_index("ix_comp_notif_company_read_created", table_name="company_notifications")
+    op.drop_index(
+        "ix_comp_notif_company_read_created", table_name="company_notifications"
+    )
     op.drop_table("company_notifications")

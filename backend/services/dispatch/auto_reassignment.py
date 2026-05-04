@@ -105,7 +105,7 @@ class AutoReassignmentService:
         self.enabled = enabled
         self.suggestion_engine = SuggestionEngine()
 
-    def check_and_reassign(  # noqa: PLR0911
+    def check_and_reassign(
         self,
         assignment_id: int,
         delay_threshold_minutes: int | None = None,
@@ -576,7 +576,7 @@ _auto_reassignment_service_instance: AutoReassignmentService | None = None
 
 def get_auto_reassignment_service() -> AutoReassignmentService:
     """Retourne l'instance singleton du AutoReassignmentService."""
-    global _auto_reassignment_service_instance  # noqa: PLW0603
+    global _auto_reassignment_service_instance
     if _auto_reassignment_service_instance is None:
         enabled = os.getenv("AUTO_REASSIGNMENT_ENABLED", "false").lower() == "true"
         _auto_reassignment_service_instance = AutoReassignmentService(enabled=enabled)

@@ -13,7 +13,9 @@ _ISO_DATE_LEN = 10
 
 
 def _day_str_from_booking(booking: Any) -> str | None:
-    st = getattr(booking, "scheduled_time", None) or getattr(booking, "pickup_time", None)
+    st = getattr(booking, "scheduled_time", None) or getattr(
+        booking, "pickup_time", None
+    )
     if st is None:
         return None
     if hasattr(st, "date") and callable(getattr(st, "date", None)):
@@ -26,7 +28,9 @@ def _day_str_from_booking(booking: Any) -> str | None:
     return None
 
 
-def invalidate_reservations_summary_cache(company_id: int | None, day_str: str | None) -> None:
+def invalidate_reservations_summary_cache(
+    company_id: int | None, day_str: str | None
+) -> None:
     """Supprime la clé summary:reservations:{company_id}:{YYYY-MM-DD} si Redis est disponible."""
     if company_id is None or not day_str:
         return
@@ -64,9 +68,5 @@ def invalidate_summary_cache_for_booking_after_day_change(
     """Invalide le jour courant et, si la course a changé de jour, l'ancien jour aussi."""
     invalidate_summary_cache_for_booking(company_id, booking)
     new_day = _day_str_from_booking(booking)
-    if (
-        previous_day_str
-        and new_day
-        and previous_day_str != new_day
-    ):
+    if previous_day_str and new_day and previous_day_str != new_day:
         invalidate_reservations_summary_cache(company_id, previous_day_str)

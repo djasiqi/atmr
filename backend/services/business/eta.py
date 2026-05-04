@@ -341,7 +341,7 @@ def get_eta_service() -> EtaService:
     Returns:
         Instance EtaService
     """
-    global _eta_service_instance  # noqa: PLW0603
+    global _eta_service_instance
 
     if _eta_service_instance is None:
         # Charger modèle ML si disponible

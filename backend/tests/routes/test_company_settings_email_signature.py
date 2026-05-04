@@ -79,9 +79,7 @@ class TestCompanySettingsEmailSignature:
         result_dict = billing_reloaded.to_dict()
         assert result_dict.get("email_signature_text") is None
 
-    def test_email_signature_mode_and_html_template_persistence(
-        self, db, test_company
-    ):
+    def test_email_signature_mode_and_html_template_persistence(self, db, test_company):
         """Test que email_signature_mode et email_signature_html_template sont persistés."""
         if not test_company:
             pytest.skip("Required fixture missing")
@@ -96,7 +94,7 @@ class TestCompanySettingsEmailSignature:
 
         # Act: Définir mode HTML avec template
         html_template = (
-            '<table><tr><td><strong>{{ name }}</strong><br>{{ phone }}</td>'
+            "<table><tr><td><strong>{{ name }}</strong><br>{{ phone }}</td>"
             '<td style="border-left: 2px solid #1b4b7a;">Colonne droite</td></tr></table>'
         )
         billing.email_signature_mode = "html"
@@ -111,7 +109,9 @@ class TestCompanySettingsEmailSignature:
         ).first()
         assert billing_reloaded.email_signature_mode == "html"
         assert billing_reloaded.email_signature_html_template == html_template
-        assert billing_reloaded.email_signature_logo_url == "https://example.com/logo.png"
+        assert (
+            billing_reloaded.email_signature_logo_url == "https://example.com/logo.png"
+        )
 
         result_dict = billing_reloaded.to_dict()
         assert result_dict["email_signature_mode"] == "html"

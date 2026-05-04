@@ -202,10 +202,16 @@ class Booking(db.Model):
     dropoff_lat = Column(Float)
     dropoff_lon = Column(Float)
     pickup_geo_unit_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("geo_unit.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer,
+        ForeignKey("geo_unit.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     dropoff_geo_unit_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("geo_unit.id", ondelete="SET NULL"), nullable=True, index=True
+        Integer,
+        ForeignKey("geo_unit.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     pickup_zip = Column(String(16), nullable=True)
     dropoff_zip = Column(String(16), nullable=True)
@@ -300,7 +306,9 @@ class Booking(db.Model):
 
     # ✅ Annulation standardisée (motif obligatoire, facturation déterministe)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
-    cancelled_by_role = Column(String(20), nullable=True)  # company | driver | admin | system
+    cancelled_by_role = Column(
+        String(20), nullable=True
+    )  # company | driver | admin | system
     cancellation_reason_code = Column(String(50), nullable=True)
     cancellation_reason_text = Column(Text, nullable=True)
     is_cancellation_billable = Column(Boolean, nullable=True)
@@ -453,7 +461,9 @@ class Booking(db.Model):
             "pickup_admin_confidence": self.pickup_admin_confidence,
             "pickup_admin_label": self.pickup_admin_label,
             "pickup_admin_resolved_at": (
-                pickup_admin_resolved_dt.isoformat() if pickup_admin_resolved_dt else None
+                pickup_admin_resolved_dt.isoformat()
+                if pickup_admin_resolved_dt
+                else None
             ),
             "dropoff_admin_token": self.dropoff_admin_token,
             "dropoff_canton_code": self.dropoff_canton_code,
@@ -461,7 +471,9 @@ class Booking(db.Model):
             "dropoff_admin_confidence": self.dropoff_admin_confidence,
             "dropoff_admin_label": self.dropoff_admin_label,
             "dropoff_admin_resolved_at": (
-                dropoff_admin_resolved_dt.isoformat() if dropoff_admin_resolved_dt else None
+                dropoff_admin_resolved_dt.isoformat()
+                if dropoff_admin_resolved_dt
+                else None
             ),
             "amount": round(amt, 2),
             "price_amount": _as_float(self.price_amount),
@@ -499,8 +511,12 @@ class Booking(db.Model):
                 "door_code": getattr(cli, "door_code", None) if cli else None,
                 "floor": getattr(cli, "floor", None) if cli else None,
                 "access_notes": getattr(cli, "access_notes", None) if cli else None,
-                "is_institution": bool(getattr(cli, "is_institution", False)) if cli else False,
-                "institution_name": getattr(cli, "institution_name", None) if cli else None,
+                "is_institution": bool(getattr(cli, "is_institution", False))
+                if cli
+                else False,
+                "institution_name": getattr(cli, "institution_name", None)
+                if cli
+                else None,
             },
             # ✅ P1-4 Phase 1.2: Remplacer company (string) par company_id + company_name
             "company_id": self.company_id,
@@ -620,7 +636,9 @@ class Booking(db.Model):
             "cancellation_reason_text": self.cancellation_reason_text,
             "is_cancellation_billable": self.is_cancellation_billable,
             "cancellation_display_label": self.cancellation_display_label,
-            "cancellation_fee_amount": float(self.cancellation_fee_amount) if getattr(self, "cancellation_fee_amount", None) is not None else None,  # type: ignore[arg-type]
+            "cancellation_fee_amount": float(self.cancellation_fee_amount)
+            if getattr(self, "cancellation_fee_amount", None) is not None
+            else None,  # type: ignore[arg-type]
             "cancellation_fee_percent": self.cancellation_fee_percent,
             "cancellation_fee_tier_id": self.cancellation_fee_tier_id,
             # ✅ Timeline institution (si booking issu d'une demande institution)
@@ -638,7 +656,9 @@ class Booking(db.Model):
                 if str(getattr(p, "payment_provider", "")).strip().lower()
                 in {"saferpay", "worldline"}
             ]
-            row = max(candidate_rows, key=lambda p: int(getattr(p, "id", 0)), default=None)
+            row = max(
+                candidate_rows, key=lambda p: int(getattr(p, "id", 0)), default=None
+            )
             if not row:
                 return None
             st = row.status.value if hasattr(row.status, "value") else str(row.status)
@@ -673,7 +693,11 @@ class Booking(db.Model):
         """
         try:
             reqs = getattr(self, "source_request", None)
-            if not reqs and getattr(self, "is_return", False) and self.parent_booking_id:  # type: ignore[truthy-bool]
+            if (
+                not reqs
+                and getattr(self, "is_return", False)
+                and self.parent_booking_id
+            ):  # type: ignore[truthy-bool]
                 parent = getattr(self, "return_trip", None)
                 if parent:
                     reqs = getattr(parent, "source_request", None)
@@ -698,8 +722,12 @@ class Booking(db.Model):
                 "sent_at": req.sent_at.isoformat() if req.sent_at else None,
                 "accepted_at": req.accepted_at.isoformat() if req.accepted_at else None,
                 "accepted_by_company_name": company_name,
-                "converted_at": req.converted_at.isoformat() if req.converted_at else None,
-                "cancelled_at": req.cancelled_at.isoformat() if req.cancelled_at else None,
+                "converted_at": req.converted_at.isoformat()
+                if req.converted_at
+                else None,
+                "cancelled_at": req.cancelled_at.isoformat()
+                if req.cancelled_at
+                else None,
             }
         except Exception:
             return None
@@ -842,11 +870,7 @@ class Booking(db.Model):
         # ✅ Sentinelle 00:00:00 = "heure à définir" : ne pas valider "dans le passé"
         is_sentinel_midnight = st.hour == 0 and st.minute == 0 and st.second == 0
         time_confirmed = getattr(self, "time_confirmed", True)
-        if (
-            not is_sentinel_midnight
-            and st < now_local()
-            and time_confirmed
-        ):
+        if not is_sentinel_midnight and st < now_local() and time_confirmed:
             msg = "Heure prévue dans le passé."
             raise ValueError(msg)
         return st

@@ -1705,7 +1705,7 @@ class PermissionRequests(Resource):
     @institutions_ns.response(409, "Demande déjà en cours")
     @jwt_required()
     @role_required(UserRole.INSTITUTION)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Envoie une demande de droits à l'admin de l'institution.
 
         Accessible à tous les rôles institution (sauf admin qui a déjà tous les droits).
@@ -1717,9 +1717,7 @@ class PermissionRequests(Resource):
 
             # L'admin n'a pas besoin de demander des droits
             if current_role == InstitutionRole.ADMIN.value:
-                return {
-                    "error": "Les administrateurs ont déjà tous les droits"
-                }, 400
+                return {"error": "Les administrateurs ont déjà tous les droits"}, 400
 
             data = request.get_json() or {}
             schema = PermissionRequestCreateSchema()
@@ -1734,9 +1732,15 @@ class PermissionRequests(Resource):
             requested_role = str(validated_raw.get("requested_role") or "")
             message = str(validated_raw.get("message") or "")
             if not requested_role:
-                return {"error": "Données invalides", "details": {"requested_role": ["Champ requis"]}}, 400
+                return {
+                    "error": "Données invalides",
+                    "details": {"requested_role": ["Champ requis"]},
+                }, 400
             if not message:
-                return {"error": "Données invalides", "details": {"message": ["Champ requis"]}}, 400
+                return {
+                    "error": "Données invalides",
+                    "details": {"message": ["Champ requis"]},
+                }, 400
 
             # Vérifier qu'il n'y a pas déjà une demande pending
             existing = _get_permission_requests(institution.id)
@@ -1850,14 +1854,10 @@ class PermissionRequestResolve(Resource):
             data = request.get_json() or {}
             action = data.get("action")
             if action not in ("approve", "deny"):
-                return {
-                    "error": "Action invalide. Utilisez 'approve' ou 'deny'."
-                }, 400
+                return {"error": "Action invalide. Utilisez 'approve' ou 'deny'."}, 400
 
             all_requests = _get_permission_requests(institution.id)
-            pr = next(
-                (r for r in all_requests if r["id"] == request_id), None
-            )
+            pr = next((r for r in all_requests if r["id"] == request_id), None)
             if not pr:
                 return {"error": "Demande non trouvée"}, 404
 

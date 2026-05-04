@@ -184,10 +184,7 @@ class Client(db.Model):
     # Validators
     @validates("contact_email")
     def validate_contact_email(self, _key: str, email: str) -> str:
-        if (
-            self.management_mode == ManagementMode.SELF_SERVICE
-            and not email
-        ):
+        if self.management_mode == ManagementMode.SELF_SERVICE and not email:
             msg = "L'email est requis pour les clients self-service."
             raise ValueError(msg)
         if email:

@@ -61,6 +61,7 @@ def _allowed_file(filename: str) -> bool:
     ext = filename.rsplit(".", 1)[1].lower()
     return ext in ALLOWED_EXT
 
+
 transport_vouchers_ns = Namespace(
     "transport-vouchers",
     description="Gestion des bons de transport (justificatifs facturation)",
@@ -81,7 +82,9 @@ transport_voucher_model = transport_vouchers_ns.model(
         "client_id": fields.Integer(description="ID du client"),
         "booking_id": fields.Integer(description="ID de la course (optionnel)"),
         "billing_party_id": fields.Integer(description="ID du payeur (optionnel)"),
-        "type": fields.String(description="Type de bon", enum=["clinic", "insurance", "other"]),
+        "type": fields.String(
+            description="Type de bon", enum=["clinic", "insurance", "other"]
+        ),
         "status": fields.String(
             description="Statut",
             enum=["draft", "submitted", "validated", "rejected", "expired"],
@@ -103,7 +106,9 @@ def _serialize_transport_voucher(voucher: TransportVoucher) -> dict[str, Any]:
     """Sérialise un TransportVoucher en dictionnaire."""
     billing_party = None
     if voucher.billing_party_id:
-        billing_party = BillingParty.query.filter_by(id=voucher.billing_party_id).first()
+        billing_party = BillingParty.query.filter_by(
+            id=voucher.billing_party_id
+        ).first()
 
     return {
         "id": voucher.id,
@@ -112,14 +117,20 @@ def _serialize_transport_voucher(voucher: TransportVoucher) -> dict[str, Any]:
         "booking_id": voucher.booking_id,
         "billing_party_id": voucher.billing_party_id,
         "billing_party_name": billing_party.legal_name if billing_party else None,
-        "type": voucher.type.value if hasattr(voucher.type, "value") else str(voucher.type),
-        "status": voucher.status.value if hasattr(voucher.status, "value") else str(voucher.status),
+        "type": voucher.type.value
+        if hasattr(voucher.type, "value")
+        else str(voucher.type),
+        "status": voucher.status.value
+        if hasattr(voucher.status, "value")
+        else str(voucher.status),
         "valid_from": voucher.valid_from.isoformat() if voucher.valid_from else None,
         "valid_to": voucher.valid_to.isoformat() if voucher.valid_to else None,
         "external_ref": voucher.external_ref,
         "notes": voucher.notes,
         "validated_by_user_id": voucher.validated_by_user_id,
-        "validated_at": voucher.validated_at.isoformat() if voucher.validated_at else None,
+        "validated_at": voucher.validated_at.isoformat()
+        if voucher.validated_at
+        else None,
         "created_by_user_id": voucher.created_by_user_id,
         "created_at": voucher.created_at.isoformat() if voucher.created_at else None,
         "updated_at": voucher.updated_at.isoformat() if voucher.updated_at else None,
@@ -190,9 +201,11 @@ class TransportVouchersList(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
     @transport_vouchers_ns.expect(transport_voucher_model)
-    @transport_vouchers_ns.response(201, "Bon créé avec succès", transport_voucher_model)
+    @transport_vouchers_ns.response(
+        201, "Bon créé avec succès", transport_voucher_model
+    )
     @transport_vouchers_ns.response(400, "Erreur de validation", validation_error_model)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Créer un bon de transport."""
         from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
@@ -204,7 +217,9 @@ class TransportVouchersList(Resource):
 
         data = request.get_json() or {}
         try:
-            validated = validate_request(TransportVoucherCreateSchema(), data, strict=False)
+            validated = validate_request(
+                TransportVoucherCreateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -217,7 +232,9 @@ class TransportVouchersList(Resource):
         # Vérifier booking si fourni
         booking_id = validated.get("booking_id")
         if booking_id:
-            booking = Booking.query.filter_by(id=booking_id, company_id=company.id).first()
+            booking = Booking.query.filter_by(
+                id=booking_id, company_id=company.id
+            ).first()
             if not booking:
                 return APIErrorHandler.handle_not_found("Booking", booking_id, logger)
 
@@ -228,7 +245,9 @@ class TransportVouchersList(Resource):
                 id=billing_party_id, company_id=company.id
             ).first()
             if not billing_party:
-                return APIErrorHandler.handle_not_found("BillingParty", billing_party_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "BillingParty", billing_party_id, logger
+                )
 
         user = get_current_user_via_use_case()
 
@@ -278,13 +297,15 @@ class TransportVoucherById(Resource):
             .first()
         )
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         return {"success": True, "data": _serialize_transport_voucher(voucher)}, 200
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def patch(self, voucher_id: int):  # noqa: PLR0911
+    def patch(self, voucher_id: int):
         """Modifier un bon."""
         from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
@@ -294,13 +315,19 @@ class TransportVoucherById(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         data = request.get_json() or {}
         try:
-            validated = validate_request(TransportVoucherUpdateSchema(), data, strict=False)
+            validated = validate_request(
+                TransportVoucherUpdateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -308,9 +335,13 @@ class TransportVoucherById(Resource):
         if "booking_id" in validated:
             booking_id = validated.get("booking_id")
             if booking_id:
-                booking = Booking.query.filter_by(id=booking_id, company_id=company.id).first()
+                booking = Booking.query.filter_by(
+                    id=booking_id, company_id=company.id
+                ).first()
                 if not booking:
-                    return APIErrorHandler.handle_not_found("Booking", booking_id, logger)
+                    return APIErrorHandler.handle_not_found(
+                        "Booking", booking_id, logger
+                    )
             voucher.booking_id = booking_id
 
         if "billing_party_id" in validated:
@@ -320,7 +351,9 @@ class TransportVoucherById(Resource):
                     id=billing_party_id, company_id=company.id
                 ).first()
                 if not billing_party:
-                    return APIErrorHandler.handle_not_found("BillingParty", billing_party_id, logger)
+                    return APIErrorHandler.handle_not_found(
+                        "BillingParty", billing_party_id, logger
+                    )
             voucher.billing_party_id = billing_party_id
 
         if validated.get("type"):
@@ -362,9 +395,13 @@ class TransportVoucherById(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         # Ne permettre la suppression que si draft
         if voucher.status != TransportVoucherStatus.DRAFT:
@@ -394,12 +431,14 @@ class TransportVoucherValidate(Resource):
         transport_vouchers_ns.model(
             "ValidateRequest",
             {
-                "billing_party_id": fields.Integer(description="ID du payeur (optionnel)"),
+                "billing_party_id": fields.Integer(
+                    description="ID du payeur (optionnel)"
+                ),
                 "notes": fields.String(description="Notes de validation"),
             },
         )
     )
-    def post(self, voucher_id: int):  # noqa: PLR0911
+    def post(self, voucher_id: int):
         """Valider un bon (passe en status=validated)."""
         from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
 
@@ -409,9 +448,13 @@ class TransportVoucherValidate(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         # Vérifier que le bon peut être validé
         if voucher.status == TransportVoucherStatus.VALIDATED:
@@ -428,7 +471,9 @@ class TransportVoucherValidate(Resource):
 
         data = request.get_json() or {}
         try:
-            validated = validate_request(TransportVoucherValidateSchema(), data, strict=False)
+            validated = validate_request(
+                TransportVoucherValidateSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -439,7 +484,9 @@ class TransportVoucherValidate(Resource):
                 id=billing_party_id, company_id=company.id
             ).first()
             if not billing_party:
-                return APIErrorHandler.handle_not_found("BillingParty", billing_party_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "BillingParty", billing_party_id, logger
+                )
             voucher.billing_party_id = billing_party_id
 
         user = get_current_user_via_use_case()
@@ -449,7 +496,9 @@ class TransportVoucherValidate(Resource):
         voucher.validated_by_user_id = getattr(user, "id", None) if user else None
         voucher.validated_at = now_utc()
         if validated.get("notes"):
-            voucher.notes = (voucher.notes or "") + f"\n[Validation] {validated['notes']}"
+            voucher.notes = (
+                voucher.notes or ""
+            ) + f"\n[Validation] {validated['notes']}"
         voucher.updated_at = now_utc()
 
         try:
@@ -487,13 +536,19 @@ class TransportVoucherReject(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         data = request.get_json() or {}
         try:
-            validated = validate_request(TransportVoucherRejectSchema(), data, strict=False)
+            validated = validate_request(
+                TransportVoucherRejectSchema(), data, strict=False
+            )
         except ValidationError as e:
             return handle_validation_error(e)
 
@@ -523,7 +578,7 @@ class TransportVoucherFiles(Resource):
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def post(self, voucher_id: int):  # noqa: PLR0911  # Many returns due to validation checks
+    def post(self, voucher_id: int):  # Many returns due to validation checks
         """Upload un fichier pour un bon de transport."""
         company, err, code = get_company_from_token()
         if err:
@@ -531,9 +586,13 @@ class TransportVoucherFiles(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         # Validation fichiers
         files = request.files.getlist("file")
@@ -645,13 +704,15 @@ class TransportVoucherFiles(Resource):
                 "file_url": voucher_file.file_url,
                 "filename": voucher_file.filename,
                 "mime_type": voucher_file.mime_type,
-                "created_at": voucher_file.created_at.isoformat() if voucher_file.created_at else None,
+                "created_at": voucher_file.created_at.isoformat()
+                if voucher_file.created_at
+                else None,
             },
         }, 201
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def delete(self, voucher_id: int):  # noqa: PLR0911
+    def delete(self, voucher_id: int):
         """Supprime un fichier attaché à un bon."""
         company, err, code = get_company_from_token()
         if err:
@@ -659,9 +720,13 @@ class TransportVoucherFiles(Resource):
         if not company:
             return APIErrorHandler.handle_not_found("Company", None, logger)
 
-        voucher = TransportVoucher.query.filter_by(id=voucher_id, company_id=company.id).first()
+        voucher = TransportVoucher.query.filter_by(
+            id=voucher_id, company_id=company.id
+        ).first()
         if not voucher:
-            return APIErrorHandler.handle_not_found("TransportVoucher", voucher_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucher", voucher_id, logger
+            )
 
         file_id = request.args.get("file_id", type=int)
         if not file_id:
@@ -674,14 +739,18 @@ class TransportVoucherFiles(Resource):
             id=file_id, voucher_id=voucher.id
         ).first()
         if not voucher_file:
-            return APIErrorHandler.handle_not_found("TransportVoucherFile", file_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "TransportVoucherFile", file_id, logger
+            )
 
         # Supprimer le fichier physique
         try:
             from urllib.parse import urlparse
 
             parsed_url = urlparse(voucher_file.file_url)
-            file_path = Path(current_app.config.get("UPLOADS_DIR", "/app/uploads")) / parsed_url.path.lstrip("/")
+            file_path = Path(
+                current_app.config.get("UPLOADS_DIR", "/app/uploads")
+            ) / parsed_url.path.lstrip("/")
             if file_path.exists():
                 file_path.unlink()
         except Exception as e:

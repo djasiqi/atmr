@@ -36,20 +36,46 @@ def upgrade():
         sa.Column("score", sa.Integer(), server_default="0", nullable=False),
         sa.Column("status", sa.String(length=32), server_default="new", nullable=False),
         sa.Column("trace_id", sa.String(length=64), nullable=False),
-        sa.Column("source", sa.String(length=64), server_default="web_demo_request", nullable=False),
+        sa.Column(
+            "source",
+            sa.String(length=64),
+            server_default="web_demo_request",
+            nullable=False,
+        ),
         sa.Column("ip_address", sa.String(length=64), nullable=True),
         sa.Column("user_agent", sa.String(length=512), nullable=True),
         sa.Column("assigned_channel", sa.String(length=120), nullable=True),
-        sa.Column("email_delivery_status", sa.String(length=32), server_default="pending", nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "email_delivery_status",
+            sa.String(length=32),
+            server_default="pending",
+            nullable=False,
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_demo_requests_created_at", "demo_requests", ["created_at"], unique=False)
-    op.create_index("ix_demo_requests_status", "demo_requests", ["status"], unique=False)
+    op.create_index(
+        "ix_demo_requests_created_at", "demo_requests", ["created_at"], unique=False
+    )
+    op.create_index(
+        "ix_demo_requests_status", "demo_requests", ["status"], unique=False
+    )
     op.create_index("ix_demo_requests_score", "demo_requests", ["score"], unique=False)
     op.create_index("ix_demo_requests_email", "demo_requests", ["email"], unique=False)
-    op.create_index("ix_demo_requests_trace_id", "demo_requests", ["trace_id"], unique=False)
+    op.create_index(
+        "ix_demo_requests_trace_id", "demo_requests", ["trace_id"], unique=False
+    )
 
 
 def downgrade():

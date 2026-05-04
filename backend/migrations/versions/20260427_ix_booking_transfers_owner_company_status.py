@@ -25,7 +25,10 @@ def upgrade() -> None:
     inspector = inspect(bind)
     if "booking_transfers" not in inspector.get_table_names(schema="public"):
         return
-    existing = {idx["name"] for idx in inspector.get_indexes("booking_transfers", schema="public")}
+    existing = {
+        idx["name"]
+        for idx in inspector.get_indexes("booking_transfers", schema="public")
+    }
     if INDEX_NAME in existing:
         return
     op.execute(

@@ -14,7 +14,8 @@ _disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
 # ✅ RECOMMANDATION A: Auto-détection des commandes de migration
 # Si la commande contient 'db' ou 'alembic', désactiver eventlet automatiquement
 _is_migration_command = any(
-    arg in ("db", "alembic", "migrate", "upgrade", "downgrade", "stamp", "heads", "current")
+    arg
+    in ("db", "alembic", "migrate", "upgrade", "downgrade", "stamp", "heads", "current")
     for arg in sys.argv
 )
 
@@ -135,8 +136,7 @@ def seed_demo(reset: bool, profile_name: str):
             reset=reset,
         )
     click.echo(
-        f"✅ Seed demo terminé (profile={profile_name}, reset={reset}) "
-        f"- {summary}"
+        f"✅ Seed demo terminé (profile={profile_name}, reset={reset}) - {summary}"
     )
 
 

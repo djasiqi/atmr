@@ -96,9 +96,7 @@ def compute_ride_line_draft(
         base_amount = Decimal(str(fixed_price)).quantize(two_places)
     else:
         base_amount = Decimal(str(reservation.amount or 0)).quantize(two_places)
-    catalog_ht_patient = (
-        base_amount if mission_type != "material_delivery" else None
-    )
+    catalog_ht_patient = base_amount if mission_type != "material_delivery" else None
     override = overrides_map.get(reservation.id)
     if (
         mission_type != "material_delivery"
@@ -140,9 +138,7 @@ def compute_ride_line_draft(
     base_amount = round_to_5_cents(base_amount)
 
     line_adjustment_note = (
-        str(override["note"])[:500]
-        if override and override.get("note")
-        else None
+        str(override["note"])[:500] if override and override.get("note") else None
     )
     override_had_amount = bool(
         mission_type != "material_delivery"
@@ -168,9 +164,7 @@ def compute_ride_line_draft(
         line_adjustment_note = None
 
     is_delivery = mission_type == "material_delivery"
-    _is_cancelled = (
-        str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-    )
+    _is_cancelled = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
     description = build_invoice_line_description(
         reservation,
         patient_name=patient_name,
@@ -182,9 +176,7 @@ def compute_ride_line_draft(
     )
 
     line_type = (
-        InvoiceLineType.MATERIAL_DELIVERY
-        if is_delivery
-        else InvoiceLineType.RIDE
+        InvoiceLineType.MATERIAL_DELIVERY if is_delivery else InvoiceLineType.RIDE
     )
     return RideLineDraft(
         base_amount=base_amount,

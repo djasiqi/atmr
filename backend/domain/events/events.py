@@ -90,7 +90,9 @@ class BookingCancelledEvent(DomainEvent):
     actor_role: str | None = None  # "driver" | "company" | "institution" | "system"
     actor_id: int | None = None  # domain ID (driver_id, company_id, institution_id)
     cancel_reason: str | None = None
-    cancel_source: str | None = None  # "company_api" | "driver_api" | "institution_api" | "system"
+    cancel_source: str | None = (
+        None  # "company_api" | "driver_api" | "institution_api" | "system"
+    )
 
 
 @dataclass(frozen=True, slots=True)

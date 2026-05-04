@@ -27,8 +27,11 @@ def mock_billing_settings():
 class TestEmailSignatureSvgFallback:
     """Tests pour le fallback SVG vers URL absolue."""
 
-    def test_svg_logo_fallback_to_url(self, mock_company_svg, mock_billing_settings, monkeypatch):
+    def test_svg_logo_fallback_to_url(
+        self, mock_company_svg, mock_billing_settings, monkeypatch
+    ):
         """Test que logo SVG déclenche fallback vers URL absolue (pas de CID)."""
+
         # Mock _get_logo_bytes pour retourner SVG
         def mock_get_logo_bytes(logo_url):
             if logo_url.endswith(".svg"):

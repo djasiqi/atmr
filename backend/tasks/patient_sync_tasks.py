@@ -7,6 +7,7 @@ Traite les PatientSyncEvent (outbox) de manière :
 - Sûre (FOR UPDATE SKIP LOCKED empêche le double traitement)
 - Observable (audit logs + statut mis à jour)
 """
+
 from __future__ import annotations
 
 import json
@@ -39,8 +40,7 @@ def process_pending_sync_events() -> dict[str, Any]:
     """
     # Sélectionner un batch d'événements pending avec verrouillage
     events = (
-        PatientSyncEvent.query
-        .filter_by(status="pending")
+        PatientSyncEvent.query.filter_by(status="pending")
         .order_by(PatientSyncEvent.created_at)
         .limit(_BATCH_SIZE)
         .with_for_update(skip_locked=True)
@@ -123,21 +123,24 @@ def _process_single_event(event: PatientSyncEvent) -> None:
                     event.changed_fields,
                 )
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=None,
-                action="SYNC_APPLIED",
-                entity_type=link.entity_type,
-                entity_id=link.entity_id,
-                metadata_json={
-                    "event_id": event.id,
-                    "fields": list(event.changed_fields.keys()),
-                },
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=None,
+                    action="SYNC_APPLIED",
+                    entity_type=link.entity_type,
+                    entity_id=link.entity_id,
+                    metadata_json={
+                        "event_id": event.id,
+                        "fields": list(event.changed_fields.keys()),
+                    },
+                )
+            )
         except Exception as exc:
             errors.append(f"{link.entity_type}:{link.entity_id} - {exc!s}")
 
     target_count = sum(
-        1 for lnk in links
+        1
+        for lnk in links
         if not (
             lnk.entity_type == event.source_entity_type
             and lnk.entity_id == event.source_entity_id

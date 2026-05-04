@@ -11,9 +11,9 @@ from .payment_reference_generator import (
 
 __all__ = [
     "BillingProfileService",
-    "sync_banking_identifiers",
     "PaymentReferenceGenerator",
     "generate_scor_reference",
     "get_or_create_billing_party_for_legacy_bill_to_client",
+    "sync_banking_identifiers",
     "validate_scor_reference",
 ]

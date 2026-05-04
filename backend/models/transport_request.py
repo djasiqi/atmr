@@ -132,9 +132,7 @@ class TransportRequest(db.Model):
     )
 
     # Référence externe DPI (OBLIGATOIRE et UNIQUE par institution)
-    external_reference: Mapped[str] = mapped_column(
-        String(100), nullable=False
-    )
+    external_reference: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Patient (optionnel, null pour livraisons)
     patient_id: Mapped[int | None] = mapped_column(
@@ -150,9 +148,7 @@ class TransportRequest(db.Model):
         default=MissionType.PATIENT_TRANSPORT.value,
         server_default=MissionType.PATIENT_TRANSPORT.value,
     )
-    delivery_description: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )
+    delivery_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Horaire
     scheduled_time = Column(DateTime(timezone=True), nullable=False)
@@ -166,22 +162,14 @@ class TransportRequest(db.Model):
 
     # Lieux
     pickup_location: Mapped[str] = mapped_column(String(255), nullable=False)
-    pickup_lat: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
-    pickup_lng: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
+    pickup_lat: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    pickup_lng: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
     pickup_floor: Mapped[str | None] = mapped_column(String(50), nullable=True)
     pickup_door_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     dropoff_location: Mapped[str] = mapped_column(String(255), nullable=False)
-    dropoff_lat: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
-    dropoff_lng: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 7), nullable=True
-    )
+    dropoff_lat: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    dropoff_lng: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
     dropoff_floor: Mapped[str | None] = mapped_column(String(50), nullable=True)
     dropoff_door_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -288,7 +276,9 @@ class TransportRequest(db.Model):
 
     @override
     def __repr__(self) -> str:
-        return f"<TransportRequest {self.id}: {self.external_reference} ({self.status})>"
+        return (
+            f"<TransportRequest {self.id}: {self.external_reference} ({self.status})>"
+        )
 
     @validates("pickup_type", "dropoff_type")
     def validate_location_type(self, _key: str, value: str | None) -> str | None:
@@ -313,7 +303,9 @@ class TransportRequest(db.Model):
         """Valide le type d'horaire."""
         valid_types = ScheduledTimeType.choices()
         if value not in valid_types:
-            raise ValueError(f"scheduled_time_type must be one of: {', '.join(valid_types)}")
+            raise ValueError(
+                f"scheduled_time_type must be one of: {', '.join(valid_types)}"
+            )
         return value
 
     @validates("billing_intent")
@@ -321,7 +313,9 @@ class TransportRequest(db.Model):
         """Valide l'intention de facturation."""
         valid_intents = BillingIntent.choices()
         if value not in valid_intents:
-            raise ValueError(f"billing_intent must be one of: {', '.join(valid_intents)}")
+            raise ValueError(
+                f"billing_intent must be one of: {', '.join(valid_intents)}"
+            )
         return value
 
     @validates("status")
@@ -466,7 +460,9 @@ class TransportRequest(db.Model):
     @staticmethod
     def _build_single_booking_summary(booking: Any) -> dict[str, Any]:
         raw_status = booking.status
-        status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status)
+        status_str = (
+            raw_status.value if hasattr(raw_status, "value") else str(raw_status)
+        )
         raw_billed = getattr(booking, "billed_to_type", None)
         billed_str = (
             raw_billed.value  # pyright: ignore[reportOptionalMemberAccess]
@@ -478,10 +474,13 @@ class TransportRequest(db.Model):
             try:
                 from models.enums import InvoiceStatus
                 from models.invoice import Invoice, InvoiceLine
+
                 il = InvoiceLine.query.get(booking.invoice_line_id)
                 if il:
                     inv = Invoice.query.get(il.invoice_id)
-                    is_invoiced = inv is not None and inv.status != InvoiceStatus.CANCELLED
+                    is_invoiced = (
+                        inv is not None and inv.status != InvoiceStatus.CANCELLED
+                    )
             except Exception:
                 is_invoiced = bool(booking.invoice_line_id)
 
@@ -497,9 +496,15 @@ class TransportRequest(db.Model):
             "completed_at": _iso(getattr(booking, "completed_at", None)),
             "cancelled_at": _iso(getattr(booking, "cancelled_at", None)),
             "cancelled_by_role": getattr(booking, "cancelled_by_role", None),
-            "cancellation_reason_code": getattr(booking, "cancellation_reason_code", None),
-            "cancellation_display_label": getattr(booking, "cancellation_display_label", None),
-            "is_cancellation_billable": getattr(booking, "is_cancellation_billable", None),
+            "cancellation_reason_code": getattr(
+                booking, "cancellation_reason_code", None
+            ),
+            "cancellation_display_label": getattr(
+                booking, "cancellation_display_label", None
+            ),
+            "is_cancellation_billable": getattr(
+                booking, "is_cancellation_billable", None
+            ),
         }
 
     @classmethod

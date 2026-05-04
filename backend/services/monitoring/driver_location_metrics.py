@@ -24,6 +24,7 @@ _KNOWN_ACCEPT_REASONS: frozenset[str] = frozenset(
     }
 )
 
+
 def _metrics_enabled() -> bool:
     return os.getenv("DRIVER_LOCATION_METRICS_ENABLED", "true").lower() not in (
         "0",
@@ -188,7 +189,11 @@ def inc_dedup_skipped(
         return
     lm = _norm_mode(location_mode)
     t = transport if transport in ("http", "socket", "socket_batch") else "http"
-    r = reason if reason in ("duplicate_event_id", "duplicate_proximity") else "_unknown"
+    r = (
+        reason
+        if reason in ("duplicate_event_id", "duplicate_proximity")
+        else "_unknown"
+    )
     _DEDUP_SKIPPED.labels(reason=r, location_mode=lm, transport=t).inc()
 
 
@@ -232,12 +237,17 @@ def inc_processed(
     lm = _norm_mode(location_mode)
     ar = _norm_reason(accept_reason)
     t = transport if transport in ("http", "socket", "socket_batch") else "http"
-    st = accept_status if accept_status in (
-        "accepted_canonical",
-        "accepted_observability_only",
-        "rejected_invalid",
-        "skipped",
-    ) else "_unknown"
+    st = (
+        accept_status
+        if accept_status
+        in (
+            "accepted_canonical",
+            "accepted_observability_only",
+            "rejected_invalid",
+            "skipped",
+        )
+        else "_unknown"
+    )
     _PROCESSED.labels(
         accept_status=st,
         accept_reason=ar,
@@ -249,11 +259,20 @@ def inc_processed(
 def inc_fanout(*, event: str, accept_status: str) -> None:
     if not _metrics_enabled() or _FANOUT is None:
         return
-    ev = event if event in ("driver_location_update", "driver_live_state_update") else "_unknown"
-    st = accept_status if accept_status in (
-        "accepted_canonical",
-        "accepted_observability_only",
-    ) else "_unknown"
+    ev = (
+        event
+        if event in ("driver_location_update", "driver_live_state_update")
+        else "_unknown"
+    )
+    st = (
+        accept_status
+        if accept_status
+        in (
+            "accepted_canonical",
+            "accepted_observability_only",
+        )
+        else "_unknown"
+    )
     _FANOUT.labels(event=ev, accept_status=st).inc()
 
 

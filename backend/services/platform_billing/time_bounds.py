@@ -6,12 +6,13 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 _ZURICH = ZoneInfo("Europe/Zurich")
+_DECEMBER = 12
 
 
 def zurich_month_bounds_utc(year: int, month: int) -> tuple[datetime, datetime]:
     """Début (inclus) et fin (inclus) du mois en UTC."""
     start_local = datetime(year, month, 1, 0, 0, 0, tzinfo=_ZURICH)
-    if month == 12:
+    if month == _DECEMBER:
         next_local = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=_ZURICH)
     else:
         next_local = datetime(year, month + 1, 1, 0, 0, 0, tzinfo=_ZURICH)

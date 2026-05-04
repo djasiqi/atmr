@@ -63,11 +63,19 @@ def _patch_db_layer(monkeypatch):
 
 
 def _patch_pipeline(monkeypatch, duplicate=None, rate_limited=False):
-    monkeypatch.setattr("routes.contact.find_recent_duplicate", lambda *args, **kwargs: duplicate)
+    monkeypatch.setattr(
+        "routes.contact.find_recent_duplicate", lambda *args, **kwargs: duplicate
+    )
     monkeypatch.setattr("routes.contact.in_cooldown", lambda *args, **kwargs: False)
-    monkeypatch.setattr("routes.contact.hit_rate_limit", lambda *args, **kwargs: rate_limited)
-    monkeypatch.setattr("routes.contact._acquire_email_send_lock", lambda *args, **kwargs: True)
-    monkeypatch.setattr("routes.contact._has_sent_for_hash", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        "routes.contact.hit_rate_limit", lambda *args, **kwargs: rate_limited
+    )
+    monkeypatch.setattr(
+        "routes.contact._acquire_email_send_lock", lambda *args, **kwargs: True
+    )
+    monkeypatch.setattr(
+        "routes.contact._has_sent_for_hash", lambda *args, **kwargs: False
+    )
     monkeypatch.setattr("routes.contact._mark_email_sending", lambda *args, **kwargs: 1)
     monkeypatch.setattr(
         "routes.contact._extract_optional_auth_context",
@@ -122,12 +130,16 @@ def test_contact_request_create_success_all_categories(client, db, monkeypatch):
     assert len(calls) == 6
 
 
-def test_contact_request_validation_error_institution_missing_required(client, monkeypatch):
+def test_contact_request_validation_error_institution_missing_required(
+    client, monkeypatch
+):
     _patch_db_layer(monkeypatch)
     _patch_pipeline(monkeypatch)
     response = client.post(
         "/api/v1/contact/requests",
-        json=_payload(category="institution", organization_type=None, integration_required=None),
+        json=_payload(
+            category="institution", organization_type=None, integration_required=None
+        ),
     )
     assert response.status_code == 400
     assert response.get_json()["error"] == "validation_error"
@@ -145,7 +157,9 @@ def test_contact_request_silent_spam_no_email(client, monkeypatch):
 
     monkeypatch.setattr("routes.contact.send_contact_notification", _mark_called)
 
-    response = client.post("/api/v1/contact/requests", json=_payload(website="https://spam.example"))
+    response = client.post(
+        "/api/v1/contact/requests", json=_payload(website="https://spam.example")
+    )
     assert response.status_code == 200
     assert was_called["value"] is False
     assert store["last"].status == "spam"
@@ -155,7 +169,9 @@ def test_contact_request_dedupe_returns_existing_trace(client, monkeypatch):
     _patch_db_layer(monkeypatch)
     existing = SimpleNamespace(trace_id="ct_EXISTING", status="new")
     _patch_pipeline(monkeypatch, duplicate=existing)
-    monkeypatch.setattr("routes.contact.send_contact_notification", lambda payload: {"ok": True})
+    monkeypatch.setattr(
+        "routes.contact.send_contact_notification", lambda payload: {"ok": True}
+    )
 
     response = client.post("/api/v1/contact/requests", json=_payload())
     assert response.status_code == 200
@@ -181,10 +197,14 @@ def test_contact_request_rate_limit_by_category(client, monkeypatch):
     assert response.status_code == 429
 
 
-def test_contact_request_concurrency_guard_suppresses_duplicate_email(client, monkeypatch):
+def test_contact_request_concurrency_guard_suppresses_duplicate_email(
+    client, monkeypatch
+):
     _patch_db_layer(monkeypatch)
     _patch_pipeline(monkeypatch)
-    monkeypatch.setattr("routes.contact._has_sent_for_hash", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        "routes.contact._has_sent_for_hash", lambda *args, **kwargs: True
+    )
     called = {"count": 0}
 
     def _send(payload):
@@ -195,4 +215,3 @@ def test_contact_request_concurrency_guard_suppresses_duplicate_email(client, mo
     response = client.post("/api/v1/contact/requests", json=_payload())
     assert response.status_code == 200
     assert called["count"] == 0
-

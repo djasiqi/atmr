@@ -111,7 +111,9 @@ def get_institution_context() -> tuple[int, int | None]:
 
     # Vérifier que l'utilisateur a le rôle admin
     if institution_role != InstitutionRole.ADMIN.value:
-        abort(403, description="Seuls les administrateurs peuvent gérer les préférences")
+        abort(
+            403, description="Seuls les administrateurs peuvent gérer les préférences"
+        )
 
     user_id = get_jwt_identity()
     return institution_id, user_id
@@ -263,7 +265,8 @@ class EligibleCompanies(Resource):
         security="BearerAuth",
     )
     @institution_settings_ns.response(
-        200, "Succès",
+        200,
+        "Succès",
         institution_settings_ns.model(
             "EligibleCompaniesList",
             {
@@ -290,8 +293,7 @@ class EligibleCompanies(Resource):
             # un record Company non-approuvé (cas normal : seules les vraies
             # entreprises de transport sont approuvées par l'admin).
             companies = (
-                Company.query
-                .filter(Company.is_approved.is_(True))
+                Company.query.filter(Company.is_approved.is_(True))
                 .order_by(Company.name)
                 .all()
             )
@@ -303,12 +305,14 @@ class EligibleCompanies(Resource):
 
             result = []
             for company in companies:
-                result.append({
-                    "id": company.id,
-                    "name": company.name,
-                    "address": company.address,
-                    "is_preferred": company.id in preferred_ids,
-                })
+                result.append(
+                    {
+                        "id": company.id,
+                        "name": company.name,
+                        "address": company.address,
+                        "is_preferred": company.id in preferred_ids,
+                    }
+                )
 
             return {
                 "companies": result,

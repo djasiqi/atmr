@@ -6,9 +6,19 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Any
 
 from ext import db
-from models import Company, DispatchOffer, DispatchOfferStatus, DriverStatus, GeoUnit, ServiceArea
-from services.geo.geo_resolver import canonical_reason, geo_chain, resolve_legacy_service_area_to_canton_codes
-
+from models import (
+    Company,
+    DispatchOffer,
+    DispatchOfferStatus,
+    DriverStatus,
+    GeoUnit,
+    ServiceArea,
+)
+from services.geo.geo_resolver import (
+    canonical_reason,
+    geo_chain,
+    resolve_legacy_service_area_to_canton_codes,
+)
 
 MATCH_SCORE = {
     "commune": 100,
@@ -77,9 +87,7 @@ def _mode_allowed(
         if intra_strict_drop:
             return pickup_match and drop_match
         return pickup_match
-    if mode == "D_NATIONAL":
-        return True
-    return False
+    return mode == "D_NATIONAL"
 
 
 def _best_company_candidate(
@@ -130,7 +138,9 @@ def _best_company_candidate(
 
     if best_score <= 0 or not best_reason:
         return None
-    return DispatchCandidate(company_id=company.id, score=best_score, reason=best_reason)
+    return DispatchCandidate(
+        company_id=company.id, score=best_score, reason=best_reason
+    )
 
 
 def compute_candidates(
@@ -160,7 +170,9 @@ def compute_candidates(
         legacy_codes = resolve_legacy_service_area_to_canton_codes(company.service_area)
         if not legacy_codes or not pickup_chain:
             continue
-        pickup_canton = next((g for g in pickup_chain if g.type.value == "canton"), None)
+        pickup_canton = next(
+            (g for g in pickup_chain if g.type.value == "canton"), None
+        )
         if pickup_canton and pickup_canton.code in legacy_codes:
             candidates.append(
                 DispatchCandidate(
@@ -197,7 +209,9 @@ def persist_offers_for_threshold(
     }
     existing_company_ids = {
         row.company_id
-        for row in DispatchOffer.query.filter(DispatchOffer.booking_id == booking_id).all()
+        for row in DispatchOffer.query.filter(
+            DispatchOffer.booking_id == booking_id
+        ).all()
     }
 
     accepted: list[DispatchOffer] = []
@@ -269,10 +283,14 @@ def compute_urgency_override_candidates(
     return list(dedup.values())
 
 
-def persist_urgency_offers(booking_id: int, candidates: list[dict[str, Any]]) -> list[DispatchOffer]:
+def persist_urgency_offers(
+    booking_id: int, candidates: list[dict[str, Any]]
+) -> list[DispatchOffer]:
     existing_company_ids = {
         row.company_id
-        for row in DispatchOffer.query.filter(DispatchOffer.booking_id == booking_id).all()
+        for row in DispatchOffer.query.filter(
+            DispatchOffer.booking_id == booking_id
+        ).all()
     }
     created: list[DispatchOffer] = []
     for candidate in candidates:

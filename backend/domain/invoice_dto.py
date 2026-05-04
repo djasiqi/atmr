@@ -124,8 +124,7 @@ class InvoiceDTO:
             "meta": self.meta,
             "payments": list(self.payments) if self.payments is not None else [],
             "lines": [
-                _invoice_line_dto_to_api_dict(line)
-                for line in (self.lines or [])
+                _invoice_line_dto_to_api_dict(line) for line in (self.lines or [])
             ],
         }
 

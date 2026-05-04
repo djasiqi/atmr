@@ -229,7 +229,9 @@ def _build_activation_status(session: ActivationSession) -> dict[str, object]:
 def _build_activation_email_link(token: str) -> str:
     environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
     default_frontend_url = (
-        "http://localhost:3000" if environment in {"development", "testing"} else "https://app.lirie.ch"
+        "http://localhost:3000"
+        if environment in {"development", "testing"}
+        else "https://app.lirie.ch"
     )
     frontend_url = (
         os.getenv("FRONTEND_URL")
@@ -400,7 +402,7 @@ def _public_guest_booking_id_from_dossier_str(raw: str) -> int | None:
     return None
 
 
-def _load_booking_status_from_token(token: str) -> tuple[int | None, str | None]:  # noqa: PLR0911
+def _load_booking_status_from_token(token: str) -> tuple[int | None, str | None]:
     t = (token or "").strip()
     revoked_key = f"public:booking_status:revoked:{_booking_status_token_hash(t)}"
     if _public_cache_get(revoked_key):
@@ -408,9 +410,7 @@ def _load_booking_status_from_token(token: str) -> tuple[int | None, str | None]
     serializer = _public_link_serializer()
     max_age = _resolve_booking_status_token_ttl_seconds()
     try:
-        data = serializer.loads(
-            t, salt="booking-status-public-link", max_age=max_age
-        )
+        data = serializer.loads(t, salt="booking-status-public-link", max_age=max_age)
     except SignatureExpired:
         return None, "expired"
     except BadSignature:
@@ -456,9 +456,7 @@ def _reset_user_password_with_policy(user: User, new_password: str):
         )
 
         revoke_all_user_tokens(user.id, reason="Changement de mot de passe")
-        security_token_invalidations_total.labels(
-            reason="password_change"
-        ).inc()
+        security_token_invalidations_total.labels(reason="password_change").inc()
     except Exception as revoke_error:
         logger.warning(
             "Échec révocation tokens lors changement mot de passe (ignoré): %s",
@@ -549,7 +547,9 @@ def _send_activation_email(user: User, token: str) -> None:
         # Email désactivé ou provider non configuré : dégradation silencieuse en dev/test.
         # Raise seulement sur une vraie erreur provider (pas sur "disabled").
         if "disabled" in error_msg.lower() or "not configured" in error_msg.lower():
-            logger.warning("[auth] Email activation non envoyé (service désactivé): %s", error_msg)
+            logger.warning(
+                "[auth] Email activation non envoyé (service désactivé): %s", error_msg
+            )
             return
         raise RuntimeError(error_msg)
 
@@ -565,6 +565,7 @@ def _send_activation_sms(user: User, code: str) -> bool:
         notification_type="activation_signup",
     )
     return bool(sms_result.get("ok"))
+
 
 # Modèle Swagger pour la connexion (login)
 login_model = auth_ns.model(
@@ -961,10 +962,14 @@ def _login_post_body():
 
         # Limite de tokens actifs : plus haute pour les drivers (multi-device, reinstall)
         is_driver = user.role == UserRole.driver
-        max_active_tokens = int(os.getenv(
-            "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
-            "15" if is_driver else "5",
-        ))
+        max_active_tokens = int(
+            os.getenv(
+                "MAX_ACTIVE_REFRESH_TOKENS_DRIVER"
+                if is_driver
+                else "MAX_ACTIVE_REFRESH_TOKENS",
+                "15" if is_driver else "5",
+            )
+        )
         token_service.limit_active_tokens(user.id, max_active_tokens)
     except Exception as store_error:
         logger.warning(
@@ -1041,9 +1046,7 @@ def _login_post_body():
             httponly=current_app.config["COOKIE_HTTP_ONLY"],
             secure=current_app.config["COOKIE_SECURE"],
             samesite=current_app.config["COOKIE_SAME_SITE"],
-            max_age=int(
-                current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()
-            ),
+            max_age=int(current_app.config["JWT_ACCESS_TOKEN_EXPIRES"].total_seconds()),
             path=current_app.config["COOKIE_PATH"],
             domain=current_app.config["COOKIE_DOMAIN"],
         )
@@ -1106,8 +1109,6 @@ class Login(Resource):
                 Exception("Erreur lors de la connexion"),
                 logger,
             )
-
-
 
 
 # ========================
@@ -1509,7 +1510,7 @@ def _get_password_hash_version(user: User) -> str:
     ]
 
 
-def _check_user_profile_active(user: User) -> tuple[bool, str | None]:  # noqa: PLR0911
+def _check_user_profile_active(user: User) -> tuple[bool, str | None]:
     """Vérifie si le profil associé à l'utilisateur est actif.
 
     Args:
@@ -1815,7 +1816,7 @@ class RefreshToken(Resource):
     @auth_ns.response(500, "Erreur interne", api_error_model)
     # ✅ S2: Rate limiting plus strict pour refresh token (protection contre abus)
     @limiter.limit("20 per minute")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Rafraîchit l'access token à partir d'un refresh token.
 
         Accepte le refresh_token en body (JSON) ou dans le header Authorization Bearer.
@@ -2021,10 +2022,14 @@ class RefreshToken(Resource):
                 )
 
                 is_driver = user.role == UserRole.driver
-                max_active_tokens = int(os.getenv(
-                    "MAX_ACTIVE_REFRESH_TOKENS_DRIVER" if is_driver else "MAX_ACTIVE_REFRESH_TOKENS",
-                    "15" if is_driver else "5",
-                ))
+                max_active_tokens = int(
+                    os.getenv(
+                        "MAX_ACTIVE_REFRESH_TOKENS_DRIVER"
+                        if is_driver
+                        else "MAX_ACTIVE_REFRESH_TOKENS",
+                        "15" if is_driver else "5",
+                    )
+                )
                 token_service.limit_active_tokens(user.id, max_active_tokens)
             except Exception as store_error:
                 logger.warning(
@@ -2142,7 +2147,7 @@ class FreshToken(Resource):
     @auth_ns.response(401, "Mot de passe incorrect ou utilisateur non authentifié")
     @jwt_required()  # Nécessite un token valide (mais pas fresh)
     @limiter.limit("5 per minute")  # Protection contre brute force
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Obtient un token 'fresh' en vérifiant le mot de passe de l'utilisateur.
 
         Permet d'obtenir un token 'fresh' sans se déconnecter complètement.
@@ -2571,9 +2576,9 @@ class AuthSwitchContext(Resource):
             }, 401
 
         data = request.get_json(silent=True) or {}
-        target_context_id = (
-            str(data.get("target_context_id") or data.get("context_id") or "").strip()
-        )
+        target_context_id = str(
+            data.get("target_context_id") or data.get("context_id") or ""
+        ).strip()
         if not target_context_id:
             return {
                 "error_code": "validation_error",
@@ -2598,12 +2603,18 @@ class AuthSwitchContext(Resource):
                 "request_id": request_id,
             }, 403
 
-        from_ctx = _context_by_id(contexts, _get_saved_active_context(str(user.public_id)))
+        from_ctx = _context_by_id(
+            contexts, _get_saved_active_context(str(user.public_id))
+        )
         if from_ctx is None:
             dcid = _default_context_id(contexts)
             from_ctx = _context_by_id(contexts, dcid)
         to_ctx = _context_by_id(contexts, target_context_id)
-        if to_ctx and from_ctx and _is_company_driver_cross_context_switch(from_ctx, to_ctx):
+        if (
+            to_ctx
+            and from_ctx
+            and _is_company_driver_cross_context_switch(from_ctx, to_ctx)
+        ):
             if user.role is not UserRole.COMPANY:
                 return {
                     "error_code": "context_switch_company_account_only",
@@ -2616,7 +2627,10 @@ class AuthSwitchContext(Resource):
                     "request_id": request_id,
                 }, 403
             # App unifiée (Expo web + natif) : mêmes règles que le mobile, pas d'exclusion web
-            if not (bool(from_ctx.get("allow_mobile_context_switch")) and bool(to_ctx.get("allow_mobile_context_switch"))):
+            if not (
+                bool(from_ctx.get("allow_mobile_context_switch"))
+                and bool(to_ctx.get("allow_mobile_context_switch"))
+            ):
                 return {
                     "error_code": "context_switch_transport_only",
                     "error_message": "Cette bascule est reservee aux comptes entreprise avec le dispatch actif.",
@@ -2704,7 +2718,13 @@ class PublicPreRequestDraft(Resource):
         destination = str(data.get("destination") or "").strip()
         date = str(data.get("date") or "").strip()
         transport_type = str(data.get("transport_type") or "").strip()
-        if not draft_id or not departure or not destination or not date or not transport_type:
+        if (
+            not draft_id
+            or not departure
+            or not destination
+            or not date
+            or not transport_type
+        ):
             return {
                 "error": "missing_fields",
                 "error_message": "draft_id, departure, destination, date et transport_type sont requis.",
@@ -2785,7 +2805,7 @@ class PublicPreRequestConsume(Resource):
 @auth_ns.route("/public/booking-status")
 class PublicBookingStatus(Resource):
     @limiter.limit("400 per hour")
-    def get(self):  # noqa: PLR0911
+    def get(self):
         token = str(request.args.get("token") or "").strip()
         if not token:
             return {"error": "token_missing"}, 401
@@ -2815,9 +2835,7 @@ class PublicBookingStatus(Resource):
         )
         updated_at_raw = getattr(booking, "updated_at", None)
         updated_at = (
-            updated_at_raw.isoformat()
-            if isinstance(updated_at_raw, datetime)
-            else None
+            updated_at_raw.isoformat() if isinstance(updated_at_raw, datetime) else None
         )
         return {
             "status": normalized_status,
@@ -2897,9 +2915,7 @@ class PublicGuestBookingCreate(Resource):
             "pickup_time",
         ]
         missing = [
-            field
-            for field in required_fields
-            if not str(data.get(field) or "").strip()
+            field for field in required_fields if not str(data.get(field) or "").strip()
         ]
         if missing:
             return {
@@ -2984,7 +3000,7 @@ class PublicGuestBookingCreate(Resource):
 @auth_ns.route("/public/guest-booking/saferpay/initialize")
 class PublicGuestSaferpayInitialize(Resource):
     @limiter.limit("30 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         from services.guest_saferpay import initialize_guest_saferpay
         from services.saferpay.config import saferpay_configured
 
@@ -3029,14 +3045,19 @@ class PublicGuestSaferpayInitialize(Resource):
                 and isinstance(return_url, str)
                 and return_url.strip()
             ):
-                logger.debug("Guest Saferpay init: return_url rejeté par l’allowlist: %s", return_url)
+                logger.debug(
+                    "Guest Saferpay init: return_url rejeté par l’allowlist: %s",
+                    return_url,
+                )
             if msg == "already_promoted":
                 raw2 = _public_cache_get(_build_public_guest_booking_key(gid))
                 pl2: dict[str, Any] = {}
                 if raw2:
                     with suppress(Exception):
                         pl2 = json.loads(raw2)
-                bid = pl2.get("promoted_booking_id") or payload.get("promoted_booking_id")
+                bid = pl2.get("promoted_booking_id") or payload.get(
+                    "promoted_booking_id"
+                )
                 logger.info(
                     "Guest Saferpay initialize refus (déjà promu)",
                     extra={
@@ -3063,7 +3084,7 @@ class PublicGuestSaferpayInitialize(Resource):
 @auth_ns.route("/public/guest-booking/saferpay/assert")
 class PublicGuestSaferpayAssert(Resource):
     @limiter.limit("60 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         from services.guest_saferpay import promote_guest_booking_after_saferpay
         from services.saferpay.config import saferpay_configured
 
@@ -3126,7 +3147,7 @@ class PublicGuestSaferpayAssert(Resource):
 @auth_ns.route("/public/guest-booking/status")
 class PublicGuestBookingStatus(Resource):
     @limiter.limit("250 per hour")
-    def get(self):  # noqa: PLR0911
+    def get(self):
         token = str(request.args.get("token") or "").strip()
         if not token:
             return {"error": "token_missing"}, 401
@@ -3149,7 +3170,9 @@ class PublicGuestBookingStatus(Resource):
             return {"error": "booking_not_found"}, 404
         with suppress(Exception):
             payload = json.loads(raw)
-            if payload.get("promoted_booking_id") and payload.get("public_status_token"):
+            if payload.get("promoted_booking_id") and payload.get(
+                "public_status_token"
+            ):
                 return {
                     "guest_booking_id": payload.get("guest_booking_id"),
                     "status": "already_promoted",
@@ -3183,7 +3206,7 @@ class PublicGuestBookingStatus(Resource):
 class PublicGuestBookingLink(Resource):
     @jwt_required()
     @limiter.limit("60 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         data = request.get_json(silent=True) or {}
         token = str(data.get("status_token") or "").strip()
         if not token:
@@ -3232,7 +3255,9 @@ class PasswordlessOtpRequest(Resource):
     def post(self):
         try:
             data = validate_request(
-                PasswordlessOtpRequestSchema(), request.get_json(silent=True) or {}, strict=False
+                PasswordlessOtpRequestSchema(),
+                request.get_json(silent=True) or {},
+                strict=False,
             )
         except ValidationError as e:
             body, code = handle_validation_error(e)
@@ -3290,10 +3315,12 @@ class PasswordlessOtpRequest(Resource):
 @auth_ns.route("/passwordless/otp/verify")
 class PasswordlessOtpVerify(Resource):
     @limiter.limit("60 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         try:
             data = validate_request(
-                PasswordlessOtpVerifySchema(), request.get_json(silent=True) or {}, strict=False
+                PasswordlessOtpVerifySchema(),
+                request.get_json(silent=True) or {},
+                strict=False,
             )
         except ValidationError as e:
             body, code = handle_validation_error(e)
@@ -3349,7 +3376,9 @@ class PasswordlessOtpVerify(Resource):
                 expires_delta=current_app.config["JWT_REFRESH_TOKEN_EXPIRES"],
             )
             with suppress(Exception):
-                refresh_expires_at = datetime.now(UTC) + current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+                refresh_expires_at = (
+                    datetime.now(UTC) + current_app.config["JWT_REFRESH_TOKEN_EXPIRES"]
+                )
                 store_refresh_token(
                     token=refresh_token,
                     user_id=user.id,
@@ -3399,7 +3428,7 @@ class Register(Resource):
     @limiter.limit(
         "10 per minute"
     )  # ✅ SECURITY: Rate limiting pour prévenir spam d'inscriptions
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Inscrit un nouvel utilisateur avec le rôle 'client' par défaut
         et crée un profil client associé.
         """
@@ -3533,7 +3562,10 @@ class Register(Resource):
             activation_session.resend_count_sms = 0
 
             email_token = _activation_serializer().dumps(
-                {"sid": activation_session.activation_session_id, "kind": "signup_activation"},
+                {
+                    "sid": activation_session.activation_session_id,
+                    "kind": "signup_activation",
+                },
                 salt="activation-email-salt",
             )
             sms_code = _generate_sms_otp()
@@ -3612,7 +3644,7 @@ class Register(Resource):
 @auth_ns.route("/activation/verify-email")
 class VerifyActivationEmail(Resource):
     @limiter.limit("20 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Valide le lien email d'une session d'activation client."""
         try:
             data = request.get_json() or {}
@@ -3657,7 +3689,9 @@ class VerifyActivationEmail(Resource):
                 )
 
             token_hash = _hash_plain_value(token)
-            if not hmac.compare_digest(token_hash, activation_session.email_token_hash or ""):
+            if not hmac.compare_digest(
+                token_hash, activation_session.email_token_hash or ""
+            ):
                 return auth_error(
                     AuthErrorCodes.TOKEN_INVALID,
                     "Lien d'activation invalide.",
@@ -3706,7 +3740,7 @@ class VerifyActivationEmail(Resource):
 @auth_ns.route("/activation/verify-sms")
 class VerifyActivationSms(Resource):
     @limiter.limit("30 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Valide le code OTP SMS pour une session d'activation client."""
         try:
             data = request.get_json() or {}
@@ -3727,8 +3761,13 @@ class VerifyActivationSms(Resource):
                 }, 200
 
             now = datetime.now(UTC)
-            if activation_session.sms_locked_until and activation_session.sms_locked_until > now:
-                retry_after = int((activation_session.sms_locked_until - now).total_seconds())
+            if (
+                activation_session.sms_locked_until
+                and activation_session.sms_locked_until > now
+            ):
+                retry_after = int(
+                    (activation_session.sms_locked_until - now).total_seconds()
+                )
                 return auth_error(
                     AuthErrorCodes.ACCOUNT_LOCKED,
                     "Trop d'essais SMS. Réessayez plus tard.",
@@ -3736,7 +3775,10 @@ class VerifyActivationSms(Resource):
                     details={"retry_after_seconds": retry_after},
                 )
 
-            if activation_session.sms_expires_at and activation_session.sms_expires_at < now:
+            if (
+                activation_session.sms_expires_at
+                and activation_session.sms_expires_at < now
+            ):
                 return auth_error(
                     AuthErrorCodes.TOKEN_EXPIRED,
                     "Le code SMS a expiré. Demandez un nouveau code.",
@@ -3744,7 +3786,9 @@ class VerifyActivationSms(Resource):
                 )
 
             code_hash = _hash_plain_value(code)
-            if not hmac.compare_digest(code_hash, activation_session.sms_code_hash or ""):
+            if not hmac.compare_digest(
+                code_hash, activation_session.sms_code_hash or ""
+            ):
                 attempts = int(activation_session.sms_attempts or 0) + 1
                 activation_session.sms_attempts = attempts
                 if attempts >= ACTIVATION_SMS_MAX_ATTEMPTS:
@@ -3757,14 +3801,18 @@ class VerifyActivationSms(Resource):
                         AuthErrorCodes.ACCOUNT_LOCKED,
                         "Trop d'essais SMS. Réessayez plus tard.",
                         429,
-                        details={"retry_after_seconds": ACTIVATION_SMS_LOCK_MINUTES * 60},
+                        details={
+                            "retry_after_seconds": ACTIVATION_SMS_LOCK_MINUTES * 60
+                        },
                     )
                 db.session.commit()
                 return auth_error(
                     AuthErrorCodes.INVALID_CREDENTIALS,
                     "Code SMS invalide.",
                     400,
-                    details={"remaining_attempts": ACTIVATION_SMS_MAX_ATTEMPTS - attempts},
+                    details={
+                        "remaining_attempts": ACTIVATION_SMS_MAX_ATTEMPTS - attempts
+                    },
                 )
 
             activation_session.phone_verified_at = now
@@ -3786,7 +3834,7 @@ class VerifyActivationSms(Resource):
 @auth_ns.route("/activation/finalize")
 class FinalizeActivation(Resource):
     @limiter.limit("20 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Active définitivement le compte après validation email + SMS."""
         try:
             data = request.get_json() or {}
@@ -3805,7 +3853,10 @@ class FinalizeActivation(Resource):
                     "activation_status": _build_activation_status(activation_session),
                 }, 200
 
-            if not activation_session.email_verified_at or not activation_session.phone_verified_at:
+            if (
+                not activation_session.email_verified_at
+                or not activation_session.phone_verified_at
+            ):
                 return auth_error(
                     AuthErrorCodes.EMAIL_NOT_VERIFIED,
                     "Validation incomplète: confirmez l'email et le SMS avant d'activer le compte.",
@@ -3839,7 +3890,7 @@ class FinalizeActivation(Resource):
 @auth_ns.route("/activation/resend-email")
 class ResendActivationEmail(Resource):
     @limiter.limit("10 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Renvoyer un email d'activation."""
         try:
             data = request.get_json() or {}
@@ -3857,9 +3908,8 @@ class ResendActivationEmail(Resource):
 
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_email or 0)
-            if (
-                activation_session.last_email_sent_at
-                and not _is_same_utc_day(activation_session.last_email_sent_at, now)
+            if activation_session.last_email_sent_at and not _is_same_utc_day(
+                activation_session.last_email_sent_at, now
             ):
                 daily_count = 0
 
@@ -3881,7 +3931,10 @@ class ResendActivationEmail(Resource):
                 )
 
             token = _activation_serializer().dumps(
-                {"sid": activation_session.activation_session_id, "kind": "signup_activation"},
+                {
+                    "sid": activation_session.activation_session_id,
+                    "kind": "signup_activation",
+                },
                 salt="activation-email-salt",
             )
             activation_session.email_token_hash = _hash_plain_value(token)
@@ -3897,7 +3950,9 @@ class ResendActivationEmail(Resource):
             try:
                 _send_activation_email(user, token)
             except Exception as email_err:
-                environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                environment = (
+                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                )
                 is_local_dev = environment == "development" and not bool(
                     current_app.config.get("TESTING")
                 )
@@ -3942,7 +3997,7 @@ class ResendActivationEmail(Resource):
 @auth_ns.route("/activation/resend-sms")
 class ResendActivationSms(Resource):
     @limiter.limit("15 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Renvoyer un code SMS d'activation."""
         try:
             data = request.get_json() or {}
@@ -3960,9 +4015,8 @@ class ResendActivationSms(Resource):
 
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_sms or 0)
-            if (
-                activation_session.last_sms_sent_at
-                and not _is_same_utc_day(activation_session.last_sms_sent_at, now)
+            if activation_session.last_sms_sent_at and not _is_same_utc_day(
+                activation_session.last_sms_sent_at, now
             ):
                 daily_count = 0
 
@@ -3997,7 +4051,9 @@ class ResendActivationSms(Resource):
             if not user:
                 return {"error": "Utilisateur introuvable."}, 404
             if not _send_activation_sms(user, sms_code):
-                environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                environment = (
+                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                )
                 is_local_dev = environment == "development" and not bool(
                     current_app.config.get("TESTING")
                 )
@@ -4030,7 +4086,7 @@ class ResendActivationSms(Resource):
 @auth_ns.route("/activation/update-phone")
 class UpdateActivationPhone(Resource):
     @limiter.limit("10 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Met à jour le numéro de téléphone puis renvoie un nouveau code SMS."""
         try:
             data = request.get_json() or {}
@@ -4056,9 +4112,8 @@ class UpdateActivationPhone(Resource):
 
             now = datetime.now(UTC)
             daily_count = int(activation_session.resend_count_sms or 0)
-            if (
-                activation_session.last_sms_sent_at
-                and not _is_same_utc_day(activation_session.last_sms_sent_at, now)
+            if activation_session.last_sms_sent_at and not _is_same_utc_day(
+                activation_session.last_sms_sent_at, now
             ):
                 daily_count = 0
 
@@ -4091,7 +4146,9 @@ class UpdateActivationPhone(Resource):
             activation_session.resend_count_sms = daily_count + 1
 
             if not _send_activation_sms(user, sms_code):
-                environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                environment = (
+                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                )
                 is_local_dev = environment == "development" and not bool(
                     current_app.config.get("TESTING")
                 )
@@ -4109,7 +4166,9 @@ class UpdateActivationPhone(Resource):
                         "masked_phone": _mask_phone(user.phone),
                         "debug_sms_code": sms_code,
                         "sms_sent": False,
-                        "activation_status": _build_activation_status(activation_session),
+                        "activation_status": _build_activation_status(
+                            activation_session
+                        ),
                     }, 200
 
                 db.session.rollback()
@@ -4209,7 +4268,9 @@ class ForgotPassword(Resource):
                 reply_to=os.getenv("ACTIVATION_EMAIL_REPLY_TO", "support@lirie.ch"),
             )
             if not send_result.get("ok"):
-                environment = str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                environment = (
+                    str(current_app.config.get("ENVIRONMENT", "")).strip().lower()
+                )
                 is_local_dev = environment == "development" and not bool(
                     current_app.config.get("TESTING")
                 )
@@ -4485,7 +4546,9 @@ class ListSessions(Resource):
 
             # 3. Déterminer la session courante via le refresh token cookie (G6)
             refresh_cookie = request.cookies.get("refresh_token_cookie")
-            current_hash = _hash_refresh_token(refresh_cookie) if refresh_cookie else None
+            current_hash = (
+                _hash_refresh_token(refresh_cookie) if refresh_cookie else None
+            )
 
             # 4. Sérialiser avec IP masquée et is_current
             sessions_data = [
@@ -4522,7 +4585,9 @@ class RevokeSession(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             session = RefreshToken.query.get(session_id)
             if not session or session.user_id != user.id:
@@ -4537,7 +4602,13 @@ class RevokeSession(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
-            audit_log("session_revoked", "security", resource_type="session", resource_id=session_id)
+
+            audit_log(
+                "session_revoked",
+                "security",
+                resource_type="session",
+                resource_id=session_id,
+            )
 
             return "", 204
 
@@ -4563,10 +4634,14 @@ class RevokeOtherSessions(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             refresh_cookie = request.cookies.get("refresh_token_cookie")
-            current_hash = _hash_refresh_token(refresh_cookie) if refresh_cookie else None
+            current_hash = (
+                _hash_refresh_token(refresh_cookie) if refresh_cookie else None
+            )
 
             now = datetime.now(UTC)
             sessions = get_user_active_sessions(user.id)
@@ -4583,7 +4658,12 @@ class RevokeOtherSessions(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
-            audit_log("sessions_bulk_revoked", "security", action_details={"revoked_count": revoked_count})
+
+            audit_log(
+                "sessions_bulk_revoked",
+                "security",
+                action_details={"revoked_count": revoked_count},
+            )
 
             return {"revoked_count": revoked_count}, 200
 
@@ -4598,6 +4678,7 @@ class RevokeOtherSessions(Resource):
 TOTP_CODE_LENGTH = 6
 RECOVERY_CODE_LENGTH = 8
 MAX_2FA_FAILURES = 10
+
 
 # ========================
 # Endpoints TOTP 2FA (Sprint 2)
@@ -4618,12 +4699,15 @@ class TOTPSetup(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             if user.totp_enabled:
                 return {"error": "2FA déjà activée. Désactivez d'abord."}, 409
 
             from security.totp_service import generate_totp_secret
+
             result = generate_totp_secret(user.email or user.username)
 
             user.totp_secret_encrypted = result["secret_encrypted"]
@@ -4643,7 +4727,7 @@ class TOTPSetup(Resource):
 class TOTPVerify(Resource):
     @jwt_required(fresh=True)
     @limiter.limit("5 per 15 minutes")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Vérifie un code TOTP et active le 2FA. Retourne les recovery codes."""
         if os.environ.get("SECURITY_2FA_ENABLED", "false") != "true":
             return {"error": "2FA non disponible"}, 403
@@ -4652,7 +4736,9 @@ class TOTPVerify(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             data = request.get_json() or {}
             code = str(data.get("code", "")).strip()
@@ -4666,6 +4752,7 @@ class TOTPVerify(Resource):
                 generate_recovery_codes,
                 verify_totp_code,
             )
+
             if not verify_totp_code(user.totp_secret_encrypted, code):
                 return {"error": "Code invalide"}, 401
 
@@ -4677,6 +4764,7 @@ class TOTPVerify(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
+
             audit_log("totp_enabled", "security")
 
             return {
@@ -4701,7 +4789,9 @@ class TOTPDisable(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             data = request.get_json() or {}
             password = data.get("password", "")
@@ -4716,6 +4806,7 @@ class TOTPDisable(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
+
             audit_log("totp_disabled", "security")
 
             return {"message": "Validation en deux étapes désactivée."}, 200
@@ -4733,11 +4824,15 @@ class TOTPStatus(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             return {
                 "enabled": bool(user.totp_enabled),
-                "enabled_at": user.totp_enabled_at.isoformat() if user.totp_enabled_at else None,
+                "enabled_at": user.totp_enabled_at.isoformat()
+                if user.totp_enabled_at
+                else None,
                 "recovery_codes_remaining": user.recovery_codes_remaining or 0,
             }, 200
         except Exception as e:
@@ -4758,7 +4853,9 @@ class TOTPRecoveryCodes(Resource):
             current_user_public_id = get_jwt_identity()
             user = user_repo.find_by_public_id(current_user_public_id)
             if not user:
-                return APIErrorHandler.handle_not_found("Utilisateur", current_user_public_id, logger)
+                return APIErrorHandler.handle_not_found(
+                    "Utilisateur", current_user_public_id, logger
+                )
 
             if not user.totp_enabled or not user.totp_secret_encrypted:
                 return {"error": "2FA non activée"}, 400
@@ -4767,6 +4864,7 @@ class TOTPRecoveryCodes(Resource):
             code = str(data.get("code", "")).strip()
 
             from security.totp_service import generate_recovery_codes, verify_totp_code
+
             if not verify_totp_code(user.totp_secret_encrypted, code):
                 return {"error": "Code TOTP invalide"}, 401
 
@@ -4776,6 +4874,7 @@ class TOTPRecoveryCodes(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
+
             audit_log("recovery_codes_regenerated", "security")
 
             return {
@@ -4790,7 +4889,7 @@ class TOTPRecoveryCodes(Resource):
 @auth_ns.route("/totp/challenge")
 class TOTPChallenge(Resource):
     @limiter.limit("5 per 15 minutes")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Vérifie un code TOTP après login (temp_token anti-replay G7).
 
         Reçoit temp_token + code TOTP, retourne les vrais tokens si valide.
@@ -4844,14 +4943,21 @@ class TOTPChallenge(Resource):
                 )
                 if is_valid:
                     user.recovery_codes_hash = updated_hashes
-                    user.recovery_codes_remaining = max(0, (user.recovery_codes_remaining or 0) - 1)
+                    user.recovery_codes_remaining = max(
+                        0, (user.recovery_codes_remaining or 0) - 1
+                    )
 
             if not is_valid:
                 failures = record_2fa_failure(user.id)
                 from shared.audit_helpers import audit_log
-                audit_log("totp_challenge_failed", "security", user=user, result="failure")
+
+                audit_log(
+                    "totp_challenge_failed", "security", user=user, result="failure"
+                )
                 if failures >= MAX_2FA_FAILURES:
-                    return {"error": "Trop de tentatives. Réessayez dans 30 minutes."}, 429
+                    return {
+                        "error": "Trop de tentatives. Réessayez dans 30 minutes."
+                    }, 429
                 return {"error": "Code invalide"}, 401
 
             reset_2fa_failures(user.id)
@@ -4872,6 +4978,7 @@ class TOTPChallenge(Resource):
             device_id = request.headers.get("X-Device-Id")
             from security.refresh_token_service import store_refresh_token
             from shared.security_helpers import parse_device
+
             store_refresh_token(
                 token=refresh_token,
                 user_id=user.id,
@@ -4883,26 +4990,51 @@ class TOTPChallenge(Resource):
             db.session.commit()
 
             from shared.audit_helpers import audit_log
+
             audit_log("user_login", "security", user=user)
 
-            resp = make_response({
-                "message": "2FA validée",
-                "user": {
-                    "id": user.id,
-                    "public_id": user.public_id,
-                    "username": user.username,
-                    "email": user.email,
-                    "role": user.role.value if user.role else None,
-                },
-                "token": access_token,
-                "refresh_token": refresh_token,
-            })
+            resp = make_response(
+                {
+                    "message": "2FA validée",
+                    "user": {
+                        "id": user.id,
+                        "public_id": user.public_id,
+                        "username": user.username,
+                        "email": user.email,
+                        "role": user.role.value if user.role else None,
+                    },
+                    "token": access_token,
+                    "refresh_token": refresh_token,
+                }
+            )
 
             from services.security.csrf import generate_csrf_token
+
             csrf_token = generate_csrf_token()
-            resp.set_cookie("csrf_token", csrf_token, httponly=False, samesite="Lax", secure=False, path="/")
-            resp.set_cookie("access_token_cookie", access_token, httponly=True, samesite="Lax", secure=False, path="/")
-            resp.set_cookie("refresh_token_cookie", refresh_token, httponly=True, samesite="Lax", secure=False, path="/api")
+            resp.set_cookie(
+                "csrf_token",
+                csrf_token,
+                httponly=False,
+                samesite="Lax",
+                secure=False,
+                path="/",
+            )
+            resp.set_cookie(
+                "access_token_cookie",
+                access_token,
+                httponly=True,
+                samesite="Lax",
+                secure=False,
+                path="/",
+            )
+            resp.set_cookie(
+                "refresh_token_cookie",
+                refresh_token,
+                httponly=True,
+                samesite="Lax",
+                secure=False,
+                path="/api",
+            )
 
             return resp
 
@@ -5142,7 +5274,9 @@ class ActivateAccount(Resource):
             # Auto-login : générer un JWT pour connexion immédiate
             claims = {
                 "user_id": user.id,
-                "role": user.role.value if hasattr(user.role, "value") else str(user.role),
+                "role": user.role.value
+                if hasattr(user.role, "value")
+                else str(user.role),
                 "company_id": _resolve_company_id(user),
                 "driver_id": getattr(user, "driver_id", None),
                 "institution_id": getattr(user, "institution_id", None),

@@ -12,7 +12,10 @@ from models import (
     UserRole,
 )
 from models.enums import BookingStatus, ServiceCoverageMode
-from services.dispatch.scoring_engine import compute_candidates, persist_offers_for_threshold
+from services.dispatch.scoring_engine import (
+    compute_candidates,
+    persist_offers_for_threshold,
+)
 
 
 def _create_company(db, idx: int) -> Company:
@@ -73,7 +76,9 @@ def test_commune_score_beats_canton(db):
 def test_declined_company_not_reproposed(db, sample_client):
     country = GeoUnit(type=GeoUnitType.COUNTRY, code="CH", name="Suisse")
     canton = GeoUnit(type=GeoUnitType.CANTON, code="GE", name="Genève", parent=country)
-    commune = GeoUnit(type=GeoUnitType.COMMUNE, code="6630", name="Anières", parent=canton)
+    commune = GeoUnit(
+        type=GeoUnitType.COMMUNE, code="6630", name="Anières", parent=canton
+    )
     db.session.add_all([country, canton, commune])
     db.session.flush()
 
@@ -124,7 +129,9 @@ def test_declined_company_not_reproposed(db, sample_client):
 def test_c_intra_inter_canton_matches_pickup_canton_carrier(db):
     """C_INTRA_ONLY : trajet GE → VD reste proposé aux entreprises canton GE (prise en charge)."""
     country = GeoUnit(type=GeoUnitType.COUNTRY, code="CH", name="Suisse")
-    canton_ge = GeoUnit(type=GeoUnitType.CANTON, code="GE", name="Genève", parent=country)
+    canton_ge = GeoUnit(
+        type=GeoUnitType.CANTON, code="GE", name="Genève", parent=country
+    )
     canton_vd = GeoUnit(type=GeoUnitType.CANTON, code="VD", name="Vaud", parent=country)
     commune_lancy = GeoUnit(
         type=GeoUnitType.COMMUNE, code="1213", name="Petit-Lancy", parent=canton_ge

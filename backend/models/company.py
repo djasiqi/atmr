@@ -90,7 +90,9 @@ class Company(db.Model):
 
     # Tarif préférentiel pour les cliniques (ex: 40.00 CHF / trajet)
     preferential_rate: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True, comment="Tarif préférentiel en CHF pour les cliniques"
+        Numeric(10, 2),
+        nullable=True,
+        comment="Tarif préférentiel en CHF pour les cliniques",
     )
 
     user_id = Column(
@@ -133,7 +135,9 @@ class Company(db.Model):
 
     # ✅ Security V2: Politique de securite entreprise (JSON)
     security_policy: Mapped[str | None] = mapped_column(
-        Text, nullable=True, comment="JSON: require_2fa_roles, password_expiry_days, max_session_days, enforcement_mode"
+        Text,
+        nullable=True,
+        comment="JSON: require_2fa_roles, password_expiry_days, max_session_days, enforcement_mode",
     )
 
     # Plateforme : suspension gouvernance (tenant = Company en V1 — voir docs/platform/DECISIONS.md)
@@ -234,7 +238,9 @@ class Company(db.Model):
             "billing_email": self.billing_email,
             "billing_notes": self.billing_notes,
             "preferential_rate": (
-                float(self.preferential_rate) if self.preferential_rate is not None else None
+                float(self.preferential_rate)
+                if self.preferential_rate is not None
+                else None
             ),
             "logo_url": self.logo_url,
             "is_approved": _as_bool(self.is_approved),

@@ -289,18 +289,29 @@ def generate_monthly_invoices():
                             groups: dict[str, dict[str, Any]] = {}
                             for r in reservations:
                                 bp_id = getattr(r, "billing_party_id", None)
-                                billed_to_type = str(getattr(r, "billed_to_type", "") or "patient").lower()
+                                billed_to_type = str(
+                                    getattr(r, "billed_to_type", "") or "patient"
+                                ).lower()
                                 clinic_id = getattr(r, "billed_to_company_id", None)
 
                                 if bp_id:
                                     key = f"bp:{int(bp_id)}"
-                                    dest = {"billing_party_id": int(bp_id), "clinic_company_id": None}
+                                    dest = {
+                                        "billing_party_id": int(bp_id),
+                                        "clinic_company_id": None,
+                                    }
                                 elif billed_to_type != "patient" and clinic_id:
                                     key = f"clinic:{int(clinic_id)}"
-                                    dest = {"billing_party_id": None, "clinic_company_id": int(clinic_id)}
+                                    dest = {
+                                        "billing_party_id": None,
+                                        "clinic_company_id": int(clinic_id),
+                                    }
                                 else:
                                     key = "patient"
-                                    dest = {"billing_party_id": None, "clinic_company_id": None}
+                                    dest = {
+                                        "billing_party_id": None,
+                                        "clinic_company_id": None,
+                                    }
 
                                 if key not in groups:
                                     groups[key] = {"reservation_ids": [], **dest}
@@ -335,7 +346,9 @@ def generate_monthly_invoices():
                                                     booking.billing_review_status = (
                                                         BillingReviewStatus.NEEDS_REVIEW
                                                     )
-                                                    booking.billing_override_reason = reason
+                                                    booking.billing_override_reason = (
+                                                        reason
+                                                    )
                                                 except Exception:
                                                     pass
                                         app_logger.warning(
@@ -358,11 +371,13 @@ def generate_monthly_invoices():
                                 )
                                 if g.get("billing_party_id"):
                                     existing_invoice_q = existing_invoice_q.filter(
-                                        Invoice.billing_party_id == int(g["billing_party_id"])
+                                        Invoice.billing_party_id
+                                        == int(g["billing_party_id"])
                                     )
                                 elif g.get("clinic_company_id"):
                                     existing_invoice_q = existing_invoice_q.filter(
-                                        Invoice.billed_to_company_id == int(g["clinic_company_id"])
+                                        Invoice.billed_to_company_id
+                                        == int(g["clinic_company_id"])
                                     )
                                 else:
                                     existing_invoice_q = existing_invoice_q.filter(
@@ -383,7 +398,9 @@ def generate_monthly_invoices():
                                     clinic_company_id=g.get("clinic_company_id"),
                                     reservation_ids=g.get("reservation_ids") or None,
                                 )
-                                generate_result = generate_invoice_uc.execute(generate_input)
+                                generate_result = generate_invoice_uc.execute(
+                                    generate_input
+                                )
                                 if generate_result.success and generate_result.invoice:
                                     invoice = generate_result.invoice
                                     invoices_generated += 1

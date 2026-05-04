@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# ruff: noqa: ARG001, PLR2004, SIM102, SIM114
+# ruff: noqa: ARG001, SIM102, SIM114
 import json
 import re
 from collections import OrderedDict
@@ -11,16 +11,23 @@ from typing import Any
 from models import PricingProfileVersion
 from services.pricing.zone_set_resolver import estimate_zones_traversed, resolve_zone_id
 
+_LAST_MINUTE_LEAD_TIME_MAX_MINUTES = 120
+
 
 def _to_decimal(value: Any) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _normalize_breakdown(model: str, base_amount: Decimal, base_rule: str) -> OrderedDict[str, Any]:
+def _normalize_breakdown(
+    model: str, base_amount: Decimal, base_rule: str
+) -> OrderedDict[str, Any]:
     return OrderedDict(
         [
             ("model", model),
-            ("base", OrderedDict([("amount", f"{base_amount:.2f}"), ("rule", base_rule)])),
+            (
+                "base",
+                OrderedDict([("amount", f"{base_amount:.2f}"), ("rule", base_rule)]),
+            ),
             ("extras", []),
             ("minimum", OrderedDict([("applied", False), ("amount", "0.00")])),
             ("total", f"{base_amount:.2f}"),
@@ -28,9 +35,13 @@ def _normalize_breakdown(model: str, base_amount: Decimal, base_rule: str) -> Or
     )
 
 
-def _apply_minimum(total: Decimal, minimum: Decimal, breakdown: OrderedDict[str, Any]) -> Decimal:
+def _apply_minimum(
+    total: Decimal, minimum: Decimal, breakdown: OrderedDict[str, Any]
+) -> Decimal:
     if minimum > 0 and total < minimum:
-        breakdown["minimum"] = OrderedDict([("applied", True), ("amount", f"{minimum:.2f}")])
+        breakdown["minimum"] = OrderedDict(
+            [("applied", True), ("amount", f"{minimum:.2f}")]
+        )
         return minimum
     return total
 
@@ -81,8 +92,12 @@ def compute_price(
     return amount, stable_json
 
 
-def _compute_flat(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
-    components = rules.get("components") if isinstance(rules.get("components"), dict) else {}
+def _compute_flat(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
+    components = (
+        rules.get("components") if isinstance(rules.get("components"), dict) else {}
+    )
     base_comp = components.get("base") if isinstance(components, dict) else {}
     if rules.get("base_fee") is not None:
         base = _to_decimal(rules.get("base_fee", 0))
@@ -108,26 +123,37 @@ def _compute_flat(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decim
             context.get("pickup_local_time"), extra.get("after")
         ):
             amount = _to_decimal(extra.get("amount", 0))
-        elif etype == "last_minute" and context.get("minutes_until_pickup", 999999) < int(
-            extra.get("under_minutes", 0)
-        ):
+        elif etype == "last_minute" and context.get(
+            "minutes_until_pickup", 999999
+        ) < int(extra.get("under_minutes", 0)):
             amount = _to_decimal(extra.get("amount", 0))
         else:
             continue
         breakdown["extras"].append(
             OrderedDict(
-                [("type", etype), ("qty", 1), ("unit", f"{amount:.2f}"), ("amount", f"{amount:.2f}")]
+                [
+                    ("type", etype),
+                    ("qty", 1),
+                    ("unit", f"{amount:.2f}"),
+                    ("amount", f"{amount:.2f}"),
+                ]
             )
         )
         total += amount
 
-    minimum = _to_decimal((rules.get("caps") or {}).get("minimum", 0) if isinstance(rules.get("caps"), dict) else rules.get("minimum", 0))
+    minimum = _to_decimal(
+        (rules.get("caps") or {}).get("minimum", 0)
+        if isinstance(rules.get("caps"), dict)
+        else rules.get("minimum", 0)
+    )
     total = _apply_minimum(total, minimum, breakdown)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
 
-def _compute_zone(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
+def _compute_zone(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
     pricing = rules.get("pricing", {})
     day_key = "weekend" if context.get("is_weekend") else "weekday"
     trip_key = "round_trip" if context.get("is_round_trip") else "one_way"
@@ -137,7 +163,13 @@ def _compute_zone(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decim
 
     zones_count = int(context.get("zones_count", 1) or 1)
     for extra in rules.get("extras", []):
-        total = _append_zone_extra(extra=extra, context=context, zones_count=zones_count, breakdown=breakdown, total=total)
+        total = _append_zone_extra(
+            extra=extra,
+            context=context,
+            zones_count=zones_count,
+            breakdown=breakdown,
+            total=total,
+        )
 
     minimum = _to_decimal(rules.get("minimum", 0))
     total = _apply_minimum(total, minimum, breakdown)
@@ -176,7 +208,12 @@ def _append_zone_extra(
         amount = _to_decimal(extra.get("amount", 0))
         breakdown["extras"].append(
             OrderedDict(
-                [("type", etype), ("qty", 1), ("unit", f"{amount:.2f}"), ("amount", f"{amount:.2f}")]
+                [
+                    ("type", etype),
+                    ("qty", 1),
+                    ("unit", f"{amount:.2f}"),
+                    ("amount", f"{amount:.2f}"),
+                ]
             )
         )
         return total + amount
@@ -230,7 +267,9 @@ def _normalize_zone_matrix_matrix(raw: Any) -> dict[str, dict[str, Decimal]]:
     return normalized
 
 
-def _compute_zone_matrix(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
+def _compute_zone_matrix(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
     zones_raw = rules.get("zones")
     zones = zones_raw if isinstance(zones_raw, list) else []
     token_to_zone_id: dict[str, str] = {}
@@ -251,12 +290,20 @@ def _compute_zone_matrix(rules: dict[str, Any], context: dict[str, Any]) -> tupl
     matrix = _normalize_zone_matrix_matrix(rules.get("matrix"))
     matrix_symmetry = bool(rules.get("matrix_symmetry", False))
     default_same_zone_price = rules.get("default_same_zone_price")
-    default_same_zone = _to_decimal(default_same_zone_price) if default_same_zone_price is not None else None
+    default_same_zone = (
+        _to_decimal(default_same_zone_price)
+        if default_same_zone_price is not None
+        else None
+    )
 
     pickup_token = _zone_token_from_context("pickup", context)
     dropoff_token = _zone_token_from_context("dropoff", context)
-    from_zone = _zone_from_definitions(zones=zones, token=pickup_token, token_to_zone_id=token_to_zone_id)
-    to_zone = _zone_from_definitions(zones=zones, token=dropoff_token, token_to_zone_id=token_to_zone_id)
+    from_zone = _zone_from_definitions(
+        zones=zones, token=pickup_token, token_to_zone_id=token_to_zone_id
+    )
+    to_zone = _zone_from_definitions(
+        zones=zones, token=dropoff_token, token_to_zone_id=token_to_zone_id
+    )
 
     warnings: list[str] = []
     if not from_zone or not to_zone:
@@ -281,16 +328,28 @@ def _compute_zone_matrix(rules: dict[str, Any], context: dict[str, Any]) -> tupl
         fallback_breakdown["model"] = "zone_matrix"
         fallback_breakdown["warnings"] = warnings
         fallback_breakdown["from_zone"] = OrderedDict(
-            [("id", from_id), ("code", from_zone.get("code")), ("label", from_zone.get("label"))]
+            [
+                ("id", from_id),
+                ("code", from_zone.get("code")),
+                ("label", from_zone.get("label")),
+            ]
         )
         fallback_breakdown["to_zone"] = OrderedDict(
-            [("id", to_id), ("code", to_zone.get("code")), ("label", to_zone.get("label"))]
+            [
+                ("id", to_id),
+                ("code", to_zone.get("code")),
+                ("label", to_zone.get("label")),
+            ]
         )
         return fallback_amount, fallback_breakdown
 
     breakdown = _normalize_breakdown("zone_matrix", base, f"{from_id}->{to_id}")
     breakdown["from_zone"] = OrderedDict(
-        [("id", from_id), ("code", from_zone.get("code")), ("label", from_zone.get("label"))]
+        [
+            ("id", from_id),
+            ("code", from_zone.get("code")),
+            ("label", from_zone.get("label")),
+        ]
     )
     breakdown["to_zone"] = OrderedDict(
         [("id", to_id), ("code", to_zone.get("code")), ("label", to_zone.get("label"))]
@@ -364,7 +423,9 @@ def validate_zone_matrix_rules(rules: dict[str, Any]) -> dict[str, Any]:
 
     matrix_symmetry = bool(normalized.get("matrix_symmetry", False))
     default_same_zone_price = normalized.get("default_same_zone_price")
-    if default_same_zone_price is not None and _to_decimal(default_same_zone_price) < Decimal("0"):
+    if default_same_zone_price is not None and _to_decimal(
+        default_same_zone_price
+    ) < Decimal("0"):
         raise ValueError("default_same_zone_price doit être >= 0.")
 
     raw_matrix = normalized.get("matrix")
@@ -411,7 +472,9 @@ def validate_zone_matrix_rules(rules: dict[str, Any]) -> dict[str, Any]:
     normalized["matrix"] = norm_matrix
     normalized["matrix_symmetry"] = matrix_symmetry
     normalized["default_same_zone_price"] = (
-        float(_to_decimal(default_same_zone_price)) if default_same_zone_price is not None else None
+        float(_to_decimal(default_same_zone_price))
+        if default_same_zone_price is not None
+        else None
     )
     extras = normalized.get("extras")
     normalized["extras"] = extras if isinstance(extras, list) else []
@@ -431,13 +494,17 @@ def build_zone_matrix_summary(rules: dict[str, Any]) -> dict[str, Any]:
     return {"zones_count": zone_count, "transitions_count": transitions}
 
 
-def _compute_distance(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
+def _compute_distance(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
     if isinstance(rules.get("components"), dict):
         return _compute_distance_v1(rules, context)
     base_fee = _to_decimal(rules.get("base_fee", 0))
     per_km = _to_decimal(rules.get("per_km", 0))
     distance_km = Decimal(str(context.get("distance_km", 0) or 0))
-    base = (base_fee + (per_km * distance_km)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    base = (base_fee + (per_km * distance_km)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
     breakdown = _normalize_breakdown("distance", base, "base_plus_km")
     total = base
 
@@ -469,7 +536,12 @@ def _compute_distance(rules: dict[str, Any], context: dict[str, Any]) -> tuple[D
             amount = _to_decimal(extra.get("amount", 0))
             breakdown["extras"].append(
                 OrderedDict(
-                    [("type", "after_time"), ("qty", 1), ("unit", f"{amount:.2f}"), ("amount", f"{amount:.2f}")]
+                    [
+                        ("type", "after_time"),
+                        ("qty", 1),
+                        ("unit", f"{amount:.2f}"),
+                        ("amount", f"{amount:.2f}"),
+                    ]
                 )
             )
             total += amount
@@ -480,7 +552,9 @@ def _compute_distance(rules: dict[str, Any], context: dict[str, Any]) -> tuple[D
     return total, breakdown
 
 
-def _compute_zones_count_from_rules(rules: dict[str, Any], context: dict[str, Any]) -> int:
+def _compute_zones_count_from_rules(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> int:
     zone_set_id = str(rules.get("zone_set_id") or "").strip()
     pickup_token = str(context.get("pickup_admin_token") or "").strip()
     dropoff_token = str(context.get("dropoff_admin_token") or "").strip()
@@ -516,45 +590,109 @@ def _compute_extras_v1(
     total = subtotal
 
     weekend = extras_rules.get("weekend") if isinstance(extras_rules, dict) else None
-    if isinstance(weekend, dict) and weekend.get("enabled") and weekend.get("type") == "multiplier":
+    if (
+        isinstance(weekend, dict)
+        and weekend.get("enabled")
+        and weekend.get("type") == "multiplier"
+    ):
         multiplier = Decimal(str(weekend.get("value") or 1))
         if context.get("is_weekend") and multiplier > Decimal("1"):
-            delta = (subtotal * (multiplier - Decimal("1"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            delta = (subtotal * (multiplier - Decimal("1"))).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
             if delta > 0:
                 total += delta
                 entries.append(
-                    OrderedDict([("type", "weekend_multiplier"), ("qty", 1), ("unit", f"{delta:.2f}"), ("amount", f"{delta:.2f}")])
+                    OrderedDict(
+                        [
+                            ("type", "weekend_multiplier"),
+                            ("qty", 1),
+                            ("unit", f"{delta:.2f}"),
+                            ("amount", f"{delta:.2f}"),
+                        ]
+                    )
                 )
 
-    after_20h = extras_rules.get("after_20h") if isinstance(extras_rules, dict) else None
-    if isinstance(after_20h, dict) and after_20h.get("enabled") and after_20h.get("type") == "fixed":
+    after_20h = (
+        extras_rules.get("after_20h") if isinstance(extras_rules, dict) else None
+    )
+    if (
+        isinstance(after_20h, dict)
+        and after_20h.get("enabled")
+        and after_20h.get("type") == "fixed"
+    ):
         if _is_after_time(context.get("pickup_local_time"), "20:00"):
             amount = _to_decimal(after_20h.get("value", 0))
             if amount > 0:
                 total += amount
-                entries.append(OrderedDict([("type", "after_20h"), ("qty", 1), ("unit", f"{amount:.2f}"), ("amount", f"{amount:.2f}")]))
+                entries.append(
+                    OrderedDict(
+                        [
+                            ("type", "after_20h"),
+                            ("qty", 1),
+                            ("unit", f"{amount:.2f}"),
+                            ("amount", f"{amount:.2f}"),
+                        ]
+                    )
+                )
 
-    last_minute = extras_rules.get("last_minute") if isinstance(extras_rules, dict) else None
-    if isinstance(last_minute, dict) and last_minute.get("enabled") and last_minute.get("type") == "fixed":
-        if int(context.get("minutes_until_pickup", 999999) or 999999) < 120:
+    last_minute = (
+        extras_rules.get("last_minute") if isinstance(extras_rules, dict) else None
+    )
+    if (
+        isinstance(last_minute, dict)
+        and last_minute.get("enabled")
+        and last_minute.get("type") == "fixed"
+    ):
+        if (
+            int(context.get("minutes_until_pickup", 999999) or 999999)
+            < _LAST_MINUTE_LEAD_TIME_MAX_MINUTES
+        ):
             amount = _to_decimal(last_minute.get("value", 0))
             if amount > 0:
                 total += amount
-                entries.append(OrderedDict([("type", "last_minute"), ("qty", 1), ("unit", f"{amount:.2f}"), ("amount", f"{amount:.2f}")]))
+                entries.append(
+                    OrderedDict(
+                        [
+                            ("type", "last_minute"),
+                            ("qty", 1),
+                            ("unit", f"{amount:.2f}"),
+                            ("amount", f"{amount:.2f}"),
+                        ]
+                    )
+                )
 
     return total, entries
 
 
-def _compute_zone_count_v1(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
-    components = rules.get("components") if isinstance(rules.get("components"), dict) else {}
+def _compute_zone_count_v1(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
+    components = (
+        rules.get("components") if isinstance(rules.get("components"), dict) else {}
+    )
     base_comp = components.get("base") if isinstance(components, dict) else {}
     zone_comp = components.get("zone_count") if isinstance(components, dict) else {}
-    base_amount = _to_decimal(base_comp.get("amount", 0)) if isinstance(base_comp, dict) and base_comp.get("enabled") else Decimal("0.00")
+    base_amount = (
+        _to_decimal(base_comp.get("amount", 0))
+        if isinstance(base_comp, dict) and base_comp.get("enabled")
+        else Decimal("0.00")
+    )
     zones_count = _compute_zones_count_from_rules(rules, context)
-    unit = _to_decimal(zone_comp.get("unit_price", 0)) if isinstance(zone_comp, dict) and zone_comp.get("enabled") else Decimal("0.00")
-    included_zones = max(1, int(zone_comp.get("included_zones") or 1)) if isinstance(zone_comp, dict) else 1
+    unit = (
+        _to_decimal(zone_comp.get("unit_price", 0))
+        if isinstance(zone_comp, dict) and zone_comp.get("enabled")
+        else Decimal("0.00")
+    )
+    included_zones = (
+        max(1, int(zone_comp.get("included_zones") or 1))
+        if isinstance(zone_comp, dict)
+        else 1
+    )
     chargeable_zones = max(max(zones_count, 1) - included_zones, 0)
-    zone_amount = (unit * Decimal(chargeable_zones)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    zone_amount = (unit * Decimal(chargeable_zones)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
     subtotal = base_amount + zone_amount
     breakdown = _normalize_breakdown("zone_count", subtotal, "base_plus_zone_count")
@@ -565,45 +703,78 @@ def _compute_zone_count_v1(rules: dict[str, Any], context: dict[str, Any]) -> tu
     breakdown["supplement_total"] = f"{zone_amount:.2f}"
     if zone_amount > 0:
         breakdown["extras"].append(
-            OrderedDict([
-                ("type", "zone_count"),
-                ("zones_total", max(zones_count, 1)),
-                ("zones_included", included_zones),
-                ("qty", chargeable_zones),
-                ("unit", f"{unit:.2f}"),
-                ("amount", f"{zone_amount:.2f}"),
-            ])
+            OrderedDict(
+                [
+                    ("type", "zone_count"),
+                    ("zones_total", max(zones_count, 1)),
+                    ("zones_included", included_zones),
+                    ("qty", chargeable_zones),
+                    ("unit", f"{unit:.2f}"),
+                    ("amount", f"{zone_amount:.2f}"),
+                ]
+            )
         )
 
     total, extras = _compute_extras_v1(rules, context, subtotal)
     for extra in extras:
         breakdown["extras"].append(extra)
-    minimum = _to_decimal((rules.get("caps") or {}).get("minimum", 0) if isinstance(rules.get("caps"), dict) else rules.get("minimum", 0))
+    minimum = _to_decimal(
+        (rules.get("caps") or {}).get("minimum", 0)
+        if isinstance(rules.get("caps"), dict)
+        else rules.get("minimum", 0)
+    )
     total = _apply_minimum(total, minimum, breakdown)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
 
 
-def _compute_distance_v1(rules: dict[str, Any], context: dict[str, Any]) -> tuple[Decimal, OrderedDict[str, Any]]:
-    components = rules.get("components") if isinstance(rules.get("components"), dict) else {}
+def _compute_distance_v1(
+    rules: dict[str, Any], context: dict[str, Any]
+) -> tuple[Decimal, OrderedDict[str, Any]]:
+    components = (
+        rules.get("components") if isinstance(rules.get("components"), dict) else {}
+    )
     distance_comp = components.get("distance") if isinstance(components, dict) else {}
     # Règle métier distance: pas de prix de base, uniquement km * prix_km (+ minimum éventuel).
     base_amount = Decimal("0.00")
-    per_km = _to_decimal(distance_comp.get("per_km", 0)) if isinstance(distance_comp, dict) and distance_comp.get("enabled") else Decimal("0.00")
-    included_km = Decimal(str(distance_comp.get("included_km", 0) if isinstance(distance_comp, dict) else 0))
+    per_km = (
+        _to_decimal(distance_comp.get("per_km", 0))
+        if isinstance(distance_comp, dict) and distance_comp.get("enabled")
+        else Decimal("0.00")
+    )
+    included_km = Decimal(
+        str(
+            distance_comp.get("included_km", 0)
+            if isinstance(distance_comp, dict)
+            else 0
+        )
+    )
     distance_km = Decimal(str(context.get("distance_km", 0) or 0))
     billable_km = max(distance_km - included_km, Decimal("0"))
-    distance_amount = (billable_km * per_km).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    distance_amount = (billable_km * per_km).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
     subtotal = base_amount + distance_amount
     breakdown = _normalize_breakdown("distance", subtotal, "km_only")
     if distance_amount > 0:
         breakdown["extras"].append(
-            OrderedDict([("type", "distance_km"), ("qty", f"{billable_km:.2f}"), ("unit", f"{per_km:.2f}"), ("amount", f"{distance_amount:.2f}")])
+            OrderedDict(
+                [
+                    ("type", "distance_km"),
+                    ("qty", f"{billable_km:.2f}"),
+                    ("unit", f"{per_km:.2f}"),
+                    ("amount", f"{distance_amount:.2f}"),
+                ]
+            )
         )
     total, extras = _compute_extras_v1(rules, context, subtotal)
     for extra in extras:
         breakdown["extras"].append(extra)
-    minimum = _to_decimal((rules.get("caps") or {}).get("minimum", 0) if isinstance(rules.get("caps"), dict) else rules.get("minimum", 0))
+    minimum = _to_decimal(
+        (rules.get("caps") or {}).get("minimum", 0)
+        if isinstance(rules.get("caps"), dict)
+        else rules.get("minimum", 0)
+    )
     total = _apply_minimum(total, minimum, breakdown)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
@@ -612,24 +783,54 @@ def _compute_distance_v1(rules: dict[str, Any], context: dict[str, Any]) -> tupl
 def _compute_hybrid_stack_v1(
     rules: dict[str, Any], context: dict[str, Any]
 ) -> tuple[Decimal, OrderedDict[str, Any]]:
-    components = rules.get("components") if isinstance(rules.get("components"), dict) else {}
+    components = (
+        rules.get("components") if isinstance(rules.get("components"), dict) else {}
+    )
     base_comp = components.get("base") if isinstance(components, dict) else {}
     zone_comp = components.get("zone_count") if isinstance(components, dict) else {}
     distance_comp = components.get("distance") if isinstance(components, dict) else {}
-    base_amount = _to_decimal(base_comp.get("amount", 0)) if isinstance(base_comp, dict) and base_comp.get("enabled") else Decimal("0.00")
+    base_amount = (
+        _to_decimal(base_comp.get("amount", 0))
+        if isinstance(base_comp, dict) and base_comp.get("enabled")
+        else Decimal("0.00")
+    )
     zones_count = _compute_zones_count_from_rules(rules, context)
-    zone_unit = _to_decimal(zone_comp.get("unit_price", 0)) if isinstance(zone_comp, dict) and zone_comp.get("enabled") else Decimal("0.00")
-    included_zones = max(1, int(zone_comp.get("included_zones") or 1)) if isinstance(zone_comp, dict) else 1
+    zone_unit = (
+        _to_decimal(zone_comp.get("unit_price", 0))
+        if isinstance(zone_comp, dict) and zone_comp.get("enabled")
+        else Decimal("0.00")
+    )
+    included_zones = (
+        max(1, int(zone_comp.get("included_zones") or 1))
+        if isinstance(zone_comp, dict)
+        else 1
+    )
     chargeable_zones = max(max(zones_count, 1) - included_zones, 0)
-    zone_amount = (zone_unit * Decimal(chargeable_zones)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    per_km = _to_decimal(distance_comp.get("per_km", 0)) if isinstance(distance_comp, dict) and distance_comp.get("enabled") else Decimal("0.00")
-    included_km = Decimal(str(distance_comp.get("included_km", 0) if isinstance(distance_comp, dict) else 0))
+    zone_amount = (zone_unit * Decimal(chargeable_zones)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    per_km = (
+        _to_decimal(distance_comp.get("per_km", 0))
+        if isinstance(distance_comp, dict) and distance_comp.get("enabled")
+        else Decimal("0.00")
+    )
+    included_km = Decimal(
+        str(
+            distance_comp.get("included_km", 0)
+            if isinstance(distance_comp, dict)
+            else 0
+        )
+    )
     distance_km = Decimal(str(context.get("distance_km", 0) or 0))
     billable_km = max(distance_km - included_km, Decimal("0"))
-    distance_amount = (billable_km * per_km).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    distance_amount = (billable_km * per_km).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
     subtotal = base_amount + zone_amount + distance_amount
-    breakdown = _normalize_breakdown("hybrid_stack", subtotal, "base_plus_zones_plus_km")
+    breakdown = _normalize_breakdown(
+        "hybrid_stack", subtotal, "base_plus_zones_plus_km"
+    )
     breakdown["zones_traversees"] = max(zones_count, 1)
     breakdown["zones_incluses"] = included_zones
     breakdown["zones_facturables"] = chargeable_zones
@@ -637,23 +838,36 @@ def _compute_hybrid_stack_v1(
     breakdown["supplement_total"] = f"{zone_amount:.2f}"
     if zone_amount > 0:
         breakdown["extras"].append(
-            OrderedDict([
-                ("type", "zone_count"),
-                ("zones_total", max(zones_count, 1)),
-                ("zones_included", included_zones),
-                ("qty", chargeable_zones),
-                ("unit", f"{zone_unit:.2f}"),
-                ("amount", f"{zone_amount:.2f}"),
-            ])
+            OrderedDict(
+                [
+                    ("type", "zone_count"),
+                    ("zones_total", max(zones_count, 1)),
+                    ("zones_included", included_zones),
+                    ("qty", chargeable_zones),
+                    ("unit", f"{zone_unit:.2f}"),
+                    ("amount", f"{zone_amount:.2f}"),
+                ]
+            )
         )
     if distance_amount > 0:
         breakdown["extras"].append(
-            OrderedDict([("type", "distance_km"), ("qty", f"{billable_km:.2f}"), ("unit", f"{per_km:.2f}"), ("amount", f"{distance_amount:.2f}")])
+            OrderedDict(
+                [
+                    ("type", "distance_km"),
+                    ("qty", f"{billable_km:.2f}"),
+                    ("unit", f"{per_km:.2f}"),
+                    ("amount", f"{distance_amount:.2f}"),
+                ]
+            )
         )
     total, extras = _compute_extras_v1(rules, context, subtotal)
     for extra in extras:
         breakdown["extras"].append(extra)
-    minimum = _to_decimal((rules.get("caps") or {}).get("minimum", 0) if isinstance(rules.get("caps"), dict) else rules.get("minimum", 0))
+    minimum = _to_decimal(
+        (rules.get("caps") or {}).get("minimum", 0)
+        if isinstance(rules.get("caps"), dict)
+        else rules.get("minimum", 0)
+    )
     total = _apply_minimum(total, minimum, breakdown)
     breakdown["total"] = f"{total:.2f}"
     return total, breakdown
@@ -668,7 +882,9 @@ def validate_company_pricing_rules(rules: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("zone_set_id requis pour modèle zone_matrix.")
         validated = validate_zone_matrix_rules(normalized)
         validated["v"] = int(normalized.get("v") or 1)
-        validated["currency"] = str(normalized.get("currency") or "CHF").strip().upper() or "CHF"
+        validated["currency"] = (
+            str(normalized.get("currency") or "CHF").strip().upper() or "CHF"
+        )
         validated["zone_set_id"] = zone_set_id
         minimum = validated.get("minimum")
         if minimum is not None and _to_decimal(minimum) < 0:
@@ -679,7 +895,9 @@ def validate_company_pricing_rules(rules: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("model pricing non supporté.")
     normalized["model"] = model
     normalized["v"] = int(normalized.get("v") or 1)
-    normalized["currency"] = str(normalized.get("currency") or "CHF").strip().upper() or "CHF"
+    normalized["currency"] = (
+        str(normalized.get("currency") or "CHF").strip().upper() or "CHF"
+    )
     components = normalized.get("components")
     if not isinstance(components, dict):
         raise ValueError("components requis.")
@@ -729,7 +947,9 @@ def validate_company_pricing_rules(rules: dict[str, Any]) -> dict[str, Any]:
         "zone_count": {
             "enabled": zone_enabled,
             "unit_price": float(zone_unit),
-            "strategy": str(zone_count.get("strategy") or "pickup_dropoff_diff_or_same"),
+            "strategy": str(
+                zone_count.get("strategy") or "pickup_dropoff_diff_or_same"
+            ),
             "included_zones": max(1, int(zone_count.get("included_zones") or 1)),
             "max_units": max(1, int(zone_count.get("max_units") or 1)),
         },
@@ -750,5 +970,8 @@ def validate_company_pricing_rules(rules: dict[str, Any]) -> dict[str, Any]:
     maximum = caps_map.get("maximum")
     if maximum is not None and _to_decimal(maximum) < 0:
         raise ValueError("caps.maximum doit être >= 0.")
-    normalized["caps"] = {"minimum": float(_to_decimal(minimum)) if minimum is not None else None, "maximum": float(_to_decimal(maximum)) if maximum is not None else None}
+    normalized["caps"] = {
+        "minimum": float(_to_decimal(minimum)) if minimum is not None else None,
+        "maximum": float(_to_decimal(maximum)) if maximum is not None else None,
+    }
     return normalized

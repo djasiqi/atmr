@@ -215,7 +215,9 @@ class TestApiKeyEndpoints:
         return {"Authorization": f"Bearer {token}"}
 
     @pytest.fixture
-    def reader_auth_headers(self, client, sample_institution_reader, sample_institution):
+    def reader_auth_headers(
+        self, client, sample_institution_reader, sample_institution
+    ):
         """Génère un token JWT pour reader institution."""
         claims = {
             "role": sample_institution_reader.role.value,
@@ -231,7 +233,12 @@ class TestApiKeyEndpoints:
         return {"Authorization": f"Bearer {token}"}
 
     def test_create_api_key_success(
-        self, client, db, sample_institution, sample_institution_admin, admin_auth_headers
+        self,
+        client,
+        db,
+        sample_institution,
+        sample_institution_admin,
+        admin_auth_headers,
     ):
         """Test: création d'une clé API par admin."""
         response = client.post(
@@ -260,9 +267,7 @@ class TestApiKeyEndpoints:
         assert api_key.institution_id == sample_institution.id
         assert api_key.created_by_user_id == sample_institution_admin.id
 
-    def test_create_api_key_invalid_scopes(
-        self, client, db, admin_auth_headers
-    ):
+    def test_create_api_key_invalid_scopes(self, client, db, admin_auth_headers):
         """Test: création avec scopes invalides -> 422."""
         response = client.post(
             "/api/v1/institutions/api-keys",
@@ -277,9 +282,7 @@ class TestApiKeyEndpoints:
         data = response.get_json()
         assert "invalid:scope" in data.get("error", "")
 
-    def test_create_api_key_reader_forbidden(
-        self, client, db, reader_auth_headers
-    ):
+    def test_create_api_key_reader_forbidden(self, client, db, reader_auth_headers):
         """Test: création par non-admin -> 403."""
         response = client.post(
             "/api/v1/institutions/api-keys",
@@ -292,9 +295,7 @@ class TestApiKeyEndpoints:
 
         assert response.status_code == 403
 
-    def test_list_api_keys(
-        self, client, db, sample_institution, admin_auth_headers
-    ):
+    def test_list_api_keys(self, client, db, sample_institution, admin_auth_headers):
         """Test: liste des clés API (sans clé brute)."""
         # Créer une clé d'abord
         _raw_key, key_prefix, key_hash = generate_api_key()
@@ -327,9 +328,7 @@ class TestApiKeyEndpoints:
         assert "valid_scopes" in data
         assert "requests:read" in data["valid_scopes"]
 
-    def test_revoke_api_key(
-        self, client, db, sample_institution, admin_auth_headers
-    ):
+    def test_revoke_api_key(self, client, db, sample_institution, admin_auth_headers):
         """Test: révocation d'une clé API."""
         # Créer une clé
         _raw_key, key_prefix, key_hash = generate_api_key()
@@ -354,9 +353,7 @@ class TestApiKeyEndpoints:
         assert data["is_active"] is False
         assert data["revoked_at"] is not None
 
-    def test_revoke_api_key_not_found(
-        self, client, db, admin_auth_headers
-    ):
+    def test_revoke_api_key_not_found(self, client, db, admin_auth_headers):
         """Test: révocation d'une clé inexistante -> 404."""
         response = client.post(
             "/api/v1/institutions/api-keys/99999/revoke",

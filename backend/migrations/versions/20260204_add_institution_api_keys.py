@@ -73,9 +73,7 @@ def upgrade():
 
 def downgrade():
     # Supprimer les index
-    op.drop_index(
-        "ix_institution_api_keys_key_hash", table_name="institution_api_keys"
-    )
+    op.drop_index("ix_institution_api_keys_key_hash", table_name="institution_api_keys")
     op.drop_index(
         "ix_institution_api_keys_key_prefix", table_name="institution_api_keys"
     )

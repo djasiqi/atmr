@@ -252,9 +252,7 @@ class RefreshTokenService:
             def _zrem() -> Any:
                 self.redis_client.zrem(user_tokens_key, token_hash)
 
-            _fix_wrongtype_and_retry(
-                self.redis_client, user_tokens_key, _zrem
-            )
+            _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zrem)
             self.redis_client.delete(f"{self.active_tokens_prefix}{token_hash}")
 
         logger.info("Token révoqué: %s...", token_hash[:8])
@@ -364,9 +362,7 @@ class RefreshTokenService:
         def _zcard() -> Any:
             return self.redis_client.zcard(user_tokens_key)
 
-        return _fix_wrongtype_and_retry(
-            self.redis_client, user_tokens_key, _zcard
-        )
+        return _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zcard)
 
     def touch_token_score(self, user_id: int, token: str) -> None:
         """Met a jour le score ZSET d'un token avec le timestamp actuel.
@@ -385,9 +381,10 @@ class RefreshTokenService:
         def _zadd() -> Any:
             self.redis_client.zadd(user_tokens_key, {token_hash: time.time()})
 
-        if _fix_wrongtype_and_retry(
-            self.redis_client, user_tokens_key, _zscore
-        ) is not None:
+        if (
+            _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zscore)
+            is not None
+        ):
             _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zadd)
 
     def limit_active_tokens(self, user_id: int, max_tokens: int = 5) -> None:
@@ -405,17 +402,13 @@ class RefreshTokenService:
         def _zcard() -> Any:
             return self.redis_client.zcard(user_tokens_key)
 
-        count = _fix_wrongtype_and_retry(
-            self.redis_client, user_tokens_key, _zcard
-        )
+        count = _fix_wrongtype_and_retry(self.redis_client, user_tokens_key, _zcard)
 
         if count > max_tokens:
             excess = count - max_tokens
 
             def _zrange() -> Any:
-                return self.redis_client.zrange(
-                    user_tokens_key, 0, excess - 1
-                )
+                return self.redis_client.zrange(user_tokens_key, 0, excess - 1)
 
             tokens_to_revoke = _fix_wrongtype_and_retry(
                 self.redis_client, user_tokens_key, _zrange
@@ -428,9 +421,8 @@ class RefreshTokenService:
                 ttl = 30 * 24 * 3600
 
             pruned_hashes = []
-            for token_hash in tokens_to_revoke:
-                if isinstance(token_hash, bytes):
-                    token_hash = token_hash.decode()
+            for th in tokens_to_revoke:
+                token_hash = th.decode() if isinstance(th, bytes) else th
                 self.redis_client.setex(
                     f"{self.revoked_tokens_prefix}{token_hash}",
                     ttl,

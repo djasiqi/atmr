@@ -16,7 +16,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ENCRYPTION_KEY = os.environ.get("TOTP_ENCRYPTION_KEY") or os.environ.get("MASTER_ENCRYPTION_KEY", "")
+_ENCRYPTION_KEY = os.environ.get("TOTP_ENCRYPTION_KEY") or os.environ.get(
+    "MASTER_ENCRYPTION_KEY", ""
+)
 _RECOVERY_CODE_COUNT = 10
 _MAX_2FA_FAILURES = 10
 _LOCKOUT_TTL_SECONDS = 1800
@@ -116,6 +118,7 @@ def _get_redis() -> redis_mod.Redis | None:
     """Return redis_client from ext, or None if unavailable."""
     try:
         from ext import redis_client
+
         return redis_client
     except Exception:
         return None
@@ -155,6 +158,7 @@ def reset_2fa_failures(user_id: int) -> None:
     if rc is None:
         return
     import contextlib
+
     with contextlib.suppress(Exception):
         rc.delete(f"2fa_failures:{user_id}")
 

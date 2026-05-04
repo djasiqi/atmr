@@ -31,7 +31,9 @@ def test_production_whitelist_required_ok_with_entries(prod_env_minimal, monkeyp
     validate_required_env_vars("production")
 
 
-def test_production_whitelist_required_false_allows_empty(prod_env_minimal, monkeypatch):
+def test_production_whitelist_required_false_allows_empty(
+    prod_env_minimal, monkeypatch
+):
     from app import validate_required_env_vars
 
     monkeypatch.setenv("ADMIN_IP_WHITELIST_REQUIRED", "false")

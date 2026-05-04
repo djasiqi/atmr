@@ -15,10 +15,16 @@ depends_on = None
 
 def upgrade():
     op.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_secret_encrypted TEXT')
-    op.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE')
-    op.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_enabled_at TIMESTAMP WITH TIME ZONE')
+    op.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE'
+    )
+    op.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS totp_enabled_at TIMESTAMP WITH TIME ZONE'
+    )
     op.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS recovery_codes_hash TEXT')
-    op.execute('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS recovery_codes_remaining INTEGER DEFAULT 0')
+    op.execute(
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS recovery_codes_remaining INTEGER DEFAULT 0'
+    )
     op.execute("ALTER TABLE company ADD COLUMN IF NOT EXISTS security_policy TEXT")
 
 

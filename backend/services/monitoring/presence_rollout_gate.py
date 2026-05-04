@@ -22,7 +22,9 @@ class PresenceRolloutGateResult:
 MISSION_MISSING_ID_RATE_THRESHOLD = 0.01
 
 
-def evaluate_presence_rollout_gate(values: PresenceRolloutGateInput) -> PresenceRolloutGateResult:
+def evaluate_presence_rollout_gate(
+    values: PresenceRolloutGateInput,
+) -> PresenceRolloutGateResult:
     reasons: list[str] = []
     if values.non_canonical_fanout_rate > 0:
         reasons.append("non_canonical_fanout_detected")
@@ -34,7 +36,10 @@ def evaluate_presence_rollout_gate(values: PresenceRolloutGateInput) -> Presence
         reasons.append("cross_tenant_mismatch_detected")
 
     can_pilot = len(reasons) == 0
-    can_rollout_large = can_pilot and values.mission_missing_id_rate <= MISSION_MISSING_ID_RATE_THRESHOLD
+    can_rollout_large = (
+        can_pilot
+        and values.mission_missing_id_rate <= MISSION_MISSING_ID_RATE_THRESHOLD
+    )
     if can_pilot and not can_rollout_large:
         reasons.append("mission_missing_id_rate_too_high")
     return PresenceRolloutGateResult(

@@ -189,7 +189,9 @@ class TestCancelConvertedRequest:
 
         assert "resulting_booking_id" in data
         assert data["resulting_booking_id"] == converted_request.booking_id
-        assert "convertie" in data["error"].lower() or "booking" in data["error"].lower()
+        assert (
+            "convertie" in data["error"].lower() or "booking" in data["error"].lower()
+        )
 
     def test_cancel_draft_request_succeeds(
         self, client, db, sample_institution, auth_headers
@@ -372,11 +374,16 @@ class TestAuditLogsImmutable:
         # le commit n'est jamais atteint
         with pytest.raises(InternalError) as exc_info:
             db.session.execute(
-                text("UPDATE audit_logs SET result_status = 'failure' WHERE action_type = 'test_update_blocked'")
+                text(
+                    "UPDATE audit_logs SET result_status = 'failure' WHERE action_type = 'test_update_blocked'"
+                )
             )
 
         db.session.rollback()  # Cleanup après l'erreur
-        assert "immutable" in str(exc_info.value).lower() or "not allowed" in str(exc_info.value).lower()
+        assert (
+            "immutable" in str(exc_info.value).lower()
+            or "not allowed" in str(exc_info.value).lower()
+        )
 
     @pytest.mark.skip(reason="Nécessite migration appliquée avec triggers")
     def test_audit_log_delete_blocked(self, db):
@@ -408,7 +415,10 @@ class TestAuditLogsImmutable:
             )
 
         db.session.rollback()  # Cleanup après l'erreur
-        assert "immutable" in str(exc_info.value).lower() or "not allowed" in str(exc_info.value).lower()
+        assert (
+            "immutable" in str(exc_info.value).lower()
+            or "not allowed" in str(exc_info.value).lower()
+        )
 
 
 class TestInstitutionEvents:

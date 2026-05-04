@@ -90,12 +90,16 @@ patient_model = institution_patients_ns.model(
         "insurance_name": fields.String(description="Caisse maladie"),
         "insurance_number": fields.String(description="Numéro d'assuré"),
         "has_guardianship": fields.Boolean(description="Sous curatelle"),
-        "guardianship_type": fields.String(description="Type de curatelle (curatorship, opad, lawyer, family, other)"),
+        "guardianship_type": fields.String(
+            description="Type de curatelle (curatorship, opad, lawyer, family, other)"
+        ),
         "guardian_name": fields.String(description="Nom du curateur"),
         "guardian_organization": fields.String(description="Organisation du curateur"),
         "guardian_phone": fields.String(description="Téléphone du curateur"),
         "guardian_email": fields.String(description="Email du curateur"),
-        "guardian_address": fields.String(description="Adresse du curateur (facturation)"),
+        "guardian_address": fields.String(
+            description="Adresse du curateur (facturation)"
+        ),
         "notes": fields.String(description="Notes"),
         "created_at": fields.String(description="Date création"),
         "updated_at": fields.String(description="Date modification"),
@@ -235,9 +239,12 @@ def _parse_date_token(token: str) -> date | None:
 
     # Try common separators: . / -
     for fmt in (
-        "%d.%m.%Y", "%d.%m.%y",
-        "%d/%m/%Y", "%d/%m/%y",
-        "%d-%m-%Y", "%d-%m-%y",
+        "%d.%m.%Y",
+        "%d.%m.%y",
+        "%d/%m/%Y",
+        "%d/%m/%y",
+        "%d-%m-%Y",
+        "%d-%m-%y",
         "%Y-%m-%d",  # ISO
     ):
         try:
@@ -247,9 +254,18 @@ def _parse_date_token(token: str) -> date | None:
 
     # French month names: "24 janvier 1993"
     french_months = {
-        "janvier": "01", "février": "02", "mars": "03", "avril": "04",
-        "mai": "05", "juin": "06", "juillet": "07", "août": "08",
-        "septembre": "09", "octobre": "10", "novembre": "11", "décembre": "12",
+        "janvier": "01",
+        "février": "02",
+        "mars": "03",
+        "avril": "04",
+        "mai": "05",
+        "juin": "06",
+        "juillet": "07",
+        "août": "08",
+        "septembre": "09",
+        "octobre": "10",
+        "novembre": "11",
+        "décembre": "12",
     }
     m = re.match(r"^(\d{1,2})\s+(\w+)\s+(\d{2,4})$", token, re.IGNORECASE)
     if m:
@@ -356,7 +372,9 @@ class InstitutionPatientList(Resource):
             pages = (total + per_page - 1) // per_page
 
             patients = (
-                query.order_by(InstitutionPatient.last_name, InstitutionPatient.first_name)
+                query.order_by(
+                    InstitutionPatient.last_name, InstitutionPatient.first_name
+                )
                 .offset((page - 1) * per_page)
                 .limit(per_page)
                 .all()
@@ -382,7 +400,9 @@ class InstitutionPatientList(Resource):
     @institution_patients_ns.response(400, "Données invalides", validation_error_model)
     @institution_patients_ns.response(401, "Non authentifié", permission_error_model)
     @institution_patients_ns.response(403, "Accès refusé", permission_error_model)
-    @institution_patients_ns.response(409, "Référence externe déjà utilisée", api_error_model)
+    @institution_patients_ns.response(
+        409, "Référence externe déjà utilisée", api_error_model
+    )
     @api_key_or_jwt_required(scopes=["patients:write"])
     def post(self):
         """Crée un nouveau patient.
@@ -424,8 +444,10 @@ class InstitutionPatientList(Resource):
             if not force_create:
                 dup_query = InstitutionPatient.query.filter(
                     InstitutionPatient.institution_id == institution_id,
-                    db.func.lower(db.func.trim(InstitutionPatient.first_name)) == first_name.lower(),
-                    db.func.lower(db.func.trim(InstitutionPatient.last_name)) == last_name.lower(),
+                    db.func.lower(db.func.trim(InstitutionPatient.first_name))
+                    == first_name.lower(),
+                    db.func.lower(db.func.trim(InstitutionPatient.last_name))
+                    == last_name.lower(),
                 )
                 if dob_str:
                     dob_parsed = datetime.strptime(dob_str, "%Y-%m-%d").date()
@@ -494,14 +516,23 @@ class InstitutionPatientList(Resource):
             db.session.add(patient)
             db.session.flush()
 
-            sync_result = {"status": "none", "suggestions_count": 0, "identity_id": None}
+            sync_result = {
+                "status": "none",
+                "suggestions_count": 0,
+                "identity_id": None,
+            }
             try:
-                from services.patient_sync.patient_identity_service import trigger_sync_on_create  # noqa: I001
+                from services.patient_sync.patient_identity_service import (
+                    trigger_sync_on_create,
+                )
+
                 result = trigger_sync_on_create(patient, user_id)
                 if result:
                     sync_result = result
             except Exception as sync_err:
-                logger.warning("[InstitutionPatients] Sync on create error: %s", sync_err)
+                logger.warning(
+                    "[InstitutionPatients] Sync on create error: %s", sync_err
+                )
 
             db.session.commit()
 
@@ -578,7 +609,11 @@ class InstitutionPatientDetail(Resource):
             if institution_role == InstitutionRole.CURATOR.value:
                 user = AuthorizationService.require_user()
                 team_ids = get_user_team_ids(user.id)
-                if team_ids and patient.curator_team_id and patient.curator_team_id not in team_ids:
+                if (
+                    team_ids
+                    and patient.curator_team_id
+                    and patient.curator_team_id not in team_ids
+                ):
                     return {"error": "Patient non trouvé"}, 404
 
             return patient.serialize, 200
@@ -596,7 +631,9 @@ class InstitutionPatientDetail(Resource):
     @institution_patients_ns.response(401, "Non authentifié", permission_error_model)
     @institution_patients_ns.response(403, "Accès refusé", permission_error_model)
     @institution_patients_ns.response(404, "Patient non trouvé", not_found_error_model)
-    @institution_patients_ns.response(409, "Référence externe déjà utilisée", api_error_model)
+    @institution_patients_ns.response(
+        409, "Référence externe déjà utilisée", api_error_model
+    )
     @api_key_or_jwt_required(scopes=["patients:write"])
     def put(self, patient_id: int):
         """Modifie un patient.
@@ -619,6 +656,7 @@ class InstitutionPatientDetail(Resource):
 
             # Capturer les anciennes valeurs pour le delta sync
             from services.patient_sync.patient_identity_service import SYNCABLE_FIELDS
+
             old_values = {f: getattr(patient, f, None) for f in SYNCABLE_FIELDS}
 
             data = request.get_json() or {}
@@ -638,7 +676,9 @@ class InstitutionPatientDetail(Resource):
                     if k in BILLING_PATIENT_EDITABLE_FIELDS
                 }
                 if not validated:
-                    return {"error": "Aucun champ modifiable avec le rôle facturation"}, 403
+                    return {
+                        "error": "Aucun champ modifiable avec le rôle facturation"
+                    }, 403
 
             # Vérifier unicité external_reference si changé
             new_ext_ref = validated.get("external_reference")
@@ -709,7 +749,10 @@ class InstitutionPatientDetail(Resource):
 
             # Déclencher la synchronisation cross-plateforme si curatelle + AVS
             try:
-                from services.patient_sync.patient_identity_service import trigger_sync_if_needed  # noqa: I001
+                from services.patient_sync.patient_identity_service import (
+                    trigger_sync_if_needed,
+                )
+
                 sync_event = trigger_sync_if_needed(patient, old_values, user_id)
                 if sync_event:
                     db.session.commit()
@@ -722,10 +765,16 @@ class InstitutionPatientDetail(Resource):
 
             # Audit log — séparer champs sensibles des champs normaux
             SENSITIVE_FIELDS = {
-                "avs_number", "insurance_name", "insurance_number",
-                "has_guardianship", "guardianship_type",
-                "guardian_name", "guardian_organization",
-                "guardian_phone", "guardian_email", "guardian_address",
+                "avs_number",
+                "insurance_name",
+                "insurance_number",
+                "has_guardianship",
+                "guardianship_type",
+                "guardian_name",
+                "guardian_organization",
+                "guardian_phone",
+                "guardian_email",
+                "guardian_address",
             }
             updated_fields = list(validated.keys())
             sensitive_updated = [f for f in updated_fields if f in SENSITIVE_FIELDS]
@@ -831,7 +880,11 @@ class PatientIdentityInfo(Resource):
     def get(self, patient_id: int):
         """Retourne les infos d'identité et liens du patient (admin only)."""
         try:
-            from models.patient_identity import PatientAuditLog, PatientIdentity, PatientIdentityLink  # noqa: I001
+            from models.patient_identity import (
+                PatientAuditLog,
+                PatientIdentity,
+                PatientIdentityLink,
+            )
 
             institution_id, user_id = get_institution_read_context()
 
@@ -841,7 +894,8 @@ class PatientIdentityInfo(Resource):
                 return {"error": "Accès réservé aux administrateurs"}, 403
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -858,13 +912,15 @@ class PatientIdentityInfo(Resource):
             identity = PatientIdentity.query.get(link.patient_identity_id)
 
             # Audit log lecture
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="READ_IDENTITY_LINKS",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={"identity_id": identity.id if identity else None},
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="READ_IDENTITY_LINKS",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={"identity_id": identity.id if identity else None},
+                )
+            )
             db.session.commit()
 
             return {
@@ -875,7 +931,9 @@ class PatientIdentityInfo(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] GET /%s/identity error: %s", patient_id, e)
+            logger.error(
+                "[InstitutionPatients] GET /%s/identity error: %s", patient_id, e
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -887,12 +945,15 @@ class PatientMatches(Resource):
     def get(self, patient_id: int):
         """Retourne les correspondances potentielles (score + signaux)."""
         try:
-            from services.patient_sync.patient_matching_service import find_potential_matches  # noqa: I001
+            from services.patient_sync.patient_matching_service import (
+                find_potential_matches,
+            )
 
             institution_id, _ = get_institution_read_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -902,7 +963,11 @@ class PatientMatches(Resource):
             if institution_role == InstitutionRole.CURATOR.value:
                 user = AuthorizationService.require_user()
                 team_ids = get_user_team_ids(user.id)
-                if team_ids and patient.curator_team_id and patient.curator_team_id not in team_ids:
+                if (
+                    team_ids
+                    and patient.curator_team_id
+                    and patient.curator_team_id not in team_ids
+                ):
                     return {"error": "Patient non trouvé"}, 404
 
             matches = find_potential_matches(
@@ -918,7 +983,9 @@ class PatientMatches(Resource):
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
-            logger.error("[InstitutionPatients] GET /%s/matches error: %s", patient_id, e)
+            logger.error(
+                "[InstitutionPatients] GET /%s/matches error: %s", patient_id, e
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -939,7 +1006,8 @@ class PatientMatchConfirm(Resource):
             institution_id, user_id = get_institution_write_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -967,16 +1035,18 @@ class PatientMatchConfirm(Resource):
             )
             db.session.add(link)
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="LINK_CONFIRMED",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={
-                    "identity_id": identity.id,
-                    "link_method": "name_dob_confirmed",
-                },
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="LINK_CONFIRMED",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={
+                        "identity_id": identity.id,
+                        "link_method": "name_dob_confirmed",
+                    },
+                )
+            )
             db.session.commit()
 
             return {"message": "Correspondance confirmée", "link": link.serialize}, 201
@@ -986,7 +1056,9 @@ class PatientMatchConfirm(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] POST /%s/matches/%s/confirm error: %s",
-                patient_id, identity_id, e,
+                patient_id,
+                identity_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1007,14 +1079,16 @@ class PatientMatchReject(Resource):
             institution_id, user_id = get_institution_write_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
 
             # Vérifier pas déjà rejeté
             existing = PatientMatchRejection.query.filter_by(
-                patient_id=patient.id, identity_id=identity_id,
+                patient_id=patient.id,
+                identity_id=identity_id,
             ).first()
             if existing:
                 return {"message": "Déjà rejeté"}, 200
@@ -1026,13 +1100,15 @@ class PatientMatchReject(Resource):
             )
             db.session.add(rejection)
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="MATCH_REJECTED",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={"identity_id": identity_id},
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="MATCH_REJECTED",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={"identity_id": identity_id},
+                )
+            )
             db.session.commit()
 
             return {"message": "Suggestion rejetée"}, 200
@@ -1042,7 +1118,9 @@ class PatientMatchReject(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] POST /%s/matches/%s/reject error: %s",
-                patient_id, identity_id, e,
+                patient_id,
+                identity_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1067,7 +1145,8 @@ class PatientIdentityDetach(Resource):
                 return {"error": "Accès réservé aux administrateurs"}, 403
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -1088,16 +1167,18 @@ class PatientIdentityDetach(Resource):
             link.detached_by_user_id = user_id
             link.detach_reason = reason[:200] if reason else None
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="DETACH",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={
-                    "identity_id": link.patient_identity_id,
-                    "reason": reason[:200] if reason else None,
-                },
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="DETACH",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={
+                        "identity_id": link.patient_identity_id,
+                        "reason": reason[:200] if reason else None,
+                    },
+                )
+            )
             db.session.commit()
 
             return {"message": "Lien détaché", "link": link.serialize}, 200
@@ -1107,7 +1188,8 @@ class PatientIdentityDetach(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] PUT /%s/identity/detach error: %s",
-                patient_id, e,
+                patient_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1129,7 +1211,8 @@ class PatientSyncStatus(Resource):
             institution_id, _ = get_institution_read_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -1147,8 +1230,9 @@ class PatientSyncStatus(Resource):
 
             # Derniers events
             recent_events = (
-                PatientSyncEvent.query
-                .filter_by(patient_identity_id=link.patient_identity_id)
+                PatientSyncEvent.query.filter_by(
+                    patient_identity_id=link.patient_identity_id
+                )
                 .order_by(PatientSyncEvent.created_at.desc())
                 .limit(5)
                 .all()
@@ -1157,6 +1241,7 @@ class PatientSyncStatus(Resource):
             source_info = None
             if identity and identity.source_institution_id:
                 from models.institution import Institution
+
                 source_inst = Institution.query.get(identity.source_institution_id)
                 if source_inst:
                     source_info = {
@@ -1176,7 +1261,8 @@ class PatientSyncStatus(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] GET /%s/sync-status error: %s",
-                patient_id, e,
+                patient_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1197,14 +1283,16 @@ class PatientLinkSuggestions(Resource):
             institution_id, _ = get_institution_read_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
 
             suggestions = (
-                PatientLinkSuggestion.query
-                .filter_by(source_patient_id=patient.id, status="pending")
+                PatientLinkSuggestion.query.filter_by(
+                    source_patient_id=patient.id, status="pending"
+                )
                 .filter(PatientLinkSuggestion.expires_at > db.func.now())
                 .order_by(PatientLinkSuggestion.match_score.desc())
                 .all()
@@ -1235,7 +1323,8 @@ class PatientLinkSuggestions(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] GET /%s/suggestions error: %s",
-                patient_id, e,
+                patient_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1267,7 +1356,8 @@ class PatientLinkSuggestionConfirm(Resource):
             institution_id, user_id = get_institution_write_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
@@ -1282,7 +1372,10 @@ class PatientLinkSuggestionConfirm(Resource):
                 return {"error": "Suggestion non trouvée"}, 404
 
             if suggestion.status != "pending":
-                return {"error": "Suggestion déjà traitée", "status": suggestion.status}, 409
+                return {
+                    "error": "Suggestion déjà traitée",
+                    "status": suggestion.status,
+                }, 409
 
             already_linked = PatientIdentityLink.query.filter_by(
                 entity_type="institution_patient",
@@ -1300,7 +1393,9 @@ class PatientLinkSuggestionConfirm(Resource):
                 identity = PatientIdentity.query.get(suggestion.target_identity_id)
 
             if not identity and suggestion.target_entity_type == "institution_patient":
-                target_patient = InstitutionPatient.query.get(suggestion.target_entity_id)
+                target_patient = InstitutionPatient.query.get(
+                    suggestion.target_entity_id
+                )
                 if target_patient and target_patient.avs_number:
                     identity = ensure_identity_and_link(target_patient, user_id)
 
@@ -1350,19 +1445,21 @@ class PatientLinkSuggestionConfirm(Resource):
             suggestion.resolved_by_user_id = user_id
             suggestion.resolved_at = datetime.now(UTC)
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="LINK_CONFIRMED",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={
-                    "identity_id": identity.id,
-                    "suggestion_id": suggestion.id,
-                    "link_method": "name_dob_confirmed",
-                    "target_entity_type": suggestion.target_entity_type,
-                    "target_entity_id": suggestion.target_entity_id,
-                },
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="LINK_CONFIRMED",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={
+                        "identity_id": identity.id,
+                        "suggestion_id": suggestion.id,
+                        "link_method": "name_dob_confirmed",
+                        "target_entity_type": suggestion.target_entity_type,
+                        "target_entity_id": suggestion.target_entity_id,
+                    },
+                )
+            )
 
             changed = compute_creation_delta(patient)
             sync_event = None
@@ -1382,7 +1479,9 @@ class PatientLinkSuggestionConfirm(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] POST /%s/suggestions/%s/confirm error: %s",
-                patient_id, suggestion_id, e,
+                patient_id,
+                suggestion_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)
 
@@ -1408,19 +1507,24 @@ class PatientLinkSuggestionReject(Resource):
             institution_id, user_id = get_institution_write_context()
 
             patient = InstitutionPatient.query.filter_by(
-                id=patient_id, institution_id=institution_id,
+                id=patient_id,
+                institution_id=institution_id,
             ).first()
             if not patient:
                 return {"error": "Patient non trouvé"}, 404
 
             suggestion = PatientLinkSuggestion.query.filter_by(
-                id=suggestion_id, source_patient_id=patient.id,
+                id=suggestion_id,
+                source_patient_id=patient.id,
             ).first()
             if not suggestion:
                 return {"error": "Suggestion non trouvée"}, 404
 
             if suggestion.status != "pending":
-                return {"message": "Suggestion déjà traitée", "status": suggestion.status}, 200
+                return {
+                    "message": "Suggestion déjà traitée",
+                    "status": suggestion.status,
+                }, 200
 
             suggestion.status = "rejected"
             suggestion.resolved_by_user_id = user_id
@@ -1432,23 +1536,27 @@ class PatientLinkSuggestionReject(Resource):
                     identity_id=suggestion.target_identity_id,
                 ).first()
                 if not existing_rejection:
-                    db.session.add(PatientMatchRejection(
-                        patient_id=patient.id,
-                        identity_id=suggestion.target_identity_id,
-                        rejected_by_user_id=user_id,
-                    ))
+                    db.session.add(
+                        PatientMatchRejection(
+                            patient_id=patient.id,
+                            identity_id=suggestion.target_identity_id,
+                            rejected_by_user_id=user_id,
+                        )
+                    )
 
-            db.session.add(PatientAuditLog(
-                actor_user_id=user_id,
-                action="MATCH_REJECTED",
-                entity_type="institution_patient",
-                entity_id=patient.id,
-                metadata_json={
-                    "suggestion_id": suggestion.id,
-                    "target_entity_type": suggestion.target_entity_type,
-                    "target_entity_id": suggestion.target_entity_id,
-                },
-            ))
+            db.session.add(
+                PatientAuditLog(
+                    actor_user_id=user_id,
+                    action="MATCH_REJECTED",
+                    entity_type="institution_patient",
+                    entity_id=patient.id,
+                    metadata_json={
+                        "suggestion_id": suggestion.id,
+                        "target_entity_type": suggestion.target_entity_type,
+                        "target_entity_id": suggestion.target_entity_id,
+                    },
+                )
+            )
             db.session.commit()
 
             return {"message": "Suggestion rejetée"}, 200
@@ -1458,6 +1566,8 @@ class PatientLinkSuggestionReject(Resource):
             sentry_sdk.capture_exception(e)
             logger.error(
                 "[InstitutionPatients] POST /%s/suggestions/%s/reject error: %s",
-                patient_id, suggestion_id, e,
+                patient_id,
+                suggestion_id,
+                e,
             )
             return APIErrorHandler.handle_exception(e, logger)

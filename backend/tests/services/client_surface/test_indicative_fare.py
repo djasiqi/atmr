@@ -31,7 +31,10 @@ def test_round_chf_five_rappen_epsilon_parity() -> None:
     """Même sémantique que `Math.round((x + Number.EPSILON) * 20) / 20` (ES)."""
     # Frontières courantes (5 centimes)
     assert float(round_chf_to_five_rappen(Decimal("44.97"))) == 44.95
-    assert float(round_chf_to_five_rappen(Decimal("45.02"))) in (45.0, 45.05)  # float bin près
+    assert float(round_chf_to_five_rappen(Decimal("45.02"))) in (
+        45.0,
+        45.05,
+    )  # float bin près
     v = float(round_chf_to_five_rappen(Decimal("45.0")))
     assert v == 45.0
     v2 = float(round_chf_to_five_rappen(48.26))

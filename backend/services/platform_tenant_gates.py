@@ -10,9 +10,8 @@ from ext import db
 from models.company import Company
 from models.enums import UserRole
 from models.user import User
-
-from services.platform_governance_constants import ERROR_TENANT_PLATFORM_SUSPENDED
 from services.platform_exceptions import PlatformTenantSuspended
+from services.platform_governance_constants import ERROR_TENANT_PLATFORM_SUSPENDED
 
 
 def _company_for_user(user: User) -> Company | None:

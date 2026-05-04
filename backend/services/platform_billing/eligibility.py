@@ -18,7 +18,9 @@ def is_cancelled_for_subscription_volume(booking: Booking) -> bool:
     return key == BookingStatus.CANCELED.value
 
 
-def is_commissionable_platform(booking: Booking, pilotage_payload: dict[str, Any]) -> bool:
+def is_commissionable_platform(
+    booking: Booking, pilotage_payload: dict[str, Any]
+) -> bool:
     """Règle V1 stricte : institution + exécuté + eligible + montant > 0 + hors démo + completed_at."""
     if is_synthetic_demo_booking(booking):
         return False
@@ -33,6 +35,4 @@ def is_commissionable_platform(booking: Booking, pilotage_payload: dict[str, Any
     if qual.get("state") != "eligible":
         return False
     amt = pl.get("observed_transport_amount")
-    if amt is None or float(amt) <= 0:
-        return False
-    return True
+    return not (amt is None or float(amt) <= 0)

@@ -37,7 +37,9 @@ def _minutes_from_seconds(sec: int | None) -> int | None:
     return max(0, math.ceil(float(sec) / 60.0))
 
 
-def enrich_booking_dict_with_client_live(booking: Any, data: dict[str, Any]) -> dict[str, Any]:
+def enrich_booking_dict_with_client_live(
+    booking: Any, data: dict[str, Any]
+) -> dict[str, Any]:
     """Ajoute driver_live_* , eta_minutes, estimated_* pour suivi client (carte / texte)."""
     st = _parse_booking_status(booking)
     if st is None or st not in _LIVE_STATUSES:

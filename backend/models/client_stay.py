@@ -33,7 +33,9 @@ class ClientStay(db.Model):
         ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     end_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -65,11 +67,12 @@ class ClientStay(db.Model):
 
     # Relations
     client = relationship("Client", back_populates="stays", passive_deletes=True)
-    company = relationship("Company", back_populates="client_stays", passive_deletes=True)
+    company = relationship(
+        "Company", back_populates="client_stays", passive_deletes=True
+    )
     created_by_user = relationship("User", passive_deletes=True)
 
     __table_args__ = (
         Index("ix_client_stays_client_start_date", "client_id", "start_date"),
         Index("ix_client_stays_company_start_date", "company_id", "start_date"),
     )
-

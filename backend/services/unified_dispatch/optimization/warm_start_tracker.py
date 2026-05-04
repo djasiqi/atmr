@@ -107,7 +107,7 @@ _global_gain_tracker: WarmStartGainTracker | None = None
 
 def get_gain_tracker() -> WarmStartGainTracker:
     """Retourne l'instance singleton du tracker."""
-    global _global_gain_tracker  # noqa: PLW0603
+    global _global_gain_tracker
 
     if _global_gain_tracker is None:
         _global_gain_tracker = WarmStartGainTracker()
@@ -117,7 +117,7 @@ def get_gain_tracker() -> WarmStartGainTracker:
 
 def reset_gain_tracker() -> None:
     """Reset le tracker (pour tests)."""
-    global _global_gain_tracker  # noqa: PLW0603
+    global _global_gain_tracker
     _global_gain_tracker = WarmStartGainTracker()
 
 

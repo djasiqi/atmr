@@ -104,12 +104,13 @@ def validate_meta(meta: Any, *, label: str) -> list[str]:
     if fr not in ALLOWED_FALLBACK_REASONS:
         # API peut renvoyer null JSON -> None en Python
         errs.append(
-            f"{label}: meta.fallback_reason={fr!r} "
-            f"(attendu null ou 'model_missing')"
+            f"{label}: meta.fallback_reason={fr!r} (attendu null ou 'model_missing')"
         )
     dm = meta.get("duration_ms")
     if dm is not None and not isinstance(dm, (int, float)):
-        errs.append(f"{label}: meta.duration_ms doit être un nombre, got {type(dm).__name__}")
+        errs.append(
+            f"{label}: meta.duration_ms doit être un nombre, got {type(dm).__name__}"
+        )
     elif dm is not None and float(dm) < 0:
         errs.append(f"{label}: meta.duration_ms < 0")
     return errs
@@ -174,9 +175,7 @@ def main() -> int:
 
     base = args.base_url.rstrip("/")
     token = args.token.strip()
-    q_suggestions = (
-        f"for_date={args.for_date}&min_confidence=0&limit=20"
-    )
+    q_suggestions = f"for_date={args.for_date}&min_confidence=0&limit=20"
 
     failures: list[str] = []
 
@@ -196,7 +195,12 @@ def main() -> int:
     else:
         if "available" not in body_status:
             failures.append("status: champ 'available' manquant")
-        print("  available:", body_status.get("available"), "loaded:", body_status.get("loaded"))
+        print(
+            "  available:",
+            body_status.get("available"),
+            "loaded:",
+            body_status.get("loaded"),
+        )
 
     # --- Suggestions (1er appel) ---
     st1, body1, err1 = http_get_json(
@@ -233,14 +237,19 @@ def main() -> int:
                     "duration_ms": meta.get("duration_ms"),
                 },
             )
-            if args.expect_model_source and meta.get("model_source") != args.expect_model_source:
+            if (
+                args.expect_model_source
+                and meta.get("model_source") != args.expect_model_source
+            ):
                 failures.append(
                     f"suggestions[1]: meta.model_source={meta.get('model_source')!r} "
                     f"!= --expect-model-source={args.expect_model_source!r}"
                 )
         if body1.get("error") and st1 == 200:
             # Erreur métier dans 200 — inattendu pour ce smoke
-            failures.append(f"suggestions[1]: champ error présent: {body1.get('error')!r}")
+            failures.append(
+                f"suggestions[1]: champ error présent: {body1.get('error')!r}"
+            )
 
     # --- Suggestions (2e appel = cache si TTL et 1er non-cache avec données cachées) ---
     if not args.skip_second_call and st1 == 200 and isinstance(body1, dict):
@@ -269,7 +278,9 @@ def main() -> int:
 
     print()
     print("--- Étapes manuelles — scénario S4_manual_ui_and_logs ---")
-    print("- Vérifier logs RL_POSTOPT_SKIPPED (dispatch auto) : fast_mode | feature_disabled |")
+    print(
+        "- Vérifier logs RL_POSTOPT_SKIPPED (dispatch auto) : fast_mode | feature_disabled |"
+    )
     print("  model_unavailable | import_error")
     print("- UI : SemiAutoPanel + useRLSuggestions (0 / 1 / N suggestions)")
     print("- Parité : ce script ne couvre que l’URL /api/v1/company_dispatch/ ;")

@@ -4,6 +4,7 @@
 Vérifie que l'annulation de l'aller d'un A/R annule automatiquement le retour
 (non facturable) via le handler centralisé, avec guard anti-boucle.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -83,29 +84,32 @@ def _run_handler(event: dict[str, Any], booking: _FakeBooking | None) -> list[An
     mock_db.session.rollback = MagicMock()
     mock_db.session.flush = MagicMock()
 
-    with patch("ext.db", mock_db), \
-         patch("models.Booking", MagicMock()), \
-         patch("models.enums.BookingStatus", _FakeBookingStatus), \
-         patch(
-             "application.bookings.cancellation_rules.compute_cancellation_fields",
-             return_value=_make_cancel_fields(),
-         ), \
-         patch("application.bookings.cancellation_rules.log_cancellation_persisted"), \
-         patch(
-             "shared.events.event_bus.publish_event",
-             side_effect=lambda e: published.append(e),
-         ), \
-         patch("services.notifications.core.notify_booking_cancelled"), \
-         patch(
-             "services.notifications.notification_targets.resolve_booking_notification_context",
-             return_value=None,
-         ), \
-         patch(
-             "services.notifications.notification_targets.compute_all_notification_targets",
-         ):
+    with (
+        patch("ext.db", mock_db),
+        patch("models.Booking", MagicMock()),
+        patch("models.enums.BookingStatus", _FakeBookingStatus),
+        patch(
+            "application.bookings.cancellation_rules.compute_cancellation_fields",
+            return_value=_make_cancel_fields(),
+        ),
+        patch("application.bookings.cancellation_rules.log_cancellation_persisted"),
+        patch(
+            "shared.events.event_bus.publish_event",
+            side_effect=lambda e: published.append(e),
+        ),
+        patch("services.notifications.core.notify_booking_cancelled"),
+        patch(
+            "services.notifications.notification_targets.resolve_booking_notification_context",
+            return_value=None,
+        ),
+        patch(
+            "services.notifications.notification_targets.compute_all_notification_targets",
+        ),
+    ):
         # Force-reload to pick up patches
         import importlib
         import services.events.handlers.booking_handlers as mod
+
         importlib.reload(mod)
         mod.handle_booking_cancelled(event)
 
@@ -157,8 +161,11 @@ class TestCancelOutboundCascadesReturn:
         """Annuler le retour seul ne touche pas l'aller."""
         outbound = _FakeBooking(id=1, status="COMPLETED", is_round_trip=True)
         ret = _FakeBooking(
-            id=2, status="CANCELED", is_return=True,
-            is_round_trip=False, parent_booking_id=1,
+            id=2,
+            status="CANCELED",
+            is_return=True,
+            is_round_trip=False,
+            parent_booking_id=1,
         )
 
         published = _run_handler(

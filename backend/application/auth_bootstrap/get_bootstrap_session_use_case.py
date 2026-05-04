@@ -82,6 +82,8 @@ class GetBootstrapSessionUseCase:
             from services.monitoring import auth_bootstrap_metrics as abm
 
             raw = json.dumps(body, ensure_ascii=False, default=str)
-            abm.observe_auth_me(status, time.perf_counter() - t0, len(raw.encode("utf-8")))
+            abm.observe_auth_me(
+                status, time.perf_counter() - t0, len(raw.encode("utf-8"))
+            )
         except Exception:
             pass

@@ -100,6 +100,7 @@ def _canonical_precision_level(place_payload: dict[str, Any] | None) -> str:
         return "rooftop"
     return "street"
 
+
 logger = logging.getLogger(__name__)
 
 # Initialisation des repositories et services
@@ -174,7 +175,9 @@ booking_create_model = clients_ns.model(
             description="Nom du médecin", default="", max_length=200
         ),
         "hospital_service": fields.String(
-            description="Service ou unité (ex. urgences, cardiologie)", default="", max_length=100
+            description="Service ou unité (ex. urgences, cardiologie)",
+            default="",
+            max_length=100,
         ),
         "is_round_trip": fields.Boolean(
             description="Créer également un retour", default=False
@@ -251,7 +254,9 @@ booking_preview_model = clients_ns.model(
         "occurrences": fields.Integer(required=False),
         "client_note": fields.String(required=False),
         "is_recurring": fields.Boolean(required=False),
-        "recurrence_type": fields.String(required=False, enum=["daily", "weekly", "custom"]),
+        "recurrence_type": fields.String(
+            required=False, enum=["daily", "weekly", "custom"]
+        ),
         "recurrence_days": fields.List(fields.Integer, required=False),
         "recurrence_end_date": fields.String(required=False),
         "recurrence_series_length": fields.Integer(required=False),
@@ -285,7 +290,7 @@ indicative_fare_estimate_model = clients_ns.model(
 class ManageClientProfile(Resource):
     @jwt_required()
     @role_required(UserRole.client)
-    def get(self, public_id):  # noqa: PLR0911
+    def get(self, public_id):
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -326,7 +331,7 @@ class ManageClientProfile(Resource):
     @jwt_required()
     @role_required(UserRole.client)
     @clients_ns.expect(client_profile_model)
-    def put(self, public_id):  # noqa: PLR0911
+    def put(self, public_id):
         try:
             # Validation initiale combinée
             current_user = get_current_user_via_use_case()
@@ -581,7 +586,7 @@ class ClientMyBookingPreview(Resource):
     @role_required(UserRole.client)
     @limiter.limit("60 per hour")
     @clients_ns.expect(booking_preview_model, validate=False)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -670,7 +675,10 @@ class ClientMyBookingPreview(Resource):
             )
 
             company_id = resolve_booking_owner_company_id_for_create(client)
-            if not company_id and getattr(client, "client_type", None) is ClientType.PORTAL:
+            if (
+                not company_id
+                and getattr(client, "client_type", None) is ClientType.PORTAL
+            ):
                 portal_ref = int(
                     current_app.config.get("PORTAL_CLIENT_PREVIEW_COMPANY_ID", 0) or 0
                 )
@@ -801,7 +809,9 @@ class ClientMyBookingPreview(Resource):
                     "message": "Aucune version de pricing active.",
                 }, 422
 
-            scheduled_time = api_scheduled_iso_to_naive_geneva(validated["scheduled_time"])
+            scheduled_time = api_scheduled_iso_to_naive_geneva(
+                validated["scheduled_time"]
+            )
             if scheduled_time is None:
                 return APIErrorHandler.handle_validation_error(
                     "scheduled_time invalide",
@@ -809,9 +819,14 @@ class ClientMyBookingPreview(Resource):
                     logger_instance=logger,
                 )
 
-            now_ref = datetime.now(
-                scheduled_time.tzinfo) if scheduled_time.tzinfo else datetime.now()
-            minutes_until = max(0, int((scheduled_time - now_ref).total_seconds() // 60))
+            now_ref = (
+                datetime.now(scheduled_time.tzinfo)
+                if scheduled_time.tzinfo
+                else datetime.now()
+            )
+            minutes_until = max(
+                0, int((scheduled_time - now_ref).total_seconds() // 60)
+            )
             context = {
                 "is_weekend": scheduled_time.weekday() >= WEEKEND_START_WEEKDAY,
                 "is_round_trip": bool(validated.get("is_round_trip")),
@@ -827,9 +842,7 @@ class ClientMyBookingPreview(Resource):
                 "pickup_geo_unit_id": pickup_geo_unit_id,
                 "dropoff_geo_unit_id": dropoff_geo_unit_id,
                 "zones_count": (
-                    1
-                    if pickup_admin.get("token") == dropoff_admin.get("token")
-                    else 2
+                    1 if pickup_admin.get("token") == dropoff_admin.get("token") else 2
                 ),
                 "requires_waiting": bool(validated.get("requires_waiting")),
             }
@@ -945,7 +958,7 @@ class ClientIndicativeFareEstimate(Resource):
     @role_required(UserRole.client)
     @limiter.limit("60 per hour")
     @clients_ns.expect(indicative_fare_estimate_model, validate=False)
-    def post(self) -> Any:  # noqa: PLR0911
+    def post(self) -> Any:
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -1038,20 +1051,20 @@ class ClientIndicativeFareEstimate(Resource):
                 "is_contractual": False,
             }, 200
         except Exception as e:
-            logger.error("❌ indicative_fare_estimate: %s - %s", type(e).__name__, str(e))
+            logger.error(
+                "❌ indicative_fare_estimate: %s - %s", type(e).__name__, str(e)
+            )
             return APIErrorHandler.handle_exception(e, logger)
 
 
-@clients_ns.route(
-    "/<string:public_id>/bookings/<int:booking_id>/confirm-return-time"
-)
+@clients_ns.route("/<string:public_id>/bookings/<int:booking_id>/confirm-return-time")
 class ClientBookingConfirmReturnTime(Resource):
     """Portail client : après contact téléphonique, confirmer l'heure du segment retour."""
 
     @jwt_required()
     @role_required(UserRole.client)
     @limiter.limit("30 per hour")
-    def post(self, public_id, booking_id):  # noqa: PLR0911
+    def post(self, public_id, booking_id):
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -1109,7 +1122,10 @@ class ClientBookingConfirmReturnTime(Resource):
                 )
 
             if bool(getattr(ret_booking, "time_confirmed", True)):
-                return {"already_confirmed": True, "return_booking_id": ret_booking.id}, 200
+                return {
+                    "already_confirmed": True,
+                    "return_booking_id": ret_booking.id,
+                }, 200
 
             ret_booking.time_confirmed = True
             db.session.add(ret_booking)
@@ -1122,22 +1138,18 @@ class ClientBookingConfirmReturnTime(Resource):
             }, 200
         except Exception as e:
             db.session.rollback()
-            logger.error(
-                "❌ confirm_return_time: %s - %s", type(e).__name__, str(e)
-            )
+            logger.error("❌ confirm_return_time: %s - %s", type(e).__name__, str(e))
             return APIErrorHandler.handle_exception(e, logger)
 
 
-@clients_ns.route(
-    "/<string:public_id>/bookings/<int:booking_id>/request-urgent-return"
-)
+@clients_ns.route("/<string:public_id>/bookings/<int:booking_id>/request-urgent-return")
 class ClientBookingRequestUrgentReturn(Resource):
     """Portail client : apres l'aller termine, programmer un retour d'urgence (~15 min)."""
 
     @jwt_required()
     @role_required(UserRole.client)
     @limiter.limit("20 per hour")
-    def post(self, public_id, booking_id):  # noqa: PLR0911
+    def post(self, public_id, booking_id):
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:
@@ -1228,9 +1240,7 @@ class ClientBookingRequestUrgentReturn(Resource):
             return {"success": True, **(payload or {})}, 200
         except Exception as e:
             db.session.rollback()
-            logger.error(
-                "request_urgent_return: %s - %s", type(e).__name__, str(e)
-            )
+            logger.error("request_urgent_return: %s - %s", type(e).__name__, str(e))
             return APIErrorHandler.handle_exception(e, logger)
 
 
@@ -1247,10 +1257,7 @@ def _normalize_name_for_match(value: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", str(value))
     normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     normalized = (
-        normalized.lower()
-        .replace("’", "'")
-        .replace("`", "'")
-        .replace("´", "'")
+        normalized.lower().replace("’", "'").replace("`", "'").replace("´", "'")
     )
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
@@ -1443,13 +1450,15 @@ def _serialize_client_stay_with_clinic_details(
             billing_addr = getattr(fallback_client, "billing_address", None)
             if billing_addr:
                 fallback_domicile_address = billing_addr
-                fallback_lat = getattr(fallback_client, "billing_lat", None) or fallback_lat
-                fallback_lon = getattr(fallback_client, "billing_lon", None) or fallback_lon
+                fallback_lat = (
+                    getattr(fallback_client, "billing_lat", None) or fallback_lat
+                )
+                fallback_lon = (
+                    getattr(fallback_client, "billing_lon", None) or fallback_lon
+                )
 
     missing_structured = not (
-        clinic.domicile_address_line1
-        or clinic.domicile_zip
-        or clinic.domicile_city
+        clinic.domicile_address_line1 or clinic.domicile_zip or clinic.domicile_city
     )
     if missing_structured and fallback_client:
         fallback_parts = [
@@ -1517,9 +1526,9 @@ def _serialize_client_billing_party_link(
     bp_type = ""
     if bp:
         bp_type = bp.type.value if hasattr(bp.type, "value") else str(bp.type)
-    is_curatelle = (
-        (link.role or "").lower() == "curatelle"
-        and bp_type in ("opad", "curatorship")
+    is_curatelle = (link.role or "").lower() == "curatelle" and bp_type in (
+        "opad",
+        "curatorship",
     )
     return {
         "id": link.id,
@@ -1609,11 +1618,14 @@ class ClientStays(Resource):
             .order_by(ClientStay.start_date.desc())
             .all()
         )
-        return {"success": True, "data": [_serialize_client_stay(s) for s in stays]}, 200
+        return {
+            "success": True,
+            "data": [_serialize_client_stay(s) for s in stays],
+        }, 200
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def post(self, client_id: int):  # noqa: PLR0911
+    def post(self, client_id: int):
         """Créer un séjour."""
         from marshmallow import ValidationError
 
@@ -1709,7 +1721,7 @@ class ClientStays(Resource):
 class ClientStayById(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def patch(self, stay_id: int):  # noqa: PLR0911
+    def patch(self, stay_id: int):
         """Modifier un séjour."""
         from marshmallow import ValidationError
 
@@ -1772,7 +1784,9 @@ class ClientStayById(Resource):
 
         if "source" in validated:
             v = validated.get("source")
-            stay.source = (str(v).strip() if isinstance(v, str) else None) or stay.source
+            stay.source = (
+                str(v).strip() if isinstance(v, str) else None
+            ) or stay.source
 
         if "notes" in validated:
             stay.notes = validated.get("notes")
@@ -1856,7 +1870,7 @@ class ClientActiveStay(Resource):
 class ClientStayClose(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def post(self, stay_id: int):  # noqa: PLR0911
+    def post(self, stay_id: int):
         """Clôturer un séjour."""
         from marshmallow import ValidationError
 
@@ -2059,7 +2073,7 @@ class ClientBillingParties(Resource):
 class ClientBillingPartyLink(Resource):
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def patch(self, link_id: int):  # noqa: PLR0911
+    def patch(self, link_id: int):
         """Mettre à jour un lien client ↔ tiers payeur."""
         from marshmallow import ValidationError
 
@@ -2077,7 +2091,9 @@ class ClientBillingPartyLink(Resource):
 
         link = ClientBillingParty.query.filter_by(id=link_id).first()
         if not link:
-            return APIErrorHandler.handle_not_found("ClientBillingParty", link_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "ClientBillingParty", link_id, logger
+            )
 
         client = Client.query.filter_by(
             id=link.client_id, company_id=company.id
@@ -2099,21 +2115,15 @@ class ClientBillingPartyLink(Resource):
         if "role" in validated:
             link.role = (validated.get("role") or "").strip() or None
         if "contact_name" in validated:
-            link.contact_name = (
-                (validated.get("contact_name") or "").strip() or None
-            )
+            link.contact_name = (validated.get("contact_name") or "").strip() or None
         if "contact_email" in validated:
-            link.contact_email = (
-                (validated.get("contact_email") or "").strip() or None
-            )
+            link.contact_email = (validated.get("contact_email") or "").strip() or None
         if "contact_phone" in validated:
-            link.contact_phone = (
-                (validated.get("contact_phone") or "").strip() or None
-            )
+            link.contact_phone = (validated.get("contact_phone") or "").strip() or None
         if "client_reference" in validated:
             link.client_reference = (
-                (validated.get("client_reference") or "").strip() or None
-            )
+                validated.get("client_reference") or ""
+            ).strip() or None
 
         if "is_default" in validated:
             is_default = bool(validated.get("is_default"))
@@ -2131,11 +2141,14 @@ class ClientBillingPartyLink(Resource):
             logger.exception("Erreur update lien tiers payeur: %s", e)
             return APIErrorHandler.handle_exception(e, logger)
 
-        return {"success": True, "data": _serialize_client_billing_party_link(link)}, 200
+        return {
+            "success": True,
+            "data": _serialize_client_billing_party_link(link),
+        }, 200
 
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def delete(self, link_id: int):  # noqa: PLR0911
+    def delete(self, link_id: int):
         """Supprimer un lien client ↔ tiers payeur."""
         from routes.companies import get_company_from_token
 
@@ -2147,7 +2160,9 @@ class ClientBillingPartyLink(Resource):
 
         link = ClientBillingParty.query.filter_by(id=link_id).first()
         if not link:
-            return APIErrorHandler.handle_not_found("ClientBillingParty", link_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "ClientBillingParty", link_id, logger
+            )
 
         client = Client.query.filter_by(
             id=link.client_id, company_id=company.id
@@ -2161,7 +2176,11 @@ class ClientBillingPartyLink(Resource):
         # Protéger les liens issus d'un mandat de curatelle (sync automatique)
         if (link.role or "").lower() == "curatelle":
             bp = link.billing_party
-            bp_type = (bp.type.value if hasattr(bp.type, "value") else str(bp.type)) if bp else ""
+            bp_type = (
+                (bp.type.value if hasattr(bp.type, "value") else str(bp.type))
+                if bp
+                else ""
+            )
             if bp_type in ("opad", "curatorship"):
                 msg = (
                     "Ce tiers payeur est lié par un mandat de curatelle. "
@@ -2825,7 +2844,7 @@ class CreateCompanyForInstitutionClient(Resource):
     @clients_ns.response(400, "Erreur de validation", validation_error_model)
     @clients_ns.response(404, "Client non trouvé", not_found_error_model)
     @clients_ns.response(403, "Non autorisé", permission_error_model)
-    def post(self, client_id: int):  # noqa: PLR0911
+    def post(self, client_id: int):
         """Créer une Company pour un Client institution.
 
         Cette endpoint permet de créer automatiquement une Company à partir
@@ -2856,9 +2875,7 @@ class CreateCompanyForInstitutionClient(Resource):
                 client_id, current_company.id
             )
             if not client:
-                return APIErrorHandler.handle_not_found(
-                    "Client", client_id, logger
-                )
+                return APIErrorHandler.handle_not_found("Client", client_id, logger)
 
             # Vérifier que c'est une institution
             from models.base import _as_bool
@@ -2887,9 +2904,7 @@ class CreateCompanyForInstitutionClient(Resource):
             # Créer un User pour la Company (ou réutiliser celui du client)
             company_user = User.query.filter_by(id=client.user_id).first()
             if not company_user:
-                return APIErrorHandler.handle_not_found(
-                    "User", client.user_id, logger
-                )
+                return APIErrorHandler.handle_not_found("User", client.user_id, logger)
 
             # Résolution d'une Company existante (évite les doublons)
             new_company = None
@@ -2905,7 +2920,10 @@ class CreateCompanyForInstitutionClient(Resource):
                     .order_by(Client.id.desc())
                     .first()
                 )
-                if existing_linked_client and existing_linked_client.default_billed_to_company_id:
+                if (
+                    existing_linked_client
+                    and existing_linked_client.default_billed_to_company_id
+                ):
                     new_company = Company.query.filter_by(
                         id=existing_linked_client.default_billed_to_company_id
                     ).first()
@@ -2923,7 +2941,8 @@ class CreateCompanyForInstitutionClient(Resource):
                         if not candidate_company:
                             continue
                         if (
-                            _normalize_name_for_match(candidate_company.name) == target_name
+                            _normalize_name_for_match(candidate_company.name)
+                            == target_name
                         ):
                             new_company = candidate_company
                             break
@@ -2944,18 +2963,16 @@ class CreateCompanyForInstitutionClient(Resource):
                 getattr(client, "contact_phone", None)
             ) or _sanitize_company_phone(getattr(company_user, "phone", None))
 
-            if (
+            if getattr(client, "contact_email", None) and not _sanitize_company_email(
                 getattr(client, "contact_email", None)
-                and not _sanitize_company_email(getattr(client, "contact_email", None))
             ):
                 logger.warning(
                     "⚠️ Email contact invalide ignoré pour client institution %s: %r",
                     client_id,
                     client.contact_email,
                 )
-            if (
+            if getattr(client, "contact_phone", None) and not _sanitize_company_phone(
                 getattr(client, "contact_phone", None)
-                and not _sanitize_company_phone(getattr(client, "contact_phone", None))
             ):
                 logger.warning(
                     "⚠️ Téléphone contact invalide ignoré pour client institution %s: %r",
@@ -2972,7 +2989,9 @@ class CreateCompanyForInstitutionClient(Resource):
                     client.preferential_rate,
                 )
 
-            postal_city = " ".join(part for part in [domicile_zip, domicile_city] if part)
+            postal_city = " ".join(
+                part for part in [domicile_zip, domicile_city] if part
+            )
             full_address = (
                 f"{domicile_address}, {postal_city}".strip(", ")
                 if domicile_address or postal_city
@@ -3027,9 +3046,7 @@ class CreateCompanyForInstitutionClient(Resource):
             billing_address = client.billing_address or client.domicile_address or ""
             if client.domicile_zip and client.domicile_city:
                 if billing_address:
-                    billing_address = (
-                        f"{billing_address}\n{client.domicile_zip} {client.domicile_city}"
-                    )
+                    billing_address = f"{billing_address}\n{client.domicile_zip} {client.domicile_city}"
                 else:
                     billing_address = f"{client.domicile_zip} {client.domicile_city}"
 
@@ -3047,9 +3064,7 @@ class CreateCompanyForInstitutionClient(Resource):
                 billing_party.external_ref = billing_ref
                 db.session.add(billing_party)
             billing_party.display_name = new_company.name
-            billing_party.billing_address = (
-                billing_address or "Adresse non renseignée"
-            )
+            billing_party.billing_address = billing_address or "Adresse non renseignée"
             billing_party.contact_email = new_company.contact_email
             billing_party.contact_phone = new_company.contact_phone
             billing_party.is_active = True

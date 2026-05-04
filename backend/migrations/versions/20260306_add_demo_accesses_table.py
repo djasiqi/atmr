@@ -21,7 +21,9 @@ def upgrade():
         "demo_accesses",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("demo_request_id", sa.Integer(), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False, server_default="pending"),
+        sa.Column(
+            "status", sa.String(length=32), nullable=False, server_default="pending"
+        ),
         sa.Column("magic_token_hash", sa.String(length=128), nullable=True),
         sa.Column("magic_token_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("magic_token_used_at", sa.DateTime(timezone=True), nullable=True),
@@ -47,13 +49,19 @@ def upgrade():
             nullable=False,
             server_default=sa.text("now()"),
         ),
-        sa.ForeignKeyConstraint(["demo_request_id"], ["demo_requests.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["demo_request_id"], ["demo_requests.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["demo_user_id"], ["user.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["demo_company_id"], ["company.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["demo_company_id"], ["company.id"], ondelete="SET NULL"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
 
-    op.create_index("ix_demo_accesses_status", "demo_accesses", ["status"], unique=False)
+    op.create_index(
+        "ix_demo_accesses_status", "demo_accesses", ["status"], unique=False
+    )
     op.create_index(
         "ix_demo_accesses_demo_expires_at",
         "demo_accesses",
@@ -75,7 +83,9 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_index("ix_demo_accesses_demo_request_created_at", table_name="demo_accesses")
+    op.drop_index(
+        "ix_demo_accesses_demo_request_created_at", table_name="demo_accesses"
+    )
     op.drop_index("ix_demo_accesses_demo_request_id", table_name="demo_accesses")
     op.drop_index("ix_demo_accesses_demo_expires_at", table_name="demo_accesses")
     op.drop_index("ix_demo_accesses_status", table_name="demo_accesses")

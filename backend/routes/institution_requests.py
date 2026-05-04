@@ -169,7 +169,9 @@ def resolve_patient(institution_id: int, data: dict[str, Any]) -> int | None:
             institution_id=institution_id,
         ).first()
         if not patient:
-            raise ValueError(f"Patient ID {patient_id} non trouvé dans cette institution")
+            raise ValueError(
+                f"Patient ID {patient_id} non trouvé dans cette institution"
+            )
         return patient.id
 
     if patient_ext_ref:
@@ -303,7 +305,9 @@ class TransportRequestList(Resource):
     @institution_requests_ns.response(400, "Données invalides", validation_error_model)
     @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
     @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
-    @institution_requests_ns.response(409, "Référence externe déjà utilisée", api_error_model)
+    @institution_requests_ns.response(
+        409, "Référence externe déjà utilisée", api_error_model
+    )
     @api_key_or_jwt_required(scopes=["requests:write"])
     def post(self):
         """Crée une nouvelle demande de transport.
@@ -325,7 +329,9 @@ class TransportRequestList(Resource):
 
             # Vérifier unicité external_reference
             ext_ref = validated["external_reference"]
-            existing = TransportRequest.find_by_external_reference(institution_id, ext_ref)
+            existing = TransportRequest.find_by_external_reference(
+                institution_id, ext_ref
+            )
             if existing:
                 return {
                     "error": f"Demande avec external_reference '{ext_ref}' existe déjà",
@@ -480,12 +486,19 @@ class TransportRequestDetail(Resource):
             # Vérifier accès curator : si le curateur a des équipes,
             # autoriser accès si le patient est dans son équipe ou sans équipe
             institution_role = AuthorizationService.get_institution_role_from_jwt()
-            if institution_role == InstitutionRole.CURATOR.value and transport_req.patient_id:
+            if (
+                institution_role == InstitutionRole.CURATOR.value
+                and transport_req.patient_id
+            ):
                 user = AuthorizationService.require_user()
                 team_ids = get_user_team_ids(user.id)
                 if team_ids:
                     patient = InstitutionPatient.query.get(transport_req.patient_id)
-                    if patient and patient.curator_team_id and patient.curator_team_id not in team_ids:
+                    if (
+                        patient
+                        and patient.curator_team_id
+                        and patient.curator_team_id not in team_ids
+                    ):
                         return {"error": "Demande non trouvée"}, 404
 
             return transport_req.serialize, 200
@@ -499,7 +512,9 @@ class TransportRequestDetail(Resource):
         description="Modifie une demande de transport.",
     )
     @institution_requests_ns.response(200, "Demande modifiée", transport_request_model)
-    @institution_requests_ns.response(400, "Données invalides ou demande non modifiable", validation_error_model)
+    @institution_requests_ns.response(
+        400, "Données invalides ou demande non modifiable", validation_error_model
+    )
     @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
     @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
     @institution_requests_ns.response(404, "Demande non trouvée", not_found_error_model)
@@ -525,7 +540,9 @@ class TransportRequestDetail(Resource):
             if not transport_req.is_editable:
                 return {
                     "error": f"Demande non modifiable (statut: {transport_req.status})",
-                    "allowed_statuses": [s.value for s in RequestStatus.editable_statuses()],
+                    "allowed_statuses": [
+                        s.value for s in RequestStatus.editable_statuses()
+                    ],
                 }, 400
 
             data = request.get_json() or {}
@@ -539,7 +556,9 @@ class TransportRequestDetail(Resource):
             # Résoudre patient si changé
             if "patient_id" in validated or "patient_external_reference" in validated:
                 try:
-                    transport_req.patient_id = resolve_patient(institution_id, validated)
+                    transport_req.patient_id = resolve_patient(
+                        institution_id, validated
+                    )
                 except ValueError as err:
                     return {"error": str(err)}, 400
 
@@ -550,18 +569,28 @@ class TransportRequestDetail(Resource):
                 transport_req.delivery_description = validated["delivery_description"]
 
             if "scheduled_time" in validated:
-                transport_req.scheduled_time = parse_iso8601(validated["scheduled_time"])
+                transport_req.scheduled_time = parse_iso8601(
+                    validated["scheduled_time"]
+                )
             if "scheduled_time_type" in validated:
                 transport_req.scheduled_time_type = validated["scheduled_time_type"]
 
             # Lieux + types de lieu + points d'accueil
             for field in [
-                "pickup_location", "pickup_lat", "pickup_lng",
-                "pickup_floor", "pickup_door_code",
-                "pickup_type", "pickup_entry_point",
-                "dropoff_location", "dropoff_lat", "dropoff_lng",
-                "dropoff_floor", "dropoff_door_code",
-                "dropoff_type", "dropoff_entry_point",
+                "pickup_location",
+                "pickup_lat",
+                "pickup_lng",
+                "pickup_floor",
+                "pickup_door_code",
+                "pickup_type",
+                "pickup_entry_point",
+                "dropoff_location",
+                "dropoff_lat",
+                "dropoff_lng",
+                "dropoff_floor",
+                "dropoff_door_code",
+                "dropoff_type",
+                "dropoff_entry_point",
             ]:
                 if field in validated:
                     setattr(transport_req, field, validated[field])
@@ -632,7 +661,9 @@ class TransportRequestSend(Resource):
         description="Envoie la demande aux transporteurs (crée des offres).",
     )
     @institution_requests_ns.response(200, "Demande envoyée", transport_request_model)
-    @institution_requests_ns.response(400, "Demande non envoyable", validation_error_model)
+    @institution_requests_ns.response(
+        400, "Demande non envoyable", validation_error_model
+    )
     @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
     @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
     @institution_requests_ns.response(404, "Demande non trouvée", not_found_error_model)
@@ -650,9 +681,10 @@ class TransportRequestSend(Resource):
         Change le statut de DRAFT à SENT.
         """
         try:
-            # ruff: noqa: I001
             from application.institutions import SendTransportRequestUseCase
-            from application.institutions.send_transport_request import SendTransportRequestInput
+            from application.institutions.send_transport_request import (
+                SendTransportRequestInput,
+            )
 
             institution_id, user_id = get_institution_context()
 
@@ -705,7 +737,9 @@ class TransportRequestCancel(Resource):
         description="Annule une demande de transport.",
     )
     @institution_requests_ns.response(200, "Demande annulée", transport_request_model)
-    @institution_requests_ns.response(400, "Demande non annulable", validation_error_model)
+    @institution_requests_ns.response(
+        400, "Demande non annulable", validation_error_model
+    )
     @institution_requests_ns.response(401, "Non authentifié", permission_error_model)
     @institution_requests_ns.response(403, "Accès refusé", permission_error_model)
     @institution_requests_ns.response(404, "Demande non trouvée", not_found_error_model)
@@ -745,7 +779,9 @@ class TransportRequestCancel(Resource):
             if not transport_req.is_cancellable:
                 return {
                     "error": f"Demande non annulable (statut: {transport_req.status})",
-                    "allowed_statuses": [s.value for s in RequestStatus.cancellable_statuses()],
+                    "allowed_statuses": [
+                        s.value for s in RequestStatus.cancellable_statuses()
+                    ],
                 }, 400
 
             # Récupérer raison si fournie

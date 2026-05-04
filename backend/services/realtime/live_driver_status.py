@@ -48,7 +48,10 @@ def resolve_driver_status_for_fanout(
     """Statut affiché entreprise : offline | busy | assigned | available."""
     if not is_active:
         return "offline"
-    if mission_status in {BookingStatus.EN_ROUTE.value, BookingStatus.IN_PROGRESS.value}:
+    if mission_status in {
+        BookingStatus.EN_ROUTE.value,
+        BookingStatus.IN_PROGRESS.value,
+    }:
         return "busy"
     if mission_status == BookingStatus.ASSIGNED.value:
         return "assigned"

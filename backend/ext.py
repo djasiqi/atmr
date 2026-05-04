@@ -186,7 +186,9 @@ class RedisStorageWithTTL:  # DEPRECATED: Non utilisée avec Flask-Limiter 3.x
         """
         # Incrémenter via le storage sous-jacent
         # Note: L'API de limits.storage peut varier selon la version
-        result = self.storage.incr(key=key, expiry=expiry, elastic_expiry=elastic_expiry, amount=amount)  # type: ignore[call-arg]
+        result = self.storage.incr(
+            key=key, expiry=expiry, elastic_expiry=elastic_expiry, amount=amount
+        )  # type: ignore[call-arg]
 
         # ✅ Définir un TTL automatique sur la clé
         # Si elastic_expiry=True, prolonge le TTL à chaque requête
@@ -462,7 +464,10 @@ def load_decode_key(jwt_header, _jwt_payload):
     if selected_kid in keyring:
         if jwt_verify_kid_total is not None:
             jwt_verify_kid_total.labels(kid=selected_kid).inc()
-        if selected_kid.startswith("legacy-") and jwt_verify_legacy_key_total is not None:
+        if (
+            selected_kid.startswith("legacy-")
+            and jwt_verify_legacy_key_total is not None
+        ):
             jwt_verify_legacy_key_total.labels(kid=selected_kid).inc()
         return keyring[selected_kid]
     return keyring.get(active_kid) or next(iter(keyring.values()))
@@ -730,7 +735,9 @@ def _ensure_demo_shadow_user(user_public_id: str | None, token_role: str | None)
         else:
             role_enum = UserRole.CLIENT
 
-        suffix = str(user_public_id).replace("-", "")[:12].lower() or secrets.token_hex(6)
+        suffix = str(user_public_id).replace("-", "")[:12].lower() or secrets.token_hex(
+            6
+        )
         demo_email = f"demo-shadow-{suffix}@demo.local"
         demo_username = f"demo_shadow_{suffix}"[:100]
 
@@ -765,7 +772,9 @@ def _ensure_demo_shadow_user(user_public_id: str | None, token_role: str | None)
                 db.session.flush()
             company.dispatch_mode = DispatchMode.MANUAL
 
-            has_clients = Client.query.filter_by(company_id=company.id).first() is not None
+            has_clients = (
+                Client.query.filter_by(company_id=company.id).first() is not None
+            )
             if not has_clients:
                 fake_request: Any = SimpleNamespace(
                     id=user.id,
@@ -876,7 +885,11 @@ def role_required(*roles):
                     pass
 
             # Multi-contexte (app unifiée) : rôle BDD = company, contexte actif = chauffeur
-            if not role_check_passed and user.driver is not None and UserRole.driver in allowed_roles:
+            if (
+                not role_check_passed
+                and user.driver is not None
+                and UserRole.driver in allowed_roles
+            ):
                 active_ctx = (request.headers.get("X-Active-Context-Id") or "").strip()
                 if active_ctx == f"driver:{user.driver.id}":
                     role_check_passed = True

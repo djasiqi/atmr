@@ -73,8 +73,12 @@ def upgrade():
         sa.UniqueConstraint("type", "code", name="uq_geo_unit_type_code"),
     )
     op.create_index(op.f("ix_geo_unit_code"), "geo_unit", ["code"], unique=False)
-    op.create_index(op.f("ix_geo_unit_parent_id"), "geo_unit", ["parent_id"], unique=False)
-    op.create_index("ix_geo_unit_type_parent", "geo_unit", ["type", "parent_id"], unique=False)
+    op.create_index(
+        op.f("ix_geo_unit_parent_id"), "geo_unit", ["parent_id"], unique=False
+    )
+    op.create_index(
+        "ix_geo_unit_type_parent", "geo_unit", ["type", "parent_id"], unique=False
+    )
 
     op.create_table(
         "service_area",
@@ -95,7 +99,9 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("weight", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -112,18 +118,34 @@ def upgrade():
             name="uq_service_area_company_geo_mode",
         ),
     )
-    op.create_index(op.f("ix_service_area_company_id"), "service_area", ["company_id"], unique=False)
-    op.create_index(op.f("ix_service_area_geo_unit_id"), "service_area", ["geo_unit_id"], unique=False)
-    op.create_index("ix_service_area_company_active", "service_area", ["company_id", "is_active"], unique=False)
+    op.create_index(
+        op.f("ix_service_area_company_id"), "service_area", ["company_id"], unique=False
+    )
+    op.create_index(
+        op.f("ix_service_area_geo_unit_id"),
+        "service_area",
+        ["geo_unit_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_service_area_company_active",
+        "service_area",
+        ["company_id", "is_active"],
+        unique=False,
+    )
 
     op.create_table(
         "pricing_profile",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column(
+            "is_active", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column("model_type", pricing_model_type, nullable=False),
-        sa.Column("currency", sa.String(length=3), server_default="CHF", nullable=False),
+        sa.Column(
+            "currency", sa.String(length=3), server_default="CHF", nullable=False
+        ),
         sa.Column("current_version_id", sa.Integer(), nullable=True),
         sa.Column(
             "created_at",
@@ -134,7 +156,12 @@ def upgrade():
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_pricing_profile_company_id"), "pricing_profile", ["company_id"], unique=False)
+    op.create_index(
+        op.f("ix_pricing_profile_company_id"),
+        "pricing_profile",
+        ["company_id"],
+        unique=False,
+    )
     op.create_index(
         "ix_pricing_profile_company_active",
         "pricing_profile",
@@ -147,7 +174,9 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("pricing_profile_id", sa.Integer(), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
-        sa.Column("rules_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "rules_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -155,8 +184,12 @@ def upgrade():
             nullable=False,
         ),
         sa.Column("created_by_user_id", sa.Integer(), nullable=True),
-        sa.ForeignKeyConstraint(["created_by_user_id"], ["user.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["pricing_profile_id"], ["pricing_profile.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"], ["user.id"], ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(
+            ["pricing_profile_id"], ["pricing_profile.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "pricing_profile_id",
@@ -193,7 +226,9 @@ def upgrade():
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("status", dispatch_offer_status, nullable=False),
         sa.Column("score", sa.Integer(), nullable=False),
-        sa.Column("reason_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "reason_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+        ),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
@@ -204,26 +239,77 @@ def upgrade():
         sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("booking_id", "company_id", name="uq_dispatch_offer_booking_company"),
+        sa.UniqueConstraint(
+            "booking_id", "company_id", name="uq_dispatch_offer_booking_company"
+        ),
     )
-    op.create_index(op.f("ix_dispatch_offer_booking_id"), "dispatch_offer", ["booking_id"], unique=False)
-    op.create_index(op.f("ix_dispatch_offer_company_id"), "dispatch_offer", ["company_id"], unique=False)
-    op.create_index("ix_dispatch_offer_booking_status", "dispatch_offer", ["booking_id", "status"], unique=False)
+    op.create_index(
+        op.f("ix_dispatch_offer_booking_id"),
+        "dispatch_offer",
+        ["booking_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_dispatch_offer_company_id"),
+        "dispatch_offer",
+        ["company_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_dispatch_offer_booking_status",
+        "dispatch_offer",
+        ["booking_id", "status"],
+        unique=False,
+    )
 
-    op.add_column("booking", sa.Column("pickup_geo_unit_id", sa.Integer(), nullable=True))
-    op.add_column("booking", sa.Column("dropoff_geo_unit_id", sa.Integer(), nullable=True))
-    op.add_column("booking", sa.Column("pickup_zip", sa.String(length=16), nullable=True))
-    op.add_column("booking", sa.Column("dropoff_zip", sa.String(length=16), nullable=True))
-    op.add_column("booking", sa.Column("pricing_profile_id", sa.Integer(), nullable=True))
-    op.add_column("booking", sa.Column("pricing_profile_version_id", sa.Integer(), nullable=True))
-    op.add_column("booking", sa.Column("price_amount", sa.Numeric(precision=10, scale=2), nullable=True))
+    op.add_column(
+        "booking", sa.Column("pickup_geo_unit_id", sa.Integer(), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("dropoff_geo_unit_id", sa.Integer(), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("pickup_zip", sa.String(length=16), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("dropoff_zip", sa.String(length=16), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("pricing_profile_id", sa.Integer(), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("pricing_profile_version_id", sa.Integer(), nullable=True)
+    )
     op.add_column(
         "booking",
-        sa.Column("price_breakdown_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("price_amount", sa.Numeric(precision=10, scale=2), nullable=True),
     )
-    op.create_index(op.f("ix_booking_pickup_geo_unit_id"), "booking", ["pickup_geo_unit_id"], unique=False)
-    op.create_index(op.f("ix_booking_dropoff_geo_unit_id"), "booking", ["dropoff_geo_unit_id"], unique=False)
-    op.create_index(op.f("ix_booking_pricing_profile_id"), "booking", ["pricing_profile_id"], unique=False)
+    op.add_column(
+        "booking",
+        sa.Column(
+            "price_breakdown_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+    )
+    op.create_index(
+        op.f("ix_booking_pickup_geo_unit_id"),
+        "booking",
+        ["pickup_geo_unit_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_booking_dropoff_geo_unit_id"),
+        "booking",
+        ["dropoff_geo_unit_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_booking_pricing_profile_id"),
+        "booking",
+        ["pricing_profile_id"],
+        unique=False,
+    )
     op.create_index(
         op.f("ix_booking_pricing_profile_version_id"),
         "booking",
@@ -265,7 +351,9 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_constraint("fk_booking_pricing_profile_version", "booking", type_="foreignkey")
+    op.drop_constraint(
+        "fk_booking_pricing_profile_version", "booking", type_="foreignkey"
+    )
     op.drop_constraint("fk_booking_pricing_profile", "booking", type_="foreignkey")
     op.drop_constraint("fk_booking_dropoff_geo_unit", "booking", type_="foreignkey")
     op.drop_constraint("fk_booking_pickup_geo_unit", "booking", type_="foreignkey")
@@ -287,9 +375,16 @@ def downgrade():
     op.drop_index(op.f("ix_dispatch_offer_booking_id"), table_name="dispatch_offer")
     op.drop_table("dispatch_offer")
 
-    op.drop_constraint("fk_pricing_profile_current_version", "pricing_profile", type_="foreignkey")
-    op.drop_index("ix_pricing_profile_version_profile", table_name="pricing_profile_version")
-    op.drop_index(op.f("ix_pricing_profile_version_pricing_profile_id"), table_name="pricing_profile_version")
+    op.drop_constraint(
+        "fk_pricing_profile_current_version", "pricing_profile", type_="foreignkey"
+    )
+    op.drop_index(
+        "ix_pricing_profile_version_profile", table_name="pricing_profile_version"
+    )
+    op.drop_index(
+        op.f("ix_pricing_profile_version_pricing_profile_id"),
+        table_name="pricing_profile_version",
+    )
     op.drop_table("pricing_profile_version")
     op.drop_index("ix_pricing_profile_company_active", table_name="pricing_profile")
     op.drop_index(op.f("ix_pricing_profile_company_id"), table_name="pricing_profile")

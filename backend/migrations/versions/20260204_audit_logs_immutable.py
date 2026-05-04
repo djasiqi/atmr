@@ -10,6 +10,7 @@ Create Date: 2026-02-04
 
 Ceci garantit l'intégrité des logs d'audit pour la traçabilité.
 """
+
 from alembic import op
 
 

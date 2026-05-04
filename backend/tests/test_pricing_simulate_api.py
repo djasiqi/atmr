@@ -21,13 +21,17 @@ def _create_company_with_user(db, idx: int) -> Company:
     user.set_password("password123", force_change=False)
     db.session.add(user)
     db.session.flush()
-    company = Company(name=f"Pricing Company {idx}", user_id=user.id, dispatch_enabled=True)
+    company = Company(
+        name=f"Pricing Company {idx}", user_id=user.id, dispatch_enabled=True
+    )
     db.session.add(company)
     db.session.flush()
     return company
 
 
-def test_pricing_simulate_returns_422_without_geo(client, auth_headers, db, sample_company):
+def test_pricing_simulate_returns_422_without_geo(
+    client, auth_headers, db, sample_company
+):
     profile = PricingProfile(
         company_id=sample_company.id,
         name="Flat",
@@ -59,7 +63,9 @@ def test_pricing_simulate_returns_422_without_geo(client, auth_headers, db, samp
         assert "incomplet" in str(response.get_json()).lower()
 
 
-def test_pricing_simulate_forbidden_cross_company(client, auth_headers, db, sample_company):
+def test_pricing_simulate_forbidden_cross_company(
+    client, auth_headers, db, sample_company
+):
     other_company = _create_company_with_user(db, 99)
     profile = PricingProfile(
         company_id=other_company.id,
@@ -211,7 +217,12 @@ def test_pricing_simulate_zone_count_blocks_when_exact_traversal_unavailable(
                     "included_zones": 2,
                     "max_units": 10,
                 },
-                "distance": {"enabled": False, "per_km": 0, "included_km": 0, "rounding": "ceil_0_1"},
+                "distance": {
+                    "enabled": False,
+                    "per_km": 0,
+                    "included_km": 0,
+                    "rounding": "ceil_0_1",
+                },
             },
             "extras": {},
             "caps": {"minimum": 0, "maximum": None},

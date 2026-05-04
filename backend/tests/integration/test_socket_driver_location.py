@@ -99,15 +99,13 @@ class TestSocketDriverLocation:
             f"Expected 'error' event, got: {[e.get('name') for e in received]}"
         )
         payload = error_events[0].get("args", [{}])[0]
-        assert "Chauffeur non lié à une entreprise" in str(
-            payload.get("error", "")
-        ), f"Expected error message, got: {payload}"
+        assert "Chauffeur non lié à une entreprise" in str(payload.get("error", "")), (
+            f"Expected error message, got: {payload}"
+        )
 
         mock_location_service.update_driver_location.assert_not_called()
 
-    def test_socket_single_rejects_availability_presence(
-        self, app, db, test_driver
-    ):
+    def test_socket_single_rejects_availability_presence(self, app, db, test_driver):
         """availability_presence est interdit sur driver_location (single)."""
         from flask_jwt_extended import create_access_token
 
@@ -150,7 +148,9 @@ class TestSocketDriverLocation:
 
         received = client.get_received()
         error_events = [e for e in received if e.get("name") == "error"]
-        assert error_events, f"Expected error event, got: {[e.get('name') for e in received]}"
+        assert error_events, (
+            f"Expected error event, got: {[e.get('name') for e in received]}"
+        )
         payload = error_events[0].get("args", [{}])[0]
         assert payload.get("reason") == "availability_presence_socket_forbidden"
         mock_location_service.update_driver_location.assert_not_called()
@@ -184,7 +184,9 @@ class TestSocketDriverLocation:
             pytest.skip("Socket client could not connect")
 
         mock_location_service = MagicMock()
-        mock_location_service.resolve_normalized_location_mode.return_value = "mission_live"
+        mock_location_service.resolve_normalized_location_mode.return_value = (
+            "mission_live"
+        )
         with (
             patch(
                 "sockets.chat.get_location_service",

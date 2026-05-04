@@ -20,7 +20,9 @@ def compute_dedupe_hash(email: str, category: str, message_normalized: str) -> s
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def current_window_bucket(now: datetime | None = None, bucket_minutes: int = 5) -> datetime:
+def current_window_bucket(
+    now: datetime | None = None, bucket_minutes: int = 5
+) -> datetime:
     now = now or datetime.now(UTC)
     epoch = int(now.timestamp())
     bucket_seconds = bucket_minutes * 60
@@ -28,7 +30,9 @@ def current_window_bucket(now: datetime | None = None, bucket_minutes: int = 5) 
     return datetime.fromtimestamp(rounded, tz=UTC)
 
 
-def find_recent_duplicate(dedupe_hash: str, window_minutes: int = 5) -> ContactRequest | None:
+def find_recent_duplicate(
+    dedupe_hash: str, window_minutes: int = 5
+) -> ContactRequest | None:
     threshold = datetime.now(UTC) - timedelta(minutes=window_minutes)
     return (
         ContactRequest.query.filter(ContactRequest.dedupe_hash == dedupe_hash)

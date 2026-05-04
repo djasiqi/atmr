@@ -56,7 +56,7 @@ except ImportError:
 
 def get_shadow_manager():
     """Récupère l'instance du shadow manager (singleton)."""
-    global _shadow_manager  # noqa: PLW0603
+    global _shadow_manager
     if not SHADOW_MODE_AVAILABLE or ShadowModeManager is None:
         return None
     if _shadow_manager is None:

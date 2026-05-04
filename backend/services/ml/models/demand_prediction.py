@@ -389,7 +389,7 @@ _global_demand_predictor: DemandPredictor | None = None
 
 def get_demand_predictor() -> DemandPredictor:
     """Récupère l'instance globale du prédicteur de demande."""
-    global _global_demand_predictor  # noqa: PLW0603
+    global _global_demand_predictor
 
     if _global_demand_predictor is None:
         _global_demand_predictor = DemandPredictor()

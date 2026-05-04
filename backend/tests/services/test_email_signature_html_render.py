@@ -66,7 +66,10 @@ class TestEmailSignatureHtmlRender:
         )
 
         # Le logo_url de la company doit être utilisé (pas de signature_logo_url)
-        assert "test_logo.png" in result or "/uploads/company_logos/test_logo.png" in result
+        assert (
+            "test_logo.png" in result
+            or "/uploads/company_logos/test_logo.png" in result
+        )
 
     def test_render_address_formatting(self, mock_company):
         """Test que l'adresse est formatée avec <br>."""
@@ -97,8 +100,7 @@ class TestEmailSignatureHtmlRender:
     def test_render_blocks_script_tags(self, mock_company):
         """Test que les balises <script> sont supprimées (sécurité XSS)."""
         template = (
-            "{{ name }}<script>alert('xss')</script>"
-            "<img src='x' onerror='alert(1)'>"
+            "{{ name }}<script>alert('xss')</script><img src='x' onerror='alert(1)'>"
         )
         result = render_signature_html_template(template, mock_company)
 
@@ -119,9 +121,7 @@ class TestEmailSignatureHtmlRender:
     def test_render_blocks_event_handlers(self, mock_company):
         """Test que les attributs onclick/onload/etc sont supprimés."""
         template = (
-            "{{ name }}"
-            '<div onclick="alert(1)">Click</div>'
-            '<img onload="evil()" src="x">'
+            '{{ name }}<div onclick="alert(1)">Click</div><img onload="evil()" src="x">'
         )
         result = render_signature_html_template(template, mock_company)
 

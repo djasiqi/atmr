@@ -108,7 +108,9 @@ reject_result_model = company_offers_ns.model(
         "offer_id": fields.Integer(description="ID de l'offre"),
         "escalated": fields.Boolean(description="Escalade déclenchée"),
         "next_offer_id": fields.Integer(description="ID de la prochaine offre"),
-        "fallback_broadcast": fields.Boolean(description="Fallback broadcast déclenché"),
+        "fallback_broadcast": fields.Boolean(
+            description="Fallback broadcast déclenché"
+        ),
     },
 )
 

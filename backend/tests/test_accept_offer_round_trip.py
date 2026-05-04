@@ -5,6 +5,7 @@ Couvre les sections 1-7 du plan (validation, création retour, inversion
 pickup/dropoff, billing, booking_summary agrégé, chat unifié, résolution
 TransportRequest pour retour).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -211,7 +212,11 @@ class TestAcceptOfferRoundTrip:
         assert return_booking.parent_booking_id == outbound.id
         # Booking may strip timezone; compare naive datetimes
         expected_naive = return_dt.replace(tzinfo=None)
-        actual_naive = return_booking.scheduled_time.replace(tzinfo=None) if return_booking.scheduled_time else None
+        actual_naive = (
+            return_booking.scheduled_time.replace(tzinfo=None)
+            if return_booking.scheduled_time
+            else None
+        )
         assert actual_naive == expected_naive
 
     @patch("application.institutions.accept_offer.db")
@@ -291,7 +296,9 @@ class TestAcceptOfferRoundTrip:
     def test_round_trip_same_billing(self, mock_db: MagicMock):
         """A/R: amount, billed_to_type, billed_to_company_id identiques."""
         uc = self._make_uc()
-        client = _Client(preferential_rate=Decimal("75.00"), default_billed_to_type="clinic")
+        client = _Client(
+            preferential_rate=Decimal("75.00"), default_billed_to_type="clinic"
+        )
         uc._find_institution_client = MagicMock(return_value=client)  # type: ignore[assignment]
         uc._resolve_billing_party = MagicMock()  # type: ignore[assignment]
 
@@ -414,12 +421,15 @@ class TestGetRequestInfoReturnBooking:
         mock_db = MagicMock()
         mock_db.session.get.return_value = mock_return_booking
 
-        with patch.dict("sys.modules", {}), \
-             patch("models.TransportRequest", mock_tr_cls, create=True), \
-             patch("models.Booking", mock_booking_cls, create=True), \
-             patch("ext.db", mock_db):
+        with (
+            patch.dict("sys.modules", {}),
+            patch("models.TransportRequest", mock_tr_cls, create=True),
+            patch("models.Booking", mock_booking_cls, create=True),
+            patch("ext.db", mock_db),
+        ):
             from importlib import reload
             import services.events.institution_events as mod
+
             reload(mod)
             result = mod.get_request_info_from_booking(99)
 

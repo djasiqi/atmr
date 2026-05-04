@@ -33,6 +33,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -78,6 +79,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -122,6 +124,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -154,6 +157,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -186,6 +190,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -225,6 +230,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -266,6 +272,7 @@ class TestQRRReference:
 
         # Mock BillingProfileService
         from services.billing import BillingProfileService
+
         original_get = BillingProfileService.get_by_company_id
         BillingProfileService.get_by_company_id = Mock(return_value=profile)
 
@@ -276,7 +283,9 @@ class TestQRRReference:
             # Assert
             assert qrr_ref is not None
             assert len(qrr_ref) == 27
-            assert qrr_ref.isdigit(), "QRR should contain only digits after normalization"
+            assert qrr_ref.isdigit(), (
+                "QRR should contain only digits after normalization"
+            )
             # Vérifier que les chiffres de invoice_number sont présents
             # "ATMR-2026-12-9999" -> "2026129999"
             assert "2026129999" in qrr_ref or "9999" in qrr_ref, (

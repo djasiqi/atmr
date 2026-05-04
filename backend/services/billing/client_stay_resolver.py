@@ -67,9 +67,7 @@ def find_active_stay_for_booking(
             status="active",
         )
         .filter(ClientStay.start_date <= booking_date)
-        .filter(
-            (ClientStay.end_date.is_(None)) | (ClientStay.end_date >= booking_date)
-        )
+        .filter((ClientStay.end_date.is_(None)) | (ClientStay.end_date >= booking_date))
         .order_by(ClientStay.start_date.desc())
         .limit(1)
         .all()
@@ -151,7 +149,9 @@ def detect_billing_conflict_with_stay(
     if not stay or not booking:
         return False, None
 
-    current_billed_to_type = (getattr(booking, "billed_to_type", None) or "patient").lower()
+    current_billed_to_type = (
+        getattr(booking, "billed_to_type", None) or "patient"
+    ).lower()
     current_billed_to_company_id = getattr(booking, "billed_to_company_id", None)
     current_billing_party_id = getattr(booking, "billing_party_id", None)
 
@@ -309,7 +309,9 @@ def resolve_billing_party_for_booking(
             ),
             booking.id,
             default_bp.id,
-            default_bp.type.value if hasattr(default_bp.type, "value") else str(default_bp.type),
+            default_bp.type.value
+            if hasattr(default_bp.type, "value")
+            else str(default_bp.type),
         )
         return {
             "billing_party_id": default_bp.id,
@@ -466,7 +468,9 @@ def get_clinic_address_for_stay(stay: ClientStay) -> dict[str, Any] | None:
         "lat": float(clinic.latitude) if clinic.latitude else None,
         "lon": float(clinic.longitude) if clinic.longitude else None,
         "preferential_rate": (
-            float(clinic.preferential_rate) if clinic.preferential_rate is not None else None
+            float(clinic.preferential_rate)
+            if clinic.preferential_rate is not None
+            else None
         ),
         "clinic_id": clinic.id,
         "clinic_name": clinic.name,

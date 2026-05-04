@@ -157,9 +157,9 @@ class CreateManualBookingUseCase:
             billed_to_type = billed_to_type.lower()
 
         if not billed_to_company_id:
-            billed_to_company_id = validated_data.get("billed_to_company_id") or getattr(
-                client, "default_billed_to_company_id", None
-            )
+            billed_to_company_id = validated_data.get(
+                "billed_to_company_id"
+            ) or getattr(client, "default_billed_to_company_id", None)
         billed_to_contact = _norm_str(
             validated_data.get("billed_to_contact")
             or getattr(client, "default_billed_to_contact", None),
@@ -275,10 +275,7 @@ class CreateManualBookingUseCase:
                     iteration = 0
                     while count < occurrences and iteration < max_iterations:
                         iteration += 1
-                        if (
-                            current_date
-                            and current_date.weekday() == target_weekday
-                        ):
+                        if current_date and current_date.weekday() == target_weekday:
                             if recurrence_end_date_str:
                                 try:
                                     end_date = parse_local_naive(
@@ -288,12 +285,8 @@ class CreateManualBookingUseCase:
                                         break
                                 except Exception:
                                     pass
-                            if (
-                                current_date != base_date
-                                or (
-                                    base_date
-                                    and target_weekday == base_date.weekday()
-                                )
+                            if current_date != base_date or (
+                                base_date and target_weekday == base_date.weekday()
                             ):
                                 if current_date not in recurrence_dates:
                                     recurrence_dates.append(current_date)
@@ -311,12 +304,12 @@ class CreateManualBookingUseCase:
 
         pickup_coords = None
         dropoff_coords = None
-        need_pickup_geo = not validated_data.get("pickup_lat") or not validated_data.get(
-            "pickup_lon"
-        )
-        need_dropoff_geo = not validated_data.get("dropoff_lat") or not validated_data.get(
-            "dropoff_lon"
-        )
+        need_pickup_geo = not validated_data.get(
+            "pickup_lat"
+        ) or not validated_data.get("pickup_lon")
+        need_dropoff_geo = not validated_data.get(
+            "dropoff_lat"
+        ) or not validated_data.get("dropoff_lon")
         # Nominatim en parallèle (sinon jusqu'à ~10 s séquentiel pour aller + retour sans coords).
         if need_pickup_geo or need_dropoff_geo:
             tasks: list[tuple[str, str]] = []
@@ -389,9 +382,7 @@ class CreateManualBookingUseCase:
                 logger.warning("OSRM timeout/error: %s", osrm_error)
 
             if base_dur_s is not None:
-                scheduled_hour = (
-                    scheduled.hour if scheduled else datetime.now(UTC).hour
-                )
+                scheduled_hour = scheduled.hour if scheduled else datetime.now(UTC).hour
                 rush_hour_factor = 1
                 if (
                     MORNING_RUSH_START <= scheduled_hour < SCHEDULED_HOUR_THRESHOLD
@@ -412,14 +403,10 @@ class CreateManualBookingUseCase:
             display_name = full_name or (getattr(user, "username", "") or "Client")
 
         mission_type = (
-            (validated_data.get("mission_type") or "patient_transport")
-            .strip()
-            .lower()
+            (validated_data.get("mission_type") or "patient_transport").strip().lower()
         )
         raw_desc = (validated_data.get("delivery_description") or "").strip()
-        delivery_description = (
-            " ".join(raw_desc.split()) if raw_desc else None
-        )
+        delivery_description = " ".join(raw_desc.split()) if raw_desc else None
 
         if mission_type == "material_delivery":
             from models import CompanyBillingSettings
@@ -432,11 +419,7 @@ class CreateManualBookingUseCase:
                 if billing_settings
                 else None
             )
-            if (
-                not billing_settings
-                or price_fixed is None
-                or float(price_fixed) <= 0
-            ):
+            if not billing_settings or price_fixed is None or float(price_fixed) <= 0:
                 raise CreateManualBookingError(
                     "Configurez le prix fixe livraison dans Paramètres > Facturation avant de créer une livraison.",
                     status_code=400,
@@ -505,9 +488,7 @@ class CreateManualBookingUseCase:
                 amount_source_used = "manual"
             else:
                 profile = (
-                    PricingProfile.query.filter_by(
-                        company_id=cid, is_active=True
-                    )
+                    PricingProfile.query.filter_by(company_id=cid, is_active=True)
                     .order_by(PricingProfile.created_at.desc())
                     .first()
                 )
@@ -684,9 +665,7 @@ class CreateManualBookingUseCase:
             outbound.hospital_service = validated_data.get("hospital_service")
             outbound.notes_medical = validated_data.get("notes_medical")
             outbound.pickup_access_notes = validated_data.get("pickup_access_notes")
-            outbound.dropoff_access_notes = validated_data.get(
-                "dropoff_access_notes"
-            )
+            outbound.dropoff_access_notes = validated_data.get("dropoff_access_notes")
             outbound.wheelchair_client_has = validated_data.get(
                 "wheelchair_client_has", False
             )
@@ -704,7 +683,9 @@ class CreateManualBookingUseCase:
                 return_booking.is_return = True
                 # Avant scheduled_time : le validateur scheduled_time exige is_return=True si heure absente.
                 return_booking.time_confirmed = (
-                    bool(return_time_confirmed) if occurrence_return_dt is not None else False
+                    bool(return_time_confirmed)
+                    if occurrence_return_dt is not None
+                    else False
                 )
                 return_booking.customer_name = outbound.customer_name
                 return_booking.client_id = client.id
@@ -741,13 +722,9 @@ class CreateManualBookingUseCase:
                 return_booking.billing_source = outbound.billing_source
                 return_booking.billing_source_ref = outbound.billing_source_ref
 
-                return_booking.medical_facility = validated_data.get(
-                    "medical_facility"
-                )
+                return_booking.medical_facility = validated_data.get("medical_facility")
                 return_booking.doctor_name = validated_data.get("doctor_name")
-                return_booking.hospital_service = validated_data.get(
-                    "hospital_service"
-                )
+                return_booking.hospital_service = validated_data.get("hospital_service")
                 return_booking.notes_medical = validated_data.get("notes_medical")
                 return_booking.pickup_access_notes = validated_data.get(
                     "pickup_access_notes"

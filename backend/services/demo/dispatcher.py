@@ -11,7 +11,9 @@ from services.notifications.email import send_email_notification
 
 
 def get_demo_destination_email() -> str:
-    return os.getenv("DEMO_EMAIL_SALES", os.getenv("CONTACT_EMAIL_DEFAULT", "info@lirie.ch"))
+    return os.getenv(
+        "DEMO_EMAIL_SALES", os.getenv("CONTACT_EMAIL_DEFAULT", "info@lirie.ch")
+    )
 
 
 def build_demo_email_body(payload: dict[str, Any]) -> str:
@@ -55,7 +57,9 @@ def send_demo_notification(payload: dict[str, Any]) -> dict[str, Any]:
         notification_type="demo_request",
         html=False,
         reply_to=requester_email,
-        from_email=os.getenv("DEMO_EMAIL_NOREPLY", os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch")),
+        from_email=os.getenv(
+            "DEMO_EMAIL_NOREPLY", os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch")
+        ),
         from_name=os.getenv("DEMO_EMAIL_NOREPLY_NAME", "LIRIE"),
     )
 
@@ -80,7 +84,9 @@ def send_demo_acknowledgement(payload: dict[str, Any]) -> dict[str, Any]:
         body,
         notification_type="demo_request_ack",
         html=True,
-        from_email=os.getenv("DEMO_EMAIL_NOREPLY", os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch")),
+        from_email=os.getenv(
+            "DEMO_EMAIL_NOREPLY", os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch")
+        ),
         from_name=os.getenv("DEMO_EMAIL_NOREPLY_NAME", "LIRIE"),
     )
 
@@ -107,9 +113,7 @@ def _format_local_datetime(value: Any) -> str:
     if not isinstance(value, datetime):
         return "-"
     timezone_name = (
-        os.getenv("APP_TIMEZONE")
-        or os.getenv("TZ")
-        or "Europe/Zurich"
+        os.getenv("APP_TIMEZONE") or os.getenv("TZ") or "Europe/Zurich"
     ).strip()
     try:
         local_dt = value.astimezone(ZoneInfo(timezone_name))
@@ -206,8 +210,10 @@ def send_demo_access_ready_email(
         body,
         notification_type="demo_access_ready",
         html=True,
-        from_email=os.getenv("DEMO_EMAIL_FROM") or os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch"),
-        from_name=os.getenv("DEMO_EMAIL_FROM_NAME") or os.getenv("SMTP_FROM_NAME", "LIRIE"),
+        from_email=os.getenv("DEMO_EMAIL_FROM")
+        or os.getenv("SMTP_FROM_EMAIL", "noreply@lirie.ch"),
+        from_name=os.getenv("DEMO_EMAIL_FROM_NAME")
+        or os.getenv("SMTP_FROM_NAME", "LIRIE"),
         reply_to=get_demo_destination_email(),
     )
 

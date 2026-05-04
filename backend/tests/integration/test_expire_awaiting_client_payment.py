@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from models import Booking, Payment, db
+from models import Booking, Payment
 from models.enums import BookingStatus, PaymentStatus
 from services.booking.expire_unpaid_client_bookings import (
     CLIENT_ONLINE_PAYMENT_GRACE_MINUTES,
@@ -46,7 +46,9 @@ class TestExpireAwaitingClientPayment:
         assert booking.cancellation_reason_code == "PAYMENT_TIMEOUT"
         assert booking.cancelled_by_role == "system"
 
-    def test_skips_when_within_grace(self, db, test_company, test_client, requires_postgresql):
+    def test_skips_when_within_grace(
+        self, db, test_company, test_client, requires_postgresql
+    ):
         booking = Booking()
         booking.user_id = test_client.user_id
         booking.company_id = test_company.id

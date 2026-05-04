@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 _EVENT_NS = os.getenv("DRIVER_LOCATION_REDIS_EVENT_NS", "atmr:driver_location:event")
 _DEFAULT_EVENT_TTL = int(os.getenv("DRIVER_LOCATION_EVENT_ID_TTL_SEC", "600"))
-_PROX_ENABLED = os.getenv("DRIVER_LOCATION_PROXIMITY_DEDUP_ENABLED", "true").lower() in (
+_PROX_ENABLED = os.getenv(
+    "DRIVER_LOCATION_PROXIMITY_DEDUP_ENABLED", "true"
+).lower() in (
     "1",
     "true",
     "yes",
@@ -91,7 +93,7 @@ def _parse_ts_any(v: Any) -> datetime | None:
         return None
 
 
-def should_skip_proximity_duplicate(  # noqa: PLR0911
+def should_skip_proximity_duplicate(
     driver_id: int,
     latitude: float,
     longitude: float,

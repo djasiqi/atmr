@@ -11,7 +11,9 @@ from infrastructure.invoices.invoice_description_builder import (
 from models import Booking
 
 
-def resolve_patient_name_for_invoice(client: Any | None, reservations: list[Any]) -> str:
+def resolve_patient_name_for_invoice(
+    client: Any | None, reservations: list[Any]
+) -> str:
     """Même logique que GenerateInvoiceUseCase (nom affiché pour tierce / institution)."""
     patient_name = ""
     if client and getattr(client, "is_institution", False) and reservations:
@@ -21,7 +23,9 @@ def resolve_patient_name_for_invoice(client: Any | None, reservations: list[Any]
                 break
     if not patient_name and client and getattr(client, "user", None):
         u = client.user
-        patient_name = f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
+        patient_name = (
+            f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}".strip()
+        )
     if not patient_name and client:
         cid = getattr(client, "id", None)
         if cid is not None:
@@ -33,7 +37,9 @@ def resolve_patient_name_for_invoice(client: Any | None, reservations: list[Any]
 
 def booking_source_type_for_preview(booking: Booking) -> str:
     """ride | service | manual — aligné évolution produit."""
-    mt = (getattr(booking, "mission_type", None) or "patient_transport") or "patient_transport"
+    mt = (
+        getattr(booking, "mission_type", None) or "patient_transport"
+    ) or "patient_transport"
     if mt == "material_delivery":
         return "service"
     return "ride"
@@ -56,11 +62,20 @@ def build_invoice_line_description(
     delivery_desc = getattr(reservation, "delivery_description", None) or None
     _is_cancelled = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
     bobj = booking_for_cancellation or reservation
-    _fee_pct = getattr(bobj, "cancellation_fee_percent", None) if bobj and _is_cancelled else None
-    _fee_tier = getattr(bobj, "cancellation_fee_tier_id", None) if bobj and _is_cancelled else None
+    _fee_pct = (
+        getattr(bobj, "cancellation_fee_percent", None)
+        if bobj and _is_cancelled
+        else None
+    )
+    _fee_tier = (
+        getattr(bobj, "cancellation_fee_tier_id", None)
+        if bobj and _is_cancelled
+        else None
+    )
 
     show_patient = (
-        bool(bill_to_client_id or clinic_company_id or billing_party_id) and not is_delivery
+        bool(bill_to_client_id or clinic_company_id or billing_party_id)
+        and not is_delivery
     )
 
     return builder.build_description(
@@ -86,9 +101,19 @@ def build_invoice_line_description_clinic_monthly(
     mission_type = getattr(reservation, "mission_type", None) or "patient_transport"
     is_delivery = mission_type == "material_delivery"
     delivery_desc = getattr(reservation, "delivery_description", None) or None
-    _is_cancelled_c = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-    _fee_pct_c = getattr(reservation, "cancellation_fee_percent", None) if _is_cancelled_c else None
-    _fee_tier_c = getattr(reservation, "cancellation_fee_tier_id", None) if _is_cancelled_c else None
+    _is_cancelled_c = (
+        str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
+    )
+    _fee_pct_c = (
+        getattr(reservation, "cancellation_fee_percent", None)
+        if _is_cancelled_c
+        else None
+    )
+    _fee_tier_c = (
+        getattr(reservation, "cancellation_fee_tier_id", None)
+        if _is_cancelled_c
+        else None
+    )
     return builder.build_description(
         pickup_location=reservation.pickup_location or "",
         dropoff_location=reservation.dropoff_location or "",
@@ -151,7 +176,9 @@ def build_merged_round_trip_invoice_line_description_from_segments(
     return f"{base} [A/R]"
 
 
-def patient_display_name_clinic_monthly(client: Any | None, reservation: Booking) -> str:
+def patient_display_name_clinic_monthly(
+    client: Any | None, reservation: Booking
+) -> str:
     """Même logique que le cache patient dans GenerateClinicMonthlyInvoiceUseCase (aperçu / labels)."""
     patient_name = ""
     if client and client.user:
@@ -164,9 +191,7 @@ def patient_display_name_clinic_monthly(client: Any | None, reservation: Booking
         elif first_name:
             patient_name = first_name.capitalize()
         else:
-            patient_name = (
-                client.user.username or f"Client #{reservation.client_id}"
-            )
+            patient_name = client.user.username or f"Client #{reservation.client_id}"
     if not patient_name:
         patient_name = f"Client #{reservation.client_id}"
     return patient_name

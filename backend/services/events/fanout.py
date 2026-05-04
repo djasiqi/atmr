@@ -1418,7 +1418,10 @@ def send_silent_data_update(
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
+            elif (
+                result.get("token_invalid")
+                and not is_push_device_token_lifecycle_enabled()
+            ):
                 device_token.is_active = False
 
         try:
@@ -1630,7 +1633,10 @@ def send_critical_alert_ios(
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
+            elif (
+                result.get("token_invalid")
+                and not is_push_device_token_lifecycle_enabled()
+            ):
                 device_token.is_active = False
 
         try:

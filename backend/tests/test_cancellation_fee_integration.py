@@ -15,16 +15,33 @@ from marshmallow import ValidationError
 from application.bookings.cancellation_policy_schema import CancellationPolicySchema
 from application.bookings.cancellation_rules import compute_cancellation_fields
 
-
 VALID_POLICY_INPUT = {
     "enabled": True,
     "basis": "booking_amount",
     "apply_when_driver_assigned_only": True,
     "tiers": [
-        {"id": "t1", "type": "time", "hours_before": 24, "percent": 20, "label": "< 24h"},
-        {"id": "t2", "type": "time", "hours_before": 12, "percent": 40, "label": "< 12h"},
+        {
+            "id": "t1",
+            "type": "time",
+            "hours_before": 24,
+            "percent": 20,
+            "label": "< 24h",
+        },
+        {
+            "id": "t2",
+            "type": "time",
+            "hours_before": 12,
+            "percent": 40,
+            "label": "< 12h",
+        },
         {"id": "t3", "type": "time", "hours_before": 2, "percent": 60, "label": "< 2h"},
-        {"id": "t4", "type": "status", "status": "EN_ROUTE", "percent": 70, "label": "Chauffeur en route"},
+        {
+            "id": "t4",
+            "type": "status",
+            "status": "EN_ROUTE",
+            "percent": 70,
+            "label": "Chauffeur en route",
+        },
     ],
     "min_fee_chf": 0,
     "max_fee_chf": None,
@@ -99,8 +116,11 @@ class TestComputeCancellationFieldsIntegration:
     def _make_booking(self, amount=100, driver_id=1, hours_ahead=10, status="ASSIGNED"):
         sched = datetime.now(UTC) + timedelta(hours=hours_ahead)
         return SimpleNamespace(
-            amount=amount, driver_id=driver_id, scheduled_time=sched,
-            status=status, company_id=1,
+            amount=amount,
+            driver_id=driver_id,
+            scheduled_time=sched,
+            status=status,
+            company_id=1,
         )
 
     def test_fields_with_policy_assigned_10h(self):

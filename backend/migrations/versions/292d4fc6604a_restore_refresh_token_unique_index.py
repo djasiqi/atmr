@@ -8,6 +8,7 @@ Idempotent: drop_index/create_index uniquement si l'index existe / n'existe pas,
 pour éviter "index ix_refresh_token_token_hash does not exist" sur DROP.
 Intention: restore = unique=True en upgrade, unique=False en downgrade.
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
@@ -28,7 +29,10 @@ def _index_exists(conn, index_name: str, schema: str = "public") -> bool:
         "SELECT 1 FROM pg_indexes "
         "WHERE schemaname = :schema AND indexname = :index_name LIMIT 1"
     )
-    return conn.execute(q, {"schema": schema, "index_name": index_name}).first() is not None
+    return (
+        conn.execute(q, {"schema": schema, "index_name": index_name}).first()
+        is not None
+    )
 
 
 def upgrade():
@@ -36,9 +40,7 @@ def upgrade():
     if _index_exists(conn, IDX_NAME):
         op.drop_index(IDX_NAME, table_name=TABLE_NAME)
     if not _index_exists(conn, IDX_NAME):
-        op.create_index(
-            IDX_NAME, TABLE_NAME, ["token_hash"], unique=True
-        )
+        op.create_index(IDX_NAME, TABLE_NAME, ["token_hash"], unique=True)
 
 
 def downgrade():
@@ -46,7 +48,4 @@ def downgrade():
     if _index_exists(conn, IDX_NAME):
         op.drop_index(IDX_NAME, table_name=TABLE_NAME)
     if not _index_exists(conn, IDX_NAME):
-        op.create_index(
-            IDX_NAME, TABLE_NAME, ["token_hash"], unique=False
-        )
-
+        op.create_index(IDX_NAME, TABLE_NAME, ["token_hash"], unique=False)

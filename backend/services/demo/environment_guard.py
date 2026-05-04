@@ -41,9 +41,8 @@ def _is_demo_redis(redis_url: str) -> bool:
 def _is_demo_storage(bucket: str, prefix: str) -> bool:
     bucket_l = bucket.lower().strip()
     prefix_l = prefix.lower().strip()
-    if bucket_l:
-        if "-demo" in bucket_l or bucket_l.startswith("demo"):
-            return True
+    if bucket_l and ("-demo" in bucket_l or bucket_l.startswith("demo")):
+        return True
     return prefix_l.startswith("demo/")
 
 
@@ -103,7 +102,9 @@ def enforce_demo_environment_or_raise(
             "Refus de démarrage: REDIS_URL demo doit pointer vers un hôte/url demo."
         )
 
-    if strict and not _is_demo_storage(snapshot.storage_bucket, snapshot.storage_prefix):
+    if strict and not _is_demo_storage(
+        snapshot.storage_bucket, snapshot.storage_prefix
+    ):
         raise RuntimeError(
             "Refus de démarrage: storage demo invalide. Configurez un bucket `*-demo` "
             "ou un préfixe strict `demo/`."
@@ -115,12 +116,10 @@ def block_sensitive_integrations_in_demo() -> dict[str, bool]:
     if snapshot.app_env != "demo":
         return {}
 
-    blocked_features = {
+    return {
         "payments": True,
         "sms": True,
         "external_webhooks": True,
         "insurance_apis": True,
         "accounting_exports": True,
     }
-    return blocked_features
-

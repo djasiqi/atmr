@@ -142,7 +142,7 @@ class ListBookingsUseCase:
         self.booking_repo = booking_repo
         self.client_repo = client_repo
 
-    def execute(self, input_data: ListBookingsInput) -> ListBookingsOutput:  # noqa: PLR0911
+    def execute(self, input_data: ListBookingsInput) -> ListBookingsOutput:
         """Exécute la liste des réservations.
 
         Args:

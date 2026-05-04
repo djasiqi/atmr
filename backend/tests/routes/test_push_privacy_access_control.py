@@ -70,7 +70,9 @@ def _token_for_user(app, user, company_id=None, driver_id=None):
     claims = {
         "role": user.role.value,
         "company_id": company_id,
-        "driver_id": getattr(driver_id, "id", driver_id) if driver_id is not None else None,
+        "driver_id": getattr(driver_id, "id", driver_id)
+        if driver_id is not None
+        else None,
         "aud": "atmr-api",
     }
     with app.app_context():
@@ -141,9 +143,7 @@ class TestPushPrivacyAccessControl:
         assert getattr(u_a, "push_privacy_mode", None) == "discreet"
         assert getattr(u_b, "push_privacy_mode", None) == "detailed"
 
-    def test_push_privacy_validation_rejects_invalid_mode(
-        self, app, client, db
-    ):
+    def test_push_privacy_validation_rejects_invalid_mode(self, app, client, db):
         """PATCH avec push_privacy_mode invalide renvoie 400."""
         user_a, company_a = _make_company_user(db)
         db.session.flush()
@@ -171,9 +171,7 @@ class TestPushPrivacyAccessControl:
         headers = {"Authorization": f"Bearer {token_a}"}
 
         for mode in ("detailed", "discreet"):
-            resp = client.patch(
-                url, json={"push_privacy_mode": mode}, headers=headers
-            )
+            resp = client.patch(url, json={"push_privacy_mode": mode}, headers=headers)
             assert resp.status_code == 200, (
                 f"mode={mode!r} should return 200, got {resp.status_code}"
             )

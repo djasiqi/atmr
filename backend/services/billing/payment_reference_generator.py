@@ -7,7 +7,7 @@ Standard Swiss QR-Bill : Les références SCOR sont utilisées avec
 les IBAN standard (non QR-IBAN).
 """
 
-# ruff: noqa: G004, PLR0911
+# ruff: noqa: G004
 import logging
 import re
 

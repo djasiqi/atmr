@@ -106,16 +106,24 @@ def test_snapshot_reconnect_never_forces_canonical_without_canonical_source(
 
     monkeypatch.setattr(chat, "_get_sid", lambda fallback_request=None: "sid-company")
     monkeypatch.setattr(chat, "redis_client", fake_redis)
-    monkeypatch.setattr(chat, "User", SimpleNamespace(query=_UserQuery(SimpleNamespace(id=999))))
-    monkeypatch.setattr(chat, "Driver", SimpleNamespace(query=_DriverQuery([driver1, driver2])))
-    monkeypatch.setattr(chat, "_resolve_mission_status_for_driver", lambda _driver_id: None)
+    monkeypatch.setattr(
+        chat, "User", SimpleNamespace(query=_UserQuery(SimpleNamespace(id=999)))
+    )
+    monkeypatch.setattr(
+        chat, "Driver", SimpleNamespace(query=_DriverQuery([driver1, driver2]))
+    )
+    monkeypatch.setattr(
+        chat, "_resolve_mission_status_for_driver", lambda _driver_id: None
+    )
     monkeypatch.setattr(
         chat,
         "_resolve_driver_status",
         lambda **_kwargs: "available",
     )
 
-    with patch("services.realtime.socketio.fanout_driver_location_update") as fanout_mock:
+    with patch(
+        "services.realtime.socketio.fanout_driver_location_update"
+    ) as fanout_mock:
         handler()
 
     assert fanout_mock.call_count == 2

@@ -237,7 +237,7 @@ class LiveDelaysResource(Resource):
             "company_id": "ID entreprise (optionnel pour ADMIN)",
         }
     )
-    def get(self):  # noqa: PLR0911
+    def get(self):
         """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.

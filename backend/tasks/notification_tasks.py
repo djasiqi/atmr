@@ -76,7 +76,7 @@ class NotificationTask(Task):
     task_soft_time_limit=10,
     max_retries=MAX_PUSH_RETRIES,
 )
-def send_push_notification_task(  # noqa: PLR0911
+def send_push_notification_task(
     self,
     driver_id: int,
     title: str,
@@ -119,7 +119,10 @@ def send_push_notification_task(  # noqa: PLR0911
                 notification_type,
             )
 
-            if os.getenv("NOTIFICATIONS_KAFKA_PUBLISH_ENABLED", "false").lower() == "true":
+            if (
+                os.getenv("NOTIFICATIONS_KAFKA_PUBLISH_ENABLED", "false").lower()
+                == "true"
+            ):
                 from services.monitoring.prometheus import (
                     inc_notification_kafka_enqueue,
                     observe_notification_kafka_enqueue_latency,
@@ -234,7 +237,9 @@ def send_push_notification_task(  # noqa: PLR0911
                         log_push_recipient_proof,
                     )
 
-                    token_hashes = [_token_hash(dt["token"]) for dt in device_tokens_data]
+                    token_hashes = [
+                        _token_hash(dt["token"]) for dt in device_tokens_data
+                    ]
                     log_push_recipient_proof(
                         trace_id=data.get("trace_id") if data else None,
                         booking_id=data.get("booking_id") if data else None,
@@ -493,7 +498,11 @@ def send_push_company_notification_task(
     # Guard centralise : bloquer self-notification (company est l'acteur)
     actor_role = data.get("actor_role") if data else None
     actor_id = data.get("actor_id") if data else None
-    if actor_role == "company" and actor_id is not None and str(actor_id) == str(company_id):
+    if (
+        actor_role == "company"
+        and actor_id is not None
+        and str(actor_id) == str(company_id)
+    ):
         logger.info(
             "[notification_task] GUARD: self-notification blocked (company %s is actor)",
             company_id,

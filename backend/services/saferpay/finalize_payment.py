@@ -74,11 +74,14 @@ def _assert_http_is_transient(st_code: int) -> bool:
     )
 
 
-def finalize_saferpay_payment(payment_row: Payment) -> dict[str, Any]:  # noqa: PLR0911
+def finalize_saferpay_payment(payment_row: Payment) -> dict[str, Any]:
     """PaymentPage Assert puis Transaction Capture si AUTHORIZED. Idempotent si déjà COMPLETED."""
     locked_payment = _get_payment_for_finalize(int(payment_row.id))
     if locked_payment is None:
-        return {"status": SAFERPAY_FINALIZE_ASSERT_FAILED, "payment_id": int(payment_row.id)}
+        return {
+            "status": SAFERPAY_FINALIZE_ASSERT_FAILED,
+            "payment_id": int(payment_row.id),
+        }
     payment_row = locked_payment
 
     if payment_row.status == PaymentStatus.COMPLETED:
@@ -115,7 +118,9 @@ def finalize_saferpay_payment(payment_row: Payment) -> dict[str, Any]:  # noqa: 
             }
         payment_row.status = PaymentStatus.FAILED
         db.session.commit()
-        detail_src = raw if raw else (str(assert_data) if assert_data is not None else "")
+        detail_src = (
+            raw if raw else (str(assert_data) if assert_data is not None else "")
+        )
         return {
             "status": SAFERPAY_FINALIZE_ASSERT_FAILED,
             "payment_id": payment_row.id,

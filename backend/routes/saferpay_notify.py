@@ -17,7 +17,9 @@ saferpay_notify_bp = Blueprint("saferpay_notify", __name__)
 def _payment_id_arg() -> int | None:
     from flask import request
 
-    raw = (request.args.get("paymentId") or request.args.get("payment_id") or "").strip()
+    raw = (
+        request.args.get("paymentId") or request.args.get("payment_id") or ""
+    ).strip()
     if not raw.isdigit():
         return None
     return int(raw)
@@ -40,7 +42,9 @@ def saferpay_notify_success() -> Response | tuple[str, int]:
 def _guest_booking_id_arg() -> str | None:
     from flask import request
 
-    raw = (request.args.get("guestBookingId") or request.args.get("guest_booking_id") or "").strip()
+    raw = (
+        request.args.get("guestBookingId") or request.args.get("guest_booking_id") or ""
+    ).strip()
     return raw or None
 
 
@@ -83,7 +87,11 @@ def saferpay_notify_guest_success() -> Response | tuple[str, int]:
     if not out.get("ok"):
         logger.info(
             "Saferpay guest notify success ignoré",
-            extra={"guest_booking_id": gid, "notify_result": out, "outcome": "guest_notify_ignored"},
+            extra={
+                "guest_booking_id": gid,
+                "notify_result": out,
+                "outcome": "guest_notify_ignored",
+            },
         )
     return "", 200
 
@@ -106,7 +114,11 @@ def saferpay_notify_guest_fail() -> Response | tuple[str, int]:
     if not out.get("ok"):
         logger.info(
             "Saferpay guest notify fail ignoré",
-            extra={"guest_booking_id": gid, "notify_result": out, "outcome": "guest_notify_ignored"},
+            extra={
+                "guest_booking_id": gid,
+                "notify_result": out,
+                "outcome": "guest_notify_ignored",
+            },
         )
     return "", 200
 

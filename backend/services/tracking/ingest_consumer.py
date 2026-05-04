@@ -33,6 +33,7 @@ try:
         observe_tracking_kafka_e2e_latency,
     )
 except Exception:  # pragma: no cover
+
     def inc_tracking_kafka_messages_produced(*, topic: str) -> None:
         _ = topic
         pass
@@ -53,6 +54,7 @@ except Exception:  # pragma: no cover
         _ = event
         pass
 
+
 logger = logging.getLogger(__name__)
 
 KAFKA_ENABLED = os.getenv("KAFKA_ENABLED", "false").lower() == "true"
@@ -63,7 +65,9 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv(
     "KAFKA_BOOTSTRAP_SERVERS",
     "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
 )
-KAFKA_CONSUMER_GROUP = os.getenv("KAFKA_TRACKING_CONSUMER_GROUP", "tracking-ingest-consumer-group")
+KAFKA_CONSUMER_GROUP = os.getenv(
+    "KAFKA_TRACKING_CONSUMER_GROUP", "tracking-ingest-consumer-group"
+)
 KAFKA_COMPRESSION_TYPE = os.getenv("KAFKA_COMPRESSION_TYPE", "gzip")
 KAFKA_ACKS = os.getenv("KAFKA_ACKS", "all")
 KAFKA_AUTO_OFFSET_RESET = os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
@@ -141,14 +145,20 @@ class TrackingIngestConsumer:
                     try:
                         inc_tracking_kafka_rebalance(event="revoked")
                     except Exception:
-                        logger.debug("[tracking_consumer] rebalance metric unavailable", exc_info=True)
+                        logger.debug(
+                            "[tracking_consumer] rebalance metric unavailable",
+                            exc_info=True,
+                        )
                     logger.warning("[tracking_consumer] partitions revoked=%s", revoked)
 
                 def on_partitions_assigned(self, assigned):
                     try:
                         inc_tracking_kafka_rebalance(event="assigned")
                     except Exception:
-                        logger.debug("[tracking_consumer] rebalance metric unavailable", exc_info=True)
+                        logger.debug(
+                            "[tracking_consumer] rebalance metric unavailable",
+                            exc_info=True,
+                        )
                     logger.info("[tracking_consumer] partitions assigned=%s", assigned)
 
             self._consumer = KC(
@@ -160,7 +170,9 @@ class TrackingIngestConsumer:
                 key_deserializer=lambda k: k.decode("utf-8") if k else None,
                 **_kafka_security_config(),
             )
-            self._consumer.subscribe([TOPIC_DRIVER_LOCATION_RAW], listener=_RebalanceListener())
+            self._consumer.subscribe(
+                [TOPIC_DRIVER_LOCATION_RAW], listener=_RebalanceListener()
+            )
             self._producer = KP(
                 bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -206,7 +218,9 @@ class TrackingIngestConsumer:
         try:
             inc_tracking_kafka_messages_produced(topic=topic)
         except Exception:
-            logger.debug("[tracking_consumer] produced metric unavailable", exc_info=True)
+            logger.debug(
+                "[tracking_consumer] produced metric unavailable", exc_info=True
+            )
 
     def _commit_current(self) -> None:
         assert self._consumer is not None
@@ -244,7 +258,9 @@ class TrackingIngestConsumer:
             try:
                 inc_tracking_kafka_dlq_messages(reason=error_type)
             except Exception:
-                logger.debug("[tracking_consumer] dlq metric unavailable", exc_info=True)
+                logger.debug(
+                    "[tracking_consumer] dlq metric unavailable", exc_info=True
+                )
             logger.warning(
                 "[tracking_consumer] DLQ confirmed topic=%s partition=%s offset=%s type=%s",
                 record.topic,
@@ -255,9 +271,14 @@ class TrackingIngestConsumer:
             return True
         except Exception:
             try:
-                inc_tracking_kafka_publish_errors(topic=TOPIC_DRIVER_LOCATION_DLQ, stage="dlq_publish_failed")
+                inc_tracking_kafka_publish_errors(
+                    topic=TOPIC_DRIVER_LOCATION_DLQ, stage="dlq_publish_failed"
+                )
             except Exception:
-                logger.debug("[tracking_consumer] publish error metric unavailable", exc_info=True)
+                logger.debug(
+                    "[tracking_consumer] publish error metric unavailable",
+                    exc_info=True,
+                )
             logger.error(
                 "[tracking_consumer] DLQ publish failed -> backoff sleep=%.3fs topic=%s partition=%s offset=%s",
                 TRACKING_DLQ_RETRY_BACKOFF_S,
@@ -329,9 +350,15 @@ class TrackingIngestConsumer:
             except Exception as exc:
                 transient = _is_transient_error(exc)
                 try:
-                    inc_tracking_kafka_publish_errors(topic=TOPIC_DRIVER_LOCATION_PROCESSED, stage="processed_publish_failed")
+                    inc_tracking_kafka_publish_errors(
+                        topic=TOPIC_DRIVER_LOCATION_PROCESSED,
+                        stage="processed_publish_failed",
+                    )
                 except Exception:
-                    logger.debug("[tracking_consumer] publish error metric unavailable", exc_info=True)
+                    logger.debug(
+                        "[tracking_consumer] publish error metric unavailable",
+                        exc_info=True,
+                    )
 
                 if transient and attempt < KAFKA_MAX_RETRIES:
                     sleep_s = (KAFKA_RETRY_BACKOFF_MS * attempt) / 1000.0
@@ -343,7 +370,9 @@ class TrackingIngestConsumer:
                     )
                     time.sleep(sleep_s)
                     continue
-                error_type = "transient_exhausted" if transient else "definitive_failure"
+                error_type = (
+                    "transient_exhausted" if transient else "definitive_failure"
+                )
                 return self._send_to_dlq_and_commit(
                     record=record,
                     key=key,
@@ -385,13 +414,16 @@ class TrackingIngestConsumer:
 
 def run_tracking_ingest_consumer() -> None:
     if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
-        logger.error("[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED)")
+        logger.error(
+            "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED)"
+        )
         sys.exit(1)
     consumer = TrackingIngestConsumer()
     consumer.start()
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
     run_tracking_ingest_consumer()
-

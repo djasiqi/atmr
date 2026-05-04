@@ -14,12 +14,18 @@ def notify_driver_new_booking(driver_id: int, booking) -> None:
     app_logger.info(f"📤 new_booking émis vers {room} pour booking_id={booking.id}")
 
 
-def notify_booking_update(driver_id: int, booking, *, emit_to_driver: bool = True) -> None:
+def notify_booking_update(
+    driver_id: int, booking, *, emit_to_driver: bool = True
+) -> None:
     """Notifie le chauffeur et/ou l'entreprise d'une mise à jour de mission.
 
     Important: une mise à jour (statut, etc.) ne doit pas être envoyée en "new_booking".
     """
-    payload = booking.to_dict() if hasattr(booking, "to_dict") else {"id": getattr(booking, "id", None)}
+    payload = (
+        booking.to_dict()
+        if hasattr(booking, "to_dict")
+        else {"id": getattr(booking, "id", None)}
+    )
 
     # 1️⃣ Notifier le driver (optionnel)
     if emit_to_driver:

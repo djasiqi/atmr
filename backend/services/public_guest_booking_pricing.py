@@ -58,7 +58,7 @@ def _build_scheduled_iso_from_guest_fields(date_s: str, pickup_time_s: str) -> s
     return f"{d}T{t}"
 
 
-def compute_public_guest_booking_price(  # noqa: PLR0911
+def compute_public_guest_booking_price(
     *,
     departure: str,
     destination: str,
@@ -155,7 +155,9 @@ def compute_public_guest_booking_price(  # noqa: PLR0911
 
     version = profile.current_version
     if not version and profile.versions:
-        version = sorted(profile.versions, key=lambda item: int(item.version), reverse=True)[0]
+        version = sorted(
+            profile.versions, key=lambda item: int(item.version), reverse=True
+        )[0]
     if not version:
         return {
             "ok": False,
@@ -165,9 +167,7 @@ def compute_public_guest_booking_price(  # noqa: PLR0911
 
     is_round_trip = str(trip_type or "").strip().lower() == "round_trip"
     now_ref = (
-        datetime.now(scheduled_time.tzinfo)
-        if scheduled_time.tzinfo
-        else datetime.now()
+        datetime.now(scheduled_time.tzinfo) if scheduled_time.tzinfo else datetime.now()
     )
     minutes_until = max(0, int((scheduled_time - now_ref).total_seconds() // 60))
     context: dict[str, Any] = {
@@ -217,8 +217,12 @@ def compute_public_guest_booking_price(  # noqa: PLR0911
         "pickup_lon": float(pickup_lng),
         "dropoff_lat": float(dropoff_lat),
         "dropoff_lon": float(dropoff_lng),
-        "pickup_geo_unit_id": int(pickup_geo_unit_id) if pickup_geo_unit_id is not None else None,
-        "dropoff_geo_unit_id": int(dropoff_geo_unit_id) if dropoff_geo_unit_id is not None else None,
+        "pickup_geo_unit_id": int(pickup_geo_unit_id)
+        if pickup_geo_unit_id is not None
+        else None,
+        "dropoff_geo_unit_id": int(dropoff_geo_unit_id)
+        if dropoff_geo_unit_id is not None
+        else None,
         "pricing_profile_id": int(profile.id),
         "pricing_profile_version_id": int(version.id),
         "pricing_status": "confirmed",

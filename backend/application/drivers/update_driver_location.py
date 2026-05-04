@@ -105,7 +105,9 @@ class UpdateDriverLocationUseCase:
             source="gps",
             timestamp=timestamp,
             location_mode=cmd.location_mode or "mission_live",
-            recorded_at=self._parse_ts(cmd.recorded_at) if cmd.recorded_at else timestamp,
+            recorded_at=self._parse_ts(cmd.recorded_at)
+            if cmd.recorded_at
+            else timestamp,
             sent_at=self._parse_ts(cmd.sent_at) if cmd.sent_at else self._now_utc(),
             is_background=bool(cmd.is_background),
             mission_id=cmd.mission_id,
@@ -116,7 +118,9 @@ class UpdateDriverLocationUseCase:
         snapped_lon = getattr(res, "snapped_lon", cmd.longitude)
         source = getattr(res, "source", "raw")
         geofence_events = list(getattr(res, "geofence_events", []) or [])
-        accept_status = str(getattr(res, "accept_status", "accepted_observability_only"))
+        accept_status = str(
+            getattr(res, "accept_status", "accepted_observability_only")
+        )
         accept_reason = str(getattr(res, "accept_reason", ""))
         received_at = getattr(res, "received_at", None)
         received_at_str = str(received_at) if received_at is not None else None

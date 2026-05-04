@@ -137,7 +137,9 @@ class TrackingIngestProducer:
 
         payload_region_id_obj = payload.get("region_id")
         payload_company_id_obj = payload.get("company_id")
-        region_id = payload_region_id_obj if isinstance(payload_region_id_obj, str) else None
+        region_id = (
+            payload_region_id_obj if isinstance(payload_region_id_obj, str) else None
+        )
         partition_company_id = (
             int(company_id)
             if company_id is not None
@@ -154,7 +156,9 @@ class TrackingIngestProducer:
         )
 
         try:
-            future = self._producer.send(TOPIC_DRIVER_LOCATION_RAW, value=message, key=key)
+            future = self._producer.send(
+                TOPIC_DRIVER_LOCATION_RAW, value=message, key=key
+            )
             future.get(timeout=KAFKA_PRODUCE_TIMEOUT_S)
             try:
                 from services.monitoring.driver_location_metrics import (
@@ -163,8 +167,14 @@ class TrackingIngestProducer:
 
                 inc_tracking_kafka_messages_produced(topic=TOPIC_DRIVER_LOCATION_RAW)
             except Exception:
-                logger.debug("[tracking_ingest] produced metric unavailable", exc_info=True)
-            return {"queued": True, "trace_id": trace_id, "topic": TOPIC_DRIVER_LOCATION_RAW}
+                logger.debug(
+                    "[tracking_ingest] produced metric unavailable", exc_info=True
+                )
+            return {
+                "queued": True,
+                "trace_id": trace_id,
+                "topic": TOPIC_DRIVER_LOCATION_RAW,
+            }
         except Exception as exc:
             # Absorbe toutes les erreurs Kafka (NoBrokersAvailable, KafkaTimeoutError,
             # NotLeaderForPartitionError, etc.) et signale à l'appelant de basculer
@@ -181,9 +191,13 @@ class TrackingIngestProducer:
                     inc_tracking_kafka_publish_errors,
                 )
 
-                inc_tracking_kafka_publish_errors(topic=TOPIC_DRIVER_LOCATION_RAW, stage="raw_enqueue_failed")
+                inc_tracking_kafka_publish_errors(
+                    topic=TOPIC_DRIVER_LOCATION_RAW, stage="raw_enqueue_failed"
+                )
             except Exception:
-                logger.debug("[tracking_ingest] publish error metric unavailable", exc_info=True)
+                logger.debug(
+                    "[tracking_ingest] publish error metric unavailable", exc_info=True
+                )
             # Tenter de réinitialiser le producer pour le prochain appel.
             # Si le broker est toujours down, _init_producer échouera silencieusement.
             try:
@@ -211,4 +225,3 @@ def enqueue_tracking_event(
         source=source,
         company_id=company_id,
     )
-

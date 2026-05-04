@@ -160,8 +160,12 @@ class KafkaProducer:
             # Utiliser driver_id comme clé pour garantir l'ordre par driver
             data_region_id_obj = (data or {}).get("region_id")
             data_company_id_obj = (data or {}).get("company_id")
-            region_id = data_region_id_obj if isinstance(data_region_id_obj, str) else None
-            company_id = data_company_id_obj if isinstance(data_company_id_obj, int) else None
+            region_id = (
+                data_region_id_obj if isinstance(data_region_id_obj, str) else None
+            )
+            company_id = (
+                data_company_id_obj if isinstance(data_company_id_obj, int) else None
+            )
             key = kafka_partition_key(
                 region_id=region_id,
                 company_id=company_id,

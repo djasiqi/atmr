@@ -38,7 +38,14 @@ from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
 from infrastructure.invoices.invoice_number_generator import InvoiceNumberGenerator
-from models import BillingParty, Booking, Invoice, InvoiceLine, InvoiceLineType, InvoiceStatus
+from models import (
+    BillingParty,
+    Booking,
+    Invoice,
+    InvoiceLine,
+    InvoiceLineType,
+    InvoiceStatus,
+)
 from models.enums import InvoiceBillingStrategy
 from repositories.booking_repository import BookingRepository
 from repositories.client_repository import ClientRepository
@@ -165,9 +172,7 @@ class GenerateInvoiceUseCase:
         self.description_builder = description_builder or InvoiceDescriptionBuilder()
         self.pdf_service = pdf_service or PDFService()
 
-    def execute(  # noqa: PLR0911
-        self, input_data: GenerateInvoiceInput
-    ) -> GenerateInvoiceOutput:
+    def execute(self, input_data: GenerateInvoiceInput) -> GenerateInvoiceOutput:
         """Génère une nouvelle facture pour un client et une période.
 
         Args:
@@ -295,12 +300,13 @@ class GenerateInvoiceUseCase:
                         booking = bookings_by_id.get(dto.id)
                         if not booking or not (getattr(dto, "amount", 0) or 0) > 0:
                             continue
-                        is_billable = (
-                            getattr(booking, "is_cancellation_billable", False) is True
-                            or (
-                                getattr(booking, "billing_override_reason", None)
-                                and str(getattr(booking, "billing_override_reason", "") or "").strip()
-                            )
+                        is_billable = getattr(
+                            booking, "is_cancellation_billable", False
+                        ) is True or (
+                            getattr(booking, "billing_override_reason", None)
+                            and str(
+                                getattr(booking, "billing_override_reason", "") or ""
+                            ).strip()
                         )
                         if not is_billable:
                             continue
@@ -799,6 +805,7 @@ class GenerateInvoiceUseCase:
                 if (getattr(r, "mission_type", None) or "patient_transport")
                 != "material_delivery"
             ]
+
             def rt_amount_ht(booking: Booking) -> Decimal:
                 return drafts[int(booking.id)].base_amount
 
@@ -813,9 +820,7 @@ class GenerateInvoiceUseCase:
             round_trip_primary_by_booking_id: dict[int, int] = {}
             for comp in round_trip_group_sets:
                 in_round_trip_merge |= comp
-                segs_b = [
-                    bookings_by_id[i] for i in comp if i in bookings_by_id
-                ]
+                segs_b = [bookings_by_id[i] for i in comp if i in bookings_by_id]
                 if len(segs_b) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
                     continue
                 pri_b = min(
@@ -854,7 +859,9 @@ class GenerateInvoiceUseCase:
                     "qty": Decimal("1"),
                     "unit_price": d.base_amount,
                     "line_total": d.base_amount,
-                    "vat_rate": d.line_vat_rate if d.line_vat_rate > Decimal("0") else None,
+                    "vat_rate": d.line_vat_rate
+                    if d.line_vat_rate > Decimal("0")
+                    else None,
                     "vat_amount": vat_amount,
                     "total_with_vat": total_with_vat,
                     "adjustment_note": d.line_adjustment_note,
@@ -876,8 +883,7 @@ class GenerateInvoiceUseCase:
                 ordered = sorted(
                     segments,
                     key=lambda b: (
-                        b.scheduled_time
-                        or datetime.min.replace(tzinfo=UTC),
+                        b.scheduled_time or datetime.min.replace(tzinfo=UTC),
                         int(b.id),
                     ),
                 )
@@ -959,11 +965,7 @@ class GenerateInvoiceUseCase:
                         continue
                     grp_bookings = [
                         bookings_by_id[i]
-                        for i in next(
-                            gs
-                            for gs in round_trip_group_sets
-                            if rid in gs
-                        )
+                        for i in next(gs for gs in round_trip_group_sets if rid in gs)
                         if i in bookings_by_id
                     ]
                     if len(grp_bookings) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
@@ -1039,9 +1041,7 @@ class GenerateInvoiceUseCase:
                     n_lines = len(ride_line_entries)
                     for idx, (lm, base_amt, rate_line) in enumerate(ride_line_entries):
                         if idx < n_lines - 1:
-                            net_i = round_to_5_cents(
-                                base_amt * net_ht / gross_subtotal
-                            )
+                            net_i = round_to_5_cents(base_amt * net_ht / gross_subtotal)
                         else:
                             net_i = round_to_5_cents(net_ht - running_net)
                         running_net += net_i

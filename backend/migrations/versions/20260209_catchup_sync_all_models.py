@@ -11,6 +11,7 @@ etre safe en local (tables billing manquantes) ET en production
 
 NE SUPPRIME AUCUNE COLONNE/TABLE pour eviter toute perte de donnees.
 """
+
 from alembic import op
 
 
@@ -287,7 +288,6 @@ ADD_COLUMNS = [
     "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS billing_party_id INTEGER REFERENCES billing_parties(id) ON DELETE SET NULL",
     "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS billing_strategy VARCHAR(50) NOT NULL DEFAULT 's1_patient'",
     "ALTER TABLE invoices ADD COLUMN IF NOT EXISTS billed_to_company_id INTEGER REFERENCES company(id) ON DELETE SET NULL",
-
     # -- company_billing_settings : SMTP + email signature
     "ALTER TABLE company_billing_settings ADD COLUMN IF NOT EXISTS material_delivery_price_fixed NUMERIC(10,2)",
     "ALTER TABLE company_billing_settings ADD COLUMN IF NOT EXISTS smtp_server VARCHAR(200)",
@@ -313,7 +313,6 @@ ADD_COLUMNS = [
     "ALTER TABLE company_billing_settings ADD COLUMN IF NOT EXISTS signature_zip VARCHAR(10)",
     "ALTER TABLE company_billing_settings ADD COLUMN IF NOT EXISTS signature_city VARCHAR(100)",
     "ALTER TABLE company_billing_settings ADD COLUMN IF NOT EXISTS email_signature_html_template TEXT",
-
     # -- invoice_reminders : rappels enrichis
     "ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS principal_amount NUMERIC(10,2) NOT NULL DEFAULT 0",
     "ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS reminder_fee_amount NUMERIC(10,2) NOT NULL DEFAULT 0",
@@ -321,16 +320,13 @@ ADD_COLUMNS = [
     "ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS qr_reference VARCHAR(50)",
     "ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'OPEN'",
     "ALTER TABLE invoice_reminders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ",
-
     # -- invoice_payments : lien rappel
     "ALTER TABLE invoice_payments ADD COLUMN IF NOT EXISTS reminder_id INTEGER REFERENCES invoice_reminders(id) ON DELETE SET NULL",
-
     # -- request_offers : enrichissement
     "ALTER TABLE request_offers ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'broadcast'",
     'ALTER TABLE request_offers ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NULL DEFAULT 0',
     "ALTER TABLE request_offers ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
     "ALTER TABLE request_offers ADD COLUMN IF NOT EXISTS rejection_reason TEXT",
-
     # -- transport_requests : champs detailles
     "ALTER TABLE transport_requests ADD COLUMN IF NOT EXISTS mission_type VARCHAR(50) NOT NULL DEFAULT 'patient_transport'",
     "ALTER TABLE transport_requests ADD COLUMN IF NOT EXISTS delivery_description TEXT",
@@ -347,12 +343,10 @@ ADD_COLUMNS = [
     "ALTER TABLE transport_requests ADD COLUMN IF NOT EXISTS contact_on_site JSONB",
     "ALTER TABLE transport_requests ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ",
     "ALTER TABLE transport_requests ADD COLUMN IF NOT EXISTS booking_id INTEGER REFERENCES booking(id) ON DELETE SET NULL",
-
     # -- institution_patients : champs additionnels
     "ALTER TABLE institution_patients ADD COLUMN IF NOT EXISTS dob DATE",
     "ALTER TABLE institution_patients ADD COLUMN IF NOT EXISTS gender VARCHAR(20)",
     "ALTER TABLE institution_patients ADD COLUMN IF NOT EXISTS notes TEXT",
-
     # -- institution_transport_preferences : order + updated_at
     'ALTER TABLE institution_transport_preferences ADD COLUMN IF NOT EXISTS "order" INTEGER NOT NULL DEFAULT 1',
     "ALTER TABLE institution_transport_preferences ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ",

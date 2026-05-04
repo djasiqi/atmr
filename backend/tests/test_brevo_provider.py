@@ -26,9 +26,11 @@ class TestBrevoEmailProvider:
 
     def test_init_without_api_key_raises_error(self):
         """Test initialisation sans clé API lève une erreur."""
-        with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError, match="Brevo API key manquante"):
-                BrevoEmailProvider()
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            pytest.raises(ValueError, match="Brevo API key manquante"),
+        ):
+            BrevoEmailProvider()
 
     def test_init_with_env_var(self):
         """Test initialisation avec variable d'environnement."""

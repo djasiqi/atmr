@@ -7,12 +7,12 @@ try:
 except ImportError:  # pragma: no cover
     Counter = None  # type: ignore[misc, assignment]
 
-_EMITTED: "Counter | None" = None
-_SKIPPED: "Counter | None" = None
-_LOC_FOR_RATIO: "Counter | None" = None
+_EMITTED: Counter | None = None
+_SKIPPED: Counter | None = None
+_LOC_FOR_RATIO: Counter | None = None
 
 
-def _emitted() -> "Counter | None":
+def _emitted() -> Counter | None:
     global _EMITTED
     if Counter is None:
         return None
@@ -24,7 +24,7 @@ def _emitted() -> "Counter | None":
     return _EMITTED
 
 
-def _skipped() -> "Counter | None":
+def _skipped() -> Counter | None:
     global _SKIPPED
     if Counter is None:
         return None
@@ -37,7 +37,7 @@ def _skipped() -> "Counter | None":
     return _SKIPPED
 
 
-def _loc_ratio() -> "Counter | None":
+def _loc_ratio() -> Counter | None:
     global _LOC_FOR_RATIO
     if Counter is None:
         return None

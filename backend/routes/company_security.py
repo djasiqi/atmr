@@ -86,7 +86,9 @@ audit_log_item = security_ns.model(
     {
         "id": fields.Integer,
         "created_at": fields.DateTime,
-        "action_type": fields.String(description="Type brut, traduit cote frontend (G3)"),
+        "action_type": fields.String(
+            description="Type brut, traduit cote frontend (G3)"
+        ),
         "action_category": fields.String,
         "result_status": fields.String,
         "resource_type": fields.String,
@@ -138,6 +140,7 @@ def _serialize_audit_log(log) -> dict[str, object]:
 
 
 # ==================== Audit Logs ====================
+
 
 @security_ns.route("/audit-logs")
 class AuditLogList(Resource):
@@ -204,8 +207,14 @@ class AuditLogList(Resource):
 
 _BOM_UTF8 = "\ufeff"
 _CSV_HEADERS = [
-    "Date", "Heure", "Utilisateur", "Action", "Catégorie",
-    "Résultat", "Adresse IP", "Appareil",
+    "Date",
+    "Heure",
+    "Utilisateur",
+    "Action",
+    "Catégorie",
+    "Résultat",
+    "Adresse IP",
+    "Appareil",
 ]
 _CSV_HEADER_LINE = ";".join(_CSV_HEADERS) + "\n"
 
@@ -275,8 +284,14 @@ def _build_export_query(company, category, date_from, date_to, limit):
 
 
 _XL_HEADERS = [
-    "Date", "Heure", "Utilisateur", "Action", "Catégorie",
-    "Résultat", "Adresse IP", "Appareil",
+    "Date",
+    "Heure",
+    "Utilisateur",
+    "Action",
+    "Catégorie",
+    "Résultat",
+    "Adresse IP",
+    "Appareil",
 ]
 _XL_COL_WIDTHS = [14, 10, 24, 40, 16, 12, 20, 26]
 
@@ -307,7 +322,9 @@ def _generate_excel(query, company_name: str, now: datetime, total_count: int) -
     subtitle_font = Font(name="Calibri", size=10, color=_COLOR_SLATE)
     summary_font = Font(name="Calibri", bold=True, size=10, color=_COLOR_DARK_SLATE)
     header_font = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
-    header_fill = PatternFill(start_color=_COLOR_TEAL, end_color=_COLOR_TEAL, fill_type="solid")
+    header_fill = PatternFill(
+        start_color=_COLOR_TEAL, end_color=_COLOR_TEAL, fill_type="solid"
+    )
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     cell_align = Alignment(vertical="center")
     data_font = Font(name="Calibri", size=10.5)
@@ -316,7 +333,9 @@ def _generate_excel(query, company_name: str, now: datetime, total_count: int) -
     result_font_success = Font(name="Calibri", bold=True, size=10.5, color=_COLOR_GREEN)
     result_font_failure = Font(name="Calibri", bold=True, size=10.5, color=_COLOR_RED)
     result_font_other = Font(name="Calibri", bold=True, size=10.5, color=_COLOR_BLUE)
-    even_fill = PatternFill(start_color=_COLOR_ROW_ALT, end_color=_COLOR_ROW_ALT, fill_type="solid")
+    even_fill = PatternFill(
+        start_color=_COLOR_ROW_ALT, end_color=_COLOR_ROW_ALT, fill_type="solid"
+    )
 
     ws.merge_cells(f"A1:{last_col_letter}1")
     c = ws["A1"]
@@ -339,7 +358,8 @@ def _generate_excel(query, company_name: str, now: datetime, total_count: int) -
 
     header_row = 5
     for col_idx, (header, width) in enumerate(
-        zip(_XL_HEADERS, _XL_COL_WIDTHS, strict=True), start=1,
+        zip(_XL_HEADERS, _XL_COL_WIDTHS, strict=True),
+        start=1,
     ):
         cell = ws.cell(row=header_row, column=col_idx, value=header)
         cell.font = header_font
@@ -356,7 +376,9 @@ def _generate_excel(query, company_name: str, now: datetime, total_count: int) -
         actor = _resolve_actor(log)
         dt = log.created_at
         action_label = ACTION_LABELS_FR.get(log.action_type, log.action_type)
-        cat_label = CATEGORY_LABELS_FR.get(log.action_category, log.action_category or "")
+        cat_label = CATEGORY_LABELS_FR.get(
+            log.action_category, log.action_category or ""
+        )
         result_label = RESULT_LABELS_FR.get(log.result_status, log.result_status or "")
 
         values = [
@@ -434,13 +456,18 @@ class AuditLogExport(Resource):
         raw_limit = min(int(request.args.get("limit", 10000)), 50000)
 
         query, now, is_institution = _build_export_query(
-            company, category, date_from, date_to, raw_limit,
+            company,
+            category,
+            date_from,
+            date_to,
+            raw_limit,
         )
 
         if not is_institution and fmt == "json":
             fmt = "xlsx"
 
         from shared.audit_helpers import audit_log
+
         audit_log(
             "audit_log_exported",
             "security",
@@ -457,6 +484,7 @@ class AuditLogExport(Resource):
 
         if fmt == "xlsx":
             from security.audit_log import AuditLog as AL2
+
             total_count = AL2.query.filter(AL2.company_id == company.id).count()
             xlsx_bytes = _generate_excel(query, company_name, now, total_count)
             sha256 = hashlib.sha256(xlsx_bytes).hexdigest()
@@ -470,6 +498,7 @@ class AuditLogExport(Resource):
             )
 
         if fmt == "csv":
+
             def generate_csv():
                 yield _BOM_UTF8 + _CSV_HEADER_LINE
                 for batch in query.yield_per(500):
@@ -529,8 +558,12 @@ _DEFAULT_POLICY = {
 security_policy_model = security_ns.model(
     "SecurityPolicy",
     {
-        "require_2fa_roles": fields.List(fields.String, description="Roles devant activer 2FA"),
-        "password_expiry_days": fields.Integer(description="Jours avant expiration MDP (null=jamais)"),
+        "require_2fa_roles": fields.List(
+            fields.String, description="Roles devant activer 2FA"
+        ),
+        "password_expiry_days": fields.Integer(
+            description="Jours avant expiration MDP (null=jamais)"
+        ),
         "max_session_days": fields.Integer(description="Duree max session en jours"),
         "enforcement_mode": fields.String(description="warn ou enforce"),
     },
@@ -576,7 +609,12 @@ class SecurityPolicy(Resource):
                 saved = json_mod.loads(company.security_policy)
                 policy.update(saved)
 
-        allowed_keys = {"require_2fa_roles", "password_expiry_days", "max_session_days", "enforcement_mode"}
+        allowed_keys = {
+            "require_2fa_roles",
+            "password_expiry_days",
+            "max_session_days",
+            "enforcement_mode",
+        }
         for key in allowed_keys:
             if key in data:
                 policy[key] = data[key]
@@ -590,7 +628,13 @@ class SecurityPolicy(Resource):
         db.session.commit()
 
         from shared.audit_helpers import audit_log
-        audit_log("security_policy_updated", "security", resource_type="security_policy", resource_id=company.id)
+
+        audit_log(
+            "security_policy_updated",
+            "security",
+            resource_type="security_policy",
+            resource_id=company.id,
+        )
 
         return {"policy": policy, "message": "Politique de sécurité mise à jour."}, 200
 
@@ -646,15 +690,19 @@ class SecurityAlerts(Resource):
         alerts = []
         if len(failed_logins) >= _FAILED_LOGIN_ALERT_THRESHOLD:
             for log in failed_logins[:10]:
-                alerts.append({
-                    "id": log.id,
-                    "alert_type": "failed_login",
-                    "message": "Tentative de connexion échouée",
-                    "ip_masked": mask_ip(log.ip_address),
-                    "device": parse_device(log.user_agent),
-                    "count": 1,
-                    "created_at": log.created_at.isoformat() if log.created_at else None,
-                })
+                alerts.append(
+                    {
+                        "id": log.id,
+                        "alert_type": "failed_login",
+                        "message": "Tentative de connexion échouée",
+                        "ip_masked": mask_ip(log.ip_address),
+                        "device": parse_device(log.user_agent),
+                        "count": 1,
+                        "created_at": log.created_at.isoformat()
+                        if log.created_at
+                        else None,
+                    }
+                )
 
         return {
             "alerts": alerts,
@@ -679,11 +727,14 @@ class SecurityAlertPreferences(Resource):
             with suppress(ValueError, TypeError):
                 policy = json_mod.loads(company.security_policy)
 
-        prefs = policy.get("alert_preferences", {
-            "failed_logins_burst": True,
-            "new_device_login": True,
-            "new_country_login": False,
-        })
+        prefs = policy.get(
+            "alert_preferences",
+            {
+                "failed_logins_burst": True,
+                "new_device_login": True,
+                "new_country_login": False,
+            },
+        )
         return {"preferences": prefs}, 200
 
     @jwt_required()

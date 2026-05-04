@@ -158,7 +158,7 @@ def _read_file_bytes(file: Any, size: int) -> tuple[bytes | None, str | None]:
         return None, f"Erreur lors de la lecture du contenu: {e!s}"
 
 
-def validate_file_upload(  # noqa: PLR0911
+def validate_file_upload(
     file: Any,
     filename: str | None,
     allowed_extensions: set[str],

@@ -136,5 +136,5 @@ def get_event_counters() -> dict[str, int]:
 
 def reset_counters() -> None:
     """Réinitialise les compteurs (pour tests uniquement)."""
-    global _event_counters  # noqa: PLW0603
+    global _event_counters
     _event_counters = {}

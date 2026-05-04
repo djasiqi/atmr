@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 def resolve_effective_tenant_state(
     *,
     desired_state: dict[str, Any],

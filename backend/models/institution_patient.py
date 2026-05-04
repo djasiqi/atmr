@@ -83,9 +83,7 @@ class InstitutionPatient(db.Model):
     )
 
     # Référence externe DPI (unique par institution si présente)
-    external_reference: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )
+    external_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Informations patient
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -110,7 +108,9 @@ class InstitutionPatient(db.Model):
         Text, nullable=True, comment="Notes d'accès (ascenseur, rampe, concierge...)"
     )
     residence_name: Mapped[str | None] = mapped_column(
-        String(200), nullable=True, comment="Établissement de résidence (EMS, foyer, etc.)"
+        String(200),
+        nullable=True,
+        comment="Établissement de résidence (EMS, foyer, etc.)",
     )
 
     # Informations administratives (facturation, identification, curatelle)
@@ -124,18 +124,23 @@ class InstitutionPatient(db.Model):
         String(50), nullable=True, comment="Numéro d'assuré"
     )
     has_guardianship: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false",
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
         comment="Patient sous curatelle",
     )
     guardianship_type: Mapped[str | None] = mapped_column(
-        String(30), nullable=True,
+        String(30),
+        nullable=True,
         comment="Type de curatelle: curatorship, opad, lawyer, family, other",
     )
     guardian_name: Mapped[str | None] = mapped_column(
         String(200), nullable=True, comment="Nom du curateur / représentant légal"
     )
     guardian_organization: Mapped[str | None] = mapped_column(
-        String(200), nullable=True,
+        String(200),
+        nullable=True,
         comment="Organisation du curateur (OPAD Genève, Étude Me. Dupont, etc.)",
     )
     guardian_phone: Mapped[str | None] = mapped_column(
@@ -145,7 +150,8 @@ class InstitutionPatient(db.Model):
         String(200), nullable=True, comment="Email du curateur"
     )
     guardian_address: Mapped[str | None] = mapped_column(
-        String(500), nullable=True,
+        String(500),
+        nullable=True,
         comment="Adresse complète du curateur (utilisée pour facturation)",
     )
 
@@ -163,7 +169,8 @@ class InstitutionPatient(db.Model):
 
     # Traçabilité sync curatelle : quels champs proviennent d'une synchronisation
     data_source_flags: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment='Ex: {"address": "sync_curatelle", "phone": "local"}',
     )
 
@@ -190,7 +197,9 @@ class InstitutionPatient(db.Model):
             return None
         valid_genders = [g.value for g in GenderEnum] + [g.name for g in GenderEnum]
         if value.upper() not in [v.upper() for v in valid_genders]:
-            raise ValueError(f"Gender must be one of: {', '.join(GenderEnum._member_names_)}")
+            raise ValueError(
+                f"Gender must be one of: {', '.join(GenderEnum._member_names_)}"
+            )
         return value.upper()
 
     @property

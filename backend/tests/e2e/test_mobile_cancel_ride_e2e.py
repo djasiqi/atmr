@@ -23,9 +23,10 @@ from tests.e2e.helpers.e2e_helpers import (
 def _company_headers(app, company):
     from flask_jwt_extended import create_access_token
 
-    user = getattr(company, "user", None) or User.query.filter_by(
-        id=company.user_id
-    ).first()
+    user = (
+        getattr(company, "user", None)
+        or User.query.filter_by(id=company.user_id).first()
+    )
     claims = {
         "role": UserRole.company.value,
         "company_id": company.id,
@@ -40,7 +41,13 @@ def _company_headers(app, company):
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
-def _post_cancel(http_client, headers, ride_id: int, reason_code: str | None = None, reason_text: str | None = None):
+def _post_cancel(
+    http_client,
+    headers,
+    ride_id: int,
+    reason_code: str | None = None,
+    reason_text: str | None = None,
+):
     payload = {}
     if reason_code is not None:
         payload["reason_code"] = reason_code
@@ -64,9 +71,7 @@ def _requires_postgres(db):
 class TestMobileCancelRideE2E:
     """POST /company_mobile/dispatch/v1/rides/:id/cancel — annulation standardisée."""
 
-    def test_operator_cancelled_non_billable_and_label(
-        self, app, db, client
-    ):
+    def test_operator_cancelled_non_billable_and_label(self, app, db, client):
         """OPERATOR_CANCELLED → non facturé + label Problème entreprise."""
         _requires_postgres(db)
         company = create_test_company(db)
@@ -94,9 +99,7 @@ class TestMobileCancelRideE2E:
         assert booking.is_cancellation_billable is False
         assert booking.cancellation_display_label == "Problème entreprise"
 
-    def test_last_minute_billable_and_label(
-        self, app, db, client
-    ):
+    def test_last_minute_billable_and_label(self, app, db, client):
         """LAST_MINUTE → billable True + label Annulation dernière minute."""
         _requires_postgres(db)
         company = create_test_company(db)
@@ -124,9 +127,7 @@ class TestMobileCancelRideE2E:
         assert booking.is_cancellation_billable is True
         assert booking.cancellation_display_label == "Annulation dernière minute"
 
-    def test_no_reason_code_legacy_historique(
-        self, app, db, client
-    ):
+    def test_no_reason_code_legacy_historique(self, app, db, client):
         """Sans reason_code → Annulation (historique), non facturé."""
         _requires_postgres(db)
         company = create_test_company(db)

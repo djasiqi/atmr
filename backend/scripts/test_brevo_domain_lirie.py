@@ -109,7 +109,7 @@ try:
             # SPF/Brevo Code
             brevo_code = dns_records.get("brevo_code", {})
             if brevo_code:
-                print(f"      🔹 Brevo Code (TXT):")
+                print("      🔹 Brevo Code (TXT):")
                 print(f"         Hôte: {brevo_code.get('host_name', '@')}")
                 print(f"         Valeur: {brevo_code.get('value', 'N/A')}")
                 print(f"         ✅ Valide: {brevo_code.get('is_valid', False)}")
@@ -117,7 +117,7 @@ try:
             # DKIM 1
             dkim1 = dns_records.get("dkim1Record", {})
             if dkim1:
-                print(f"      🔹 DKIM 1 (CNAME):")
+                print("      🔹 DKIM 1 (CNAME):")
                 print(f"         Hôte: {dkim1.get('host_name', 'N/A')}")
                 print(f"         Valeur: {dkim1.get('value', 'N/A')}")
                 print(f"         ✅ Valide: {dkim1.get('is_valid', False)}")
@@ -125,7 +125,7 @@ try:
             # DKIM 2
             dkim2 = dns_records.get("dkim2Record", {})
             if dkim2:
-                print(f"      🔹 DKIM 2 (CNAME):")
+                print("      🔹 DKIM 2 (CNAME):")
                 print(f"         Hôte: {dkim2.get('host_name', 'N/A')}")
                 print(f"         Valeur: {dkim2.get('value', 'N/A')}")
                 print(f"         ✅ Valide: {dkim2.get('is_valid', False)}")

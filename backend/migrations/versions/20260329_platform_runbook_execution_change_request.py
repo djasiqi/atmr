@@ -41,9 +41,17 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("triggered_by_user_id", sa.Integer(), nullable=True),
-        sa.Column("preview_snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("result_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("metadata_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "preview_snapshot_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "result_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "metadata_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("rollback_of_execution_id", sa.String(length=36), nullable=True),
         sa.ForeignKeyConstraint(
             ["rollback_of_execution_id"],
@@ -119,9 +127,17 @@ def upgrade() -> None:
         sa.Column("effective_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("justification", sa.Text(), server_default="", nullable=False),
         sa.Column("incident_id", sa.String(length=128), nullable=True),
-        sa.Column("target_snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("result_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("metadata_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "target_snapshot_json",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "result_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "metadata_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.ForeignKeyConstraint(
             ["requested_by_user_id"],
             ["user.id"],
@@ -169,16 +185,33 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_platform_change_request_tenant_id"), table_name="platform_change_request")
-    op.drop_index(op.f("ix_platform_change_request_status"), table_name="platform_change_request")
+    op.drop_index(
+        op.f("ix_platform_change_request_tenant_id"),
+        table_name="platform_change_request",
+    )
+    op.drop_index(
+        op.f("ix_platform_change_request_status"), table_name="platform_change_request"
+    )
     op.drop_index("ix_pchreq_tenant_created", table_name="platform_change_request")
     op.drop_index("ix_pchreq_correlation", table_name="platform_change_request")
     op.drop_index("ix_pchreq_change_type", table_name="platform_change_request")
     op.drop_table("platform_change_request")
 
-    op.drop_index(op.f("ix_platform_runbook_execution_tenant_id"), table_name="platform_runbook_execution")
-    op.drop_index(op.f("ix_platform_runbook_execution_status"), table_name="platform_runbook_execution")
-    op.drop_index("ix_prunbook_exec_tenant_created", table_name="platform_runbook_execution")
-    op.drop_index("ix_prunbook_exec_runbook_status", table_name="platform_runbook_execution")
-    op.drop_index("ix_prunbook_exec_correlation", table_name="platform_runbook_execution")
+    op.drop_index(
+        op.f("ix_platform_runbook_execution_tenant_id"),
+        table_name="platform_runbook_execution",
+    )
+    op.drop_index(
+        op.f("ix_platform_runbook_execution_status"),
+        table_name="platform_runbook_execution",
+    )
+    op.drop_index(
+        "ix_prunbook_exec_tenant_created", table_name="platform_runbook_execution"
+    )
+    op.drop_index(
+        "ix_prunbook_exec_runbook_status", table_name="platform_runbook_execution"
+    )
+    op.drop_index(
+        "ix_prunbook_exec_correlation", table_name="platform_runbook_execution"
+    )
     op.drop_table("platform_runbook_execution")

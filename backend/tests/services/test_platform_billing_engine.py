@@ -15,9 +15,11 @@ from services.platform_billing.money import money_round_chf
 def test_recalculate_raises_when_period_locked():
     period = MagicMock()
     period.status = PlatformBillingPeriodStatus.LOCKED.value
-    with patch("services.platform_billing.engine.db.session.get", return_value=period):
-        with pytest.raises(ValueError, match="verrouill"):
-            recalculate_platform_period_drafts(42)
+    with (
+        patch("services.platform_billing.engine.db.session.get", return_value=period),
+        pytest.raises(ValueError, match="verrouill"),
+    ):
+        recalculate_platform_period_drafts(42)
 
 
 def test_commission_total_is_sum_of_per_booking_rounded_amounts():

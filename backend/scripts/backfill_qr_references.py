@@ -30,7 +30,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def backfill_qr_references(dry_run: bool = False, limit: int | None = None) -> dict[str, Any]:
+def backfill_qr_references(
+    dry_run: bool = False, limit: int | None = None
+) -> dict[str, Any]:
     """Remplit les références QR manquantes pour les factures existantes.
 
     Args:
@@ -49,9 +51,7 @@ def backfill_qr_references(dry_run: bool = False, limit: int | None = None) -> d
 
     try:
         # Récupérer les factures sans qr_reference
-        query = db.session.query(Invoice).filter(
-            Invoice.qr_reference.is_(None)
-        )
+        query = db.session.query(Invoice).filter(Invoice.qr_reference.is_(None))
 
         if limit:
             query = query.limit(limit)

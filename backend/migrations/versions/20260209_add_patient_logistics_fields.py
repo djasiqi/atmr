@@ -65,24 +65,48 @@ def upgrade():
     """)
 
     # ── Commentaires documentation ──
-    op.execute("COMMENT ON COLUMN institution_patients.door_code IS 'Code porte / digicode';")
-    op.execute("COMMENT ON COLUMN institution_patients.floor IS 'Étage (ex: 3, RDC, 2B)';")
-    op.execute("COMMENT ON COLUMN institution_patients.access_notes IS 'Notes accès chauffeur';")
-    op.execute("COMMENT ON COLUMN institution_patients.residence_name IS 'Établissement de résidence';")
-    op.execute("COMMENT ON COLUMN institution_patients.avs_number IS 'Numéro AVS (756.XXXX.XXXX.XX)';")
-    op.execute("COMMENT ON COLUMN institution_patients.insurance_name IS 'Nom caisse maladie';")
-    op.execute("COMMENT ON COLUMN institution_patients.insurance_number IS 'Numéro assuré';")
-    op.execute("COMMENT ON COLUMN institution_patients.has_guardianship IS 'Patient sous curatelle';")
-    op.execute("COMMENT ON COLUMN institution_patients.guardian_name IS 'Nom du curateur';")
-    op.execute("COMMENT ON COLUMN institution_patients.guardian_phone IS 'Téléphone du curateur';")
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.door_code IS 'Code porte / digicode';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.floor IS 'Étage (ex: 3, RDC, 2B)';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.access_notes IS 'Notes accès chauffeur';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.residence_name IS 'Établissement de résidence';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.avs_number IS 'Numéro AVS (756.XXXX.XXXX.XX)';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.insurance_name IS 'Nom caisse maladie';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.insurance_number IS 'Numéro assuré';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.has_guardianship IS 'Patient sous curatelle';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.guardian_name IS 'Nom du curateur';"
+    )
+    op.execute(
+        "COMMENT ON COLUMN institution_patients.guardian_phone IS 'Téléphone du curateur';"
+    )
 
 
 def downgrade():
     """Retirer les colonnes ajoutées (réversible)."""
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_phone;")
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS guardian_name;")
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS has_guardianship;")
-    op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS insurance_number;")
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS has_guardianship;"
+    )
+    op.execute(
+        "ALTER TABLE institution_patients DROP COLUMN IF EXISTS insurance_number;"
+    )
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS insurance_name;")
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS avs_number;")
     op.execute("ALTER TABLE institution_patients DROP COLUMN IF EXISTS residence_name;")

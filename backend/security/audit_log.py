@@ -33,7 +33,12 @@ class AuditLog(db.Model):  # type: ignore[name-defined]
         Index("ix_audit_logs_booking_id", "booking_id"),
         Index("ix_audit_logs_driver_id", "driver_id"),
         Index("ix_audit_logs_institution_id", "institution_id"),
-        Index("ix_audit_logs_company_category_created", "company_id", "action_category", "created_at"),
+        Index(
+            "ix_audit_logs_company_category_created",
+            "company_id",
+            "action_category",
+            "created_at",
+        ),
     )
 
     # Identifiant unique (auto-incrémental)

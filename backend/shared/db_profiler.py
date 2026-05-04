@@ -247,7 +247,7 @@ _db_profiler: DBProfiler | None = None
 
 def get_db_profiler() -> DBProfiler:
     """Récupère l'instance singleton du profiler DB."""
-    global _db_profiler  # noqa: PLW0603
+    global _db_profiler
 
     if _db_profiler is None:
         _db_profiler = DBProfiler(enabled=is_profiling_enabled())
@@ -257,7 +257,7 @@ def get_db_profiler() -> DBProfiler:
 
 def reset_db_profiler() -> None:
     """Reset le profiler (pour tests)."""
-    global _db_profiler  # noqa: PLW0603
+    global _db_profiler
     _db_profiler = None
 
 

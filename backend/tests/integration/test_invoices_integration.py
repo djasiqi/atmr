@@ -389,7 +389,9 @@ class TestInvoicesIntegration:
         test_completed_booking.billed_to_company_id = None
         test_completed_booking.billing_party_id = None
         test_completed_booking.scheduled_time = datetime(year, month, 15, tzinfo=UTC)
-        test_completed_booking.completed_at = datetime(year, month, 15, 12, 0, tzinfo=UTC)
+        test_completed_booking.completed_at = datetime(
+            year, month, 15, 12, 0, tzinfo=UTC
+        )
         test_completed_booking.invoice_line_id = None
 
         invoice_line = InvoiceLine()
@@ -1273,7 +1275,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
     """V1 : prévisualisation période, édition lignes facture (brouillon ou émise), refus si payée / annulée."""
 
     def test_period_preview_patient(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_completed_booking]):
             pytest.skip("Required fixtures missing")
@@ -1391,7 +1398,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert len(d.get("preview_lines") or []) == 1
 
     def test_draft_remove_line_frees_booking(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_completed_booking]):
             pytest.skip("Required fixtures missing")
@@ -1439,7 +1451,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert test_completed_booking.invoice_line_id is None
 
     def test_draft_patch_line_recomputes(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_completed_booking]):
             pytest.skip("Required fixtures missing")
@@ -1464,7 +1481,9 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         invoice_id = inv_data.get("id")
         before_total = float(inv_data.get("total_amount", 0))
         inv = Invoice.query.get(invoice_id)
-        line = next(inv_line for inv_line in inv.lines if inv_line.type == InvoiceLineType.RIDE)
+        line = next(
+            inv_line for inv_line in inv.lines if inv_line.type == InvoiceLineType.RIDE
+        )
         purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{line.id}"
         pr = authenticated_client.patch(purl, json={"line_total": 50.0})
         assert_response_status(pr, 200)
@@ -1473,7 +1492,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert float(out["total_amount"]) < before_total
 
     def test_draft_get_repairs_zero_total_with_vat_on_custom_line(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         """Mutation brouillon : si une ligne a HT≠0 mais TTC=0, le repair recalcul TTC + totaux facture."""
         if not all([test_company, test_client, test_completed_booking]):
@@ -1490,16 +1514,15 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
 
         gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
         gen = authenticated_client.post(
-            gen_url, json={"client_id": test_client.id, "period_year": y, "period_month": m}
+            gen_url,
+            json={"client_id": test_client.id, "period_year": y, "period_month": m},
         )
         assert gen.status_code in (200, 201)
         inv_data = gen.get_json()
         invoice_id = inv_data.get("id")
         assert invoice_id
 
-        cust_url = (
-            f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/custom-line"
-        )
+        cust_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/custom-line"
         cr = authenticated_client.post(
             cust_url,
             json={"description": "Accompagnement QA", "line_total": 22.5},
@@ -1536,7 +1559,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert float(custom_out.get("total_with_vat") or 0) > 0
 
     def test_draft_apply_global_discount_custom_negative_line(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_completed_booking]):
             pytest.skip("Required fixtures missing")
@@ -1560,7 +1588,8 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         invoice_id = inv_data.get("id")
         disc_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/apply-global-discount"
         dr = authenticated_client.post(
-            disc_url, json={"global_discount_percent": 10.0, "global_discount_note": "Test QA"}
+            disc_url,
+            json={"global_discount_percent": 10.0, "global_discount_note": "Test QA"},
         )
         assert_response_status(dr, 200)
         inv_out = dr.get_json()["data"]["invoice"]
@@ -1573,10 +1602,17 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         ]
         assert len(remise_lines) >= 1
         if len(remise_lines) > 1:
-            assert all("remise" in (ln.get("description") or "").lower() for ln in remise_lines)
+            assert all(
+                "remise" in (ln.get("description") or "").lower() for ln in remise_lines
+            )
 
     def test_draft_remove_global_discount_restores_ride_line_ht(
-        self, authenticated_client, test_company, test_client, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_completed_booking,
+        db,
     ):
         """Après retrait remise globale %, le HT transport doit revenir au catalogue (pas rester remisé)."""
         if not all([test_company, test_client, test_completed_booking]):
@@ -1611,7 +1647,8 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
 
         disc_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/apply-global-discount"
         dr = authenticated_client.post(
-            disc_url, json={"global_discount_percent": 20.0, "global_discount_note": "QA"}
+            disc_url,
+            json={"global_discount_percent": 20.0, "global_discount_note": "QA"},
         )
         assert_response_status(dr, 200)
         db.session.expire_all()
@@ -1702,7 +1739,13 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert inv.total_amount == Decimal("53.00")
 
     def test_remove_global_discount_without_pct_meta_preserves_ride_amounts(
-        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_invoice,
+        test_completed_booking,
+        db,
     ):
         """Sans méta global_discount / per_line_discounts, « Retirer les remises » ne doit pas
         réécrire le HT transport depuis Booking (montant facturé A/R ≠ amount réservation)."""
@@ -1742,7 +1785,13 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert ride.line_total == Decimal("40.00")
 
     def test_sent_invoice_line_can_be_edited(
-        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_invoice,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_invoice, test_completed_booking]):
             pytest.skip("Required fixtures missing")
@@ -1771,7 +1820,13 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert_response_status(pr, 200)
 
     def test_draft_edit_refused_when_invoice_paid(
-        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+        self,
+        authenticated_client,
+        test_company,
+        test_client,
+        test_invoice,
+        test_completed_booking,
+        db,
     ):
         if not all([test_company, test_client, test_invoice, test_completed_booking]):
             pytest.skip("Required fixtures missing")

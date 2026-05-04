@@ -187,7 +187,9 @@ class TestE2EInstitutionFlow:
             json=patient_data,
         )
 
-        assert response.status_code == 201, f"Failed to create patient: {response.get_json()}"
+        assert response.status_code == 201, (
+            f"Failed to create patient: {response.get_json()}"
+        )
         patient_response = response.get_json()
         patient_id = patient_response.get("id")
         assert patient_id is not None, "Patient ID should be returned"
@@ -222,7 +224,9 @@ class TestE2EInstitutionFlow:
             json=request_data,
         )
 
-        assert response.status_code == 201, f"Failed to create request: {response.get_json()}"
+        assert response.status_code == 201, (
+            f"Failed to create request: {response.get_json()}"
+        )
         request_response = response.get_json()
         request_id = request_response.get("id")
         assert request_id is not None, "Request ID should be returned"
@@ -236,7 +240,9 @@ class TestE2EInstitutionFlow:
             headers=e2e_institution_headers,
         )
 
-        assert response.status_code == 200, f"Failed to send request: {response.get_json()}"
+        assert response.status_code == 200, (
+            f"Failed to send request: {response.get_json()}"
+        )
         send_response = response.get_json()
         assert send_response.get("status") == RequestStatus.SENT.value
         offers_created = send_response.get("offers_created", 0)
@@ -267,7 +273,9 @@ class TestE2EInstitutionFlow:
             headers=e2e_company_headers,
         )
 
-        assert response.status_code == 200, f"Failed to get offers: {response.get_json()}"
+        assert response.status_code == 200, (
+            f"Failed to get offers: {response.get_json()}"
+        )
         offers_response = response.get_json()
         offers = offers_response.get("offers", [])
 
@@ -290,7 +298,9 @@ class TestE2EInstitutionFlow:
             target_offer = {"id": db_offer.id}
 
         offer_id = target_offer.get("id")
-        assert offer_id is not None, f"Offer ID should be found for request {external_ref}"
+        assert offer_id is not None, (
+            f"Offer ID should be found for request {external_ref}"
+        )
 
         # =====================================================================
         # STEP 5: Company accepte l'offre
@@ -300,7 +310,9 @@ class TestE2EInstitutionFlow:
             headers=e2e_company_headers,
         )
 
-        assert response.status_code == 200, f"Failed to accept offer: {response.get_json()}"
+        assert response.status_code == 200, (
+            f"Failed to accept offer: {response.get_json()}"
+        )
         accept_response = response.get_json()
         assert accept_response.get("success") is True
         booking_id = accept_response.get("booking_id")
@@ -315,7 +327,9 @@ class TestE2EInstitutionFlow:
         transport_req = TransportRequest.query.get(request_id)
         assert transport_req is not None
         assert transport_req.status == RequestStatus.CONVERTED.value
-        assert transport_req.booking_id == booking_id, "Request should have booking_id set"
+        assert transport_req.booking_id == booking_id, (
+            "Request should have booking_id set"
+        )
 
         # 6b. Vérifier que le booking existe et appartient à la company
         booking = Booking.query.get(booking_id)
@@ -398,7 +412,9 @@ class TestE2EInstitutionFlow:
         )
 
         assert fields_in_progress["is_cancellation_billable"] is True
-        assert fields_in_progress["billing_info"]["billing_reason"] == "status_in_progress"
+        assert (
+            fields_in_progress["billing_info"]["billing_reason"] == "status_in_progress"
+        )
         assert fields_in_progress["billing_info"]["surcharge_percent"] == 100
 
         print("\n✅ Cancellation rules E2E PASSED:")
@@ -476,7 +492,10 @@ class TestE2EInstitutionFlowEdgeCases:
         data = response.get_json()
         assert "resulting_booking_id" in data
         assert data["resulting_booking_id"] == transport_req.booking_id
-        assert "convertie" in data.get("error", "").lower() or "booking" in data.get("error", "").lower()
+        assert (
+            "convertie" in data.get("error", "").lower()
+            or "booking" in data.get("error", "").lower()
+        )
 
         print("\n✅ Cancel CONVERTED request returns 409 with resulting_booking_id ✓")
 

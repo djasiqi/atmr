@@ -12,7 +12,6 @@ from models.company import Company
 from models.dispatch import DispatchRun
 from models.driver import Driver
 from models.enums import BookingStatus, DispatchStatus
-
 from services.effective_state_resolver import resolve_effective_tenant_state
 
 
@@ -31,34 +30,47 @@ def get_company_or_404(company_id: int) -> Company | None:
 
 
 def count_drivers(company_id: int) -> int:
-    return db.session.scalar(
-        select(func.count()).select_from(Driver).where(Driver.company_id == company_id)
-    ) or 0
+    return (
+        db.session.scalar(
+            select(func.count())
+            .select_from(Driver)
+            .where(Driver.company_id == company_id)
+        )
+        or 0
+    )
 
 
 def count_active_bookings(company_id: int) -> int:
-    return db.session.scalar(
-        select(func.count())
-        .select_from(Booking)
-        .where(
-            Booking.company_id == company_id,
-            Booking.status.in_(_active_booking_statuses()),
+    return (
+        db.session.scalar(
+            select(func.count())
+            .select_from(Booking)
+            .where(
+                Booking.company_id == company_id,
+                Booking.status.in_(_active_booking_statuses()),
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
 def count_running_dispatch_runs(company_id: int) -> int:
-    return db.session.scalar(
-        select(func.count())
-        .select_from(DispatchRun)
-        .where(
-            DispatchRun.company_id == company_id,
-            DispatchRun.status == DispatchStatus.RUNNING,
+    return (
+        db.session.scalar(
+            select(func.count())
+            .select_from(DispatchRun)
+            .where(
+                DispatchRun.company_id == company_id,
+                DispatchRun.status == DispatchStatus.RUNNING,
+            )
         )
-    ) or 0
+        or 0
+    )
 
 
-def build_observed_snapshot(company_id: int, *, include_runtime_hints: bool = True) -> dict[str, Any]:
+def build_observed_snapshot(
+    company_id: int, *, include_runtime_hints: bool = True
+) -> dict[str, Any]:
     """Agrégats « observés » pour réconciliation (sessions/sockets/GPS : enrichissements futurs)."""
     out: dict[str, Any] = {
         "drivers_count": count_drivers(company_id),
@@ -161,7 +173,7 @@ def apply_suspend(
     db.session.add(company)
     db.session.flush()
     payload = tenant_governance_payload(company)
-    observed = payload["observed_state"]
+    payload["observed_state"]
     recon = payload["reconciliation_status"]
     if recon == "drift":
         return payload, "partially_applied"

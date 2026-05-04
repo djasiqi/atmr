@@ -7,7 +7,6 @@ from models.demo_request import DemoRequest
 from services.demo.dispatcher import get_demo_destination_email
 from services.demo.scoring import compute_demo_score
 
-
 ORG_TYPE_MAP = {
     "transport": "transport_company",
     "transport_company": "transport_company",
@@ -65,7 +64,10 @@ def run_backfill() -> int:
             payload = row.payload_json or {}
             org_type = _norm_org_type(payload.get("organization_type"))
             preferred_slot = _norm_slot(payload.get("preferred_slot"))
-            timing = str(payload.get("timing") or "exploration").strip().lower() or "exploration"
+            timing = (
+                str(payload.get("timing") or "exploration").strip().lower()
+                or "exploration"
+            )
 
             score_payload = {
                 "name": row.name or "",
@@ -111,10 +113,11 @@ def run_backfill() -> int:
             created += 1
 
         db.session.commit()
-        print(f"[backfill-demo] created={created} skipped={skipped} total_contacts={len(rows)}")
+        print(
+            f"[backfill-demo] created={created} skipped={skipped} total_contacts={len(rows)}"
+        )
         return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(run_backfill())
-

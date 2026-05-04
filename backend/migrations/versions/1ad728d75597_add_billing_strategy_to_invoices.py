@@ -28,9 +28,7 @@ def _invoices_has_column(conn, name: str) -> bool:
 
 def _invoices_has_index(conn, index_name: str) -> bool:
     insp = inspect(conn)
-    return any(
-        idx["name"] == index_name for idx in insp.get_indexes("invoices")
-    )
+    return any(idx["name"] == index_name for idx in insp.get_indexes("invoices"))
 
 
 def upgrade():
@@ -75,8 +73,7 @@ def upgrade():
     insp = inspect(conn)
     fks = insp.get_foreign_keys("invoices")
     has_billed_to_company_fk = any(
-        "billed_to_company_id" in (fk.get("constrained_columns") or [])
-        for fk in fks
+        "billed_to_company_id" in (fk.get("constrained_columns") or []) for fk in fks
     )
     if not has_billed_to_company_fk:
         op.create_foreign_key(

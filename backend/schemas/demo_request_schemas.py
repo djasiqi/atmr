@@ -37,7 +37,9 @@ class DemoRequestSchema(Schema):
     organization = fields.Str(required=True, validate=Length(min=2, max=180))
     organization_type = fields.Str(required=True, validate=OneOf(ORGANIZATION_TYPES))
     use_case = fields.Str(required=True, validate=OneOf(USE_CASES))
-    volume_range = fields.Str(required=False, allow_none=True, validate=OneOf(VOLUME_RANGES))
+    volume_range = fields.Str(
+        required=False, allow_none=True, validate=OneOf(VOLUME_RANGES)
+    )
     integration_required = fields.Str(
         required=True, validate=OneOf(INTEGRATION_REQUIRED_VALUES)
     )

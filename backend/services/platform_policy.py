@@ -52,14 +52,13 @@ def evaluate_policy(
         "governance.tenant.suspend",
         "governance.runbook.execute",
         "governance.runbook.rollback",
-    ):
-        if scope_type != "tenant" or not scope_id or not str(scope_id).isdigit():
-            return _deny(
-                reason_code=REASON_SCOPE_MISMATCH,
-                human_reason="Action réservée au scope tenant avec identifiant valide.",
-                evaluation_order=evaluation_order,
-                stopped_at="scope_check",
-            )
+    ) and (scope_type != "tenant" or not scope_id or not str(scope_id).isdigit()):
+        return _deny(
+            reason_code=REASON_SCOPE_MISMATCH,
+            human_reason="Action réservée au scope tenant avec identifiant valide.",
+            evaluation_order=evaluation_order,
+            stopped_at="scope_check",
+        )
 
     if requested_permission:
         if user_id is not None:
@@ -78,14 +77,17 @@ def evaluate_policy(
     # if needs_approval:
     #     return _require_approval(...)
 
-    if emergency_override:
-        if require_incident_for_override and not (incident_id and str(incident_id).strip()):
-            return _deny(
-                reason_code=REASON_EMERGENCY_NEEDS_INCIDENT,
-                human_reason="EmergencyOverride exige un incident_id (ou ticket) valide.",
-                evaluation_order=evaluation_order,
-                stopped_at="emergency_override",
-            )
+    if (
+        emergency_override
+        and require_incident_for_override
+        and not (incident_id and str(incident_id).strip())
+    ):
+        return _deny(
+            reason_code=REASON_EMERGENCY_NEEDS_INCIDENT,
+            human_reason="EmergencyOverride exige un incident_id (ou ticket) valide.",
+            evaluation_order=evaluation_order,
+            stopped_at="emergency_override",
+        )
 
     return {
         "decision": "allow",

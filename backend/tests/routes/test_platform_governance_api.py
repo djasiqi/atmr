@@ -154,7 +154,9 @@ def test_runbook_execution_verify(admin_tenant_client, sample_company, db):
     assert rv2.status_code == 200
 
 
-def test_runbook_rollback_audit_carries_correlation_id(admin_tenant_client, sample_company, db):
+def test_runbook_rollback_audit_carries_correlation_id(
+    admin_tenant_client, sample_company, db
+):
     """Execute + rollback + replay: même correlation_id sur le log rollback."""
     tid = sample_company.id
     Company.query.filter_by(id=tid).update({"platform_suspended": True})

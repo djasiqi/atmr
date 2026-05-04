@@ -194,18 +194,35 @@ def init_namespaces(app):
     from routes.driver import driver_ns
     from routes.email import email_ns  # Configuration emails transactionnels (Brevo)
     from routes.geocode import geocode_ns
+
     __import__("routes.geocode_zones")  # enregistre /geocode/zones sur geocode_ns
     from routes.institutions import institutions_ns  # ✅ Portail institutionnel
-    from routes.institution_patients import institution_patients_ns  # ✅ Patients institution
-    from routes.institution_requests import institution_requests_ns  # ✅ Demandes transport
-    from routes.institution_settings import institution_settings_ns  # ✅ ÉTAPE 4: Paramètres institution
-    from routes.institution_billing import institution_billing_ns  # ✅ ÉTAPE 5: Facturation institution
+    from routes.institution_patients import (
+        institution_patients_ns,
+    )  # ✅ Patients institution
+    from routes.institution_requests import (
+        institution_requests_ns,
+    )  # ✅ Demandes transport
+    from routes.institution_settings import (
+        institution_settings_ns,
+    )  # ✅ ÉTAPE 4: Paramètres institution
+    from routes.institution_billing import (
+        institution_billing_ns,
+    )  # ✅ ÉTAPE 5: Facturation institution
     from routes.institution_teams import institution_teams_ns  # ✅ Curatelle: équipes
-    from routes.institution_notifications import institution_notifications_ns  # ✅ Notifications in-app
+    from routes.institution_notifications import (
+        institution_notifications_ns,
+    )  # ✅ Notifications in-app
     from routes.booking_messages import booking_messages_ns  # ✅ Mini-chat booking
-    from routes.company_notifications import company_notifications_ns  # ✅ Notifications company
-    from routes.company_request_offers import company_offers_ns  # ✅ ÉTAPE 4: Offres côté company
-    from routes.company_security import security_ns  # ✅ Security Tab V2: audit logs, export, policy
+    from routes.company_notifications import (
+        company_notifications_ns,
+    )  # ✅ Notifications company
+    from routes.company_request_offers import (
+        company_offers_ns,
+    )  # ✅ ÉTAPE 4: Offres côté company
+    from routes.company_security import (
+        security_ns,
+    )  # ✅ Security Tab V2: audit logs, export, policy
     from routes.invoices import invoices_ns
     from routes.medical import medical_ns
     from routes.messages import messages_ns
@@ -285,7 +302,9 @@ def init_namespaces(app):
     # Routes bookings
     api_v1.add_namespace(bookings_ns, path="/bookings")
     api_v1.add_namespace(booking_messages_ns, path="/bookings")  # ✅ Mini-chat booking
-    api_v1.add_namespace(company_notifications_ns, path="/companies/notifications")  # ✅ Notifications company
+    api_v1.add_namespace(
+        company_notifications_ns, path="/companies/notifications"
+    )  # ✅ Notifications company
 
     # Routes payments
     api_v1.add_namespace(partnerships_ns, path="/partnerships")
@@ -310,10 +329,18 @@ def init_namespaces(app):
     api_v1.add_namespace(institutions_ns, path="/institutions")
     api_v1.add_namespace(institution_patients_ns, path="/institutions/patients")
     api_v1.add_namespace(institution_requests_ns, path="/institutions/requests")
-    api_v1.add_namespace(institution_settings_ns, path="/institutions/settings")  # ✅ ÉTAPE 4
-    api_v1.add_namespace(institution_billing_ns, path="/institutions/billing")  # ✅ ÉTAPE 5
-    api_v1.add_namespace(institution_notifications_ns, path="/institutions/notifications")
-    api_v1.add_namespace(institution_teams_ns, path="/institutions/teams")  # ✅ Curatelle
+    api_v1.add_namespace(
+        institution_settings_ns, path="/institutions/settings"
+    )  # ✅ ÉTAPE 4
+    api_v1.add_namespace(
+        institution_billing_ns, path="/institutions/billing"
+    )  # ✅ ÉTAPE 5
+    api_v1.add_namespace(
+        institution_notifications_ns, path="/institutions/notifications"
+    )
+    api_v1.add_namespace(
+        institution_teams_ns, path="/institutions/teams"
+    )  # ✅ Curatelle
 
     # ✅ ÉTAPE 4: Offres côté company
     api_v1.add_namespace(company_offers_ns, path="/company/request-offers")
@@ -402,14 +429,18 @@ def init_namespaces(app):
         api_legacy.add_namespace(driver_ns, path="/driver")
         api_legacy.add_namespace(bookings_ns, path="/bookings")
         api_legacy.add_namespace(booking_messages_ns, path="/bookings")  # ✅ Mini-chat
-        api_legacy.add_namespace(company_notifications_ns, path="/companies/notifications")  # ✅ Notif company
+        api_legacy.add_namespace(
+            company_notifications_ns, path="/companies/notifications"
+        )  # ✅ Notif company
         api_legacy.add_namespace(payments_ns, path="/payments")
         api_legacy.add_namespace(utils_ns, path="/utils")
         api_legacy.add_namespace(messages_ns, path="/messages")
         api_legacy.add_namespace(geocode_ns, path="/geocode")
         api_legacy.add_namespace(medical_ns, path="/medical")
         api_legacy.add_namespace(invoices_ns, path="/invoices")
-        api_legacy.add_namespace(institutions_ns, path="/institutions")  # ✅ Portail institutionnel
+        api_legacy.add_namespace(
+            institutions_ns, path="/institutions"
+        )  # ✅ Portail institutionnel
         api_legacy.add_namespace(institution_patients_ns, path="/institutions/patients")
         api_legacy.add_namespace(institution_requests_ns, path="/institutions/requests")
         api_legacy.add_namespace(planning_ns, path="/planning")

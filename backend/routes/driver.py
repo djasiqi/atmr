@@ -88,7 +88,7 @@ TRACKING_INGEST_ASYNC_ENABLED = (
 )
 
 
-def _resolve_tracking_ack_status(  # noqa: PLR0911
+def _resolve_tracking_ack_status(
     *,
     accept_status: str | None,
     accept_reason: str | None,
@@ -119,7 +119,9 @@ def _normalize_transition_error_payload(
     if payload.get("error_code") and payload.get("retryable") is not None:
         return payload
 
-    error_raw = str(payload.get("error") or payload.get("message") or "").strip().lower()
+    error_raw = (
+        str(payload.get("error") or payload.get("message") or "").strip().lower()
+    )
     code = "driver_transition_unknown"
     retryable = False
 
@@ -135,7 +137,11 @@ def _normalize_transition_error_payload(
     elif status_code == HTTP_STATUS_BAD_REQUEST:
         if "missing json payload" in error_raw:
             code = "driver_transition_invalid_request"
-        elif "invalid status" in error_raw or "must be" in error_raw or "impossible" in error_raw:
+        elif (
+            "invalid status" in error_raw
+            or "must be" in error_raw
+            or "impossible" in error_raw
+        ):
             code = "driver_transition_invalid_transition"
         elif "already" in error_raw:
             code = "driver_transition_already_applied"
@@ -149,6 +155,7 @@ def _normalize_transition_error_payload(
     normalized["error_code"] = code
     normalized["retryable"] = retryable
     return normalized
+
 
 # sentry (si initialisé dans app.py, on garde try/except pour éviter
 # ImportError en tests)
@@ -225,16 +232,26 @@ location_model = driver_ns.model(
         "speed_mps": fields.Float(required=False, description="Vitesse m/s canonique"),
         "heading": fields.Float(required=False, description="Cap en degrés"),
         "accuracy": fields.Float(required=False, description="Précision en mètres"),
-        "accuracy_m": fields.Float(required=False, description="Précision en mètres canonique"),
+        "accuracy_m": fields.Float(
+            required=False, description="Précision en mètres canonique"
+        ),
         "ts": fields.String(required=False, description="Horodatage ISO8601"),
-        "recorded_at": fields.String(required=False, description="Horodatage GPS ISO8601"),
-        "sent_at": fields.String(required=False, description="Horodatage envoi ISO8601"),
+        "recorded_at": fields.String(
+            required=False, description="Horodatage GPS ISO8601"
+        ),
+        "sent_at": fields.String(
+            required=False, description="Horodatage envoi ISO8601"
+        ),
         "location_mode": fields.String(
             required=False,
             description="mission_live|availability_presence|passive_last_known",
         ),
-        "is_background": fields.Boolean(required=False, description="Position collectée en background"),
-        "mission_id": fields.Integer(required=False, description="Mission active (optionnel)"),
+        "is_background": fields.Boolean(
+            required=False, description="Position collectée en background"
+        ),
+        "mission_id": fields.Integer(
+            required=False, description="Mission active (optionnel)"
+        ),
         "device_status": fields.Raw(required=False, description="Métadonnées device"),
     },
 )
@@ -913,10 +930,10 @@ class DriverBookingsSince(Resource):
                 # Filtrer par updated_at >= since ET statuts appropriés
                 from models.booking import Booking
                 from models.enums import BookingStatus
-                include_terminal = (
-                    str(request.args.get("include_terminal", "false")).strip().lower()
-                    in {"1", "true", "yes", "on"}
-                )
+
+                include_terminal = str(
+                    request.args.get("include_terminal", "false")
+                ).strip().lower() in {"1", "true", "yes", "on"}
                 statuses = [
                     BookingStatus.ASSIGNED,
                     BookingStatus.EN_ROUTE,
@@ -1207,7 +1224,10 @@ class DriverRoute(Resource):
 
             logger.info(
                 "[DriverRoute] OSRM route request start origin=(%.5f,%.5f) dest=(%.5f,%.5f)",
-                o_lat, o_lon, d_lat, d_lon,
+                o_lat,
+                o_lon,
+                d_lat,
+                d_lon,
             )
             info = route_info(
                 origin=(o_lat, o_lon),
@@ -1248,9 +1268,7 @@ class DriverRoute(Resource):
 
         except Exception as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000
-            logger.warning(
-                "[DriverRoute] OSRM error after %.0fms: %s", elapsed_ms, e
-            )
+            logger.warning("[DriverRoute] OSRM error after %.0fms: %s", elapsed_ms, e)
             return {"error": "Calcul d'itinéraire indisponible"}, 503
 
 
@@ -1371,15 +1389,22 @@ class DriverLocation(Resource):
                 logger.warning(
                     "📍 PUT /driver/me/location: JSON invalide ou vide. body_len=%s body_preview=%s",
                     len(raw) if raw else 0,
-                    (raw[:BODY_PREVIEW_MAX_LEN] + "...") if raw and len(raw) > BODY_PREVIEW_MAX_LEN else raw,
+                    (raw[:BODY_PREVIEW_MAX_LEN] + "...")
+                    if raw and len(raw) > BODY_PREVIEW_MAX_LEN
+                    else raw,
                 )
                 result = {
                     "error": "invalid_json",
                     "message": "Corps de requête JSON manquant ou invalide. Vérifiez le format du body.",
                 }
                 status_code = 400
-            elif ("latitude" not in p and "lat" not in p) or ("longitude" not in p and "lon" not in p):
-                result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}
+            elif ("latitude" not in p and "lat" not in p) or (
+                "longitude" not in p and "lon" not in p
+            ):
+                result = {
+                    "error": "Latitude/longitude are required",
+                    "reason": "missing_required_fields",
+                }
                 status_code = 400
             else:
                 # Valeurs par défaut pour compatibilité avec anciennes versions app
@@ -1396,7 +1421,10 @@ class DriverLocation(Resource):
                     lat_val = p.get("lat") or p.get("latitude")
                     lon_val = p.get("lon") or p.get("longitude")
                     if lat_val is None or lon_val is None:
-                        result = {"error": "Latitude/longitude are required", "reason": "missing_required_fields"}
+                        result = {
+                            "error": "Latitude/longitude are required",
+                            "reason": "missing_required_fields",
+                        }
                         status_code = 400
                     else:
                         lat = float(lat_val)
@@ -1410,15 +1438,15 @@ class DriverLocation(Resource):
                             status_code = 400
 
                         if result is None:
-                            idem_hdr = request.headers.get("Idempotency-Key") or request.headers.get(
-                                "X-Idempotency-Key"
-                            )
+                            idem_hdr = request.headers.get(
+                                "Idempotency-Key"
+                            ) or request.headers.get("X-Idempotency-Key")
                             if idem_hdr:
                                 cached = get_idempotent_response(driver.id, idem_hdr)
                                 if cached is not None:
                                     return cached, 200
-                            allowed_rl, retry_rl = check_http_driver_location_rate_limit(
-                                driver.id
+                            allowed_rl, retry_rl = (
+                                check_http_driver_location_rate_limit(driver.id)
                             )
                             if not allowed_rl:
                                 return {
@@ -1621,23 +1649,37 @@ class DriverLocation(Resource):
                                     # Extraire first_name et last_name depuis driver.user
                                     first_name = None
                                     last_name = None
-                                    if hasattr(driver, "user") and driver.user is not None:
-                                        first_name = getattr(driver.user, "first_name", None)
-                                        last_name = getattr(driver.user, "last_name", None)
+                                    if (
+                                        hasattr(driver, "user")
+                                        and driver.user is not None
+                                    ):
+                                        first_name = getattr(
+                                            driver.user, "first_name", None
+                                        )
+                                        last_name = getattr(
+                                            driver.user, "last_name", None
+                                        )
 
                                     # ✅ FIX: Émettre "driver_location_update" pour correspondre au frontend
-                                    last_seen_seconds = last_seen_seconds_from_location_fields(
-                                        {
-                                            "recorded_at": recorded_at,
-                                            "received_at": received_at,
-                                            "ts": p.get("ts") if isinstance(p, dict) else None,
-                                        }
+                                    last_seen_seconds = (
+                                        last_seen_seconds_from_location_fields(
+                                            {
+                                                "recorded_at": recorded_at,
+                                                "received_at": received_at,
+                                                "ts": p.get("ts")
+                                                if isinstance(p, dict)
+                                                else None,
+                                            }
+                                        )
                                     )
                                     location_status = compute_location_status(
-                                        mode=location_mode, last_seen_seconds=last_seen_seconds
+                                        mode=location_mode,
+                                        last_seen_seconds=last_seen_seconds,
                                     )
-                                    presence_status = presence_status_from_location_status(
-                                        location_status
+                                    presence_status = (
+                                        presence_status_from_location_status(
+                                            location_status
+                                        )
                                     )
 
                                     company_id_raw = getattr(driver, "company_id", None)
@@ -1648,13 +1690,17 @@ class DriverLocation(Resource):
                                     )
                                     if company_id_for_room is None:
                                         raise ValueError("driver.company_id is missing")
-                                    mission_status_resolved = resolve_mission_status_for_driver(
-                                        driver.id
+                                    mission_status_resolved = (
+                                        resolve_mission_status_for_driver(driver.id)
                                     )
-                                    driver_status_resolved = resolve_driver_status_for_fanout(
-                                        mission_status=mission_status_resolved,
-                                        is_active=bool(getattr(driver, "is_active", True)),
-                                        presence_status=presence_status,
+                                    driver_status_resolved = (
+                                        resolve_driver_status_for_fanout(
+                                            mission_status=mission_status_resolved,
+                                            is_active=bool(
+                                                getattr(driver, "is_active", True)
+                                            ),
+                                            presence_status=presence_status,
+                                        )
                                     )
                                     canonical_payload = {
                                         "driver_id": driver.id,
@@ -1685,7 +1731,8 @@ class DriverLocation(Resource):
                                             if mission_status_resolved != "NONE"
                                             else None
                                         ),
-                                        "is_available": driver_status_resolved == "available",
+                                        "is_available": driver_status_resolved
+                                        == "available",
                                         "offline_reason": "",
                                         "source": source,
                                         "first_name": first_name,
@@ -1714,7 +1761,9 @@ class DriverLocation(Resource):
                                     "received_at": received_at,
                                 }
                                 if idem_hdr:
-                                    store_idempotent_response(driver.id, idem_hdr, result)
+                                    store_idempotent_response(
+                                        driver.id, idem_hdr, result
+                                    )
                 except (ValueError, TypeError):
                     result = {"error": "Invalid coordinate format"}
                     status_code = 400
@@ -1734,9 +1783,9 @@ class DriverLocation(Resource):
                 if result.get("accept_reason") is not None
                 else None
             )
-            tracking_event_id = request.headers.get("X-Location-Event-Id") or request.headers.get(
-                "x-location-event-id"
-            )
+            tracking_event_id = request.headers.get(
+                "X-Location-Event-Id"
+            ) or request.headers.get("x-location-event-id")
             body = cast("dict[str, Any]", request.get_json(silent=True) or {})
             if not tracking_event_id:
                 tracking_event_id = body.get("tracking_event_id") or body.get(
@@ -1805,9 +1854,7 @@ class DriverLocationBatch(Resource):
             }
             company_id_raw = getattr(driver, "company_id", None)
             company_id_value = (
-                int(company_id_raw)
-                if isinstance(company_id_raw, (int, str))
-                else None
+                int(company_id_raw) if isinstance(company_id_raw, (int, str)) else None
             )
             ingest_result = enqueue_tracking_event(
                 driver_id=driver.id,
@@ -2393,7 +2440,9 @@ class UpdateBookingStatus(Resource):
             status_code = 500
 
         if isinstance(result, dict):
-            result = _normalize_transition_error_payload(result, int(status_code or 500))
+            result = _normalize_transition_error_payload(
+                result, int(status_code or 500)
+            )
         return result, status_code
 
 

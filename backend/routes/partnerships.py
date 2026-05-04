@@ -2,7 +2,6 @@
 """Routes pour les partenariats (endpoints simplifiés pour le frontend)."""
 
 import logging
-from pathlib import Path
 from typing import Any
 
 from flask import request
@@ -72,7 +71,9 @@ class CreatePartnershipRequest(Resource):
             from models.enums import TransferModel
             from services.partnerships.core import PartnershipService
 
-            default_partner_tariff_percent = data.get("default_partner_tariff_percent", 90)
+            default_partner_tariff_percent = data.get(
+                "default_partner_tariff_percent", 90
+            )
             payment_terms_days = data.get("payment_terms_days", 30)
             auto_accept_rules = bool(data.get("auto_accept_rules", False))
 
@@ -554,7 +555,7 @@ class TransfersList(Resource):
 class TransferAccept(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self, transfer_id: int):  # noqa: PLR0911
+    def post(self, transfer_id: int):
         """Accepte un transfert de course proposé par une entreprise partenaire.
 
         Args:
@@ -646,7 +647,7 @@ class TransferAccept(Resource):
 class TransferReject(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self, transfer_id: int):  # noqa: PLR0911
+    def post(self, transfer_id: int):
         """Refuse un transfert de course proposé par une entreprise partenaire.
 
         Args:

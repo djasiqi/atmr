@@ -191,9 +191,13 @@ class GenerateInvoiceReminderUseCase:
                         float(total_due),
                     )
                 else:
-                    logger.info("Mode de référence non-QRR ou profil non trouvé, pas de QR-bill pour le rappel")
+                    logger.info(
+                        "Mode de référence non-QRR ou profil non trouvé, pas de QR-bill pour le rappel"
+                    )
             except Exception as e:
-                logger.warning("Échec de la génération du QR-bill pour le rappel: %s", str(e))
+                logger.warning(
+                    "Échec de la génération du QR-bill pour le rappel: %s", str(e)
+                )
                 # Ne pas bloquer si le QR-bill échoue (peut être généré plus tard)
 
             # 8. Mettre à jour SEULEMENT le niveau de rappel (pas les montants)
@@ -204,6 +208,7 @@ class GenerateInvoiceReminderUseCase:
 
             # 9. Générer le PDF du rappel consolidé (PDF séparé, distinct de invoice.pdf_url)
             import os
+
             REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
 
             if REMINDER_DEBUG:
@@ -219,7 +224,9 @@ class GenerateInvoiceReminderUseCase:
                     invoice.due_date.isoformat() if invoice.due_date else None,
                 )
 
-            pdf_url = self.pdf_service.generate_reminder_pdf(invoice, input_data.level, reminder)
+            pdf_url = self.pdf_service.generate_reminder_pdf(
+                invoice, input_data.level, reminder
+            )
             reminder.pdf_url = pdf_url
 
             # ✅ IMPORTANT : On ne régénère PAS le PDF de la facture principale

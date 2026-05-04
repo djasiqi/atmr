@@ -5,6 +5,7 @@ Utilise information_schema / pg_* pour éviter DuplicateTable/DuplicateObject.
 Schema: tous les helpers prennent schema="public" par défaut. Si l'environnement
 utilise un autre schéma (ex: multi-tenant), passer le schema explicitement.
 """
+
 from sqlalchemy import text
 
 
@@ -55,9 +56,7 @@ def column_exists(
         "WHERE table_schema = :s AND table_name = :t AND column_name = :c"
         ")"
     )
-    return bind.execute(
-        q, {"s": schema, "t": table_name, "c": column_name}
-    ).scalar()
+    return bind.execute(q, {"s": schema, "t": table_name, "c": column_name}).scalar()
 
 
 def get_fk_constraint_name(
@@ -107,6 +106,9 @@ def fk_exists(
     referred_column: str = "id",
 ) -> bool:
     """Vrai si une FK existe de (table, column) vers (referred_table, referred_column)."""
-    return get_fk_constraint_name(
-        bind, table_name, column_name, referred_table, schema, referred_column
-    ) is not None
+    return (
+        get_fk_constraint_name(
+            bind, table_name, column_name, referred_table, schema, referred_column
+        )
+        is not None
+    )

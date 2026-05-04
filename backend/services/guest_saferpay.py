@@ -91,7 +91,9 @@ def _guest_customer_name(payload: dict[str, Any]) -> str:
     return GUEST_BOOKING_CUSTOMER_PLACEHOLDER
 
 
-def _apply_payload_geo_to_guest_booking(booking: Booking, payload: dict[str, Any]) -> None:
+def _apply_payload_geo_to_guest_booking(
+    booking: Booking, payload: dict[str, Any]
+) -> None:
     """Recopie le géo du brouillon (calculé au pricing) : requis pour les offres dispatch entreprise."""
     for pkey, attr in (
         ("pickup_lat", "pickup_lat"),
@@ -113,7 +115,10 @@ def _apply_payload_geo_to_guest_booking(booking: Booking, payload: dict[str, Any
             continue
         with suppress(TypeError, ValueError):
             setattr(booking, attr, int(v))
-    for pkey, attr in (("distance_meters", "distance_meters"), ("duration_seconds", "duration_seconds")):
+    for pkey, attr in (
+        ("distance_meters", "distance_meters"),
+        ("duration_seconds", "duration_seconds"),
+    ):
         v = payload.get(pkey)
         if v is None:
             continue
@@ -126,10 +131,14 @@ def _issue_public_booking_status_token(booking_id: int) -> str:
     if not secret_key:
         raise RuntimeError("SECRET_KEY non configurée")
     serializer = URLSafeTimedSerializer(secret_key)
-    return serializer.dumps({"booking_id": booking_id}, salt=_BOOKING_PUBLIC_STATUS_SALT)
+    return serializer.dumps(
+        {"booking_id": booking_id}, salt=_BOOKING_PUBLIC_STATUS_SALT
+    )
 
 
-def _default_guest_saferpay_return_urls(*, guest_booking_id: str) -> tuple[str, str, str]:
+def _default_guest_saferpay_return_urls(
+    *, guest_booking_id: str
+) -> tuple[str, str, str]:
     from services.saferpay.return_urls import (
         _is_loopback_http_url,
         _localhost_return_allowed_for_saferpay,
@@ -139,7 +148,11 @@ def _default_guest_saferpay_return_urls(*, guest_booking_id: str) -> tuple[str, 
     if not base:
         base = (os.getenv("CLIENT_WEB_BASE_URL") or "").strip().rstrip("/")
     if not base:
-        base = (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000").strip().rstrip("/")
+        base = (
+            (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000")
+            .strip()
+            .rstrip("/")
+        )
     q = f"guestBookingId={guest_booking_id}"
     success = f"{base}/guest/payment/saferpay/return?{q}&outcome=success"
     fail = f"{base}/guest/payment/saferpay/return?{q}&outcome=fail"
@@ -247,7 +260,9 @@ def initialize_guest_saferpay(
             "OrderId": order_id,
             "Description": "Transport LIRIE (invité)",
         },
-        "Payer": {"LanguageCode": (os.getenv("SAFERPAY_PAYER_LANGUAGE") or "fr").strip()},
+        "Payer": {
+            "LanguageCode": (os.getenv("SAFERPAY_PAYER_LANGUAGE") or "fr").strip()
+        },
         "ReturnUrls": {
             "Success": success_url,
             "Fail": fail_url,
@@ -269,7 +284,9 @@ def initialize_guest_saferpay(
             ),
         }
 
-    st, data, raw = saferpay_post_json("Payment/v1/PaymentPage/Initialize", saferpay_payload)
+    st, data, raw = saferpay_post_json(
+        "Payment/v1/PaymentPage/Initialize", saferpay_payload
+    )
     if st != HTTPStatus.OK or not data:
         raise RuntimeError(
             f"Saferpay Initialize refusé (HTTP {st}): {(raw or '')[:400]}"
@@ -328,7 +345,7 @@ def _mark_redis_promoted(
     redis_setex(cache_key, promote_ttl_seconds, json.dumps(payload))
 
 
-def promote_guest_booking_after_saferpay(  # noqa: PLR0911
+def promote_guest_booking_after_saferpay(
     *,
     guest_booking_id: str,
     payload: dict[str, Any],
@@ -357,7 +374,10 @@ def promote_guest_booking_after_saferpay(  # noqa: PLR0911
     if notify_key and stored_key and notify_key != stored_key:
         logger.warning(
             "Guest Saferpay notify_key refusée",
-            extra={"guest_booking_id": guest_booking_id, "outcome": "forbidden_notify_key"},
+            extra={
+                "guest_booking_id": guest_booking_id,
+                "outcome": "forbidden_notify_key",
+            },
         )
         return {"status": "forbidden", "detail": "bad_notify_key"}
 
@@ -374,7 +394,13 @@ def promote_guest_booking_after_saferpay(  # noqa: PLR0911
             payload["updated_at"] = datetime.now(UTC).isoformat()
             redis_setex(
                 f"public:guest_booking:{guest_booking_id}",
-                max(600, int(os.getenv("PUBLIC_GUEST_BOOKING_TTL_SECONDS", "604800") or 604800)),
+                max(
+                    600,
+                    int(
+                        os.getenv("PUBLIC_GUEST_BOOKING_TTL_SECONDS", "604800")
+                        or 604800
+                    ),
+                ),
                 json.dumps(payload),
             )
             logger.info(
@@ -407,7 +433,10 @@ def promote_guest_booking_after_saferpay(  # noqa: PLR0911
     if existing_pay is not None:
         bk = existing_pay.booking
         if bk is None:
-            return {"status": SAFERPAY_FINALIZE_ASSERT_FAILED, "detail": "booking_manquant"}
+            return {
+                "status": SAFERPAY_FINALIZE_ASSERT_FAILED,
+                "detail": "booking_manquant",
+            }
         token = _issue_public_booking_status_token(int(bk.id))
         _mark_redis_promoted(
             guest_booking_id=guest_booking_id,
@@ -423,7 +452,9 @@ def promote_guest_booking_after_saferpay(  # noqa: PLR0911
             "guest_booking_id": guest_booking_id,
         }
 
-    w_need, w_has = _draft_wheelchair_flags(str(payload.get("transport_type") or "assis"))
+    w_need, w_has = _draft_wheelchair_flags(
+        str(payload.get("transport_type") or "assis")
+    )
     scheduled = _draft_scheduled_time(payload)
     amount_f = float(_decimal_amount(payload.get("amount") or 0))
 
@@ -464,7 +495,10 @@ def promote_guest_booking_after_saferpay(  # noqa: PLR0911
         db.session.rollback()
         logger.warning(
             "Guest Saferpay IntegrityError à l'insert (course concurrente ?)",
-            extra={"guest_booking_id": guest_booking_id, "outcome": "integrity_recover"},
+            extra={
+                "guest_booking_id": guest_booking_id,
+                "outcome": "integrity_recover",
+            },
         )
         existing_pay = Payment.query.filter_by(saferpay_transaction_id=tx_id).first()
         if existing_pay and existing_pay.booking_id:
@@ -539,7 +573,10 @@ def try_finalize_guest_saferpay_notify(
     except Exception:
         logger.warning(
             "Guest Saferpay notify cache JSON invalide",
-            extra={"guest_booking_id": guest_booking_id, "outcome": "notify_invalid_cache"},
+            extra={
+                "guest_booking_id": guest_booking_id,
+                "outcome": "notify_invalid_cache",
+            },
         )
         return {"ok": False, "reason": "invalid_cache"}
     try:

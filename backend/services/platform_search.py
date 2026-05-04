@@ -50,7 +50,9 @@ def search_investigation(query: str) -> dict[str, Any]:
                     "company_id": b.company_id,
                 }
             )
-            links.append({"rel": "booking", "booking_id": b.id, "tenant_id": b.company_id})
+            links.append(
+                {"rel": "booking", "booking_id": b.id, "tenant_id": b.company_id}
+            )
 
     if _uuid_like(raw):
         u = User.query.filter_by(public_id=raw).first()

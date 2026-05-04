@@ -175,8 +175,12 @@ def get_or_create_billing_party_for_clinic_company(
         f"Clinique #{clinic_company_id}"
     )
     billing_party.billing_address = address
-    billing_party.contact_email = (getattr(clinic, "contact_email", None) or "").strip() or None
-    billing_party.contact_phone = (getattr(clinic, "contact_phone", None) or "").strip() or None
+    billing_party.contact_email = (
+        getattr(clinic, "contact_email", None) or ""
+    ).strip() or None
+    billing_party.contact_phone = (
+        getattr(clinic, "contact_phone", None) or ""
+    ).strip() or None
     billing_party.external_ref = external_ref
 
     db.session.add(billing_party)
@@ -236,4 +240,3 @@ def resolve_billing_party_for_clinic(
         company_id=company_id,
         clinic_company_id=clinic_company_id,
     )
-

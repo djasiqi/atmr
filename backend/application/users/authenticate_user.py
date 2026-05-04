@@ -78,6 +78,7 @@ class AuthenticateUserUseCase:
             )
 
         from repositories.user_repository import UserRepository
+
         user_repo = UserRepository()
         user = user_repo.find_model_by_email(input_data.email)
         if not user:

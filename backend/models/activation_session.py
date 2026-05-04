@@ -34,7 +34,9 @@ class ActivationSession(db.Model):
         index=True,
     )
 
-    email_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    email_token_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     email_token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -43,21 +45,35 @@ class ActivationSession(db.Model):
     )
 
     sms_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    sms_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    sms_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    sms_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sms_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    sms_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    sms_locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     phone_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
-    resend_count_email: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    resend_count_sms: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    resend_count_email: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+    resend_count_sms: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
     last_email_sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    last_sms_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sms_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    consumed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

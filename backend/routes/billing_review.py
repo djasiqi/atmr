@@ -170,7 +170,9 @@ def _serialize_billing_review_item(booking: Booking) -> dict[str, Any]:
         active_stay = find_active_stay_for_booking(booking=booking)
         if active_stay and active_stay.company_id:
             clinic_company = (
-                db.session.query(Company).filter(Company.id == active_stay.company_id).first()
+                db.session.query(Company)
+                .filter(Company.id == active_stay.company_id)
+                .first()
             )
             if clinic_company:
                 clinic_name = clinic_company.name
@@ -184,7 +186,9 @@ def _serialize_billing_review_item(booking: Booking) -> dict[str, Any]:
         "patient_name": patient_name,
         "payer_name": payer_name,
         "payer_type": payer_type,
-        "billing_source": booking.billing_source.value if booking.billing_source else None,
+        "billing_source": booking.billing_source.value
+        if booking.billing_source
+        else None,
         "billing_source_ref": booking.billing_source_ref,
         "status": booking.billing_review_status.value,
         "amount": float(booking.amount or 0),
@@ -275,7 +279,9 @@ class BillingMonthlyReview(Resource):
                     Booking.billing_review_status == BillingReviewStatus(status_filter)
                 )
             if billing_party_id_filter:
-                query = query.filter(Booking.billing_party_id == billing_party_id_filter)
+                query = query.filter(
+                    Booking.billing_party_id == billing_party_id_filter
+                )
             if clinic_id_filter:
                 # Filtrer par clinique via les séjours actifs
                 # Un booking est lié à une clinique s'il existe un séjour actif
@@ -296,7 +302,9 @@ class BillingMonthlyReview(Resource):
                 ).distinct()
 
             # Trier par date puis par ID
-            bookings = query.order_by(Booking.scheduled_time.desc(), Booking.id.desc()).all()
+            bookings = query.order_by(
+                Booking.scheduled_time.desc(), Booking.id.desc()
+            ).all()
 
             # Sérialiser les résultats
             items = [_serialize_billing_review_item(b) for b in bookings]
@@ -387,15 +395,15 @@ class SetBookingPayer(Resource):
             if not booking:
                 # Debug: existe sans filtre company ? (multi-tenant / filtre sécurité)
                 exists_without_filter = (
-                    db.session.query(Booking)
-                    .filter(Booking.id == booking_id)
-                    .first()
+                    db.session.query(Booking).filter(Booking.id == booking_id).first()
                 )
                 _fmt = (
                     "[BillingReview] set-payer 404: booking_id=%s, current_company_id=%s, "
                     "booking_exists_without_company_filter=%s"
                 )
-                logger.warning(_fmt, booking_id, company_id, exists_without_filter is not None)
+                logger.warning(
+                    _fmt, booking_id, company_id, exists_without_filter is not None
+                )
                 if exists_without_filter:
                     logger.warning(
                         "[BillingReview] Booking %s appartient à company_id=%s (≠ %s)",
@@ -417,7 +425,9 @@ class SetBookingPayer(Resource):
                 )
 
             # ✅ Optionnel: si clinic sans billed_to_company_id, inférer depuis booking.billed_to_company_id
-            if validated["billed_to_type"] == "clinic" and not validated.get("billed_to_company_id"):
+            if validated["billed_to_type"] == "clinic" and not validated.get(
+                "billed_to_company_id"
+            ):
                 inferred = getattr(booking, "billed_to_company_id", None)
                 if inferred is not None:
                     validated["billed_to_company_id"] = inferred
@@ -436,7 +446,9 @@ class SetBookingPayer(Resource):
                 "billed_to_type": booking.billed_to_type,
                 "billing_party_id": booking.billing_party_id,
                 "billed_to_company_id": booking.billed_to_company_id,
-                "billing_source": booking.billing_source.value if booking.billing_source else None,
+                "billing_source": booking.billing_source.value
+                if booking.billing_source
+                else None,
                 "billing_source_ref": booking.billing_source_ref,
                 "amount": old_amount,
             }
@@ -566,10 +578,16 @@ class SetBookingPayer(Resource):
             elif validated["billed_to_type"] == "patient":
                 # Facturation patient : utiliser le tarif préférentiel du client
                 if booking.client_id:
-                    client = db.session.query(Client).filter(Client.id == booking.client_id).first()
+                    client = (
+                        db.session.query(Client)
+                        .filter(Client.id == booking.client_id)
+                        .first()
+                    )
                     if client and client.preferential_rate is not None:
                         new_amount = _round_chf_005(float(client.preferential_rate))
-                        rate_source = f"Client.preferential_rate (client_id={booking.client_id})"
+                        rate_source = (
+                            f"Client.preferential_rate (client_id={booking.client_id})"
+                        )
                         logger.info(
                             "[BillingReview] Booking %s: tarif patient appliqué %.2f CHF (au lieu de %.2f CHF) - source: %s",
                             booking_id,
@@ -814,9 +832,7 @@ class UnlockBooking(Resource):
         try:
             # Valider la requête
             try:
-                validated = validate_request(
-                    UnlockBookingRequestSchema(), request.json
-                )
+                validated = validate_request(UnlockBookingRequestSchema(), request.json)
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -940,9 +956,7 @@ class BatchSetBookingPayer(Resource):
         try:
             # Valider la requête
             try:
-                validated = validate_request(
-                    BatchSetPayerRequestSchema(), request.json
-                )
+                validated = validate_request(BatchSetPayerRequestSchema(), request.json)
             except ValidationError as e:
                 return handle_validation_error(e)
 
@@ -991,7 +1005,9 @@ class BatchSetBookingPayer(Resource):
 
             # Vérifier que tous les bookings ne sont pas verrouillés
             locked_bookings = [
-                b.id for b in bookings if b.billing_review_status == BillingReviewStatus.LOCKED
+                b.id
+                for b in bookings
+                if b.billing_review_status == BillingReviewStatus.LOCKED
             ]
             if locked_bookings:
                 return APIErrorHandler.handle_validation_error(

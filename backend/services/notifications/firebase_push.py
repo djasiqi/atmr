@@ -13,6 +13,7 @@ import os
 import random
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from ext import app_logger
@@ -222,7 +223,7 @@ def _init_firebase() -> bool:
 
     try:
         if cred_path:
-            if not os.path.isfile(cred_path):
+            if not Path(cred_path).is_file():
                 app_logger.error(
                     "[fcm] Firebase init failed: FIREBASE_SERVICE_ACCOUNT_PATH file not found — %s",
                     cred_path,

@@ -33,7 +33,9 @@ class PlatformChangeRequest(db.Model):
         nullable=True,
         index=True,
     )
-    correlation_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    correlation_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
     requested_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"),
         nullable=True,
@@ -47,11 +49,17 @@ class PlatformChangeRequest(db.Model):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    effective_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    effective_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_from: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    effective_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     justification: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     incident_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    target_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    target_snapshot_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 

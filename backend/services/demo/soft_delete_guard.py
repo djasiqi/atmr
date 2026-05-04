@@ -97,7 +97,7 @@ def _convert_demo_delete_to_soft_delete(session: Session, obj: Any) -> bool:
 
     if isinstance(obj, Vehicle) and _vehicle_is_demo(obj):
         if hasattr(obj, "is_active"):
-            setattr(obj, "is_active", False)
+            obj.is_active = False
             session.add(obj)
             return True
         return False
@@ -126,7 +126,9 @@ def register_demo_soft_delete_guard() -> None:
         return
 
     @event.listens_for(Session, "before_flush")
-    def _demo_before_flush(session: Session, _flush_context: Any, _instances: Any) -> None:
+    def _demo_before_flush(
+        session: Session, _flush_context: Any, _instances: Any
+    ) -> None:
         converted = 0
         for obj in list(session.deleted):
             if _convert_demo_delete_to_soft_delete(session, obj):

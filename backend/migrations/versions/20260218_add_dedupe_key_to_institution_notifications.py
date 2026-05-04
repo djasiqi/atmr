@@ -37,12 +37,8 @@ def _add_dedupe(table: str, constraint: str, fk_col: str) -> None:
 
 
 def upgrade():
-    _add_dedupe(
-        "institution_notifications", "uq_inst_notif_dedupe", "institution_id"
-    )
-    _add_dedupe(
-        "company_notifications", "uq_comp_notif_dedupe", "company_id"
-    )
+    _add_dedupe("institution_notifications", "uq_inst_notif_dedupe", "institution_id")
+    _add_dedupe("company_notifications", "uq_comp_notif_dedupe", "company_id")
 
 
 def downgrade():

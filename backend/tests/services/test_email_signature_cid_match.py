@@ -10,6 +10,7 @@ class TestEmailSignatureCidMatch:
 
     def test_cid_html_matches_brevo_contentid(self):
         """Test que le HTML src="cid:company_logo" correspond exactement à contentId="company_logo"."""
+
         # Créer un mock company avec logo_url
         class MockCompany:
             def __init__(self):
@@ -24,6 +25,7 @@ class TestEmailSignatureCidMatch:
 
         # Vérifier que le HTML contient exactement src="cid:company_logo"
         import re
+
         img_src_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', html_result)
         assert img_src_match is not None, "Aucun src trouvé dans le HTML"
         html_img_src = img_src_match.group(1)

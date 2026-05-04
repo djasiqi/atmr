@@ -14,9 +14,7 @@ UNASSIGNED_DEFINITION = (
 
 # with_transfer: au moins un transfert partenaire accepté ou complété pour cette réservation.
 # SQL: EXISTS booking_transfers WHERE booking_id = … AND status IN (ACCEPTED, COMPLETED).
-WITH_TRANSFER_DEFINITION = (
-    "Avec transfert = existe un BookingTransfer en statut ACCEPTED ou COMPLETED pour la réservation."
-)
+WITH_TRANSFER_DEFINITION = "Avec transfert = existe un BookingTransfer en statut ACCEPTED ou COMPLETED pour la réservation."
 
 # incomplete_data: données minimales manquantes pour exploitation sereine.
 INCOMPLETE_DATA_DEFINITION = (

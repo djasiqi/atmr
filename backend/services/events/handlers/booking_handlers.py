@@ -17,16 +17,24 @@ def _log_notification_dispatched(
     summary = {
         k: getattr(targets, k, None)
         for k in (
-            "notify_driver_push", "notify_driver_socket",
-            "notify_owner_push", "notify_owner_socket",
-            "notify_executing_push", "notify_executing_socket", "notify_executing_persist",
-            "notify_institution_persist", "notify_institution_socket",
+            "notify_driver_push",
+            "notify_driver_socket",
+            "notify_owner_push",
+            "notify_owner_socket",
+            "notify_executing_push",
+            "notify_executing_socket",
+            "notify_executing_persist",
+            "notify_institution_persist",
+            "notify_institution_socket",
         )
         if getattr(targets, k, None)
     }
     logger.info(
         "[notification_dispatched] event=%s booking_id=%s trace_id=%s targets=%s",
-        event_type, booking_id, trace_id, summary,
+        event_type,
+        booking_id,
+        trace_id,
+        summary,
     )
 
 
@@ -76,7 +84,9 @@ def handle_booking_assigned(event: dict[str, Any]) -> None:
                     public_id=ctx.request_public_id,
                 )
             except Exception:
-                logger.debug("[EventBus] Institution assigned notification failed (non-critical)")
+                logger.debug(
+                    "[EventBus] Institution assigned notification failed (non-critical)"
+                )
 
         if targets.notify_executing_socket and targets.executing_company_id:
             try:
@@ -98,7 +108,9 @@ def handle_booking_assigned(event: dict[str, Any]) -> None:
                     persist=targets.notify_executing_persist,
                 )
             except Exception:
-                logger.debug("[EventBus] Executing company assigned notification failed (non-critical)")
+                logger.debug(
+                    "[EventBus] Executing company assigned notification failed (non-critical)"
+                )
 
     except Exception:
         logger.exception("[EventBus] handle_booking_assigned failed")
@@ -214,9 +226,7 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 "value",
                 getattr(booking, "status", None),
             )
-            status_val = (
-                str(status_raw).lower() if status_raw is not None else None
-            )
+            status_val = str(status_raw).lower() if status_raw is not None else None
             booking_data["status"] = status_val
             booking_data["actor_role"] = actor_role
             booking_data["actor_id"] = actor_id
@@ -253,7 +263,9 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                 or int(driver_id) != int(targets.exclude_driver_id)
             ):
                 changes = event.get("changes") or {}
-                changes_keys = set(changes.keys()) if isinstance(changes, dict) else set()
+                changes_keys = (
+                    set(changes.keys()) if isinstance(changes, dict) else set()
+                )
                 driver_push = targets.notify_driver_push and (
                     bool(
                         changes_keys.intersection(
@@ -291,12 +303,17 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                     status=status_val,
                 )
                 _log_notification_dispatched(
-                    "booking_updated", booking_id, full_targets,
+                    "booking_updated",
+                    booking_id,
+                    full_targets,
                     trace_id=booking_data.get("trace_id"),
                 )
 
                 # Institution : socket + persist (en_route, completed ; skip in_progress)
-                if full_targets.notify_institution_persist and full_targets.institution_id:
+                if (
+                    full_targets.notify_institution_persist
+                    and full_targets.institution_id
+                ):
                     try:
                         from services.events.institution_events import (
                             emit_booking_status_updated,
@@ -314,10 +331,15 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                             eta=None,
                         )
                     except Exception:
-                        logger.debug("[EventBus] Institution event emission failed (non-critical)")
+                        logger.debug(
+                            "[EventBus] Institution event emission failed (non-critical)"
+                        )
 
                 # Executing company : socket (toujours si sous-traite), push (completed/cancelled)
-                if full_targets.notify_executing_socket and full_targets.executing_company_id:
+                if (
+                    full_targets.notify_executing_socket
+                    and full_targets.executing_company_id
+                ):
                     try:
                         from services.events.fanout import (
                             _send_notification_to_executing_company,
@@ -326,7 +348,8 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                         _send_notification_to_executing_company(
                             executing_company_id=full_targets.executing_company_id,
                             title=f"Course #{booking_id} - {status_val or 'mise a jour'}",
-                            body=booking_data.get("pickup_address", "") or f"Statut: {status_val}",
+                            body=booking_data.get("pickup_address", "")
+                            or f"Statut: {status_val}",
                             data={
                                 "type": "booking_updated",
                                 "booking_id": int(booking_id),
@@ -338,7 +361,9 @@ def handle_booking_updated(event: dict[str, Any]) -> None:
                             persist=full_targets.notify_executing_persist,
                         )
                     except Exception:
-                        logger.debug("[EventBus] Executing company updated notification failed (non-critical)")
+                        logger.debug(
+                            "[EventBus] Executing company updated notification failed (non-critical)"
+                        )
 
             # Portail client : uniquement « en route » (acceptation / assignation gérés ailleurs).
             if status_val == "en_route":
@@ -486,18 +511,24 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
 
                 logger.info(
                     "[R5-CASCADE] Retour id=%s annulé par cascade (aller id=%s)",
-                    ret.id, booking.id,
+                    ret.id,
+                    booking.id,
                 )
 
         ctx = resolve_booking_notification_context(int(booking_id))
         if ctx is None:
             # Fallback : notifier le driver si disponible (ancien comportement)
             if driver_id:
-                notify_booking_cancelled(int(driver_id), int(booking_id), booking_data=booking_data)
+                notify_booking_cancelled(
+                    int(driver_id), int(booking_id), booking_data=booking_data
+                )
             return
 
         targets = compute_all_notification_targets(
-            "booking_cancelled", ctx, actor_role=actor_role, actor_id=actor_id,
+            "booking_cancelled",
+            ctx,
+            actor_role=actor_role,
+            actor_id=actor_id,
         )
         _log_notification_dispatched("booking_cancelled", booking_id, targets)
 
@@ -527,7 +558,9 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
                     send_push=True,
                 )
             except Exception:
-                logger.debug("[EventBus] Owner company cancel notification failed (non-critical)")
+                logger.debug(
+                    "[EventBus] Owner company cancel notification failed (non-critical)"
+                )
 
         # Institution : socket + persist
         if targets.notify_institution_persist and targets.institution_id:
@@ -546,7 +579,9 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
                     display_label=cancel_reason,
                 )
             except Exception:
-                logger.debug("[EventBus] Institution cancel notification failed (non-critical)")
+                logger.debug(
+                    "[EventBus] Institution cancel notification failed (non-critical)"
+                )
 
         # Executing company : socket + push + persist
         if targets.notify_executing_push and targets.executing_company_id:
@@ -571,7 +606,9 @@ def handle_booking_cancelled(event: dict[str, Any]) -> None:
                     persist=targets.notify_executing_persist,
                 )
             except Exception:
-                logger.debug("[EventBus] Executing company cancel notification failed (non-critical)")
+                logger.debug(
+                    "[EventBus] Executing company cancel notification failed (non-critical)"
+                )
 
         logger.debug(
             "[EventBus] BookingCancelledEvent routed: booking_id=%s actor_role=%s",

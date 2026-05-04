@@ -69,7 +69,9 @@ def map_mobile_ride_payload_to_manual_booking_payload(
             if enforce_mode:
                 raise ValueError(f"{address_key} doit être un objet structuré")
             return (None, None, None, None)
-        label_raw = value.get("label") or value.get("address") or value.get("description")
+        label_raw = (
+            value.get("label") or value.get("address") or value.get("description")
+        )
         place_id_raw = value.get("place_id") or value.get("placeId")
         lat_raw = value.get("lat") or value.get("latitude")
         lon_raw = value.get("lon") or value.get("lng") or value.get("longitude")
@@ -158,7 +160,9 @@ def map_mobile_ride_payload_to_manual_booking_payload(
             result["return_date"] = scheduled.split("T")[0]
         else:
             result["return_date"] = (
-                scheduled[:_ISO_DATE_LEN] if len(scheduled) >= _ISO_DATE_LEN else scheduled
+                scheduled[:_ISO_DATE_LEN]
+                if len(scheduled) >= _ISO_DATE_LEN
+                else scheduled
             )
 
     # Champs pass-through (noms identiques)

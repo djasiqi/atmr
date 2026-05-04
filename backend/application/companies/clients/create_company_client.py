@@ -105,7 +105,7 @@ class CreateCompanyClientUseCase:
         self._writer = client_writer
         self._make_public_id = make_public_id_fn
 
-    def execute(  # noqa: PLR0911
+    def execute(
         self, input_data: CreateCompanyClientInput
     ) -> CreateCompanyClientOutput:
         validated_data = input_data.validated_data
@@ -227,7 +227,9 @@ class CreateCompanyClientUseCase:
             "gp_phone": validated_data.get("gp_phone"),
             # Facturation par défaut
             "default_billed_to_type": validated_data.get("default_billed_to_type"),
-            "default_billed_to_contact": validated_data.get("default_billed_to_contact"),
+            "default_billed_to_contact": validated_data.get(
+                "default_billed_to_contact"
+            ),
             "is_active": validated_data.get("is_active", True),
         }
 
@@ -241,14 +243,11 @@ class CreateCompanyClientUseCase:
                 if lid_int is not None:
                     from models import Client
 
-                    existing = (
-                        Client.query.filter(
-                            Client.company_id == input_data.company_id,
-                            Client.is_institution.is_(True),
-                            Client.linked_institution_id == lid_int,
-                        )
-                        .first()
-                    )
+                    existing = Client.query.filter(
+                        Client.company_id == input_data.company_id,
+                        Client.is_institution.is_(True),
+                        Client.linked_institution_id == lid_int,
+                    ).first()
                     if existing is not None:
                         return CreateCompanyClientOutput(
                             success=False,

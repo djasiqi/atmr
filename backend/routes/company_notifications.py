@@ -11,7 +11,8 @@ Endpoints:
 import logging
 from datetime import UTC, datetime, timedelta
 
-from flask import abort, request as flask_request
+from flask import abort
+from flask import request as flask_request
 from flask_jwt_extended import get_jwt, verify_jwt_in_request
 from flask_restx import Namespace, Resource
 from sqlalchemy import or_
@@ -50,30 +51,24 @@ class CompanyNotificationList(Resource):
             offset = max(int(flask_request.args.get("offset", 0)), 0)
             cutoff = datetime.now(UTC) - timedelta(hours=24)
 
-            base_filter = (
-                CompanyNotification.query
-                .filter(
-                    CompanyNotification.company_id == company_id,
-                    or_(
-                        CompanyNotification.created_at >= cutoff,
-                        CompanyNotification.is_read.is_(False),
-                    ),
-                )
+            base_filter = CompanyNotification.query.filter(
+                CompanyNotification.company_id == company_id,
+                or_(
+                    CompanyNotification.created_at >= cutoff,
+                    CompanyNotification.is_read.is_(False),
+                ),
             )
 
             notifications = (
-                base_filter
-                .order_by(CompanyNotification.created_at.desc())
+                base_filter.order_by(CompanyNotification.created_at.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
             )
 
-            unread_count = (
-                CompanyNotification.query
-                .filter_by(company_id=company_id, is_read=False)
-                .count()
-            )
+            unread_count = CompanyNotification.query.filter_by(
+                company_id=company_id, is_read=False
+            ).count()
 
             total = base_filter.count()
 
@@ -129,11 +124,9 @@ class CompanyNotificationReadAll(Resource):
         try:
             company_id = _get_company_id()
 
-            updated = (
-                CompanyNotification.query
-                .filter_by(company_id=company_id, is_read=False)
-                .update({"is_read": True})
-            )
+            updated = CompanyNotification.query.filter_by(
+                company_id=company_id, is_read=False
+            ).update({"is_read": True})
             db.session.commit()
 
             return {"success": True, "updated_count": updated}

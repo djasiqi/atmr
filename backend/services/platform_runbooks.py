@@ -11,8 +11,10 @@ from sqlalchemy import func, select
 from ext import db
 from models.company import Company
 from models.platform_runbook_execution import PlatformRunbookExecution
-
-from services.platform_exceptions import PlatformRollbackNotAllowed, PlatformRunbookConflict
+from services.platform_exceptions import (
+    PlatformRollbackNotAllowed,
+    PlatformRunbookConflict,
+)
 from services.platform_governance_constants import (
     RUNBOOK_EXEC_COMPLETED,
     RUNBOOK_EXEC_FAILED,
@@ -73,7 +75,9 @@ def preview_execution(
     }
 
 
-def _execution_to_dict(row: PlatformRunbookExecution, rb: dict[str, Any]) -> dict[str, Any]:
+def _execution_to_dict(
+    row: PlatformRunbookExecution, rb: dict[str, Any]
+) -> dict[str, Any]:
     """Expose un statut d'exécution API canonique (running|verifying|completed|failed|rolled_back).
     Le résultat métier reste dans result_status / verification_status (ex. success = métier, pas statut machine)."""
     result_json = row.result_json or {}
@@ -95,7 +99,7 @@ def _execution_to_dict(row: PlatformRunbookExecution, rb: dict[str, Any]) -> dic
     st = row.status
     if st == RUNBOOK_EXEC_ROLLED_BACK:
         out["status"] = "rolled_back"
-        out["lifecycle"] = base_lifecycle + ["rolled_back"]
+        out["lifecycle"] = [*base_lifecycle, "rolled_back"]
         out["rolled_back_at"] = result_json.get("rolled_back_at")
     elif st == RUNBOOK_EXEC_FAILED:
         out["status"] = "failed"
@@ -143,17 +147,20 @@ def execute_runbook(
     db.session.add(row)
     db.session.flush()
 
-    active = db.session.scalar(
-        select(func.count())
-        .select_from(PlatformRunbookExecution)
-        .where(
-            PlatformRunbookExecution.tenant_id == tenant_id,
-            PlatformRunbookExecution.runbook_id == runbook_id,
-            PlatformRunbookExecution.status.in_(
-                (RUNBOOK_EXEC_RUNNING, RUNBOOK_EXEC_VERIFYING)
-            ),
+    active = (
+        db.session.scalar(
+            select(func.count())
+            .select_from(PlatformRunbookExecution)
+            .where(
+                PlatformRunbookExecution.tenant_id == tenant_id,
+                PlatformRunbookExecution.runbook_id == runbook_id,
+                PlatformRunbookExecution.status.in_(
+                    (RUNBOOK_EXEC_RUNNING, RUNBOOK_EXEC_VERIFYING)
+                ),
+            )
         )
-    ) or 0
+        or 0
+    )
     if active > 1:
         db.session.rollback()
         raise PlatformRunbookConflict()

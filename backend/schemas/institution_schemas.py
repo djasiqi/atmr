@@ -64,7 +64,9 @@ class InstitutionUpdateSchema(Schema):
     )
     institution_type = fields.Str(
         validate=validate.OneOf(VALID_INSTITUTION_TYPES),
-        metadata={"description": "Type d'institution (clinic, ems, imad, hospital, curatelle, other)"},
+        metadata={
+            "description": "Type d'institution (clinic, ems, imad, hospital, curatelle, other)"
+        },
     )
     address = fields.Str(
         validate=validate.Length(max=255),
@@ -324,7 +326,10 @@ class InstitutionPatientCreateSchema(Schema):
         metadata={"description": "Téléphone du curateur"},
     )
     guardian_email = fields.Str(
-        validate=[validate.Length(max=200), validate.Email(error="Email curateur invalide")],
+        validate=[
+            validate.Length(max=200),
+            validate.Email(error="Email curateur invalide"),
+        ],
         allow_none=True,
         metadata={"description": "Email du curateur"},
     )
@@ -443,7 +448,10 @@ class InstitutionPatientUpdateSchema(Schema):
         allow_none=True,
     )
     guardian_email = fields.Str(
-        validate=[validate.Length(max=200), validate.Email(error="Email curateur invalide")],
+        validate=[
+            validate.Length(max=200),
+            validate.Email(error="Email curateur invalide"),
+        ],
         allow_none=True,
     )
     guardian_address = fields.Str(
@@ -666,7 +674,9 @@ class TransportRequestCreateSchema(Schema):
     dropoff_type = fields.Str(
         validate=validate.OneOf(VALID_LOCATION_TYPES),
         allow_none=True,
-        metadata={"description": "Type de lieu arrivée: institution | domicile | other"},
+        metadata={
+            "description": "Type de lieu arrivée: institution | domicile | other"
+        },
     )
     pickup_entry_point = fields.Str(
         validate=validate.Length(max=100),

@@ -126,7 +126,13 @@ class TestSendWithOffers:
         return request
 
     def test_send_without_preferences_creates_broadcast(
-        self, client, db, sample_institution, auth_headers, sample_request, sample_company
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
     ):
         """Test: Sans préférences, send crée des offres broadcast."""
         # Vérifier pas de préférences
@@ -160,8 +166,14 @@ class TestSendWithOffers:
         assert all(o.status == OfferStatus.PENDING.value for o in offers)
 
     def test_send_with_preferences_creates_sequential(
-        self, client, db, sample_institution, auth_headers, sample_request,
-        sample_company, sample_company_2
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
+        sample_company_2,
     ):
         """Test: Avec préférences, send crée une offre séquentielle (première préférence)."""
         # Définir des préférences
@@ -195,7 +207,13 @@ class TestSendWithOffers:
         assert offers[0].expires_at is not None
 
     def test_send_already_sent_is_idempotent(
-        self, client, db, sample_institution, auth_headers, sample_request, sample_company
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
     ):
         """Test GO-LIVE: Renvoyer une demande SENT avec offres PENDING retourne 200 (idempotent)."""
         # Première envoi
@@ -211,14 +229,24 @@ class TestSendWithOffers:
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
         )
-        assert response.status_code == 200, f"Expected idempotent 200, got {response.status_code}"
+        assert response.status_code == 200, (
+            f"Expected idempotent 200, got {response.status_code}"
+        )
 
         # Vérifier que le nombre d'offres est cohérent
         second_offers = response.json.get("send_info", {}).get("offers_created", 0)
-        assert second_offers == first_offers, "Idempotent send should return same offer count"
+        assert second_offers == first_offers, (
+            "Idempotent send should return same offer count"
+        )
 
     def test_send_converted_request_fails_409(
-        self, client, db, sample_institution, auth_headers, sample_request, sample_company
+        self,
+        client,
+        db,
+        sample_institution,
+        auth_headers,
+        sample_request,
+        sample_company,
     ):
         """Test GO-LIVE: Envoyer une demande CONVERTED retourne 409."""
         # Simuler une demande déjà convertie
@@ -231,7 +259,9 @@ class TestSendWithOffers:
             f"/api/v1/institutions/requests/{sample_request.id}/send",
             headers=auth_headers,
         )
-        assert response.status_code == 409, f"Expected 409 for CONVERTED, got {response.status_code}"
+        assert response.status_code == 409, (
+            f"Expected 409 for CONVERTED, got {response.status_code}"
+        )
         assert "convertie" in response.json.get("error", "").lower()
 
 
@@ -340,7 +370,12 @@ class TestAcceptOffer:
         return request, offer
 
     def test_accept_offer_creates_booking(
-        self, client, db, sample_request_with_offer, company_auth_headers, sample_company
+        self,
+        client,
+        db,
+        sample_request_with_offer,
+        company_auth_headers,
+        sample_company,
     ):
         """Test: Accepter une offre crée un booking."""
         request, offer = sample_request_with_offer
@@ -375,8 +410,13 @@ class TestAcceptOffer:
         assert booking.pickup_location == request.pickup_location
 
     def test_accept_makes_other_offers_unavailable(
-        self, client, db, sample_institution, sample_company, sample_company_2,
-        company_auth_headers
+        self,
+        client,
+        db,
+        sample_institution,
+        sample_company,
+        sample_company_2,
+        company_auth_headers,
     ):
         """Test: Accepter rend les autres offres UNAVAILABLE."""
         company1, _user1 = sample_company
@@ -422,8 +462,14 @@ class TestAcceptOffer:
         assert offer2.status == OfferStatus.UNAVAILABLE.value
 
     def test_second_accept_fails(
-        self, client, db, sample_institution, sample_company, sample_company_2,
-        company_auth_headers, company_2_auth_headers
+        self,
+        client,
+        db,
+        sample_institution,
+        sample_company,
+        sample_company_2,
+        company_auth_headers,
+        company_2_auth_headers,
     ):
         """Test: Deuxième acceptation échoue (first accept wins)."""
         company1, _user1 = sample_company
@@ -675,7 +721,9 @@ class TestTransportPreferences:
         assert data["preferences"] == []
         assert data["total"] == 0
 
-    def test_set_preferences(self, client, db, sample_institution, auth_headers, sample_companies):
+    def test_set_preferences(
+        self, client, db, sample_institution, auth_headers, sample_companies
+    ):
         """Test: PUT définit les préférences."""
         company_ids = [c.id for c in sample_companies]
 
@@ -720,7 +768,9 @@ class TestTransportPreferences:
         assert data["total"] == 1
         assert data["preferences"][0]["company_id"] == sample_companies[2].id
 
-    def test_get_eligible_companies(self, client, db, sample_institution, auth_headers, sample_companies):
+    def test_get_eligible_companies(
+        self, client, db, sample_institution, auth_headers, sample_companies
+    ):
         """Test: GET eligible-companies retourne les entreprises éligibles."""
         response = client.get(
             "/api/v1/institutions/settings/eligible-companies",

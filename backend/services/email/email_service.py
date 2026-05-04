@@ -141,7 +141,9 @@ class EmailService:
 
             if billing_party:
                 recipient_name = billing_party.display_name or client_name
-                recipient_type = getattr(billing_party.type, "value", billing_party.type)
+                recipient_type = getattr(
+                    billing_party.type, "value", billing_party.type
+                )
                 try:
                     from models.billing_party import ClientBillingParty
 
@@ -150,7 +152,9 @@ class EmailService:
                         billing_party_id=billing_party.id,
                     ).first()
                     relationship_label = (
-                        normalize_relationship_label(getattr(link, "role", "")) if link else ""
+                        normalize_relationship_label(getattr(link, "role", ""))
+                        if link
+                        else ""
                     )
                 except Exception:
                     relationship_label = ""
@@ -162,7 +166,11 @@ class EmailService:
                 recipient_name = institution_name or client_name
                 recipient_type = "clinic"
 
-            is_clinic_recipient = str(recipient_type).lower() in {"clinic", "hospital", "ems"}
+            is_clinic_recipient = str(recipient_type).lower() in {
+                "clinic",
+                "hospital",
+                "ems",
+            }
             is_family_recipient = str(recipient_type).lower() == "family"
             is_curator_recipient = str(recipient_type).lower() == "curatorship"
             is_insurance_recipient = str(recipient_type).lower() == "insurance"

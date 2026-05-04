@@ -35,7 +35,12 @@ class UserRoleUpdateSchema(Schema):
     )
     institution_role = fields.Str(
         validate=validate.OneOf(
-            ["institution_admin", "institution_requester", "institution_reader", "institution_billing"],
+            [
+                "institution_admin",
+                "institution_requester",
+                "institution_reader",
+                "institution_billing",
+            ],
             error="Rôle institution invalide. Valeurs possibles: institution_admin, institution_requester, institution_reader, institution_billing",
         ),
         allow_none=True,

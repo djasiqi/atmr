@@ -94,11 +94,14 @@ class TestBookingUpdatedHandler:
         db.session.commit()
 
         # Mock fanout (handler utilise fanout directement, pas notify_booking_update)
-        with patch(
-            "services.events.handlers.booking_handlers.fanout_booking_updated"
-        ) as mock_fanout_driver, patch(
-            "services.events.handlers.booking_handlers.fanout_booking_updated_to_company"
-        ) as mock_fanout_company:
+        with (
+            patch(
+                "services.events.handlers.booking_handlers.fanout_booking_updated"
+            ) as mock_fanout_driver,
+            patch(
+                "services.events.handlers.booking_handlers.fanout_booking_updated_to_company"
+            ) as mock_fanout_company,
+        ):
             event = {
                 "event_type": "BookingUpdatedEvent",
                 "booking_id": booking.id,
@@ -171,11 +174,14 @@ class TestBookingUpdatedHandler:
         db.session.add(booking)
         db.session.commit()
 
-        with patch(
-            "services.events.fanout.fanout_booking_updated"
-        ) as mock_fanout_driver, patch(
-            "services.events.fanout.fanout_booking_updated_to_company"
-        ) as mock_fanout_company:
+        with (
+            patch(
+                "services.events.fanout.fanout_booking_updated"
+            ) as mock_fanout_driver,
+            patch(
+                "services.events.fanout.fanout_booking_updated_to_company"
+            ) as mock_fanout_company,
+        ):
             event = {
                 "event_type": "BookingUpdatedEvent",
                 "booking_id": booking.id,
@@ -195,11 +201,10 @@ class TestBookingUpdatedHandler:
         """P0.2: exclude_driver_id -> fanout_booking_updated return early, company via fanout_to_company."""
         from services.events.fanout import fanout_booking_updated
 
-        with patch(
-            "services.events.fanout._send_push_to_driver"
-        ) as mock_push_driver, patch(
-            "services.events.fanout.emit_driver_event"
-        ) as mock_emit_driver:
+        with (
+            patch("services.events.fanout._send_push_to_driver") as mock_push_driver,
+            patch("services.events.fanout.emit_driver_event") as mock_emit_driver,
+        ):
             fanout_booking_updated(
                 driver_id=33,
                 booking_id=1,
@@ -231,11 +236,14 @@ class TestBookingUpdatedHandler:
             "company_id": 1,
         }
 
-        with patch(
-            "services.events.fanout.fanout_booking_updated"
-        ) as mock_fanout_driver, patch(
-            "services.events.fanout.fanout_booking_updated_to_company"
-        ) as mock_fanout_company:
+        with (
+            patch(
+                "services.events.fanout.fanout_booking_updated"
+            ) as mock_fanout_driver,
+            patch(
+                "services.events.fanout.fanout_booking_updated_to_company"
+            ) as mock_fanout_company,
+        ):
             handle_booking_updated(event)
             # Ne doit pas appeler fanout si le booking n'existe pas
             mock_fanout_driver.assert_not_called()
@@ -638,11 +646,14 @@ class TestEventIntegration:
         registry.register("BookingUpdatedEvent", handle_booking_updated)
 
         # Mock fanout (handler utilise fanout directement)
-        with patch(
-            "services.events.fanout.fanout_booking_updated"
-        ) as mock_fanout_driver, patch(
-            "services.events.fanout.fanout_booking_updated_to_company"
-        ) as mock_fanout_company:
+        with (
+            patch(
+                "services.events.fanout.fanout_booking_updated"
+            ) as mock_fanout_driver,
+            patch(
+                "services.events.fanout.fanout_booking_updated_to_company"
+            ) as mock_fanout_company,
+        ):
             # Publier l'événement (actor_role absent -> fallback)
             publish_event(
                 BookingUpdatedEvent(

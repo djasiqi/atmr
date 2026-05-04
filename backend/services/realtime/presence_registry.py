@@ -69,7 +69,9 @@ def register_presence(
 
         canonical_key = _driver_canonical_key(driver_id)
         sessions_key = _driver_sessions_key(driver_id)
-        previous_raw = _resolve_redis_response(cast(Any, redis_client.get(canonical_key)))
+        previous_raw = _resolve_redis_response(
+            cast(Any, redis_client.get(canonical_key))
+        )
         previous_sid: str | None = None
         if isinstance(previous_raw, (str, bytes, bytearray)):
             with suppress(json.JSONDecodeError):
@@ -101,7 +103,9 @@ def refresh_presence(*, sid: str, user_id: int, role: str) -> None:
     key = _presence_key(role, user_id, sid)
     try:
         redis_client.expire(key, PRESENCE_TTL_SECONDS)
-        sid_payload_raw = _resolve_redis_response(cast(Any, redis_client.get(_sid_index_key(sid))))
+        sid_payload_raw = _resolve_redis_response(
+            cast(Any, redis_client.get(_sid_index_key(sid)))
+        )
         redis_client.expire(_sid_index_key(sid), PRESENCE_TTL_SECONDS)
         if isinstance(sid_payload_raw, (str, bytes, bytearray)):
             with suppress(json.JSONDecodeError):
@@ -125,7 +129,9 @@ def remove_presence(*, sid: str, user_id: int, role: str) -> None:
     key = _presence_key(role, user_id, sid)
     try:
         redis_client.delete(key)
-        sid_payload_raw = _resolve_redis_response(cast(Any, redis_client.get(_sid_index_key(sid))))
+        sid_payload_raw = _resolve_redis_response(
+            cast(Any, redis_client.get(_sid_index_key(sid)))
+        )
         redis_client.delete(_sid_index_key(sid))
         if isinstance(sid_payload_raw, (str, bytes, bytearray)):
             with suppress(json.JSONDecodeError):
@@ -154,4 +160,3 @@ def remove_presence(*, sid: str, user_id: int, role: str) -> None:
                                     redis_client.delete(canonical_key)
     except Exception:
         logger.exception("[presence] remove failed")
-

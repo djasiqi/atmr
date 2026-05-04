@@ -17,7 +17,9 @@ def run_demo_sanity_check() -> int:
         request_count = TransportRequest.query.count()
         invoice_count = Invoice.query.count()
 
-        today_bookings = Booking.query.filter(Booking.scheduled_time >= datetime.combine(today, datetime.min.time())).count()
+        today_bookings = Booking.query.filter(
+            Booking.scheduled_time >= datetime.combine(today, datetime.min.time())
+        ).count()
         yesterday_bookings = Booking.query.filter(
             Booking.scheduled_time >= datetime.combine(yesterday, datetime.min.time()),
             Booking.scheduled_time < datetime.combine(today, datetime.min.time()),
@@ -44,4 +46,3 @@ def run_demo_sanity_check() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(run_demo_sanity_check())
-

@@ -59,13 +59,10 @@ def find_valid_voucher_for_booking(
         return None
 
     # 1. Chercher un bon directement lié au booking
-    direct_voucher = (
-        TransportVoucher.query.filter_by(
-            booking_id=booking.id,
-            status=TransportVoucherStatus.VALIDATED.value,
-        )
-        .first()
-    )
+    direct_voucher = TransportVoucher.query.filter_by(
+        booking_id=booking.id,
+        status=TransportVoucherStatus.VALIDATED.value,
+    ).first()
     if direct_voucher:
         return direct_voucher
 
@@ -76,10 +73,12 @@ def find_valid_voucher_for_booking(
             status=TransportVoucherStatus.VALIDATED.value,
         )
         .filter(
-            (TransportVoucher.valid_from.is_(None)) | (TransportVoucher.valid_from <= booking_date)
+            (TransportVoucher.valid_from.is_(None))
+            | (TransportVoucher.valid_from <= booking_date)
         )
         .filter(
-            (TransportVoucher.valid_to.is_(None)) | (TransportVoucher.valid_to >= booking_date)
+            (TransportVoucher.valid_to.is_(None))
+            | (TransportVoucher.valid_to >= booking_date)
         )
         .order_by(TransportVoucher.created_at.desc())
         .limit(1)
@@ -128,7 +127,11 @@ def resolve_payer_from_voucher(
                 "billing_source_ref": f"voucher#{voucher.id}",
             }
             # Si c'est une clinique, ajouter billed_to_company_id
-            if billing_party.type.value == "clinic" if hasattr(billing_party.type, "value") else str(billing_party.type) == "clinic":
+            if (
+                billing_party.type.value == "clinic"
+                if hasattr(billing_party.type, "value")
+                else str(billing_party.type) == "clinic"
+            ):
                 # Essayer de trouver la company_id depuis le billing_party
                 # (nécessite un mapping ou un champ dans BillingParty)
                 # Pour l'instant, on laisse None si pas disponible
@@ -136,7 +139,9 @@ def resolve_payer_from_voucher(
             return result
 
     # Si type=clinic mais pas de billing_party_id, résoudre via mapping
-    voucher_type_value = voucher.type.value if hasattr(voucher.type, "value") else str(voucher.type)
+    voucher_type_value = (
+        voucher.type.value if hasattr(voucher.type, "value") else str(voucher.type)
+    )
     if voucher_type_value == TransportVoucherType.CLINIC.value:
         # Chercher si le bon référence une clinique via external_ref ou autre
         # Pour l'instant, on retourne None si pas de billing_party_id
@@ -190,7 +195,9 @@ def detect_billing_conflict_with_voucher(
 
     expected_billing_party_id = expected_payer.get("billing_party_id")
     current_billing_party_id = getattr(booking, "billing_party_id", None)
-    current_billed_to_type = (getattr(booking, "billed_to_type", None) or "patient").lower()
+    current_billed_to_type = (
+        getattr(booking, "billed_to_type", None) or "patient"
+    ).lower()
 
     # Pas de conflit si le payeur correspond
     if current_billing_party_id == expected_billing_party_id:

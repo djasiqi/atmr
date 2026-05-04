@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import socket
@@ -143,10 +144,8 @@ def _build_redis_section() -> dict[str, Any]:
             r.ping()
             info_raw = r.info()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 r.close()
-            except Exception:
-                pass
     except Exception as e:
         logger.debug("[platform/runtime] redis section: %s", e, exc_info=False)
         return {
@@ -161,10 +160,7 @@ def _build_redis_section() -> dict[str, Any]:
             raise TypeError("redis info is not a dict")
         subset = _extract_redis_info_subset(dict(info_raw))
         # Après PING OK : au moins une métrique mémoire attendue, sinon INFO considéré incomplet.
-        if (
-            "used_memory_bytes" not in subset
-            and "used_memory_human" not in subset
-        ):
+        if "used_memory_bytes" not in subset and "used_memory_human" not in subset:
             raise ValueError("redis info missing memory fields")
         data = _redis_data_public_only(
             {
@@ -193,7 +189,9 @@ def _build_celery_section() -> dict[str, Any]:
     """Inspect Celery minimal (ping + stats optionnel) — timeout court, ne lève pas."""
     checked = _now_iso_z()
     try:
-        timeout = float(os.getenv("PLATFORM_RUNTIME_CELERY_INSPECT_TIMEOUT_SECONDS", "1.5"))
+        timeout = float(
+            os.getenv("PLATFORM_RUNTIME_CELERY_INSPECT_TIMEOUT_SECONDS", "1.5")
+        )
     except ValueError:
         timeout = 1.5
 

@@ -61,14 +61,20 @@ def test_update_driver_location_disables_canonical_outputs_when_non_canonical(
                 "query": type(
                     "Q",
                     (),
-                    {"get": lambda _id: driver_query_get_calls.__setitem__("count", driver_query_get_calls["count"] + 1)},
+                    {
+                        "get": lambda _id: driver_query_get_calls.__setitem__(
+                            "count", driver_query_get_calls["count"] + 1
+                        )
+                    },
                 )()
             },
         ),
     )
     monkeypatch.setattr(
         "services.geolocation.location.get_geofencing_service",
-        lambda: type("G", (), {"check_active_assignment_geofencing": lambda *a, **k: []})(),
+        lambda: type(
+            "G", (), {"check_active_assignment_geofencing": lambda *a, **k: []}
+        )(),
     )
     monkeypatch.setattr(service, "_log_trip_tracking", lambda **_kwargs: False)
 

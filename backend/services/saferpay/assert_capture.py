@@ -36,8 +36,7 @@ def _assert_http_is_transient(st_code: int) -> bool:
     return (
         st_code == 0
         or st_code >= HTTPStatus.INTERNAL_SERVER_ERROR
-        or st_code
-        in (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS)
+        or st_code in (HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS)
     )
 
 
@@ -69,7 +68,7 @@ _SAFERPAY_ASSERT_MAX_ATTEMPTS = 6
 _SAFERPAY_ASSERT_BACKOFF_MAX_SEC = 3.0
 
 
-def run_saferpay_paymentpage_assert_capture(session_token: str) -> dict[str, Any]:  # noqa: PLR0911
+def run_saferpay_paymentpage_assert_capture(session_token: str) -> dict[str, Any]:
     """Exécute PaymentPage Assert puis Transaction Capture si AUTHORIZED.
 
     Ne touche pas à la base. Retourne un dict avec au minimum ``status`` (constantes
@@ -143,7 +142,11 @@ def run_saferpay_paymentpage_assert_capture(session_token: str) -> dict[str, Any
                 msg = str(first)[:300] if first is not None else ""
             detail_text = msg or (raw or "")
         else:
-            detail_text = (raw or "") if raw else (str(assert_data) if assert_data is not None else "")
+            detail_text = (
+                (raw or "")
+                if raw
+                else (str(assert_data) if assert_data is not None else "")
+            )
         return {
             "status": SAFERPAY_FINALIZE_ASSERT_FAILED,
             "http_status": st_code,

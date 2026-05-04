@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from services.demo.access_service import DemoAccessError
 
 
-def test_admin_provision_access_success_partial_email(client, admin_headers, monkeypatch):
+def test_admin_provision_access_success_partial_email(
+    client, admin_headers, monkeypatch
+):
     now = datetime.now(UTC) + timedelta(hours=24)
     fake_result = SimpleNamespace(
         demo_request=SimpleNamespace(id=11),
@@ -15,7 +17,9 @@ def test_admin_provision_access_success_partial_email(client, admin_headers, mon
         email_sent=False,
         email_error="smtp failed",
     )
-    monkeypatch.setattr("routes.demo_requests.provision_demo_access", lambda **kwargs: fake_result)
+    monkeypatch.setattr(
+        "routes.demo_requests.provision_demo_access", lambda **kwargs: fake_result
+    )
 
     response = client.post(
         "/api/v1/admin/demo_requests/11/provision-access",
@@ -35,7 +39,9 @@ def test_admin_resend_access_business_error(client, admin_headers, monkeypatch):
         raise DemoAccessError("no_active_access", "Aucun acces actif.", status_code=409)
 
     monkeypatch.setattr("routes.demo_requests.resend_demo_access", _raise)
-    response = client.post("/api/v1/admin/demo_accesses/99/resend", headers=admin_headers, json={})
+    response = client.post(
+        "/api/v1/admin/demo_accesses/99/resend", headers=admin_headers, json={}
+    )
     assert response.status_code == 409
     body = response.get_json()
     assert body["code"] == "no_active_access"
@@ -46,7 +52,9 @@ def test_admin_revoke_access_success(client, admin_headers, monkeypatch):
         "routes.demo_requests.revoke_demo_access",
         lambda **kwargs: SimpleNamespace(id=55, status="revoked"),
     )
-    response = client.post("/api/v1/admin/demo_accesses/55/revoke", headers=admin_headers, json={})
+    response = client.post(
+        "/api/v1/admin/demo_accesses/55/revoke", headers=admin_headers, json={}
+    )
     assert response.status_code == 200
     body = response.get_json()
     assert body["ok"] is True
@@ -58,7 +66,9 @@ def test_consume_magic_link_error_mapping(client, monkeypatch):
         raise DemoAccessError("token_expired", "Token expire.", status_code=409)
 
     monkeypatch.setattr("routes.demo_requests.consume_magic_link", _raise)
-    response = client.post("/api/v1/demo_access/consume-magic-link", json={"token": "abc"})
+    response = client.post(
+        "/api/v1/demo_access/consume-magic-link", json={"token": "abc"}
+    )
     assert response.status_code == 409
     body = response.get_json()
     assert body["code"] == "token_expired"

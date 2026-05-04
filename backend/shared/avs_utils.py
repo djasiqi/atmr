@@ -19,6 +19,7 @@ import re
 # Rend le hash AVS résistant aux attaques par rainbow table
 # (espace de recherche = 13 chiffres = ~10^13, attaquable sans pepper).
 _AVS_PEPPER = os.environ.get("AVS_HASH_PEPPER", "")
+SWISS_AVS_NUM_DIGITS = 13
 
 
 def normalize_avs(avs_raw: str) -> str:
@@ -51,13 +52,11 @@ def validate_avs(avs_raw: str) -> str:
         'unknown' — 13 chiffres mais pas préfixe 756 (format étranger possible)
     """
     digits = normalize_avs(avs_raw)
-    if len(digits) != 13:
+    if len(digits) != SWISS_AVS_NUM_DIGITS:
         return "invalid"
     if not digits.startswith("756"):
         return "unknown"
     # EAN-13 check digit : somme des 12 premiers (poids 1,3 alternée)
-    total = sum(
-        int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits[:12])
-    )
+    total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits[:12]))
     expected_check = (10 - total % 10) % 10
     return "valid" if int(digits[12]) == expected_check else "invalid"

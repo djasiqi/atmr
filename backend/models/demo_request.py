@@ -35,10 +35,14 @@ class DemoRequest(db.Model):
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     score: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="new")
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="new"
+    )
     trace_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
 
-    source: Mapped[str] = mapped_column(String(64), nullable=False, server_default="web_demo_request")
+    source: Mapped[str] = mapped_column(
+        String(64), nullable=False, server_default="web_demo_request"
+    )
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     assigned_channel: Mapped[str | None] = mapped_column(String(120), nullable=True)

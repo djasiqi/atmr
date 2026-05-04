@@ -42,8 +42,7 @@ class InstitutionTransportPreference(db.Model):
     __table_args__ = (
         # Une seule préférence par (institution, company)
         UniqueConstraint(
-            "institution_id", "company_id",
-            name="uq_institution_transport_preference"
+            "institution_id", "company_id", name="uq_institution_transport_preference"
         ),
         # Index pour requêtes par institution
         Index("ix_institution_transport_pref_institution", "institution_id"),
@@ -116,11 +115,15 @@ class InstitutionTransportPreference(db.Model):
         return self.serialize
 
     @classmethod
-    def get_ordered_preferences(cls, institution_id: int) -> list[InstitutionTransportPreference]:
+    def get_ordered_preferences(
+        cls, institution_id: int
+    ) -> list[InstitutionTransportPreference]:
         """Récupère les préférences d'une institution, ordonnées."""
-        return cls.query.filter_by(
-            institution_id=institution_id
-        ).order_by(cls.order.asc()).all()
+        return (
+            cls.query.filter_by(institution_id=institution_id)
+            .order_by(cls.order.asc())
+            .all()
+        )
 
     @classmethod
     def get_company_ids_ordered(cls, institution_id: int) -> list[int]:
@@ -138,10 +141,14 @@ class InstitutionTransportPreference(db.Model):
         cls, institution_id: int, current_order: int
     ) -> InstitutionTransportPreference | None:
         """Récupère la préférence suivante après un ordre donné."""
-        return cls.query.filter(
-            cls.institution_id == institution_id,
-            cls.order > current_order,
-        ).order_by(cls.order.asc()).first()
+        return (
+            cls.query.filter(
+                cls.institution_id == institution_id,
+                cls.order > current_order,
+            )
+            .order_by(cls.order.asc())
+            .first()
+        )
 
     @classmethod
     def set_preferences(

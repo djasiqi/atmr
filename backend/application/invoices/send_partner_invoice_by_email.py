@@ -55,7 +55,7 @@ class SendPartnerInvoiceByEmailUseCase:
         self.brevo_provider = BrevoEmailProvider()
         self.partner_invoice_service = PartnerInvoiceService()
 
-    def execute(  # noqa: PLR0911 - Multiple early returns for validation steps
+    def execute(
         self, input_data: SendPartnerInvoiceByEmailInput
     ) -> SendPartnerInvoiceByEmailResult:
         """
@@ -303,9 +303,7 @@ class SendPartnerInvoiceByEmailUseCase:
                 "novembre",
                 "décembre",
             ]
-            period_str = (
-                f"{MONTHS_FR[partner_invoice.period_month]} {partner_invoice.period_year}"
-            )
+            period_str = f"{MONTHS_FR[partner_invoice.period_month]} {partner_invoice.period_year}"
 
             # Utiliser le template de message s'il existe, sinon message par défaut
             template = (

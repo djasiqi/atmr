@@ -853,7 +853,9 @@ def init_chat_socket(socketio: SocketIO):
                     raise SocketConnectionRefusedError("DRIVER_OR_COMPANY_NOT_FOUND")
                 if not _try_acquire_company_slot(int(driver.company_id)):
                     ws_metrics.on_error("realtime_company_capacity_exceeded")
-                    raise SocketConnectionRefusedError("COMPANY_REALTIME_CAPACITY_EXCEEDED")
+                    raise SocketConnectionRefusedError(
+                        "COMPANY_REALTIME_CAPACITY_EXCEEDED"
+                    )
 
                 company_room = f"company_{driver.company_id}"
                 driver_room = f"driver_{driver.id}"
@@ -923,7 +925,9 @@ def init_chat_socket(socketio: SocketIO):
                     raise SocketConnectionRefusedError("COMPANY_NOT_FOUND")
                 if not _try_acquire_company_slot(int(company.id)):
                     ws_metrics.on_error("realtime_company_capacity_exceeded")
-                    raise SocketConnectionRefusedError("COMPANY_REALTIME_CAPACITY_EXCEEDED")
+                    raise SocketConnectionRefusedError(
+                        "COMPANY_REALTIME_CAPACITY_EXCEEDED"
+                    )
 
                 room = f"company_{company.id}"
                 join_room(room)
@@ -1130,7 +1134,7 @@ def init_chat_socket(socketio: SocketIO):
             raise SocketConnectionRefusedError("CONNECT_ERROR") from e
 
     @socketio.on("team_chat_message")
-    def handle_team_chat(data):  # noqa: PLR0911
+    def handle_team_chat(data):
         local_id = data.get("_localId")
         logger.info("📨 [CHAT] team_chat_message reçu: data=%s", data)
         try:
@@ -1770,7 +1774,7 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
     @socketio.on("driver_location")
-    def handle_driver_location(data):  # noqa: PLR0911
+    def handle_driver_location(data):
         """Handler pour la réception de la localisation du chauffeur.
 
         Contrat modes / transports : ``backend/docs/DRIVER_LOCATION_CONTRACT.md``.
@@ -1834,7 +1838,9 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Chauffeur introuvable."})
                 return
 
-            if payload_driver_id is not None and isinstance(payload_driver_id, (int, str)):
+            if payload_driver_id is not None and isinstance(
+                payload_driver_id, (int, str)
+            ):
                 try:
                     candidate_id = int(payload_driver_id)
                     if candidate_id != int(driver.id):
@@ -1843,7 +1849,9 @@ def init_chat_socket(socketio: SocketIO):
                             candidate_id,
                             driver.id,
                         )
-                        emit("error", {"error": "driver_id invalide pour cette session."})
+                        emit(
+                            "error", {"error": "driver_id invalide pour cette session."}
+                        )
                         return
                 except (ValueError, TypeError):
                     emit("error", {"error": "driver_id invalide."})
@@ -1928,11 +1936,16 @@ def init_chat_socket(socketio: SocketIO):
             mission_id = data.get("mission_id")
             is_background = bool(data.get("is_background", False))
             recorded_at_dt = _parse_timestamp(recorded_at_value)
-            sent_at_dt = _parse_timestamp(sent_at_value) if sent_at_value else datetime.now(UTC)
+            sent_at_dt = (
+                _parse_timestamp(sent_at_value) if sent_at_value else datetime.now(UTC)
+            )
             if data.get("location_mode") is None or data.get("recorded_at") is None:
                 emit(
                     "error",
-                    {"error": "missing required fields", "reason": "missing_required_fields"},
+                    {
+                        "error": "missing required fields",
+                        "reason": "missing_required_fields",
+                    },
                 )
                 return
             if location_mode == "availability_presence":
@@ -1951,8 +1964,13 @@ def init_chat_socket(socketio: SocketIO):
                 company_id_val, raw_mode_sock
             )
             leid_sock = data.get("location_event_id")
-            from services.geolocation.driver_location_dedup import should_skip_location_ingest
-            from services.monitoring.driver_location_metrics import inc_dedup_skipped, inc_received
+            from services.geolocation.driver_location_dedup import (
+                should_skip_location_ingest,
+            )
+            from services.monitoring.driver_location_metrics import (
+                inc_dedup_skipped,
+                inc_received,
+            )
 
             skip_ingest_sock, skip_reason_sock = should_skip_location_ingest(
                 driver.id,
@@ -2038,7 +2056,9 @@ def init_chat_socket(socketio: SocketIO):
             now_iso = datetime.now(UTC).isoformat()
             last_seen_seconds = last_seen_seconds_from_location_fields(
                 {
-                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else None,
+                    "recorded_at": recorded_at_dt.isoformat()
+                    if recorded_at_dt
+                    else None,
                     "received_at": received_at,
                     "ts": timestamp.isoformat() if timestamp else None,
                 }
@@ -2065,8 +2085,12 @@ def init_chat_socket(socketio: SocketIO):
                     ),
                     "latitude": snapped_lat,
                     "longitude": snapped_lon,
-                    "timestamp": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
-                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "timestamp": recorded_at_dt.isoformat()
+                    if recorded_at_dt
+                    else now_iso,
+                    "recorded_at": recorded_at_dt.isoformat()
+                    if recorded_at_dt
+                    else now_iso,
                     "received_at": received_at,
                     "location_mode": location_mode,
                 },
@@ -2075,17 +2099,23 @@ def init_chat_socket(socketio: SocketIO):
                     "company_id": company_id_val,
                     "lat": snapped_lat,
                     "lng": snapped_lon,
-                    "timestamp": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "timestamp": recorded_at_dt.isoformat()
+                    if recorded_at_dt
+                    else now_iso,
                     "status": driver_status,
                     "mission_status": mission_status,
                     "presence_status": presence_status,
                     "location_status": location_status,
                     "is_available": driver_status == "available",
-                    "offline_reason": "location_stale" if location_status == "stale" else "",
+                    "offline_reason": "location_stale"
+                    if location_status == "stale"
+                    else "",
                     "last_seen_seconds": last_seen_seconds,
                     "location_mode": location_mode,
                     "mission_id": mission_id,
-                    "recorded_at": recorded_at_dt.isoformat() if recorded_at_dt else now_iso,
+                    "recorded_at": recorded_at_dt.isoformat()
+                    if recorded_at_dt
+                    else now_iso,
                     "received_at": received_at,
                 },
                 accept_status=accept_status,
@@ -2143,7 +2173,7 @@ def init_chat_socket(socketio: SocketIO):
                 )
 
     @socketio.on("driver_location_batch")
-    def handle_driver_location_batch(data):  # noqa: PLR0911
+    def handle_driver_location_batch(data):
         """Handler pour la réception de batch de localisations du chauffeur.
 
         Contrat : ``backend/docs/DRIVER_LOCATION_CONTRACT.md``. Les entrées
@@ -2198,7 +2228,9 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Chauffeur introuvable."})
                 return {"success": False, "error": "Chauffeur introuvable"}
 
-            if payload_driver_id is not None and isinstance(payload_driver_id, (int, str)):
+            if payload_driver_id is not None and isinstance(
+                payload_driver_id, (int, str)
+            ):
                 try:
                     candidate_id = int(payload_driver_id)
                     if candidate_id != int(driver.id):
@@ -2207,8 +2239,13 @@ def init_chat_socket(socketio: SocketIO):
                             candidate_id,
                             driver.id,
                         )
-                        emit("error", {"error": "driver_id invalide pour cette session."})
-                        return {"success": False, "error": "driver_id invalide pour cette session"}
+                        emit(
+                            "error", {"error": "driver_id invalide pour cette session."}
+                        )
+                        return {
+                            "success": False,
+                            "error": "driver_id invalide pour cette session",
+                        }
                 except (ValueError, TypeError):
                     emit("error", {"error": "driver_id invalide."})
                     return {"success": False, "error": "driver_id invalide"}
@@ -2271,8 +2308,13 @@ def init_chat_socket(socketio: SocketIO):
             # Instrumentation: tracer les clés reçues pour diagnostiquer payload cassé
             first_pos = positions[0] if positions else {}
             pos_keys = list(first_pos.keys())
-            has_loc_mode = "location_mode" in first_pos and first_pos.get("location_mode") is not None
-            has_rec_at = "recorded_at" in first_pos and first_pos.get("recorded_at") is not None
+            has_loc_mode = (
+                "location_mode" in first_pos
+                and first_pos.get("location_mode") is not None
+            )
+            has_rec_at = (
+                "recorded_at" in first_pos and first_pos.get("recorded_at") is not None
+            )
             if not has_loc_mode or not has_rec_at:
                 logger.warning(
                     "driver_location_batch position missing required fields: keys=%s has_location_mode=%s has_recorded_at=%s",
@@ -2371,7 +2413,10 @@ def init_chat_socket(socketio: SocketIO):
                         if sent_at_value
                         else datetime.now(UTC)
                     )
-                    if pos.get("location_mode") is None or pos.get("recorded_at") is None:
+                    if (
+                        pos.get("location_mode") is None
+                        or pos.get("recorded_at") is None
+                    ):
                         rejected_positions.append(
                             {
                                 "index": idx,
@@ -2420,7 +2465,9 @@ def init_chat_socket(socketio: SocketIO):
                         processed_count += 1
                         continue
 
-                    inc_received(transport="socket_batch", location_mode=norm_mode_batch)
+                    inc_received(
+                        transport="socket_batch", location_mode=norm_mode_batch
+                    )
 
                     snapped_lat, snapped_lon = latitude, longitude
                     accept_status = "accepted_observability_only"
@@ -2440,7 +2487,9 @@ def init_chat_socket(socketio: SocketIO):
                             recorded_at=recorded_at_dt,
                             sent_at=sent_at_dt,
                             is_background=is_background,
-                            mission_id=mission_id if isinstance(mission_id, int) else None,
+                            mission_id=mission_id
+                            if isinstance(mission_id, int)
+                            else None,
                             transport="socket_batch",
                         )
 
@@ -2494,7 +2543,9 @@ def init_chat_socket(socketio: SocketIO):
                     location_status = compute_location_status(
                         mode=location_mode, last_seen_seconds=last_seen_seconds
                     )
-                    presence_status = presence_status_from_location_status(location_status)
+                    presence_status = presence_status_from_location_status(
+                        location_status
+                    )
                     driver_status = _resolve_driver_status(
                         mission_status=mission_status,
                         is_active=bool(getattr(driver, "is_active", True)),
@@ -2839,7 +2890,9 @@ def init_chat_socket(socketio: SocketIO):
                         legacy_key = f"driver:{driver.id}:loc"
                         canonical_raw = redis_client.hgetall(canonical_key)
                         legacy_raw = (
-                            redis_client.hgetall(legacy_key) if not canonical_raw else None
+                            redis_client.hgetall(legacy_key)
+                            if not canonical_raw
+                            else None
                         )
                         h_raw = canonical_raw or legacy_raw
                         if canonical_raw:
@@ -2848,7 +2901,9 @@ def init_chat_socket(socketio: SocketIO):
                             redis_source = "legacy"
                         # Calme Pylance: redis-py retourne un dict[bytes, bytes]
                         h = cast("Mapping[bytes, Any]", h_raw)
-                        last_seen_raw = redis_client.get(f"driver:{driver.id}:last_seen")
+                        last_seen_raw = redis_client.get(
+                            f"driver:{driver.id}:last_seen"
+                        )
                     else:
                         last_seen_raw = None
 
@@ -2893,7 +2948,9 @@ def init_chat_socket(socketio: SocketIO):
                             presence_status=presence_status,
                         )
                         ts_val = loc_data.get("ts") or datetime.now(UTC).isoformat()
-                        from services.realtime.socketio import fanout_driver_location_update
+                        from services.realtime.socketio import (
+                            fanout_driver_location_update,
+                        )
 
                         fanout_accept_status = (
                             "accepted_canonical"
@@ -2942,7 +2999,9 @@ def init_chat_socket(socketio: SocketIO):
                             presence_status="degraded",
                         )
                         ts_val = datetime.now(UTC).isoformat()
-                        from services.realtime.socketio import fanout_driver_location_update
+                        from services.realtime.socketio import (
+                            fanout_driver_location_update,
+                        )
 
                         fanout_driver_location_update(
                             company_id,

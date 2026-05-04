@@ -3,6 +3,7 @@
 
 Règle absolue : jamais d'auto-link sans confirmation humaine.
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,6 @@ from typing import Any
 
 from sqlalchemy import func
 
-from ext import db
 from models.institution_patient import InstitutionPatient
 from models.patient_identity import (
     PatientIdentity,
@@ -71,20 +71,24 @@ def find_potential_matches(
 
         active_links = [lnk for lnk in identity.links if lnk.is_active]
 
-        results.append({
-            "type": "identity",
-            "identity_id": identity.id,
-            "match_score": score,
-            "signals": signals,
-            "confidence": identity.confidence_level,
-            "avs_last4": identity.avs_last4,
-            "linked_entities_count": len(active_links),
-        })
+        results.append(
+            {
+                "type": "identity",
+                "identity_id": identity.id,
+                "match_score": score,
+                "signals": signals,
+                "confidence": identity.confidence_level,
+                "avs_last4": identity.avs_last4,
+                "linked_entities_count": len(active_links),
+            }
+        )
 
     # 2. Si rien dans l'index, chercher dans les patients d'autres institutions
     if not results:
         patient_source = InstitutionPatient.query.get(patient_id)
-        source_institution_id = patient_source.institution_id if patient_source else None
+        source_institution_id = (
+            patient_source.institution_id if patient_source else None
+        )
 
         cross_query = InstitutionPatient.query.filter(
             func.lower(InstitutionPatient.first_name) == first_name.lower(),
@@ -110,15 +114,15 @@ def find_potential_matches(
                 score += 10
                 signals.append("phone_match")
 
-            results.append({
-                "type": "cross_patient",
-                "patient_id": p.id,
-                "institution_id": p.institution_id,
-                "institution_name": (
-                    p.institution.name if p.institution else "?"
-                ),
-                "match_score": score,
-                "signals": signals,
-            })
+            results.append(
+                {
+                    "type": "cross_patient",
+                    "patient_id": p.id,
+                    "institution_id": p.institution_id,
+                    "institution_name": (p.institution.name if p.institution else "?"),
+                    "match_score": score,
+                    "signals": signals,
+                }
+            )
 
     return sorted(results, key=lambda r: r["match_score"], reverse=True)

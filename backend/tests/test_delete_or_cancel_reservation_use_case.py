@@ -17,12 +17,12 @@ class FakeBooking:
     def __init__(
         self,
         *,
-        id: int = 1,
+        booking_id: int = 1,
         status: str = "ASSIGNED",
         driver_id: int | None = 1,
         scheduled_time: datetime | None = None,
     ):
-        self.id = id
+        self.id = booking_id
         self.status = status
         self.driver_id = driver_id
         self.scheduled_time = scheduled_time or (datetime.now(UTC) + timedelta(hours=2))

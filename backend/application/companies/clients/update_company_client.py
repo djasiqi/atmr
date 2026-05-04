@@ -57,6 +57,7 @@ class UpdateCompanyClientUseCase:
         self, *, client: _ClientLike, data: dict[str, Any]
     ) -> UpdateCompanyClientResult:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.info(
             "📝 [UpdateCompanyClientUseCase] Début mise à jour client ID=%s, données reçues: %s",
@@ -67,10 +68,16 @@ class UpdateCompanyClientUseCase:
         # Champs Client
         if "contact_email" in data:
             client.contact_email = data["contact_email"] or None
-            logger.info("📝 [UpdateCompanyClientUseCase] contact_email mis à jour: %s", client.contact_email)
+            logger.info(
+                "📝 [UpdateCompanyClientUseCase] contact_email mis à jour: %s",
+                client.contact_email,
+            )
         if "contact_phone" in data:
             client.contact_phone = data["contact_phone"] or None
-            logger.info("📝 [UpdateCompanyClientUseCase] contact_phone mis à jour: %s", client.contact_phone)
+            logger.info(
+                "📝 [UpdateCompanyClientUseCase] contact_phone mis à jour: %s",
+                client.contact_phone,
+            )
         if "billing_address" in data:
             client.billing_address = data["billing_address"]
         if "billing_lat" in data:
@@ -159,7 +166,10 @@ class UpdateCompanyClientUseCase:
                         client.preferential_rate,
                     )
                 except (ValueError, TypeError) as e:
-                    logger.error("❌ [UpdateCompanyClientUseCase] Erreur tarif préférentiel: %s", e)
+                    logger.error(
+                        "❌ [UpdateCompanyClientUseCase] Erreur tarif préférentiel: %s",
+                        e,
+                    )
                     return UpdateCompanyClientResult(
                         ok=False,
                         error={"error": "Tarif préférentiel invalide"},
@@ -330,7 +340,9 @@ class UpdateCompanyClientUseCase:
                         if clinic_company and not clinic_company_id:
                             client.default_billed_to_company_id = clinic_company.id
                     if clinic_company:
-                        domicile_address = getattr(client, "domicile_address", None) or ""
+                        domicile_address = (
+                            getattr(client, "domicile_address", None) or ""
+                        )
                         domicile_zip = getattr(client, "domicile_zip", None) or ""
                         domicile_city = getattr(client, "domicile_city", None) or ""
                         postal_city = " ".join(

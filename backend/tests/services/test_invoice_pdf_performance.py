@@ -12,13 +12,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from models import Booking, Client, Company, Invoice, InvoiceLine, User, db
+from models import Booking, Client, Company, Invoice, InvoiceLine, User
 from models.enums import BookingStatus, InvoiceLineType, InvoiceStatus
 from services.documents.pdf import (
     PERF_WARNING_MS_THRESHOLD,
     PERF_WARNING_ROWS_THRESHOLD,
-    PDFService,
     TEMPLATE_VERSION,
+    PDFService,
 )
 
 
@@ -83,7 +83,7 @@ class TestInvoicePdfPerformance:
         # Act & Assert
         with patch("services.documents.pdf.app_logger") as mock_logger:
             pdf_service = PDFService()
-            pdf_url = pdf_service.generate_invoice_pdf(invoice)
+            pdf_service.generate_invoice_pdf(invoice)
 
             # Vérifier que INFO a été appelé avec les bonnes données
             assert mock_logger.info.called, "INFO log should be called"
@@ -95,7 +95,9 @@ class TestInvoicePdfPerformance:
             assert f"template_version={TEMPLATE_VERSION}" in call_args[0]
 
             # Vérifier que WARNING n'a pas été appelé (facture normale)
-            assert not mock_logger.warning.called, "WARNING should not be called for normal invoice"
+            assert not mock_logger.warning.called, (
+                "WARNING should not be called for normal invoice"
+            )
 
     def test_performance_logging_large_invoice(self, db):
         """Test que les logs WARNING sont émis pour une facture avec beaucoup de lignes."""
@@ -155,10 +157,12 @@ class TestInvoicePdfPerformance:
         # Act & Assert
         with patch("services.documents.pdf.app_logger") as mock_logger:
             pdf_service = PDFService()
-            pdf_url = pdf_service.generate_invoice_pdf(invoice)
+            pdf_service.generate_invoice_pdf(invoice)
 
             # Vérifier que WARNING a été appelé
-            assert mock_logger.warning.called, "WARNING log should be called for large invoice"
+            assert mock_logger.warning.called, (
+                "WARNING log should be called for large invoice"
+            )
             call_args = mock_logger.warning.call_args[0]
             assert "InvoicePDF slow/large" in call_args[0]
             assert "invoice_id=" in call_args[0]
@@ -166,4 +170,4 @@ class TestInvoicePdfPerformance:
             assert "generation_ms=" in call_args[0]
             assert f"template_version={TEMPLATE_VERSION}" in call_args[0]
             assert "thresholds_exceeded=" in call_args[0]
-            assert f"rows=" in call_args[0] or "time=" in call_args[0]
+            assert "rows=" in call_args[0] or "time=" in call_args[0]

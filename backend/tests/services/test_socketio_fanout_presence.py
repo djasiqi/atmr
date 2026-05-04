@@ -61,7 +61,9 @@ def test_fanout_emits_location_only_for_observability_status() -> None:
         )
     assert safe_emit.call_count == 1
     assert safe_emit.call_args[0][0] == "driver_location_update"
-    assert safe_emit.call_args[0][1].get("accept_status") == "accepted_observability_only"
+    assert (
+        safe_emit.call_args[0][1].get("accept_status") == "accepted_observability_only"
+    )
 
 
 def test_fanout_skips_rejected_invalid() -> None:
@@ -91,14 +93,26 @@ def test_fanout_canonical_payload_keeps_lon_and_lng_for_both_events() -> None:
     with patch("services.realtime.socketio._safe_emit") as safe_emit:
         fanout_driver_location_update(
             1,
-            {"driver_id": 10, "company_id": 1, "lat": 46.2, "lon": 6.1, "recorded_at": "2026-01-01T10:00:00Z"},
+            {
+                "driver_id": 10,
+                "company_id": 1,
+                "lat": 46.2,
+                "lon": 6.1,
+                "recorded_at": "2026-01-01T10:00:00Z",
+            },
             {"driver_id": 10, "company_id": 1, "status": "available"},
             accept_status="accepted_canonical",
         )
 
     assert safe_emit.call_count == 2
-    first_event_name, first_payload = safe_emit.call_args_list[0][0][0], safe_emit.call_args_list[0][0][1]
-    second_event_name, second_payload = safe_emit.call_args_list[1][0][0], safe_emit.call_args_list[1][0][1]
+    first_event_name, first_payload = (
+        safe_emit.call_args_list[0][0][0],
+        safe_emit.call_args_list[0][0][1],
+    )
+    second_event_name, second_payload = (
+        safe_emit.call_args_list[1][0][0],
+        safe_emit.call_args_list[1][0][1],
+    )
     assert first_event_name == "driver_location_update"
     assert second_event_name == "driver_live_state_update"
     assert first_payload["lon"] == 6.1

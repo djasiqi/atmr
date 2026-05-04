@@ -20,7 +20,9 @@ _optimized_body = ai_ns.model(
     "OptimizedRouteBody",
     {
         "pickup": fields.String(required=True, description="Adresse ou libellé départ"),
-        "dropoff": fields.String(required=True, description="Adresse ou libellé arrivée"),
+        "dropoff": fields.String(
+            required=True, description="Adresse ou libellé arrivée"
+        ),
     },
 )
 

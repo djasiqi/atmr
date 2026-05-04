@@ -25,6 +25,7 @@ CHECK_CRITICALITY: dict[str, str] = {
 }
 
 CRITICAL_CHECK_KEYS = frozenset({"ready", "database", "redis"})
+CRITICAL_UNKNOWN_ROLLUP_THRESHOLD = 2
 
 # Ordre d’affichage UI (criticité puis métier) — aligné plan §4.4
 CHECK_DISPLAY_ORDER: tuple[str, ...] = ("ready", "database", "redis", "websocket")
@@ -73,7 +74,7 @@ def _rollup_env_status(checks: dict[str, str], *, is_prod: bool) -> str:
         critical_unknowns = [
             k for k in CRITICAL_CHECK_KEYS if checks.get(k) == "unknown"
         ]
-        if len(critical_unknowns) >= 2:
+        if len(critical_unknowns) >= CRITICAL_UNKNOWN_ROLLUP_THRESHOLD:
             return "unknown"
         if len(critical_unknowns) == 1:
             return "degraded"
@@ -293,9 +294,7 @@ def _build_env_block(
         elif code is None:
             flat["websocket"] = "unknown"
         elif code != HTTP_OK:
-            errors.append(
-                {"type": "websocket_http_error", "message": f"HTTP {code}"}
-            )
+            errors.append({"type": "websocket_http_error", "message": f"HTTP {code}"})
             flat["websocket"] = _norm_ws_status(
                 isinstance(body, dict) and body.get("status")
             )
@@ -317,9 +316,7 @@ def _build_env_block(
         elif key in ("database", "redis"):
             lat, cat = ready_lat, ready_checked_at
             detail = (
-                derived_detail
-                if ready_lat is not None and st != "unknown"
-                else None
+                derived_detail if ready_lat is not None and st != "unknown" else None
             )
         else:
             lat, cat, detail = ws_lat, ws_checked_at, None

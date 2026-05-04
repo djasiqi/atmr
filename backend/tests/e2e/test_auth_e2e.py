@@ -254,7 +254,10 @@ class TestAuthMeDriverBootstrapContract:
     """GET /auth/me — contrat bootstrap (driver) après refactor session."""
 
     def test_e2e_auth_me_driver_contract(self, e2e_client, db):
-        from tests.e2e.helpers.e2e_helpers import create_test_company, create_test_driver
+        from tests.e2e.helpers.e2e_helpers import (
+            create_test_company,
+            create_test_driver,
+        )
 
         company = create_test_company(db)
         driver = create_test_driver(db, company=company)

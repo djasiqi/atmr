@@ -17,4 +17,6 @@ def test_normalize_bookings_since_trigger_garbage_to_unknown() -> None:
 
 
 def test_observe_accepts_normalized_trigger() -> None:
-    m.observe_driver_bookings_since_request(trigger_reason="foreground", duration_seconds=0.01)
+    m.observe_driver_bookings_since_request(
+        trigger_reason="foreground", duration_seconds=0.01
+    )

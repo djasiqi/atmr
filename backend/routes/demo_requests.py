@@ -180,7 +180,7 @@ class DemoRequests(Resource):
     @demo_requests_ns.response(400, "Requete invalide")
     @demo_requests_ns.response(429, "Trop de requetes")
     @limiter.limit("30 per day")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         payload = request.get_json(silent=True) or {}
         try:
             data = validate_request(DemoRequestSchema(), payload)
@@ -201,7 +201,10 @@ class DemoRequests(Resource):
             }, 201
 
         form_started_at_ms = data.get("form_started_at_ms")
-        if isinstance(form_started_at_ms, int) and int(time.time() * 1000) - form_started_at_ms < MIN_FORM_SUBMIT_MS:
+        if (
+            isinstance(form_started_at_ms, int)
+            and int(time.time() * 1000) - form_started_at_ms < MIN_FORM_SUBMIT_MS
+        ):
             return {
                 "error": "validation_error",
                 "message": "Le formulaire a ete soumis trop rapidement.",
@@ -209,12 +212,20 @@ class DemoRequests(Resource):
 
         email = sanitize_email(data["email"])
         if not email:
-            return {"error": "validation_error", "message": "Adresse email invalide."}, 400
+            return {
+                "error": "validation_error",
+                "message": "Adresse email invalide.",
+            }, 400
 
         clean = {
-            "name": strip_control_characters(sanitize_string(data["name"], max_length=120)) or "",
+            "name": strip_control_characters(
+                sanitize_string(data["name"], max_length=120)
+            )
+            or "",
             "email": email,
-            "phone": strip_control_characters(sanitize_string(data.get("phone"), max_length=32)),
+            "phone": strip_control_characters(
+                sanitize_string(data.get("phone"), max_length=32)
+            ),
             "organization": strip_control_characters(
                 sanitize_string(data["organization"], max_length=180)
             )
@@ -242,7 +253,9 @@ class DemoRequests(Resource):
         trace_id = uuid.uuid4().hex
         destination = get_demo_destination_email()
 
-        source = str(data.get("source") or "web_demo_request").strip() or "web_demo_request"
+        source = (
+            str(data.get("source") or "web_demo_request").strip() or "web_demo_request"
+        )
         source = source[:64]
         demo_values = {
             **clean,
@@ -272,7 +285,9 @@ class DemoRequests(Resource):
                 )
             if not bool(data.get("acknowledgement_already_sent")):
                 send_demo_acknowledgement({**clean, "trace_id": trace_id})
-            demo_request.email_delivery_status = "sent" if email_result.get("ok") else "failed"
+            demo_request.email_delivery_status = (
+                "sent" if email_result.get("ok") else "failed"
+            )
             db.session.commit()
         except Exception:
             db.session.rollback()
@@ -305,7 +320,9 @@ class AdminProvisionDemoAccess(Resource):
         try:
             result = provision_demo_access(
                 demo_request_id=demo_request_id,
-                actor_id=int(actor_id) if actor_id and str(actor_id).isdigit() else None,
+                actor_id=int(actor_id)
+                if actor_id and str(actor_id).isdigit()
+                else None,
                 provision_source="manual",
                 provisioning_mode="shared_workspace",
                 provision_profile=provision_profile,
@@ -396,7 +413,9 @@ class AdminDemoRequestsList(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     def get(self):
-        rows = DemoRequest.query.order_by(DemoRequest.created_at.desc()).limit(100).all()
+        rows = (
+            DemoRequest.query.order_by(DemoRequest.created_at.desc()).limit(100).all()
+        )
         output = []
         for row in rows:
             latest_access = (
@@ -422,7 +441,9 @@ class AdminResendDemoAccess(Resource):
         try:
             result = resend_demo_access(
                 access_id=access_id,
-                actor_id=int(actor_id) if actor_id and str(actor_id).isdigit() else None,
+                actor_id=int(actor_id)
+                if actor_id and str(actor_id).isdigit()
+                else None,
             )
         except DemoAccessError as error:
             db.session.rollback()
@@ -463,7 +484,9 @@ class AdminRevokeDemoAccess(Resource):
         try:
             access = revoke_demo_access(
                 access_id=access_id,
-                actor_id=int(actor_id) if actor_id and str(actor_id).isdigit() else None,
+                actor_id=int(actor_id)
+                if actor_id and str(actor_id).isdigit()
+                else None,
             )
         except DemoAccessError as error:
             db.session.rollback()
@@ -519,13 +542,10 @@ class ConsumeDemoMagicLink(Resource):
         )
         demo_company = demo_user.company
         demo_institution_id = demo_user.institution_id
-        institution_role = (
-            demo_user.institution_role
-            or (
-                InstitutionRole.ADMIN.value
-                if str(role).upper() == UserRole.INSTITUTION.value
-                else None
-            )
+        institution_role = demo_user.institution_role or (
+            InstitutionRole.ADMIN.value
+            if str(role).upper() == UserRole.INSTITUTION.value
+            else None
         )
         profile_email = demo_user.email
         claims = {
@@ -589,7 +609,9 @@ class ConsumeDemoMagicLink(Resource):
             httponly=current_app.config["COOKIE_HTTP_ONLY"],
             secure=current_app.config["COOKIE_SECURE"],
             samesite=current_app.config["COOKIE_SAME_SITE"],
-            max_age=int(current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()),
+            max_age=int(
+                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+            ),
             path=current_app.config["COOKIE_PATH"],
             domain=current_app.config["COOKIE_DOMAIN"],
         )
@@ -634,15 +656,14 @@ class SetDemoPassword(Resource):
         user.force_password_change = False
         db.session.commit()
         role = (
-            user.role.value if hasattr(user.role, "value") else str(user.role or "client")
+            user.role.value
+            if hasattr(user.role, "value")
+            else str(user.role or "client")
         )
-        institution_role = (
-            user.institution_role
-            or (
-                InstitutionRole.ADMIN.value
-                if str(role).upper() == UserRole.INSTITUTION.value
-                else None
-            )
+        institution_role = user.institution_role or (
+            InstitutionRole.ADMIN.value
+            if str(role).upper() == UserRole.INSTITUTION.value
+            else None
         )
         demo_company = user.company
         claims = {
@@ -702,7 +723,9 @@ class SetDemoPassword(Resource):
             httponly=current_app.config["COOKIE_HTTP_ONLY"],
             secure=current_app.config["COOKIE_SECURE"],
             samesite=current_app.config["COOKIE_SAME_SITE"],
-            max_age=int(current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()),
+            max_age=int(
+                current_app.config["JWT_REFRESH_TOKEN_EXPIRES"].total_seconds()
+            ),
             path=current_app.config["COOKIE_PATH"],
             domain=current_app.config["COOKIE_DOMAIN"],
         )

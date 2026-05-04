@@ -16,9 +16,10 @@ def test_sync_billing_settings_source_updates_company_and_profile():
 
     company = SimpleNamespace(id=1)
 
-    with patch("models.CompanyBillingSettings") as Cbs, patch(
-        "models.CompanyBillingProfile"
-    ) as Cbp:
+    with (
+        patch("models.CompanyBillingSettings") as Cbs,
+        patch("models.CompanyBillingProfile") as Cbp,
+    ):
         Cbs.query.filter_by.return_value.first.return_value = billing
         Cbp.query.filter_by.return_value.first.return_value = profile
 
@@ -38,9 +39,11 @@ def test_sync_company_source_creates_billing_and_updates_profile():
     profile = MagicMock()
 
     mock_session = MagicMock()
-    with patch("models.CompanyBillingSettings") as Cbs, patch(
-        "models.CompanyBillingProfile"
-    ) as Cbp, patch("ext.db") as db_mod:
+    with (
+        patch("models.CompanyBillingSettings") as Cbs,
+        patch("models.CompanyBillingProfile") as Cbp,
+        patch("ext.db") as db_mod,
+    ):
         Cbs.query.filter_by.return_value.first.return_value = None
         Cbp.query.filter_by.return_value.first.return_value = profile
         db_mod.session = mock_session

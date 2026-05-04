@@ -44,7 +44,9 @@ def _preview_base_amount_ht(booking: Any, billing_settings_dto: Any) -> Decimal:
         if fp is None or fp <= 0:
             return Decimal("0.00")
         return Decimal(str(fp)).quantize(two_places)
-    base_amount = Decimal(str(getattr(booking, "amount", None) or 0)).quantize(two_places)
+    base_amount = Decimal(str(getattr(booking, "amount", None) or 0)).quantize(
+        two_places
+    )
     if (
         str(getattr(booking, "status", "") or "").upper() == "CANCELED"
         and getattr(booking, "cancellation_fee_amount", None) is not None
@@ -99,7 +101,9 @@ def _consolidate_period_preview_round_trip_rows(
 
     comps = [
         c
-        for c in round_trip_component_id_sets(bookings, amount_ht_fn=_amount_for_booking)
+        for c in round_trip_component_id_sets(
+            bookings, amount_ht_fn=_amount_for_booking
+        )
         if len(c) >= _MIN_ROUND_TRIP_COMPONENT_SIZE
     ]
     if not comps:
@@ -184,7 +188,9 @@ def build_period_invoice_preview(
 ) -> PeriodPreviewResult:
     """Aperçu read-only : exactement un de client_id (patient direct) ou clinic_company_id (S2)."""
     if bool(client_id) == bool(clinic_company_id):
-        raise ValueError("Fournir exactement un des paramètres: client_id ou clinic_company_id")
+        raise ValueError(
+            "Fournir exactement un des paramètres: client_id ou clinic_company_id"
+        )
 
     warnings: list[str] = []
     settings_repo = CompanyBillingSettingsRepository()
@@ -192,7 +198,9 @@ def build_period_invoice_preview(
     calc = InvoiceCalculator()
 
     vat_rate_setting = billing_settings_dto.vat_rate
-    vat_applicable = bool(billing_settings_dto.vat_applicable) and vat_rate_setting is not None
+    vat_applicable = (
+        bool(billing_settings_dto.vat_applicable) and vat_rate_setting is not None
+    )
     default_vat_rate = Decimal("0")
     if vat_applicable:
         try:
@@ -238,7 +246,9 @@ def build_period_invoice_preview(
                     f"Transport #{getattr(b, 'id', '?')} sans montant (un estimé peut s'appliquer à la génération)"
                 )
 
-            va, tw = calc.calculate_vat(amt, default_vat_rate if vat_applicable else Decimal("0"))
+            va, tw = calc.calculate_vat(
+                amt, default_vat_rate if vat_applicable else Decimal("0")
+            )
             vat_sum += va
             tw_sum += tw
 
@@ -375,11 +385,15 @@ def build_period_invoice_preview(
                 f"Transport #{getattr(b, 'id', '?')} sans montant (un estimé peut s'appliquer à la génération)"
             )
 
-        va, tw = calc.calculate_vat(amt, default_vat_rate if vat_applicable else Decimal("0"))
+        va, tw = calc.calculate_vat(
+            amt, default_vat_rate if vat_applicable else Decimal("0")
+        )
         vat_sum_s2 += va
         tw_sum_s2 += tw
 
-        desc = build_invoice_line_description_clinic_monthly(b, description_builder=None)
+        desc = build_invoice_line_description_clinic_monthly(
+            b, description_builder=None
+        )
 
         locked = bool(getattr(b, "invoice_line_id", None))
         preview_lines_out.append(

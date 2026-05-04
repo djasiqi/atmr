@@ -215,8 +215,7 @@ class TestGenerateAndStoreSuggestions:
         settings = MagicMock()
 
         mock_orchestrator_instance = MagicMock()
-        mock_orchestrator_instance.generate_and_store_shadow_suggestions.\
-            return_value = 0
+        mock_orchestrator_instance.generate_and_store_shadow_suggestions.return_value = 0
         mock_orchestrator_class.return_value = mock_orchestrator_instance
 
         manager = ShadowModeManager(settings)

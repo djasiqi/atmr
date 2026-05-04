@@ -61,7 +61,9 @@ def _drop_indexes_postgres() -> None:
         op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_booking_scheduled_at_company")
         op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_assignment_driver_status")
         op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_driver_company_active")
-        op.execute("DROP INDEX CONCURRENTLY IF EXISTS idx_trip_tracking_driver_recorded")
+        op.execute(
+            "DROP INDEX CONCURRENTLY IF EXISTS idx_trip_tracking_driver_recorded"
+        )
 
 
 def upgrade() -> None:
@@ -74,4 +76,3 @@ def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         _drop_indexes_postgres()
-

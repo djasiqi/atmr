@@ -128,7 +128,7 @@ class SaveCompanyPushToken(Resource):
     @companies_ns.expect(save_company_push_token_model, validate=True)
     @jwt_required()
     @role_required(UserRole.company, UserRole.admin)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         from flask_jwt_extended import get_jwt
 
         from models import Company, User
@@ -359,7 +359,9 @@ client_create_model = companies_ns.model(
             enum=["TRANSPORT"],
             description="Type de client (toujours TRANSPORT pour les clients entreprise)",
         ),
-        "email": fields.String(description="Email (requis pour management_mode SELF_SERVICE)"),
+        "email": fields.String(
+            description="Email (requis pour management_mode SELF_SERVICE)"
+        ),
         "first_name": fields.String(
             required=True,
             description="Prénom (requis pour MANAGED/CORPORATE)",
@@ -994,7 +996,7 @@ class CompanyPartnerships(Resource):
 class CompanyPartnership(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def put(self, partnership_id: int):  # noqa: PLR0911
+    def put(self, partnership_id: int):
         """Met à jour un partenariat."""
         try:
             company, error_response, status_code = _get_current_company_via_use_case()
@@ -1184,7 +1186,7 @@ class CompanyPartnership(Resource):
 class CompanyPartnershipsStatement(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """Génère un décompte consolidé de tous les partenaires."""
         try:
             company, error_response, status_code = _get_current_company_via_use_case()
@@ -1275,7 +1277,7 @@ class CompanyPartnershipsStatement(Resource):
 class CompanyPartnershipStatement(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def post(self, partnership_id: int):  # noqa: PLR0911
+    def post(self, partnership_id: int):
         """Génère un décompte pour un partenariat spécifique."""
         try:
             company, error_response, status_code = _get_current_company_via_use_case()
@@ -1573,7 +1575,9 @@ class CompanyReservationsSummary(Resource):
                 logger_instance=logger,
             )
 
-        cache_ttl = int(getenv("LIRIE_RESERVATIONS_SUMMARY_CACHE_TTL_SECONDS", "0") or "0")
+        cache_ttl = int(
+            getenv("LIRIE_RESERVATIONS_SUMMARY_CACHE_TTL_SECONDS", "0") or "0"
+        )
         cache_key = f"summary:reservations:{company_id}:{day_str}"
         if redis_client is not None and cache_ttl > 0:
             with suppress(Exception):
@@ -1603,7 +1607,7 @@ class CompanyReservationsSummary(Resource):
 class CompanyReservations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def get(self):  # noqa: PLR0911
+    def get(self):
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, error_response, status_code = _get_current_company_via_use_case()
         if error_response:
@@ -2004,7 +2008,7 @@ class AcceptReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting acceptation réservation
-    def post(self, reservation_id):  # noqa: PLR0911
+    def post(self, reservation_id):
         from repositories.booking_repository import BookingRepository
 
         # ✅ DDD: Utilise use-case au lieu de service directement
@@ -2304,7 +2308,7 @@ class AssignDriver(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting assignation chauffeur
-    def post(self, reservation_id):  # noqa: PLR0911
+    def post(self, reservation_id):
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         from repositories.booking_repository import BookingRepository
 
@@ -2349,14 +2353,16 @@ class AssignDriver(Resource):
             booking.executing_company_id,
         )
 
-        status_value = booking.status.value if hasattr(booking.status, "value") else str(booking.status)
+        status_value = (
+            booking.status.value
+            if hasattr(booking.status, "value")
+            else str(booking.status)
+        )
         status_lower = status_value.lower()
         is_terminal = status_lower in {"canceled", "completed", "return_completed"}
         is_assignable = status_lower in {"accepted", "assigned"}
         if is_terminal or not is_assignable:
-            warning_msg = (
-                "❌ Statut invalide pour assignation atomique : %s"
-            )
+            warning_msg = "❌ Statut invalide pour assignation atomique : %s"
             logger.warning(
                 warning_msg,
                 booking.status,
@@ -2469,7 +2475,9 @@ class AssignDriver(Resource):
 
             notify_driver_new_booking(driver.id, booking)
         _maybe_trigger_dispatch(company_id, "update")
-        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+        from services.reservations_summary_cache import (
+            invalidate_summary_cache_for_booking,
+        )
 
         invalidate_summary_cache_for_booking(company_id, booking)
         return {
@@ -2565,19 +2573,17 @@ class CompleteReservation(Resource):
                         "en_route": "en_route",
                         "accepted": "acceptée (sans parcours chauffeur démarré)",
                         "assigned": "assignée (sans clôture depuis l’app)",
-                    }.get(
-                        status_before_complete, status_before_complete
-                    )
-                    result_msg = (
-                        f"Réservation clôturée manuellement — statut d’origine: {from_label}"
-                    )
+                    }.get(status_before_complete, status_before_complete)
+                    result_msg = f"Réservation clôturée manuellement — statut d’origine: {from_label}"
                     if uc_result.from_en_route_manual:
                         result_msg = "Réservation clôturée manuellement depuis en_route"
                     AuditLogger.log_action(
                         action_type="company_manual_completion",
                         action_category="company",
                         user_id=actor.id if actor else None,
-                        user_type=(actor.role.value if actor and actor.role else "company"),
+                        user_type=(
+                            actor.role.value if actor and actor.role else "company"
+                        ),
                         result_status="success",
                         result_message=result_msg,
                         company_id=company_id,
@@ -2649,7 +2655,7 @@ class ReservationBillingAdjustment(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")
-    def patch(self, reservation_id: int):  # noqa: PLR0911
+    def patch(self, reservation_id: int):
         from application.companies.reservations.billing_adjustment import (
             CompanyBookingBillingAdjustmentUseCase,
         )
@@ -2676,7 +2682,9 @@ class ReservationBillingAdjustment(Resource):
         booking_repo = BookingRepository()
         booking = booking_repo.find_model_by_id_with_visibility(reservation_id, cid)
         if not booking:
-            return APIErrorHandler.handle_not_found("Réservation", reservation_id, logger)
+            return APIErrorHandler.handle_not_found(
+                "Réservation", reservation_id, logger
+            )
 
         raw = request.get_json(silent=True) or {}
         try:
@@ -2708,16 +2716,16 @@ class ReservationBillingAdjustment(Resource):
 
                 public_id = get_jwt_identity()
                 actor = (
-                    User.query.filter_by(public_id=public_id).first() if public_id else None
+                    User.query.filter_by(public_id=public_id).first()
+                    if public_id
+                    else None
                 )
                 reason_clean = (validated.get("override_reason") or "").strip()
                 AuditLogger.log_action(
                     action_type="company_booking_billing_adjusted",
                     action_category="company",
                     user_id=actor.id if actor else None,
-                    user_type=actor.role.value
-                    if actor and actor.role
-                    else "company",
+                    user_type=actor.role.value if actor and actor.role else "company",
                     result_status="success",
                     company_id=cid,
                     booking_id=booking.id,
@@ -2762,7 +2770,9 @@ class CompanyDriversLocations(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        from services.company_driver_locations import build_company_driver_locations_items
+        from services.company_driver_locations import (
+            build_company_driver_locations_items,
+        )
 
         company, err, code = _get_current_company_via_use_case()
         if err:
@@ -3461,7 +3471,7 @@ class CreateManualReservation(Resource):
         "100 per hour"
     )  # ✅ 2.8: Rate limiting création réservation manuelle
     @companies_ns.expect(manual_booking_model, validate=True)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, err, code = _get_current_company_via_use_case()
@@ -3540,7 +3550,9 @@ class CreateManualReservation(Resource):
         # ---------- 5) Déclencher la queue si dispatch actif ----------
         _maybe_trigger_dispatch(cid, "create")
 
-        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+        from services.reservations_summary_cache import (
+            invalidate_summary_cache_for_booking,
+        )
 
         for b in list(created_outbounds or []) + list(created_returns or []):
             invalidate_summary_cache_for_booking(cid, b)
@@ -3754,7 +3766,9 @@ class TriggerReturnBooking(Resource):
         db.session.add(booking)
         db.session.commit()
         _maybe_trigger_dispatch(cid, "return_request")
-        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+        from services.reservations_summary_cache import (
+            invalidate_summary_cache_for_booking,
+        )
 
         invalidate_summary_cache_for_booking(cid, booking)
         invalidate_summary_cache_for_booking(cid, return_booking)
@@ -3819,8 +3833,9 @@ class CompanyInstitutionSearch(Resource):
         """
         from models.institution import Institution
 
+        _min_institution_search_len = 2
         q = request.args.get("q", "").strip()
-        if len(q) < 2:  # noqa: PLR2004
+        if len(q) < _min_institution_search_len:
             return {"institutions": [], "total": 0}, 200
 
         results = (
@@ -3975,7 +3990,7 @@ class CompanyClients(Resource):
     @companies_ns.response(403, "Non autorisé", permission_error_model)
     @companies_ns.response(409, "Client déjà existant (idempotency)", api_error_model)
     @companies_ns.response(500, "Erreur serveur", api_error_model)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         """POST /companies/me/clients
         Crée un nouveau client TRANSPORT pour l'entreprise courante,
         avec management_mode (SELF_SERVICE, MANAGED ou CORPORATE).
@@ -4633,7 +4648,7 @@ class SingleReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
-    def put(self, reservation_id):  # noqa: PLR0911
+    def put(self, reservation_id):
         """Met à jour une réservation
         (adresses, heure, informations médicales).
         Permet la modification pour PENDING, ACCEPTED et ASSIGNED
@@ -4730,7 +4745,7 @@ class SingleReservation(Resource):
 
     @jwt_required()
     @role_required(UserRole.company)
-    def delete(self, reservation_id):  # noqa: PLR0911
+    def delete(self, reservation_id):
         """Supprime ou annule une réservation selon le statut."""
         # Logger immédiatement pour confirmer que le code est exécuté
         logger.info("🔍 DELETE reservation request: reservation_id=%s", reservation_id)
@@ -4840,7 +4855,9 @@ class SingleReservation(Resource):
                     logger_instance=logger,
                 )
 
-            from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+            from services.reservations_summary_cache import (
+                invalidate_summary_cache_for_booking,
+            )
 
             invalidate_summary_cache_for_booking(cid, booking)
 
@@ -5314,7 +5331,7 @@ class UpdateReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @limiter.limit("200 per hour")  # ✅ 2.8: Rate limiting modification réservation
-    def put(self, booking_id):  # noqa: PLR0911
+    def put(self, booking_id):
         """Met à jour une réservation (adresses, heure, informations médicales).
         Permet la modification pour PENDING, ACCEPTED et ASSIGNED.
         """
@@ -5414,7 +5431,7 @@ class UpdateReservation(Resource):
 class ScheduleReservation(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    def put(self, booking_id):  # noqa: PLR0911
+    def put(self, booking_id):
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, err, code = _get_current_company_via_use_case()
         if err:
@@ -5530,7 +5547,9 @@ class ScheduleReservation(Resource):
         if bool(getattr(company, "dispatch_enabled", True)):
             _maybe_trigger_dispatch(cid, "update")
 
-        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+        from services.reservations_summary_cache import (
+            invalidate_summary_cache_for_booking,
+        )
 
         invalidate_summary_cache_for_booking(cid, booking)
 
@@ -5676,7 +5695,9 @@ class DispatchNowReservation(Resource):
         # Rafraîchir pour obtenir les données à jour (notamment driver si assigné)
         db.session.refresh(booking)
 
-        from services.reservations_summary_cache import invalidate_summary_cache_for_booking
+        from services.reservations_summary_cache import (
+            invalidate_summary_cache_for_booking,
+        )
 
         invalidate_summary_cache_for_booking(cid, booking)
 
@@ -5875,7 +5896,7 @@ class MyVehicle(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @companies_ns.expect(vehicle_update_model, validate=False)
-    def put(self, vehicle_id):  # noqa: PLR0911
+    def put(self, vehicle_id):
         # ruff: noqa: I001  # Imports locaux pour éviter dépendances circulaires
         # ✅ DDD: Utilise use-case au lieu de service directement
         company, err, code = _get_current_company_via_use_case()

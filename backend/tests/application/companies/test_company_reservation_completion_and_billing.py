@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from application.companies.reservations.complete_reservation import (
-    CompleteCompanyReservationUseCase,
-)
 from application.companies.reservations.billing_adjustment import (
     CompanyBookingBillingAdjustmentUseCase,
+)
+from application.companies.reservations.complete_reservation import (
+    CompleteCompanyReservationUseCase,
 )
 from models.enums import BookingCreatedVia
 
@@ -91,7 +91,10 @@ def test_complete_en_route_ok(monkeypatch):
     assert r.from_en_route_manual is True
 
 
-@patch("application.companies.reservations.billing_adjustment._active_invoice_line_exists", return_value=False)
+@patch(
+    "application.companies.reservations.billing_adjustment._active_invoice_line_exists",
+    return_value=False,
+)
 def test_billing_adjustment_rejects_public_guest(_mock_line):
     uc = CompanyBookingBillingAdjustmentUseCase()
     b = MagicMock()
@@ -112,7 +115,10 @@ def test_billing_adjustment_rejects_public_guest(_mock_line):
     assert r.status_code == 400
 
 
-@patch("application.companies.reservations.billing_adjustment._active_invoice_line_exists", return_value=False)
+@patch(
+    "application.companies.reservations.billing_adjustment._active_invoice_line_exists",
+    return_value=False,
+)
 def test_billing_adjustment_requires_reason(_mock_line):
     uc = CompanyBookingBillingAdjustmentUseCase()
     b = MagicMock()
@@ -132,7 +138,10 @@ def test_billing_adjustment_requires_reason(_mock_line):
     assert r.ok is False
 
 
-@patch("application.companies.reservations.billing_adjustment._active_invoice_line_exists", return_value=False)
+@patch(
+    "application.companies.reservations.billing_adjustment._active_invoice_line_exists",
+    return_value=False,
+)
 def test_billing_patient_rejects_extra_company_id(_mock_line):
     uc = CompanyBookingBillingAdjustmentUseCase()
     b = MagicMock()
@@ -152,7 +161,12 @@ def test_billing_patient_rejects_extra_company_id(_mock_line):
             "billed_to_type": "patient",
             "billed_to_company_id": 99,
         },
-        keys_present={"override_reason", "amount", "billed_to_type", "billed_to_company_id"},
+        keys_present={
+            "override_reason",
+            "amount",
+            "billed_to_type",
+            "billed_to_company_id",
+        },
     )
     assert r.ok is False
     assert r.status_code == 400

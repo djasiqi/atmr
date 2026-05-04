@@ -55,8 +55,12 @@ class ListCompanyVehiclesUseCase:
                 if isinstance(ser, dict):
                     vid = getattr(v, "id", None)
                     assignment = vehicle_driver_map.get(vid) if vid else None
-                    ser["assigned_driver_id"] = assignment["driver_id"] if assignment else None
-                    ser["assigned_driver_name"] = assignment["driver_name"] if assignment else None
+                    ser["assigned_driver_id"] = (
+                        assignment["driver_id"] if assignment else None
+                    )
+                    ser["assigned_driver_name"] = (
+                        assignment["driver_name"] if assignment else None
+                    )
                     vehicles.append(ser)
                 else:
                     vehicles.append({"id": getattr(v, "id", None)})

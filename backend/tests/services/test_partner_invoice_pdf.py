@@ -246,7 +246,9 @@ class TestPartnerInvoicePdf:
     def test_partner_invoice_pdf_1_transfer_no_exception(self, db):
         """Test que la génération PDF avec 1 transfert ne lève pas d'exception."""
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act & Assert: pas d'exception
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -256,7 +258,9 @@ class TestPartnerInvoicePdf:
     def test_partner_invoice_pdf_30_transfers_no_exception(self, db):
         """Test que la génération PDF avec 30 transferts ne lève pas d'exception."""
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=30)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=30
+        )
 
         # Act & Assert: pas d'exception
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -266,7 +270,9 @@ class TestPartnerInvoicePdf:
     def test_partner_invoice_pdf_has_2_pages(self, db):
         """Test que le PDF contient exactement 2 pages (contenu + QR-Bill)."""
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -278,14 +284,18 @@ class TestPartnerInvoicePdf:
     def test_partner_invoice_pdf_30_transfers_has_at_least_2_pages(self, db):
         """Test que le PDF avec 30 transferts contient au moins 2 pages."""
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=30)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=30
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
 
         # Assert
         page_count = _get_pdf_page_count(pdf_content)
-        assert page_count >= 2, f"Le PDF devrait avoir au moins 2 pages, mais en a {page_count}"
+        assert page_count >= 2, (
+            f"Le PDF devrait avoir au moins 2 pages, mais en a {page_count}"
+        )
 
     def test_partner_invoice_pdf_qrbill_section_paiement(self, db):
         """Test que la 2e page contient le QR-Bill (Section paiement).
@@ -294,7 +304,9 @@ class TestPartnerInvoicePdf:
         est rendu comme SVG. On vérifie donc la présence dans le contenu brut.
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -312,9 +324,7 @@ class TestPartnerInvoicePdf:
             "CH",
         ]
         found = any(indicator in pdf_text for indicator in qrbill_indicators)
-        assert found, (
-            "Le QR-Bill devrait être présent (aucun indicateur trouvé)"
-        )
+        assert found, "Le QR-Bill devrait être présent (aucun indicateur trouvé)"
 
     def test_partner_invoice_pdf_qrbill_recepisse(self, db):
         """Test que le QR-Bill contient la section récépissé.
@@ -323,7 +333,9 @@ class TestPartnerInvoicePdf:
         est rendu comme graphique SVG.
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -351,7 +363,9 @@ class TestPartnerInvoicePdf:
     def test_partner_invoice_pdf_contains_scor_reference(self, db):
         """Test que le QR-Bill contient une référence SCOR (RF...)."""
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -368,7 +382,9 @@ class TestPartnerInvoicePdf:
         Le footer peut être rendu comme graphique, on vérifie des indicateurs généraux.
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -387,9 +403,7 @@ class TestPartnerInvoicePdf:
         found = any(
             indicator.lower() in pdf_text.lower() for indicator in footer_indicators
         )
-        assert found, (
-            "Le PDF devrait contenir des indicateurs de paiement"
-        )
+        assert found, "Le PDF devrait contenir des indicateurs de paiement"
 
     def test_partner_invoice_pdf_contains_invoice_number(self, db):
         """Test que le PDF contient des informations de facture.
@@ -397,7 +411,9 @@ class TestPartnerInvoicePdf:
         Le numéro exact peut ne pas être extractible, on vérifie des indicateurs.
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -419,9 +435,7 @@ class TestPartnerInvoicePdf:
         found = any(
             indicator.lower() in pdf_text.lower() for indicator in invoice_indicators
         )
-        assert found, (
-            "Le PDF devrait contenir des informations de facture"
-        )
+        assert found, "Le PDF devrait contenir des informations de facture"
 
     def test_partner_invoice_pdf_contains_iban(self, db):
         """Test que le PDF contient des informations bancaires.
@@ -429,7 +443,9 @@ class TestPartnerInvoicePdf:
         L'IBAN peut être formaté différemment ou dans un graphique SVG.
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -452,9 +468,7 @@ class TestPartnerInvoicePdf:
         found = any(
             indicator.lower() in pdf_text.lower() for indicator in iban_indicators
         )
-        assert found, (
-            "Le PDF devrait contenir des informations bancaires/paiement"
-        )
+        assert found, "Le PDF devrait contenir des informations bancaires/paiement"
 
     def test_partner_invoice_pdf_contains_total_amount(self, db):
         """Test que le PDF contient des montants.
@@ -462,7 +476,9 @@ class TestPartnerInvoicePdf:
         Le format exact peut varier (40.00, 40,00, CHF 40.00, etc.)
         """
         # Arrange
-        partner_invoice, transfers = _create_test_partner_invoice_setup(db, num_transfers=1)
+        partner_invoice, transfers = _create_test_partner_invoice_setup(
+            db, num_transfers=1
+        )
 
         # Act
         pdf_content = generate_partner_invoice_pdf_content(partner_invoice, transfers)
@@ -478,6 +494,4 @@ class TestPartnerInvoicePdf:
             "40",
         ]
         found = any(indicator in pdf_text for indicator in amount_indicators)
-        assert found, (
-            "Le PDF devrait contenir des informations de montant"
-        )
+        assert found, "Le PDF devrait contenir des informations de montant"

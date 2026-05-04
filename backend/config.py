@@ -311,9 +311,7 @@ class Config:
     # 1. ensure login endpoints set CSRF cookies
     # 2. align frontend header expectations
     # 3. add integration tests for cookie-auth mutations
-    JWT_COOKIE_CSRF_PROTECT = (
-        False  # intentionally False — see NOTE above
-    )
+    JWT_COOKIE_CSRF_PROTECT = False  # intentionally False — see NOTE above
     JWT_ACCESS_COOKIE_NAME = COOKIE_ACCESS_TOKEN_NAME
     JWT_REFRESH_COOKIE_NAME = COOKIE_REFRESH_TOKEN_NAME
     JWT_COOKIE_DOMAIN = COOKIE_DOMAIN
@@ -384,8 +382,12 @@ class Config:
     PLATFORM_API_URL_PROD = (os.getenv("PLATFORM_API_URL_PROD") or "").strip() or None
     PLATFORM_API_URL_DEMO = (os.getenv("PLATFORM_API_URL_DEMO") or "").strip() or None
     PLATFORM_LINK_GRAFANA = (os.getenv("PLATFORM_LINK_GRAFANA") or "").strip() or None
-    PLATFORM_LINK_PROMETHEUS = (os.getenv("PLATFORM_LINK_PROMETHEUS") or "").strip() or None
-    PLATFORM_LINK_ALERTMANAGER = (os.getenv("PLATFORM_LINK_ALERTMANAGER") or "").strip() or None
+    PLATFORM_LINK_PROMETHEUS = (
+        os.getenv("PLATFORM_LINK_PROMETHEUS") or ""
+    ).strip() or None
+    PLATFORM_LINK_ALERTMANAGER = (
+        os.getenv("PLATFORM_LINK_ALERTMANAGER") or ""
+    ).strip() or None
     PLATFORM_STATUS_TIMEOUT_SECONDS = float(
         os.getenv("PLATFORM_STATUS_TIMEOUT_SECONDS", "2.5")
     )
@@ -500,7 +502,9 @@ def validate_production_security(app) -> None:
         for key in ("GATEWAY_APP_AUTH_URL", "GATEWAY_DEMO_AUTH_URL"):
             url = app.config.get(key) or os.getenv(key, "")
             if url and (
-                "127.0.0.1" in url or "localhost" in url or "host.docker.internal" in url
+                "127.0.0.1" in url
+                or "localhost" in url
+                or "host.docker.internal" in url
             ):
                 _logger.warning(
                     "[config] %s=%s : en prod Docker, utiliser http://backend:5000/... (définir explicitement dans .env.production)",
@@ -561,7 +565,9 @@ class DevelopmentConfig(Config):
     )
     # Supprime l'envoi SMTP réel en dev sauf si MAIL_SUPPRESS_SEND=false explicite.
     # Évite ConnectionRefusedError sur localhost:25 (défaut Flask-Mail sans MAIL_SERVER).
-    MAIL_SUPPRESS_SEND: bool = os.getenv("MAIL_SUPPRESS_SEND", "true").lower() != "false"
+    MAIL_SUPPRESS_SEND: bool = (
+        os.getenv("MAIL_SUPPRESS_SEND", "true").lower() != "false"
+    )
     # PostgreSQL via Docker (DATABASE_URL doit être défini)
     # ✅ 4.1: Support dynamic secrets Database (via Vault) ou DATABASE_URL (fallback)
     SQLALCHEMY_DATABASE_URI = _get_secret_from_vault_or_env(
@@ -746,9 +752,7 @@ class ProductionConfig(Config):
             # requis pour DB externes
             "sslmode": _sslmode,
             **(
-                {"prepare_threshold": 0}
-                if _is_psycopg3_dialect_in_url(_db_uri)
-                else {}
+                {"prepare_threshold": 0} if _is_psycopg3_dialect_in_url(_db_uri) else {}
             ),
         },
     }
@@ -878,7 +882,9 @@ class TestingConfig(Config):
         db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
         if db_uri and db_uri.startswith("postgresql"):
             prior = app.config.get("SQLALCHEMY_ENGINE_OPTIONS") or {}
-            prior_connect = prior.get("connect_args", {}) if isinstance(prior, dict) else {}
+            prior_connect = (
+                prior.get("connect_args", {}) if isinstance(prior, dict) else {}
+            )
             if not isinstance(prior_connect, dict):
                 prior_connect = {}
             _tc_connect = {

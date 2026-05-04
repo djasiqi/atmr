@@ -127,11 +127,7 @@ def list_billing_opportunities(
             client_id=cid,
             clinic_company_id=None,
         )
-        client = (
-            Client.query.options(joinedload(Client.user))
-            .filter_by(id=cid)
-            .first()
-        )
+        client = Client.query.options(joinedload(Client.user)).filter_by(id=cid).first()
         display = _client_display_name(client) if client else f"Client #{cid}"
         patient_items.append(
             PatientOpportunity(
@@ -191,9 +187,7 @@ def list_billing_opportunities(
     return BillingOpportunitiesResult(
         period_year=period_year,
         period_month=period_month,
-        patient_items=sorted(
-            patient_items, key=lambda x: x.display_name.lower()
-        ),
+        patient_items=sorted(patient_items, key=lambda x: x.display_name.lower()),
         clinic_items=sorted(clinic_items, key=lambda x: (x.name or "").lower()),
         total_draft_would_create=total_draft,
     )

@@ -37,9 +37,8 @@ def is_synthetic_demo_email(email: str | None) -> bool:
 def is_synthetic_demo_booking(booking: Booking) -> bool:
     """Hors périmètre pilotage : comptes / emails de démo (aligné esprit admin)."""
     try:
-        from models import User
-
         from ext import db
+        from models import User
 
         u = None
         if getattr(booking, "user_id", None):
@@ -47,9 +46,12 @@ def is_synthetic_demo_booking(booking: Booking) -> bool:
         if u and is_synthetic_demo_email(getattr(u, "email", None)):
             return True
         cli = booking.client
-        if cli and getattr(cli, "user", None):
-            if is_synthetic_demo_email(getattr(cli.user, "email", None)):
-                return True
+        if (
+            cli
+            and getattr(cli, "user", None)
+            and is_synthetic_demo_email(getattr(cli.user, "email", None))
+        ):
+            return True
     except Exception:
         logger.debug("is_synthetic_demo_booking: erreur soft", exc_info=True)
     return False
@@ -236,9 +238,7 @@ def reliability_bucket_and_percent(
     _ = excluded
     # Pénalité : needs_review plus lourd qu'ambiguous
     adjusted = (
-        100.0 * eligible / total
-        - 18.0 * needs_review / total
-        - 6.0 * ambiguous / total
+        100.0 * eligible / total - 18.0 * needs_review / total - 6.0 * ambiguous / total
     )
     adjusted = max(0.0, min(100.0, adjusted))
     if adjusted >= RELIABILITY_GOOD_MIN:

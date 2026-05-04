@@ -10,4 +10,3 @@ from __future__ import annotations
 from services.events.registry import dispatch_event, register
 
 __all__ = ["dispatch_event", "register"]
-

@@ -50,6 +50,7 @@ def _mark_pdf_stale(invoice: Invoice) -> None:
 
     mark_pdf_stale(invoice)
 
+
 # Ligne CUSTOM < 0 ajoutée explicitement comme remise libre (libellé + montant) — ne pas la traiter comme la ligne « remise globale ».
 _META_MANUAL_DISCOUNT = "manual_discount"
 _META_PER_LINE_DISCOUNT_LINE = "per_line_discount_line"
@@ -220,7 +221,9 @@ class EditDraftResult:
     status_code: int | None = None
 
 
-def _expected_updated_at_conflict(inv: Invoice, expected_updated_at: str | None) -> EditDraftResult | None:
+def _expected_updated_at_conflict(
+    inv: Invoice, expected_updated_at: str | None
+) -> EditDraftResult | None:
     """409 si le client envoie un horodatage qui ne correspond pas à ``invoice.updated_at``."""
     if expected_updated_at is None:
         return None
@@ -307,7 +310,9 @@ def remove_draft_invoice_line(
 
     line = next((ln for ln in inv.lines if ln.id == line_id), None)
     if not line:
-        return EditDraftResult(False, error={"error": "Ligne introuvable"}, status_code=404)
+        return EditDraftResult(
+            False, error={"error": "Ligne introuvable"}, status_code=404
+        )
 
     if line.reservation_id:
         bk = Booking.query.get(line.reservation_id)
@@ -352,11 +357,15 @@ def update_draft_invoice_line(
 
     line = next((ln for ln in inv.lines if ln.id == line_id), None)
     if not line:
-        return EditDraftResult(False, error={"error": "Ligne introuvable"}, status_code=404)
+        return EditDraftResult(
+            False, error={"error": "Ligne introuvable"}, status_code=404
+        )
 
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    vat_rate = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    vat_rate = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_applicable = bool(bset.vat_applicable) and vat_rate > 0
 
     if line_total is not None:
@@ -446,7 +455,9 @@ def _restore_positive_ride_lines_from_catalog_meta(
     """Restaure les transports HT depuis `original_line_total` (remise globale % ou par ligne)."""
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    cr_vat = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    cr_vat = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_ok = bool(bset.vat_applicable) and cr_vat > 0
     calc = InvoiceCalculator()
     for lm in inv.lines:
@@ -519,7 +530,9 @@ def _apply_line_ht_snapshot(inv_line: InvoiceLine, snap: dict[str, Any]) -> None
     inv_line.line_meta = meta if meta else None
 
 
-def _line_snapshots_from_global_discount_meta(inv: Invoice) -> list[dict[str, Any]] | None:
+def _line_snapshots_from_global_discount_meta(
+    inv: Invoice,
+) -> list[dict[str, Any]] | None:
     meta = inv.meta if isinstance(inv.meta, dict) else {}
     gd = meta.get("global_discount")
     if not isinstance(gd, dict):
@@ -547,7 +560,9 @@ def _restore_invoice_lines_from_global_discount_snapshots(
             _apply_line_ht_snapshot(lm, snap)
 
 
-def _eligible_positive_custom_lines_for_global_discount(inv: Invoice) -> list[InvoiceLine]:
+def _eligible_positive_custom_lines_for_global_discount(
+    inv: Invoice,
+) -> list[InvoiceLine]:
     """Prestations CUSTOM HT > 0 (hors remises auto, déductions manuelles, lignes techniques)."""
     res: list[InvoiceLine] = []
     for inv_ln in inv.lines:
@@ -577,7 +592,9 @@ def _eligible_lines_for_per_line_discount(inv: Invoice) -> list[InvoiceLine]:
             continue
         if inv_ln.type == InvoiceLineType.CUSTOM:
             meta = inv_ln.line_meta if isinstance(inv_ln.line_meta, dict) else {}
-            if meta.get("global_discount_line") or meta.get(_META_PER_LINE_DISCOUNT_LINE):
+            if meta.get("global_discount_line") or meta.get(
+                _META_PER_LINE_DISCOUNT_LINE
+            ):
                 continue
             if _is_manual_discount_line(inv_ln):
                 continue
@@ -585,7 +602,9 @@ def _eligible_lines_for_per_line_discount(inv: Invoice) -> list[InvoiceLine]:
     return res
 
 
-def _undo_auto_discount_lines_and_restore_catalog_for_global_discount(inv: Invoice) -> None:
+def _undo_auto_discount_lines_and_restore_catalog_for_global_discount(
+    inv: Invoice,
+) -> None:
     """Supprime les lignes CUSTOM de remise auto et rétablit les HT avant remise globale (snapshot ou réservations)."""
     prev_snaps = _line_snapshots_from_global_discount_meta(inv)
     _delete_negative_custom_discount_lines_except_manual(inv)
@@ -597,15 +616,19 @@ def _undo_auto_discount_lines_and_restore_catalog_for_global_discount(inv: Invoi
     db.session.expire(inv, ["lines"])
 
 
-def _stash_original_line_totals_for_global_discount(eligible: list[InvoiceLine]) -> None:
+def _stash_original_line_totals_for_global_discount(
+    eligible: list[InvoiceLine],
+) -> None:
     """Enregistre le HT catalogue sur la ligne avant application remise globale (retrait si snapshot incomplet)."""
     for inv_ln in eligible:
-        meta: dict[str, Any] = dict(inv_ln.line_meta) if isinstance(inv_ln.line_meta, dict) else {}
+        meta: dict[str, Any] = (
+            dict(inv_ln.line_meta) if isinstance(inv_ln.line_meta, dict) else {}
+        )
         meta[_META_ORIGINAL_LINE_TOTAL] = format(inv_ln.line_total or Decimal("0"), "f")
         inv_ln.line_meta = meta
 
 
-def apply_draft_global_discount(  # noqa: PLR0911
+def apply_draft_global_discount(
     company_id: int,
     invoice_id: int,
     *,
@@ -633,7 +656,9 @@ def apply_draft_global_discount(  # noqa: PLR0911
 
     if not (0 < global_discount_percent <= _MAX_DISCOUNT_PERCENT):
         return EditDraftResult(
-            False, error={"error": "Remise: pourcentage invalide (0-100]"}, status_code=400
+            False,
+            error={"error": "Remise: pourcentage invalide (0-100]"},
+            status_code=400,
         )
 
     _undo_auto_discount_lines_and_restore_catalog_for_global_discount(inv)
@@ -650,7 +675,9 @@ def apply_draft_global_discount(  # noqa: PLR0911
         if len(ride_line_ids) == 0:
             return EditDraftResult(
                 False,
-                error={"error": "Indiquez au moins une ligne transport pour la remise %"},
+                error={
+                    "error": "Indiquez au moins une ligne transport pour la remise %"
+                },
                 status_code=400,
             )
         try:
@@ -685,7 +712,9 @@ def apply_draft_global_discount(  # noqa: PLR0911
     if gross <= 0:
         return EditDraftResult(
             False,
-            error={"error": "Aucun montant HT à remiser (transports et lignes positives)."},
+            error={
+                "error": "Aucun montant HT à remiser (transports et lignes positives)."
+            },
             status_code=400,
         )
 
@@ -705,7 +734,9 @@ def apply_draft_global_discount(  # noqa: PLR0911
     n = len(eligible)
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    vat_rate = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    vat_rate = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_applicable = bool(bset.vat_applicable) and vat_rate > 0
     calc = InvoiceCalculator()
 
@@ -809,7 +840,9 @@ def apply_draft_per_line_discounts(
 
     # Toujours lever une remise % précédente (globale ou par ligne) avant réapplication — évite double remise silencieuse.
     _undo_auto_discount_lines_and_restore_catalog_for_global_discount(inv)
-    err_custom_restore = _restore_positive_custom_lines_from_catalog_meta(inv, company_id)
+    err_custom_restore = _restore_positive_custom_lines_from_catalog_meta(
+        inv, company_id
+    )
     if err_custom_restore is not None:
         return err_custom_restore
     meta_pre: dict[str, Any] = dict(inv.meta) if isinstance(inv.meta, dict) else {}
@@ -828,7 +861,9 @@ def apply_draft_per_line_discounts(
 
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    vat_rate = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    vat_rate = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_applicable = bool(bset.vat_applicable) and vat_rate > 0
     calc = InvoiceCalculator()
 
@@ -888,7 +923,9 @@ def _restore_positive_custom_lines_from_catalog_meta(
     """
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    cr_vat = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    cr_vat = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_ok = bool(bset.vat_applicable) and cr_vat > 0
     calc = InvoiceCalculator()
     for lm in inv.lines:
@@ -1000,7 +1037,11 @@ def remove_draft_global_discount(
             return err_rides_snap
         # Legacy : snapshot incomplet — RIDE absents → réservation
         for lm in inv.lines:
-            if lm.type != InvoiceLineType.RIDE or not lm.reservation_id or lm.id is None:
+            if (
+                lm.type != InvoiceLineType.RIDE
+                or not lm.reservation_id
+                or lm.id is None
+            ):
                 continue
             if lm.id in snap_ids:
                 continue
@@ -1030,7 +1071,11 @@ def remove_draft_global_discount(
             if err_rides is not None:
                 return err_rides
             for lm in inv.lines:
-                if lm.type != InvoiceLineType.RIDE or not lm.reservation_id or lm.id is None:
+                if (
+                    lm.type != InvoiceLineType.RIDE
+                    or not lm.reservation_id
+                    or lm.id is None
+                ):
                     continue
                 if lm.id in ride_ids_with_catalog_meta:
                     continue
@@ -1142,7 +1187,9 @@ def add_draft_custom_line(
     )
     settings_repo = CompanyBillingSettingsRepository()
     bset = settings_repo.find_or_create(company_id)
-    vat_rate = Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    vat_rate = (
+        Decimal(str(bset.vat_rate)) if bset.vat_rate is not None else Decimal("0.00")
+    )
     vat_applicable = bool(bset.vat_applicable) and vat_rate > 0
     calc = InvoiceCalculator()
 

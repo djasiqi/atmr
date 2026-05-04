@@ -31,7 +31,10 @@ class ServiceArea(db.Model):
     __tablename__ = "service_area"
     __table_args__ = (
         UniqueConstraint(
-            "company_id", "geo_unit_id", "coverage_mode", name="uq_service_area_company_geo_mode"
+            "company_id",
+            "geo_unit_id",
+            "coverage_mode",
+            name="uq_service_area_company_geo_mode",
         ),
         Index("ix_service_area_company_active", "company_id", "is_active"),
     )
@@ -185,7 +188,9 @@ class PricingProfileVersion(db.Model):
 class DispatchOffer(db.Model):
     __tablename__ = "dispatch_offer"
     __table_args__ = (
-        UniqueConstraint("booking_id", "company_id", name="uq_dispatch_offer_booking_company"),
+        UniqueConstraint(
+            "booking_id", "company_id", name="uq_dispatch_offer_booking_company"
+        ),
         Index("ix_dispatch_offer_booking_status", "booking_id", "status"),
     )
 
@@ -212,7 +217,9 @@ class DispatchOffer(db.Model):
     )
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     reason_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -225,15 +232,17 @@ class DispatchOffer(db.Model):
 
 class PlatformZoneSet(db.Model):
     __tablename__ = "platform_zone_set"
-    __table_args__ = (
-        Index("ix_platform_zone_set_active_scope", "is_active", "scope"),
-    )
+    __table_args__ = (Index("ix_platform_zone_set_active_scope", "is_active", "scope"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    key: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
     label: Mapped[str] = mapped_column(String(120), nullable=False)
     scope: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1"), default=1
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

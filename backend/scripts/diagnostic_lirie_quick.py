@@ -16,7 +16,7 @@ try:
     env_path = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(env_path)
     print(f"✅ .env chargé: {env_path}")
-except:
+except Exception:
     print("⚠️  dotenv non disponible, utilise variables système")
 
 print()

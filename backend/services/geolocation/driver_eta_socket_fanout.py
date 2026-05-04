@@ -31,7 +31,9 @@ _last_compute_monotonic: dict[int, float] = {}
 _last_eta_emitted_by_driver: dict[int, dict[int, tuple[int | None, int | None]]] = {}
 
 
-def _signature_from_response(resp: DriverBookingsEtaResponse) -> dict[int, tuple[int | None, int | None]]:
+def _signature_from_response(
+    resp: DriverBookingsEtaResponse,
+) -> dict[int, tuple[int | None, int | None]]:
     return {
         int(item.id): (item.eta_to_pickup_seconds, item.eta_to_dropoff_seconds)
         for item in resp.bookings
@@ -61,7 +63,9 @@ def _significant_delta(
     return False
 
 
-def _serialize_eta_response(resp: DriverBookingsEtaResponse, bookings: list[Any]) -> dict[str, Any]:
+def _serialize_eta_response(
+    resp: DriverBookingsEtaResponse, bookings: list[Any]
+) -> dict[str, Any]:
     """Même forme que GET /driver/me/bookings/eta."""
     if not resp.has_gps:
         return {
@@ -107,7 +111,9 @@ def maybe_emit_eta_changed_after_driver_location(
         return
 
     try:
-        today_start, today_end = day_local_bounds(now_local().date().strftime("%Y-%m-%d"))
+        today_start, today_end = day_local_bounds(
+            now_local().date().strftime("%Y-%m-%d")
+        )
         booking_repo = BookingRepository()
         bookings = booking_repo.find_models_by_driver_with_statuses_and_time_range(
             driver_id=driver_id,
@@ -154,4 +160,7 @@ def maybe_emit_eta_changed_after_driver_location(
         inc_eta_changed_emitted()
     except Exception:
         inc_eta_changed_skipped(reason="error")
-        logger.exception("maybe_emit_eta_changed_after_driver_location failed driver_id=%s", driver_id)
+        logger.exception(
+            "maybe_emit_eta_changed_after_driver_location failed driver_id=%s",
+            driver_id,
+        )

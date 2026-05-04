@@ -151,7 +151,9 @@ def send_contact_notification(payload: dict[str, Any]) -> dict[str, Any]:
     if not internal_result.get("ok"):
         return internal_result
 
-    auto_reply_enabled = os.getenv("CONTACT_AUTOREPLY_ENABLED", "true").lower() == "true"
+    auto_reply_enabled = (
+        os.getenv("CONTACT_AUTOREPLY_ENABLED", "true").lower() == "true"
+    )
     client_email = str(payload.get("email") or "").strip()
     if not auto_reply_enabled or not client_email:
         return internal_result

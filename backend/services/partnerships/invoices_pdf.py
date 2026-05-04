@@ -50,8 +50,18 @@ from services.documents.pdf import (
 # Constantes alignées avec pdf.py
 DEST_ADDR_MAX_WIDTH_MM = 85.0  # Largeur max bloc destinataire
 MONTHS_FR = (
-    "janvier", "février", "mars", "avril", "mai", "juin",
-    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
 )
 # Constantes pour parsing d'adresse
 MIN_ADDRESS_PARTS = 2
@@ -237,7 +247,11 @@ def generate_partner_invoice_pdf_content(
     payment_terms_days = int(
         billing_settings.payment_terms_days
         if billing_settings and billing_settings.payment_terms_days
-        else (partnership.payment_terms_days if partnership and partnership.payment_terms_days else 30)
+        else (
+            partnership.payment_terms_days
+            if partnership and partnership.payment_terms_days
+            else 30
+        )
     )
 
     overdue_fee = 5.00
@@ -263,9 +277,11 @@ def generate_partner_invoice_pdf_content(
         iban_formatted = iban_value
         if len(iban_value) >= MIN_IBAN_LENGTH and " " not in iban_value:
             iban_formatted = " ".join(
-                [iban_value[i:i + 4] for i in range(0, len(iban_value), 4)]
+                [iban_value[i : i + 4] for i in range(0, len(iban_value), 4)]
             )
-        footer_message += f"<br/>Paiement par virement bancaire : IBAN : {iban_formatted}"
+        footer_message += (
+            f"<br/>Paiement par virement bancaire : IBAN : {iban_formatted}"
+        )
 
     # Créer le callback footer (IDENTIQUE à pdf.py)
     footer_cb = _make_legal_footer_page_callback(
@@ -298,9 +314,7 @@ def generate_partner_invoice_pdf_content(
     company_address = _format_address_multiline(executing_company.address)
     company_phone = executing_company.contact_phone or ""
     company_email = (
-        executing_company.billing_email
-        or executing_company.contact_email
-        or ""
+        executing_company.billing_email or executing_company.contact_email or ""
     )
     company_uid = executing_company.uid_ide or ""
 
@@ -352,11 +366,13 @@ def generate_partner_invoice_pdf_content(
         colWidths=[dest_width_pt],
     )
     recipient_block.setStyle(
-        TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ])
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
     )
 
     # Construire cellule gauche (logo + entreprise)
@@ -374,14 +390,16 @@ def generate_partner_invoice_pdf_content(
         if is_drawing:
             logo_table = Table([[logo_img]], colWidths=[logo_width])
             logo_table.setStyle(
-                TableStyle([
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-                    ("TOPPADDING", (0, 0), (-1, -1), 0),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-                ])
+                TableStyle(
+                    [
+                        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                    ]
+                )
             )
             left_cell_content.append(logo_table)
         else:
@@ -398,14 +416,16 @@ def generate_partner_invoice_pdf_content(
         colWidths=[company_width_pt, dest_width_pt],
     )
     header_table.setStyle(
-        TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (0, -1), 0),
-            ("RIGHTPADDING", (0, 0), (0, -1), 6),
-            ("LEFTPADDING", (1, 0), (1, -1), recipient_left_padding_mm * mm),
-            ("RIGHTPADDING", (1, 0), (1, -1), 0),
-            ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
-        ])
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (0, -1), 0),
+                ("RIGHTPADDING", (0, 0), (0, -1), 6),
+                ("LEFTPADDING", (1, 0), (1, -1), recipient_left_padding_mm * mm),
+                ("RIGHTPADDING", (1, 0), (1, -1), 0),
+                ("TOPPADDING", (1, 0), (1, -1), recipient_top_padding_mm * mm),
+            ]
+        )
     )
     story.append(header_table)
     story.append(Spacer(1, 20))
@@ -435,7 +455,7 @@ def generate_partner_invoice_pdf_content(
         clean = address.replace(", Suisse", "").replace(" Suisse", "").strip()
         if len(clean) <= max_len:
             return clean
-        return clean[:max_len - 1] + "…"
+        return clean[: max_len - 1] + "…"
 
     # En-tête du tableau
     table_data: list[list[Any]] = [
@@ -460,7 +480,7 @@ def generate_partner_invoice_pdf_content(
                     or "Client"
                 )
                 if len(client_name) > MAX_CLIENT_NAME_LENGTH:
-                    client_name = client_name[:MAX_CLIENT_NAME_LENGTH - 1] + "…"
+                    client_name = client_name[: MAX_CLIENT_NAME_LENGTH - 1] + "…"
             else:
                 client_name = booking.customer_name or "Client"
 
@@ -488,25 +508,27 @@ def generate_partner_invoice_pdf_content(
         colWidths=[2 * cm, 3.5 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm],
     )
     services_table.setStyle(
-        TableStyle([
-            # En-tête
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 9),
-            ("ALIGN", (0, 0), (-1, 0), "LEFT"),
-            ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-            ("TOPPADDING", (0, 0), (-1, 0), 8),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
-            # Corps
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 1), (-1, -1), 8),
-            ("ALIGN", (0, 1), (-1, -1), "LEFT"),
-            ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
-            ("TOPPADDING", (0, 1), (-1, -1), 6),
-            ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
-        ])
+        TableStyle(
+            [
+                # En-tête
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("ALIGN", (0, 0), (-1, 0), "LEFT"),
+                ("ALIGN", (-1, 0), (-1, 0), "RIGHT"),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+                ("TOPPADDING", (0, 0), (-1, 0), 8),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.black),
+                # Corps
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 8),
+                ("ALIGN", (0, 1), (-1, -1), "LEFT"),
+                ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 6),
+                ("TOPPADDING", (0, 1), (-1, -1), 6),
+                ("LINEBELOW", (0, 1), (-1, -2), 0.25, colors.lightgrey),
+            ]
+        )
     )
 
     story.append(services_table)
@@ -543,15 +565,17 @@ def generate_partner_invoice_pdf_content(
         colWidths=[2 * cm, 3.5 * cm, 4.5 * cm, 4.5 * cm, 2.5 * cm],
     )
     total_table.setStyle(
-        TableStyle([
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-            ("ALIGN", (3, 0), (4, -1), "RIGHT"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ])
+        TableStyle(
+            [
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("FONTNAME", (0, 0), (-1, -2), "Helvetica"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ]
+        )
     )
     story.append(total_table)
 

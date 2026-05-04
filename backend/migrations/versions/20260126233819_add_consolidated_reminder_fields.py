@@ -28,15 +28,24 @@ def upgrade():
     # Ajouter les nouveaux champs à invoice_reminders
     op.add_column(
         "invoice_reminders",
-        sa.Column("principal_amount", sa.Numeric(10, 2), nullable=False, server_default="0.00"),
+        sa.Column(
+            "principal_amount", sa.Numeric(10, 2), nullable=False, server_default="0.00"
+        ),
     )
     op.add_column(
         "invoice_reminders",
-        sa.Column("reminder_fee_amount", sa.Numeric(10, 2), nullable=False, server_default="0.00"),
+        sa.Column(
+            "reminder_fee_amount",
+            sa.Numeric(10, 2),
+            nullable=False,
+            server_default="0.00",
+        ),
     )
     op.add_column(
         "invoice_reminders",
-        sa.Column("total_due", sa.Numeric(10, 2), nullable=False, server_default="0.00"),
+        sa.Column(
+            "total_due", sa.Numeric(10, 2), nullable=False, server_default="0.00"
+        ),
     )
     op.add_column(
         "invoice_reminders",
@@ -86,7 +95,9 @@ def upgrade():
 def downgrade():
     # Supprimer les index et FK pour invoice_payments
     op.drop_index("ix_invoice_payments_reminder", table_name="invoice_payments")
-    op.drop_constraint("fk_invoice_payment_reminder", "invoice_payments", type_="foreignkey")
+    op.drop_constraint(
+        "fk_invoice_payment_reminder", "invoice_payments", type_="foreignkey"
+    )
     op.drop_column("invoice_payments", "reminder_id")
 
     # Supprimer les index

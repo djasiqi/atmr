@@ -3,7 +3,14 @@ from marshmallow.validate import Length, OneOf
 
 from schemas.validation_utils import EMAIL_VALIDATOR, PHONE_VALIDATOR
 
-CONTACT_CATEGORIES = ("support", "institution", "transport", "demo", "billing", "family")
+CONTACT_CATEGORIES = (
+    "support",
+    "institution",
+    "transport",
+    "demo",
+    "billing",
+    "family",
+)
 # Compatibilite legacy imports.
 CONTACT_SUBJECTS = CONTACT_CATEGORIES
 
@@ -21,26 +28,38 @@ class BaseContactSchema(Schema):
     message = fields.Str(required=True, validate=Length(min=5, max=4000))
     privacy_consent = fields.Bool(required=True)
     website = fields.Str(required=False, allow_none=True, validate=Length(max=256))
-    client_request_id = fields.Str(required=False, allow_none=True, validate=Length(max=64))
-    subject_detail = fields.Str(required=False, allow_none=True, validate=Length(max=64))
+    client_request_id = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
+    subject_detail = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
     reference = fields.Str(required=False, allow_none=True, validate=Length(max=120))
     urgency = fields.Str(
         required=False,
         allow_none=True,
         validate=OneOf(("normal", "priority")),
     )
-    organization_type = fields.Str(required=False, allow_none=True, validate=Length(max=64))
+    organization_type = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
     sites_count = fields.Str(required=False, allow_none=True, validate=Length(max=32))
     integration_required = fields.Str(
         required=False,
         allow_none=True,
         validate=OneOf(("yes", "no", "evaluate")),
     )
-    integration_system = fields.Str(required=False, allow_none=True, validate=Length(max=120))
-    fleet_size_range = fields.Str(required=False, allow_none=True, validate=Length(max=64))
+    integration_system = fields.Str(
+        required=False, allow_none=True, validate=Length(max=120)
+    )
+    fleet_size_range = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
     service_area = fields.Str(required=False, allow_none=True, validate=Length(max=160))
     timing = fields.Str(required=False, allow_none=True, validate=Length(max=64))
-    preferred_slot = fields.Str(required=False, allow_none=True, validate=Length(max=64))
+    preferred_slot = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
     volume_range = fields.Str(required=False, allow_none=True, validate=Length(max=64))
     situation = fields.Str(required=False, allow_none=True, validate=Length(max=220))
 
@@ -48,7 +67,11 @@ class BaseContactSchema(Schema):
     def validate_privacy_consent(self, data, **_kwargs):
         if not data.get("privacy_consent"):
             raise ValidationError(
-                {"privacy_consent": ["Le consentement est requis pour envoyer la demande."]}
+                {
+                    "privacy_consent": [
+                        "Le consentement est requis pour envoyer la demande."
+                    ]
+                }
             )
 
 
@@ -65,7 +88,9 @@ class InstitutionContactSchema(BaseContactSchema):
         if not data.get("organization_type"):
             errors["organization_type"] = ["Type d'organisation requis."]
         if not data.get("integration_required"):
-            errors["integration_required"] = ["Indiquer si une integration est requise."]
+            errors["integration_required"] = [
+                "Indiquer si une integration est requise."
+            ]
         if errors:
             raise ValidationError(errors)
 
@@ -101,7 +126,9 @@ class FamilyContactSchema(BaseContactSchema):
     @validates_schema
     def validate_required(self, data, **_kwargs):
         if (data.get("organization") or "").strip():
-            raise ValidationError({"organization": ["Ne pas renseigner ce champ pour cette categorie."]})
+            raise ValidationError(
+                {"organization": ["Ne pas renseigner ce champ pour cette categorie."]}
+            )
 
 
 def schema_for_category(category: str) -> Schema:
@@ -130,7 +157,9 @@ class ContactRequestBaseOnlySchema(Schema):
     phone = fields.Str(required=False, allow_none=True, validate=PHONE_VALIDATOR)
     privacy_consent = fields.Bool(required=True)
     website = fields.Str(required=False, allow_none=True, validate=Length(max=256))
-    client_request_id = fields.Str(required=False, allow_none=True, validate=Length(max=64))
+    client_request_id = fields.Str(
+        required=False, allow_none=True, validate=Length(max=64)
+    )
 
 
 class ContactRequestSchema(BaseContactSchema):

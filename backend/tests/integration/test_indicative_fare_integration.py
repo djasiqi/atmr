@@ -61,7 +61,9 @@ def test_indicative_fare_estimate_disabled_412(
     client, app, db, sample_client, monkeypatch
 ):
     if not _table_exists(app):
-        pytest.skip("Table platform_client_indicative_fare_config absente (flask db upgrade).")
+        pytest.skip(
+            "Table platform_client_indicative_fare_config absente (flask db upgrade)."
+        )
 
     row = _ensure_singleton_row(db, is_enabled=False, config_version=3)
     assert row.is_enabled is False
@@ -92,7 +94,9 @@ def test_admin_put_bumps_config_version_then_estimate_matches(
     client, app, db, sample_client, admin_headers, monkeypatch
 ):
     if not _table_exists(app):
-        pytest.skip("Table platform_client_indicative_fare_config absente (flask db upgrade).")
+        pytest.skip(
+            "Table platform_client_indicative_fare_config absente (flask db upgrade)."
+        )
 
     row = _ensure_singleton_row(
         db,

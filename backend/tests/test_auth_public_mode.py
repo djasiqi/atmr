@@ -62,7 +62,9 @@ def test_service_area_check_unavailable(client):
 
 
 def test_service_area_check_invalid_payload(client):
-    response = client.post("/api/v1/auth/public/service-area/check", json={"departure": "A"})
+    response = client.post(
+        "/api/v1/auth/public/service-area/check", json={"departure": "A"}
+    )
     assert response.status_code == 400
     payload = response.get_json()
     assert payload["status"] == "unavailable"
@@ -133,7 +135,9 @@ def test_booking_status_token_valid(client, app, monkeypatch):
         booking_reference = "BK-123"
         updated_at = datetime.now(UTC)
 
-    monkeypatch.setattr(auth_routes.db.session, "get", lambda model, booking_id: FakeBooking())
+    monkeypatch.setattr(
+        auth_routes.db.session, "get", lambda model, booking_id: FakeBooking()
+    )
     token = _build_booking_token(app, 123)
     response = client.get(f"/api/v1/auth/public/booking-status?token={token}")
     assert response.status_code == 200
@@ -219,7 +223,9 @@ def test_guest_booking_create_minimal_without_pii(client, monkeypatch):
             "breakdown": {},
         }
 
-    monkeypatch.setattr(guest_pricing, "compute_public_guest_booking_price", _fake_price)
+    monkeypatch.setattr(
+        guest_pricing, "compute_public_guest_booking_price", _fake_price
+    )
 
     response = client.post(
         "/api/v1/auth/public/guest-booking/create",
@@ -254,4 +260,3 @@ def test_booking_status_token_revoked(client, app, monkeypatch):
     response = client.get(f"/api/v1/auth/public/booking-status?token={token}")
     assert response.status_code == 410
     assert response.get_json()["error"] == "token_revoked"
-

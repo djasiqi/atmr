@@ -89,6 +89,7 @@ def _is_synthetic_demo_email_expr(column):
         lowered.like("%@internal.atmr.local"),
     )
 
+
 # Initialisation des repositories et services
 user_repo = UserRepository()
 booking_repo = BookingRepository()
@@ -186,9 +187,7 @@ class AdminStats(Resource):
                 day=1, hour=0, minute=0, second=0, microsecond=0
             )
             window_start = current_month_start - relativedelta(months=11)
-            counts_by_month = booking_repo.get_monthly_booking_counts(
-                window_start, now
-            )
+            counts_by_month = booking_repo.get_monthly_booking_counts(window_start, now)
 
             trends = []
             for i in range(11, -1, -1):
@@ -515,7 +514,9 @@ class AllUsers(Resource):
 
             paginate_raw = request.args.get("paginate")
             has_page_args = ("page" in request.args) or ("per_page" in request.args)
-            has_sort_args = ("sort_by" in request.args) or ("sort_order" in request.args)
+            has_sort_args = ("sort_by" in request.args) or (
+                "sort_order" in request.args
+            )
             paginate = (
                 str(paginate_raw).strip().lower() in {"1", "true", "yes"}
                 if paginate_raw is not None
@@ -526,10 +527,12 @@ class AllUsers(Resource):
             per_page = min(per_page, 200)
             search = (request.args.get("search", "") or "").strip().lower()
             role = (request.args.get("role", "") or "").strip().lower()
-            sort_by = (request.args.get("sort_by", "created_at") or "created_at").strip()
+            sort_by = (
+                request.args.get("sort_by", "created_at") or "created_at"
+            ).strip()
             sort_order = (
-                request.args.get("sort_order", "desc") or "desc"
-            ).strip().lower()
+                (request.args.get("sort_order", "desc") or "desc").strip().lower()
+            )
 
             # Compatibilité: sans pagination explicite, sans page/per_page et sans
             # filtres explicites, conserver l'ancien comportement (retour complet).
@@ -537,10 +540,9 @@ class AllUsers(Resource):
             has_filters = bool(search or role or has_sort_args or has_page_args)
             if not paginate and has_filters:
                 paginate = True
-            include_synthetic = (
-                str(request.args.get("include_synthetic", "false")).strip().lower()
-                in {"1", "true", "yes"}
-            )
+            include_synthetic = str(
+                request.args.get("include_synthetic", "false")
+            ).strip().lower() in {"1", "true", "yes"}
 
             query = User.query
             if not include_synthetic:
@@ -561,14 +563,15 @@ class AllUsers(Resource):
 
             if role:
                 query = query.filter(
-                    func.lower(func.coalesce(func.cast(User.role, db.String), "")) == role
+                    func.lower(func.coalesce(func.cast(User.role, db.String), ""))
+                    == role
                 )
 
             role_counts_rows = (
                 query.with_entities(
-                    func.lower(func.coalesce(func.cast(User.role, db.String), "")).label(
-                        "role_key"
-                    ),
+                    func.lower(
+                        func.coalesce(func.cast(User.role, db.String), "")
+                    ).label("role_key"),
                     func.count(User.id),
                 )
                 .group_by("role_key")
@@ -659,7 +662,9 @@ class AllInstitutions(Resource):
         try:
             from models import Institution
 
-            institutions = db.session.query(Institution).order_by(Institution.name).all()
+            institutions = (
+                db.session.query(Institution).order_by(Institution.name).all()
+            )
             return {
                 "institutions": [
                     {
@@ -842,7 +847,7 @@ class UpdateUserRole(Resource):
     # ✅ S2: Rate limiting strict pour changement rôle (action sensible)
     @limiter.limit("20 per hour")
     @admin_ns.expect(user_role_update_model, validate=False)
-    def put(self, user_id: int):  # noqa: PLR0911
+    def put(self, user_id: int):
         """Met à jour le rôle d'un utilisateur et, si besoin,
         crée/assigne Driver ou Company en gérant la transition depuis l'ancien rôle.
         """
@@ -945,20 +950,27 @@ class UpdateUserRole(Resource):
             elif role_upper == "INSTITUTION":
                 # Assigner l'utilisateur à une institution
                 institution_id = validated_data.get("institution_id")
-                institution_role = validated_data.get("institution_role", "institution_admin")
+                institution_role = validated_data.get(
+                    "institution_role", "institution_admin"
+                )
 
                 from models import Institution
 
                 # ✅ Si aucune institution_id fournie, créer automatiquement l'institution
                 if not institution_id:
                     # Utiliser le nom de l'utilisateur comme nom d'institution
-                    institution_name = cast("Any", user).username or cast("Any", user).email.split("@")[0]
+                    institution_name = (
+                        cast("Any", user).username
+                        or cast("Any", user).email.split("@")[0]
+                    )
                     user_email = cast("Any", user).email
 
                     # Vérifier si une institution existe déjà avec cet email
-                    existing_inst = db.session.query(Institution).filter_by(
-                        contact_email=user_email
-                    ).first()
+                    existing_inst = (
+                        db.session.query(Institution)
+                        .filter_by(contact_email=user_email)
+                        .first()
+                    )
 
                     if existing_inst:
                         institution = existing_inst
@@ -971,6 +983,7 @@ class UpdateUserRole(Resource):
                     else:
                         # Créer une nouvelle institution
                         import uuid
+
                         InstitutionCtor = cast("Any", Institution)
                         institution = InstitutionCtor(
                             public_id=str(uuid.uuid4()),
@@ -990,7 +1003,11 @@ class UpdateUserRole(Resource):
                     institution_id = institution.id
                 else:
                     # Vérifier que l'institution existe
-                    institution = db.session.query(Institution).filter_by(id=institution_id).first()
+                    institution = (
+                        db.session.query(Institution)
+                        .filter_by(id=institution_id)
+                        .first()
+                    )
                     if institution is None:
                         return APIErrorHandler.handle_not_found(
                             "Institution",
@@ -1189,9 +1206,13 @@ class AutonomousActionsList(Resource):
             end_date = None
             try:
                 if start_date_raw:
-                    start_date = datetime.fromisoformat(f"{start_date_raw}T00:00:00+00:00")
+                    start_date = datetime.fromisoformat(
+                        f"{start_date_raw}T00:00:00+00:00"
+                    )
                 if end_date_raw:
-                    end_date = datetime.fromisoformat(f"{end_date_raw}T23:59:59.999999+00:00")
+                    end_date = datetime.fromisoformat(
+                        f"{end_date_raw}T23:59:59.999999+00:00"
+                    )
             except ValueError as err:
                 raise ValidationError(
                     {"start_date": ["Format de date invalide (YYYY-MM-DD attendu)"]}

@@ -180,7 +180,12 @@ def _postgresql_schema_ready(app: Flask) -> bool:
                 _db.session.rollback()
     except Exception as e:
         err = str(e).lower()
-        if "does not exist" in err or "relation" in err or "connection" in err or "connect" in err:
+        if (
+            "does not exist" in err
+            or "relation" in err
+            or "connection" in err
+            or "connect" in err
+        ):
             return False
         raise
 

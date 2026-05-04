@@ -4,6 +4,7 @@
 Messages texte lies a un booking, affiches dans le panel de detail.
 Enum separe BookingMessageSender pour ne pas toucher SenderRole (driver/company).
 """
+
 from __future__ import annotations
 
 from enum import Enum as PyEnum
@@ -40,9 +41,7 @@ class BookingMessage(db.Model):
     """Message dans le mini-chat d'un booking institution."""
 
     __tablename__ = "booking_messages"
-    __table_args__ = (
-        Index("ix_bmsg_booking_created", "booking_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_bmsg_booking_created", "booking_id", "created_at"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     booking_id = Column(

@@ -27,7 +27,11 @@ class GeoUnit(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     type: Mapped[GeoUnitType] = mapped_column(
-        SAEnum(GeoUnitType, name="geo_unit_type", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        SAEnum(
+            GeoUnitType,
+            name="geo_unit_type",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
         nullable=False,
     )
     code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

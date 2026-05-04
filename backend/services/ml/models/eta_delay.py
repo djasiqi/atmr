@@ -817,7 +817,7 @@ _global_eta_model: ETADelayModel | None = None
 
 def get_eta_delay_model() -> ETADelayModel:
     """Récupère l'instance globale du modèle ETA."""
-    global _global_eta_model  # noqa: PLW0603
+    global _global_eta_model
 
     if _global_eta_model is None:
         # Préférer XGBoost si disponible

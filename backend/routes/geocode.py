@@ -59,17 +59,27 @@ ZONE_MAX_LIMIT = 50
 ZONE_QUERY_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_QUERY", "7200"))
 ZONE_QUERY_CACHE_VERSION = "2"
 ZONE_REVERSE_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_REVERSE", "172800"))
-ZONE_GEOMETRY_CACHE_TTL_SECONDS = int(os.getenv("GEOADMIN_CACHE_TTL_GEOMETRY", "604800"))
+ZONE_GEOMETRY_CACHE_TTL_SECONDS = int(
+    os.getenv("GEOADMIN_CACHE_TTL_GEOMETRY", "604800")
+)
 GEOADMIN_ENABLED = os.getenv("GEOADMIN_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # Cache Redis autocomplete / place-details (Bloc 2)
-GEOCODE_AUTOCOMPLETE_CACHE_TTL = int(os.getenv("GEOCODE_AUTOCOMPLETE_CACHE_TTL", "300"))  # 5 min
-GEOCODE_PLACE_DETAILS_CACHE_TTL = int(os.getenv("GEOCODE_PLACE_DETAILS_CACHE_TTL", "3600"))  # 1 h
-GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip("/")
+GEOCODE_AUTOCOMPLETE_CACHE_TTL = int(
+    os.getenv("GEOCODE_AUTOCOMPLETE_CACHE_TTL", "300")
+)  # 5 min
+GEOCODE_PLACE_DETAILS_CACHE_TTL = int(
+    os.getenv("GEOCODE_PLACE_DETAILS_CACHE_TTL", "3600")
+)  # 1 h
+GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip(
+    "/"
+)
 GEOADMIN_CB_FAIL_THRESHOLD = int(os.getenv("GEOADMIN_CB_FAIL_THRESHOLD", "10"))
 GEOADMIN_CB_WINDOW_SECONDS = int(os.getenv("GEOADMIN_CB_WINDOW_SECONDS", "60"))
 GEOADMIN_CB_OPEN_SECONDS = int(os.getenv("GEOADMIN_CB_OPEN_SECONDS", "120"))
-GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS = int(os.getenv("GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS", "10"))
+GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS = int(
+    os.getenv("GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS", "10")
+)
 
 # Biais géographique Genève (approx)
 GENEVA_CENTER: Tuple[float, float] = (46.2044, 6.1432)  # (lat, lon)
@@ -231,7 +241,9 @@ def _zone_is_breaker_open() -> bool:
         # Half-open simplifié: laisser une requête test toutes les N secondes.
         probe_at = float(_geoadmin_breaker_state.get("half_open_probe_at", 0.0) or 0.0)
         if now >= probe_at:
-            _geoadmin_breaker_state["half_open_probe_at"] = now + GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS
+            _geoadmin_breaker_state["half_open_probe_at"] = (
+                now + GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS
+            )
             return False
         return True
     return False
@@ -269,11 +281,15 @@ def _zone_cache_get(cache_key: str) -> list[Dict[str, Any]] | None:
         return None
 
 
-def _zone_cache_set(cache_key: str, items: list[Dict[str, Any]], ttl_seconds: int) -> None:
+def _zone_cache_set(
+    cache_key: str, items: list[Dict[str, Any]], ttl_seconds: int
+) -> None:
     if not redis_client:
         return
     try:
-        redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(items, ensure_ascii=False))
+        redis_client.setex(
+            cache_key, max(ttl_seconds, 1), json.dumps(items, ensure_ascii=False)
+        )
     except Exception:
         return
 
@@ -293,11 +309,15 @@ def _zone_cache_get_dict(cache_key: str) -> Dict[str, Any] | None:
         return None
 
 
-def _zone_cache_set_dict(cache_key: str, payload: Dict[str, Any], ttl_seconds: int) -> None:
+def _zone_cache_set_dict(
+    cache_key: str, payload: Dict[str, Any], ttl_seconds: int
+) -> None:
     if not redis_client:
         return
     try:
-        redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False))
+        redis_client.setex(
+            cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False)
+        )
     except Exception:
         return
 
@@ -359,7 +379,9 @@ def _geocode_place_cache_get(cache_key: str) -> Dict[str, Any] | None:
         return None
 
 
-def _geocode_place_cache_set(cache_key: str, payload: Dict[str, Any], ttl_seconds: int) -> None:
+def _geocode_place_cache_set(
+    cache_key: str, payload: Dict[str, Any], ttl_seconds: int
+) -> None:
     if not redis_client:
         return
     with contextlib.suppress(Exception):
@@ -379,7 +401,9 @@ def _simplify_ring(ring: list[list[float]], step: int = 6) -> list[list[float]]:
     return sampled
 
 
-def _simplify_geojson_geometry(geometry: Dict[str, Any], step: int = 6) -> Dict[str, Any]:
+def _simplify_geojson_geometry(
+    geometry: Dict[str, Any], step: int = 6
+) -> Dict[str, Any]:
     gtype = str(geometry.get("type") or "")
     coords = geometry.get("coordinates")
     if gtype == "Polygon" and isinstance(coords, list):
@@ -453,7 +477,9 @@ def _fetch_commune_geometry_geojson(
         if not isinstance(geometry, dict):
             return None
         props_raw = feature_dict.get("properties")
-        feature_props = cast(Dict[str, Any], props_raw) if isinstance(props_raw, dict) else {}
+        feature_props = (
+            cast(Dict[str, Any], props_raw) if isinstance(props_raw, dict) else {}
+        )
         geometry_payload = (
             _simplify_geojson_geometry(geometry, step=8)
             if level == "simplified"
@@ -485,7 +511,11 @@ def _resolve_canton_code(unit: GeoUnit) -> str | None:
 
 def _serialize_zone_item(unit: GeoUnit) -> Dict[str, Any]:
     token = f"{unit.type.value}:{unit.code}"
-    commune_id = int(unit.code) if unit.type == GeoUnitType.COMMUNE and str(unit.code).isdigit() else None
+    commune_id = (
+        int(unit.code)
+        if unit.type == GeoUnitType.COMMUNE and str(unit.code).isdigit()
+        else None
+    )
     return {
         "id": commune_id,
         "type": unit.type.value,
@@ -571,7 +601,9 @@ def _fallback_geocode_zones(q: str, limit: int) -> list[Dict[str, Any]]:
         name = (props.get("name") or "").strip()
         osm_value = (props.get("osm_value") or "").strip().lower()
 
-        city_candidate = city or (name if osm_value in {"city", "town", "village", "municipality"} else "")
+        city_candidate = city or (
+            name if osm_value in {"city", "town", "village", "municipality"} else ""
+        )
         candidates: list[tuple[str, str, str | None]] = []
         if city_candidate:
             candidates.append(("commune", city_candidate, None))
@@ -756,7 +788,9 @@ def _extract_zone_type_from_geoadmin(attrs: Dict[str, Any]) -> str | None:
     return zone_type
 
 
-def _extract_zone_code(zone_type: str, attrs: Dict[str, Any], item: Dict[str, Any]) -> str | None:
+def _extract_zone_code(
+    zone_type: str, attrs: Dict[str, Any], item: Dict[str, Any]
+) -> str | None:
     if zone_type == "canton":
         candidates = [
             attrs.get("abbreviation"),
@@ -841,28 +875,43 @@ def _search_geoadmin_zones(
             continue
 
         name = _strip_tags(
-            str(attrs.get("label") or attrs.get("name") or attrs.get("detail") or row.get("label") or "")
+            str(
+                attrs.get("label")
+                or attrs.get("name")
+                or attrs.get("detail")
+                or row.get("label")
+                or ""
+            )
         )
         if not name:
             continue
         code = _extract_zone_code(zone_type, attrs, row)
-        token = f"{zone_type}:{code}" if code else _build_named_zone_token(zone_type, name)
+        token = (
+            f"{zone_type}:{code}" if code else _build_named_zone_token(zone_type, name)
+        )
         if token in seen_tokens:
             continue
         seen_tokens.add(token)
         if zone_type == "canton":
-            canton_code = code if code in SWISS_CANTON_CODES else _extract_canton_code_from_text(
-                attrs.get("label") or attrs.get("detail") or row.get("label")
-            )
-        else:
             canton_code = (
-                _extract_zone_code("canton", attrs, row)
-                or _extract_canton_code_from_text(
+                code
+                if code in SWISS_CANTON_CODES
+                else _extract_canton_code_from_text(
                     attrs.get("label") or attrs.get("detail") or row.get("label")
                 )
             )
+        else:
+            canton_code = _extract_zone_code(
+                "canton", attrs, row
+            ) or _extract_canton_code_from_text(
+                attrs.get("label") or attrs.get("detail") or row.get("label")
+            )
 
-        commune_id = int(code) if zone_type == "commune" and code and str(code).isdigit() else None
+        commune_id = (
+            int(code)
+            if zone_type == "commune" and code and str(code).isdigit()
+            else None
+        )
         items.append(
             {
                 "id": commune_id,
@@ -1328,9 +1377,7 @@ class GeocodeAutocomplete(Resource):
         # ✅ Ignorer les valeurs par défaut qui ne sont pas de vraies adresses
         DEFAULT_VALUES = ["non spécifié", "non specifie", "n/a", "na"]
         if q.lower() in DEFAULT_VALUES:
-            current_app.logger.debug(
-                "⚠️ Requête ignorée (valeur par défaut): '%s'", q
-            )
+            current_app.logger.debug("⚠️ Requête ignorée (valeur par défaut): '%s'", q)
             return [], 200
 
         # Biais (fallback Genève)
@@ -1409,7 +1456,10 @@ class GeocodeAutocomplete(Resource):
                 if country_mode == "CH":
                     try:
                         google_results_ch = autocomplete_address(
-                            q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
+                            q,
+                            country="CH",
+                            location={"lat": lat, "lng": lon},
+                            limit=limit,
                         )
                         if google_results_ch:
                             current_app.logger.debug(
@@ -1445,7 +1495,10 @@ class GeocodeAutocomplete(Resource):
                     # Zone frontalière : CH en priorité, puis FR pour compléter
                     try:
                         google_results_ch = autocomplete_address(
-                            q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
+                            q,
+                            country="CH",
+                            location={"lat": lat, "lng": lon},
+                            limit=limit,
                         )
                         if google_results_ch:
                             current_app.logger.debug(

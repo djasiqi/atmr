@@ -50,29 +50,41 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
                 except Exception:
                     ctx = ""
 
-            redis_key = f"idempotency:{ctx}:{idem_key}" if ctx else f"idempotency:{idem_key}"
+            redis_key = (
+                f"idempotency:{ctx}:{idem_key}" if ctx else f"idempotency:{idem_key}"
+            )
 
             try:
                 cached = redis_client.get(redis_key)
                 if cached:
                     raw: str | bytes = (
-                        cached.decode("utf-8") if isinstance(cached, bytes) else str(cached)
+                        cached.decode("utf-8")
+                        if isinstance(cached, bytes)
+                        else str(cached)
                     )
                     data = json.loads(raw)
                     cached_requested = data.get("requested_status")
                     current_body = request.get_json(silent=True) or {}
                     current_requested = (current_body.get("status") or "").upper()
-                    if cached_requested and current_requested and cached_requested != current_requested:
+                    if (
+                        cached_requested
+                        and current_requested
+                        and cached_requested != current_requested
+                    ):
                         logger.info(
                             "idempotency_conflict key=%s cached=%s requested=%s",
-                            redis_key, cached_requested, current_requested,
+                            redis_key,
+                            cached_requested,
+                            current_requested,
                         )
                         conflict_resp = make_response(
-                            jsonify({
-                                "error": "Idempotency conflict: same key used with different status",
-                                "cached_status": cached_requested,
-                                "requested_status": current_requested,
-                            }),
+                            jsonify(
+                                {
+                                    "error": "Idempotency conflict: same key used with different status",
+                                    "cached_status": cached_requested,
+                                    "requested_status": current_requested,
+                                }
+                            ),
                             400,
                         )
                         conflict_resp.headers["X-Idempotency-Status"] = "conflict"
@@ -80,21 +92,25 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
                             from services.monitoring.prometheus import (
                                 track_driver_booking_status_update,
                             )
+
                             track_driver_booking_status_update("conflict")
                         except Exception:
                             pass
                         return conflict_resp
-                    logger.info("idempotency_replay key=%s status=%s", redis_key, cached_requested or "?")
+                    logger.info(
+                        "idempotency_replay key=%s status=%s",
+                        redis_key,
+                        cached_requested or "?",
+                    )
                     try:
                         from services.monitoring.prometheus import (
                             track_driver_booking_status_update,
                         )
+
                         track_driver_booking_status_update("replay")
                     except Exception:
                         pass
-                    resp = make_response(
-                        jsonify(data["body"]), data["status_code"]
-                    )
+                    resp = make_response(jsonify(data["body"]), data["status_code"])
                     resp.headers["X-Idempotency-Status"] = "replay"
                     return resp
             except Exception as e:
@@ -123,7 +139,10 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
             try:
                 req_body = request.get_json(silent=True) or {}
                 requested_status = (req_body.get("status") or "").upper()
-                cache_payload: dict[str, Any] = {"status_code": status_code, "body": body}
+                cache_payload: dict[str, Any] = {
+                    "status_code": status_code,
+                    "body": body,
+                }
                 if requested_status:
                     cache_payload["requested_status"] = requested_status
                 redis_client.setex(
@@ -139,6 +158,7 @@ def idempotent(get_context_key: Callable[[], str | None] | None = None):
                 from services.monitoring.prometheus import (
                     track_driver_booking_status_update,
                 )
+
                 track_driver_booking_status_update("new")
             except Exception:
                 pass

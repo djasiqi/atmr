@@ -145,7 +145,9 @@ def _extract_points_from_geometry(route_geometry: Any) -> list[tuple[float, floa
     return points
 
 
-def _downsample_points(points: list[tuple[float, float]], max_points: int = 36) -> list[tuple[float, float]]:
+def _downsample_points(
+    points: list[tuple[float, float]], max_points: int = 36
+) -> list[tuple[float, float]]:
     if len(points) <= max_points:
         return points
     step = max(1, len(points) // max_points)
@@ -155,7 +157,9 @@ def _downsample_points(points: list[tuple[float, float]], max_points: int = 36) 
     return sampled
 
 
-def _build_linestring_geometry_from_points(points: list[tuple[float, float]]) -> dict[str, Any] | None:
+def _build_linestring_geometry_from_points(
+    points: list[tuple[float, float]],
+) -> dict[str, Any] | None:
     if len(points) < COORDINATE_PAIR_SIZE:
         return None
     coordinates = [[lng, lat] for lat, lng in points]
@@ -331,4 +335,3 @@ def estimate_zones_traversed(
         require_exact=False,
     )
     return detailed.zones_count
-

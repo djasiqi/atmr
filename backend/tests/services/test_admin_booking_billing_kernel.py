@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from services.admin_booking_billing_kernel import observed_transport_amount, qualify_booking
+from services.admin_booking_billing_kernel import (
+    observed_transport_amount,
+    qualify_booking,
+)
 
 
 def test_observed_transport_amount_prefers_positive_amount():

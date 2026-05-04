@@ -342,7 +342,7 @@ _geofencing_service_instance: GeofencingService | None = None
 
 def get_geofencing_service() -> GeofencingService:
     """Retourne l'instance singleton du GeofencingService."""
-    global _geofencing_service_instance  # noqa: PLW0603
+    global _geofencing_service_instance
     if _geofencing_service_instance is None:
         _geofencing_service_instance = GeofencingService()
     return _geofencing_service_instance

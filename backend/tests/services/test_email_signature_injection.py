@@ -25,7 +25,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text="Khalid ALAOUI\nAssocié gérant"
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         assert "</body>" in html_result
         assert "Khalid ALAOUI" in html_result
@@ -41,7 +43,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text="Test signature"
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         assert "Test signature" in html_result
         assert "—" in html_result
@@ -53,7 +57,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text="Test signature"
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         assert html in html_result
         assert "Test signature" in html_result
@@ -62,16 +68,26 @@ class TestEmailSignatureInjection:
     def test_inject_signature_empty(self):
         """Test que signature vide retourne html inchangé."""
         html = "<html><body><p>Bonjour</p></body></html>"
-        billing_settings = create_mock_billing_settings(mode="text", signature_text=None)
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        billing_settings = create_mock_billing_settings(
+            mode="text", signature_text=None
+        )
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
         assert html_result == html
 
         billing_settings2 = create_mock_billing_settings(mode="text", signature_text="")
-        html_result2, _ = inject_signature_into_html(html, billing_settings=billing_settings2)
+        html_result2, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings2
+        )
         assert html_result2 == html
 
-        billing_settings3 = create_mock_billing_settings(mode="text", signature_text="   ")
-        html_result3, _ = inject_signature_into_html(html, billing_settings=billing_settings3)
+        billing_settings3 = create_mock_billing_settings(
+            mode="text", signature_text="   "
+        )
+        html_result3, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings3
+        )
         assert html_result3 == html
 
     def test_inject_signature_escapes_html(self):
@@ -80,7 +96,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text="<script>alert('xss')</script>"
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         # Le script ne doit pas être exécutable
         assert "<script>" not in html_result
@@ -92,7 +110,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text="Ligne 1\nLigne 2\nLigne 3"
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         assert "Ligne 1" in html_result
         assert "Ligne 2" in html_result
@@ -120,7 +140,9 @@ class TestEmailSignatureInjection:
         billing_settings = create_mock_billing_settings(
             mode="text", signature_text=signature_text
         )
-        html_result, _ = inject_signature_into_html(html, billing_settings=billing_settings)
+        html_result, _ = inject_signature_into_html(
+            html, billing_settings=billing_settings
+        )
 
         # Vérifier que le contenu original est intact
         assert "Bonjour Client" in html_result

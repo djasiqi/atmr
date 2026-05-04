@@ -533,9 +533,9 @@ class BookingRepository:
         Returns:
             Liste de Booking triées par scheduled_time décroissant
         """
-        query = Booking.query.filter_by(client_id=client_id, company_id=company_id).order_by(
-            Booking.scheduled_time.desc()
-        )
+        query = Booking.query.filter_by(
+            client_id=client_id, company_id=company_id
+        ).order_by(Booking.scheduled_time.desc())
         if limit:
             query = query.limit(limit)
         return query.all()

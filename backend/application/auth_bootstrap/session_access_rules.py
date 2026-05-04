@@ -14,7 +14,7 @@ from .session_bootstrap_snapshot import SessionBootstrapSnapshot
 logger = logging.getLogger(__name__)
 
 
-def evaluate_access_denial(  # noqa: PLR0911
+def evaluate_access_denial(
     snapshot: SessionBootstrapSnapshot,
     user_orm: User,
 ) -> tuple[str, str] | None:

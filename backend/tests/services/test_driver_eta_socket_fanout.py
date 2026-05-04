@@ -7,7 +7,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.drivers.get_driver_bookings_eta import BookingEtaItem, DriverBookingsEtaResponse
+from application.drivers.get_driver_bookings_eta import (
+    BookingEtaItem,
+    DriverBookingsEtaResponse,
+)
 
 
 def _make_resp(

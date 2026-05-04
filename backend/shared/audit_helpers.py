@@ -68,7 +68,9 @@ def audit_log(
             action_type=action_type,
             action_category=category,
             user_id=_user.id if _user else None,
-            user_type=_user.role.value if _user and hasattr(_user, "role") and _user.role else "system",
+            user_type=_user.role.value
+            if _user and hasattr(_user, "role") and _user.role
+            else "system",
             company_id=_company.id if _company else None,
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,

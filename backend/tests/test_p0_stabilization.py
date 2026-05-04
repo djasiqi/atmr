@@ -339,7 +339,10 @@ class TestCreateBookingP0:
         assert response.status_code in [200, 201]
         data = response.get_json() or {}
         inner = data.get("data", data)
-        assert inner.get("trace_id") == "trace-success" or data.get("trace_id") == "trace-success"
+        assert (
+            inner.get("trace_id") == "trace-success"
+            or data.get("trace_id") == "trace-success"
+        )
         assert mock_execute.called
 
     @patch("routes.bookings.execute_client_booking_creation")
@@ -461,7 +464,9 @@ class TestCreateBookingP0:
             },
             headers=headers,
         )
-        assert response.status_code != 405, "POST /clients/me/bookings doit exister (pas 405)"
+        assert response.status_code != 405, (
+            "POST /clients/me/bookings doit exister (pas 405)"
+        )
         assert response.status_code == 201
         mock_execute.assert_called_once()
         assert mock_execute.call_args[0][0] == str(u.public_id)

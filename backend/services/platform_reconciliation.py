@@ -6,7 +6,6 @@ from typing import Any
 
 from ext import db
 from models.company import Company
-
 from services.platform_tenant_governance import tenant_governance_payload
 
 

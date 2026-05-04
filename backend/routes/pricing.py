@@ -39,7 +39,9 @@ from services.pricing.zone_set_resolver import (
     reverse_to_commune_token,
 )
 
-pricing_ns = Namespace("pricing", description="Pricing simulation and pricing engine endpoints")
+pricing_ns = Namespace(
+    "pricing", description="Pricing simulation and pricing engine endpoints"
+)
 logger = logging.getLogger(__name__)
 WEEKEND_START_INDEX = 5
 MIN_ROUTE_POINTS = 2
@@ -55,33 +57,45 @@ ZONE_DEFAULT_COLORS = [
     "#0EA5E9",
     "#14B8A6",
 ]
-ZONE_SET_DETAIL_CACHE_TTL_SECONDS = int(os.getenv("PRICING_ZONESET_DETAIL_CACHE_TTL", "3600"))
+ZONE_SET_DETAIL_CACHE_TTL_SECONDS = int(
+    os.getenv("PRICING_ZONESET_DETAIL_CACHE_TTL", "3600")
+)
 ZONE_SET_MAP_CACHE_TTL_SECONDS = int(os.getenv("PRICING_ZONESET_MAP_CACHE_TTL", "900"))
 ZONE_SET_CACHE_VERSION_KEY = "pricing:zoneset-cache-version:v1"
 OSRM_SIM_CACHE_TTL_SECONDS = int(os.getenv("PRICING_OSRM_SIM_CACHE_TTL", "86400"))
 OSRM_SIM_TIMEOUT_SECONDS = float(os.getenv("PRICING_OSRM_SIM_TIMEOUT", "3.0"))
 OSRM_SIM_MAX_RETRIES = int(os.getenv("PRICING_OSRM_SIM_RETRY", "0"))
 OSRM_BASE_URL = (
-    os.getenv("OSRM_BASE_URL")
-    or os.getenv("UD_OSRM_URL")
-    or "http://osrm:5000"
+    os.getenv("OSRM_BASE_URL") or os.getenv("UD_OSRM_URL") or "http://osrm:5000"
 )
 ROUTE_ALGO_VERSION = int(os.getenv("PRICING_ROUTE_ALGO_VERSION", "2"))
 SIMULATE_RESULT_CACHE_TTL_SECONDS = int(os.getenv("PRICING_SIM_RESULT_CACHE_TTL", "20"))
 _FLASK_ENV = str(os.getenv("FLASK_ENV", "production")).strip().lower()
-_RELAXED_LOCAL_BUDGETS = _FLASK_ENV in {"development", "dev", "testing", "test", "local"}
+_RELAXED_LOCAL_BUDGETS = _FLASK_ENV in {
+    "development",
+    "dev",
+    "testing",
+    "test",
+    "local",
+}
 _DEFAULT_TOTAL_BUDGET_MS = "2500" if _RELAXED_LOCAL_BUDGETS else "500"
 _DEFAULT_ROUTE_BUDGET_MS = "1200" if _RELAXED_LOCAL_BUDGETS else "250"
 _DEFAULT_ZONE_BUDGET_MS = "900" if _RELAXED_LOCAL_BUDGETS else "150"
-SIMULATE_BUDGET_TOTAL_MS = int(os.getenv("PRICING_SIM_BUDGET_TOTAL_MS", _DEFAULT_TOTAL_BUDGET_MS))
-SIMULATE_BUDGET_ROUTE_MS = int(os.getenv("PRICING_SIM_BUDGET_ROUTE_MS", _DEFAULT_ROUTE_BUDGET_MS))
-SIMULATE_BUDGET_ZONE_MS = int(os.getenv("PRICING_SIM_BUDGET_ZONE_MS", _DEFAULT_ZONE_BUDGET_MS))
-PRICING_SIM_TIMINGS_DEBUG = (
-    str(os.getenv("PRICING_SIM_TIMINGS_DEBUG", "false")).strip().lower() in {"1", "true", "yes", "on"}
+SIMULATE_BUDGET_TOTAL_MS = int(
+    os.getenv("PRICING_SIM_BUDGET_TOTAL_MS", _DEFAULT_TOTAL_BUDGET_MS)
 )
-ROUTE_CACHE_CARDINALITY_DEBUG = (
-    str(os.getenv("PRICING_ROUTE_CACHE_CARDINALITY_DEBUG", "false")).strip().lower() in {"1", "true", "yes", "on"}
+SIMULATE_BUDGET_ROUTE_MS = int(
+    os.getenv("PRICING_SIM_BUDGET_ROUTE_MS", _DEFAULT_ROUTE_BUDGET_MS)
 )
+SIMULATE_BUDGET_ZONE_MS = int(
+    os.getenv("PRICING_SIM_BUDGET_ZONE_MS", _DEFAULT_ZONE_BUDGET_MS)
+)
+PRICING_SIM_TIMINGS_DEBUG = str(
+    os.getenv("PRICING_SIM_TIMINGS_DEBUG", "false")
+).strip().lower() in {"1", "true", "yes", "on"}
+ROUTE_CACHE_CARDINALITY_DEBUG = str(
+    os.getenv("PRICING_ROUTE_CACHE_CARDINALITY_DEBUG", "false")
+).strip().lower() in {"1", "true", "yes", "on"}
 _route_cache_keys_seen: set[str] = set()
 
 
@@ -100,11 +114,15 @@ def _pricing_cache_get_dict(cache_key: str) -> dict[str, Any] | None:
     return None
 
 
-def _pricing_cache_set_dict(cache_key: str, payload: dict[str, Any], ttl_seconds: int) -> None:
+def _pricing_cache_set_dict(
+    cache_key: str, payload: dict[str, Any], ttl_seconds: int
+) -> None:
     if not redis_client:
         return
     try:
-        redis_client.setex(cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False))
+        redis_client.setex(
+            cache_key, max(ttl_seconds, 1), json.dumps(payload, ensure_ascii=False)
+        )
     except Exception:
         return
 
@@ -121,7 +139,9 @@ def _pricing_cache_get_text(cache_key: str) -> str | None:
         return None
 
 
-def _pricing_cache_set_text(cache_key: str, value: str, ttl_seconds: int = 86400) -> None:
+def _pricing_cache_set_text(
+    cache_key: str, value: str, ttl_seconds: int = 86400
+) -> None:
     if not redis_client:
         return
     try:
@@ -135,7 +155,9 @@ def _get_zone_set_cache_version() -> str:
     if current:
         return current
     default_version = str(int(datetime.utcnow().timestamp()))
-    _pricing_cache_set_text(ZONE_SET_CACHE_VERSION_KEY, default_version, ttl_seconds=86400 * 30)
+    _pricing_cache_set_text(
+        ZONE_SET_CACHE_VERSION_KEY, default_version, ttl_seconds=86400 * 30
+    )
     return default_version
 
 
@@ -198,7 +220,10 @@ def _record_route_cache_cardinality(route_cache_key: str | None) -> None:
         return
     _route_cache_keys_seen.add(route_cache_key)
     if len(_route_cache_keys_seen) % 100 == 0:
-        logger.info("[pricing.simulate] cache_key_cardinality_route=%s", len(_route_cache_keys_seen))
+        logger.info(
+            "[pricing.simulate] cache_key_cardinality_route=%s",
+            len(_route_cache_keys_seen),
+        )
 
 
 def _simulate_result_cache_key(
@@ -249,7 +274,9 @@ def _route_signature_from_booking(booking: dict[str, Any]) -> str:
 
 def _rules_json_hash(rules_json: dict[str, Any] | None) -> str:
     try:
-        canonical = json.dumps(rules_json or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        canonical = json.dumps(
+            rules_json or {}, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
     except Exception:
         canonical = "{}"
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
@@ -259,13 +286,17 @@ def _route_geometry_signature(route_geometry: dict[str, Any] | None) -> str:
     if not isinstance(route_geometry, dict):
         return "no-geometry"
     try:
-        payload = json.dumps(route_geometry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        payload = json.dumps(
+            route_geometry, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
     except Exception:
         return "invalid-geometry"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
 
 
-def _traversal_cache_key(*, zone_set_id: str, zone_cache_version: str, route_geometry: dict[str, Any] | None) -> str:
+def _traversal_cache_key(
+    *, zone_set_id: str, zone_cache_version: str, route_geometry: dict[str, Any] | None
+) -> str:
     return f"pricing:sim:traversal:v3:{zone_set_id}:{zone_cache_version}:{_route_geometry_signature(route_geometry)}"
 
 
@@ -336,7 +367,9 @@ def _build_blocked_response(
     breakdown = {
         "model_used": model,
         "amount_source": "simulated",
-        "distance_km_used": distance_km_used if distance_source == "osrm_fastest" else None,
+        "distance_km_used": distance_km_used
+        if distance_source == "osrm_fastest"
+        else None,
         "distance_source": distance_source,
         "pickup_zone_id": pickup_zone_id,
         "dropoff_zone_id": dropoff_zone_id,
@@ -360,7 +393,11 @@ def _build_blocked_response(
 
 def _pricing_model_from_rules(version: PricingProfileVersion) -> str:
     rules = version.rules_json or {}
-    return str(rules.get("model") or version.pricing_profile.model_type.value or "").strip().lower()
+    return (
+        str(rules.get("model") or version.pricing_profile.model_type.value or "")
+        .strip()
+        .lower()
+    )
 
 
 def _compute_osrm_distance_km(
@@ -393,7 +430,9 @@ def _compute_osrm_distance_km(
                 continue
             return (
                 max(float(distance_m) / 1000.0, 0.0),
-                route.get("geometry") if isinstance(route.get("geometry"), dict) else None,
+                route.get("geometry")
+                if isinstance(route.get("geometry"), dict)
+                else None,
                 "osrm_fastest",
                 warnings,
             )
@@ -401,6 +440,7 @@ def _compute_osrm_distance_km(
             continue
     warnings.append("distance_unavailable")
     return None, None, "unavailable", warnings
+
 
 pricing_simulate_model = pricing_ns.model(
     "PricingSimulateRequest",
@@ -442,13 +482,21 @@ def _to_context(
     dropoff_admin_token = booking.get("dropoff_admin_token")
 
     if resolve_admin_tokens:
-        if not pickup_admin_token and booking.get("pickup_lat") is not None and booking.get("pickup_lng") is not None:
+        if (
+            not pickup_admin_token
+            and booking.get("pickup_lat") is not None
+            and booking.get("pickup_lng") is not None
+        ):
             pickup_admin_token = reverse_to_commune_token(
                 lat=booking.get("pickup_lat"),
                 lng=booking.get("pickup_lng"),
                 zip_code=booking.get("pickup_zip"),
             )
-        if not pickup_admin_token and booking.get("pickup_lat") is not None and booking.get("pickup_lng") is not None:
+        if (
+            not pickup_admin_token
+            and booking.get("pickup_lat") is not None
+            and booking.get("pickup_lng") is not None
+        ):
             pickup_resolution = resolve_pickup_admin(
                 lat=booking.get("pickup_lat"),
                 lng=booking.get("pickup_lng"),
@@ -456,13 +504,21 @@ def _to_context(
                 pickup_text=None,
             )
             pickup_admin_token = pickup_resolution.get("token")
-        if not dropoff_admin_token and booking.get("dropoff_lat") is not None and booking.get("dropoff_lng") is not None:
+        if (
+            not dropoff_admin_token
+            and booking.get("dropoff_lat") is not None
+            and booking.get("dropoff_lng") is not None
+        ):
             dropoff_admin_token = reverse_to_commune_token(
                 lat=booking.get("dropoff_lat"),
                 lng=booking.get("dropoff_lng"),
                 zip_code=booking.get("dropoff_zip"),
             )
-        if not dropoff_admin_token and booking.get("dropoff_lat") is not None and booking.get("dropoff_lng") is not None:
+        if (
+            not dropoff_admin_token
+            and booking.get("dropoff_lat") is not None
+            and booking.get("dropoff_lng") is not None
+        ):
             dropoff_resolution = resolve_pickup_admin(
                 lat=booking.get("dropoff_lat"),
                 lng=booking.get("dropoff_lng"),
@@ -497,14 +553,16 @@ class PricingSimulateResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     @pricing_ns.expect(pricing_simulate_model)
-    def post(self):  # noqa: PLR0911
+    def post(self):
         started_at = time.perf_counter()
         zone_resolve_ms = 0.0
         osrm_call_ms = 0.0
         compute_ms = 0.0
         company, err, code = get_company_from_token()
         if err or not company:
-            return (err or {"error": "Company not found"}), (code or HTTPStatus.NOT_FOUND)
+            return (err or {"error": "Company not found"}), (
+                code or HTTPStatus.NOT_FOUND
+            )
 
         payload = request.get_json(silent=True) or {}
         try:
@@ -512,7 +570,10 @@ class PricingSimulateResource(Resource):
         except ValidationError as exc:
             return handle_validation_error(exc)
         except Exception as exc:
-            return {"error": "Validation impossible", "details": str(exc)}, HTTPStatus.UNPROCESSABLE_ENTITY
+            return {
+                "error": "Validation impossible",
+                "details": str(exc),
+            }, HTTPStatus.UNPROCESSABLE_ENTITY
 
         booking = data["booking"]
         has_pickup_signal = any(
@@ -520,27 +581,38 @@ class PricingSimulateResource(Resource):
                 booking.get("pickup_geo_unit_id"),
                 booking.get("pickup_zip"),
                 booking.get("pickup_admin_token"),
-                booking.get("pickup_lat") is not None and booking.get("pickup_lng") is not None,
+                booking.get("pickup_lat") is not None
+                and booking.get("pickup_lng") is not None,
             ]
         )
         if not has_pickup_signal:
             return {
                 "error": "Contexte géographique incomplet",
-                "details": {"pickup_geo_unit_id": "required when pickup signal missing"},
+                "details": {
+                    "pickup_geo_unit_id": "required when pickup signal missing"
+                },
             }, HTTPStatus.UNPROCESSABLE_ENTITY
 
         version = PricingProfileVersion.query.filter_by(
             id=data["pricing_profile_version_id"]
         ).first()
         if not version or not version.pricing_profile:
-            return {"error": "pricing_profile_version introuvable"}, HTTPStatus.NOT_FOUND
+            return {
+                "error": "pricing_profile_version introuvable"
+            }, HTTPStatus.NOT_FOUND
         if version.pricing_profile.company_id != company.id:
-            return {"error": "Version pricing hors périmètre entreprise"}, HTTPStatus.FORBIDDEN
+            return {
+                "error": "Version pricing hors périmètre entreprise"
+            }, HTTPStatus.FORBIDDEN
 
         model = _pricing_model_from_rules(version)
         rules_hash = _rules_json_hash(version.rules_json or {})
         pickup_at_bucket = _pickup_at_cache_bucket(booking.get("pickup_at"))
-        zone_cache_version = _get_zone_set_cache_version() if model in {"zone_count", "hybrid_stack"} else "na"
+        zone_cache_version = (
+            _get_zone_set_cache_version()
+            if model in {"zone_count", "hybrid_stack"}
+            else "na"
+        )
         simulate_result_cache_key = _simulate_result_cache_key(
             profile_version_id=version.id,
             booking=booking,
@@ -552,7 +624,10 @@ class PricingSimulateResource(Resource):
         if simulate_result_cache_key:
             cached_response = _pricing_cache_get_dict(simulate_result_cache_key)
             if cached_response:
-                cached_response.setdefault("confidence", "exact" if cached_response.get("amount") is not None else "blocked")
+                cached_response.setdefault(
+                    "confidence",
+                    "exact" if cached_response.get("amount") is not None else "blocked",
+                )
                 cached_response.setdefault("blocking_reasons", [])
                 cached_response.setdefault("breakdown", {})
                 return _attach_timings(
@@ -568,11 +643,15 @@ class PricingSimulateResource(Resource):
         distance_source = "not_required"
         distance_km_used = 0.0
         route_geometry: dict[str, Any] | None = (
-            booking.get("route_geometry") if isinstance(booking.get("route_geometry"), dict) else None
+            booking.get("route_geometry")
+            if isinstance(booking.get("route_geometry"), dict)
+            else None
         )
         zone_set_id = str((version.rules_json or {}).get("zone_set_id") or "").strip()
         zone_mode = model in {"zone_count", "hybrid_stack"}
-        route_required = bool(zone_mode and zone_set_id) or _distance_required_for_version(version, model)
+        route_required = bool(
+            zone_mode and zone_set_id
+        ) or _distance_required_for_version(version, model)
         distance_required = _distance_required_for_version(version, model)
 
         route_cache_key = _route_cache_key(
@@ -593,7 +672,9 @@ class PricingSimulateResource(Resource):
                 if isinstance(cached_route.get("route_geometry"), dict):
                     route_geometry = cached_route.get("route_geometry")
                 if cached_route.get("distance_km") is not None:
-                    distance_km_used = max(float(cached_route.get("distance_km") or 0), 0.0)
+                    distance_km_used = max(
+                        float(cached_route.get("distance_km") or 0), 0.0
+                    )
                 if cached_route.get("distance_source"):
                     distance_source = str(cached_route.get("distance_source"))
 
@@ -605,19 +686,25 @@ class PricingSimulateResource(Resource):
         )
         if route_required and not route_geometry and has_coords:
             osrm_started = time.perf_counter()
-            distance_km, osrm_geometry, source, distance_warnings = _compute_osrm_distance_km(
-                pickup_lat=float(booking.get("pickup_lat")),
-                pickup_lng=float(booking.get("pickup_lng")),
-                dropoff_lat=float(booking.get("dropoff_lat")),
-                dropoff_lng=float(booking.get("dropoff_lng")),
+            distance_km, osrm_geometry, source, distance_warnings = (
+                _compute_osrm_distance_km(
+                    pickup_lat=float(booking.get("pickup_lat")),
+                    pickup_lng=float(booking.get("pickup_lng")),
+                    dropoff_lat=float(booking.get("dropoff_lat")),
+                    dropoff_lng=float(booking.get("dropoff_lng")),
+                )
             )
             osrm_call_ms += (time.perf_counter() - osrm_started) * 1000.0
             if osrm_call_ms > SIMULATE_BUDGET_ROUTE_MS:
                 blocked = _build_blocked_response(
                     version=version,
                     model=model,
-                    warnings=["zone_unresolved_timeout"] if zone_mode else ["distance_unavailable"],
-                    blocking_reasons=["zone_unresolved_timeout"] if zone_mode else ["distance_unavailable"],
+                    warnings=["zone_unresolved_timeout"]
+                    if zone_mode
+                    else ["distance_unavailable"],
+                    blocking_reasons=["zone_unresolved_timeout"]
+                    if zone_mode
+                    else ["distance_unavailable"],
                     distance_source="unavailable",
                     distance_km_used=0.0,
                     pickup_zone_id=None,
@@ -625,7 +712,11 @@ class PricingSimulateResource(Resource):
                     zones_count_used=None,
                 )
                 if simulate_result_cache_key:
-                    _pricing_cache_set_dict(simulate_result_cache_key, blocked, SIMULATE_RESULT_CACHE_TTL_SECONDS)
+                    _pricing_cache_set_dict(
+                        simulate_result_cache_key,
+                        blocked,
+                        SIMULATE_RESULT_CACHE_TTL_SECONDS,
+                    )
                 return _attach_timings(
                     blocked,
                     started_at=started_at,
@@ -648,14 +739,21 @@ class PricingSimulateResource(Resource):
                 _pricing_cache_set_dict(
                     route_cache_key,
                     {
-                        "distance_km": distance_km_used if distance_km is not None else None,
+                        "distance_km": distance_km_used
+                        if distance_km is not None
+                        else None,
                         "distance_source": distance_source,
                         "route_geometry": route_geometry,
                     },
                     OSRM_SIM_CACHE_TTL_SECONDS,
                 )
 
-        resolve_admin_tokens = model in {"zone", "zone_v1", "zone_matrix", "zone_matrix_v1"}
+        resolve_admin_tokens = model in {
+            "zone",
+            "zone_v1",
+            "zone_matrix",
+            "zone_matrix_v1",
+        }
         provisional_context = _to_context(
             data,
             distance_km=distance_km_used,
@@ -665,9 +763,15 @@ class PricingSimulateResource(Resource):
         )
 
         pickup_token = str(provisional_context.get("pickup_admin_token") or "").strip()
-        dropoff_token = str(provisional_context.get("dropoff_admin_token") or "").strip()
-        pickup_zone_id = resolve_zone_id(pickup_token, zone_set_id) if zone_set_id else None
-        dropoff_zone_id = resolve_zone_id(dropoff_token, zone_set_id) if zone_set_id else None
+        dropoff_token = str(
+            provisional_context.get("dropoff_admin_token") or ""
+        ).strip()
+        pickup_zone_id = (
+            resolve_zone_id(pickup_token, zone_set_id) if zone_set_id else None
+        )
+        dropoff_zone_id = (
+            resolve_zone_id(dropoff_token, zone_set_id) if zone_set_id else None
+        )
         zones_count_used = 1
         if pickup_zone_id and dropoff_zone_id and pickup_zone_id != dropoff_zone_id:
             zones_count_used = 2
@@ -685,7 +789,11 @@ class PricingSimulateResource(Resource):
                 zones_count_used=None,
             )
             if simulate_result_cache_key:
-                _pricing_cache_set_dict(simulate_result_cache_key, blocked, SIMULATE_RESULT_CACHE_TTL_SECONDS)
+                _pricing_cache_set_dict(
+                    simulate_result_cache_key,
+                    blocked,
+                    SIMULATE_RESULT_CACHE_TTL_SECONDS,
+                )
             return _attach_timings(
                 blocked,
                 started_at=started_at,
@@ -703,7 +811,9 @@ class PricingSimulateResource(Resource):
                 route_geometry=provisional_context.get("route_geometry"),
             )
             cached_traversal = _pricing_cache_get_dict(traversal_cache_key)
-            traversal_cache_hit = bool(cached_traversal and cached_traversal.get("zones_count") is not None)
+            traversal_cache_hit = bool(
+                cached_traversal and cached_traversal.get("zones_count") is not None
+            )
             traversal_count: int | None = None
             traversal_confidence = "blocked"
             traversal_blocking_reasons: list[str] = []
@@ -736,7 +846,10 @@ class PricingSimulateResource(Resource):
                     traversal_blocking_reasons = list(traversal.blocking_reasons or [])
             zone_resolve_ms += (time.perf_counter() - zone_started) * 1000.0
             if zone_resolve_ms > SIMULATE_BUDGET_ZONE_MS:
-                traversal_blocking_reasons = [*traversal_blocking_reasons, "zone_unresolved_timeout"]
+                traversal_blocking_reasons = [
+                    *traversal_blocking_reasons,
+                    "zone_unresolved_timeout",
+                ]
                 traversal_confidence = "blocked"
             if traversal_confidence != "exact" or not traversal_count:
                 blocked_reasons = traversal_blocking_reasons or ["zone_unresolved"]
@@ -753,7 +866,11 @@ class PricingSimulateResource(Resource):
                     zones_count_used=None,
                 )
                 if simulate_result_cache_key:
-                    _pricing_cache_set_dict(simulate_result_cache_key, blocked, SIMULATE_RESULT_CACHE_TTL_SECONDS)
+                    _pricing_cache_set_dict(
+                        simulate_result_cache_key,
+                        blocked,
+                        SIMULATE_RESULT_CACHE_TTL_SECONDS,
+                    )
                 return _attach_timings(
                     blocked,
                     started_at=started_at,
@@ -779,7 +896,11 @@ class PricingSimulateResource(Resource):
                 zones_count_used=zones_count_used,
             )
             if simulate_result_cache_key:
-                _pricing_cache_set_dict(simulate_result_cache_key, blocked, SIMULATE_RESULT_CACHE_TTL_SECONDS)
+                _pricing_cache_set_dict(
+                    simulate_result_cache_key,
+                    blocked,
+                    SIMULATE_RESULT_CACHE_TTL_SECONDS,
+                )
             return _attach_timings(
                 blocked,
                 started_at=started_at,
@@ -811,7 +932,11 @@ class PricingSimulateResource(Resource):
                 zones_count_used=None,
             )
             if simulate_result_cache_key:
-                _pricing_cache_set_dict(simulate_result_cache_key, blocked, SIMULATE_RESULT_CACHE_TTL_SECONDS)
+                _pricing_cache_set_dict(
+                    simulate_result_cache_key,
+                    blocked,
+                    SIMULATE_RESULT_CACHE_TTL_SECONDS,
+                )
             return _attach_timings(
                 blocked,
                 started_at=started_at,
@@ -834,7 +959,9 @@ class PricingSimulateResource(Resource):
         breakdown = deepcopy(raw_breakdown)
         breakdown["model_used"] = model
         breakdown["amount_source"] = "simulated"
-        breakdown["distance_km_used"] = distance_km_used if distance_source == "osrm_fastest" else None
+        breakdown["distance_km_used"] = (
+            distance_km_used if distance_source == "osrm_fastest" else None
+        )
         breakdown["distance_source"] = distance_source
         breakdown["pickup_zone_id"] = pickup_zone_id
         breakdown["dropoff_zone_id"] = dropoff_zone_id
@@ -984,8 +1111,12 @@ def _serialize_company_zone_set_detail(
             "token": token,
             "name": unit.name if unit else token,
             "canton_code": geocode_routes._resolve_canton_code(unit) if unit else None,
-            "lat": float(unit.centroid_lat) if unit and unit.centroid_lat is not None else None,
-            "lon": float(unit.centroid_lng) if unit and unit.centroid_lng is not None else None,
+            "lat": float(unit.centroid_lat)
+            if unit and unit.centroid_lat is not None
+            else None,
+            "lon": float(unit.centroid_lng)
+            if unit and unit.centroid_lng is not None
+            else None,
             "geometry": geometry,
         }
         zone_payload["communes"].append(commune_item)
@@ -1016,20 +1147,33 @@ def _serialize_company_zone_sets_map(
     row_ids = [row.id for row in rows]
     zones = (
         PlatformZone.query.filter(PlatformZone.zone_set_id.in_(row_ids))
-        .order_by(PlatformZone.zone_set_id.asc(), PlatformZone.code.asc(), PlatformZone.id.asc())
+        .order_by(
+            PlatformZone.zone_set_id.asc(),
+            PlatformZone.code.asc(),
+            PlatformZone.id.asc(),
+        )
         .all()
     )
     memberships = (
-        PlatformZoneMembership.query.filter(PlatformZoneMembership.zone_set_id.in_(row_ids))
-        .order_by(PlatformZoneMembership.zone_set_id.asc(), PlatformZoneMembership.commune_token.asc())
+        PlatformZoneMembership.query.filter(
+            PlatformZoneMembership.zone_set_id.in_(row_ids)
+        )
+        .order_by(
+            PlatformZoneMembership.zone_set_id.asc(),
+            PlatformZoneMembership.commune_token.asc(),
+        )
         .all()
     )
     zones_count_by_set: dict[int, int] = {}
     for zone in zones:
-        zones_count_by_set[zone.zone_set_id] = zones_count_by_set.get(zone.zone_set_id, 0) + 1
+        zones_count_by_set[zone.zone_set_id] = (
+            zones_count_by_set.get(zone.zone_set_id, 0) + 1
+        )
     communes_count_by_set: dict[int, int] = {}
     for membership in memberships:
-        communes_count_by_set[membership.zone_set_id] = communes_count_by_set.get(membership.zone_set_id, 0) + 1
+        communes_count_by_set[membership.zone_set_id] = (
+            communes_count_by_set.get(membership.zone_set_id, 0) + 1
+        )
 
     commune_codes: set[str] = set()
     for membership in memberships:
@@ -1116,13 +1260,19 @@ def _serialize_company_zone_sets_map(
                 geometry = feature.get("geometry")
                 points = _extract_bbox_points(geometry)
                 if points:
-                    bbox_points_by_set.setdefault(membership.zone_set_id, []).extend(points)
+                    bbox_points_by_set.setdefault(membership.zone_set_id, []).extend(
+                        points
+                    )
         commune_item = {
             "token": token,
             "name": unit.name if unit else token,
             "canton_code": geocode_routes._resolve_canton_code(unit) if unit else None,
-            "lat": float(unit.centroid_lat) if unit and unit.centroid_lat is not None else None,
-            "lon": float(unit.centroid_lng) if unit and unit.centroid_lng is not None else None,
+            "lat": float(unit.centroid_lat)
+            if unit and unit.centroid_lat is not None
+            else None,
+            "lon": float(unit.centroid_lng)
+            if unit and unit.centroid_lng is not None
+            else None,
             "geometry": geometry,
         }
         zone_payload["communes"].append(commune_item)
@@ -1136,7 +1286,9 @@ def _serialize_company_zone_sets_map(
         lats = [pt[1] for pt in points]
         row_payload["bbox"] = [min(lngs), min(lats), max(lngs), max(lats)]
 
-    return [payload_by_row_id[row_id] for row_id in row_order if row_id in payload_by_row_id]
+    return [
+        payload_by_row_id[row_id] for row_id in row_order if row_id in payload_by_row_id
+    ]
 
 
 @pricing_ns.route("/zone-sets")
@@ -1144,7 +1296,12 @@ class PricingZoneSetsResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {"1", "true", "yes", "on"}:
+        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             return {"error": "feature_disabled"}, HTTPStatus.NOT_FOUND
         _, err, code = get_company_from_token()
         if err:
@@ -1159,7 +1316,11 @@ class PricingZoneSetsResource(Resource):
             query = query.filter_by(scope=scope)
         if active:
             query = query.filter_by(is_active=True)
-        rows = query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc()).limit(limit).all()
+        rows = (
+            query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc())
+            .limit(limit)
+            .all()
+        )
         return {"items": [_serialize_zone_set(row) for row in rows]}, HTTPStatus.OK
 
 
@@ -1168,7 +1329,12 @@ class PricingZoneSetsMapResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self):
-        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {"1", "true", "yes", "on"}:
+        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             return {"error": "feature_disabled"}, HTTPStatus.NOT_FOUND
         _, err, code = get_company_from_token()
         if err:
@@ -1176,13 +1342,17 @@ class PricingZoneSetsMapResource(Resource):
         scope = (request.args.get("scope") or "").strip().upper()
         active_raw = str(request.args.get("active") or "true").lower()
         active = active_raw not in {"0", "false", "no"}
-        include_geometry = str(request.args.get("include_geometry") or "1").strip().lower() in {
+        include_geometry = str(
+            request.args.get("include_geometry") or "1"
+        ).strip().lower() in {
             "1",
             "true",
             "yes",
             "on",
         }
-        geometry_level = str(request.args.get("geometry_level") or "simplified").strip().lower()
+        geometry_level = (
+            str(request.args.get("geometry_level") or "simplified").strip().lower()
+        )
         if geometry_level not in {"full", "simplified"}:
             geometry_level = "simplified"
         limit = min(max(int(request.args.get("limit") or 200), 1), 500)
@@ -1192,7 +1362,11 @@ class PricingZoneSetsMapResource(Resource):
             query = query.filter_by(scope=scope)
         if active:
             query = query.filter_by(is_active=True)
-        rows = query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc()).limit(limit).all()
+        rows = (
+            query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc())
+            .limit(limit)
+            .all()
+        )
         cache_version = _get_zone_set_cache_version()
         cache_key = (
             f"pricing:zoneset-map:v1:{cache_version}:s:{scope or '*'}:"
@@ -1214,7 +1388,9 @@ class PricingZoneSetsMapResource(Resource):
             include_geometry=include_geometry,
             geometry_level=geometry_level,
         )
-        _pricing_cache_set_dict(cache_key, {"items": items}, ZONE_SET_MAP_CACHE_TTL_SECONDS)
+        _pricing_cache_set_dict(
+            cache_key, {"items": items}, ZONE_SET_MAP_CACHE_TTL_SECONDS
+        )
         return {"items": items}, HTTPStatus.OK, response_headers
 
 
@@ -1223,18 +1399,27 @@ class PricingZoneSetByKeyResource(Resource):
     @jwt_required()
     @role_required(UserRole.company)
     def get(self, zone_set_key: str):
-        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {"1", "true", "yes", "on"}:
+        if os.getenv(ZONESETS_READONLY_FLAG, "true").lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             return {"error": "feature_disabled"}, HTTPStatus.NOT_FOUND
         _, err, code = get_company_from_token()
         if err:
             return err, code
-        include_geometry = str(request.args.get("include_geometry") or "").strip().lower() in {
+        include_geometry = str(
+            request.args.get("include_geometry") or ""
+        ).strip().lower() in {
             "1",
             "true",
             "yes",
             "on",
         }
-        geometry_level = str(request.args.get("geometry_level") or "simplified").strip().lower()
+        geometry_level = (
+            str(request.args.get("geometry_level") or "simplified").strip().lower()
+        )
         if geometry_level not in {"full", "simplified"}:
             geometry_level = "simplified"
         row = PlatformZoneSet.query.filter_by(key=zone_set_key).first()
@@ -1271,7 +1456,11 @@ class PricingAdminZoneSetsResource(Resource):
         if active_filter is not None:
             active = str(active_filter).lower() in {"1", "true", "yes", "on"}
             query = query.filter_by(is_active=active)
-        rows = query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc()).limit(limit).all()
+        rows = (
+            query.order_by(PlatformZoneSet.scope.asc(), PlatformZoneSet.label.asc())
+            .limit(limit)
+            .all()
+        )
         return {"items": [_serialize_zone_set(row) for row in rows]}, HTTPStatus.OK
 
     @jwt_required()
@@ -1320,7 +1509,12 @@ class PricingAdminZoneSetByKeyResource(Resource):
             "item": {
                 **_serialize_zone_set(row),
                 "zones": [
-                    {"id": zone.id, "code": zone.code, "label": zone.label, "active": bool(zone.is_active)}
+                    {
+                        "id": zone.id,
+                        "code": zone.code,
+                        "label": zone.label,
+                        "active": bool(zone.is_active),
+                    }
                     for zone in zones
                 ],
                 "memberships": [

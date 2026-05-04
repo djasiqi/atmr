@@ -29,7 +29,7 @@ try:
         "Taille approximative du JSON GET /auth/me",
         buckets=(128, 256, 512, 1024, 2048, 4096, 8192),
     )
-except Exception:  # noqa: BLE001
+except Exception:
     _AUTH_ME_TOTAL = None
     _AUTH_ME_FORBIDDEN = None
     _AUTH_ME_DRIVER_NO_ROW = None

@@ -46,7 +46,9 @@ MAX_RETRIES = int(os.getenv("KAFKA_NOTIFICATION_MAX_RETRIES", "3"))
 KAFKA_NOTIFICATION_RETRY_BACKOFF_MS = int(
     os.getenv("KAFKA_NOTIFICATION_RETRY_BACKOFF_MS", "200")
 )
-KAFKA_DLQ_ACK_TIMEOUT_S = float(os.getenv("KAFKA_NOTIFICATION_DLQ_ACK_TIMEOUT_S", "10.0"))
+KAFKA_DLQ_ACK_TIMEOUT_S = float(
+    os.getenv("KAFKA_NOTIFICATION_DLQ_ACK_TIMEOUT_S", "10.0")
+)
 
 try:
     from services.monitoring.prometheus import inc_notification_kafka_skip
@@ -176,7 +178,7 @@ class KafkaConsumer:
         except Exception:
             logger.debug("[kafka_consumer] skip metric unavailable", exc_info=True)
 
-    def _schema_skip_reason(self, topic: str, message: Any) -> str | None:  # noqa: PLR0911
+    def _schema_skip_reason(self, topic: str, message: Any) -> str | None:
         if not isinstance(message, dict):
             return "invalid_payload"
         if topic == KAFKA_TOPIC_NOTIFICATIONS:
@@ -366,7 +368,10 @@ class KafkaConsumer:
 
             if result.get("ok"):
                 success_count += 1
-            elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
+            elif (
+                result.get("token_invalid")
+                and not is_push_device_token_lifecycle_enabled()
+            ):
                 device_token.is_active = False
 
         try:

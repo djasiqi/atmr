@@ -24,8 +24,15 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("billing_year", sa.Integer(), nullable=False),
         sa.Column("billing_month", sa.Integer(), nullable=False),
-        sa.Column("status", sa.String(length=16), server_default="draft", nullable=False),
-        sa.Column("timezone", sa.String(length=64), server_default="Europe/Zurich", nullable=False),
+        sa.Column(
+            "status", sa.String(length=16), server_default="draft", nullable=False
+        ),
+        sa.Column(
+            "timezone",
+            sa.String(length=64),
+            server_default="Europe/Zurich",
+            nullable=False,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -65,7 +72,9 @@ def upgrade() -> None:
         "company_platform_billing_config",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
-        sa.Column("is_billing_enabled", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column(
+            "is_billing_enabled", sa.Boolean(), server_default="false", nullable=False
+        ),
         sa.Column("dispatch_mode_override", sa.String(length=16), nullable=True),
         sa.Column("commission_rate", sa.Numeric(8, 6), nullable=True),
         sa.Column("support_hourly_rate_default", sa.Numeric(12, 2), nullable=True),
@@ -110,7 +119,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("period_id", sa.Integer(), nullable=False),
-        sa.Column("currency", sa.String(length=3), server_default="CHF", nullable=False),
+        sa.Column(
+            "currency", sa.String(length=3), server_default="CHF", nullable=False
+        ),
         sa.Column("subtotal_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("total_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
@@ -166,7 +177,9 @@ def upgrade() -> None:
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("quantity", sa.Numeric(12, 4), nullable=True),
         sa.Column("unit_amount", sa.Numeric(12, 4), nullable=True),
-        sa.Column("snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "snapshot_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("sort_order", sa.Integer(), server_default="0", nullable=False),
         sa.ForeignKeyConstraint(
             ["invoice_id"],
@@ -236,16 +249,28 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_platform_support_company"), table_name="platform_support_entry")
+    op.drop_index(
+        op.f("ix_platform_support_company"), table_name="platform_support_entry"
+    )
     op.drop_table("platform_support_entry")
-    op.drop_index(op.f("ix_platform_invoice_line_invoice_id"), table_name="platform_invoice_line")
+    op.drop_index(
+        op.f("ix_platform_invoice_line_invoice_id"), table_name="platform_invoice_line"
+    )
     op.drop_table("platform_invoice_line")
     op.drop_index(op.f("ix_platform_invoice_period_id"), table_name="platform_invoice")
     op.drop_index(op.f("ix_platform_invoice_company_id"), table_name="platform_invoice")
     op.drop_table("platform_invoice")
-    op.drop_index(op.f("ix_cpb_config_company_active"), table_name="company_platform_billing_config")
-    op.drop_index(op.f("ix_cpb_config_company_id"), table_name="company_platform_billing_config")
+    op.drop_index(
+        op.f("ix_cpb_config_company_active"),
+        table_name="company_platform_billing_config",
+    )
+    op.drop_index(
+        op.f("ix_cpb_config_company_id"), table_name="company_platform_billing_config"
+    )
     op.drop_table("company_platform_billing_config")
-    op.drop_index(op.f("ix_platform_sub_pricing_dispatch"), table_name="platform_subscription_pricing")
+    op.drop_index(
+        op.f("ix_platform_sub_pricing_dispatch"),
+        table_name="platform_subscription_pricing",
+    )
     op.drop_table("platform_subscription_pricing")
     op.drop_table("platform_billing_period")

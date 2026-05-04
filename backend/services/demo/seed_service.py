@@ -59,7 +59,10 @@ def _assert_demo_seed_environment() -> None:
     if "demo" in db_name:
         return
 
-    raise RuntimeError("Seed demo bloque: base non-demo detectee. Utilisez une base *_demo ou ALLOW_NON_DEMO_SEED=true.")
+    raise RuntimeError(
+        "Seed demo bloque: base non-demo detectee. Utilisez une base *_demo ou ALLOW_NON_DEMO_SEED=true."
+    )
+
 
 DEMO_PATIENT_IDENTITIES: list[tuple[str, str]] = [
     ("Aline", "Morel"),
@@ -96,14 +99,62 @@ DEMO_DRIVER_GPS_POINTS: list[tuple[str, str]] = [
 ]
 
 DEMO_GENEVA_ADDRESSES: list[dict[str, str]] = [
-    {"street": "Rue de Carouge 58", "zip": "1205", "city": "Geneve", "lat": "46.1937", "lon": "6.1450"},
-    {"street": "Avenue Wendt 5", "zip": "1203", "city": "Geneve", "lat": "46.2145", "lon": "6.1269"},
-    {"street": "Rue de Lyon 93", "zip": "1203", "city": "Geneve", "lat": "46.2104", "lon": "6.1212"},
-    {"street": "Rue de Lausanne 71", "zip": "1202", "city": "Geneve", "lat": "46.2162", "lon": "6.1478"},
-    {"street": "Chemin des Palettes 24", "zip": "1212", "city": "Grand-Lancy", "lat": "46.1769", "lon": "6.1102"},
-    {"street": "Route de Meyrin 33", "zip": "1203", "city": "Geneve", "lat": "46.2178", "lon": "6.1115"},
-    {"street": "Avenue de la Praille 35", "zip": "1227", "city": "Carouge", "lat": "46.1810", "lon": "6.1300"},
-    {"street": "Rue de Montchoisy 46", "zip": "1207", "city": "Geneve", "lat": "46.2025", "lon": "6.1607"},
+    {
+        "street": "Rue de Carouge 58",
+        "zip": "1205",
+        "city": "Geneve",
+        "lat": "46.1937",
+        "lon": "6.1450",
+    },
+    {
+        "street": "Avenue Wendt 5",
+        "zip": "1203",
+        "city": "Geneve",
+        "lat": "46.2145",
+        "lon": "6.1269",
+    },
+    {
+        "street": "Rue de Lyon 93",
+        "zip": "1203",
+        "city": "Geneve",
+        "lat": "46.2104",
+        "lon": "6.1212",
+    },
+    {
+        "street": "Rue de Lausanne 71",
+        "zip": "1202",
+        "city": "Geneve",
+        "lat": "46.2162",
+        "lon": "6.1478",
+    },
+    {
+        "street": "Chemin des Palettes 24",
+        "zip": "1212",
+        "city": "Grand-Lancy",
+        "lat": "46.1769",
+        "lon": "6.1102",
+    },
+    {
+        "street": "Route de Meyrin 33",
+        "zip": "1203",
+        "city": "Geneve",
+        "lat": "46.2178",
+        "lon": "6.1115",
+    },
+    {
+        "street": "Avenue de la Praille 35",
+        "zip": "1227",
+        "city": "Carouge",
+        "lat": "46.1810",
+        "lon": "6.1300",
+    },
+    {
+        "street": "Rue de Montchoisy 46",
+        "zip": "1207",
+        "city": "Geneve",
+        "lat": "46.2025",
+        "lon": "6.1607",
+    },
 ]
 
 DEMO_DROPOFF_LOCATIONS: list[str] = [
@@ -158,7 +209,9 @@ def _is_placeholder_pickup(value: str | None) -> bool:
 
 def _is_placeholder_dropoff(value: str | None) -> bool:
     text_value = str(value or "").strip().lower()
-    return text_value.startswith("hug - service") or text_value.startswith("hug service")
+    return text_value.startswith("hug - service") or text_value.startswith(
+        "hug service"
+    )
 
 
 def _is_placeholder_customer_name(value: str | None) -> bool:
@@ -215,9 +268,7 @@ def _ensure_demo_enum_compatibility() -> None:
 
 
 def _reset_existing_demo_data() -> None:
-    demo_users = User.query.filter(
-        _demo_email_filter_expr(User.email)
-    ).all()
+    demo_users = User.query.filter(_demo_email_filter_expr(User.email)).all()
     demo_user_ids = [user.id for user in demo_users]
     demo_company_ids = [
         company_id
@@ -230,7 +281,8 @@ def _reset_existing_demo_data() -> None:
         # Respecter les contraintes FK: supprimer d'abord les entités qui référencent
         # clients/companies avant de supprimer ces dernières.
         Booking.query.filter(
-            Booking.user_id.in_(demo_user_ids) | Booking.company_id.in_(demo_company_ids)
+            Booking.user_id.in_(demo_user_ids)
+            | Booking.company_id.in_(demo_company_ids)
         ).delete(synchronize_session=False)
         TransportRequest.query.filter(
             TransportRequest.created_by_user_id.in_(demo_user_ids)
@@ -256,9 +308,9 @@ def _reset_existing_demo_data() -> None:
         ).delete(synchronize_session=False)
         User.query.filter(User.id.in_(demo_user_ids)).delete(synchronize_session=False)
 
-    Institution.query.filter(
-        _demo_email_filter_expr(Institution.contact_email)
-    ).delete(synchronize_session=False)
+    Institution.query.filter(_demo_email_filter_expr(Institution.contact_email)).delete(
+        synchronize_session=False
+    )
 
     db.session.commit()
 
@@ -474,9 +526,7 @@ def reset_and_seed_demo_dataset(
 
         institution = institutions[idx % len(institutions)]
         ext_ref = f"DEMO-REQ-{idx + 1:04d}"
-        request = TransportRequest.find_by_external_reference(
-            institution.id, ext_ref
-        )
+        request = TransportRequest.find_by_external_reference(institution.id, ext_ref)
         if not request:
             request = TransportRequest()
             request.institution_id = institution.id

@@ -26,9 +26,7 @@ depends_on = None
 def _timescaledb_available(conn) -> bool:
     """Check TimescaleDB extension is installed before applying policies."""
     result = conn.execute(
-        sa.text(
-            "SELECT COUNT(*) FROM pg_extension WHERE extname = 'timescaledb'"
-        )
+        sa.text("SELECT COUNT(*) FROM pg_extension WHERE extname = 'timescaledb'")
     )
     return result.scalar() > 0
 
@@ -50,12 +48,8 @@ def upgrade() -> None:
     #    TimescaleDB requires the partitioning column (timestamp) to be part of
     #    any unique index. These are plain non-unique indexes — safe to drop and
     #    recreate after conversion.
-    op.execute(
-        sa.text("DROP INDEX IF EXISTS ix_trip_tracking_assignment_timestamp")
-    )
-    op.execute(
-        sa.text("DROP INDEX IF EXISTS ix_trip_tracking_timestamp")
-    )
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_trip_tracking_assignment_timestamp"))
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_trip_tracking_timestamp"))
 
     # 2. Convert to hypertable.
     #    chunk_time_interval = 1 day: each chunk covers one day of tracking
@@ -152,9 +146,7 @@ def downgrade() -> None:
     # Decompress all chunks before reverting (required before drop_chunks /
     # revert hypertable; decompression may take minutes on large datasets).
     conn.execute(
-        sa.text(
-            "SELECT decompress_chunk(c) FROM show_chunks('trip_tracking') c"
-        )
+        sa.text("SELECT decompress_chunk(c) FROM show_chunks('trip_tracking') c")
     )
 
     # Revert to plain table.
@@ -173,12 +165,8 @@ def downgrade() -> None:
     )
 
     # Restore original plain indexes if somehow available.
-    op.execute(
-        sa.text("DROP INDEX IF EXISTS ix_trip_tracking_driver_timestamp")
-    )
-    op.execute(
-        sa.text("DROP INDEX IF EXISTS ix_trip_tracking_assignment_timestamp")
-    )
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_trip_tracking_driver_timestamp"))
+    op.execute(sa.text("DROP INDEX IF EXISTS ix_trip_tracking_assignment_timestamp"))
     op.create_index(
         "ix_trip_tracking_assignment_timestamp",
         "trip_tracking",

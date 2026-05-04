@@ -13,6 +13,7 @@ Interprétation:
     - MessageTooBig → payload > 4KB
     - InvalidCredentials → config FCM/APNS
 """
+
 from __future__ import annotations
 
 import json
@@ -35,7 +36,10 @@ def fetch_receipts(ticket_ids: list[str]) -> dict:
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__, file=sys.stderr)
-        print("\nExemple: python -m scripts.fetch_expo_receipts XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX", file=sys.stderr)
+        print(
+            "\nExemple: python -m scripts.fetch_expo_receipts XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX",
+            file=sys.stderr,
+        )
         return 1
 
     ticket_ids = [a.strip() for a in sys.argv[1:] if a.strip()]

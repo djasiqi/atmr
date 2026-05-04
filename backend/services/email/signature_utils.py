@@ -479,7 +479,7 @@ def generate_signature_html_from_form(
     return "\n".join(html_parts)
 
 
-def inject_signature_into_html(  # noqa: PLR0911
+def inject_signature_into_html(
     html_content: str,
     signature_mode: str | None = None,
     company: Any | None = None,

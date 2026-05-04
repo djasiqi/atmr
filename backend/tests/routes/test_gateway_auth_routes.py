@@ -31,7 +31,9 @@ class _FakeResponse:
 
 
 def test_gateway_login_routes_demo_success(client, monkeypatch):
-    monkeypatch.setattr("routes.gateway_auth._resolve_target_env", lambda _email: "demo")
+    monkeypatch.setattr(
+        "routes.gateway_auth._resolve_target_env", lambda _email: "demo"
+    )
     monkeypatch.setattr(
         "routes.gateway_auth._delegate",
         lambda **_kwargs: _FakeResponse(
@@ -61,12 +63,17 @@ def test_gateway_login_routes_demo_success(client, monkeypatch):
 
 
 def test_gateway_login_demo_invalid_password_no_fallback(client, monkeypatch):
-    monkeypatch.setattr("routes.gateway_auth._resolve_target_env", lambda _email: "demo")
+    monkeypatch.setattr(
+        "routes.gateway_auth._resolve_target_env", lambda _email: "demo"
+    )
     monkeypatch.setattr(
         "routes.gateway_auth._delegate",
         lambda **_kwargs: _FakeResponse(
             status_code=401,
-            payload={"error": "invalid_credentials", "message": "Email ou mot de passe invalide"},
+            payload={
+                "error": "invalid_credentials",
+                "message": "Email ou mot de passe invalide",
+            },
         ),
     )
 
@@ -94,7 +101,9 @@ def test_gateway_context_without_valid_session_is_neutral(client):
 def test_gateway_context_with_invalid_session_returns_neutral(client, monkeypatch):
     monkeypatch.setattr(
         "routes.gateway_auth._delegate",
-        lambda **_kwargs: _FakeResponse(status_code=401, payload={"msg": "Missing Authorization Header"}),
+        lambda **_kwargs: _FakeResponse(
+            status_code=401, payload={"msg": "Missing Authorization Header"}
+        ),
     )
     response = client.get("/api/gateway/auth/context?target_env=demo")
     assert response.status_code == 200

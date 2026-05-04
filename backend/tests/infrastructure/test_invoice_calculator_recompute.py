@@ -120,9 +120,7 @@ class TestRecomputeInvoiceTotals:
         db.session.flush()
         return invoice
 
-    def test_recompute_updates_totals_from_lines(
-        self, db, invoice_with_zero_totals
-    ):
+    def test_recompute_updates_totals_from_lines(self, db, invoice_with_zero_totals):
         """Test: recalcul met à jour les totaux à partir des lignes."""
         invoice = invoice_with_zero_totals
 

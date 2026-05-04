@@ -35,25 +35,23 @@ class TestGetCancellationTransportDisplay:
 
     def test_no_show_contains_client_ne_sest_pas_presente(self) -> None:
         """NO_SHOW ⇒ transport_display contient 'Client ne s'est pas présenté'."""
-        booking = _MockBooking(cancellation_display_label="Client ne s'est pas présenté")
+        booking = _MockBooking(
+            cancellation_display_label="Client ne s'est pas présenté"
+        )
         result = _get_cancellation_transport_display(booking)
         assert "Client ne s'est pas présenté" in result
         assert result == "Client ne s'est pas présenté"
 
     def test_last_minute_contains_annulation_derniere_minute(self) -> None:
         """LAST_MINUTE ⇒ contient 'Annulation dernière minute'."""
-        booking = _MockBooking(
-            cancellation_display_label="Annulation dernière minute"
-        )
+        booking = _MockBooking(cancellation_display_label="Annulation dernière minute")
         result = _get_cancellation_transport_display(booking)
         assert "Annulation dernière minute" in result
         assert result == "Annulation dernière minute"
 
     def test_company_issue_contains_probleme_entreprise(self) -> None:
         """COMPANY_ISSUE ⇒ contient 'Problème entreprise' (même si non facturé)."""
-        booking = _MockBooking(
-            cancellation_display_label="Problème entreprise"
-        )
+        booking = _MockBooking(cancellation_display_label="Problème entreprise")
         result = _get_cancellation_transport_display(booking)
         assert "Problème entreprise" in result
         assert result == "Problème entreprise"
@@ -128,6 +126,4 @@ class TestDetectAndGroupRoundTripsCancelled:
         ]
         consolidated = _detect_and_group_round_trips(lines_with_bookings)
         assert len(consolidated) == 1
-        assert "Problème entreprise" in consolidated[0].get(
-            "transport_display", ""
-        )
+        assert "Problème entreprise" in consolidated[0].get("transport_display", "")

@@ -21,7 +21,9 @@ def _merge_s2_clinic_line_meta_from_booking(
     client: Any | None,
 ) -> dict[str, Any]:
     """Complète patient_name / service_date pour une ligne liée à une réservation (facture clinique S2)."""
-    out: dict[str, Any] = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    out: dict[str, Any] = (
+        dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    )
     if booking is None:
         return out
 
@@ -50,9 +52,7 @@ def _merge_s2_clinic_line_meta_from_booking(
                     )
             else:
                 cid = getattr(booking, "client_id", None)
-                out["patient_name"] = (
-                    f"Client #{cid}" if cid is not None else "Client"
-                )
+                out["patient_name"] = f"Client #{cid}" if cid is not None else "Client"
 
     _existing_sd = out.get("service_date")
     if _existing_sd is None or str(_existing_sd).strip() == "":
@@ -72,7 +72,9 @@ def _merge_ride_service_date_from_booking(
     booking: Any | None,
 ) -> dict[str, Any] | None:
     """Ajoute ``service_date`` depuis la réservation si absent (ex. facturation patient S1)."""
-    out: dict[str, Any] = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    out: dict[str, Any] = (
+        dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    )
     if booking is None:
         return out if out else None
     _sd = out.get("service_date")
@@ -260,9 +262,7 @@ class InvoiceRepository:
                         if _bk and getattr(_bk, "client_id", None)
                         else None
                     )
-                    lm_final = _merge_s2_clinic_line_meta_from_booking(
-                        line, _bk, _cl
-                    )
+                    lm_final = _merge_s2_clinic_line_meta_from_booking(line, _bk, _cl)
                 elif (
                     bs_val != "s2_clinic_monthly"
                     and line.reservation_id
@@ -297,7 +297,9 @@ class InvoiceRepository:
 
         pdf_url = cast(str | None, getattr(invoice, "pdf_url", None))
         meta_val = getattr(invoice, "meta", None)
-        meta_payload = cast(dict[str, Any] | None, meta_val) if meta_val is not None else None
+        meta_payload = (
+            cast(dict[str, Any] | None, meta_val) if meta_val is not None else None
+        )
 
         return InvoiceDTO(
             id=invoice.id,

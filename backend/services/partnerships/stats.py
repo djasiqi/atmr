@@ -257,7 +257,9 @@ class PartnershipStatsService:
         # (double coalesce : partner_cost nullable, SUM(NULL) peut rester NULL selon la DB)
         if is_owner and invoiced_to_pay == 0:
             estimated_to_pay = db.session.query(
-                func.coalesce(func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0)
+                func.coalesce(
+                    func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0
+                )
             ).filter(
                 BookingTransfer.partnership_id == partnership.id,
                 BookingTransfer.owner_company_id == company_id,
@@ -300,7 +302,9 @@ class PartnershipStatsService:
         # (double coalesce : partner_cost nullable, SUM(NULL) peut rester NULL selon la DB)
         if not is_owner and invoiced_to_receive == 0:
             estimated_to_receive = db.session.query(
-                func.coalesce(func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0)
+                func.coalesce(
+                    func.sum(func.coalesce(BookingTransfer.partner_cost, 0)), 0
+                )
             ).filter(
                 BookingTransfer.partnership_id == partnership.id,
                 BookingTransfer.executing_company_id == company_id,

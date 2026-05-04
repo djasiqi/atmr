@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import socket
+from http import HTTPStatus
 
 from flask import current_app, request
 from flask_jwt_extended import jwt_required  # pyright: ignore
@@ -374,7 +375,7 @@ class EmailDomainDiagnostic(Resource):
 
             logger.info("🔍 [DIAGNOSTIC] Réponse Brevo status=%s", response.status_code)
 
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 data = response.json()
 
                 # Extraire les détails
@@ -439,7 +440,7 @@ class EmailDomainDiagnostic(Resource):
 
                 return diagnostic, 200
 
-            if response.status_code == 404:
+            if response.status_code == HTTPStatus.NOT_FOUND:
                 return {
                     "success": False,
                     "error": f"Domaine {domain} non trouvé dans Brevo",
@@ -479,7 +480,9 @@ class EmailHealth(Resource):
         - Expose un diagnostic lisible pour environnement local
         """
         provider = (os.getenv("EMAIL_PROVIDER", "smtp") or "smtp").strip().lower()
-        notifications_enabled = (os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false").strip().lower() in (
+        notifications_enabled = (
+            os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false"
+        ).strip().lower() in (
             "1",
             "true",
             "yes",
@@ -487,14 +490,10 @@ class EmailHealth(Resource):
         )
 
         smtp_host = (
-            os.getenv("SMTP_HOST")
-            or os.getenv("MAIL_SERVER")
-            or "smtp.gmail.com"
+            os.getenv("SMTP_HOST") or os.getenv("MAIL_SERVER") or "smtp.gmail.com"
         ).strip()
         smtp_port_raw = (
-            os.getenv("SMTP_PORT")
-            or os.getenv("MAIL_PORT")
-            or "587"
+            os.getenv("SMTP_PORT") or os.getenv("MAIL_PORT") or "587"
         ).strip()
         try:
             smtp_port = int(smtp_port_raw)
@@ -553,28 +552,28 @@ class EmailHealthPublic(Resource):
         is_testing = bool(current_app.config.get("TESTING"))
         is_dev = env in {"development", "dev", "local"}
         if not (is_dev or is_testing):
-            return {"error": "Endpoint disponible uniquement en développement/test."}, 403
+            return {
+                "error": "Endpoint disponible uniquement en développement/test."
+            }, 403
 
         remote = (request.remote_addr or "").strip()
         if remote not in {"127.0.0.1", "::1", ""}:
             return {"error": "Endpoint public autorisé uniquement en localhost."}, 403
 
         provider = (os.getenv("EMAIL_PROVIDER", "smtp") or "smtp").strip().lower()
-        notifications_enabled = (os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false").strip().lower() in (
+        notifications_enabled = (
+            os.getenv("EMAIL_NOTIFICATIONS_ENABLED", "false") or "false"
+        ).strip().lower() in (
             "1",
             "true",
             "yes",
             "on",
         )
         smtp_host = (
-            os.getenv("SMTP_HOST")
-            or os.getenv("MAIL_SERVER")
-            or "smtp.gmail.com"
+            os.getenv("SMTP_HOST") or os.getenv("MAIL_SERVER") or "smtp.gmail.com"
         ).strip()
         smtp_port_raw = (
-            os.getenv("SMTP_PORT")
-            or os.getenv("MAIL_PORT")
-            or "587"
+            os.getenv("SMTP_PORT") or os.getenv("MAIL_PORT") or "587"
         ).strip()
         try:
             smtp_port = int(smtp_port_raw)

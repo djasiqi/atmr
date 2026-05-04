@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,7 @@ def get_worldline_api_client() -> Any:
         return Factory.create_client_from_file(ini_path, key_id, secret)
     finally:
         try:
-            os.unlink(ini_path)
+            Path(ini_path).unlink()
         except OSError as e:
             logger.debug("Could not remove temp Worldline ini: %s", e)
 

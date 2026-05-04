@@ -55,7 +55,9 @@ def test_compute_price_zone_weekend_roundtrip():
                 "weekday": {"one_way": 45.0, "round_trip": 85.0},
                 "weekend": {"one_way": 60.0, "round_trip": 120.0},
             },
-            "extras": [{"type": "after_time_per_zone", "after": "20:00", "amount": 8.0}],
+            "extras": [
+                {"type": "after_time_per_zone", "after": "20:00", "amount": 8.0}
+            ],
         },
         "zone",
     )
@@ -101,7 +103,9 @@ def test_compute_price_zone_matrix_uses_pair_transition():
                 {"id": "z2", "code": "B", "label": "Rive", "tokens": ["commune:200"]},
             ],
             "matrix": {"z1": {"z1": 45.0, "z2": 60.0}, "z2": {"z1": 60.0, "z2": 50.0}},
-            "extras": [{"type": "after_time_per_zone", "after": "20:00", "amount": 4.0}],
+            "extras": [
+                {"type": "after_time_per_zone", "after": "20:00", "amount": 4.0}
+            ],
         },
         "zone",
     )
@@ -125,7 +129,9 @@ def test_compute_price_zone_matrix_fallback_when_unassigned():
     version = _DummyVersion(
         {
             "model": "zone_matrix",
-            "zones": [{"id": "z1", "code": "A", "label": "Centre", "tokens": ["commune:100"]}],
+            "zones": [
+                {"id": "z1", "code": "A", "label": "Centre", "tokens": ["commune:100"]}
+            ],
             "matrix": {"z1": {"z1": 45.0}},
             "pricing": {"weekday": {"one_way": 30.0}},
         },
@@ -175,8 +181,18 @@ def test_compute_price_zone_count_uses_zone_set_resolver(monkeypatch):
             "zone_set_id": "zoneset_ge_v1",
             "components": {
                 "base": {"enabled": True, "amount": 30},
-                "zone_count": {"enabled": True, "unit_price": 10, "strategy": "pickup_dropoff_diff_or_same", "max_units": 10},
-                "distance": {"enabled": False, "per_km": 0, "included_km": 0, "rounding": "ceil_0_1"},
+                "zone_count": {
+                    "enabled": True,
+                    "unit_price": 10,
+                    "strategy": "pickup_dropoff_diff_or_same",
+                    "max_units": 10,
+                },
+                "distance": {
+                    "enabled": False,
+                    "per_km": 0,
+                    "included_km": 0,
+                    "rounding": "ceil_0_1",
+                },
             },
             "extras": {},
             "caps": {"minimum": 0, "maximum": None},
@@ -186,7 +202,10 @@ def test_compute_price_zone_count_uses_zone_set_resolver(monkeypatch):
     amount, breakdown = compute_price(
         booking={},
         pricing_profile_version=version,
-        context={"pickup_admin_token": "commune:100", "dropoff_admin_token": "commune:200"},
+        context={
+            "pickup_admin_token": "commune:100",
+            "dropoff_admin_token": "commune:200",
+        },
     )
     assert amount == Decimal("40.00")
     assert breakdown["model"] == "zone_count"
@@ -202,7 +221,9 @@ def test_compute_price_zone_count_uses_zone_set_resolver(monkeypatch):
         (5, Decimal("60.00")),
     ],
 )
-def test_compute_price_zone_count_formula_by_traversed_zones(monkeypatch, zones_traversed, expected_amount):
+def test_compute_price_zone_count_formula_by_traversed_zones(
+    monkeypatch, zones_traversed, expected_amount
+):
     monkeypatch.setattr(
         pricing_engine_module,
         "estimate_zones_traversed",
@@ -223,7 +244,12 @@ def test_compute_price_zone_count_formula_by_traversed_zones(monkeypatch, zones_
                     "included_zones": 2,
                     "max_units": 10,
                 },
-                "distance": {"enabled": False, "per_km": 0, "included_km": 0, "rounding": "ceil_0_1"},
+                "distance": {
+                    "enabled": False,
+                    "per_km": 0,
+                    "included_km": 0,
+                    "rounding": "ceil_0_1",
+                },
             },
             "extras": {},
             "caps": {"minimum": 0, "maximum": None},
@@ -233,7 +259,10 @@ def test_compute_price_zone_count_formula_by_traversed_zones(monkeypatch, zones_
     amount, breakdown = compute_price(
         booking={},
         pricing_profile_version=version,
-        context={"pickup_admin_token": "commune:100", "dropoff_admin_token": "commune:200"},
+        context={
+            "pickup_admin_token": "commune:100",
+            "dropoff_admin_token": "commune:200",
+        },
     )
     assert amount == expected_amount
     assert breakdown["zones_traversees"] == zones_traversed

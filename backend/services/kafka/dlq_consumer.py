@@ -18,10 +18,18 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv(
     "KAFKA_BOOTSTRAP_SERVERS",
     "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
 )
-KAFKA_DLQ_CONSUMER_GROUP = os.getenv("KAFKA_DLQ_CONSUMER_GROUP", "kafka-dlq-consumer-group")
-KAFKA_TOPIC_NOTIFICATIONS_DLQ = os.getenv("KAFKA_TOPIC_NOTIFICATIONS_DLQ", "notifications.dlq")
-KAFKA_TOPIC_DRIVER_LOCATION_DLQ = os.getenv("KAFKA_TOPIC_DRIVER_LOCATION_DLQ", "driver.location.dlq")
-KAFKA_DLQ_STORAGE_PATH = os.getenv("KAFKA_DLQ_STORAGE_PATH", "/app/data/kafka_dlq_events.jsonl")
+KAFKA_DLQ_CONSUMER_GROUP = os.getenv(
+    "KAFKA_DLQ_CONSUMER_GROUP", "kafka-dlq-consumer-group"
+)
+KAFKA_TOPIC_NOTIFICATIONS_DLQ = os.getenv(
+    "KAFKA_TOPIC_NOTIFICATIONS_DLQ", "notifications.dlq"
+)
+KAFKA_TOPIC_DRIVER_LOCATION_DLQ = os.getenv(
+    "KAFKA_TOPIC_DRIVER_LOCATION_DLQ", "driver.location.dlq"
+)
+KAFKA_DLQ_STORAGE_PATH = os.getenv(
+    "KAFKA_DLQ_STORAGE_PATH", "/app/data/kafka_dlq_events.jsonl"
+)
 
 KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
 KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
@@ -167,5 +175,7 @@ def run_kafka_dlq_consumer() -> None:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
     run_kafka_dlq_consumer()

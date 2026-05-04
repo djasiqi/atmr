@@ -127,10 +127,12 @@ class SqlAlchemyBookingWriter:
         outbound_price_amount = price_amount
         return_price_amount: float | None = None
         if is_round_trip:
-            outbound_amount, return_amount = _split_round_trip_total_amount(float(amount))
+            outbound_amount, return_amount = _split_round_trip_total_amount(
+                float(amount)
+            )
             if price_amount is not None:
-                outbound_price_amount, return_price_amount = _split_round_trip_total_amount(
-                    float(price_amount)
+                outbound_price_amount, return_price_amount = (
+                    _split_round_trip_total_amount(float(price_amount))
                 )
 
         new_booking = cast("Any", Booking)(

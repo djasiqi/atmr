@@ -20,11 +20,7 @@ class _FakeClientRepo:
         self._company_id = company_id
 
     def find_by_id(self, _client_id: int):  # type: ignore[no-untyped-def]
-        ct = (
-            ClientType.TRANSPORT
-            if (self._company_id or 0) > 0
-            else ClientType.PORTAL
-        )
+        ct = ClientType.TRANSPORT if (self._company_id or 0) > 0 else ClientType.PORTAL
         return SimpleNamespace(id=1, company_id=self._company_id, client_type=ct)
 
 
@@ -104,8 +100,18 @@ def test_create_booking_use_case_publishes_booking_created_event(monkeypatch) ->
     assert published[0]["event_type"] == "BookingCreatedEvent"
     assert published[0]["booking_id"] == 123
     assert published[0]["company_id"] == 7
-    assert writer.last_kwargs["pickup_admin_source"] in {"db", "geoadmin", "photon", "unknown"}
-    assert writer.last_kwargs["dropoff_admin_source"] in {"db", "geoadmin", "photon", "unknown"}
+    assert writer.last_kwargs["pickup_admin_source"] in {
+        "db",
+        "geoadmin",
+        "photon",
+        "unknown",
+    }
+    assert writer.last_kwargs["dropoff_admin_source"] in {
+        "db",
+        "geoadmin",
+        "photon",
+        "unknown",
+    }
     assert "pickup_admin_resolved_at" in writer.last_kwargs
     assert "dropoff_admin_resolved_at" in writer.last_kwargs
 

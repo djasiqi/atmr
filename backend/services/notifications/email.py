@@ -34,7 +34,9 @@ def _html_to_text(html_content: str) -> str:
     """Convertit un HTML simple en texte brut pour améliorer la délivrabilité."""
     no_style = re.sub(r"<style[\s\S]*?</style>", " ", html_content, flags=re.IGNORECASE)
     no_script = re.sub(r"<script[\s\S]*?</script>", " ", no_style, flags=re.IGNORECASE)
-    with_newlines = re.sub(r"</(p|div|br|li|h1|h2|h3|tr|table)>", "\n", no_script, flags=re.IGNORECASE)
+    with_newlines = re.sub(
+        r"</(p|div|br|li|h1|h2|h3|tr|table)>", "\n", no_script, flags=re.IGNORECASE
+    )
     no_tags = re.sub(r"<[^>]+>", " ", with_newlines)
     normalized = re.sub(r"[ \t\r\f\v]+", " ", no_tags)
     normalized = re.sub(r"\n{3,}", "\n\n", normalized)

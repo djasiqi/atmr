@@ -70,4 +70,3 @@ def presence_status_from_location_status(location_status: str) -> PresenceStatus
     if location_status == "stale":
         return "degraded"
     return "offline"
-

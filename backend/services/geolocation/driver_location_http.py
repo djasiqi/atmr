@@ -48,10 +48,7 @@ def check_http_driver_location_rate_limit(driver_id: int) -> tuple[bool, int | N
                 and len(oldest_ts_list) > 0
             ):
                 oldest_tuple = oldest_ts_list[0]
-                if (
-                    isinstance(oldest_tuple, (tuple, list))
-                    and len(oldest_tuple) > 1
-                ):
+                if isinstance(oldest_tuple, (tuple, list)) and len(oldest_tuple) > 1:
                     oldest = int(oldest_tuple[1])
                     retry_after = max(1, (oldest + window_seconds) - now_ts)
                 else:
@@ -76,7 +73,9 @@ def _idem_key(driver_id: int, idempotency_key: str) -> str:
     return f"driver_http_idem:{driver_id}:{h}"
 
 
-def get_idempotent_response(driver_id: int, idempotency_key: str) -> dict[str, Any] | None:
+def get_idempotent_response(
+    driver_id: int, idempotency_key: str
+) -> dict[str, Any] | None:
     """Si une réponse 200 a déjà été enregistrée pour cette clé, la retourne."""
     if not redis_client or not idempotency_key.strip():
         return None

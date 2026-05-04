@@ -5,18 +5,20 @@ class PlatformTenantSuspended(Exception):
     """Entreprise (tenant) suspendue au sens plateforme."""
 
     def __init__(self, message: str | None = None) -> None:
-        self.message = message or (
-            "Ce transporteur est suspendu au sens plateforme."
-        )
+        self.message = message or ("Ce transporteur est suspendu au sens plateforme.")
         super().__init__(self.message)
 
 
 class PlatformRunbookConflict(Exception):
     """Exécution runbook refusée (conflit concurrent)."""
 
-    def __init__(self, message: str | None = None, code: str = "runbook_conflict") -> None:
+    def __init__(
+        self, message: str | None = None, code: str = "runbook_conflict"
+    ) -> None:
         self.code = code
-        self.message = message or "Une exécution runbook est déjà en cours pour ce tenant."
+        self.message = (
+            message or "Une exécution runbook est déjà en cours pour ce tenant."
+        )
         super().__init__(self.message)
 
 

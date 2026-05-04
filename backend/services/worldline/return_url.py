@@ -52,7 +52,9 @@ def validate_return_url_override(url: str) -> str:
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("return_url doit être une URL absolue (http/https)")
 
-    require_https = (os.getenv("WORLDLINE_RETURN_URL_REQUIRE_HTTPS") or "").strip().lower() in (
+    require_https = (
+        os.getenv("WORLDLINE_RETURN_URL_REQUIRE_HTTPS") or ""
+    ).strip().lower() in (
         "1",
         "true",
         "yes",
@@ -78,5 +80,9 @@ def default_worldline_return_url(booking_id: int) -> str:
     """URL de retour construite côté serveur (hors champ return_url du client)."""
     base = (os.getenv("CLIENT_WEB_BASE_URL") or "").strip().rstrip("/")
     if not base:
-        base = (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000").strip().rstrip("/")
+        base = (
+            (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000")
+            .strip()
+            .rstrip("/")
+        )
     return f"{base}/client/payment/worldline/return?bookingId={booking_id}"

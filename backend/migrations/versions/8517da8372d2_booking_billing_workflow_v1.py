@@ -1,4 +1,3 @@
-
 """booking_billing_workflow_v1
 
 Revision ID: 8517da8372d2
@@ -6,6 +5,7 @@ Revises: 4e968efb2f32
 Create Date: 2026-01-21 10:50:43.730107
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -28,33 +28,95 @@ def upgrade():
     )
     billing_review_status_enum.create(op.get_bind(), checkfirst=True)
 
-    op.create_table("billing_audit_logs",
-    sa.Column("id", sa.Integer(), nullable=False),
-    sa.Column("company_id", sa.Integer(), nullable=False),
-    sa.Column("booking_id", sa.Integer(), nullable=False),
-    sa.Column("actor_user_id", sa.Integer(), nullable=True),
-    sa.Column("action", sa.Text(), nullable=False),
-    sa.Column("reason", sa.Text(), nullable=True),
-    sa.Column("before", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column("after", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="SET NULL"),
-    sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
-    sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-    sa.PrimaryKeyConstraint("id")
+    op.create_table(
+        "billing_audit_logs",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("booking_id", sa.Integer(), nullable=False),
+        sa.Column("actor_user_id", sa.Integer(), nullable=True),
+        sa.Column("action", sa.Text(), nullable=False),
+        sa.Column("reason", sa.Text(), nullable=True),
+        sa.Column("before", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("after", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_billing_audit_logs_actor_user_id"), "billing_audit_logs", ["actor_user_id"], unique=False)
-    op.create_index(op.f("ix_billing_audit_logs_booking_id"), "billing_audit_logs", ["booking_id"], unique=False)
-    op.create_index(op.f("ix_billing_audit_logs_company_id"), "billing_audit_logs", ["company_id"], unique=False)
-    op.add_column("booking", sa.Column("billing_review_status", sa.Enum("draft", "needs_review", "ready", "locked", name="billing_review_status"), server_default="draft", nullable=False))
-    op.add_column("booking", sa.Column("billing_locked_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("booking", sa.Column("billing_locked_by_user_id", sa.Integer(), nullable=True))
-    op.add_column("booking", sa.Column("billing_override_reason", sa.Text(), nullable=True))
+    op.create_index(
+        op.f("ix_billing_audit_logs_actor_user_id"),
+        "billing_audit_logs",
+        ["actor_user_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_billing_audit_logs_booking_id"),
+        "billing_audit_logs",
+        ["booking_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_billing_audit_logs_company_id"),
+        "billing_audit_logs",
+        ["company_id"],
+        unique=False,
+    )
+    op.add_column(
+        "booking",
+        sa.Column(
+            "billing_review_status",
+            sa.Enum(
+                "draft", "needs_review", "ready", "locked", name="billing_review_status"
+            ),
+            server_default="draft",
+            nullable=False,
+        ),
+    )
+    op.add_column(
+        "booking",
+        sa.Column("billing_locked_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    op.add_column(
+        "booking", sa.Column("billing_locked_by_user_id", sa.Integer(), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("billing_override_reason", sa.Text(), nullable=True)
+    )
     op.add_column("booking", sa.Column("billing_party_id", sa.Integer(), nullable=True))
-    op.create_index(op.f("ix_booking_billing_locked_by_user_id"), "booking", ["billing_locked_by_user_id"], unique=False)
-    op.create_index(op.f("ix_booking_billing_party_id"), "booking", ["billing_party_id"], unique=False)
-    op.create_foreign_key(None, "booking", "user", ["billing_locked_by_user_id"], ["id"], ondelete="SET NULL")
-    op.create_foreign_key(None, "booking", "billing_parties", ["billing_party_id"], ["id"], ondelete="SET NULL")
+    op.create_index(
+        op.f("ix_booking_billing_locked_by_user_id"),
+        "booking",
+        ["billing_locked_by_user_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("ix_booking_billing_party_id"),
+        "booking",
+        ["billing_party_id"],
+        unique=False,
+    )
+    op.create_foreign_key(
+        None,
+        "booking",
+        "user",
+        ["billing_locked_by_user_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    op.create_foreign_key(
+        None,
+        "booking",
+        "billing_parties",
+        ["billing_party_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
     # ### end Alembic commands ###
 
 
@@ -69,9 +131,15 @@ def downgrade():
     op.drop_column("booking", "billing_locked_by_user_id")
     op.drop_column("booking", "billing_locked_at")
     op.drop_column("booking", "billing_review_status")
-    op.drop_index(op.f("ix_billing_audit_logs_company_id"), table_name="billing_audit_logs")
-    op.drop_index(op.f("ix_billing_audit_logs_booking_id"), table_name="billing_audit_logs")
-    op.drop_index(op.f("ix_billing_audit_logs_actor_user_id"), table_name="billing_audit_logs")
+    op.drop_index(
+        op.f("ix_billing_audit_logs_company_id"), table_name="billing_audit_logs"
+    )
+    op.drop_index(
+        op.f("ix_billing_audit_logs_booking_id"), table_name="billing_audit_logs"
+    )
+    op.drop_index(
+        op.f("ix_billing_audit_logs_actor_user_id"), table_name="billing_audit_logs"
+    )
     op.drop_table("billing_audit_logs")
 
     billing_review_status_enum = postgresql.ENUM(
@@ -83,4 +151,3 @@ def downgrade():
     )
     billing_review_status_enum.drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###
-

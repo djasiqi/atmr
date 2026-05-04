@@ -34,11 +34,12 @@ from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
 
+from sqlalchemy import Date, cast  # noqa: E402
+
 from app import create_app  # noqa: E402
 from ext import db  # noqa: E402
 from models.booking import Booking  # noqa: E402
 from models.enums import BookingStatus  # noqa: E402
-from sqlalchemy import Date, cast  # noqa: E402
 
 
 def _parse_date(s: str) -> date:

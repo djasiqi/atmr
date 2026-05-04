@@ -29,10 +29,7 @@ def _normalize_name(value: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", str(value))
     normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     normalized = (
-        normalized.lower()
-        .replace("’", "'")
-        .replace("`", "'")
-        .replace("´", "'")
+        normalized.lower().replace("’", "'").replace("`", "'").replace("´", "'")
     )
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
@@ -143,13 +140,17 @@ class SqlAlchemyClientWriter:
                             Client.company_id == company_id,
                             Client.is_institution.is_(True),
                             Client.id != client.id,
-                            Client.linked_institution_id == client.linked_institution_id,
+                            Client.linked_institution_id
+                            == client.linked_institution_id,
                             Client.default_billed_to_company_id.isnot(None),
                         )
                         .order_by(Client.id.desc())
                         .first()
                     )
-                    if existing_linked_client and existing_linked_client.default_billed_to_company_id:
+                    if (
+                        existing_linked_client
+                        and existing_linked_client.default_billed_to_company_id
+                    ):
                         clinic_company = Company.query.filter_by(
                             id=existing_linked_client.default_billed_to_company_id
                         ).first()
@@ -187,8 +188,12 @@ class SqlAlchemyClientWriter:
                         if getattr(client, "domicile_lon", None) is not None
                         else None
                     )
-                    clinic_company.contact_email = client.contact_email or user.email or ""
-                    clinic_company.contact_phone = client.contact_phone or user.phone or ""
+                    clinic_company.contact_email = (
+                        client.contact_email or user.email or ""
+                    )
+                    clinic_company.contact_phone = (
+                        client.contact_phone or user.phone or ""
+                    )
                     clinic_company.service_area = ""
                     clinic_company.max_daily_bookings = 50
                     clinic_company.is_approved = False
@@ -211,14 +216,16 @@ class SqlAlchemyClientWriter:
                 client.default_billed_to_company_id = clinic_company.id
 
                 # Upsert BillingParty pour la clinique
-                billing_address = client.billing_address or client.domicile_address or ""
+                billing_address = (
+                    client.billing_address or client.domicile_address or ""
+                )
                 if client.domicile_zip and client.domicile_city:
                     if billing_address:
-                        billing_address = (
-                            f"{billing_address}\n{client.domicile_zip} {client.domicile_city}"
-                        )
+                        billing_address = f"{billing_address}\n{client.domicile_zip} {client.domicile_city}"
                     else:
-                        billing_address = f"{client.domicile_zip} {client.domicile_city}"
+                        billing_address = (
+                            f"{client.domicile_zip} {client.domicile_city}"
+                        )
 
                 billing_ref = f"clinic_company:{clinic_company.id}"
                 billing_party = BillingParty.query.filter_by(
@@ -232,7 +239,9 @@ class SqlAlchemyClientWriter:
                     billing_party.external_ref = billing_ref
                     db.session.add(billing_party)
                 billing_party.display_name = client.institution_name
-                billing_party.billing_address = billing_address or "Adresse non renseignée"
+                billing_party.billing_address = (
+                    billing_address or "Adresse non renseignée"
+                )
                 billing_party.contact_email = client.contact_email or user.email
                 billing_party.contact_phone = client.contact_phone or user.phone
                 billing_party.is_active = True
@@ -246,9 +255,13 @@ class SqlAlchemyClientWriter:
                 if not mapping:
                     mapping = ClinicBillingPartyMapping()
                     mapping.company_id = company_id  # L'entreprise de transport
-                    mapping.clinic_company_id = clinic_company.id  # La clinique (payeur)
+                    mapping.clinic_company_id = (
+                        clinic_company.id
+                    )  # La clinique (payeur)
                     db.session.add(mapping)
-                mapping.billing_party_id = billing_party.id  # Le destinataire de facturation
+                mapping.billing_party_id = (
+                    billing_party.id
+                )  # Le destinataire de facturation
                 mapping.is_active = True
 
                 logger.info(

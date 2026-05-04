@@ -39,7 +39,9 @@ class TestAdminPlatformBookingsList:
         assert isinstance(data["items"], list)
         assert "pagination" in data
         p = data["pagination"]
-        assert "page" in p and "per_page" in p and "total_items" in p
+        assert "page" in p
+        assert "per_page" in p
+        assert "total_items" in p
         if data["items"]:
             row = data["items"][0]
             for key in (

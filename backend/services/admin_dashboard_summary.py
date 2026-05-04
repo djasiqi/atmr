@@ -35,6 +35,7 @@ BOOKING_PENDING_ACTION_STATUSES: tuple[BookingStatus, ...] = (
 
 # Demandes démo « ouvertes » : même règle que le compteur `new` côté AdminDemoRequests.
 DEMO_OPEN_STATUSES: frozenset[str] = frozenset({"new"})
+_DECEMBER = 12
 
 
 def _is_synthetic_demo_email_expr(column):
@@ -49,7 +50,7 @@ def _is_synthetic_demo_email_expr(column):
 
 def _month_window(now: datetime) -> tuple[datetime, datetime]:
     start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    if now.month == 12:
+    if now.month == _DECEMBER:
         end_of_month = now.replace(
             year=now.year + 1,
             month=1,
@@ -83,7 +84,9 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     bookings_pending_action = (
         db.session.scalar(
             select(func.count(Booking.id)).where(
-                Booking.status.in_(tuple(s.value for s in BOOKING_PENDING_ACTION_STATUSES))
+                Booking.status.in_(
+                    tuple(s.value for s in BOOKING_PENDING_ACTION_STATUSES)
+                )
             )
         )
         or 0
@@ -91,7 +94,9 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
 
     demo_requests_open = (
         db.session.scalar(
-            select(func.count(DemoRequest.id)).where(DemoRequest.status.in_(DEMO_OPEN_STATUSES))
+            select(func.count(DemoRequest.id)).where(
+                DemoRequest.status.in_(DEMO_OPEN_STATUSES)
+            )
         )
         or 0
     )
@@ -126,7 +131,9 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     bookings_completed_7d = (
         db.session.scalar(
             select(func.count(Booking.id)).where(
-                Booking.status.in_((BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED)),
+                Booking.status.in_(
+                    (BookingStatus.COMPLETED, BookingStatus.RETURN_COMPLETED)
+                ),
                 Booking.completed_at.isnot(None),
                 Booking.completed_at >= seven_ago,
                 Booking.completed_at <= now,
@@ -175,7 +182,9 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
             Booking.scheduled_time < end_of_month,
         )
     )
-    revenue_current_month_chf = float(db.session.execute(revenue_stmt).scalar_one() or 0)
+    revenue_current_month_chf = float(
+        db.session.execute(revenue_stmt).scalar_one() or 0
+    )
 
     # --- platform_snippet (léger : pas de build_platform_status_payload) ---
     runbooks_today = (
@@ -219,7 +228,6 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     )
 
     # --- booking_trends (12 mois, created_at) — même logique que /admin/stats ---
-    from dateutil.relativedelta import relativedelta
 
     current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     window_start = current_month_start - relativedelta(months=11)
@@ -243,9 +251,15 @@ def build_admin_dashboard_summary() -> dict[str, Any]:
     for b in recent_rows:
         client = b.client
         first = (
-            getattr(getattr(client, "user", None), "first_name", None) if client else None
+            getattr(getattr(client, "user", None), "first_name", None)
+            if client
+            else None
         )
-        last = getattr(getattr(client, "user", None), "last_name", None) if client else None
+        last = (
+            getattr(getattr(client, "user", None), "last_name", None)
+            if client
+            else None
+        )
         name_parts = [p for p in (first, last) if p]
         client_label = " ".join(name_parts) if name_parts else None
         if not client_label and client:

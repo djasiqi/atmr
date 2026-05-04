@@ -90,4 +90,3 @@ def test_not_commissionable_zero_amount():
         "observed_transport_amount": 0,
     }
     assert is_commissionable_platform(b, pl) is False
-

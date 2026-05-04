@@ -80,7 +80,8 @@ class CreateCompanyVehicleUseCase:
             insurance_company_name_val = data.get("insurance_company_name")
             insurance_company_name = (
                 str(insurance_company_name_val).strip()
-                if insurance_company_name_val and str(insurance_company_name_val).strip()
+                if insurance_company_name_val
+                and str(insurance_company_name_val).strip()
                 else None
             )
 

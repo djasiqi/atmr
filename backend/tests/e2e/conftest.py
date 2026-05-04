@@ -79,7 +79,9 @@ def e2e_db_migrations(request):
             # Vérifier la connexion à la DB
             try:
                 _db.session.execute(text("SELECT 1"))
-                logger.info("✅ [E2E] Connexion DB établie: %s", database_url.split("@")[-1])
+                logger.info(
+                    "✅ [E2E] Connexion DB établie: %s", database_url.split("@")[-1]
+                )
             except Exception as conn_err:
                 msg = (
                     f"❌ [E2E] Impossible de se connecter à la base de données: {conn_err}\n"

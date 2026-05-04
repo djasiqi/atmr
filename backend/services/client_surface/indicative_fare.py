@@ -67,11 +67,15 @@ class IndicativeFareValidationError(ValueError):
 
 def _to_decimal(name: str, raw: Any) -> Decimal:
     if raw is None:
-        raise IndicativeFareValidationError("invalid_type", f"Valeur manquante : {name}")
+        raise IndicativeFareValidationError(
+            "invalid_type", f"Valeur manquante : {name}"
+        )
     try:
         d = Decimal(str(raw))
     except (InvalidOperation, TypeError) as e:
-        raise IndicativeFareValidationError("invalid_type", f"Valeur non numérique : {name}") from e
+        raise IndicativeFareValidationError(
+            "invalid_type", f"Valeur non numérique : {name}"
+        ) from e
     return d
 
 
@@ -83,9 +87,13 @@ def assert_coherence(
     ref_km: Decimal,
 ) -> None:
     if ref_km <= 0:
-        raise IndicativeFareValidationError("ref_km", "ref_km doit être strictement positif.")
+        raise IndicativeFareValidationError(
+            "ref_km", "ref_km doit être strictement positif."
+        )
     if min_fare <= 0:
-        raise IndicativeFareValidationError("min_fare_chf", "min_fare_chf doit être strictement positif.")
+        raise IndicativeFareValidationError(
+            "min_fare_chf", "min_fare_chf doit être strictement positif."
+        )
     if base < 0 or per_minute < 0 or ref_min < 0:
         raise IndicativeFareValidationError(
             "non_negative", "base_chf, per_minute_chf et ref_min doivent être >= 0."
@@ -104,7 +112,9 @@ def merge_admin_update(
     """Applique les champs reconnus sur `row` (PUT admin : incrément de version côté route)."""
     min_fare = _to_decimal("min_fare_chf", body.get("min_fare_chf", row.min_fare_chf))
     base = _to_decimal("base_chf", body.get("base_chf", row.base_chf))
-    per_minute = _to_decimal("per_minute_chf", body.get("per_minute_chf", row.per_minute_chf))
+    per_minute = _to_decimal(
+        "per_minute_chf", body.get("per_minute_chf", row.per_minute_chf)
+    )
     ref_km = _to_decimal("ref_km", body.get("ref_km", row.ref_km))
     ref_min = _to_decimal("ref_min", body.get("ref_min", row.ref_min))
     if "is_enabled" in body and body["is_enabled"] is not None:

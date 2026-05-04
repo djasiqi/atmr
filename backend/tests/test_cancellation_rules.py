@@ -1,14 +1,15 @@
 """Tests unitaires pour les règles d'annulation standardisées."""
 
-import pytest
 from datetime import UTC, datetime
+
+import pytest
 
 from application.bookings.cancellation_rules import (
     BILLABLE_REASONS,
     CANCELLATION_REASON_LABELS,
+    compute_cancellation_fields,
     get_all_reason_codes,
     get_cancellation_display_label,
-    compute_cancellation_fields,
     is_cancellation_billable,
 )
 
@@ -22,7 +23,9 @@ class TestIsCancellationBillable:
         assert is_cancellation_billable(code) is True
         assert is_cancellation_billable(code.lower()) is True
 
-    @pytest.mark.parametrize("code", ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER"])
+    @pytest.mark.parametrize(
+        "code", ["COMPANY_ISSUE", "MAJOR_DELAY", "VEHICLE_ISSUE", "OTHER"]
+    )
     def test_non_billable_reasons(self, code: str) -> None:
         """Motifs non facturables retournent False."""
         assert is_cancellation_billable(code) is False
@@ -43,8 +46,13 @@ class TestGetCancellationDisplayLabel:
 
     def test_known_codes_return_label(self) -> None:
         """Codes connus retournent le libellé attendu."""
-        assert get_cancellation_display_label("LAST_MINUTE") == "Annulation dernière minute"
-        assert get_cancellation_display_label("NO_SHOW") == "Client ne s'est pas présenté"
+        assert (
+            get_cancellation_display_label("LAST_MINUTE")
+            == "Annulation dernière minute"
+        )
+        assert (
+            get_cancellation_display_label("NO_SHOW") == "Client ne s'est pas présenté"
+        )
         assert get_cancellation_display_label("COMPANY_ISSUE") == "Problème entreprise"
 
     def test_other_with_text_returns_truncated(self) -> None:

@@ -29,7 +29,9 @@ class PlatformBillingPeriod(db.Model):
 
     __tablename__ = "platform_billing_period"
     __table_args__ = (
-        UniqueConstraint("billing_year", "billing_month", name="uq_platform_billing_period_ym"),
+        UniqueConstraint(
+            "billing_year", "billing_month", name="uq_platform_billing_period_ym"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -63,20 +65,27 @@ class PlatformInvoice(db.Model):
 
     __tablename__ = "platform_invoice"
     __table_args__ = (
-        UniqueConstraint("company_id", "period_id", name="uq_platform_invoice_company_period"),
+        UniqueConstraint(
+            "company_id", "period_id", name="uq_platform_invoice_company_period"
+        ),
         Index("ix_platform_invoice_period_id", "period_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     company_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     period_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("platform_billing_period.id", ondelete="CASCADE"),
         nullable=False,
     )
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="CHF")
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="CHF"
+    )
     subtotal_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     cancelled_at: Mapped[datetime | None] = mapped_column(
@@ -125,9 +134,7 @@ class PlatformSubscriptionPricing(db.Model):
     """Grille : palier de volume par mode dispatch."""
 
     __tablename__ = "platform_subscription_pricing"
-    __table_args__ = (
-        Index("ix_platform_sub_pricing_dispatch", "dispatch_mode"),
-    )
+    __table_args__ = (Index("ix_platform_sub_pricing_dispatch", "dispatch_mode"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     dispatch_mode: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -145,11 +152,20 @@ class CompanyPlatformBillingConfig(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     company_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("company.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
-    is_billing_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-    dispatch_mode_override: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    commission_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
+    is_billing_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    dispatch_mode_override: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )
+    commission_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 6), nullable=True
+    )
     support_hourly_rate_default: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
@@ -159,7 +175,9 @@ class CompanyPlatformBillingConfig(db.Model):
     effective_to: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -182,11 +200,15 @@ class PlatformSupportEntry(db.Model):
     company_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("company.id", ondelete="CASCADE"), nullable=False
     )
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    hourly_rate_snapshot: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    hourly_rate_snapshot: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False
+    )
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     validated_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True

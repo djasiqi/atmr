@@ -45,7 +45,10 @@ class TestAuthActivationFlow:
         # 2) Login bloqué avant activation complète
         login_before_response = e2e_client.post(
             "/api/v1/auth/login",
-            json={"email": register_payload["email"], "password": register_payload["password"]},
+            json={
+                "email": register_payload["email"],
+                "password": register_payload["password"],
+            },
             headers={"Content-Type": "application/json"},
         )
         assert login_before_response.status_code == 403, (
@@ -66,7 +69,9 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(email_token.encode("utf-8")).hexdigest()
+        session.email_token_hash = hashlib.sha256(
+            email_token.encode("utf-8")
+        ).hexdigest()
         session.email_token_expires_at = datetime.now(UTC) + timedelta(minutes=30)
         db.session.commit()
 
@@ -86,7 +91,9 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.sms_code_hash = hashlib.sha256(known_sms_code.encode("utf-8")).hexdigest()
+        session.sms_code_hash = hashlib.sha256(
+            known_sms_code.encode("utf-8")
+        ).hexdigest()
         session.sms_attempts = 0
         session.sms_locked_until = None
         db.session.commit()
@@ -120,7 +127,10 @@ class TestAuthActivationFlow:
         # 6) Login autorisé après activation
         login_after_response = e2e_client.post(
             "/api/v1/auth/login",
-            json={"email": register_payload["email"], "password": register_payload["password"]},
+            json={
+                "email": register_payload["email"],
+                "password": register_payload["password"],
+            },
             headers={"Content-Type": "application/json"},
         )
         assert login_after_response.status_code == 200, (
@@ -128,7 +138,9 @@ class TestAuthActivationFlow:
             f"{login_after_response.get_json()}"
         )
 
-    def test_e2e_activation_sms_guardrails_lock_and_resend_cooldown(self, e2e_client, db):
+    def test_e2e_activation_sms_guardrails_lock_and_resend_cooldown(
+        self, e2e_client, db
+    ):
         unique_suffix = str(uuid.uuid4())[:8]
         password = f"GuardrailPass123!{unique_suffix}"
         register_payload = {
@@ -161,7 +173,9 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.sms_code_hash = hashlib.sha256(known_sms_code.encode("utf-8")).hexdigest()
+        session.sms_code_hash = hashlib.sha256(
+            known_sms_code.encode("utf-8")
+        ).hexdigest()
         session.sms_attempts = 0
         session.sms_locked_until = None
         session.phone_verified_at = None
@@ -263,7 +277,9 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(email_token.encode("utf-8")).hexdigest()
+        session.email_token_hash = hashlib.sha256(
+            email_token.encode("utf-8")
+        ).hexdigest()
         session.email_token_expires_at = datetime.now(UTC) - timedelta(minutes=1)
         session.email_verified_at = None
         db.session.commit()
@@ -280,7 +296,9 @@ class TestAuthActivationFlow:
         verify_email_data = verify_email_response.get_json() or {}
         assert verify_email_data.get("error") == "token_expired"
 
-    def test_e2e_activation_finalize_refused_when_sms_not_verified(self, e2e_client, db):
+    def test_e2e_activation_finalize_refused_when_sms_not_verified(
+        self, e2e_client, db
+    ):
         unique_suffix = str(uuid.uuid4())[:8]
         password = f"FinalizeGuardPass123!{unique_suffix}"
         register_payload = {
@@ -319,7 +337,9 @@ class TestAuthActivationFlow:
             activation_session_id=activation_session_id
         ).first()
         assert session is not None, "Session d'activation introuvable en base"
-        session.email_token_hash = hashlib.sha256(email_token.encode("utf-8")).hexdigest()
+        session.email_token_hash = hashlib.sha256(
+            email_token.encode("utf-8")
+        ).hexdigest()
         session.email_token_expires_at = datetime.now(UTC) + timedelta(minutes=30)
         session.phone_verified_at = None
         db.session.commit()
@@ -551,7 +571,9 @@ class TestAuthActivationFlow:
         session.resend_count_email = 0
         db.session.commit()
 
-        with patch("routes.auth._send_activation_email", side_effect=RuntimeError("smtp down")):
+        with patch(
+            "routes.auth._send_activation_email", side_effect=RuntimeError("smtp down")
+        ):
             resend_response = e2e_client.post(
                 "/api/v1/auth/activation/resend-email",
                 json={"activation_session_id": activation_session_id},

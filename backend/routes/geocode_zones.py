@@ -42,7 +42,9 @@ class GeocodeZones(Resource):
             limit = G.ZONE_DEFAULT_LIMIT
         limit = max(1, min(limit, 500))
         canton_code = (request.args.get("canton_code") or "").strip().upper()
-        include_geometry = str(request.args.get("include_geometry") or "").strip().lower() in {
+        include_geometry = str(
+            request.args.get("include_geometry") or ""
+        ).strip().lower() in {
             "1",
             "true",
             "yes",
@@ -78,11 +80,9 @@ class GeocodeZones(Resource):
                 canonical = G.ZONE_TOKEN_PATTERN.match(token)
                 if canonical:
                     zone_type, code = canonical.group(1), canonical.group(2)
-                    item = (
-                        base_query.filter(
-                            GeoUnit.type == G.ZONE_TYPE_MAP[zone_type], GeoUnit.code == code
-                        ).first()
-                    )
+                    item = base_query.filter(
+                        GeoUnit.type == G.ZONE_TYPE_MAP[zone_type], GeoUnit.code == code
+                    ).first()
                     if item:
                         hydrated_items.append(G._serialize_zone_item(item))
                     else:
@@ -95,7 +95,11 @@ class GeocodeZones(Resource):
                         if zone_type == "commune" and code.isdigit():
                             # Fallback to geo.admin commune feature when local GeoUnit is missing.
                             feature = G._fetch_commune_geometry_geojson(code)
-                            props = feature.get("properties") if isinstance(feature, dict) else {}
+                            props = (
+                                feature.get("properties")
+                                if isinstance(feature, dict)
+                                else {}
+                            )
                             label = (
                                 str((props or {}).get("label") or "").strip()
                                 if isinstance(props, dict)
@@ -237,8 +241,8 @@ class GeocodeZones(Resource):
                 },
             }, 200
 
-        geoadmin_items, geoadmin_degraded, geoadmin_breaker_open = G._search_geoadmin_zones(
-            q, lang=lang, types=zone_types, limit=limit
+        geoadmin_items, geoadmin_degraded, geoadmin_breaker_open = (
+            G._search_geoadmin_zones(q, lang=lang, types=zone_types, limit=limit)
         )
         degraded = degraded or geoadmin_degraded
         breaker_open = breaker_open or geoadmin_breaker_open

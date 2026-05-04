@@ -104,7 +104,9 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         return
 
     company_id_obj = envelope.get("company_id")
-    company_id: int | None = int(company_id_obj) if isinstance(company_id_obj, int) else None
+    company_id: int | None = (
+        int(company_id_obj) if isinstance(company_id_obj, int) else None
+    )
 
     app = get_flask_app()
     with app.app_context():
@@ -128,7 +130,9 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
             lat = float(lat_val)
             lon = float(lon_val)
         except (TypeError, ValueError):
-            logger.debug("[processed_fanout] skip driver_id=%s reason=bad_coords", driver_id)
+            logger.debug(
+                "[processed_fanout] skip driver_id=%s reason=bad_coords", driver_id
+            )
             return
 
         speed = float(p.get("speed_mps", p.get("speed", 0.0)) or 0.0)
@@ -162,7 +166,9 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         presence_status = presence_status_from_location_status(location_status)
 
         mission_status_resolved = resolve_mission_status_for_driver(driver_id)
-        is_active = bool(getattr(driver, "is_active", True)) if driver is not None else True
+        is_active = (
+            bool(getattr(driver, "is_active", True)) if driver is not None else True
+        )
         driver_status_resolved = resolve_driver_status_for_fanout(
             mission_status=mission_status_resolved,
             is_active=is_active,
@@ -235,7 +241,11 @@ class ProcessedLocationFanoutConsumer:
         self._initialized = False
         signal.signal(signal.SIGTERM, self._shutdown_signal)
         signal.signal(signal.SIGINT, self._shutdown_signal)
-        if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED and TRACKING_PROCESSED_FANOUT_ENABLED:
+        if (
+            KAFKA_ENABLED
+            and TRACKING_INGEST_ASYNC_ENABLED
+            and TRACKING_PROCESSED_FANOUT_ENABLED
+        ):
             self._init_consumer()
 
     @property

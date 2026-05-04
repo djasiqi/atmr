@@ -273,7 +273,9 @@ class TestTransportRequestsCRUD:
         for r in data["requests"]:
             assert r["status"] == "SENT"
 
-    def test_get_request_by_id(self, client, db, admin_auth_headers, sample_institution):
+    def test_get_request_by_id(
+        self, client, db, admin_auth_headers, sample_institution
+    ):
         """Test: récupération d'une demande par ID."""
         req = TransportRequest()
         req.institution_id = sample_institution.id

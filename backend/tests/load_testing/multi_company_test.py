@@ -20,7 +20,7 @@ Métriques clés :
 - Isolation données : 100%
 
 Usage:
-    locust -f multi_company_test.py --host=http://localhost:5000 --users=10 
+    locust -f multi_company_test.py --host=http://localhost:5000 --users=10
     --spawn-rate=10
 """
 

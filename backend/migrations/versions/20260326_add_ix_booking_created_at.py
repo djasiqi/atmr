@@ -17,10 +17,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute(
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_booking_created_at "
-            "ON booking (created_at)"
-        )
+        text("CREATE INDEX IF NOT EXISTS ix_booking_created_at ON booking (created_at)")
     )
 
 

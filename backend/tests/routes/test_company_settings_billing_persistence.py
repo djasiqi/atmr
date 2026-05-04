@@ -58,6 +58,7 @@ class TestCompanySettingsBillingPersistence:
 
         # Requête SQL directe pour vérifier la persistance (bypass ORM)
         from sqlalchemy import text
+
         sql_result = db.session.execute(
             text(
                 "SELECT iban, qr_iban, esr_ref_base FROM company_billing_settings "
@@ -73,7 +74,9 @@ class TestCompanySettingsBillingPersistence:
         )
         # iban et qr_iban sont chiffrés, vérifier qu'ils ne sont pas NULL
         assert sql_result.iban is not None, "iban should be encrypted (not NULL) in DB"
-        assert sql_result.qr_iban is not None, "qr_iban should be encrypted (not NULL) in DB"
+        assert sql_result.qr_iban is not None, (
+            "qr_iban should be encrypted (not NULL) in DB"
+        )
 
         # 3. Recharger via ORM (simule un GET après restart)
         billing = CompanyBillingSettings.query.filter_by(
@@ -139,6 +142,7 @@ class TestCompanySettingsBillingPersistence:
 
         # Requête SQL directe pour vérifier (bypass ORM)
         from sqlalchemy import text
+
         sql_result = db.session.execute(
             text(
                 "SELECT iban, qr_iban, esr_ref_base FROM company_billing_settings "
@@ -179,4 +183,6 @@ class TestCompanySettingsBillingPersistence:
         # Les valeurs devraient être None ou "" dans la réponse
         assert get_data.get("iban") is None or get_data.get("iban") == ""
         assert get_data.get("qr_iban") is None or get_data.get("qr_iban") == ""
-        assert get_data.get("esr_ref_base") is None or get_data.get("esr_ref_base") == ""
+        assert (
+            get_data.get("esr_ref_base") is None or get_data.get("esr_ref_base") == ""
+        )

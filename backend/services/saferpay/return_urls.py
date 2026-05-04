@@ -118,7 +118,11 @@ def default_saferpay_return_urls(
     if not base:
         base = (os.getenv("CLIENT_WEB_BASE_URL") or "").strip().rstrip("/")
     if not base:
-        base = (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000").strip().rstrip("/")
+        base = (
+            (os.getenv("PUBLIC_BASE_URL") or "http://localhost:3000")
+            .strip()
+            .rstrip("/")
+        )
     q = f"bookingId={booking_id}&paymentId={payment_id}"
     success = f"{base}/client/payment/saferpay/return?{q}&outcome=success"
     fail = f"{base}/client/payment/saferpay/return?{q}&outcome=fail"

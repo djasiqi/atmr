@@ -53,7 +53,12 @@ class TestAdminDashboardSummaryEndpoint:
 
         assert "platform_snippet" in data
         s = data["platform_snippet"]
-        for key in ("overall_status", "open_alerts", "runbooks_today", "tenants_in_drift"):
+        for key in (
+            "overall_status",
+            "open_alerts",
+            "runbooks_today",
+            "tenants_in_drift",
+        ):
             assert key in s
         assert s["overall_status"] in ("ok", "degraded", "unknown")
 
@@ -64,5 +69,16 @@ class TestAdminDashboardSummaryEndpoint:
         assert "recent_activity" in data
         assert isinstance(data["recent_activity"], list)
         for item in data["recent_activity"]:
-            assert set(item.keys()) >= {"type", "label", "status", "occurred_at", "href"}
-            assert item["type"] in ("booking", "demo_request", "tenant_governance", "runbook")
+            assert set(item.keys()) >= {
+                "type",
+                "label",
+                "status",
+                "occurred_at",
+                "href",
+            }
+            assert item["type"] in (
+                "booking",
+                "demo_request",
+                "tenant_governance",
+                "runbook",
+            )

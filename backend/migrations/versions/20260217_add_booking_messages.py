@@ -17,7 +17,9 @@ down_revision = "20260216_link_sugg"
 branch_labels = None
 depends_on = None
 
-sender_enum = ENUM("COMPANY", "INSTITUTION", name="bookingmessagesender", create_type=False)
+sender_enum = ENUM(
+    "COMPANY", "INSTITUTION", name="bookingmessagesender", create_type=False
+)
 
 
 def upgrade():

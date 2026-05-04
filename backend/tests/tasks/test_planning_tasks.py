@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from tasks.planning_tasks import (
+    _run_compliance_scan_for_company,
     compliance_scan,
     compliance_scan_all,
-    _run_compliance_scan_for_company,
 )
 
 

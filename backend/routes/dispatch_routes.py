@@ -96,7 +96,7 @@ except ImportError:
 
 def get_shadow_manager():
     """Récupère l'instance du shadow manager (singleton)."""
-    global _shadow_manager  # noqa: PLW0603
+    global _shadow_manager
     if not SHADOW_MODE_AVAILABLE or ShadowModeManager is None:
         return None
     if _shadow_manager is None:
@@ -2237,7 +2237,7 @@ class LiveDelaysResource(Resource):
             "company_id": "ID entreprise (optionnel pour ADMIN)",
         }
     )
-    def get(self):  # noqa: PLR0911
+    def get(self):
         """Retards en temps réel avec recalcul des ETAs et suggestions intelligentes.
         Inclut les retards actuels ET prédits, avec suggestions de réassignation
         et impact sur les courses suivantes.
@@ -3987,9 +3987,7 @@ class RLDispatchSuggestions(Resource):
                                     metric.company_id = int(company.id)
                                     metric.suggestion_id = suggestion_id
                                     metric.booking_id = suggestion["booking_id"]
-                                    metric.assignment_id = suggestion[
-                                        "assignment_id"
-                                    ]
+                                    metric.assignment_id = suggestion["assignment_id"]
                                     metric.current_driver_id = suggestion[
                                         "current_driver_id"
                                     ]

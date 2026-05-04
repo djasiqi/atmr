@@ -306,11 +306,9 @@ class InvoiceTemplateBuilder:
             client_id = getattr(invoice, "client_id", None)
             bp_id = getattr(invoice, "billing_party_id", None)
             if client_id is not None and bp_id is not None:
-                link = (
-                    ClientBillingParty.query.filter_by(
-                        client_id=client_id, billing_party_id=bp_id
-                    ).first()
-                )
+                link = ClientBillingParty.query.filter_by(
+                    client_id=client_id, billing_party_id=bp_id
+                ).first()
                 if link is None:
                     logger.info(
                         "[InvoiceTemplateBuilder] Lien client↔tiers payeur supprimé (invoice_id=%s). Facturé à = domicile du client.",
@@ -347,7 +345,9 @@ class InvoiceTemplateBuilder:
                     addr_html = f"{addr_html}<br/>{'<br/>'.join(contact_lines)}"
                 # Tiers payeur : plusieurs lignes = client, puis c/o tiers payeur, puis adresse
                 name = bp_name
-                if getattr(invoice, "client_id", None) and getattr(bp, "type", None) in (
+                if getattr(invoice, "client_id", None) and getattr(
+                    bp, "type", None
+                ) in (
                     BillingPartyType.FAMILY,
                     BillingPartyType.CURATORSHIP,
                     BillingPartyType.OPAD,
@@ -365,23 +365,20 @@ class InvoiceTemplateBuilder:
                     from models.billing_party import ClientBillingParty
 
                     client_id = getattr(invoice, "client_id", None)
-                    bp_id = getattr(bp, "id", None) or getattr(invoice, "billing_party_id", None)
+                    bp_id = getattr(bp, "id", None) or getattr(
+                        invoice, "billing_party_id", None
+                    )
                     if client_id is not None and bp_id is not None:
-                        link = (
-                            ClientBillingParty.query.filter_by(
-                                client_id=client_id, billing_party_id=bp_id
-                            )
-                            .first()
-                        )
+                        link = ClientBillingParty.query.filter_by(
+                            client_id=client_id, billing_party_id=bp_id
+                        ).first()
                         if (
                             link
                             and getattr(link, "client_reference", None)
                             and (link.client_reference or "").strip()
                         ):
                             # 2 lignes vides puis numéro SPC (3 <br/> = 2 lignes vides)
-                            addr_html = (
-                                f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
-                            )
+                            addr_html = f"{addr_html}<br/><br/><br/>No. SPC : {(link.client_reference or '').strip()}"
                 return (name, addr_html)
         except Exception:
             pass
@@ -688,7 +685,7 @@ class InvoiceTemplateBuilder:
             date_cell = line["date"]
             if adj:
                 date_cell = (
-                    f'{line["date"]}<br/>'
+                    f"{line['date']}<br/>"
                     f'<span style="font-size:0.75em;color:#718096;">'
                     f"{html.escape(str(adj))}</span>"
                 )

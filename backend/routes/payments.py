@@ -136,7 +136,7 @@ class ClientPayments(Resource):
 @payments_ns.route("/<int:payment_id>")
 class PaymentResource(Resource):
     @jwt_required()
-    def get(self, payment_id: int):  # noqa: PLR0911
+    def get(self, payment_id: int):
         try:
             # Validation
             if payment_id <= 0:
@@ -277,7 +277,7 @@ class PaymentResource(Resource):
 class CreatePayment(Resource):
     @jwt_required()
     @payments_ns.expect(payment_create_model)
-    def post(self, booking_id: int):  # noqa: PLR0911
+    def post(self, booking_id: int):
         try:
             current_user = get_current_user_via_use_case()
             if not current_user:

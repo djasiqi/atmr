@@ -4,6 +4,7 @@ Revision ID: 20260219_veh_tacho
 Revises: 20260218_drv_vehicle
 Create Date: 2026-02-19
 """
+
 from alembic import op
 import sqlalchemy as sa
 

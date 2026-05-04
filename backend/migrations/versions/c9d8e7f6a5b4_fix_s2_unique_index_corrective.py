@@ -10,6 +10,7 @@ dans la migration 5e9c90875469_add_billing_source_and_transport_.
 Cette migration vérifie si l'index existe, et le recrée s'il est absent.
 Idempotent : peut être exécutée plusieurs fois sans erreur.
 """
+
 from alembic import op
 import sqlalchemy as sa
 

@@ -22,4 +22,3 @@ def current_region_topology() -> dict[str, Any]:
         "traffic_mode": traffic_mode,
         "multi_region_ready": len(regions) > 1 and traffic_mode != "single_active",
     }
-

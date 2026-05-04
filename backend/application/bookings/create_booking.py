@@ -388,7 +388,9 @@ class CreateBookingUseCase:
             if isinstance(price_breakdown_json, dict):
                 price_breakdown_json["overridden_by_preferential"] = True
                 price_breakdown_json["preferential_source"] = preferential_source
-                price_breakdown_json["preferential_amount"] = f"{preferential_amount:.2f}"
+                price_breakdown_json["preferential_amount"] = (
+                    f"{preferential_amount:.2f}"
+                )
             logger.info(
                 "💰 Tarif préférentiel %s appliqué: %.2f CHF",
                 preferential_source,
@@ -503,7 +505,7 @@ class CreateBookingUseCase:
 
         return new_booking
 
-    def _compute_pricing_freeze(  # noqa: PLR0911
+    def _compute_pricing_freeze(
         self,
         *,
         company_id: int | None,
@@ -520,7 +522,12 @@ class CreateBookingUseCase:
         dropoff_lat: float | None,
         dropoff_lon: float | None,
     ) -> tuple[int | None, int | None, float | None, dict[str, Any] | None]:
-        if os.getenv(BOOKING_FREEZE_FLAG, "true").lower() not in {"1", "true", "yes", "on"}:
+        if os.getenv(BOOKING_FREEZE_FLAG, "true").lower() not in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             return None, None, None, None
         if not has_app_context():
             return None, None, None, None
@@ -535,11 +542,17 @@ class CreateBookingUseCase:
             return None, None, None, None
         version = profile.current_version
         if not version and profile.versions:
-            version = sorted(profile.versions, key=lambda item: int(item.version), reverse=True)[0]
+            version = sorted(
+                profile.versions, key=lambda item: int(item.version), reverse=True
+            )[0]
         if not version:
             return profile.id, None, None, None
 
-        now_ref = datetime.now(scheduled_time.tzinfo) if scheduled_time.tzinfo else datetime.now()
+        now_ref = (
+            datetime.now(scheduled_time.tzinfo)
+            if scheduled_time.tzinfo
+            else datetime.now()
+        )
         minutes_until = max(0, int((scheduled_time - now_ref).total_seconds() // 60))
         context = {
             "is_weekend": scheduled_time.weekday() >= WEEKEND_START_INDEX,
@@ -562,7 +575,9 @@ class CreateBookingUseCase:
             amount, breakdown = compute_price(booking_payload, version, context)
             return profile.id, version.id, float(amount), breakdown
         except Exception:
-            logger.exception("Pricing freeze computation failed for company=%s", company_id)
+            logger.exception(
+                "Pricing freeze computation failed for company=%s", company_id
+            )
             return profile.id, version.id, None, None
 
     def _geocode_booking_addresses(

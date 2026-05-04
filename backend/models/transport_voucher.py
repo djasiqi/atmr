@@ -100,9 +100,15 @@ class TransportVoucher(db.Model):
     )
 
     # Relations
-    company = relationship("Company", back_populates="transport_vouchers", passive_deletes=True)
-    client = relationship("Client", back_populates="transport_vouchers", passive_deletes=True)
-    booking = relationship("Booking", back_populates="transport_vouchers", passive_deletes=True)
+    company = relationship(
+        "Company", back_populates="transport_vouchers", passive_deletes=True
+    )
+    client = relationship(
+        "Client", back_populates="transport_vouchers", passive_deletes=True
+    )
+    booking = relationship(
+        "Booking", back_populates="transport_vouchers", passive_deletes=True
+    )
     billing_party = relationship(
         "BillingParty", foreign_keys=[billing_party_id], passive_deletes=True
     )
@@ -120,7 +126,12 @@ class TransportVoucher(db.Model):
     )
 
     __table_args__ = (
-        Index("ix_transport_vouchers_company_client_created", "company_id", "client_id", "created_at"),
+        Index(
+            "ix_transport_vouchers_company_client_created",
+            "company_id",
+            "client_id",
+            "created_at",
+        ),
         Index("ix_transport_vouchers_booking_id", "booking_id"),
         Index("ix_transport_vouchers_billing_party_id", "billing_party_id"),
     )
@@ -151,7 +162,9 @@ class TransportVoucherFile(db.Model):
     )
 
     # Relations
-    voucher = relationship("TransportVoucher", back_populates="files", passive_deletes=True)
+    voucher = relationship(
+        "TransportVoucher", back_populates="files", passive_deletes=True
+    )
 
     def __repr__(self) -> str:  # pyright: ignore[reportImplicitOverride]
         return f"<TransportVoucherFile id={self.id}, voucher_id={self.voucher_id}, filename={self.filename}>"

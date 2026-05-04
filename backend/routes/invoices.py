@@ -997,7 +997,7 @@ class CompanyBillingSettingsResource(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @invoices_ns.expect(billing_settings_model, validate=False)
-    def put(self, company_id):  # noqa: PLR0911
+    def put(self, company_id):
         """Met à jour les paramètres de facturation d'une entreprise."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -1512,7 +1512,13 @@ class EligibleClients(Resource):
 
         clients = []
         seen_client_ids = set()
-        for client, unbilled_count, unbilled_total_amount, last_ride_at, patient_name in results:
+        for (
+            client,
+            unbilled_count,
+            unbilled_total_amount,
+            last_ride_at,
+            patient_name,
+        ) in results:
             payload = client.serialize
             payload["unbilled_count"] = int(unbilled_count or 0)
             payload["invoiced_count"] = 0
@@ -1530,11 +1536,18 @@ class EligibleClients(Resource):
                 # Retrouver les coordonnées du patient institution
                 try:
                     from models.institution_patient import InstitutionPatient
-                    patient_tr = TransportRequest.query.filter_by(
-                        institution_id=client.linked_institution_id,
-                    ).order_by(TransportRequest.id.desc()).first()
+
+                    patient_tr = (
+                        TransportRequest.query.filter_by(
+                            institution_id=client.linked_institution_id,
+                        )
+                        .order_by(TransportRequest.id.desc())
+                        .first()
+                    )
                     if patient_tr and patient_tr.patient_id:
-                        inst_patient = InstitutionPatient.query.get(patient_tr.patient_id)
+                        inst_patient = InstitutionPatient.query.get(
+                            patient_tr.patient_id
+                        )
                         if inst_patient:
                             # Nom du patient pour l'affichage
                             pname = f"{inst_patient.first_name or ''} {inst_patient.last_name or ''}".strip()
@@ -1592,7 +1605,8 @@ class EligibleClients(Resource):
                     Invoice.billed_to_company_id == clinic_company_id,
                     Invoice.period_year == period_year,
                     Invoice.period_month == period_month,
-                    Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                    Invoice.billing_strategy
+                    == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
                     Invoice.status != InvoiceStatus.CANCELLED,
                     Booking.scheduled_time >= start_date,
                     Booking.scheduled_time < end_date,
@@ -1628,9 +1642,7 @@ class EligibleClients(Resource):
                 )
             )
             if seen_client_ids:
-                invoiced_query = invoiced_query.filter(
-                    ~Client.id.in_(seen_client_ids)
-                )
+                invoiced_query = invoiced_query.filter(~Client.id.in_(seen_client_ids))
             if search:
                 pattern = f"%{search.lower()}%"
                 invoiced_query = invoiced_query.join(User, Client.user).filter(
@@ -1640,9 +1652,11 @@ class EligibleClients(Resource):
                         func.lower(User.email).like(pattern),
                     )
                 )
-            invoiced_results = invoiced_query.order_by(
-                invoiced_subq.c.last_ride_at.desc()
-            ).limit(max(1, limit - len(clients))).all()
+            invoiced_results = (
+                invoiced_query.order_by(invoiced_subq.c.last_ride_at.desc())
+                .limit(max(1, limit - len(clients)))
+                .all()
+            )
 
             for client, inv_count, inv_total, last_ride_at in invoiced_results:
                 payload = client.serialize
@@ -1687,7 +1701,7 @@ class ClinicMonthlyTotals(Resource):
         "IDs clients à inclure (optionnel, séparés par virgule)",
         type="string",
     )
-    def get(self, company_id: int):  # noqa: PLR0911
+    def get(self, company_id: int):
         """Récupère les totaux des transports éligibles pour une facture clinique mensuelle.
 
         Retourne:
@@ -1835,7 +1849,9 @@ class ClinicMonthlyTotals(Resource):
             # ✅ Totaux des transports DÉJÀ FACTURÉS (dans une facture S2 pour cette clinique+période)
             # Permet d'afficher la vue complète : X à facturer + Y déjà facturés
             invoiced_query = (
-                Booking.query.join(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
+                Booking.query.join(
+                    InvoiceLine, Booking.invoice_line_id == InvoiceLine.id
+                )
                 .join(Invoice, InvoiceLine.invoice_id == Invoice.id)
                 .filter(
                     Booking.company_id == company_id,
@@ -1844,7 +1860,8 @@ class ClinicMonthlyTotals(Resource):
                     Invoice.billed_to_company_id == clinic_company_id,
                     Invoice.period_year == period_year,
                     Invoice.period_month == period_month,
-                    Invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
+                    Invoice.billing_strategy
+                    == InvoiceBillingStrategy.S2_CLINIC_MONTHLY,
                     Invoice.status != InvoiceStatus.CANCELLED,
                     Booking.scheduled_time >= start_date,
                     Booking.scheduled_time < end_date,
@@ -1968,8 +1985,12 @@ class ClinicMonthlyTotals(Resource):
                         if booking.billing_source
                         else None,
                         "status": booking.status.value if booking.status else None,
-                        "mission_type": getattr(booking, "mission_type", None) or "patient_transport",
-                        "delivery_description": getattr(booking, "delivery_description", None) or None,
+                        "mission_type": getattr(booking, "mission_type", None)
+                        or "patient_transport",
+                        "delivery_description": getattr(
+                            booking, "delivery_description", None
+                        )
+                        or None,
                         # ✅ Ajouter invoice_line_id et billing_review_status pour safety rules S2
                         "invoice_line_id": booking.invoice_line_id,
                         # ✅ Normaliser billing_review_status en lowercase pour cohérence frontend
@@ -2034,10 +2055,16 @@ class PeriodInvoicePreview(Resource):
             return error_response, status_code
         cid = int(getattr(company, "id", 0) or 0)
         if cid != company_id:
-            return APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
 
-        y = request.args.get("year", type=int) or request.args.get("period_year", type=int)
-        m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
+        y = request.args.get("year", type=int) or request.args.get(
+            "period_year", type=int
+        )
+        m = request.args.get("month", type=int) or request.args.get(
+            "period_month", type=int
+        )
         c_id = request.args.get("client_id", type=int)
         cc_id = request.args.get("clinic_company_id", type=int)
         if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
@@ -2065,9 +2092,7 @@ class PeriodInvoicePreview(Resource):
             )
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/billing-opportunities"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/billing-opportunities")
 class BillingOpportunities(Resource):
     """V2 : vue agrégée « factures à générer » (payeurs + période, read-only)."""
 
@@ -2089,8 +2114,12 @@ class BillingOpportunities(Resource):
                 "Non autorisé", logger_instance=logger
             )
 
-        y = request.args.get("year", type=int) or request.args.get("period_year", type=int)
-        m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
+        y = request.args.get("year", type=int) or request.args.get(
+            "period_year", type=int
+        )
+        m = request.args.get("month", type=int) or request.args.get(
+            "period_month", type=int
+        )
         if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
             return APIErrorHandler.handle_validation_error(
                 "Paramètres year (ou period_year) et month (1-12) requis",
@@ -2107,9 +2136,7 @@ class BillingOpportunities(Resource):
             )
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/celery-tasks/<string:task_id>"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/celery-tasks/<string:task_id>")
 class InvoiceCeleryTaskStatus(Resource):
     """Statut tâche Celery (ex. PDF async) — résultat via backend Redis."""
 
@@ -2206,7 +2233,9 @@ class DraftInvoiceLineEdit(Resource):
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json(silent=True) or {}
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
@@ -2230,7 +2259,9 @@ class DraftInvoiceLineEdit(Resource):
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json() or {}
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
@@ -2257,13 +2288,15 @@ class ApplyGlobalDiscountDraftInvoice(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("20 per minute")
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         from application.invoices.edit_draft_invoice import apply_draft_global_discount
         from routes.companies import _get_current_company_via_use_case
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json() or {}
         pct = body.get("global_discount_percent")
         note = body.get("global_discount_note")
@@ -2272,7 +2305,8 @@ class ApplyGlobalDiscountDraftInvoice(Resource):
         if raw_ride_ids is not None:
             if not isinstance(raw_ride_ids, list):
                 return APIErrorHandler.handle_validation_error(
-                    "ride_line_ids doit être une liste d'entiers", logger_instance=logger
+                    "ride_line_ids doit être une liste d'entiers",
+                    logger_instance=logger,
                 )
             try:
                 ride_line_ids = [int(x) for x in raw_ride_ids]
@@ -2322,7 +2356,9 @@ class ApplyPerLineDiscountsDraftInvoice(Resource):
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json() or {}
         raw = body.get("line_discounts")
         if raw is not None and not isinstance(raw, list):
@@ -2357,7 +2393,9 @@ class RemoveGlobalDiscountDraftInvoice(Resource):
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json(silent=True) or {}
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
@@ -2371,42 +2409,54 @@ class RemoveGlobalDiscountDraftInvoice(Resource):
         )
 
 
-@invoices_ns.route(
-    "/companies/<int:company_id>/invoices/<int:invoice_id>/custom-line"
-)
+@invoices_ns.route("/companies/<int:company_id>/invoices/<int:invoice_id>/custom-line")
 class AddCustomLineDraftInvoice(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("30 per minute")
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         from application.invoices.edit_draft_invoice import add_draft_custom_line
         from routes.companies import _get_current_company_via_use_case
 
         company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
-            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+            return err or APIErrorHandler.handle_permission_error(
+                "Non autorisé", logger_instance=logger
+            )
         body = request.get_json() or {}
         desc = body.get("description")
         tot = body.get("line_total")
         qty = body.get("qty", 1.0)
         if not isinstance(desc, str) or not desc.strip():
-            return APIErrorHandler.handle_validation_error("description requis", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "description requis", logger_instance=logger
+            )
         if tot is None:
-            return APIErrorHandler.handle_validation_error("line_total requis", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "line_total requis", logger_instance=logger
+            )
         try:
             tf = float(tot)
             qf = float(qty) if qty is not None else 1.0
         except (TypeError, ValueError):
-            return APIErrorHandler.handle_validation_error("line_total ou qty invalide", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "line_total ou qty invalide", logger_instance=logger
+            )
         custom_mode = body.get("custom_mode")
         time_unit = body.get("time_unit")
         service_date_iso = body.get("service_date_iso")
         if custom_mode is not None and custom_mode not in ("time", "quantity"):
-            return APIErrorHandler.handle_validation_error("custom_mode invalide", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "custom_mode invalide", logger_instance=logger
+            )
         if time_unit is not None and time_unit not in ("min", "h", "d", "mois"):
-            return APIErrorHandler.handle_validation_error("time_unit invalide", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "time_unit invalide", logger_instance=logger
+            )
         if service_date_iso is not None and not isinstance(service_date_iso, str):
-            return APIErrorHandler.handle_validation_error("service_date_iso invalide", logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                "service_date_iso invalide", logger_instance=logger
+            )
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
 
@@ -2417,7 +2467,9 @@ class AddCustomLineDraftInvoice(Resource):
             "custom_mode": custom_mode if isinstance(custom_mode, str) else None,
             "time_unit": time_unit if isinstance(time_unit, str) else None,
             "expected_updated_at": exp_s,
-            "service_date_iso": service_date_iso if isinstance(service_date_iso, str) else None,
+            "service_date_iso": service_date_iso
+            if isinstance(service_date_iso, str)
+            else None,
         }
         _allowed = set(inspect.signature(add_draft_custom_line).parameters)
         _kw = {k: v for k, v in _kw.items() if k in _allowed}
@@ -2748,9 +2800,7 @@ class GenerateInvoice(Resource):
                         global_discount_percent=validated_data.get(
                             "global_discount_percent"
                         ),
-                        global_discount_note=validated_data.get(
-                            "global_discount_note"
-                        ),
+                        global_discount_note=validated_data.get("global_discount_note"),
                     )
                     invoice_result = uc.execute(input_data)
                     if not invoice_result.success:
@@ -2820,7 +2870,7 @@ class GenerateInvoice(Resource):
 class InvoiceDetail(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def get(self, company_id, invoice_id):  # noqa: PLR0911
+    def get(self, company_id, invoice_id):
         """Récupère les détails d'une facture."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -2921,7 +2971,7 @@ class SendInvoice(Resource):
     )
     @invoices_ns.response(404, "Facture non trouvée")
     @invoices_ns.response(500, "Erreur lors de l'envoi")
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         """
         Envoie une facture par email ou la marque comme envoyée (papier).
 
@@ -3150,7 +3200,7 @@ class InvoicePayments(Resource):
         409, "Paiement déjà enregistré (idempotency)", api_error_model
     )
     @invoices_ns.response(500, "Erreur serveur", api_error_model)
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         """Enregistrer un paiement pour une facture.
 
         ✅ P0: Support idempotency-key pour éviter les doublons de paiement.
@@ -3589,7 +3639,7 @@ class InvoiceReminders(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         """Générer un rappel pour une facture."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -3713,7 +3763,7 @@ class SendReminder(Resource):
     )
     @invoices_ns.response(404, "Rappel non trouvé")
     @invoices_ns.response(500, "Erreur lors de l'envoi")
-    def post(self, company_id, invoice_id, reminder_id):  # noqa: PLR0911, ARG002
+    def post(self, company_id, invoice_id, reminder_id):  # noqa: ARG002
         """
         Envoie un rappel de paiement par email.
 
@@ -3813,7 +3863,7 @@ class RegenerateInvoicePdf(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         """Régénérer le PDF d'une facture."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -4004,7 +4054,7 @@ class CancelInvoice(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         """Annuler une facture."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -4169,7 +4219,7 @@ class DuplicateInvoice(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, invoice_id):  # noqa: PLR0911
+    def post(self, company_id, invoice_id):
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
             from routes.companies import _get_current_company_via_use_case
@@ -4391,7 +4441,8 @@ class InstitutionsList(Resource):
                         "id": inst.id,
                         "institution_name": inst.institution_name
                         or "Institution sans nom",
-                        "clinic_company_id": inst.default_billed_to_company_id or inst.company_id,
+                        "clinic_company_id": inst.default_billed_to_company_id
+                        or inst.company_id,
                         "contact_email": inst.contact_email,
                         "contact_phone": inst.contact_phone,
                         "billing_address": inst.billing_address,
@@ -4441,7 +4492,7 @@ class ToggleInstitution(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def post(self, company_id, client_id):  # noqa: PLR0911
+    def post(self, company_id, client_id):
         """Bascule le statut d'institution d'un client."""
         try:
             # ✅ DDD: Utilise use-case au lieu de service directement
@@ -4610,7 +4661,11 @@ class UnbilledReservations(Resource):
                 if billed_to_filter and billed_to_filter.strip()
                 else None
             )
-            if billed_to_type and billed_to_type not in ("patient", "clinic", "insurance"):
+            if billed_to_type and billed_to_type not in (
+                "patient",
+                "clinic",
+                "insurance",
+            ):
                 billed_to_type = None
             reservations = booking_repo.find_models_unbilled_by_company_and_client(
                 company_id=company_id,
@@ -4623,12 +4678,7 @@ class UnbilledReservations(Resource):
             # ✅ S2: Inclure les transports DÉJÀ FACTURÉS pour cette clinique+période
             # (contexte facture clinique mensuelle : afficher la vue complète)
             invoiced_reservations = []
-            if (
-                include_invoiced
-                and clinic_company_id
-                and period_year
-                and period_month
-            ):
+            if include_invoiced and clinic_company_id and period_year and period_month:
                 start_date = datetime(period_year, period_month, 1)
                 if period_month == PERIOD_MONTH_THRESHOLD:
                     end_date = datetime(period_year + 1, 1, 1)
@@ -4658,9 +4708,7 @@ class UnbilledReservations(Resource):
                 )
 
             # Combiner unbilled + invoiced, trier par date
-            all_reservations = [
-                (r, False) for r in reservations
-            ] + [
+            all_reservations = [(r, False) for r in reservations] + [
                 (r, True) for r in invoiced_reservations
             ]
             all_reservations.sort(
@@ -4670,9 +4718,7 @@ class UnbilledReservations(Resource):
             def _to_reservation_dict(r, invoiced_flag):
                 return {
                     "id": r.id,
-                    "date": r.scheduled_time.isoformat()
-                    if r.scheduled_time
-                    else None,
+                    "date": r.scheduled_time.isoformat() if r.scheduled_time else None,
                     "scheduled_time": r.scheduled_time.isoformat()
                     if r.scheduled_time
                     else None,
@@ -4686,8 +4732,10 @@ class UnbilledReservations(Resource):
                     "billed_to_contact": r.billed_to_contact,
                     "customer_name": r.customer_name,
                     "status": r.status.value,
-                    "mission_type": getattr(r, "mission_type", None) or "patient_transport",
-                    "delivery_description": getattr(r, "delivery_description", None) or None,
+                    "mission_type": getattr(r, "mission_type", None)
+                    or "patient_transport",
+                    "delivery_description": getattr(r, "delivery_description", None)
+                    or None,
                     "is_urgent": r.is_urgent or False,
                     "is_return": r.is_return or False,
                     "medical_facility": r.medical_facility,
@@ -4714,9 +4762,7 @@ class UnbilledReservations(Resource):
 
             return {
                 "reservations": reservations_out,
-                "total_amount": sum(
-                    float(r.amount or 0) for r, _ in all_reservations
-                ),
+                "total_amount": sum(float(r.amount or 0) for r, _ in all_reservations),
                 "count": len(all_reservations),
                 "summary_by_type": {
                     "patient": sum(
@@ -4855,7 +4901,7 @@ class SingleReservation(Resource):
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
-    def get(self, company_id, reservation_id):  # noqa: PLR0911
+    def get(self, company_id, reservation_id):
         """Récupère les détails d'une réservation spécifique.
 
         Utilisé pour hydrater les objets minimaux {id} en objets complets
@@ -5069,13 +5115,13 @@ class PartnerTransfersForInvoice(Resource):
                     ~BookingTransfer.id.in_(
                         select(partner_invoice_transfers.c.booking_transfer_id)
                         .select_from(partner_invoice_transfers.join(PartnerInvoice))
-                        .where(
-                            PartnerInvoice.status != PartnerInvoiceStatus.CANCELLED
-                        )
+                        .where(PartnerInvoice.status != PartnerInvoiceStatus.CANCELLED)
                     )
                 )
                 .order_by(
-                    func.coalesce(Booking.scheduled_time, BookingTransfer.validated_at).asc()
+                    func.coalesce(
+                        Booking.scheduled_time, BookingTransfer.validated_at
+                    ).asc()
                 )
                 .all()
             )
@@ -5100,7 +5146,9 @@ class PartnerTransfersForInvoice(Resource):
                         "pickup_location": b.pickup_location if b else None,
                         "dropoff_location": b.dropoff_location if b else None,
                         "client_name": (
-                            b.customer_full_name if b and hasattr(b, "customer_full_name") else "—"
+                            b.customer_full_name
+                            if b and hasattr(b, "customer_full_name")
+                            else "—"
                         ),
                         "time_formatted": (
                             b.scheduled_time.strftime("%H:%M")
@@ -5386,15 +5434,12 @@ class BillablePartners(Resource):
                 # Le service de génération de facture vérifiera que seuls les transferts validés
                 # sont inclus dans la facture.
 
-                all_transfers_query = (
-                    db.session.query(BookingTransfer)
-                    .filter(
-                        BookingTransfer.partnership_id == partnership.id,
-                        BookingTransfer.executing_company_id
-                        == company.id,  # L'entreprise actuelle est l'exécutante
-                        BookingTransfer.status
-                        == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
-                    )
+                all_transfers_query = db.session.query(BookingTransfer).filter(
+                    BookingTransfer.partnership_id == partnership.id,
+                    BookingTransfer.executing_company_id
+                    == company.id,  # L'entreprise actuelle est l'exécutante
+                    BookingTransfer.status
+                    == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
                 )
                 if year and month:
                     DECEMBER = 12
@@ -5575,7 +5620,9 @@ class GeneratePartnerInvoice(Resource):
             period_year = data.get("period_year")
             period_month = data.get("period_month")
             transfer_ids = data.get("transfer_ids")  # optionnel: liste d'IDs
-            overrides = data.get("overrides")  # optionnel: {transfer_id: {amount, note}}
+            overrides = data.get(
+                "overrides"
+            )  # optionnel: {transfer_id: {amount, note}}
 
             # Validation des paramètres requis
             if not partnership_id or not period_year or not period_month:
@@ -6124,9 +6171,7 @@ class BulkSendInvoices(Resource):
         try:
             from routes.companies import _get_current_company_via_use_case
 
-            company, error_response, status_code = (
-                _get_current_company_via_use_case()
-            )
+            company, error_response, status_code = _get_current_company_via_use_case()
             if error_response or not company:
                 return error_response, status_code
 

@@ -27,7 +27,11 @@ def _is_direct_client_invoice(invoice: Any) -> bool:
     if billed_to is not None or bill_to_client is not None:
         return False
     try:
-        s = strategy if isinstance(strategy, InvoiceBillingStrategy) else InvoiceBillingStrategy(strategy)
+        s = (
+            strategy
+            if isinstance(strategy, InvoiceBillingStrategy)
+            else InvoiceBillingStrategy(strategy)
+        )
     except (ValueError, TypeError):
         return False
     return s == InvoiceBillingStrategy.S1_PATIENT
@@ -131,8 +135,7 @@ class CancelInvoiceUseCase:
                 success=False,
                 error={
                     "error": (
-                        "Seules les factures au statut 'draft' peuvent être "
-                        "annulées."
+                        "Seules les factures au statut 'draft' peuvent être annulées."
                     )
                 },
                 status_code=400,

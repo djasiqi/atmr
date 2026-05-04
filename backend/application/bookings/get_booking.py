@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 class BookingRepoPort(Protocol):
     """Port pour récupérer un booking."""
 
-    def find_model_by_id_with_eager_loading(
-        self, booking_id: int
-    ) -> Any | None:
+    def find_model_by_id_with_eager_loading(self, booking_id: int) -> Any | None:
         """Récupère un booking avec eager loading pour éviter N+1."""
         ...
 

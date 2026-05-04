@@ -107,9 +107,7 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )
@@ -146,18 +144,14 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )
 
             assert len(payments) == 0
 
-    def test_export_partial_payment_creates_multiple_lines(
-        self, app, company, client
-    ):
+    def test_export_partial_payment_creates_multiple_lines(self, app, company, client):
         """Test 3: Paiement partiel => 2 lignes dans le CSV."""
         with app.app_context():
             # Créer une facture avec 2 paiements partiels
@@ -192,9 +186,7 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .order_by(InvoicePayment.paid_at)
                 .all()
@@ -223,9 +215,7 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )
@@ -260,9 +250,7 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )
@@ -301,15 +289,16 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )
 
             assert len(payments) == 1
-            assert payments[0].invoice.billing_strategy == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+            assert (
+                payments[0].invoice.billing_strategy
+                == InvoiceBillingStrategy.S2_CLINIC_MONTHLY
+            )
             assert payments[0].invoice.billed_to_company_id == clinic_company.id
 
     def test_export_csv_format_includes_all_columns(self, app, company, client):
@@ -341,9 +330,7 @@ class TestExportPaymentsCSV:
                 .join(Invoice, InvoicePayment.invoice_id == Invoice.id)
                 .filter(Invoice.company_id == company.id)
                 .filter(Invoice.status != InvoiceStatus.CANCELLED)
-                .filter(
-                    InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC)
-                )
+                .filter(InvoicePayment.paid_at >= datetime(2026, 1, 1, tzinfo=UTC))
                 .filter(InvoicePayment.paid_at < datetime(2026, 2, 1, tzinfo=UTC))
                 .all()
             )

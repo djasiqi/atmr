@@ -69,7 +69,9 @@ def ensure_booking_dispatch_geo_units(booking: Booking) -> bool:
                 pickup_zip=None,
                 pickup_text=getattr(booking, "pickup_location", None),
             )
-            token = _token_for_geo_unit_lookup(pa) or _canton_token_from_address_keywords(
+            token = _token_for_geo_unit_lookup(
+                pa
+            ) or _canton_token_from_address_keywords(
                 getattr(booking, "pickup_location", None)
             )
             gid = geo_unit_id_from_pickup_admin_token(token)
@@ -86,7 +88,9 @@ def ensure_booking_dispatch_geo_units(booking: Booking) -> bool:
                 pickup_zip=None,
                 pickup_text=getattr(booking, "dropoff_location", None),
             )
-            token = _token_for_geo_unit_lookup(da) or _canton_token_from_address_keywords(
+            token = _token_for_geo_unit_lookup(
+                da
+            ) or _canton_token_from_address_keywords(
                 getattr(booking, "dropoff_location", None)
             )
             gid = geo_unit_id_from_pickup_admin_token(token)
@@ -181,8 +185,12 @@ def seed_dispatch_offers_for_unassigned_booking(booking_id: int) -> int:
     pickup_at = booking.scheduled_time
     should_run_urgency = False
     if pickup_at:
-        pickup_at_aware = pickup_at.replace(tzinfo=UTC) if pickup_at.tzinfo is None else pickup_at
-        should_run_urgency = (pickup_at_aware - datetime.now(UTC)).total_seconds() <= 15 * 60
+        pickup_at_aware = (
+            pickup_at.replace(tzinfo=UTC) if pickup_at.tzinfo is None else pickup_at
+        )
+        should_run_urgency = (
+            pickup_at_aware - datetime.now(UTC)
+        ).total_seconds() <= 15 * 60
 
     if not created_total and should_run_urgency:
         pickup_lat_raw = getattr(booking, "pickup_lat", None)
@@ -233,7 +241,9 @@ def refresh_dispatch_offers_after_online_payment(booking_id: int) -> None:
         )
 
 
-def seed_offers_for_pending_without_proposed_offers(*, limit: int = 100) -> dict[str, Any]:
+def seed_offers_for_pending_without_proposed_offers(
+    *, limit: int = 100
+) -> dict[str, Any]:
     """Retente ``seed_dispatch_offers_for_unassigned_booking`` pour les PENDING sans offre PROPOSED.
 
     Permet de « rattraper » les demandes orphelines (visibles client mais invisibles entreprises

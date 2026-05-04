@@ -53,7 +53,7 @@ class SendTransportRequestResult:
 class SendTransportRequestUseCase:
     """Use case: Envoyer une demande de transport aux entreprises."""
 
-    def execute(  # noqa: PLR0911 - early returns for validation
+    def execute(
         self, input_data: SendTransportRequestInput
     ) -> SendTransportRequestResult:
         """
@@ -74,7 +74,9 @@ class SendTransportRequestUseCase:
         """
         try:
             # 1. Charger la demande
-            transport_request = TransportRequest.query.get(input_data.transport_request_id)
+            transport_request = TransportRequest.query.get(
+                input_data.transport_request_id
+            )
             if not transport_request:
                 return SendTransportRequestResult(
                     success=False,
@@ -103,7 +105,10 @@ class SendTransportRequestUseCase:
                     status_code=409,
                 )
 
-            if transport_request.status not in [RequestStatus.DRAFT.value, RequestStatus.SENT.value]:
+            if transport_request.status not in [
+                RequestStatus.DRAFT.value,
+                RequestStatus.SENT.value,
+            ]:
                 return SendTransportRequestResult(
                     success=False,
                     transport_request_id=input_data.transport_request_id,
@@ -252,7 +257,9 @@ class SendTransportRequestUseCase:
                     offers_created=offers_created,
                 )
             except Exception as metric_err:
-                logger.warning("[SendTransportRequest] Error tracking metric: %s", metric_err)
+                logger.warning(
+                    "[SendTransportRequest] Error tracking metric: %s", metric_err
+                )
 
             # ÉTAPE 5: Émettre événement temps réel vers l'institution
             try:
@@ -267,7 +274,9 @@ class SendTransportRequestUseCase:
                     offers_created=offers_created,
                 )
             except Exception as event_err:
-                logger.warning("[SendTransportRequest] Error emitting event: %s", event_err)
+                logger.warning(
+                    "[SendTransportRequest] Error emitting event: %s", event_err
+                )
 
             # ÉTAPE 6: Notifier les entreprises cibles (Socket + bell)
             self._notify_target_companies(transport_request)

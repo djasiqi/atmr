@@ -118,7 +118,6 @@ def find_round_trip_merge_booking_pairs(
         if uid is not None:
             groups[("u", int(uid), date_key)].append(b)
 
-
     for _key, group_bookings in groups.items():
         if len(group_bookings) < _MIN_ROUND_TRIP_PAIR_GROUP:
             continue
@@ -360,12 +359,7 @@ def find_round_trip_merge_booking_pairs(
                 continue
             d1 = p1.get("date")
             d2 = p2.get("date")
-            if (
-                d1
-                and d2
-                and isinstance(d1, datetime)
-                and isinstance(d2, datetime)
-            ):
+            if d1 and d2 and isinstance(d1, datetime) and isinstance(d2, datetime):
                 if d1 <= d2:
                     pairs_out.append((id1, id2))
                 else:

@@ -26,9 +26,10 @@ from tests.e2e.helpers.e2e_helpers import (
 def _company_headers(app, company):
     from flask_jwt_extended import create_access_token
 
-    user = getattr(company, "user", None) or User.query.filter_by(
-        id=company.user_id
-    ).first()
+    user = (
+        getattr(company, "user", None)
+        or User.query.filter_by(id=company.user_id).first()
+    )
     claims = {
         "role": UserRole.company.value,
         "company_id": company.id,
@@ -98,9 +99,7 @@ class TestMobileDispatchUrgentSentinelE2E:
         assert booking.scheduled_time.hour == 10
         assert booking.scheduled_time.minute == 15
 
-    def test_urgent_sentinel_0000_ok(
-        self, app, db, client, patch_urgent_now_local
-    ):
+    def test_urgent_sentinel_0000_ok(self, app, db, client, patch_urgent_now_local):
         """scheduled_time = 00:00:00 (sentinelle) → 200, time_confirmed = True."""
         _requires_postgres(db)
         company = create_test_company(db)

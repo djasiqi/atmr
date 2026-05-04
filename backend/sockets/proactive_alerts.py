@@ -42,6 +42,7 @@ active_connections: Dict[str, Set[str]] = {}
 
 def register_proactive_alerts_sockets(socketio: SocketIO):
     """Enregistre les handlers Socket.IO pour les alertes proactives."""
+
     @socketio.on("connect")
     def handle_connect():
         """Gère la connexion d'un client."""

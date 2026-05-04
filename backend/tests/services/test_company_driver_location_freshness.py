@@ -36,7 +36,10 @@ def test_resolve_falls_back_received_then_ts() -> None:
 
 
 def test_resolve_only_ts() -> None:
-    assert resolve_location_freshness_timestamp({"ts": "2026-01-01T09:00:00Z"}) == "2026-01-01T09:00:00Z"
+    assert (
+        resolve_location_freshness_timestamp({"ts": "2026-01-01T09:00:00Z"})
+        == "2026-01-01T09:00:00Z"
+    )
 
 
 def test_resolve_empty() -> None:

@@ -27,11 +27,7 @@ def _parse_optional_datetime(s: str | None) -> datetime | None:
     if s is None or not str(s).strip():
         return None
     s = str(s).strip()
-    if (
-        len(s) == _ISO_DATE_STRING_LEN
-        and s[4] == "-"
-        and s[7] == "-"
-    ):
+    if len(s) == _ISO_DATE_STRING_LEN and s[4] == "-" and s[7] == "-":
         return datetime.fromisoformat(f"{s}T00:00:00+00:00")
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
@@ -67,7 +63,9 @@ def _serialize_config(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
         "support_hourly_rate_default": str(cfg.support_hourly_rate_default)
         if cfg.support_hourly_rate_default is not None
         else None,
-        "effective_from": cfg.effective_from.isoformat() if cfg.effective_from else None,
+        "effective_from": cfg.effective_from.isoformat()
+        if cfg.effective_from
+        else None,
         "effective_to": cfg.effective_to.isoformat() if cfg.effective_to else None,
         "is_active": cfg.is_active,
         "notes": cfg.notes,
@@ -87,7 +85,9 @@ def register_platform_billing_cli(app: Flask) -> None:
         default=None,
         help="true/false : activer le billing plateforme pour cette entreprise",
     )
-    @click.option("--commission-rate", type=str, default=None, help="Taux décimal ex. 0.10")
+    @click.option(
+        "--commission-rate", type=str, default=None, help="Taux décimal ex. 0.10"
+    )
     @click.option(
         "--support-hourly-rate",
         type=str,
@@ -198,12 +198,10 @@ def register_platform_billing_cli(app: Flask) -> None:
     @platform_billing.command("list-pricing-tiers")
     @with_appcontext
     def list_pricing_tiers() -> None:
-        rows = (
-            PlatformSubscriptionPricing.query.order_by(
-                PlatformSubscriptionPricing.dispatch_mode.asc(),
-                PlatformSubscriptionPricing.volume_min.asc(),
-            ).all()
-        )
+        rows = PlatformSubscriptionPricing.query.order_by(
+            PlatformSubscriptionPricing.dispatch_mode.asc(),
+            PlatformSubscriptionPricing.volume_min.asc(),
+        ).all()
         if not rows:
             click.echo("Aucune ligne dans platform_subscription_pricing.")
             return

@@ -95,7 +95,11 @@ def check_dedup_and_throttle(
         throttle_scope_key is not None
         and throttle_max > 0
         and should_skip_throttle(
-            recipient_role, recipient_id, throttle_scope_key, throttle_window_s, throttle_max
+            recipient_role,
+            recipient_id,
+            throttle_scope_key,
+            throttle_window_s,
+            throttle_max,
         )
     ):
         return True, "throttled"

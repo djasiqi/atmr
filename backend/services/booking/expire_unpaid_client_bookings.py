@@ -59,7 +59,9 @@ def expire_awaiting_client_payment_bookings(
 
     rows = (
         Booking.query.filter(Booking.status == BookingStatus.AWAITING_CLIENT_PAYMENT)
-        .filter(func.lower(func.coalesce(Booking.billed_to_type, "patient")) == "patient")
+        .filter(
+            func.lower(func.coalesce(Booking.billed_to_type, "patient")) == "patient"
+        )
         .filter(Booking.created_at.isnot(None))
         .filter(Booking.created_at <= threshold)
         .filter(~has_completed_payment)

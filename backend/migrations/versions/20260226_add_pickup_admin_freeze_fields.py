@@ -19,14 +19,27 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("booking", sa.Column("pickup_admin_token", sa.String(length=64), nullable=True))
-    op.add_column("booking", sa.Column("pickup_canton_code", sa.String(length=8), nullable=True))
-    op.add_column("booking", sa.Column("pickup_admin_source", sa.String(length=24), nullable=True))
-    op.add_column("booking", sa.Column("pickup_admin_confidence", sa.String(length=24), nullable=True))
-    op.add_column("booking", sa.Column("pickup_admin_label", sa.String(length=160), nullable=True))
+    op.add_column(
+        "booking", sa.Column("pickup_admin_token", sa.String(length=64), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("pickup_canton_code", sa.String(length=8), nullable=True)
+    )
+    op.add_column(
+        "booking", sa.Column("pickup_admin_source", sa.String(length=24), nullable=True)
+    )
     op.add_column(
         "booking",
-        sa.Column("pickup_admin_resolved_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("pickup_admin_confidence", sa.String(length=24), nullable=True),
+    )
+    op.add_column(
+        "booking", sa.Column("pickup_admin_label", sa.String(length=160), nullable=True)
+    )
+    op.add_column(
+        "booking",
+        sa.Column(
+            "pickup_admin_resolved_at", sa.DateTime(timezone=True), nullable=True
+        ),
     )
     op.create_index(
         op.f("ix_booking_pickup_admin_token"),

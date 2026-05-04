@@ -52,7 +52,9 @@ class CompleteCompanyReservationUseCase:
                 if not r:
                     return CompleteCompanyReservationResult(
                         ok=False,
-                        error={"error": "Un motif (reason) est requis pour clôturer une course en route."},
+                        error={
+                            "error": "Un motif (reason) est requis pour clôturer une course en route."
+                        },
                         status_code=400,
                     )
         else:

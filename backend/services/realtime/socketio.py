@@ -30,7 +30,11 @@ from repositories.driver_repository import DriverRepository
 DEFAULT_NAMESPACE = "/"
 
 # Annexe F — alias optionnels lirie.* (double emit si LIRIE_WS_V2_ALIASES=1)
-_LIRIE_WS_V2_ALIASES = os.getenv("LIRIE_WS_V2_ALIASES", "").lower() in ("1", "true", "yes")
+_LIRIE_WS_V2_ALIASES = os.getenv("LIRIE_WS_V2_ALIASES", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 _LIRIE_EVENT_ALIASES: dict[str, str] = {
     "driver_location_update": "lirie.driver.map.updated",
     "driver_live_state_update": "lirie.driver.state.updated",
@@ -416,9 +420,7 @@ def _emit_dispatch_state_patch_if_enabled(
     }
     if fields is not None:
         payload["fields"] = fields
-    emit_company_event(
-        company_id, "dispatch_state_patch", payload, namespace=namespace
-    )
+    emit_company_event(company_id, "dispatch_state_patch", payload, namespace=namespace)
 
 
 def _maybe_emit_dispatch_dashboard_snapshot(
@@ -530,7 +532,9 @@ def fanout_driver_location_update(
     - ``accepted_observability_only`` : **uniquement** ``driver_location_update``.
     """
     if company_id <= 0:
-        app_logger.error("[socketio] invalid company_id in fanout_driver_location_update")
+        app_logger.error(
+            "[socketio] invalid company_id in fanout_driver_location_update"
+        )
         return
     if not accept_status.strip():
         raise ValueError("accept_status is required for fanout_driver_location_update")
@@ -546,7 +550,9 @@ def fanout_driver_location_update(
             company_id,
         )
         return
-    payload_company = live_state_payload.get("company_id") or location_payload.get("company_id")
+    payload_company = live_state_payload.get("company_id") or location_payload.get(
+        "company_id"
+    )
     if payload_company is not None and str(payload_company) != str(company_id):
         app_logger.error(
             "[socketio] cross_tenant_mismatch blocked in fanout company_id=%s payload_company=%s",
@@ -919,7 +925,10 @@ def emit_delay_detected(
 
                     if result.get("ok"):
                         success_count += 1
-                    elif result.get("token_invalid") and not is_push_device_token_lifecycle_enabled():
+                    elif (
+                        result.get("token_invalid")
+                        and not is_push_device_token_lifecycle_enabled()
+                    ):
                         device_token.is_active = False
 
                 try:

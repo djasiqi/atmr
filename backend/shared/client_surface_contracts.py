@@ -31,4 +31,3 @@ CANONICAL_PRECISION_ACCEPTANCE_MATRIX = {
     "locality": "block",
     "approximate": "block",
 }
-

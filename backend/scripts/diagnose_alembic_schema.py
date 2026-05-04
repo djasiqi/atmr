@@ -52,6 +52,7 @@ def _get_alembic_heads():
     try:
         import alembic.config
         from alembic.script import ScriptDirectory
+
         script_dir = _ROOT / "migrations"
         cfg = alembic.config.Config(str(script_dir / "alembic.ini"))
         cfg.set_main_option("script_location", str(script_dir))
@@ -71,6 +72,7 @@ def run_diagnostic(bind=None):
     if bind is None:
         from app import create_app
         from ext import db
+
         app = create_app()
         with app.app_context():
             bind = db.get_engine().connect()
@@ -84,6 +86,7 @@ def run_diagnostic(bind=None):
 
 def _column_exists(conn, schema, table, column):
     from sqlalchemy import text
+
     q = text(
         "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
         "WHERE table_schema = :s AND table_name = :t AND column_name = :c)"
@@ -126,9 +129,15 @@ def _do_run(conn):
         r = conn.execute(q, {"s": schema, "t": table})
         exists = r.scalar()
         if exists and table in EXPECTED_COLUMNS:
-            missing = [c for c in EXPECTED_COLUMNS[table] if not _column_exists(conn, schema, table, c)]
+            missing = [
+                c
+                for c in EXPECTED_COLUMNS[table]
+                if not _column_exists(conn, schema, table, c)
+            ]
             if missing:
-                print(f"  {table}: OUI mais INCOMPLET (colonnes manquantes: {', '.join(missing)})")
+                print(
+                    f"  {table}: OUI mais INCOMPLET (colonnes manquantes: {', '.join(missing)})"
+                )
             else:
                 print(f"  {table}: OUI")
         else:
@@ -141,6 +150,7 @@ if __name__ == "__main__":
     url = os.environ.get("DATABASE_URL") or os.environ.get("SQLALCHEMY_DATABASE_URI")
     if url:
         from sqlalchemy import create_engine
+
         engine = create_engine(url)
         with engine.connect() as conn:
             _do_run(conn)

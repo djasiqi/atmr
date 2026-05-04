@@ -21,14 +21,20 @@ from services.platform_authz import (
     PERM_OPERATE_RUNBOOKS,
     user_effective_platform_permissions,
 )
-from services.platform_audit_events import list_audit_events, replay_timeline_by_correlation_id
+from services.platform_audit_events import (
+    list_audit_events,
+    replay_timeline_by_correlation_id,
+)
 from services.platform_change_requests import (
     complete_change_request,
     create_change_request,
     get_change_request,
     list_change_requests,
 )
-from services.platform_exceptions import PlatformRollbackNotAllowed, PlatformRunbookConflict
+from services.platform_exceptions import (
+    PlatformRollbackNotAllowed,
+    PlatformRunbookConflict,
+)
 from services.platform_policy import evaluate_policy
 from services.platform_reconciliation import drift_summary_for_tenant
 from services.platform_region_topology import current_region_topology
@@ -174,7 +180,10 @@ class PlatformSearchResource(Resource):
         if not q:
             return {"error": "validation", "message": "query requis."}, 400
         ctx = search_investigation(q)
-        return {"investigation_context": ctx, "correlation_id": _correlation_id_from_request(data)}, 200
+        return {
+            "investigation_context": ctx,
+            "correlation_id": _correlation_id_from_request(data),
+        }, 200
 
 
 @platform_ops_ns.route("/services")
@@ -307,7 +316,10 @@ class PlatformPoliciesEvaluateResource(Resource):
         perm = None
         if action_type == "governance.tenant.suspend":
             perm = PERM_GOVERNANCE_TENANT_SUSPEND
-        elif action_type in ("governance.runbook.execute", "governance.runbook.rollback"):
+        elif action_type in (
+            "governance.runbook.execute",
+            "governance.runbook.rollback",
+        ):
             perm = PERM_OPERATE_RUNBOOKS
 
         current_user = get_current_user_via_use_case()
@@ -322,7 +334,10 @@ class PlatformPoliciesEvaluateResource(Resource):
             is_admin=True,
             user_id=current_user.id if current_user else None,
         )
-        return {"policy_evaluation_result": result, "correlation_id": _correlation_id_from_request(data)}, 200
+        return {
+            "policy_evaluation_result": result,
+            "correlation_id": _correlation_id_from_request(data),
+        }, 200
 
 
 @platform_ops_ns.route("/tenants")
@@ -465,7 +480,9 @@ class PlatformTenantSuspendResource(Resource):
         )
         db.session.commit()
 
-        result_status = "partially_applied" if outcome == "partially_applied" else "applied"
+        result_status = (
+            "partially_applied" if outcome == "partially_applied" else "applied"
+        )
         audit_rs = "partial" if outcome == "partially_applied" else "success"
 
         try:
@@ -671,7 +688,10 @@ class PlatformRunbookRollbackResource(Resource):
             return {"error": "not_found", "message": "Exécution inconnue."}, 404
         tid = ex0.get("tenant_id")
         if tid is None:
-            return {"error": "validation", "message": "tenant_id manquant sur l'exécution."}, 400
+            return {
+                "error": "validation",
+                "message": "tenant_id manquant sur l'exécution.",
+            }, 400
         current_user = get_current_user_via_use_case()
         pol = evaluate_policy(
             action_type="governance.runbook.rollback",

@@ -27,15 +27,41 @@ from ext import db
 from models import GeoUnit, PlatformZoneMembership
 from models.enums import GeoUnitType
 
-GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip("/")
+GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip(
+    "/"
+)
 GEOMETRY_TIMEOUT_SECONDS = float(os.getenv("GEO_GEOMETRY_FETCH_TIMEOUT", "8"))
 
 
 DEFAULT_ROWS = [
-    {"type": "country", "code": "CH", "name": "Suisse", "parent_type": "", "parent_code": ""},
-    {"type": "canton", "code": "GE", "name": "Genève", "parent_type": "country", "parent_code": "CH"},
-    {"type": "canton", "code": "VD", "name": "Vaud", "parent_type": "country", "parent_code": "CH"},
-    {"type": "canton", "code": "VS", "name": "Valais", "parent_type": "country", "parent_code": "CH"},
+    {
+        "type": "country",
+        "code": "CH",
+        "name": "Suisse",
+        "parent_type": "",
+        "parent_code": "",
+    },
+    {
+        "type": "canton",
+        "code": "GE",
+        "name": "Genève",
+        "parent_type": "country",
+        "parent_code": "CH",
+    },
+    {
+        "type": "canton",
+        "code": "VD",
+        "name": "Vaud",
+        "parent_type": "country",
+        "parent_code": "CH",
+    },
+    {
+        "type": "canton",
+        "code": "VS",
+        "name": "Valais",
+        "parent_type": "country",
+        "parent_code": "CH",
+    },
 ]
 
 
@@ -106,7 +132,9 @@ def _fetch_commune_feature(commune_code: str) -> dict[str, Any] | None:
     )
     params = {"geometryFormat": "geojson", "sr": 4326}
     try:
-        response = requests.get(endpoint, params=params, timeout=GEOMETRY_TIMEOUT_SECONDS)
+        response = requests.get(
+            endpoint, params=params, timeout=GEOMETRY_TIMEOUT_SECONDS
+        )
         response.raise_for_status()
         payload = response.json()
     except Exception:
@@ -136,8 +164,12 @@ def _to_multipolygon_geojson(geometry: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def populate_geo_unit_geom_from_geoadmin(*, dry_run: bool = False, limit: int | None = None) -> dict[str, int]:
-    communes_query = GeoUnit.query.filter(GeoUnit.type == GeoUnitType.COMMUNE).order_by(GeoUnit.code.asc())
+def populate_geo_unit_geom_from_geoadmin(
+    *, dry_run: bool = False, limit: int | None = None
+) -> dict[str, int]:
+    communes_query = GeoUnit.query.filter(GeoUnit.type == GeoUnitType.COMMUNE).order_by(
+        GeoUnit.code.asc()
+    )
     if limit and limit > 0:
         communes = communes_query.limit(limit).all()
     else:
@@ -170,7 +202,12 @@ def populate_geo_unit_geom_from_geoadmin(*, dry_run: bool = False, limit: int | 
                         WHERE id = :unit_id
                         """
                     ),
-                    {"geojson": json.dumps(multi, ensure_ascii=False, separators=(",", ":")), "unit_id": commune.id},
+                    {
+                        "geojson": json.dumps(
+                            multi, ensure_ascii=False, separators=(",", ":")
+                        ),
+                        "unit_id": commune.id,
+                    },
                 )
             updated += 1
         except Exception:
@@ -187,9 +224,13 @@ def populate_geo_unit_geom_from_geoadmin(*, dry_run: bool = False, limit: int | 
     }
 
 
-def bootstrap_communes_from_zone_memberships(*, dry_run: bool = False) -> dict[str, int]:
+def bootstrap_communes_from_zone_memberships(
+    *, dry_run: bool = False
+) -> dict[str, int]:
     rows = (
-        PlatformZoneMembership.query.filter(PlatformZoneMembership.commune_token.like("commune:%"))
+        PlatformZoneMembership.query.filter(
+            PlatformZoneMembership.commune_token.like("commune:%")
+        )
         .with_entities(PlatformZoneMembership.commune_token)
         .all()
     )
@@ -211,21 +252,33 @@ def bootstrap_communes_from_zone_memberships(*, dry_run: bool = False) -> dict[s
         if not feature:
             missing += 1
             continue
-        props = feature.get("properties") if isinstance(feature.get("properties"), dict) else {}
+        props = (
+            feature.get("properties")
+            if isinstance(feature.get("properties"), dict)
+            else {}
+        )
         label = str((props or {}).get("label") or code).strip()
         name = label.split(",")[0].strip() if label else code
         canton_code = str((props or {}).get("kanton") or "GE").strip().upper() or "GE"
         try:
-            canton = GeoUnit.query.filter_by(type=GeoUnitType.CANTON, code=canton_code).first()
+            canton = GeoUnit.query.filter_by(
+                type=GeoUnitType.CANTON, code=canton_code
+            ).first()
             if not canton and not dry_run:
-                country = GeoUnit.query.filter_by(type=GeoUnitType.COUNTRY, code="CH").first()
-                canton = GeoUnit(type=GeoUnitType.CANTON, code=canton_code, name=canton_code)
+                country = GeoUnit.query.filter_by(
+                    type=GeoUnitType.COUNTRY, code="CH"
+                ).first()
+                canton = GeoUnit(
+                    type=GeoUnitType.CANTON, code=canton_code, name=canton_code
+                )
                 if country:
                     canton.parent_id = country.id
                 db.session.add(canton)
                 db.session.flush()
                 created += 1
-            commune = GeoUnit.query.filter_by(type=GeoUnitType.COMMUNE, code=code).first()
+            commune = GeoUnit.query.filter_by(
+                type=GeoUnitType.COMMUNE, code=code
+            ).first()
             if not commune and not dry_run:
                 commune = GeoUnit(type=GeoUnitType.COMMUNE, code=code, name=name)
                 if canton:
@@ -248,4 +301,3 @@ def bootstrap_communes_from_zone_memberships(*, dry_run: bool = False) -> dict[s
         "failed": failed,
         "dry_run": int(dry_run),
     }
-

@@ -51,17 +51,13 @@ def _notify_company_new_offer(
                 return
         inst_name = institution.name if institution else "Institution"
         patient = transport_request.patient
-        patient_name = (
-            f"{patient.first_name} {patient.last_name}" if patient else ""
-        )
+        patient_name = f"{patient.first_name} {patient.last_name}" if patient else ""
 
         sched = transport_request.scheduled_time
         time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else ""
         round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
-        message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(
-            " —"
-        )
+        message = f"{inst_name} — {patient_name}{round_trip} — {time_str}".strip(" —")
 
         persist_company_notification(
             company_id=company_id,
@@ -226,7 +222,6 @@ def _escalate_sequential_request(
 ) -> None:
     """Escalade une request séquentielle vers la préférence suivante ou fallback."""
     from models import Company
-
     from services.demo.soft_delete_guard import (
         company_is_demo,
         institution_is_demo,
@@ -244,7 +239,6 @@ def _escalate_sequential_request(
         current_order,
     )
     if next_pref and institution_is_demo(transport_request.institution):
-        search_order = current_order
         while next_pref:
             company = Company.query.get(next_pref.company_id)
             if company_is_demo(company):
@@ -314,7 +308,6 @@ def _escalate_sequential_request(
 def _create_fallback_broadcast(transport_request: TransportRequest) -> None:
     """Crée des offres broadcast de fallback après épuisement des préférences."""
     from models import Company
-
     from services.demo.soft_delete_guard import (
         company_is_demo,
         institution_is_demo,

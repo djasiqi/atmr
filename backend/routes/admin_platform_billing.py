@@ -34,6 +34,7 @@ from services.platform_billing.engine import (
 from shared.error_handlers import APIErrorHandler
 
 logger = logging.getLogger(__name__)
+_MAX_CALENDAR_MONTH = 12
 
 
 def _serialize_period(p: PlatformBillingPeriod) -> dict[str, Any]:
@@ -75,17 +76,23 @@ def _serialize_invoice(inv: PlatformInvoice) -> dict[str, Any]:
     }
 
 
-def _serialize_company_platform_config(cfg: CompanyPlatformBillingConfig) -> dict[str, Any]:
+def _serialize_company_platform_config(
+    cfg: CompanyPlatformBillingConfig,
+) -> dict[str, Any]:
     return {
         "id": cfg.id,
         "company_id": cfg.company_id,
         "is_billing_enabled": cfg.is_billing_enabled,
         "dispatch_mode_override": cfg.dispatch_mode_override,
-        "commission_rate": float(cfg.commission_rate) if cfg.commission_rate is not None else None,
+        "commission_rate": float(cfg.commission_rate)
+        if cfg.commission_rate is not None
+        else None,
         "support_hourly_rate_default": float(cfg.support_hourly_rate_default)
         if cfg.support_hourly_rate_default is not None
         else None,
-        "effective_from": cfg.effective_from.isoformat() if cfg.effective_from else None,
+        "effective_from": cfg.effective_from.isoformat()
+        if cfg.effective_from
+        else None,
         "effective_to": cfg.effective_to.isoformat() if cfg.effective_to else None,
         "is_active": cfg.is_active,
         "notes": cfg.notes,
@@ -96,7 +103,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
     """Enregistre les routes sous /admin/platform-billing/."""
     if getattr(admin_ns, "_lirie_platform_billing_registered", False):
         return
-    setattr(admin_ns, "_lirie_platform_billing_registered", True)
+    admin_ns._lirie_platform_billing_registered = True
 
     @admin_ns.route("/platform-billing/periods")
     class PlatformBillingPeriods(Resource):
@@ -129,7 +136,7 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     "billing_year et billing_month requis (entiers)",
                     logger_instance=logger,
                 )
-            if month < 1 or month > 12:
+            if month < 1 or month > _MAX_CALENDAR_MONTH:
                 return APIErrorHandler.handle_validation_error(
                     "billing_month invalide", logger_instance=logger
                 )
@@ -275,12 +282,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
         @ip_whitelist_required()
         @limiter.limit("120 per hour")
         def get(self):
-            rows = (
-                PlatformSubscriptionPricing.query.order_by(
-                    PlatformSubscriptionPricing.dispatch_mode.asc(),
-                    PlatformSubscriptionPricing.volume_min.asc(),
-                ).all()
-            )
+            rows = PlatformSubscriptionPricing.query.order_by(
+                PlatformSubscriptionPricing.dispatch_mode.asc(),
+                PlatformSubscriptionPricing.volume_min.asc(),
+            ).all()
             return {
                 "items": [
                     {
@@ -352,7 +357,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             )
             if not cfg:
                 return {"config": None, "company_id": company_id}, 200
-            return {"config": _serialize_company_platform_config(cfg), "company_id": company_id}, 200
+            return {
+                "config": _serialize_company_platform_config(cfg),
+                "company_id": company_id,
+            }, 200
 
         @jwt_required()
         @role_required(UserRole.admin)
@@ -380,7 +388,10 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                 cfg.commission_rate = Decimal(str(data["commission_rate"]))
             elif "commission_rate" in data:
                 cfg.commission_rate = None
-            if "support_hourly_rate_default" in data and data["support_hourly_rate_default"] is not None:
+            if (
+                "support_hourly_rate_default" in data
+                and data["support_hourly_rate_default"] is not None
+            ):
                 cfg.support_hourly_rate_default = Decimal(
                     str(data["support_hourly_rate_default"])
                 )
@@ -393,13 +404,17 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
             if "effective_from" in data:
                 v = data.get("effective_from")
                 if v:
-                    cfg.effective_from = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+                    cfg.effective_from = datetime.fromisoformat(
+                        str(v).replace("Z", "+00:00")
+                    )
                 else:
                     cfg.effective_from = None
             if "effective_to" in data:
                 v = data.get("effective_to")
                 if v:
-                    cfg.effective_to = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+                    cfg.effective_to = datetime.fromisoformat(
+                        str(v).replace("Z", "+00:00")
+                    )
                 else:
                     cfg.effective_to = None
             db.session.commit()
@@ -427,7 +442,9 @@ def register_platform_billing_routes(admin_ns: Namespace) -> None:
                     {
                         "id": e.id,
                         "company_id": e.company_id,
-                        "occurred_at": e.occurred_at.isoformat() if e.occurred_at else None,
+                        "occurred_at": e.occurred_at.isoformat()
+                        if e.occurred_at
+                        else None,
                         "duration_minutes": e.duration_minutes,
                         "category": e.category,
                         "description": e.description,

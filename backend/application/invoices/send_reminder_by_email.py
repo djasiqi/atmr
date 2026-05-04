@@ -60,7 +60,7 @@ class SendReminderByEmailUseCase:
         self.brevo_provider = BrevoEmailProvider()
         self.pdf_service = PDFService()
 
-    def execute(  # noqa: PLR0911
+    def execute(
         self, input_data: SendReminderByEmailInput
     ) -> SendReminderByEmailResult:
         """
@@ -142,6 +142,7 @@ class SendReminderByEmailUseCase:
             # La facture initiale reste intacte, le rappel a son propre PDF
             pdf_path = None
             import os
+
             REMINDER_DEBUG = os.getenv("REMINDER_DEBUG", "0") == "1"
 
             if REMINDER_DEBUG:
@@ -171,7 +172,9 @@ class SendReminderByEmailUseCase:
                     )
                     # Régénérer uniquement le PDF du rappel (pas la facture)
                     # ✅ GARANTIE: generate_reminder_pdf ne modifie JAMAIS invoice.pdf_url
-                    pdf_url = self.pdf_service.generate_reminder_pdf(invoice, reminder.level, reminder)
+                    pdf_url = self.pdf_service.generate_reminder_pdf(
+                        invoice, reminder.level, reminder
+                    )
                     if pdf_url:
                         reminder.pdf_url = pdf_url
                         db.session.commit()

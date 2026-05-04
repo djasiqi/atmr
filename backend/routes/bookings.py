@@ -160,7 +160,9 @@ booking_export_pdf_model = bookings_ns.model(
             required=True,
             enum=["this_month", "previous_month", "this_year", "custom"],
         ),
-        "from": fields.String(required=False, description="ISO 8601 pour période custom"),
+        "from": fields.String(
+            required=False, description="ISO 8601 pour période custom"
+        ),
         "to": fields.String(required=False, description="ISO 8601 pour période custom"),
     },
 )
@@ -443,7 +445,9 @@ def _parse_iso_or_none(value: Any) -> datetime | None:
         return None
 
 
-def _period_bounds(period: str, custom_from: datetime | None, custom_to: datetime | None) -> tuple[datetime, datetime] | None:
+def _period_bounds(
+    period: str, custom_from: datetime | None, custom_to: datetime | None
+) -> tuple[datetime, datetime] | None:
     now = datetime.now(UTC)
     if period == "this_month":
         start = datetime(now.year, now.month, 1, tzinfo=UTC)
@@ -618,7 +622,9 @@ def _booking_creation_client_brief(booking: Any) -> dict[str, Any]:
     if breakdown.get("overridden_by_preferential"):
         source = str(breakdown.get("preferential_source") or "policy").strip().lower()
         if source == "clinic":
-            recalculation_reason = "Tarif recalculé selon la convention clinique active."
+            recalculation_reason = (
+                "Tarif recalculé selon la convention clinique active."
+            )
         elif source == "client":
             recalculation_reason = "Tarif recalculé selon le tarif préférentiel client."
         else:
@@ -636,7 +642,9 @@ def _booking_creation_client_brief(booking: Any) -> dict[str, Any]:
     return {
         "id": booking.id,
         "amount": float(getattr(booking, "amount", 0) or 0),
-        "price_amount": float(preview_amount or 0) if preview_amount is not None else None,
+        "price_amount": float(preview_amount or 0)
+        if preview_amount is not None
+        else None,
         "pricing_adjustment_reason": recalculation_reason,
         "pricing_status": pricing_status,
         "pricing_contract_version": PRICING_CONTRACT_VERSION,
@@ -647,7 +655,7 @@ def _booking_creation_client_brief(booking: Any) -> dict[str, Any]:
     }
 
 
-def execute_client_booking_creation(public_id: str) -> Any:  # noqa: PLR0911
+def execute_client_booking_creation(public_id: str) -> Any:
     """Création réservation pour `public_id` utilisateur — partagé entre
     `POST /bookings/clients/<id>/bookings` et `POST /clients/<id>/bookings`."""
     try:
@@ -740,13 +748,19 @@ def execute_client_booking_creation(public_id: str) -> Any:  # noqa: PLR0911
             },
         )
 
-        booking_brief = _booking_creation_client_brief(new_booking) if new_booking is not None else None
+        booking_brief = (
+            _booking_creation_client_brief(new_booking)
+            if new_booking is not None
+            else None
+        )
         requested_amount = data.get("amount")
         preview_amount = data.get("preview_amount")
         if booking_brief is not None:
             final_amount = booking_brief.get("amount")
             provided_reference_amount = (
-                preview_amount if isinstance(preview_amount, (float, int)) else requested_amount
+                preview_amount
+                if isinstance(preview_amount, (float, int))
+                else requested_amount
             )
             if (
                 isinstance(provided_reference_amount, (float, int))
@@ -814,7 +828,7 @@ class ClientBookingsExportPdf(Resource):
     @role_required(UserRole.client)
     @bookings_ns.expect(booking_export_pdf_model, validate=False)
     @limiter.limit("30 per hour")
-    def post(self):  # noqa: PLR0911
+    def post(self):
         try:
             from models import Booking
             from shared.infrastructure.adapters.auth_adapter import (
@@ -849,7 +863,9 @@ class ClientBookingsExportPdf(Resource):
                 .all()
             )
             if not bookings:
-                return {"message": "Aucune donnée exportable pour la période sélectionnée."}, 404
+                return {
+                    "message": "Aucune donnée exportable pour la période sélectionnée."
+                }, 404
 
             period_label_map = {
                 "this_month": "Ce mois",
@@ -860,7 +876,9 @@ class ClientBookingsExportPdf(Resource):
             period_label = period_label_map.get(period, "Période")
             pdf_bytes = _build_client_bookings_pdf(bookings, period_label)
 
-            total_amount = sum(float(getattr(item, "amount", 0) or 0) for item in bookings)
+            total_amount = sum(
+                float(getattr(item, "amount", 0) or 0) for item in bookings
+            )
             filename = f"courses_{period}.pdf"
             response = send_file(
                 BytesIO(pdf_bytes),
@@ -882,7 +900,7 @@ class BookingSaferpayInitialize(Resource):
 
     @require_booking_ownership("read")
     @limiter.limit("30 per hour")
-    def post(self, booking_id, booking, user):  # noqa: PLR0911
+    def post(self, booking_id, booking, user):
         _ = booking_id
         from services.saferpay.config import saferpay_configured
 
@@ -940,7 +958,7 @@ class BookingSaferpayAssert(Resource):
 
     @require_booking_ownership("read")
     @limiter.limit("60 per hour")
-    def post(self, booking_id, booking, user):  # noqa: PLR0911
+    def post(self, booking_id, booking, user):
         _ = booking_id
         role_val = str(getattr(user.role, "value", user.role))
         if role_val != UserRole.client.value:
@@ -989,7 +1007,9 @@ class BookingSaferpayAssert(Resource):
         try:
             out = finalize_saferpay_payment(payment_row)
         except ValueError as e:
-            return APIErrorHandler.handle_validation_error(str(e), logger_instance=logger)
+            return APIErrorHandler.handle_validation_error(
+                str(e), logger_instance=logger
+            )
         except Exception as e:
             db.session.rollback()
             return APIErrorHandler.handle_exception(e, logger)
@@ -998,18 +1018,26 @@ class BookingSaferpayAssert(Resource):
         payment_status = "pending_verification"
         if assert_status in {"completed", "already_completed"}:
             payment_status = "paid"
-        elif assert_status in {"payment_failed", "assert_failed", "unexpected_tx_status"}:
+        elif assert_status in {
+            "payment_failed",
+            "assert_failed",
+            "unexpected_tx_status",
+        }:
             payment_status = "failed"
         else:
-            persisted_payment_status = str(
-                getattr(payment_row.status, "value", payment_row.status)
-            ).strip().upper()
+            persisted_payment_status = (
+                str(getattr(payment_row.status, "value", payment_row.status))
+                .strip()
+                .upper()
+            )
             if persisted_payment_status == "FAILED":
                 payment_status = "failed"
             elif persisted_payment_status == "COMPLETED":
                 payment_status = "paid"
 
-        booking_status = str(getattr(booking.status, "value", booking.status)).strip().lower()
+        booking_status = (
+            str(getattr(booking.status, "value", booking.status)).strip().lower()
+        )
         payload = {
             **out,
             "booking_id": booking.id,

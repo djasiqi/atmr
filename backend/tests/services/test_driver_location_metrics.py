@@ -10,7 +10,9 @@ import pytest
 from services.monitoring import driver_location_metrics as m
 
 
-def test_observe_clock_skew_seconds_noop_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_observe_clock_skew_seconds_noop_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("DRIVER_LOCATION_METRICS_ENABLED", "false")
     m.observe_clock_skew_seconds(location_mode="mission_live", skew_seconds=12.5)
 
@@ -26,7 +28,9 @@ def test_observe_clock_skew_seconds_observes(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("DRIVER_LOCATION_METRICS_ENABLED", raising=False)
     if m._CLOCK_SKEW is None:
         pytest.skip("prometheus_client Histogram unavailable")
-    m.observe_clock_skew_seconds(location_mode="availability_presence", skew_seconds=15.0)
+    m.observe_clock_skew_seconds(
+        location_mode="availability_presence", skew_seconds=15.0
+    )
 
 
 def test_inc_received_increments_received_and_ingested_same_labels() -> None:
@@ -40,7 +44,11 @@ def test_inc_received_increments_received_and_ingested_same_labels() -> None:
         mock_r.labels.return_value = MagicMock(inc=r_inc)
         mock_i.labels.return_value = MagicMock(inc=i_inc)
         m.inc_received(transport="socket_batch", location_mode="mission_live")
-    mock_r.labels.assert_called_once_with(transport="socket_batch", location_mode="mission_live")
-    mock_i.labels.assert_called_once_with(transport="socket_batch", location_mode="mission_live")
+    mock_r.labels.assert_called_once_with(
+        transport="socket_batch", location_mode="mission_live"
+    )
+    mock_i.labels.assert_called_once_with(
+        transport="socket_batch", location_mode="mission_live"
+    )
     r_inc.assert_called_once()
     i_inc.assert_called_once()

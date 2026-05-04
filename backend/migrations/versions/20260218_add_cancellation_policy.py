@@ -23,8 +23,7 @@ def upgrade():
         "ADD COLUMN IF NOT EXISTS cancellation_fee_amount NUMERIC(10,2)"
     )
     op.execute(
-        "ALTER TABLE booking "
-        "ADD COLUMN IF NOT EXISTS cancellation_fee_percent INTEGER"
+        "ALTER TABLE booking ADD COLUMN IF NOT EXISTS cancellation_fee_percent INTEGER"
     )
     op.execute(
         "ALTER TABLE booking "
@@ -37,6 +36,5 @@ def downgrade():
     op.execute("ALTER TABLE booking DROP COLUMN IF EXISTS cancellation_fee_percent")
     op.execute("ALTER TABLE booking DROP COLUMN IF EXISTS cancellation_fee_amount")
     op.execute(
-        "ALTER TABLE company_billing_settings "
-        "DROP COLUMN IF EXISTS cancellation_policy"
+        "ALTER TABLE company_billing_settings DROP COLUMN IF EXISTS cancellation_policy"
     )

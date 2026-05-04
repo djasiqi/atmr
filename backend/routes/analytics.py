@@ -697,13 +697,11 @@ class DispatchAnalytics(Resource):
                 end_date + timedelta(days=1), datetime.min.time()
             ).replace(tzinfo=UTC_TZ)
 
-            assignments = (
-                assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
-                    company_id=company.id,
-                    start_datetime=start_datetime,
-                    end_datetime=end_datetime,
-                    excluded_statuses=[],  # Pas d'exclusion de statuts
-                )
+            assignments = assignment_repo.find_models_by_company_with_time_range_and_excluded_statuses(
+                company_id=company.id,
+                start_datetime=start_datetime,
+                end_datetime=end_datetime,
+                excluded_statuses=[],  # Pas d'exclusion de statuts
             )
 
             if not assignments:

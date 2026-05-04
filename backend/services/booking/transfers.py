@@ -122,8 +122,6 @@ class BookingTransferService:
         # La course passe à PENDING sans chauffeur assigné
         # ✅ CORRECTION : Changer le statut AVANT de mettre driver_id à None
         # pour éviter l'erreur de validation "driver_id ne peut pas être NULL si status=ASSIGNED"
-        original_driver_id = booking.driver_id
-        original_status = booking.status
         # Changer le statut d'abord (pour éviter la validation qui vérifie driver_id si status=ASSIGNED)
         booking.status = BookingStatus.PENDING
         # Ensuite mettre driver_id à None (maintenant que le statut n'est plus ASSIGNED)

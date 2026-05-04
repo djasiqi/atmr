@@ -68,14 +68,14 @@ def test_compute_metrics_no_global_except_with_mocked_orm(app, monkeypatch):
         return fb if sess_n[0] == 1 else seq
 
     mock_exc = MagicMock()
-    with app.app_context():
-        with (
-            patch.object(im.TransportRequest, "query", tr_q),
-            patch.object(im.RequestOffer, "query", ro_base),
-            patch.object(im.db.session, "query", session_query),
-            patch.object(im.logger, "exception", mock_exc),
-        ):
-            snap = InstitutionMetricsService.compute_metrics(period_hours=24)
+    with (
+        app.app_context(),
+        patch.object(im.TransportRequest, "query", tr_q),
+        patch.object(im.RequestOffer, "query", ro_base),
+        patch.object(im.db.session, "query", session_query),
+        patch.object(im.logger, "exception", mock_exc),
+    ):
+        snap = InstitutionMetricsService.compute_metrics(period_hours=24)
 
     mock_exc.assert_not_called()
     assert snap.total_requests_sent == 2
@@ -119,12 +119,12 @@ def test_compute_metrics_non_empty_snapshot_when_mocks_return_counts(app):
         sess_n[0] += 1
         return fb if sess_n[0] == 1 else seq
 
-    with app.app_context():
-        with (
-            patch.object(im.TransportRequest, "query", tr_q),
-            patch.object(im.RequestOffer, "query", ro_base),
-            patch.object(im.db.session, "query", session_query),
-        ):
-            snap = InstitutionMetricsService.compute_metrics(period_hours=24)
+    with (
+        app.app_context(),
+        patch.object(im.TransportRequest, "query", tr_q),
+        patch.object(im.RequestOffer, "query", ro_base),
+        patch.object(im.db.session, "query", session_query),
+    ):
+        snap = InstitutionMetricsService.compute_metrics(period_hours=24)
     assert snap.total_requests_sent >= 1
     assert snap.total_offers_created >= 1

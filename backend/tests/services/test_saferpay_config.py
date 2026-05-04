@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 import os
 
+import services.saferpay.config as saferpay_config_module
 from services.saferpay.config import (
     saferpay_api_url_looks_like_test_host,
     saferpay_configured,
     warn_saferpay_test_api_url_in_production,
 )
-import services.saferpay.config as saferpay_config_module
 
 
 def test_saferpay_api_url_looks_like_test_host():
@@ -46,7 +46,9 @@ def test_saferpay_configured_merges_missing_keys_from_root_dotenv(
         "_repo_root_env_path",
         lambda: tmp_path / ".env",
     )
-    monkeypatch.setattr(saferpay_config_module, "_saferpay_repo_merge_state", {"done": False})
+    monkeypatch.setattr(
+        saferpay_config_module, "_saferpay_repo_merge_state", {"done": False}
+    )
     (tmp_path / ".env").write_text(
         "SAFERPAY_CUSTOMER_ID=cid\n"
         "SAFERPAY_TERMINAL_ID=tid\n"

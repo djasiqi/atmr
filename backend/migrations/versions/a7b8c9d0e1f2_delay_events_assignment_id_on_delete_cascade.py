@@ -8,6 +8,7 @@ Create Date: 2026-01-27
 delay_events (ex: update_driver_booking_status RELEASE). Les delay_events sont
 un log technique rattaché à l'assignation ; CASCADE les supprime avec elle.
 """
+
 from alembic import op
 
 revision = "a7b8c9d0e1f2"

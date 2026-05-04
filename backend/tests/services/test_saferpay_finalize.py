@@ -29,7 +29,9 @@ def _saferpay_env(monkeypatch):
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("app_context")
-def test_finalize_already_completed(db, sample_user, sample_client, sample_company, requires_postgresql):
+def test_finalize_already_completed(
+    db, sample_user, sample_client, sample_company, requires_postgresql
+):
     booking = Booking()
     booking.user_id = sample_client.user_id
     booking.company_id = sample_company.id
@@ -105,7 +107,9 @@ def test_finalize_capture_failed_persists_tx(
             return 503, None, "unavailable"
         return 500, None, "err"
 
-    with patch("services.saferpay.finalize_payment.saferpay_post_json", side_effect=fake_post):
+    with patch(
+        "services.saferpay.finalize_payment.saferpay_post_json", side_effect=fake_post
+    ):
         out = finalize_saferpay_payment(pay)
 
     assert out["status"] == SAFERPAY_FINALIZE_CAPTURE_FAILED
@@ -294,7 +298,9 @@ def test_finalize_completed_happy_path(
             return 200, {"Status": "CAPTURED"}, "{}"
         return 500, None, "x"
 
-    with patch("services.saferpay.finalize_payment.saferpay_post_json", side_effect=fake_post):
+    with patch(
+        "services.saferpay.finalize_payment.saferpay_post_json", side_effect=fake_post
+    ):
         out = finalize_saferpay_payment(pay)
 
     assert out["status"] == SAFERPAY_FINALIZE_COMPLETED

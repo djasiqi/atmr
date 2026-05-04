@@ -146,7 +146,9 @@ class SaveDriverPushTokenUseCase:
                 platform = payload.get("platform")  # "ios" | "android"
                 provider = payload.get("provider", "expo")  # "expo" | "fcm"
                 if provider not in ("expo", "fcm"):
-                    provider = "fcm" if not token.startswith("ExponentPushToken") else "expo"
+                    provider = (
+                        "fcm" if not token.startswith("ExponentPushToken") else "expo"
+                    )
 
                 existing_token = DeviceToken.query.filter_by(
                     driver_id=driver_id,

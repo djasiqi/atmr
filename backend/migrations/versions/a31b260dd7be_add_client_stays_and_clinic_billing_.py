@@ -1,4 +1,3 @@
-
 """add client_stays and clinic_billing_party_mappings
 
 Revision ID: a31b260dd7be
@@ -6,6 +5,7 @@ Revises: 502ee3c14a85
 Create Date: 2026-01-21 16:07:31.423286
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -89,9 +89,7 @@ def upgrade():
         sa.Column("company_id", sa.Integer(), nullable=False),
         sa.Column("clinic_company_id", sa.Integer(), nullable=False),
         sa.Column("billing_party_id", sa.Integer(), nullable=False),
-        sa.Column(
-            "is_active", sa.Boolean(), server_default="true", nullable=False
-        ),
+        sa.Column("is_active", sa.Boolean(), server_default="true", nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -170,4 +168,3 @@ def downgrade():
     op.drop_index(op.f("ix_client_stays_client_id"), table_name="client_stays")
     op.drop_table("client_stays")
     # ### end Alembic commands ###
-

@@ -22,13 +22,17 @@ LEGACY_CANTON_MAP = {
 }
 
 PHOTON_BASE = os.getenv("PHOTON_BASE_URL", "https://photon.komoot.io").rstrip("/")
-GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip("/")
+GEOADMIN_BASE_URL = os.getenv("GEOADMIN_BASE_URL", "https://api3.geo.admin.ch").rstrip(
+    "/"
+)
 GEOADMIN_ENABLED = os.getenv("GEOADMIN_ENABLED", "true").lower() in ("true", "1", "yes")
 GEOADMIN_CACHE_TTL_REVERSE = int(os.getenv("GEOADMIN_CACHE_TTL_REVERSE", "172800"))
 GEOADMIN_CB_FAIL_THRESHOLD = int(os.getenv("GEOADMIN_CB_FAIL_THRESHOLD", "10"))
 GEOADMIN_CB_WINDOW_SECONDS = int(os.getenv("GEOADMIN_CB_WINDOW_SECONDS", "60"))
 GEOADMIN_CB_OPEN_SECONDS = int(os.getenv("GEOADMIN_CB_OPEN_SECONDS", "120"))
-GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS = int(os.getenv("GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS", "10"))
+GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS = int(
+    os.getenv("GEOADMIN_CB_HALF_OPEN_PROBE_SECONDS", "10")
+)
 HTTP_TOO_MANY_REQUESTS = 429
 HTTP_INTERNAL_SERVER_ERROR = 500
 
@@ -106,7 +110,9 @@ def _breaker_success(state: dict[str, Any]) -> None:
 
 def _breaker_failure(state: dict[str, Any]) -> None:
     now = time.time()
-    failures = [ts for ts in state.get("failures", []) if now - ts <= GEOADMIN_CB_WINDOW_SECONDS]
+    failures = [
+        ts for ts in state.get("failures", []) if now - ts <= GEOADMIN_CB_WINDOW_SECONDS
+    ]
     failures.append(now)
     state["failures"] = failures
     if len(failures) >= GEOADMIN_CB_FAIL_THRESHOLD:
@@ -169,7 +175,9 @@ def resolve_geo_unit(
         ).first()
         if zipcode_unit:
             chain = geo_chain(zipcode_unit)
-            commune_in_chain = next((g for g in chain if g.type == GeoUnitType.COMMUNE), None)
+            commune_in_chain = next(
+                (g for g in chain if g.type == GeoUnitType.COMMUNE), None
+            )
             if commune_in_chain:
                 commune_chain = geo_chain(commune_in_chain)
                 return GeoResolutionResult(
@@ -201,7 +209,9 @@ def resolve_geo_unit(
     )
 
 
-def resolve_legacy_service_area_to_canton_codes(legacy_service_area: str | None) -> list[str]:
+def resolve_legacy_service_area_to_canton_codes(
+    legacy_service_area: str | None,
+) -> list[str]:
     """Codes canton (ex. ``GE``) pour le fallback scoring, depuis texte libre ou JSON ``{"tokens":["canton:GE"]}``."""
     raw = (legacy_service_area or "").strip()
     if not raw:
@@ -278,7 +288,9 @@ def _resolve_canton_code_from_unit(unit: GeoUnit | None) -> str | None:
     return None
 
 
-def _from_geo_unit(unit: GeoUnit, *, source: str, confidence: str) -> PickupAdminResolution:
+def _from_geo_unit(
+    unit: GeoUnit, *, source: str, confidence: str
+) -> PickupAdminResolution:
     token = f"{unit.type.value}:{unit.code}"
     canton = _resolve_canton_code_from_unit(unit)
     label = f"{unit.name} ({canton})" if canton else unit.name
@@ -291,14 +303,20 @@ def _from_geo_unit(unit: GeoUnit, *, source: str, confidence: str) -> PickupAdmi
     )
 
 
-def _try_db_resolution(*, pickup_zip: str | None, pickup_text: str | None) -> PickupAdminResolution | None:
+def _try_db_resolution(
+    *, pickup_zip: str | None, pickup_text: str | None
+) -> PickupAdminResolution | None:
     result = resolve_geo_unit(commune_text=pickup_text, zip_code=pickup_zip)
     if not result.geo_unit_id:
         return None
     unit = GeoUnit.query.get(result.geo_unit_id)
     if not unit:
         return None
-    confidence = "authoritative" if unit.type in {GeoUnitType.CANTON, GeoUnitType.COMMUNE} else "inferred"
+    confidence = (
+        "authoritative"
+        if unit.type in {GeoUnitType.CANTON, GeoUnitType.COMMUNE}
+        else "inferred"
+    )
     return _from_geo_unit(unit, source="db", confidence=confidence)
 
 
@@ -322,12 +340,16 @@ def _extract_geoadmin_zone(payload: dict[str, Any]) -> PickupAdminResolution | N
             or attrs.get("bfsnr")
             or ""
         ).strip()
-        canton = str(
-            attrs.get("kanton")
-            or attrs.get("abbreviation")
-            or attrs.get("canton")
-            or ""
-        ).strip().upper()
+        canton = (
+            str(
+                attrs.get("kanton")
+                or attrs.get("abbreviation")
+                or attrs.get("canton")
+                or ""
+            )
+            .strip()
+            .upper()
+        )
         layer = str(attrs.get("origin") or attrs.get("layerBodId") or "").lower()
 
         if code.isdigit() and ("gemeinde" in layer or "municipality" in layer):
@@ -354,7 +376,9 @@ def _extract_geoadmin_zone(payload: dict[str, Any]) -> PickupAdminResolution | N
     return best_commune or best_canton
 
 
-def _geoadmin_reverse(lat: float, lng: float, lang: str) -> PickupAdminResolution | None:
+def _geoadmin_reverse(
+    lat: float, lng: float, lang: str
+) -> PickupAdminResolution | None:
     if not GEOADMIN_ENABLED or _breaker_is_open(_geoadmin_reverse_breaker):
         return None
 
@@ -366,7 +390,7 @@ def _geoadmin_reverse(lat: float, lng: float, lang: str) -> PickupAdminResolutio
         "tolerance": 0,
         "layers": "all",
         "imageDisplay": "1,1,96",
-        "mapExtent": f"{lng-0.01},{lat-0.01},{lng+0.01},{lat+0.01}",
+        "mapExtent": f"{lng - 0.01},{lat - 0.01},{lng + 0.01},{lat + 0.01}",
         "returnGeometry": "false",
         "lang": lang or "fr",
     }
@@ -377,7 +401,9 @@ def _geoadmin_reverse(lat: float, lng: float, lang: str) -> PickupAdminResolutio
             response.status_code >= HTTP_INTERNAL_SERVER_ERROR
             or response.status_code == HTTP_TOO_MANY_REQUESTS
         ):
-            raise requests.HTTPError(f"geoadmin reverse transient {response.status_code}", response=response)
+            raise requests.HTTPError(
+                f"geoadmin reverse transient {response.status_code}", response=response
+            )
         response.raise_for_status()
         return response.json()
 
@@ -443,7 +469,9 @@ def resolve_pickup_admin(
     if lat is not None and lng is not None:
         rounded_lat = round(float(lat), 5)
         rounded_lng = round(float(lng), 5)
-        cache_key = _cache_key("geoadmin_reverse", f"{rounded_lat}:{rounded_lng}:{lang}")
+        cache_key = _cache_key(
+            "geoadmin_reverse", f"{rounded_lat}:{rounded_lng}:{lang}"
+        )
         cached = _cache_get_json(cache_key)
         if cached:
             return cached

@@ -48,20 +48,28 @@ class PatientIdentity(db.Model):
 
     # Index AVS sécurisé
     avs_hash: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False, index=True,
+        String(64),
+        unique=True,
+        nullable=False,
+        index=True,
         comment="HMAC-SHA256(pepper, avs_normalise) — jamais l'AVS en clair",
     )
     avs_last4: Mapped[str | None] = mapped_column(
-        String(4), nullable=True,
+        String(4),
+        nullable=True,
         comment="4 derniers chiffres pour debug/UX",
     )
     avs_status: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="unknown",
+        String(10),
+        nullable=False,
+        default="unknown",
         comment="valid, invalid, unknown",
     )
     avs_verified_at = Column(DateTime(timezone=True), nullable=True)
     avs_verified_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Données canoniques (meilleure info disponible, priorité curatelle)
@@ -69,11 +77,14 @@ class PatientIdentity(db.Model):
     canonical_last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     canonical_dob: Mapped[Any] = mapped_column(Date, nullable=True)
     canonical_source: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment='Source par champ: {"first_name": "curatelle", "dob": "clinic"}',
     )
     canonical_updated_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Optimistic locking
@@ -81,16 +92,22 @@ class PatientIdentity(db.Model):
 
     # Confiance du lien
     confidence_level: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="high",
+        String(10),
+        nullable=False,
+        default="high",
         comment="high (AVS validé), medium (nom+DOB confirmé), low (manuel)",
     )
 
     # Source de vérité (curatelle)
     source_institution_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("institutions.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("institutions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     source_patient_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("institution_patients.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("institution_patients.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     created_at = Column(
@@ -118,7 +135,9 @@ class PatientIdentity(db.Model):
             "avs_status": self.avs_status,
             "canonical_first_name": self.canonical_first_name,
             "canonical_last_name": self.canonical_last_name,
-            "canonical_dob": self.canonical_dob.isoformat() if self.canonical_dob else None,
+            "canonical_dob": self.canonical_dob.isoformat()
+            if self.canonical_dob
+            else None,
             "confidence_level": self.confidence_level,
             "version": self.version,
             "active_links_count": sum(1 for lnk in self.links if lnk.is_active),
@@ -137,13 +156,16 @@ class PatientIdentityLink(db.Model):
     __tablename__ = "patient_identity_links"
     __table_args__ = (
         UniqueConstraint(
-            "patient_identity_id", "entity_type", "entity_id",
+            "patient_identity_id",
+            "entity_type",
+            "entity_id",
             name="uq_identity_link",
         ),
         # Un seul lien actif par entité (empêche double liaison)
         Index(
             "ix_identity_link_active_entity",
-            "entity_type", "entity_id",
+            "entity_type",
+            "entity_id",
             unique=True,
             postgresql_where=text("is_active = true"),
         ),
@@ -157,13 +179,15 @@ class PatientIdentityLink(db.Model):
         index=True,
     )
     entity_type: Mapped[str] = mapped_column(
-        String(30), nullable=False,
+        String(30),
+        nullable=False,
         comment="institution_patient ou client",
     )
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     link_method: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
         comment="avs_exact, name_dob_confirmed, manual",
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -172,13 +196,17 @@ class PatientIdentityLink(db.Model):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     linked_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Soft detach
     detached_at = Column(DateTime(timezone=True), nullable=True)
     detached_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
     detach_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
@@ -221,19 +249,24 @@ class PatientSyncEvent(db.Model):
 
     # Delta avec before/after pour debug + rollback
     changed_fields: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False,
+        JSON,
+        nullable=False,
         comment='{"field": {"before": "old", "after": "new"}}',
     )
 
     # Clé déterministe : même mutation = même key
     idempotency_key: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False,
+        String(64),
+        unique=True,
+        nullable=False,
     )
     event_version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Statut du traitement
     status: Mapped[str] = mapped_column(
-        String(15), nullable=False, default="pending",
+        String(15),
+        nullable=False,
+        default="pending",
         comment="pending, processing, success, partial_failure, failed",
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -255,7 +288,9 @@ class PatientSyncEvent(db.Model):
             "patient_identity_id": self.patient_identity_id,
             "source_entity_type": self.source_entity_type,
             "source_entity_id": self.source_entity_id,
-            "changed_fields_keys": list(self.changed_fields.keys()) if self.changed_fields else [],
+            "changed_fields_keys": list(self.changed_fields.keys())
+            if self.changed_fields
+            else [],
             "status": self.status,
             "retry_count": self.retry_count,
             "created_at": _iso(self.created_at),
@@ -270,16 +305,20 @@ class PatientAuditLog(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     actor_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
     action: Mapped[str] = mapped_column(
-        String(50), nullable=False,
+        String(50),
+        nullable=False,
         comment="READ_IDENTITY_LINKS, MERGE, DETACH, LINK_CONFIRMED, SYNC_TRIGGERED, SYNC_APPLIED, MATCH_REJECTED, SYNC_MANUAL_RETRY",
     )
     entity_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     entity_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment="Détails complémentaires",
     )
     created_at = Column(
@@ -304,7 +343,9 @@ class PatientMatchRejection(db.Model):
         nullable=False,
     )
     rejected_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
     rejected_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -323,7 +364,9 @@ class PatientLinkSuggestion(db.Model):
     __table_args__ = (
         Index(
             "ix_link_suggestion_pending_unique",
-            "source_patient_id", "target_entity_type", "target_entity_id",
+            "source_patient_id",
+            "target_entity_type",
+            "target_entity_id",
             unique=True,
             postgresql_where=text("status = 'pending'"),
         ),
@@ -342,25 +385,33 @@ class PatientLinkSuggestion(db.Model):
         nullable=True,
     )
     target_entity_type: Mapped[str] = mapped_column(
-        String(30), nullable=False,
+        String(30),
+        nullable=False,
         comment="institution_patient ou client",
     )
     target_entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     match_score: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0,
+        Integer,
+        nullable=False,
+        default=0,
     )
     match_signals: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True,
+        JSON,
+        nullable=True,
         comment='{"name_exact": true, "dob_exact": true, ...}',
     )
 
     status: Mapped[str] = mapped_column(
-        String(15), nullable=False, default="pending",
+        String(15),
+        nullable=False,
+        default="pending",
         comment="pending, confirmed, rejected, expired",
     )
     resolved_by_user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("user.id", ondelete="SET NULL"), nullable=True,
+        Integer,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
     )
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 

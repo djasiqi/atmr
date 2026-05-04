@@ -1,4 +1,3 @@
-
 """add_billing_source_and_transport_vouchers
 
 Revision ID: 5e9c90875469
@@ -6,6 +5,7 @@ Revises: a31b260dd7be
 Create Date: 2026-01-21 21:12:46.465933
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -30,56 +30,126 @@ def upgrade():
         )
     """)
 
-    op.create_table("transport_vouchers",
-    sa.Column("id", sa.Integer(), nullable=False),
-    sa.Column("company_id", sa.Integer(), nullable=False),
-    sa.Column("client_id", sa.Integer(), nullable=False),
-    sa.Column("booking_id", sa.Integer(), nullable=True),
-    sa.Column("billing_party_id", sa.Integer(), nullable=True),
-    sa.Column("type", sa.String(length=50), server_default="clinic", nullable=False),
-    sa.Column("status", sa.String(length=50), server_default="draft", nullable=False),
-    sa.Column("valid_from", sa.DateTime(timezone=True), nullable=True),
-    sa.Column("valid_to", sa.DateTime(timezone=True), nullable=True),
-    sa.Column("external_ref", sa.String(length=255), nullable=True),
-    sa.Column("notes", sa.Text(), nullable=True),
-    sa.Column("validated_by_user_id", sa.Integer(), nullable=True),
-    sa.Column("validated_at", sa.DateTime(timezone=True), nullable=True),
-    sa.Column("created_by_user_id", sa.Integer(), nullable=True),
-    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    sa.ForeignKeyConstraint(["billing_party_id"], ["billing_parties.id"], ondelete="SET NULL"),
-    sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="SET NULL"),
-    sa.ForeignKeyConstraint(["client_id"], ["client.id"], ondelete="CASCADE"),
-    sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
-    sa.ForeignKeyConstraint(["created_by_user_id"], ["user.id"], ondelete="SET NULL"),
-    sa.ForeignKeyConstraint(["validated_by_user_id"], ["user.id"], ondelete="SET NULL"),
-    sa.PrimaryKeyConstraint("id")
+    op.create_table(
+        "transport_vouchers",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("company_id", sa.Integer(), nullable=False),
+        sa.Column("client_id", sa.Integer(), nullable=False),
+        sa.Column("booking_id", sa.Integer(), nullable=True),
+        sa.Column("billing_party_id", sa.Integer(), nullable=True),
+        sa.Column(
+            "type", sa.String(length=50), server_default="clinic", nullable=False
+        ),
+        sa.Column(
+            "status", sa.String(length=50), server_default="draft", nullable=False
+        ),
+        sa.Column("valid_from", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("valid_to", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("external_ref", sa.String(length=255), nullable=True),
+        sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("validated_by_user_id", sa.Integer(), nullable=True),
+        sa.Column("validated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_by_user_id", sa.Integer(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["billing_party_id"], ["billing_parties.id"], ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(["booking_id"], ["booking.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["client_id"], ["client.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["company_id"], ["company.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["created_by_user_id"], ["user.id"], ondelete="SET NULL"
+        ),
+        sa.ForeignKeyConstraint(
+            ["validated_by_user_id"], ["user.id"], ondelete="SET NULL"
+        ),
+        sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("transport_vouchers", schema=None) as batch_op:
-        batch_op.create_index("ix_transport_vouchers_billing_party_id", ["billing_party_id"], unique=False)
-        batch_op.create_index("ix_transport_vouchers_booking_id", ["booking_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_transport_vouchers_client_id"), ["client_id"], unique=False)
-        batch_op.create_index("ix_transport_vouchers_company_client_created", ["company_id", "client_id", "created_at"], unique=False)
-        batch_op.create_index(batch_op.f("ix_transport_vouchers_company_id"), ["company_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_transport_vouchers_created_by_user_id"), ["created_by_user_id"], unique=False)
-        batch_op.create_index(batch_op.f("ix_transport_vouchers_validated_by_user_id"), ["validated_by_user_id"], unique=False)
+        batch_op.create_index(
+            "ix_transport_vouchers_billing_party_id", ["billing_party_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_transport_vouchers_booking_id", ["booking_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_transport_vouchers_client_id"), ["client_id"], unique=False
+        )
+        batch_op.create_index(
+            "ix_transport_vouchers_company_client_created",
+            ["company_id", "client_id", "created_at"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_transport_vouchers_company_id"), ["company_id"], unique=False
+        )
+        batch_op.create_index(
+            batch_op.f("ix_transport_vouchers_created_by_user_id"),
+            ["created_by_user_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_transport_vouchers_validated_by_user_id"),
+            ["validated_by_user_id"],
+            unique=False,
+        )
 
-    op.create_table("transport_voucher_files",
-    sa.Column("id", sa.Integer(), nullable=False),
-    sa.Column("voucher_id", sa.Integer(), nullable=False),
-    sa.Column("file_url", sa.String(length=500), nullable=False),
-    sa.Column("filename", sa.String(length=255), nullable=False),
-    sa.Column("mime_type", sa.String(length=100), nullable=True),
-    sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-    sa.ForeignKeyConstraint(["voucher_id"], ["transport_vouchers.id"], ondelete="CASCADE"),
-    sa.PrimaryKeyConstraint("id")
+    op.create_table(
+        "transport_voucher_files",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("voucher_id", sa.Integer(), nullable=False),
+        sa.Column("file_url", sa.String(length=500), nullable=False),
+        sa.Column("filename", sa.String(length=255), nullable=False),
+        sa.Column("mime_type", sa.String(length=100), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["voucher_id"], ["transport_vouchers.id"], ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("transport_voucher_files", schema=None) as batch_op:
-        batch_op.create_index(batch_op.f("ix_transport_voucher_files_voucher_id"), ["voucher_id"], unique=False)
+        batch_op.create_index(
+            batch_op.f("ix_transport_voucher_files_voucher_id"),
+            ["voucher_id"],
+            unique=False,
+        )
 
     with op.batch_alter_table("booking", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("billing_source", sa.Enum("default_client", "transport_voucher", "client_stay", "manual_override", "import", "system_rule", name="billing_source", create_type=False), nullable=True))
-        batch_op.add_column(sa.Column("billing_source_ref", sa.String(length=255), nullable=True))
+        batch_op.add_column(
+            sa.Column(
+                "billing_source",
+                sa.Enum(
+                    "default_client",
+                    "transport_voucher",
+                    "client_stay",
+                    "manual_override",
+                    "import",
+                    "system_rule",
+                    name="billing_source",
+                    create_type=False,
+                ),
+                nullable=True,
+            )
+        )
+        batch_op.add_column(
+            sa.Column("billing_source_ref", sa.String(length=255), nullable=True)
+        )
 
     # NOTE: L'index unique S2 n'est PAS supprimé ici car il n'a pas de raison d'être supprimé
     # dans cette migration (qui ajoute billing_source et transport_vouchers).
@@ -87,7 +157,9 @@ def upgrade():
 
     with op.batch_alter_table("refresh_token", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_refresh_token_token_hash"))
-        batch_op.create_index("ix_refresh_token_token_hash", ["token_hash"], unique=False)
+        batch_op.create_index(
+            "ix_refresh_token_token_hash", ["token_hash"], unique=False
+        )
 
     # ### end Alembic commands ###
 
@@ -96,7 +168,9 @@ def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
     with op.batch_alter_table("refresh_token", schema=None) as batch_op:
         batch_op.drop_index("ix_refresh_token_token_hash")
-        batch_op.create_index(batch_op.f("ix_refresh_token_token_hash"), ["token_hash"], unique=True)
+        batch_op.create_index(
+            batch_op.f("ix_refresh_token_token_hash"), ["token_hash"], unique=True
+        )
 
     # NOTE: L'index unique S2 n'est PAS recréé ici car il n'a pas été supprimé dans upgrade()
     # L'index S2 doit rester intact lors du downgrade de cette migration.
@@ -123,4 +197,3 @@ def downgrade():
 
     op.drop_table("transport_vouchers")
     # ### end Alembic commands ###
-

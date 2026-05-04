@@ -124,7 +124,7 @@ class EmailValidator:
         return result
 
     @staticmethod
-    def _check_dns(normalized_email: str) -> str | None:  # noqa: PLR0911
+    def _check_dns(normalized_email: str) -> str | None:
         """
         Vérifie l'existence du domaine via DNS MX records.
 

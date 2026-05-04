@@ -43,4 +43,3 @@ def test_relative_slots_cover_yesterday_today_tomorrow() -> None:
     assert reference_day in dates
     assert (reference_day - timedelta(days=1)) in dates
     assert (reference_day + timedelta(days=1)) in dates
-

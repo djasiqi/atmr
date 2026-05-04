@@ -135,7 +135,9 @@ class PartnerInvoiceService:
         )
 
         all_eligible = (
-            BookingTransfer.query.join(Booking, BookingTransfer.booking_id == Booking.id)
+            BookingTransfer.query.join(
+                Booking, BookingTransfer.booking_id == Booking.id
+            )
             .filter(
                 BookingTransfer.partnership_id == partnership_id,
                 BookingTransfer.status == TransferStatus.COMPLETED,
@@ -498,9 +500,7 @@ class PartnerInvoiceService:
                 partner_invoice_id,
                 str(e),
             )
-            raise ValueError(
-                f"Erreur lors de la régénération du PDF: {e}"
-            ) from e
+            raise ValueError(f"Erreur lors de la régénération du PDF: {e}") from e
 
     def mark_as_sent(self, partner_invoice_id: int, company_id: int) -> PartnerInvoice:
         """Marque une facture partenaire comme envoyée (workflow Brouillon → Envoyée).

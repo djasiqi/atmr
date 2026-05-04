@@ -62,11 +62,19 @@ BP_TYPE_HOSPITAL = BillingPartyType.HOSPITAL.value  # "hospital"
 def parse_args():
     parser = argparse.ArgumentParser(description="Audit d'intégrité des factures")
     parser.add_argument("--company-id", type=int, help="ID de la company à auditer")
-    parser.add_argument("--from-date", type=str, help="Date de début (YYYY-MM-DD), filtre sur issued_at")
+    parser.add_argument(
+        "--from-date", type=str, help="Date de début (YYYY-MM-DD), filtre sur issued_at"
+    )
     parser.add_argument("--to-date", type=str, help="Date de fin (YYYY-MM-DD)")
-    parser.add_argument("--status", type=str, help="Filtrer par statut (draft, sent, paid, cancelled)")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Afficher les détails")
-    parser.add_argument("--limit", type=int, default=20, help="Nombre max d'exemples par catégorie")
+    parser.add_argument(
+        "--status", type=str, help="Filtrer par statut (draft, sent, paid, cancelled)"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Afficher les détails"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=20, help="Nombre max d'exemples par catégorie"
+    )
     parser.add_argument("--export", type=str, help="Exporter les résultats en JSON")
     return parser.parse_args()
 
@@ -289,6 +297,7 @@ def print_results(title: str, results: list[dict], verbose: bool = False):
 
 def serialize_results(results: dict) -> dict:
     """Sérialise les résultats pour export JSON."""
+
     def convert(obj):
         if isinstance(obj, Decimal):
             return float(obj)
@@ -297,10 +306,7 @@ def serialize_results(results: dict) -> dict:
         return str(obj)
 
     return {
-        k: [
-            {key: convert(val) for key, val in row.items()}
-            for row in v
-        ]
+        k: [{key: convert(val) for key, val in row.items()} for row in v]
         for k, v in results.items()
     }
 
@@ -332,11 +338,21 @@ def main():
 
         # Exécuter les audits
         results = {
-            "totals_zero_with_lines": audit_totals_zero_with_lines(db.session, filters, args.limit),
-            "subtotal_mismatch": audit_subtotal_mismatch(db.session, filters, args.limit),
-            "balance_due_mismatch": audit_balance_due_mismatch(db.session, filters, args.limit),
-            "s2_without_billing_party": audit_s2_without_billing_party(db.session, filters, args.limit),
-            "clinic_without_link": audit_clinic_without_link(db.session, filters, args.limit),
+            "totals_zero_with_lines": audit_totals_zero_with_lines(
+                db.session, filters, args.limit
+            ),
+            "subtotal_mismatch": audit_subtotal_mismatch(
+                db.session, filters, args.limit
+            ),
+            "balance_due_mismatch": audit_balance_due_mismatch(
+                db.session, filters, args.limit
+            ),
+            "s2_without_billing_party": audit_s2_without_billing_party(
+                db.session, filters, args.limit
+            ),
+            "clinic_without_link": audit_clinic_without_link(
+                db.session, filters, args.limit
+            ),
             "negative_balance": audit_negative_balance(db.session, filters, args.limit),
         }
 
@@ -344,32 +360,32 @@ def main():
         print_results(
             "Factures avec total=0 mais lignes > 0 (CRITIQUE)",
             results["totals_zero_with_lines"],
-            args.verbose
+            args.verbose,
         )
         print_results(
             "Factures avec subtotal != sum(lines) (CRITIQUE)",
             results["subtotal_mismatch"],
-            args.verbose
+            args.verbose,
         )
         print_results(
             "Factures avec balance_due incohérent (WARNING)",
             results["balance_due_mismatch"],
-            args.verbose
+            args.verbose,
         )
         print_results(
             "Factures S2 sans billing_party_id (CRITIQUE)",
             results["s2_without_billing_party"],
-            args.verbose
+            args.verbose,
         )
         print_results(
             "Factures cliniques sans lien ClientBillingParty (INFO - OK avec bypass)",
             results["clinic_without_link"],
-            args.verbose
+            args.verbose,
         )
         print_results(
             "Factures avec balance_due < 0 (WARNING)",
             results["negative_balance"],
-            args.verbose
+            args.verbose,
         )
 
         # Résumé
@@ -378,24 +394,27 @@ def main():
         print("=" * 80)
 
         critical_count = (
-            len(results["totals_zero_with_lines"]) +
-            len(results["subtotal_mismatch"]) +
-            len(results["s2_without_billing_party"])
+            len(results["totals_zero_with_lines"])
+            + len(results["subtotal_mismatch"])
+            + len(results["s2_without_billing_party"])
         )
-        warning_count = (
-            len(results["balance_due_mismatch"]) +
-            len(results["negative_balance"])
+        warning_count = len(results["balance_due_mismatch"]) + len(
+            results["negative_balance"]
         )
 
         if critical_count > 0:
-            print(f"🔴 CRITIQUES: {critical_count} facture(s) nécessitent une correction")
+            print(
+                f"🔴 CRITIQUES: {critical_count} facture(s) nécessitent une correction"
+            )
         else:
             print("✅ Aucun problème critique détecté")
 
         if warning_count > 0:
             print(f"🟡 WARNINGS: {warning_count} facture(s) à vérifier")
 
-        print(f"\nℹ️  INFO: {len(results['clinic_without_link'])} facture(s) cliniques sans lien ClientBillingParty")
+        print(
+            f"\nℹ️  INFO: {len(results['clinic_without_link'])} facture(s) cliniques sans lien ClientBillingParty"
+        )
         print("   (Normal avec le bypass S2/clinic - à ne pas corriger)")
 
         # Collecter les IDs pour réparation
@@ -403,13 +422,21 @@ def main():
             "totals_zero": [r["id"] for r in results["totals_zero_with_lines"]],
             "subtotal_mismatch": [r["id"] for r in results["subtotal_mismatch"]],
             "balance_mismatch": [r["id"] for r in results["balance_due_mismatch"]],
-            "s2_no_billing_party": [r["id"] for r in results["s2_without_billing_party"]],
+            "s2_no_billing_party": [
+                r["id"] for r in results["s2_without_billing_party"]
+            ],
         }
 
         print("\n📋 IDs à réparer:")
-        print(f"   - Totaux à recalculer: {repair_ids['totals_zero'][:10]}{'...' if len(repair_ids['totals_zero']) > 10 else ''}")
-        print(f"   - Subtotal mismatch: {repair_ids['subtotal_mismatch'][:10]}{'...' if len(repair_ids['subtotal_mismatch']) > 10 else ''}")
-        print(f"   - Balance mismatch: {repair_ids['balance_mismatch'][:10]}{'...' if len(repair_ids['balance_mismatch']) > 10 else ''}")
+        print(
+            f"   - Totaux à recalculer: {repair_ids['totals_zero'][:10]}{'...' if len(repair_ids['totals_zero']) > 10 else ''}"
+        )
+        print(
+            f"   - Subtotal mismatch: {repair_ids['subtotal_mismatch'][:10]}{'...' if len(repair_ids['subtotal_mismatch']) > 10 else ''}"
+        )
+        print(
+            f"   - Balance mismatch: {repair_ids['balance_mismatch'][:10]}{'...' if len(repair_ids['balance_mismatch']) > 10 else ''}"
+        )
 
         # Export JSON si demandé
         if args.export:
@@ -421,7 +448,7 @@ def main():
                 "summary": {
                     "critical_count": critical_count,
                     "warning_count": warning_count,
-                }
+                },
             }
             with Path(args.export).open("w") as f:
                 json.dump(export_data, f, indent=2)

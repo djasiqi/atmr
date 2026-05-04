@@ -127,7 +127,9 @@ from .patient_identity import (
     PatientSyncEvent,
 )
 from .institution_settings import InstitutionSettings
-from .institution_transport_preference import InstitutionTransportPreference  # ✅ ÉTAPE 4
+from .institution_transport_preference import (
+    InstitutionTransportPreference,
+)  # ✅ ÉTAPE 4
 from .request_offer import RequestOffer  # ✅ ÉTAPE 4
 from .geo_unit import GeoUnit
 from .service_area_pricing import (

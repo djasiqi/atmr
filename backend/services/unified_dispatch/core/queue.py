@@ -70,7 +70,7 @@ _APP: Any | None = None
 
 def init_app(app):
     """À appeler depuis create_app(app)."""
-    global _APP  # noqa: PLW0603
+    global _APP
     _APP = app
 
 

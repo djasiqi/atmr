@@ -501,7 +501,7 @@ def get_rl_logger() -> RLLogger:
         Instance du RLLogger
 
     """
-    global _rl_logger_instance  # noqa: PLW0603
+    global _rl_logger_instance
     if _rl_logger_instance is None:
         _rl_logger_instance = RLLogger()
     return _rl_logger_instance

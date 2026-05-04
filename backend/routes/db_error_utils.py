@@ -176,8 +176,7 @@ def _format_check_constraint_error(
     return {
         "error": "check_constraint_violation",
         "message": (
-            "Valeur invalide pour ce champ. "
-            "Vérifiez les contraintes de validation."
+            "Valeur invalide pour ce champ. Vérifiez les contraintes de validation."
         ),
     }, 400
 

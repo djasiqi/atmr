@@ -46,7 +46,9 @@ def _set_status(booking: _BookingLike, status_name: str) -> None:
 class _BookingRepo(Protocol):
     def find_model_by_id(self, booking_id: int) -> Any | None: ...
 
-    def find_children_by_parent_booking_id(self, parent_booking_id: int) -> list[Any]: ...
+    def find_children_by_parent_booking_id(
+        self, parent_booking_id: int
+    ) -> list[Any]: ...
 
 
 class _AssignmentRepo(Protocol):
@@ -130,8 +132,10 @@ class UpdateDriverBookingStatusUseCase:
             # Surface driver: FAILED → annulation côté booking (aligné CANCELED) avec raison
             if new_status_str == "failed":
                 new_status_str = "canceled"
-                if data is not None and not data.get("cancel_reason") and not data.get(
-                    "reason_code"
+                if (
+                    data is not None
+                    and not data.get("cancel_reason")
+                    and not data.get("reason_code")
                 ):
                     data = {**data, "cancel_reason": "FAILED"}
             valid_statuses = {
@@ -168,13 +172,17 @@ class UpdateDriverBookingStatusUseCase:
                         response = {
                             "booking_id": booking.id,
                             "status": BOOKING_STATUS_EN_ROUTE,
-                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "server_time": self._now_utc().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "unchanged": True,
                         }
                     elif status_val != BOOKING_STATUS_ASSIGNED:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
-                            cmd.booking_id, status_val, new_status_str,
+                            cmd.booking_id,
+                            status_val,
+                            new_status_str,
                         )
                         response = {
                             "error": "Booking must be ASSIGNED before going en_route"
@@ -188,11 +196,16 @@ class UpdateDriverBookingStatusUseCase:
                     # Étape intermédiaire (contrat `MISSION_STATUS_VALUES.ARRIVED`) : le
                     # `Booking` reste EN_ROUTE ; pas d'autre statut de réservation.
                     status_val = _status_value(booking)
-                    if status_val in (BOOKING_STATUS_IN_PROGRESS, BOOKING_STATUS_EN_ROUTE):
+                    if status_val in (
+                        BOOKING_STATUS_IN_PROGRESS,
+                        BOOKING_STATUS_EN_ROUTE,
+                    ):
                         response = {
                             "booking_id": booking.id,
                             "status": status_val,
-                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "server_time": self._now_utc().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "unchanged": True,
                             "mission_milestone": "ARRIVED",
                         }
@@ -213,13 +226,17 @@ class UpdateDriverBookingStatusUseCase:
                         response = {
                             "booking_id": booking.id,
                             "status": BOOKING_STATUS_IN_PROGRESS,
-                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "server_time": self._now_utc().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "unchanged": True,
                         }
                     elif status_val != BOOKING_STATUS_EN_ROUTE:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
-                            cmd.booking_id, status_val, new_status_str,
+                            cmd.booking_id,
+                            status_val,
+                            new_status_str,
                         )
                         response = {"error": "Booking must be en_route before starting"}
                         status_code = 400
@@ -235,13 +252,17 @@ class UpdateDriverBookingStatusUseCase:
                             response = {
                                 "booking_id": booking.id,
                                 "status": BOOKING_STATUS_RETURN_COMPLETED,
-                                "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "server_time": self._now_utc().strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"
+                                ),
                                 "unchanged": True,
                             }
                         elif status_val != BOOKING_STATUS_IN_PROGRESS:
                             logger.info(
                                 "invalid_transition booking_id=%s current=%s requested=%s",
-                                cmd.booking_id, status_val, "completed(return)",
+                                cmd.booking_id,
+                                status_val,
+                                "completed(return)",
                             )
                             response = {
                                 "error": (
@@ -262,13 +283,17 @@ class UpdateDriverBookingStatusUseCase:
                             response = {
                                 "booking_id": booking.id,
                                 "status": BOOKING_STATUS_COMPLETED,
-                                "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                "server_time": self._now_utc().strftime(
+                                    "%Y-%m-%dT%H:%M:%SZ"
+                                ),
                                 "unchanged": True,
                             }
                         elif status_val != BOOKING_STATUS_IN_PROGRESS:
                             logger.info(
                                 "invalid_transition booking_id=%s current=%s requested=%s",
-                                cmd.booking_id, status_val, "completed",
+                                cmd.booking_id,
+                                status_val,
+                                "completed",
                             )
                             response = {
                                 "error": "Booking must be in_progress before completing"
@@ -287,13 +312,17 @@ class UpdateDriverBookingStatusUseCase:
                         response = {
                             "booking_id": booking.id,
                             "status": BOOKING_STATUS_RETURN_COMPLETED,
-                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "server_time": self._now_utc().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "unchanged": True,
                         }
                     elif status_val != BOOKING_STATUS_IN_PROGRESS:
                         logger.info(
                             "invalid_transition booking_id=%s current=%s requested=%s",
-                            cmd.booking_id, status_val, "return_completed",
+                            cmd.booking_id,
+                            status_val,
+                            "return_completed",
                         )
                         response = {
                             "error": (
@@ -317,7 +346,9 @@ class UpdateDriverBookingStatusUseCase:
                         response = {
                             "booking_id": booking.id,
                             "status": BOOKING_STATUS_CANCELED,
-                            "server_time": self._now_utc().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "server_time": self._now_utc().strftime(
+                                "%Y-%m-%dT%H:%M:%SZ"
+                            ),
                             "unchanged": True,
                         }
                     elif (data.get("scope") or "").strip().lower() == "reservation":
@@ -383,10 +414,18 @@ class UpdateDriverBookingStatusUseCase:
                                     seg, "cancellation_reason_code", None
                                 )
                                 if existing_code is None:
-                                    billing = CompanyBillingSettings.query.filter_by(
-                                        company_id=seg.company_id
-                                    ).first() if getattr(seg, "company_id", None) else None
-                                    cpolicy = getattr(billing, "cancellation_policy", None) if billing else None
+                                    billing = (
+                                        CompanyBillingSettings.query.filter_by(
+                                            company_id=seg.company_id
+                                        ).first()
+                                        if getattr(seg, "company_id", None)
+                                        else None
+                                    )
+                                    cpolicy = (
+                                        getattr(billing, "cancellation_policy", None)
+                                        if billing
+                                        else None
+                                    )
                                     cancel_fields = compute_cancellation_fields(
                                         reason_code=reason_code,
                                         reason_text=reason_text,
@@ -477,8 +516,10 @@ class UpdateDriverBookingStatusUseCase:
                                 _set_status(booking, "ACCEPTED")
                                 booking.driver_id = None
 
-                                assignment = self._assignment_repo.find_model_by_booking_id(
-                                    booking_id=cmd.booking_id
+                                assignment = (
+                                    self._assignment_repo.find_model_by_booking_id(
+                                        booking_id=cmd.booking_id
+                                    )
                                 )
                                 assignment_id_str: str | None = None
                                 if assignment is not None:
@@ -546,10 +587,18 @@ class UpdateDriverBookingStatusUseCase:
                                     )
                                     from models.invoice import CompanyBillingSettings
 
-                                    billing_s = CompanyBillingSettings.query.filter_by(
-                                        company_id=booking.company_id
-                                    ).first() if getattr(booking, "company_id", None) else None
-                                    cpolicy_s = getattr(billing_s, "cancellation_policy", None) if billing_s else None
+                                    billing_s = (
+                                        CompanyBillingSettings.query.filter_by(
+                                            company_id=booking.company_id
+                                        ).first()
+                                        if getattr(booking, "company_id", None)
+                                        else None
+                                    )
+                                    cpolicy_s = (
+                                        getattr(billing_s, "cancellation_policy", None)
+                                        if billing_s
+                                        else None
+                                    )
 
                                     cancel_fields = compute_cancellation_fields(
                                         reason_code=reason_code,
@@ -669,7 +718,8 @@ class UpdateDriverBookingStatusUseCase:
         if response.get("unchanged"):
             logger.info(
                 "status_unchanged booking_id=%s status=%s",
-                response.get("booking_id"), response.get("status"),
+                response.get("booking_id"),
+                response.get("status"),
             )
 
         return UpdateDriverBookingStatusResult(

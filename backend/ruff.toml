@@ -46,7 +46,12 @@ ignore = [
     "D105",   # Missing docstring in magic method
     "PLR0913", # Too many arguments
     "PLR0912", # Too many branches
+    "PLR0911", # Too many return statements
     "PLR0915", # Too many statements
+    "PLW0603",  # global (extensions Flask / état module)
+    "PT019",   # Fixture pytest sans parenthèses (style existant)
+    "RUF002",  # Unicode ambigu dans docstrings (texte FR)
+    "RUF003",  # Unicode ambigu dans commentaires (texte FR)
     "COM812", # Missing trailing comma
     "ISC001", # Implicitly concatenated string literals
     "EXE002", # Executable file without shebang (Docker scripts)

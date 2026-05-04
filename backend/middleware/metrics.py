@@ -129,7 +129,11 @@ def prom_middleware(app: Flask) -> Flask:
     def _start_timer():  # pyright: ignore[reportUnusedFunction]
         """Marque le début de la requête."""
         request._prom_start_time = time.time()
-        if os.getenv("METRICS_SQL_PER_REQUEST", "false").lower() in ("1", "true", "yes"):
+        if os.getenv("METRICS_SQL_PER_REQUEST", "false").lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
             g._metrics_sql_track = True
             g._metrics_sql_count = 0
 

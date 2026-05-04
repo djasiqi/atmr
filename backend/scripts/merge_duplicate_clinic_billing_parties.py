@@ -36,7 +36,9 @@ from models import (
     TransportVoucher,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -46,10 +48,7 @@ def _normalize_name(value: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", str(value))
     normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
     normalized = (
-        normalized.lower()
-        .replace("’", "'")
-        .replace("`", "'")
-        .replace("´", "'")
+        normalized.lower().replace("’", "'").replace("`", "'").replace("´", "'")
     )
     normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
@@ -57,8 +56,12 @@ def _normalize_name(value: str | None) -> str:
 
 def _ref_counts(bp_id: int) -> dict[str, int]:
     return {
-        "mappings": ClinicBillingPartyMapping.query.filter_by(billing_party_id=bp_id).count(),
-        "client_links": ClientBillingParty.query.filter_by(billing_party_id=bp_id).count(),
+        "mappings": ClinicBillingPartyMapping.query.filter_by(
+            billing_party_id=bp_id
+        ).count(),
+        "client_links": ClientBillingParty.query.filter_by(
+            billing_party_id=bp_id
+        ).count(),
         "bookings": Booking.query.filter_by(billing_party_id=bp_id).count(),
         "invoices": Invoice.query.filter_by(billing_party_id=bp_id).count(),
         "vouchers": TransportVoucher.query.filter_by(billing_party_id=bp_id).count(),
@@ -69,7 +72,9 @@ def _pick_canonical(parties: list[BillingParty]) -> BillingParty:
     def score(bp: BillingParty):
         refs = _ref_counts(bp.id)
         total_refs = sum(refs.values())
-        has_clinic_ref = int(bool(bp.external_ref and str(bp.external_ref).startswith("clinic_company:")))
+        has_clinic_ref = int(
+            bool(bp.external_ref and str(bp.external_ref).startswith("clinic_company:"))
+        )
         updated = bp.updated_at or datetime.min
         # Priorité: +références, +external_ref clinic, actif, plus récent, plus grand id
         return (total_refs, has_clinic_ref, int(bool(bp.is_active)), updated, bp.id)
@@ -95,7 +100,9 @@ def _merge_fields(canonical: BillingParty, duplicate: BillingParty) -> None:
             canonical.external_ref = duplicate.external_ref
 
 
-def _reassign_duplicate(duplicate: BillingParty, canonical: BillingParty) -> dict[str, int]:
+def _reassign_duplicate(
+    duplicate: BillingParty, canonical: BillingParty
+) -> dict[str, int]:
     moved = {
         "mappings": 0,
         "client_links_updated": 0,
@@ -106,7 +113,9 @@ def _reassign_duplicate(duplicate: BillingParty, canonical: BillingParty) -> dic
     }
 
     # 1) Clinic mappings
-    mappings = ClinicBillingPartyMapping.query.filter_by(billing_party_id=duplicate.id).all()
+    mappings = ClinicBillingPartyMapping.query.filter_by(
+        billing_party_id=duplicate.id
+    ).all()
     for m in mappings:
         m.billing_party_id = canonical.id
         moved["mappings"] += 1
@@ -134,7 +143,9 @@ def _reassign_duplicate(duplicate: BillingParty, canonical: BillingParty) -> dic
         {"billing_party_id": canonical.id},
         synchronize_session=False,
     )
-    moved["vouchers"] = TransportVoucher.query.filter_by(billing_party_id=duplicate.id).update(
+    moved["vouchers"] = TransportVoucher.query.filter_by(
+        billing_party_id=duplicate.id
+    ).update(
         {"billing_party_id": canonical.id},
         synchronize_session=False,
     )
@@ -204,7 +215,9 @@ def run(*, dry_run: bool, company_id: int | None = None) -> dict[str, int]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true", help="Analyse sans commit")
-    parser.add_argument("--company-id", type=int, default=None, help="Limiter à une company")
+    parser.add_argument(
+        "--company-id", type=int, default=None, help="Limiter à une company"
+    )
     args = parser.parse_args()
 
     app = create_app()
@@ -215,4 +228,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

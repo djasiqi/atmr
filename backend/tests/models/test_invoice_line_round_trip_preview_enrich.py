@@ -47,8 +47,16 @@ def test_enrich_sets_primary_ar_and_hides_secondary():
 
         ln1 = SimpleNamespace(type=InvoiceLineType.RIDE, reservation_id=101)
         ln2 = SimpleNamespace(type=InvoiceLineType.RIDE, reservation_id=102)
-        d1: dict[str, object] = {"reservation_id": 101, "line_total": 45.0, "line_meta": {}}
-        d2: dict[str, object] = {"reservation_id": 102, "line_total": 45.0, "line_meta": {}}
+        d1: dict[str, object] = {
+            "reservation_id": 101,
+            "line_total": 45.0,
+            "line_meta": {},
+        }
+        d2: dict[str, object] = {
+            "reservation_id": 102,
+            "line_total": 45.0,
+            "line_meta": {},
+        }
 
         _enrich_invoice_line_payloads_round_trip_merge([ln1, ln2], [d1, d2])
 

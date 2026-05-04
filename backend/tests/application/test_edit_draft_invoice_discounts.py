@@ -41,7 +41,7 @@ class TestLineHtSnapshotDict:
 
 
 @pytest.mark.parametrize(
-    "amount,estimated,expected_raw",
+    ("amount", "estimated", "expected_raw"),
     [
         (Decimal("0"), Decimal("99"), Decimal("0")),
         (None, Decimal("40"), Decimal("40")),
@@ -84,4 +84,4 @@ def test_per_line_discount_eligible_lines_include_positive_custom_lines():
     inv = MagicMock()
     inv.lines = [ride, custom, manual_discount, technical_discount]
 
-    assert [l.id for l in _eligible_lines_for_per_line_discount(inv)] == [1, 2]
+    assert [line.id for line in _eligible_lines_for_per_line_discount(inv)] == [1, 2]

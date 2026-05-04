@@ -51,6 +51,7 @@ def _client_booking_payable_amount_chf(booking: Any) -> Decimal:
         return base + _decimal_amount(getattr(ret, "amount", 0))
     return base
 
+
 logger = logging.getLogger(__name__)
 
 _PAYABLE_CLIENT_STATUSES = frozenset(
@@ -233,7 +234,9 @@ def create_saferpay_payment_page_initialize(
             "OrderId": order_id,
             "Description": "Transport LIRIE",
         },
-        "Payer": {"LanguageCode": (os.getenv("SAFERPAY_PAYER_LANGUAGE") or "fr").strip()},
+        "Payer": {
+            "LanguageCode": (os.getenv("SAFERPAY_PAYER_LANGUAGE") or "fr").strip()
+        },
         "ReturnUrls": {
             "Success": success_url,
             "Fail": fail_url,
@@ -309,6 +312,8 @@ def try_finalize_saferpay_by_payment_id(
     try:
         out = finalize_saferpay_payment(row)
     except Exception:
-        logger.exception("try_finalize_saferpay_by_payment_id payment_id=%s", payment_id)
+        logger.exception(
+            "try_finalize_saferpay_by_payment_id payment_id=%s", payment_id
+        )
         return {"ok": False, "reason": "error"}
     return {"ok": True, **out}

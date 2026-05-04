@@ -65,7 +65,9 @@ class BookingCreateSchema(Schema):
     )
     occurrences = fields.Int(
         load_default=1,
-        validate=validate.Range(min=1, max=20, error="occurrences doit être entre 1 et 20"),
+        validate=validate.Range(
+            min=1, max=20, error="occurrences doit être entre 1 et 20"
+        ),
     )
     client_note = fields.Str(
         load_default="",
@@ -103,14 +105,13 @@ class BookingCreateSchema(Schema):
         raw = dict(data)
         asap_val = raw.get("asap")
         asap = asap_val is True or (
-            isinstance(asap_val, str) and asap_val.strip().lower() in ("true", "1", "yes")
+            isinstance(asap_val, str)
+            and asap_val.strip().lower() in ("true", "1", "yes")
         )
         st = raw.get("scheduled_time")
         if asap and (st is None or (isinstance(st, str) and not st.strip())):
             # Marge pour éviter « dans le passé » (latence réseau / parsing fuseau)
-            soon = (datetime.now(UTC) + timedelta(minutes=5)).replace(
-                microsecond=0
-            )
+            soon = (datetime.now(UTC) + timedelta(minutes=5)).replace(microsecond=0)
             raw["scheduled_time"] = soon.isoformat().replace("+00:00", "Z")
         red = raw.get("recurrence_end_date")
         if isinstance(red, str) and not red.strip():
@@ -175,7 +176,11 @@ class BookingCreateSchema(Schema):
                 return
             if rday < outbound.date():
                 raise ValidationError(
-                    {"return_date": ["return_date ne peut pas précéder la date du départ."]}
+                    {
+                        "return_date": [
+                            "return_date ne peut pas précéder la date du départ."
+                        ]
+                    }
                 )
 
     @validates_schema
@@ -190,7 +195,9 @@ class BookingCreateSchema(Schema):
             )
         rtype = (data.get("recurrence_type") or "").strip()
         if not rtype:
-            raise ValidationError("recurrence_type est requis lorsque is_recurring=True")
+            raise ValidationError(
+                "recurrence_type est requis lorsque is_recurring=True"
+            )
         if rtype == "custom":
             days = data.get("recurrence_days") or []
             if not days:

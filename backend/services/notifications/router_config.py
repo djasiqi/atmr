@@ -56,7 +56,9 @@ ROUTER_CONFIG: dict[str, EventTypeConfig] = {
         recipients="both",
         push_policy="if_inactive",
         exclude_actor=True,
-        throttle=ThrottleRule(window_s=60, max_per_window=1, scope="booking_id+recipient"),
+        throttle=ThrottleRule(
+            window_s=60, max_per_window=1, scope="booking_id+recipient"
+        ),
     ),
     "BOOKING_CANCELED": EventTypeConfig(
         event_type="BOOKING_CANCELED",
@@ -88,14 +90,18 @@ ROUTER_CONFIG: dict[str, EventTypeConfig] = {
         recipients="company",
         push_policy="if_inactive",
         exclude_actor=True,
-        throttle=ThrottleRule(window_s=30, max_per_window=1, scope="booking_id+company"),
+        throttle=ThrottleRule(
+            window_s=30, max_per_window=1, scope="booking_id+company"
+        ),
     ),
     "DRIVER_ONBOARD": EventTypeConfig(
         event_type="DRIVER_ONBOARD",
         recipients="company",
         push_policy="if_inactive",
         exclude_actor=True,
-        throttle=ThrottleRule(window_s=30, max_per_window=1, scope="booking_id+company"),
+        throttle=ThrottleRule(
+            window_s=30, max_per_window=1, scope="booking_id+company"
+        ),
     ),
     "DRIVER_COMPLETED": EventTypeConfig(
         event_type="DRIVER_COMPLETED",

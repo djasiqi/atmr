@@ -8,6 +8,7 @@ P1: Table institution_settings (1:1 via institution_id unique FK)
     + 3 colonnes billing sur institutions (billing_email, billing_address, vat_number)
     + Backfill: une row settings pour chaque institution existante
 """
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -107,9 +108,7 @@ def upgrade():
     op.execute(
         "ALTER TABLE institutions ADD COLUMN IF NOT EXISTS billing_email VARCHAR(255)"
     )
-    op.execute(
-        "ALTER TABLE institutions ADD COLUMN IF NOT EXISTS billing_address TEXT"
-    )
+    op.execute("ALTER TABLE institutions ADD COLUMN IF NOT EXISTS billing_address TEXT")
     op.execute(
         "ALTER TABLE institutions ADD COLUMN IF NOT EXISTS vat_number VARCHAR(50)"
     )

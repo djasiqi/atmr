@@ -14,9 +14,7 @@ class BillingReviewListQuerySchema(Schema):
 
     company_id = fields.Integer(required=True, validate=validate.Range(min=1))
     year = fields.Integer(required=True, validate=validate.Range(min=2000, max=2100))
-    month = fields.Integer(
-        required=True, validate=validate.Range(min=1, max=12)
-    )
+    month = fields.Integer(required=True, validate=validate.Range(min=1, max=12))
     status = fields.String(
         validate=validate.OneOf(["draft", "needs_review", "ready", "locked"]),
         allow_none=True,

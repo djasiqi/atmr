@@ -210,7 +210,7 @@ class DelayMLPredictor:
         except Exception:
             return 5  # Distance par défaut
 
-    def _calculate_driver_punctuality(self, driver: Any) -> float:  # noqa: PLR0911
+    def _calculate_driver_punctuality(self, driver: Any) -> float:
         """Calcule un score de ponctualité du chauffeur (0-1)
         basé sur l'historique réel.
         Méthode :
@@ -684,7 +684,7 @@ _global_predictor: DelayMLPredictor | None = None
 
 def get_ml_predictor() -> DelayMLPredictor:
     """Récupère l'instance globale du prédicteur."""
-    global _global_predictor  # noqa: PLW0603
+    global _global_predictor
     if _global_predictor is None:
         _global_predictor = DelayMLPredictor()
     return _global_predictor

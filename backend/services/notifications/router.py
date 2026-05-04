@@ -64,12 +64,13 @@ def _is_actor_recipient(
     if not config.exclude_actor or not actor_role or actor_id is None:
         return False
     return (
-        (recipient_role == "driver" and actor_role == "driver" and actor_id == recipient_id)
-        or (
-            recipient_role == "company"
-            and actor_role == "company"
-            and actor_id == recipient_id
-        )
+        recipient_role == "driver"
+        and actor_role == "driver"
+        and actor_id == recipient_id
+    ) or (
+        recipient_role == "company"
+        and actor_role == "company"
+        and actor_id == recipient_id
     )
 
 
@@ -130,11 +131,7 @@ def route(
 
     # Push requests
     throttle = config.throttle
-    throttle_scope = (
-        f"booking_{event.booking_id or 0}"
-        if throttle
-        else None
-    )
+    throttle_scope = f"booking_{event.booking_id or 0}" if throttle else None
     throttle_window = throttle.window_s if throttle else 0
     throttle_max = throttle.max_per_window if throttle else 0
     dedupe_key = event.dedupe_key()
@@ -147,10 +144,10 @@ def route(
             return
         if recipient_id <= 0:
             return
-        if _is_actor_recipient(config, actor_role, actor_id, recipient_role, recipient_id):
-            result.skip_reasons.append(
-                (recipient_role, recipient_id, "exclude_actor")
-            )
+        if _is_actor_recipient(
+            config, actor_role, actor_id, recipient_role, recipient_id
+        ):
+            result.skip_reasons.append((recipient_role, recipient_id, "exclude_actor"))
             return
         if config.push_policy == "never":
             result.skip_reasons.append((recipient_role, recipient_id, "policy_never"))

@@ -1,2 +1,1 @@
 """Services Kafka utilitaires."""
-

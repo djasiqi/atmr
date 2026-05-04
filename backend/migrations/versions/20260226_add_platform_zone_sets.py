@@ -24,13 +24,27 @@ def upgrade():
         sa.Column("label", sa.String(length=120), nullable=False),
         sa.Column("scope", sa.String(length=16), nullable=True),
         sa.Column("version", sa.Integer(), nullable=False, server_default=sa.text("1")),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("key"),
     )
-    op.create_index("ix_platform_zone_set_key", "platform_zone_set", ["key"], unique=False)
+    op.create_index(
+        "ix_platform_zone_set_key", "platform_zone_set", ["key"], unique=False
+    )
     op.create_index(
         "ix_platform_zone_set_active_scope",
         "platform_zone_set",
@@ -44,13 +58,24 @@ def upgrade():
         sa.Column("zone_set_id", sa.Integer(), nullable=False),
         sa.Column("code", sa.String(length=32), nullable=False),
         sa.Column("label", sa.String(length=120), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.ForeignKeyConstraint(["zone_set_id"], ["platform_zone_set.id"], ondelete="CASCADE"),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
+        sa.ForeignKeyConstraint(
+            ["zone_set_id"], ["platform_zone_set.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("zone_set_id", "code", name="uq_platform_zone_set_code"),
     )
-    op.create_index("ix_platform_zone_zone_set", "platform_zone", ["zone_set_id"], unique=False)
+    op.create_index(
+        "ix_platform_zone_zone_set", "platform_zone", ["zone_set_id"], unique=False
+    )
 
     op.create_table(
         "platform_zone_membership",
@@ -58,9 +83,16 @@ def upgrade():
         sa.Column("zone_set_id", sa.Integer(), nullable=False),
         sa.Column("zone_id", sa.Integer(), nullable=False),
         sa.Column("commune_token", sa.String(length=64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        ),
         sa.ForeignKeyConstraint(["zone_id"], ["platform_zone.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["zone_set_id"], ["platform_zone_set.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["zone_set_id"], ["platform_zone_set.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "zone_set_id",
@@ -83,8 +115,12 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_index("ix_platform_zone_membership_commune", table_name="platform_zone_membership")
-    op.drop_index("ix_platform_zone_membership_zone_set", table_name="platform_zone_membership")
+    op.drop_index(
+        "ix_platform_zone_membership_commune", table_name="platform_zone_membership"
+    )
+    op.drop_index(
+        "ix_platform_zone_membership_zone_set", table_name="platform_zone_membership"
+    )
     op.drop_table("platform_zone_membership")
 
     op.drop_index("ix_platform_zone_zone_set", table_name="platform_zone")
@@ -93,4 +129,3 @@ def downgrade():
     op.drop_index("ix_platform_zone_set_active_scope", table_name="platform_zone_set")
     op.drop_index("ix_platform_zone_set_key", table_name="platform_zone_set")
     op.drop_table("platform_zone_set")
-

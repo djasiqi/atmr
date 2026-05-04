@@ -113,9 +113,7 @@ class CuratorTeamMember(db.Model):
             "user_id": self.user_id,
             "user_public_id": self.user.public_id if self.user else None,
             "user_name": (
-                f"{self.user.first_name} {self.user.last_name}"
-                if self.user
-                else None
+                f"{self.user.first_name} {self.user.last_name}" if self.user else None
             ),
             "user_email": self.user.email if self.user else None,
             "created_at": _iso(self.created_at),

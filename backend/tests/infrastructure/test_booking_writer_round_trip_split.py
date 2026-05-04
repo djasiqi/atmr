@@ -1,6 +1,8 @@
 """Tests unitaires : répartition 50/50 du tarif aller-retour à la persistance."""
 
-from infrastructure.persistence.bookings.booking_writer import _split_round_trip_total_amount
+from infrastructure.persistence.bookings.booking_writer import (
+    _split_round_trip_total_amount,
+)
 
 
 def test_split_round_trip_90_chf():

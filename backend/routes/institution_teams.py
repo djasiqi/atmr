@@ -42,7 +42,10 @@ def _require_admin_curatelle():
     if (institution.institution_type or "").lower() != "curatelle":
         from flask import abort
 
-        abort(400, description="Cette fonctionnalité est réservée aux institutions de type curatelle")
+        abort(
+            400,
+            description="Cette fonctionnalité est réservée aux institutions de type curatelle",
+        )
     return institution, user
 
 
@@ -75,7 +78,9 @@ class TeamList(Resource):
         team = CuratorTeam(institution_id=institution.id, name=name)
         db.session.add(team)
         db.session.commit()
-        logger.info("[Teams] Équipe créée: %s (institution=%s)", team.name, institution.id)
+        logger.info(
+            "[Teams] Équipe créée: %s (institution=%s)", team.name, institution.id
+        )
         return team.serialize, 201
 
 
@@ -85,7 +90,9 @@ class TeamDetail(Resource):
     def put(self, team_id: int):
         """Renommer une équipe."""
         institution, _user = _require_admin_curatelle()
-        team = CuratorTeam.query.filter_by(id=team_id, institution_id=institution.id).first()
+        team = CuratorTeam.query.filter_by(
+            id=team_id, institution_id=institution.id
+        ).first()
         if not team:
             return {"error": "Équipe non trouvée"}, 404
 
@@ -102,7 +109,9 @@ class TeamDetail(Resource):
     def delete(self, team_id: int):
         """Supprimer une équipe (désassigne les patients, ne les supprime pas)."""
         institution, _user = _require_admin_curatelle()
-        team = CuratorTeam.query.filter_by(id=team_id, institution_id=institution.id).first()
+        team = CuratorTeam.query.filter_by(
+            id=team_id, institution_id=institution.id
+        ).first()
         if not team:
             return {"error": "Équipe non trouvée"}, 404
 
@@ -112,7 +121,9 @@ class TeamDetail(Resource):
         )
         db.session.delete(team)
         db.session.commit()
-        logger.info("[Teams] Équipe supprimée: %s (institution=%s)", team.name, institution.id)
+        logger.info(
+            "[Teams] Équipe supprimée: %s (institution=%s)", team.name, institution.id
+        )
         return {"message": "Équipe supprimée"}, 200
 
 
@@ -125,7 +136,9 @@ class TeamMembers(Resource):
     def post(self, team_id: int):
         """Ajouter un membre à l'équipe."""
         institution, _user = _require_admin_curatelle()
-        team = CuratorTeam.query.filter_by(id=team_id, institution_id=institution.id).first()
+        team = CuratorTeam.query.filter_by(
+            id=team_id, institution_id=institution.id
+        ).first()
         if not team:
             return {"error": "Équipe non trouvée"}, 404
 
@@ -158,7 +171,9 @@ class TeamMemberDetail(Resource):
     def delete(self, team_id: int, user_id: int):
         """Retirer un membre de l'équipe."""
         institution, _user = _require_admin_curatelle()
-        team = CuratorTeam.query.filter_by(id=team_id, institution_id=institution.id).first()
+        team = CuratorTeam.query.filter_by(
+            id=team_id, institution_id=institution.id
+        ).first()
         if not team:
             return {"error": "Équipe non trouvée"}, 404
 

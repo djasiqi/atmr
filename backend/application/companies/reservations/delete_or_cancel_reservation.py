@@ -91,10 +91,16 @@ class DeleteOrCancelCompanyReservationUseCase:
         )
         from models.invoice import CompanyBillingSettings
 
-        billing = CompanyBillingSettings.query.filter_by(
-            company_id=booking.company_id
-        ).first() if getattr(booking, "company_id", None) else None
-        cancellation_policy = getattr(billing, "cancellation_policy", None) if billing else None
+        billing = (
+            CompanyBillingSettings.query.filter_by(
+                company_id=booking.company_id
+            ).first()
+            if getattr(booking, "company_id", None)
+            else None
+        )
+        cancellation_policy = (
+            getattr(billing, "cancellation_policy", None) if billing else None
+        )
 
         already_had_reason = bool(getattr(booking, "cancellation_reason_code", None))
         fields = compute_cancellation_fields(
@@ -168,14 +174,20 @@ class DeleteOrCancelCompanyReservationUseCase:
                 )
             # Validation motif obligatoire pour cancel
             return self._cancel_with_reason(
-                booking, reason_code, reason_text, now,
+                booking,
+                reason_code,
+                reason_text,
+                now,
                 message="La réservation a été annulée avec succès.",
             )
 
         # Règle 2.5: EN_ROUTE → cancel (facturation selon motif)
         if st == "en_route":
             return self._cancel_with_reason(
-                booking, reason_code, reason_text, now,
+                booking,
+                reason_code,
+                reason_text,
+                now,
                 message="La course a été annulée (chauffeur en route).",
             )
 

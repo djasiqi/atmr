@@ -16,7 +16,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'AWAITING_CLIENT_PAYMENT'")
+    op.execute(
+        "ALTER TYPE booking_status ADD VALUE IF NOT EXISTS 'AWAITING_CLIENT_PAYMENT'"
+    )
 
 
 def downgrade() -> None:
