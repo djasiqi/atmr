@@ -9,6 +9,7 @@ produit à la finalisation / envoi / téléchargement ou via ``POST …/regenera
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -60,17 +61,40 @@ _ISO_DATE_SLICE_LEN = 10
 _MAX_DISCOUNT_PERCENT = 100.0
 # Paramètre optionnel ``update_draft_invoice_line(service_date_iso=…)`` : omit du PATCH ⇒ pas de changement.
 _SERVICE_DATE_ISO_ARG_UNSET = object()
+# Paramètre optionnel ``original_line_total`` (méta remise % affichage) : omit ⇒ pas de changement.
+_ORIGINAL_LINE_TOTAL_ARG_UNSET = object()
+# Fusion contrôlée de clés d’aperçu (A/R, etc.) : omit ⇒ pas de changement.
+_LINE_META_MERGE_ARG_UNSET = object()
+_ALLOWED_INVOICE_LINE_META_MERGE_KEYS = frozenset(
+    {
+        "is_round_trip_leg",
+        "transport_type",
+        "preview_hide_merged_round_trip",
+        "round_trip_merge_partner_reservation_id",
+    }
+)
 
 
 def _normalize_optional_service_date_iso(raw: Any) -> str | None:
-    """Accepte une date ``YYYY-MM-DD`` (corps POST ou extrait d'un ISO) ; sinon None."""
+    """Accepte ``YYYY-MM-DD`` (ou préfixe ISO), ``JJ.MM.AAAA`` ou ``JJ/MM/AAAA`` ; sinon None."""
     if raw is None:
         return None
-    s = str(raw).strip()[:_ISO_DATE_SLICE_LEN]
-    if len(s) != _ISO_DATE_SLICE_LEN:
+    s_full = str(raw).strip()
+    if not s_full:
+        return None
+    if len(s_full) >= _ISO_DATE_SLICE_LEN and s_full[4] == "-" and s_full[7] == "-":
+        head = s_full[:_ISO_DATE_SLICE_LEN]
+        if len(head) == _ISO_DATE_SLICE_LEN:
+            try:
+                return date.fromisoformat(head).isoformat()
+            except ValueError:
+                return None
+    m = re.fullmatch(r"(\d{1,2})[./](\d{1,2})[./](\d{4})", s_full)
+    if not m:
         return None
     try:
-        return date.fromisoformat(s).isoformat()
+        d_i, mo_i, y_i = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        return date(y_i, mo_i, d_i).isoformat()
     except ValueError:
         return None
 
@@ -340,6 +364,8 @@ def update_draft_invoice_line(
     description: str | None = None,
     expected_updated_at: str | None = None,
     service_date_iso: Any = _SERVICE_DATE_ISO_ARG_UNSET,
+    original_line_total: Any = _ORIGINAL_LINE_TOTAL_ARG_UNSET,
+    line_meta_merge: Any = _LINE_META_MERGE_ARG_UNSET,
 ) -> EditDraftResult:
     inv, err_code, err_msg = _resolve_draft_invoice(
         company_id, invoice_id, expected_updated_at=expected_updated_at
@@ -422,12 +448,53 @@ def update_draft_invoice_line(
                     return EditDraftResult(
                         False,
                         error={
-                            "error": "service_date_iso invalide (format YYYY-MM-DD attendu).",
+                            "error": "service_date_iso invalide (AAAA-MM-JJ ou JJ.MM.AAAA).",
                         },
                         status_code=400,
                     )
                 meta_sd["service_date_iso"] = norm_sd
+                meta_sd["service_date"] = norm_sd
             line.line_meta = meta_sd if meta_sd else None
+
+    if original_line_total is not _ORIGINAL_LINE_TOTAL_ARG_UNSET:
+        meta_olt = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+        if original_line_total is None or (
+            isinstance(original_line_total, str) and not str(original_line_total).strip()
+        ):
+            meta_olt.pop(_META_ORIGINAL_LINE_TOTAL, None)
+        else:
+            try:
+                v_olt = round(float(original_line_total), 2)
+            except (TypeError, ValueError):
+                return EditDraftResult(
+                    False,
+                    error={"error": "original_line_total invalide"},
+                    status_code=400,
+                )
+            meta_olt[_META_ORIGINAL_LINE_TOTAL] = v_olt
+        line.line_meta = meta_olt if meta_olt else None
+
+    if line_meta_merge is not _LINE_META_MERGE_ARG_UNSET:
+        if line_meta_merge is not None and isinstance(line_meta_merge, dict):
+            meta_mm = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+            for k, v in line_meta_merge.items():
+                if k not in _ALLOWED_INVOICE_LINE_META_MERGE_KEYS:
+                    continue
+                if v is None:
+                    meta_mm.pop(k, None)
+                    continue
+                if k == "is_round_trip_leg" and isinstance(v, bool):
+                    meta_mm[k] = v
+                elif k == "preview_hide_merged_round_trip" and isinstance(v, bool):
+                    meta_mm[k] = v
+                elif k == "transport_type" and isinstance(v, str):
+                    meta_mm[k] = v.strip()[:32]
+                elif k == "round_trip_merge_partner_reservation_id":
+                    try:
+                        meta_mm[k] = int(v)
+                    except (TypeError, ValueError):
+                        continue
+            line.line_meta = meta_mm if meta_mm else None
 
     _recompute_totals_from_lines(inv)
     _mark_pdf_stale(inv)
@@ -1181,8 +1248,13 @@ def add_draft_custom_line(
         line_meta = None
         if custom_mode in ("time", "quantity"):
             entry: dict[str, Any] = {"mode": str(custom_mode)}
-            if custom_mode == "time" and time_unit in ("min", "h", "d", "mois"):
-                entry["time_unit"] = str(time_unit)
+            if custom_mode == "time":
+                tu = (
+                    str(time_unit)
+                    if time_unit in ("min", "h", "d", "mois")
+                    else "h"
+                )
+                entry["time_unit"] = tu
             line_meta = {"custom_prestation": entry}
 
     norm_service: str | None = None
@@ -1194,15 +1266,22 @@ def add_draft_custom_line(
                 return EditDraftResult(
                     False,
                     error={
-                        "error": "service_date_iso invalide (format YYYY-MM-DD attendu).",
+                        "error": "service_date_iso invalide (AAAA-MM-JJ ou JJ.MM.AAAA).",
                     },
                     status_code=400,
                 )
     if norm_service:
         if line_meta is None:
-            line_meta = {"service_date_iso": norm_service}
+            line_meta = {
+                "service_date_iso": norm_service,
+                "service_date": norm_service,
+            }
         else:
-            line_meta = {**line_meta, "service_date_iso": norm_service}
+            line_meta = {
+                **line_meta,
+                "service_date_iso": norm_service,
+                "service_date": norm_service,
+            }
 
     logger.info(
         "[draft_edit] add_custom_line invoice_id=%s company_id=%s",

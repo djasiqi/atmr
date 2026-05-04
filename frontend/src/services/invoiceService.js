@@ -487,9 +487,18 @@ export const invoiceService = {
       service_date_iso,
     }
   ) {
-    const body = { description, line_total, qty };
-    if (custom_mode) body.custom_mode = custom_mode;
-    if (time_unit) body.time_unit = time_unit;
+    const mode = custom_mode === 'quantity' ? 'quantity' : 'time';
+    const unitOk = (u) =>
+      u != null && ['min', 'h', 'd', 'mois'].includes(String(u).trim());
+    const body = {
+      description,
+      line_total,
+      qty,
+      custom_mode: mode,
+    };
+    if (mode === 'time') {
+      body.time_unit = unitOk(time_unit) ? String(time_unit).trim() : 'h';
+    }
     if (service_date_iso != null && String(service_date_iso).trim()) {
       body.service_date_iso = String(service_date_iso).trim();
     }

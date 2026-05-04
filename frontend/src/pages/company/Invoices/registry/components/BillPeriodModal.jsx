@@ -21,6 +21,7 @@ import {
   FiCheck,
   FiTrash2,
 } from 'react-icons/fi';
+import { toast } from 'sonner';
 import { invoiceService, formatCurrencyCHF, generateInvoice } from '../../../../../services/invoiceService';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
 import DraftInvoiceEditorPanel from './DraftInvoiceEditorPanel';
@@ -31,6 +32,7 @@ import InlineMonthYearPicker from '../../../../../components/ui/InlineMonthYearP
 import InlineDatePicker from '../../../../../components/ui/InlineDatePicker';
 import ChipSelect from '../../../../../components/ui/ChipSelect';
 import { syncDraftInvoiceWithMergedAssemblyPreview } from '../utils/periodAssemblyInvoiceSync';
+import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 
 const unwrapApi = (res) => {
   if (res && typeof res === 'object' && res.data && typeof res.data === 'object' && 'transports_count' in res.data) {
@@ -200,12 +202,34 @@ function mergePeriodPreviewInvoice(baseInvoice, linePatch, extraLinesRaw, remise
     if (fac < 1 - 1e-9) {
       lm.original_line_total = ht0;
     }
+    const sd =
+      ex.service_date_iso != null ? String(ex.service_date_iso).trim() : '';
+    if (sd) {
+      lm.service_date_iso = sd;
+      lm.service_date = sd;
+    }
+    const cm = ex.custom_mode === 'quantity' ? 'quantity' : 'time';
+    if (cm === 'quantity') {
+      lm.custom_prestation = { mode: 'quantity' };
+    } else {
+      const tu =
+        ex.time_unit && ['min', 'h', 'd', 'mois'].includes(String(ex.time_unit))
+          ? String(ex.time_unit)
+          : 'h';
+      lm.custom_prestation = { mode: 'time', time_unit: tu };
+    }
+    const qtyRaw = Number(ex.qty);
+    const qtyLine = Number.isFinite(qtyRaw) && qtyRaw > 0 ? qtyRaw : 1;
+    const upRaw = Number(ex.unit_price);
+    const unitLine = Number.isFinite(upRaw) && upRaw > 0 ? upRaw : ht0 / qtyLine;
     lines.push({
       id: ex.id,
       type: 'custom',
       line_type: 'custom',
       description: ex.description || '—',
       line_total: ht,
+      qty: qtyLine,
+      unit_price: unitLine,
       vat_amount: vat,
       total_with_vat: ttc,
       line_meta: lm,
@@ -482,6 +506,7 @@ const BillPeriodModal = ({
   const [addLineUnitPrice, setAddLineUnitPrice] = useState('');
   const [addLineQty, setAddLineQty] = useState('1');
   const [addLineServiceDate, setAddLineServiceDate] = useState('');
+  const addLineServiceDateRef = useRef('');
   /** IDs réservations cochées pour la génération (patient / clinique). */
   const [selectedBookingIds, setSelectedBookingIds] = useState(() => new Set());
   const periodLinesHeadingId = useId();
@@ -500,6 +525,10 @@ const BillPeriodModal = ({
       return `${head}-01`;
     });
   }, [addLineServiceDateMonthYearOnly]);
+
+  useEffect(() => {
+    addLineServiceDateRef.current = addLineServiceDate;
+  }, [addLineServiceDate]);
 
   const addLinePreview = useMemo(() => {
     if (addLineMode === EXTRA_LINE_MODE.quantity) {
@@ -621,6 +650,7 @@ const BillPeriodModal = ({
     setAddLineTimeUnit('h');
     setAddLineUnitPrice('');
     setAddLineQty('1');
+    addLineServiceDateRef.current = '';
     setAddLineServiceDate('');
   }, [preview]);
 
@@ -927,12 +957,28 @@ const BillPeriodModal = ({
     setError('');
   }, [periodFreeDeductionAmt, periodFreeDeductionDesc]);
 
-  const handlePeriodAddExtraLine = useCallback(() => {
+  const handlePeriodAddExtraLine = useCallback(async () => {
     if (!addLineDesc.trim()) {
       setError('Indiquez un libellé.');
       return;
     }
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+    const rawSvc = (addLineServiceDateRef.current || addLineServiceDate || '').trim();
+    let serviceDateIso;
+    if (rawSvc) {
+      serviceDateIso = normalizeServiceDateToIsoForApi(rawSvc);
+      if (!serviceDateIso) {
+        setError('Date de prestation invalide (utilisez JJ.MM.AAAA ou AAAA-MM-JJ).');
+        return;
+      }
+    }
     let lineTotal;
+    let qtyVal;
+    let unitPriceVal;
+    let customMode;
+    let timeUnit;
     if (addLineMode === EXTRA_LINE_MODE.quantity) {
       const u = parseFloat(String(addLineUnitPrice).replace(',', '.'));
       const q = parseFloat(String(addLineQty).replace(',', '.'));
@@ -945,6 +991,9 @@ const BillPeriodModal = ({
         return;
       }
       lineTotal = u * q;
+      qtyVal = q;
+      unitPriceVal = u;
+      customMode = 'quantity';
     } else {
       const t = parseFloat(String(addLineTaux).replace(',', '.'));
       const v = parseFloat(String(addLineTimeValue).replace(',', '.'));
@@ -957,6 +1006,10 @@ const BillPeriodModal = ({
         return;
       }
       lineTotal = t * v;
+      qtyVal = v;
+      unitPriceVal = t;
+      customMode = 'time';
+      timeUnit = addLineTimeUnit;
     }
     setPeriodExtraLines((prev) => [
       ...prev,
@@ -964,6 +1017,11 @@ const BillPeriodModal = ({
         id: `extra-${Date.now()}`,
         description: addLineDesc.trim() || 'Prestation',
         line_total: lineTotal,
+        qty: qtyVal,
+        unit_price: unitPriceVal,
+        custom_mode: customMode,
+        time_unit: customMode === 'time' ? timeUnit : undefined,
+        service_date_iso: serviceDateIso,
       },
     ]);
     setAddLineDesc('');
@@ -972,6 +1030,7 @@ const BillPeriodModal = ({
     setAddLineTimeUnit('h');
     setAddLineUnitPrice('');
     setAddLineQty('1');
+    addLineServiceDateRef.current = '';
     setAddLineServiceDate('');
     setAddLineMode(EXTRA_LINE_MODE.time);
     setError('');
@@ -982,6 +1041,8 @@ const BillPeriodModal = ({
     addLineTimeValue,
     addLineUnitPrice,
     addLineQty,
+    addLineServiceDate,
+    addLineTimeUnit,
   ]);
 
   useEffect(() => {
@@ -1236,6 +1297,26 @@ const BillPeriodModal = ({
               inv.id,
               mergedPeriodInvoice
             );
+            // Le PDF initial est généré avant cette synchro : sans régénération il reste obsolète
+            // (une seule ligne, montants catalogue, pas les CUSTOM ajoutés à l’aperçu).
+            try {
+              const pdfRes = await invoiceService.regenerateInvoicePdf(companyId, inv.id);
+              const pdfUrl =
+                (pdfRes && typeof pdfRes === 'object' && pdfRes.pdf_url) ||
+                (pdfRes?.data && typeof pdfRes.data === 'object' && pdfRes.data.pdf_url);
+              if (typeof pdfUrl === 'string' && pdfUrl.trim()) {
+                inv = { ...inv, pdf_url: pdfUrl.trim() };
+              }
+            } catch (pdfErr) {
+              console.error(pdfErr);
+              toast.warning(
+                getApiErrorMessage(
+                  pdfErr,
+                  'Le PDF n’a pas pu être régénéré automatiquement. Ouvrez le brouillon et utilisez « Régénérer le PDF » si besoin.'
+                ),
+                { duration: 9000 }
+              );
+            }
           } catch (syncErr) {
             console.error(syncErr);
             setError(
@@ -2228,7 +2309,11 @@ const BillPeriodModal = ({
                                             ? addLineServiceDate.trim().slice(0, 7)
                                             : ''
                                         }
-                                        onChange={(ym) => setAddLineServiceDate(ym ? `${ym}-01` : '')}
+                                        onChange={(ym) => {
+                                          const next = ym ? `${ym}-01` : '';
+                                          addLineServiceDateRef.current = next;
+                                          setAddLineServiceDate(next);
+                                        }}
                                         ariaLabel="Mois de la prestation (optionnel)"
                                         title="Mois (optionnel)"
                                       />
@@ -2237,7 +2322,11 @@ const BillPeriodModal = ({
                                         inputId={`${periodAddLineHeadingId}-svc-date`}
                                         className={draftEditorStyles.addLineFormDatePickerWrap}
                                         value={addLineServiceDate}
-                                        onChange={(iso) => setAddLineServiceDate(iso || '')}
+                                        onChange={(iso) => {
+                                          const next = iso || '';
+                                          addLineServiceDateRef.current = next;
+                                          setAddLineServiceDate(next);
+                                        }}
                                         ariaLabel="Date de la prestation (optionnel)"
                                         title="Date (optionnel)"
                                       />
@@ -2286,7 +2375,7 @@ const BillPeriodModal = ({
                                         type="button"
                                         className={draftEditorStyles.btnIconAdd}
                                         title="Ajouter la ligne"
-                                        onClick={() => handlePeriodAddExtraLine()}
+                                        onClick={() => void handlePeriodAddExtraLine()}
                                       >
                                         <FiPlus size={18} />
                                       </button>
@@ -2322,7 +2411,7 @@ const BillPeriodModal = ({
                                         type="button"
                                         className={draftEditorStyles.btnIconAdd}
                                         title="Ajouter la ligne"
-                                        onClick={() => handlePeriodAddExtraLine()}
+                                        onClick={() => void handlePeriodAddExtraLine()}
                                       >
                                         <FiPlus size={18} />
                                       </button>

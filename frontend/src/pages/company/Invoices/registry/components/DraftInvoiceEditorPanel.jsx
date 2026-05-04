@@ -43,6 +43,7 @@ import {
   ensurePdfUrlWorksInDev,
 } from '../../../../../utils/pdfUrlFallback';
 import { getApiErrorMessage } from '../../../../../utils/apiErrorMessage';
+import { normalizeServiceDateToIsoForApi } from '../../../../../utils/invoiceServiceDate';
 import '../../../../../styles/acrobatPdfEmbedHide.css';
 import styles from './InvoiceDraftEditModal.module.css';
 import InvoiceLivePreview from './InvoiceLivePreview';
@@ -247,6 +248,8 @@ const DraftInvoiceEditorPanel = ({
   const pdfWrapRef = useRef(null);
   const pdfIframeRef = useRef(null);
   const mountedRef = useRef(true);
+  /** Dernière date « ligne suppl. » connue (évite perte si blur/changement d’état pas encore rejoué). */
+  const customLineServiceDateRef = useRef('');
   const addLineHeadingId = useId();
   const remiseHeadingId = useId();
   const linesSheetHeadingId = useId();
@@ -263,6 +266,10 @@ const DraftInvoiceEditorPanel = ({
       return `${head}-01`;
     });
   }, [serviceDateMonthYearOnly]);
+
+  useEffect(() => {
+    customLineServiceDateRef.current = customLineServiceDate;
+  }, [customLineServiceDate]);
 
   /** Verrou optimiste (optionnel côté API si absent). */
   const draftConcurrencyPayload = useMemo(() => {
@@ -427,6 +434,7 @@ const DraftInvoiceEditorPanel = ({
       setCustomLineTimeUnit('h');
       setCustomLineUnitPrice('');
       setCustomLineQty('1');
+      customLineServiceDateRef.current = '';
       setCustomLineServiceDate('');
       setLineFilter('');
       setLinePage(1);
@@ -989,6 +997,10 @@ const DraftInvoiceEditorPanel = ({
       setError('Indiquez un libellé.');
       return;
     }
+    /* Laisse le blur du date picker appliquer onChange(iso) avant la lecture (clic « Ajouter »). */
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
     let lineTotal;
     let qty;
     if (customLineMode === EXTRA_LINE_MODE.quantity) {
@@ -1018,6 +1030,19 @@ const DraftInvoiceEditorPanel = ({
       lineTotal = t * v;
       qty = v;
     }
+    const rawSvcDate = (
+      customLineServiceDateRef.current ||
+      customLineServiceDate ||
+      ''
+    ).trim();
+    let serviceDateIso;
+    if (rawSvcDate) {
+      serviceDateIso = normalizeServiceDateToIsoForApi(rawSvcDate);
+      if (!serviceDateIso) {
+        setError('Date de prestation invalide (utilisez JJ.MM.AAAA ou AAAA-MM-JJ).');
+        return;
+      }
+    }
     setSaving(true);
     setError('');
     try {
@@ -1028,7 +1053,7 @@ const DraftInvoiceEditorPanel = ({
         qty,
         custom_mode: customLineMode === EXTRA_LINE_MODE.time ? 'time' : 'quantity',
         time_unit: customLineMode === EXTRA_LINE_MODE.time ? customLineTimeUnit : undefined,
-        service_date_iso: customLineServiceDate.trim() || undefined,
+        service_date_iso: serviceDateIso,
       });
       await afterDraftMutation(res);
       setCustomLineDesc('');
@@ -1037,6 +1062,7 @@ const DraftInvoiceEditorPanel = ({
       setCustomLineTimeUnit('h');
       setCustomLineUnitPrice('');
       setCustomLineQty('1');
+      customLineServiceDateRef.current = '';
       setCustomLineServiceDate('');
       setShowAddLinePanel(false);
     } catch (e) {
@@ -1438,7 +1464,11 @@ const DraftInvoiceEditorPanel = ({
                       ? customLineServiceDate.trim().slice(0, 7)
                       : ''
                   }
-                  onChange={(ym) => setCustomLineServiceDate(ym ? `${ym}-01` : '')}
+                  onChange={(ym) => {
+                    const next = ym ? `${ym}-01` : '';
+                    customLineServiceDateRef.current = next;
+                    setCustomLineServiceDate(next);
+                  }}
                   ariaLabel="Mois de la prestation (optionnel)"
                   title="Mois (optionnel)"
                 />
@@ -1447,7 +1477,11 @@ const DraftInvoiceEditorPanel = ({
                   inputId={`${addLineHeadingId}-svc-date`}
                   className={styles.addLineFormDatePickerWrap}
                   value={customLineServiceDate}
-                  onChange={(iso) => setCustomLineServiceDate(iso || '')}
+                  onChange={(iso) => {
+                    const next = iso || '';
+                    customLineServiceDateRef.current = next;
+                    setCustomLineServiceDate(next);
+                  }}
                   ariaLabel="Date de la prestation (optionnel)"
                   title="Date (optionnel)"
                 />
@@ -1840,7 +1874,7 @@ const DraftInvoiceEditorPanel = ({
                               · {draftPdfStaleHint}
                             </span>
                           ) : null}
-                          {saving || loading ? (
+                          {saving ? (
                             <span className={styles.draftPdfHeadMeta} aria-live="polite">
                               {' '}
                               · Mise à jour…

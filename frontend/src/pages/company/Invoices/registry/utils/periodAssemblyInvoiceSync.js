@@ -63,6 +63,36 @@ function findServerCustomMatch(serverLines, description, lineTotal) {
   });
 }
 
+/** Mêmes clés que le backend (PATCH `line_meta_merge`) : A/R, fusion A/R, etc. */
+function previewTransportMetaPick(lineMeta) {
+  const m = lineMeta && typeof lineMeta === 'object' ? lineMeta : {};
+  const o = {};
+  if (m.is_round_trip_leg === true) o.is_round_trip_leg = true;
+  const tt = String(m.transport_type || '').trim();
+  if (tt) o.transport_type = tt;
+  if (m.preview_hide_merged_round_trip === true) o.preview_hide_merged_round_trip = true;
+  if (
+    m.round_trip_merge_partner_reservation_id != null &&
+    Number.isFinite(Number(m.round_trip_merge_partner_reservation_id))
+  ) {
+    o.round_trip_merge_partner_reservation_id = Number(m.round_trip_merge_partner_reservation_id);
+  }
+  return o;
+}
+
+function transportMetaPatchIfNeeded(mergedLineMeta, serverLine) {
+  const want = previewTransportMetaPick(mergedLineMeta);
+  if (!Object.keys(want).length) return null;
+  const slm =
+    serverLine?.line_meta && typeof serverLine.line_meta === 'object' ? serverLine.line_meta : {};
+  const have = previewTransportMetaPick(slm);
+  const patch = {};
+  for (const k of Object.keys(want)) {
+    if (have[k] !== want[k]) patch[k] = want[k];
+  }
+  return Object.keys(patch).length ? patch : null;
+}
+
 /**
  * @param {number} companyId
  * @param {number} invoiceId
@@ -84,7 +114,8 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
       const sorted = [...serverRides].sort((a, b) => Number(a.id) - Number(b.id));
       const [keep, ...drop] = sorted;
       inv = await loadInvoice(companyId, invoiceId);
-      await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, keep.id, {
+      const km = m.line_meta && typeof m.line_meta === 'object' ? m.line_meta : {};
+      const mergeBody = {
         ...concurrency(inv),
         description: m.description,
         line_total: Number(m.line_total),
@@ -92,7 +123,15 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
           m.adjustment_note != null && String(m.adjustment_note).trim()
             ? String(m.adjustment_note).trim()
             : null,
-      });
+      };
+      if (km.original_line_total != null && Number.isFinite(Number(km.original_line_total))) {
+        mergeBody.original_line_total = Number(km.original_line_total);
+      }
+      const tp = transportMetaPatchIfNeeded(km, keep);
+      if (tp) {
+        mergeBody.line_meta_merge = tp;
+      }
+      await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, keep.id, mergeBody);
       inv = await loadInvoice(companyId, invoiceId);
       for (const row of drop) {
         inv = await loadInvoice(companyId, invoiceId);
@@ -134,6 +173,23 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
       body.adjustment_note = mn.trim() ? mn : null;
       changed = true;
     }
+    const mlm = ml.line_meta && typeof ml.line_meta === 'object' ? ml.line_meta : {};
+    const slm = sl.line_meta && typeof sl.line_meta === 'object' ? sl.line_meta : {};
+    const mOlt = mlm.original_line_total;
+    const sOlt = slm.original_line_total;
+    if (
+      mOlt != null &&
+      Number.isFinite(Number(mOlt)) &&
+      (sOlt == null || Math.abs(Number(sOlt) - Number(mOlt)) > 0.004)
+    ) {
+      body.original_line_total = Number(mOlt);
+      changed = true;
+    }
+    const tPatch = transportMetaPatchIfNeeded(mlm, sl);
+    if (tPatch) {
+      body.line_meta_merge = tPatch;
+      changed = true;
+    }
     if (changed) {
       await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, sl.id, body);
     }
@@ -146,15 +202,46 @@ export async function syncDraftInvoiceWithMergedAssemblyPreview(companyId, invoi
     const ht = Number(ml.line_total);
     if (!Number.isFinite(ht) || ht === 0) continue;
     const desc = String(ml.description || '—').trim().slice(0, 500);
-    if (findServerCustomMatch(inv.lines, desc, ht)) continue;
+    inv = await loadInvoice(companyId, invoiceId);
+    const existing = findServerCustomMatch(inv.lines, desc, ht);
+    if (existing) {
+      const lm = ml.line_meta && typeof ml.line_meta === 'object' ? ml.line_meta : {};
+      const want =
+        [lm.service_date_iso, lm.service_date].find((x) => x != null && String(x).trim()) || '';
+      const slm =
+        existing.line_meta && typeof existing.line_meta === 'object' ? existing.line_meta : {};
+      const have =
+        [slm.service_date_iso, slm.service_date].find((x) => x != null && String(x).trim()) || '';
+      if (String(want).trim() && String(want).trim() !== String(have).trim()) {
+        await invoiceService.updateDraftInvoiceLine(companyId, invoiceId, existing.id, {
+          ...concurrency(inv),
+          service_date_iso: String(want).trim().slice(0, 10),
+        });
+      }
+      continue;
+    }
 
     inv = await loadInvoice(companyId, invoiceId);
-    await invoiceService.addDraftCustomLine(companyId, invoiceId, {
+    const lm = ml.line_meta && typeof ml.line_meta === 'object' ? ml.line_meta : {};
+    const cp = lm.custom_prestation;
+    const modeQty = cp && cp.mode === 'quantity';
+    const qtyNum = Number(ml.qty);
+    const qtyPayload = Number.isFinite(qtyNum) && qtyNum > 0 ? qtyNum : 1;
+    const body = {
       ...concurrency(inv),
       description: desc,
       line_total: ht,
-      qty: 1,
-    });
+      qty: qtyPayload,
+      custom_mode: modeQty ? 'quantity' : 'time',
+    };
+    if (!modeQty) {
+      body.time_unit = (cp && cp.time_unit) || 'h';
+    }
+    const sdi = lm.service_date_iso || lm.service_date;
+    if (sdi != null && String(sdi).trim()) {
+      body.service_date_iso = String(sdi).trim();
+    }
+    await invoiceService.addDraftCustomLine(companyId, invoiceId, body);
   }
 
   return loadInvoice(companyId, invoiceId);

@@ -2273,6 +2273,10 @@ class DraftInvoiceLineEdit(Resource):
         }
         if "service_date_iso" in body:
             _line_kw["service_date_iso"] = body.get("service_date_iso")
+        if "original_line_total" in body:
+            _line_kw["original_line_total"] = body.get("original_line_total")
+        if "line_meta_merge" in body:
+            _line_kw["line_meta_merge"] = body.get("line_meta_merge")
         r = update_draft_invoice_line(company_id, invoice_id, line_id, **_line_kw)
         if not r.success:
             return r.error, r.status_code or 400

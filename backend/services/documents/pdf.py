@@ -77,6 +77,19 @@ QR_BILL_PAGE_BOTTOM_MARGIN_CM = 0.5
 INVOICE_PREVIEW_TOTALS_LABEL_CM = 4.25
 INVOICE_PREVIEW_TOTALS_AMOUNT_CM = 3.15
 
+# --- Grille typo facture PDF (miroir InvoiceLivePreview.module.css, valeurs pt) ---
+FONT_HEADER_COMPANY = 14
+FONT_CLIENT_NAME = 12
+FONT_BODY = 10
+FONT_META_NUMBER = 11
+FONT_META_DATES = 10
+FONT_TABLE_HEADER = 10
+FONT_SECONDARY = 8
+FONT_TOTAL = 12
+FONT_COMPANY_CONTACT = 9
+COLOR_TEXT_PDF = "#000000"
+COLOR_MUTED_PDF = "#64748b"
+
 
 def _make_invoice_doc_with_qrbill_page(
     buffer: Any,
@@ -258,14 +271,15 @@ def _make_legal_footer_page_callback(
         y_pos = 1.2 * cm
 
         if footer_message:
-            p = Paragraph(footer_message, centered_style)
+            p = Paragraph(_reportlab_safe_footer_html(footer_message), centered_style)
             w, h = p.wrap(avail_width, 150)
             p.drawOn(canvas, (page_w - w) / 2, y_pos)
             y_pos += h + 6
 
         if mention:
             p2 = Paragraph(
-                f'<font size="8" color="grey">{mention}</font>',
+                f'<font size="8" color="grey">'
+                f"{_xml_escape_for_paragraph(mention)}</font>",
                 centered_style,
             )
             w2, _ = p2.wrap(avail_width, 50)
@@ -1753,6 +1767,8 @@ def _build_recipient_block_flowable(
     normal_style: Any,
     *,
     bookings_by_id: dict[int, Any] | None = None,
+    name_font_size: float | None = None,
+    addr_font_size: float | None = None,
 ) -> tuple[Any | None, list[str]]:
     """Construit le flowable pour le bloc destinataire compatible zone C5.
 
@@ -1760,6 +1776,9 @@ def _build_recipient_block_flowable(
     - Filtre les lignes vides (no data => no UI).
     - Wrap via stringWidth/simpleSplit (font metrics ReportLab).
     - Ne dessine rien si aucune ligne utile.
+
+    ``name_font_size`` / ``addr_font_size`` : hiérarchie type facture pro (ex. 12 / 10 pt) ;
+    si omis, réutilise la taille du ``normal_style``.
 
     Returns:
         (Paragraph ou None, recipient_lines pour tests).
@@ -1772,6 +1791,7 @@ def _build_recipient_block_flowable(
         for name_line in str(name).strip().split("\n"):
             if name_line.strip():
                 lines.append(name_line.strip())
+    name_count = len(lines)
     if addr:
         for part in (
             str(addr).replace("<br/>", "\n").replace("<br />", "\n").split("\n")
@@ -1784,39 +1804,56 @@ def _build_recipient_block_flowable(
         return (None, [])
 
     font_name = getattr(normal_style, "fontName", "Helvetica") or "Helvetica"
-    font_size = getattr(normal_style, "fontSize", 10) or 10
+    base_fs = float(getattr(normal_style, "fontSize", 10) or 10)
+    name_fs = float(name_font_size) if name_font_size is not None else base_fs
+    addr_fs = float(addr_font_size) if addr_font_size is not None else base_fs
     max_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
     max_lines = max(1, int(DEST_ADDR_ZONE_HEIGHT_MM / DEST_ADDR_LINE_HEIGHT_MM))
     max_chars_fallback = max(30, int(DEST_ADDR_MAX_WIDTH_MM * 3))
 
-    visual_lines: list[str] = []
-    for line in lines:
+    visual_rows: list[tuple[str, bool]] = []
+    for i, line in enumerate(lines):
+        is_name = i < name_count
+        fs = name_fs if is_name else addr_fs
         if line == "":
-            visual_lines.append("")
+            visual_rows.append(("", is_name))
         else:
-            wrapped = _wrap_line_by_width(line, font_name, font_size, max_width_pt)
-            visual_lines.extend(wrapped)
+            wrapped = _wrap_line_by_width(line, font_name, fs, max_width_pt)
+            for wline in wrapped:
+                visual_rows.append((wline, is_name))
 
-    if len(visual_lines) > max_lines:
-        visual_lines = visual_lines[:max_lines]
-        last = visual_lines[-1]
-        if len(last) + 1 > max_chars_fallback:
-            truncated = last[: max_chars_fallback - 1]
-            last = (
+    if len(visual_rows) > max_lines:
+        visual_rows = visual_rows[:max_lines]
+        last_t, last_is_name = visual_rows[-1]
+        if last_t == "":
+            pass
+        elif len(last_t) + 1 > max_chars_fallback:
+            truncated = last_t[: max_chars_fallback - 1]
+            last_t = (
                 truncated.rsplit(" ", 1)[0] + "…"
                 if " " in truncated
                 else truncated + "…"
             )
+            visual_rows[-1] = (last_t, last_is_name)
         else:
-            last = last + "…"
-        visual_lines[-1] = last
+            visual_rows[-1] = (last_t + "…", last_is_name)
 
-    # Zone fenêtre : pas de label « Facturé à : », uniquement destinataire
     parts: list[str] = []
-    for vl in visual_lines:
-        parts.append(vl)
-        parts.append("<br/>")
-    text = "".join(parts).rstrip("<br/>")
+    for vl, is_name in visual_rows:
+        if vl == "":
+            parts.append("<br/>")
+            continue
+        esc = _xml_escape_for_paragraph(vl)
+        if is_name:
+            parts.append(f'<font size="{int(name_fs)}"><b>{esc}</b></font><br/>')
+        else:
+            parts.append(f'<font size="{int(addr_fs)}">{esc}</font><br/>')
+
+    text = "".join(parts)
+    # Ne pas utiliser rstrip("<br/>") : il enlève tout caractère dans {<,b,r,/,>} en fin de chaîne
+    # et peut corrompre ``</font>`` (par ex. ``…</font><br/>`` → ``…</fon``) puis paraparser.
+    while text.endswith("<br/>"):
+        text = text[:-5]
     from reportlab.platypus import Paragraph
 
     para = Paragraph(text, normal_style)
@@ -1826,6 +1863,47 @@ def _build_recipient_block_flowable(
 def _xml_escape_for_paragraph(text: str) -> str:
     """Échappe & < > pour du contenu dans un ReportLab Paragraph (mini HTML)."""
     return _xml_escape(text or "", {"'": "&apos;", '"': "&quot;"})
+
+
+def _reportlab_safe_footer_html(text: str) -> str:
+    """Texte configurable (pied légal, etc.) : conserve uniquement les sauts ``<br/>`` ; échappe le reste.
+
+    Évite les erreurs paraparser (balises ``font`` / ``para`` non fermées) si le texte contient
+    des ``<`` ou du pseudo-HTML invalide.
+    """
+    import re
+
+    if not text:
+        return ""
+    parts = re.split(r"(?i)(<br\s*/?>)", text)
+    out: list[str] = []
+    for part in parts:
+        if re.fullmatch(r"(?i)<br\s*/?>", part or ""):
+            out.append("<br/>")
+        else:
+            out.append(_xml_escape_for_paragraph(part))
+    return "".join(out)
+
+
+def _reportlab_multiline_plain_to_html(text: str) -> str:
+    """Notes / texte multiligne : une ligne = un ``<br/>``, tout le contenu échappé."""
+    t = text or ""
+    if not t:
+        return ""
+    return "<br/>".join(_xml_escape_for_paragraph(line) for line in t.splitlines())
+
+
+def _pdf_note_global_discount_for_totals_table(note: str) -> str:
+    """Texte note remise globale (méta) : jamais de HTML brut vers le Table/Paragraph ReportLab."""
+    s = (note or "").strip()[:280]
+    if not s:
+        return ""
+    return _xml_escape_for_paragraph(s)
+
+
+def _pdf_s2_ar_tag_markup() -> str:
+    """Tag [A/R] dans le détail — pas d'attribut couleur (évite soucis paraparser)."""
+    return f'<font size="{int(FONT_SECONDARY)}">[A/R]</font>'
 
 
 def _collect_adjustment_notes_from_consolidated_item(
@@ -1942,8 +2020,8 @@ def _detail_lines_heading_paragraph(styles: Any, font_name_bold: str) -> Any:
         "InvoiceDetailLinesHeading",
         parent=styles["Normal"],
         fontName=font_name_bold,
-        fontSize=9,
-        leading=11,
+        fontSize=FONT_BODY,
+        leading=int(round(FONT_BODY * 1.3)),
         spaceAfter=10,
         textColor=colors.HexColor("#334155"),
     )
@@ -2028,32 +2106,66 @@ def _global_discount_hint_flowable(
     return KeepTogether(box)
 
 
-def _invoice_line_meta_indicates_round_trip_tag(line: Any) -> bool:
-    """True si la ligne DB est un trajet A/R (fusion à l'émission ou méta alignée aperçu HTML)."""
-    if line is None:
-        return False
-    lm = getattr(line, "line_meta", None)
-    if not isinstance(lm, dict):
-        return False
-    if lm.get("is_round_trip_leg") is True:
-        return True
-    tt = str(lm.get("transport_type") or "").strip().upper().replace(" ", "")
-    return tt in ("A/R", "AR")
-
-
 def _pdf_show_ar_legend(
     invoice: Any,
     consolidated: list[dict[str, Any]],
+    bookings_by_id: dict[int, Any] | None = None,
 ) -> bool:
-    """Comme ``InvoiceLivePreview`` : légende si A/R consolidé ou méta sur une ligne."""
+    """Légende [A/R] : uniquement si une ligne du tableau affiche réellement ``[A/R]``.
+
+    Aligné sur ``_build_s2_table`` : blocs consolidés + lignes orphelines RIDE/matériel
+    (sans réservation résolue dans ``bookings_by_id``) avec ``round_trip_merge_partner_*``.
+    Pas de légende sur aller simple sans ces indicateurs.
+    """
     for item in consolidated:
-        if item.get("is_round_trip"):
+        if _consolidated_item_shows_ar_tag_pdf(item):
             return True
-        for k in ("line", "line1", "line2"):
-            if _invoice_line_meta_indicates_round_trip_tag(item.get(k)):
-                return True
+    bb = bookings_by_id or {}
     for ln in getattr(invoice, "lines", []) or []:
-        if _invoice_line_meta_indicates_round_trip_tag(ln):
+        if getattr(ln, "type", None) not in (
+            InvoiceLineType.RIDE,
+            InvoiceLineType.MATERIAL_DELIVERY,
+        ):
+            continue
+        rid = getattr(ln, "reservation_id", None)
+        if rid is not None and bb.get(int(rid)):
+            continue
+        lm = getattr(ln, "line_meta", None)
+        if not isinstance(lm, dict):
+            continue
+        if lm.get("preview_hide_merged_round_trip") is True:
+            continue
+        if lm.get("round_trip_merge_partner_reservation_id") is not None:
+            return True
+    return False
+
+
+def _consolidated_item_indicates_round_trip_tag(item: dict[str, Any]) -> bool:
+    """[A/R] structurel : regroupement détecté aller+retour avec deux segments dans l'item."""
+    return bool(
+        item.get("is_round_trip")
+        and item.get("aller_detail")
+        and item.get("retour_detail")
+    )
+
+
+def _consolidated_item_shows_ar_tag_pdf(item: dict[str, Any]) -> bool:
+    """Une ligne PDF doit afficher [A/R] : consolidation réelle OU métier alignée HTML (merge partenaire).
+
+    Ignore les lignes ``preview_hide_merged_round_trip`` (non rendues comme les lignes masquées HTML).
+    """
+    if _consolidated_item_indicates_round_trip_tag(item):
+        return True
+    for key in ("line1", "line2", "line"):
+        ln = item.get(key)
+        if ln is None:
+            continue
+        lm = getattr(ln, "line_meta", None)
+        if not isinstance(lm, dict):
+            continue
+        if lm.get("preview_hide_merged_round_trip") is True:
+            continue
+        if lm.get("round_trip_merge_partner_reservation_id") is not None:
             return True
     return False
 
@@ -2081,6 +2193,93 @@ def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None
     return _one(item.get("line"))
 
 
+def _consolidated_item_is_ride_transport(item: dict[str, Any]) -> bool:
+    """« Trajet : » uniquement pour les lignes RIDE (pas livraison matériel, CUSTOM, frais)."""
+    if item.get("is_round_trip"):
+        for key in ("line1", "line2"):
+            ln = item.get(key)
+            if ln is not None and getattr(ln, "type", None) == InvoiceLineType.RIDE:
+                return True
+        return False
+    ln = item.get("line")
+    return ln is not None and getattr(ln, "type", None) == InvoiceLineType.RIDE
+
+
+def _consolidated_item_is_material_delivery(item: dict[str, Any]) -> bool:
+    """Livraison matériel : préfixe « Livraison : », pas « Trajet : »."""
+    if item.get("is_round_trip"):
+        for key in ("line1", "line2"):
+            ln = item.get(key)
+            if ln is not None and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY:
+                return True
+        return False
+    ln = item.get("line")
+    return ln is not None and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY
+
+
+def _pdf_escape_wrapped_plain(
+    text: str,
+    font_name: str,
+    desc_inner_pt: float,
+) -> str:
+    """Texte plain → lignes wrappées selon largeur colonne, puis échappement HTML."""
+    if not text or not str(text).strip():
+        return ""
+    lines = _wrap_line_by_width(
+        str(text).strip(),
+        font_name,
+        float(FONT_BODY),
+        desc_inner_pt,
+    )
+    return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
+
+
+def _pdf_format_transport_detail_inner_wrapped(
+    raw: str,
+    *,
+    font_name: str,
+    desc_inner_pt: float,
+    is_ride_line: bool,
+    is_material_delivery: bool,
+) -> str:
+    """Trajet / Livraison / libellé : préfixes métier + wrap largeur colonne (adresse complète, pas ville seule)."""
+    s = (raw or "").strip()
+    fs = float(FONT_BODY)
+    if is_material_delivery and s:
+        lines = _wrap_line_by_width(f"Livraison : {s}", font_name, fs, desc_inner_pt)
+        return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
+    if not is_ride_line:
+        if not s:
+            return ""
+        lines = _wrap_line_by_width(s, font_name, fs, desc_inner_pt)
+        return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
+    if not s:
+        return ""
+    for sep in (" ↔ ", " → "):
+        if sep in s:
+            a, b = s.split(sep, 1)
+            chunk: list[str] = []
+            chunk.extend(
+                _wrap_line_by_width(
+                    f"Trajet : {a.strip()}",
+                    font_name,
+                    fs,
+                    desc_inner_pt,
+                )
+            )
+            chunk.extend(
+                _wrap_line_by_width(
+                    f"→ {b.strip()}",
+                    font_name,
+                    fs,
+                    desc_inner_pt,
+                )
+            )
+            return "<br/>".join(_xml_escape_for_paragraph(x) for x in chunk)
+    lines = _wrap_line_by_width(f"Trajet : {s}", font_name, fs, desc_inner_pt)
+    return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
+
+
 def _build_s2_table(
     invoice: "Invoice",
     font_name: str,
@@ -2093,9 +2292,9 @@ def _build_s2_table(
 ) -> tuple[Any, list[dict[str, Any]]]:
     """Construit le tableau de détail des prestations.
 
-    Aligné sur ``InvoiceLivePreview`` pour tous les cas : **Date | Description | HT**.
+    Aligné sur ``InvoiceLivePreview`` pour tous les cas : **Date | Description | Montant**.
     Le nom patient (clinique S2, tierce partie, institution S1 patient) est rendu dans
-    la description (``Patient : …``), pas dans une colonne séparée. La colonne HT reprend
+    la description (``Patient : …``), pas dans une colonne séparée. La colonne Montant reprend
     uniquement le montant (sans « CHF » sur une deuxième ligne).
 
     Si ``available_width_pt`` est fourni (ex. ``doc.width``), la colonne description
@@ -2214,14 +2413,13 @@ def _build_s2_table(
 
     # Client privé direct : pas tierce / pas S2 (comportement remise globale dans le détail).
     is_compact_private = not is_third_party_invoice and not is_s2_invoice
-    # En-tête identique à InvoiceLivePreview (`.table` / `th` : 13px, #475569, fond #f8fafc).
-    _thead_color = colors.HexColor("#475569")
+    _thead_lead = int(round(FONT_TABLE_HEADER * 1.3))
     _thead_ps = ParagraphStyle(
         "InvoiceCompactThead",
         fontName=font_name_bold,
-        fontSize=13,
-        leading=17,
-        textColor=_thead_color,
+        fontSize=FONT_TABLE_HEADER,
+        leading=_thead_lead,
+        textColor=colors.black,
         spaceBefore=0,
         spaceAfter=0,
     )
@@ -2234,7 +2432,10 @@ def _build_s2_table(
                 "Description",
                 ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
             ),
-            Paragraph("HT", ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT)),
+            Paragraph(
+                "<nobr>Montant</nobr>",
+                ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT),
+            ),
         ]
     else:
         _header_row = [
@@ -2242,11 +2443,29 @@ def _build_s2_table(
                 "Description",
                 ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
             ),
-            Paragraph("HT", ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT)),
+            Paragraph(
+                "<nobr>Montant</nobr>",
+                ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT),
+            ),
         ]
     if is_compact_private:
         # Avec remise globale, l'aperçu HTML conserve les sous-lignes catalogue → net par ligne.
         suppress_line_discount_breakdown = False
+    # Largeur utile texte colonne Description (retrait padding L/R — aligné TableStyle body).
+    _s2_desc_hpad_pt = 7.5 + 3.0
+    _date_w_col = 2.95 * cm
+    _amt_w_col = 2.75 * cm
+    if available_width_pt is not None and float(available_width_pt) > 0:
+        if show_date_column:
+            _desc_w_for_wrap = float(
+                max(available_width_pt - _date_w_col - _amt_w_col, 1 * cm)
+            )
+        else:
+            _desc_w_for_wrap = float(max(available_width_pt - _amt_w_col, 1 * cm))
+    else:
+        _desc_w_for_wrap = float(12 * cm if show_date_column else 13 * cm)
+    desc_inner_pt = max(_desc_w_for_wrap - _s2_desc_hpad_pt, 60.0)
+
     table_data = [_header_row]
     s2_patient_separator_after_rows: list[int] = []
     for i, item in enumerate(consolidated):
@@ -2273,12 +2492,13 @@ def _build_s2_table(
         note_suffix = ""
         if adj_note:
             esc_n = _xml_escape_for_paragraph(adj_note)
-            note_suffix = f"<br/><font size='8' color='#6b7280'><i>{esc_n}</i></font>"
-        is_ar = (
-            item.get("is_round_trip")
-            and item.get("aller_detail")
-            and item.get("retour_detail")
-        ) or _invoice_line_meta_indicates_round_trip_tag(item.get("line"))
+            note_suffix = (
+                f'<br/><font size="{int(FONT_SECONDARY)}" color="#6b7280">'
+                f"<i>{esc_n}</i></font>"
+            )
+        is_ar = _consolidated_item_shows_ar_tag_pdf(item)
+        is_ride_td = _consolidated_item_is_ride_transport(item)
+        is_material_td = _consolidated_item_is_material_delivery(item)
         disc_suffix = ""
         if (
             not suppress_line_discount_breakdown
@@ -2291,33 +2511,41 @@ def _build_s2_table(
         line_desc_opt = _line_description_from_consolidated_item(item)
         if is_ar:
             if line_desc_opt:
-                esc_desc = _xml_escape_for_paragraph(line_desc_opt)
+                esc_desc = _pdf_escape_wrapped_plain(
+                    line_desc_opt, font_name, desc_inner_pt
+                )
                 inner_html = (
-                    f"<b>{esc_desc}</b>&nbsp;"
-                    f"<font color='#aaaaaa' size='8'>[A/R]</font>"
-                    f"{disc_suffix}{note_suffix}"
+                    f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
                 )
             else:
-                base = item.get("transport_display", "")
-                esc_base = _xml_escape_for_paragraph(base)
-                main_text = f"{esc_base}&nbsp;<font color='#aaaaaa' size='8'>↔</font>&nbsp;[A/R]"
-                inner_html = f"<b>{main_text}</b>{disc_suffix}{note_suffix}"
+                body_tr = _pdf_format_transport_detail_inner_wrapped(
+                    item.get("transport_display", ""),
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=is_ride_td,
+                    is_material_delivery=is_material_td,
+                )
+                inner_html = (
+                    f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
+                )
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
-                is_round_trip=True,
+                is_round_trip=False,
                 ht_column_plain=True,
             )
         else:
             if line_desc_opt:
                 inner_html = (
-                    f"{_xml_escape_for_paragraph(line_desc_opt)}"
+                    f"{_pdf_escape_wrapped_plain(line_desc_opt, font_name, desc_inner_pt)}"
                     f"{disc_suffix}{note_suffix}"
                 )
             else:
                 transport = item.get("transport_display", "")
-                esc_tr = _xml_escape_for_paragraph(transport)
-                inner_html = f"{esc_tr}{disc_suffix}{note_suffix}"
+                inner_html = (
+                    f"{_pdf_format_transport_detail_inner_wrapped(transport, font_name=font_name, desc_inner_pt=desc_inner_pt, is_ride_line=is_ride_td, is_material_delivery=is_material_td)}"
+                    f"{disc_suffix}{note_suffix}"
+                )
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
@@ -2333,23 +2561,28 @@ def _build_s2_table(
                 and pn_raw
             ):
                 patient_prefix_html = (
-                    f"<font size='8' color='#475569'>Patient : "
+                    f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
                     f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
                 )
         elif pn_raw and str(pn_raw).strip() not in ("Patient",):
             # Clinique S2 / tierce : ``InvoiceLivePreview`` `.lineClinicContext` (#475569, ~11px).
             patient_prefix_html = (
-                f"<font size='8' color='#475569'>Patient : "
+                f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
                 f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
             )
-        desc_cell = Paragraph(f"{patient_prefix_html}{inner_html}", s2_main_style)
-        table_data.append(
-            [
-                _compact_private_date_paragraph(date_str, font_name),
-                desc_cell,
-                amount_cell,
-            ]
+        desc_cell = Paragraph(
+            f"{patient_prefix_html}{inner_html}", s2_main_style
         )
+        if show_date_column:
+            table_data.append(
+                [
+                    _compact_private_date_paragraph(date_str, font_name),
+                    desc_cell,
+                    amount_cell,
+                ]
+            )
+        else:
+            table_data.append([desc_cell, amount_cell])
 
     if include_non_ride:
         for line in invoice.lines:
@@ -2377,12 +2610,14 @@ def _build_s2_table(
                     disc_o = _pdf_s2_per_line_discount_suffix_html(
                         cat_o, net_o, compact_private_sub=True
                     )
-                esc_d = _xml_escape_for_paragraph((line.description or "")[:500])
+                esc_d = _pdf_escape_wrapped_plain(
+                    (line.description or "")[:500], font_name, desc_inner_pt
+                )
                 sub = _custom_prestation_subline_for_pdf(line)
                 if sub:
                     esc_s = _xml_escape_for_paragraph(sub)
                     desc_html = (
-                        f"{esc_d}<br/><font size='8' color='#64748b'>{esc_s}</font>"
+                        f'{esc_d}<br/><font size="{FONT_SECONDARY}" color="#64748b">{esc_s}</font>'
                     )
                 else:
                     desc_html = esc_d
@@ -2427,20 +2662,49 @@ def _build_s2_table(
                 disc_or = _pdf_s2_per_line_discount_suffix_html(
                     cat_or, net_or, compact_private_sub=True
                 )
-            esc_d = _xml_escape_for_paragraph((line.description or "")[:500])
+            raw_desc_orphan = (line.description or "")[:500]
+            if line.type == InvoiceLineType.MATERIAL_DELIVERY and raw_desc_orphan.strip():
+                esc_d = _pdf_format_transport_detail_inner_wrapped(
+                    raw_desc_orphan,
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=False,
+                    is_material_delivery=True,
+                )
+            elif line.type == InvoiceLineType.RIDE and raw_desc_orphan.strip():
+                esc_d = _pdf_format_transport_detail_inner_wrapped(
+                    raw_desc_orphan,
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=True,
+                    is_material_delivery=False,
+                )
+            else:
+                esc_d = _pdf_escape_wrapped_plain(
+                    raw_desc_orphan, font_name, desc_inner_pt
+                )
+            lm_or = line.line_meta if isinstance(line.line_meta, dict) else {}
+            orphan_ar = (
+                lm_or.get("round_trip_merge_partner_reservation_id") is not None
+                and lm_or.get("preview_hide_merged_round_trip") is not True
+            )
+            ar_suffix = ""
+            if orphan_ar:
+                ar_suffix = f" {_pdf_s2_ar_tag_markup()}"
             orphan_pn_prefix = ""
             if is_third_party_invoice or is_s2_invoice:
-                lm = line.line_meta if isinstance(line.line_meta, dict) else {}
-                raw_pn = lm.get("patient_name")
+                raw_pn = lm_or.get("patient_name")
                 if raw_pn and str(raw_pn).strip() and str(raw_pn).strip() != "—":
                     pn_disp = str(raw_pn).strip()
                     if len(pn_disp) > MAX_PATIENT_NAME_LENGTH:
                         pn_disp = pn_disp[: MAX_PATIENT_NAME_LENGTH - 1] + "."
                     orphan_pn_prefix = (
-                        f"<font size='8' color='#475569'>Patient : "
+                        f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
                     )
-            desc_cell = Paragraph(f"{orphan_pn_prefix}{esc_d}{disc_or}", s2_main_style)
+            desc_cell = Paragraph(
+                f"{orphan_pn_prefix}{esc_d}{ar_suffix}{disc_or}", s2_main_style
+            )
             amt_cell_or = _pdf_s2_amount_only_paragraph(
                 net_or,
                 s2_main_style,
@@ -2454,9 +2718,9 @@ def _build_s2_table(
             else:
                 table_data.append([desc_cell, amt_cell_or])
 
-    # Largeurs : Date fixe, montant fixe, colonne description = tout l'espace utile (aperçu HTML).
-    date_w = 2.1 * cm
-    amount_w = 1.65 * cm
+    # Largeurs : Date / Montant assez larges pour éviter coupures (nobr + police date réduite).
+    date_w = 2.95 * cm
+    amount_w = 2.75 * cm
     if available_width_pt is not None and available_width_pt > 0:
         if show_date_column:
             desc_w = max(available_width_pt - date_w - amount_w, 1 * cm)
@@ -2498,10 +2762,11 @@ def _build_s2_table(
             ("RIGHTPADDING", (2, 0), (2, 0), _pad_lr),
             ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
             ("FONTNAME", (0, 1), (-1, -1), font_name),
-            ("FONTSIZE", (0, 1), (-1, -1), 13),
-            ("TEXTCOLOR", (0, 1), (0, -1), colors.HexColor("#334155")),
-            ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#0f172a")),
-            ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#0f172a")),
+            ("FONTSIZE", (0, 1), (-1, -1), FONT_BODY),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+            ("FONTNAME", (0, 0), (-1, 0), font_name_bold),
+            ("FONTSIZE", (0, 0), (-1, 0), FONT_TABLE_HEADER),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
             ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
             ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
             ("LEFTPADDING", (0, 1), (0, -1), _pad_lr),
@@ -2525,9 +2790,11 @@ def _build_s2_table(
             ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
             ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
             ("FONTNAME", (0, 1), (-1, -1), font_name),
-            ("FONTSIZE", (0, 1), (-1, -1), 13),
-            ("TEXTCOLOR", (0, 1), (0, -1), colors.HexColor("#0f172a")),
-            ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#0f172a")),
+            ("FONTSIZE", (0, 1), (-1, -1), FONT_BODY),
+            ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+            ("FONTNAME", (0, 0), (-1, 0), font_name_bold),
+            ("FONTSIZE", (0, 0), (-1, 0), FONT_TABLE_HEADER),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
             ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
             ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
             ("LEFTPADDING", (0, 1), (0, -1), _pad_desc_l),
@@ -2664,8 +2931,8 @@ def _custom_prestation_subline_for_pdf(line: InvoiceLine) -> str | None:
             return None
         qsym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
         psym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
-        # Même ordre que l'aperçu HTML : « 50.00 CHF/h × 4 h = 200.00 CHF HT »
-        return f"{up} CHF/{psym[tu]} × {qv} {qsym[tu]} = {tot} CHF HT"
+        # Aligné InvoiceLivePreview : « tarif × durée → HT »
+        return f"{up} CHF/{psym[tu]} × {qv} {qsym[tu]} → {tot} CHF HT"
     if mode == "quantity":
         return f"{qv} × {up} CHF = {tot} CHF HT"
     return None
@@ -2742,7 +3009,11 @@ def _pdf_billing_period_label_fr(invoice: Any) -> str | None:
 
 
 def _pdf_line_detail_date_str(line: Any, invoice: Any) -> str:
-    """Texte colonne Date — aligné sur ``InvoiceLivePreview.lineDetailDateLabel``."""
+    """Texte colonne Date — aligné sur ``InvoiceLivePreview.lineDetailDateLabel``.
+
+    - Trajet / livraison : méta ou date réelle de réservation (``scheduled_time``).
+    - CUSTOM : méta ; libellé période « mois année » uniquement si ``custom_prestation.time_unit == mois``.
+    """
     if not line:
         return ""
     lm = getattr(line, "line_meta", None)
@@ -2757,9 +3028,28 @@ def _pdf_line_detail_date_str(line: Any, invoice: Any) -> str:
     base = _line_meta_service_date_display_fr(line)
     if base:
         return base
-    pl = _pdf_billing_period_label_fr(invoice)
-    if pl and kind in ("RIDE", "MATERIAL_DELIVERY", "CUSTOM"):
-        return pl
+    rid = getattr(line, "reservation_id", None)
+    if rid and kind in ("RIDE", "MATERIAL_DELIVERY"):
+        try:
+            from models.booking import Booking
+
+            bk = Booking.query.get(int(rid))
+            if bk is not None:
+                st = getattr(bk, "scheduled_time", None)
+                if st is not None and hasattr(st, "strftime"):
+                    return st.strftime("%d.%m.%Y")
+        except Exception:
+            pass
+    if kind == "CUSTOM":
+        cp = lm.get("custom_prestation")
+        if (
+            isinstance(cp, dict)
+            and cp.get("mode") == "time"
+            and cp.get("time_unit") == "mois"
+        ):
+            pl = _pdf_billing_period_label_fr(invoice)
+            if pl:
+                return pl
     return ""
 
 
@@ -2893,13 +3183,14 @@ def _pdf_s2_per_line_discount_suffix_html(
     esc_net = _xml_escape_for_paragraph(f"{Decimal(net):.2f}")
     if compact_private_sub:
         return (
-            f'<br/><font size="8" color="#64748b">{esc_cat} → {esc_net} CHF HT</font>'
+            f'<br/><font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
+            f"{esc_cat} → {esc_net} CHF HT</font>"
         )
     return f'<br/><font size="7" color="#6b7280">{esc_cat} → {esc_net} CHF HT</font>'
 
 
 def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
-    """Colonne Date client privé — alignée sur `.colDate` (#334155), même corps que `.table` (13px).
+    """Colonne Date client privé — police compacte pour tenir sur une ligne dans la colonne étroite.
     """
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
@@ -2908,13 +3199,27 @@ def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
     display = date_str.strip() if date_str else ""
     if not display:
         display = "—"
+    else:
+        parts = display.split(".")
+        if (
+            len(parts) == 3
+            and len(parts[0]) == 2
+            and len(parts[1]) == 2
+            and len(parts[2]) == 4
+            and parts[0].isdigit()
+            and parts[1].isdigit()
+            and parts[2].isdigit()
+        ):
+            # Insécable avant l’année : évite « 22.04. » / « 2026 » sur deux lignes.
+            display = f"{parts[0]}.{parts[1]}.\u00a0{parts[2]}"
     esc = _xml_escape_for_paragraph(display)
+    _lead_d = int(round(FONT_BODY * 1.3))
     ps = ParagraphStyle(
         "CompactPrivateDateCell",
         fontName=font_name,
-        fontSize=13,
-        leading=16,
-        textColor=colors.HexColor("#334155"),
+        fontSize=FONT_BODY,
+        leading=_lead_d,
+        textColor=colors.black,
     )
     # Évite la coupure au dernier caractère si le moteur peut garder la ligne entière.
     return Paragraph(f"<nobr>{esc}</nobr>", ps)
@@ -2931,27 +3236,42 @@ def _pdf_s2_amount_only_paragraph(
 
     ``ht_column_plain`` : comme l'aperçu HTML client privé — uniquement ``12.34`` (sans « CHF »
     qui sinon peut passer à la ligne suivante dans une colonne étroite).
+
+    Ne pas utiliser de balise ``<para>`` dans le fragment HTML : ``Paragraph`` applique déjà
+    le paraparser ; des ``<para>`` imbriqués provoquent « unclosed tags ».
     """
+    from reportlab.lib.enums import TA_RIGHT
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import Paragraph
 
     net_d = Decimal(net)
-    amount_txt = (
-        _xml_escape_for_paragraph(f"{net_d:.2f}")
-        if ht_column_plain
-        else _xml_escape_for_paragraph(f"{net_d:.2f} CHF")
+    raw_txt = f"{net_d:.2f}" if ht_column_plain else f"{net_d:.2f} CHF"
+    esc = _xml_escape_for_paragraph(raw_txt)
+    inner = f"<nobr>{esc}</nobr>"
+    right_style = ParagraphStyle(
+        "S2AmountColRight",
+        parent=style,
+        alignment=TA_RIGHT,
     )
     if is_round_trip:
-        return Paragraph(f'<para align="right"><b>{amount_txt}</b></para>', style)
-    return Paragraph(f'<para align="right">{amount_txt}</para>', style)
+        return Paragraph(f"<b>{inner}</b>", right_style)
+    return Paragraph(inner, right_style)
 
 
 def _pdf_minimal_amount_only_flowable(net: Decimal, normal_style: Any) -> Any:
     """Colonne Montant (PDF minimal) : montant facturé seul, sans texte de remise."""
+    from reportlab.lib.enums import TA_RIGHT
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import Paragraph
 
     net_d = Decimal(net)
     esc_one = _xml_escape_for_paragraph(f"{net_d:.2f}")
-    return Paragraph(f'<para align="right">{esc_one}</para>', normal_style)
+    right_style = ParagraphStyle(
+        "MinimalAmountRight",
+        parent=normal_style,
+        alignment=TA_RIGHT,
+    )
+    return Paragraph(esc_one, right_style)
 
 
 def _minimal_custom_detail_paragraph(
@@ -2968,7 +3288,9 @@ def _minimal_custom_detail_paragraph(
     sub = _custom_prestation_subline_for_pdf(line)
     if sub:
         esc_s = _xml_escape_for_paragraph(sub)
-        body = f"{esc_d}<br/><font size='9' color='#64748b'>{esc_s}</font>{extra_html_suffix}"
+        body = (
+            f'{esc_d}<br/><font size="9" color="#64748b">{esc_s}</font>{extra_html_suffix}'
+        )
         return Paragraph(body, normal_style)
     return Paragraph(f"{esc_d}{extra_html_suffix}", normal_style)
 
@@ -3121,7 +3443,9 @@ def _build_totals_table(
                     [disc_label, _format_chf_discount_pdf(disc_ht)],
                 ]
                 if note_gd:
-                    total_data.append([note_gd[:280], ""])
+                    total_data.append(
+                        [_pdf_note_global_discount_for_totals_table(note_gd), ""]
+                    )
                     totals_extra_style_rules.extend(
                         [
                             ("SPAN", (0, 2), (1, 2)),
@@ -3227,7 +3551,9 @@ def _build_totals_table(
                 [disc_label, _format_chf_discount_pdf(disc_ht)],
             ]
             if note_gd:
-                total_data.append([note_gd[:280], ""])
+                total_data.append(
+                    [_pdf_note_global_discount_for_totals_table(note_gd), ""]
+                )
                 _note_row = len(total_data) - 1
                 totals_extra_style_rules.extend(
                     [
@@ -3324,7 +3650,8 @@ def _build_totals_table(
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+        ("FONTSIZE", (0, 0), (-1, -1), FONT_BODY),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
     ]
@@ -3342,17 +3669,19 @@ def _build_totals_table(
                 ("LEFTPADDING", (amount_col_idx, -1), (amount_col_idx, -1), 0),
             ]
         )
-    # ✅ Style des polices : dernière ligne (total) en gras, autres en normal
+    # Lignes intermédiaires corps ; dernière ligne (TOTAL) en gras.
     if len(total_data) > 1:
         style_rules.extend(
             [
+                ("FONTSIZE", (0, 0), (-1, -2), FONT_BODY),
                 ("FONTNAME", (0, 0), (-1, -2), font_name),
                 ("FONTNAME", (0, -1), (-1, -1), font_name_bold),
-                ("FONTSIZE", (0, -1), (-1, -1), 11),
+                ("FONTSIZE", (0, -1), (-1, -1), FONT_TOTAL),
             ]
         )
     else:
         style_rules.append(("FONTNAME", (0, 0), (-1, -1), font_name_bold))
+        style_rules.append(("FONTSIZE", (0, 0), (-1, -1), FONT_TOTAL))
     total_table.setStyle(TableStyle(style_rules))
     return total_table
 
@@ -4031,11 +4360,13 @@ class PDFService:
         # Styles basés sur le design de référence
         styles = getSampleStyleSheet()
 
+        _body_leading = int(round(FONT_BODY * 1.3))
         # Style pour le texte normal (leftIndent=0 pour alignement marge gauche)
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
-            fontSize=10,
+            fontSize=FONT_BODY,
+            leading=_body_leading,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=6,
@@ -4049,7 +4380,8 @@ class PDFService:
         centered_style = ParagraphStyle(
             "Centered",
             parent=styles["Normal"],
-            fontSize=10,
+            fontSize=FONT_BODY,
+            leading=_body_leading,
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=6,
@@ -4058,8 +4390,8 @@ class PDFService:
         s2_main_style = ParagraphStyle(
             "S2Main",
             parent=styles["Normal"],
-            fontSize=13,
-            leading=16,
+            fontSize=FONT_BODY,
+            leading=_body_leading,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceBefore=0,
@@ -4134,7 +4466,11 @@ class PDFService:
 
         # === EN-TÊTE : ENTREPRISE (gauche) | DESTINATAIRE (droite) — convention comptable ---
         recipient_para, _ = _build_recipient_block_flowable(
-            invoice, normal_style, bookings_by_id=bookings_by_id
+            invoice,
+            normal_style,
+            bookings_by_id=bookings_by_id,
+            name_font_size=FONT_CLIENT_NAME,
+            addr_font_size=FONT_BODY,
         )
         recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
         recipient_left_padding_mm = 15.0  # déplace le bloc destinataire vers la droite (pas d'espace volé à l'expéditeur)
@@ -4145,13 +4481,20 @@ class PDFService:
             usable_width_pt - dest_width_pt
         )  # expéditeur garde toute sa largeur
 
-        vat_line = f"<br/>{vat_status_text}" if vat_status_text else ""
+        vat_line = (
+            f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
+            if vat_status_text
+            else ""
+        )
         company_info_left = (
-            f"{company_name}<br/>"
-            f"{company_address}<br/>"
-            f"{company_email}<br/>"
-            f"{company_phone}<br/>"
-            f"IDE/UID : {company_uid}{vat_line}"
+            f'<font size="{FONT_HEADER_COMPANY}"><b>'
+            f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
+            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font><br/>'
+            f'<font size="{FONT_COMPANY_CONTACT}" color="{COLOR_MUTED_PDF}">'
+            f"{_xml_escape_for_paragraph(company_email)}<br/>"
+            f"{_xml_escape_for_paragraph(company_phone)}<br/>"
+            f"IDE/UID : {_xml_escape_for_paragraph(company_uid)}{vat_line}"
+            f"</font>"
         )
         company_para = Paragraph(company_info_left, normal_style)
 
@@ -4202,7 +4545,7 @@ class PDFService:
             label_style = ParagraphStyle(
                 "DestLabel",
                 parent=normal_style,
-                fontSize=8,
+                fontSize=FONT_SECONDARY,
                 spaceAfter=2,
             )
             label_para = Paragraph("<b>Facturé à :</b>", label_style)
@@ -4285,7 +4628,7 @@ class PDFService:
                     )
                     story.append(logo_para)
             story.append(company_para)
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 14))
 
         display_reminder_level = reminder_ctx.get("display_reminder_level")
 
@@ -4314,15 +4657,24 @@ class PDFService:
             if 1 <= invoice.period_month <= MONTHS_PER_YEAR
             else f"{invoice.period_month:02d}.{invoice.period_year}"
         )
+        _inv_n = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
+        _per_lbl = _xml_escape_for_paragraph(period_label)
         invoice_info_left = (
-            f"<b>Numéro de facture :</b> {invoice.invoice_number}<br/>"
-            f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
-            f"<b>{echeance_label}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
-            f"<b>Période de facturation :</b> {period_label}"
+            f'<font size="{FONT_META_NUMBER}"><b>Numéro de facture :</b></font> '
+            f'<font size="{FONT_META_NUMBER}">{_inv_n}</font><br/>'
+            f'<font size="{FONT_META_DATES}"><b>Date d\'émission :</b></font> '
+            f'<font size="{FONT_META_DATES}">{invoice.issued_at.strftime("%d.%m.%Y")}</font><br/>'
+            f'<font size="{FONT_META_DATES}"><b>'
+            f"{_xml_escape_for_paragraph(echeance_label)}</b></font> "
+            f'<font size="{FONT_META_DATES}">{invoice.due_date.strftime("%d.%m.%Y")}</font><br/>'
+            f'<font size="{FONT_META_DATES}"><b>Période de facturation :</b></font> '
+            f'<font size="{FONT_META_DATES}">{_per_lbl}</font>'
         )
         if reminder_ctx.get("is_reminder"):
             invoice_info_left += (
-                f"<br/><b>Date du rappel :</b> {datetime.now(UTC).strftime('%d.%m.%Y')}"
+                f'<br/><font size="{FONT_META_DATES}"><b>Date du rappel :</b></font> '
+                f'<font size="{FONT_META_DATES}">'
+                f"{datetime.now(UTC).strftime('%d.%m.%Y')}</font>"
             )
 
         invoice_info_table = Table(
@@ -4340,7 +4692,7 @@ class PDFService:
             )
         )
         story.append(invoice_info_table)
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 14))
 
         # === TABLEAU DES COURSES ===
         # Fonction pour formater les adresses longues avec retour à la ligne
@@ -4474,9 +4826,10 @@ class PDFService:
         story.append(Spacer(1, 6))
         story.append(s2_table)
         # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
-        if _pdf_show_ar_legend(invoice, consolidated_lines):
+        if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
             note_para = Paragraph(
-                '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
+                f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
+                f"[A/R] = transport aller-retour</font>",
                 normal_style,
             )
             story.append(Spacer(1, 8))
@@ -4714,10 +5067,12 @@ class PDFService:
         )
 
         styles = getSampleStyleSheet()
+        _min_lead = int(round(FONT_BODY * 1.3))
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
-            fontSize=9,
+            fontSize=FONT_BODY,
+            leading=_min_lead,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=4,
@@ -4729,7 +5084,8 @@ class PDFService:
         centered_style = ParagraphStyle(
             "Centered",
             parent=styles["Normal"],
-            fontSize=9,
+            fontSize=FONT_BODY,
+            leading=_min_lead,
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=4,
@@ -4745,7 +5101,7 @@ class PDFService:
             esc_d = _xml_escape_for_paragraph(date_str)
             esc_n = _xml_escape_for_paragraph(note)
             return Paragraph(
-                f"{esc_d}<br/><font size='7' color='#6b7280'><i>{esc_n}</i></font>",
+                f'{esc_d}<br/><font size="7" color="#6b7280"><i>{esc_n}</i></font>',
                 normal_style,
             )
 
@@ -4763,7 +5119,7 @@ class PDFService:
             if note:
                 esc_n = _xml_escape_for_paragraph(note)
                 parts.append(
-                    f"<br/><font size='7' color='#6b7280'><i>{esc_n}</i></font>"
+                    f'<br/><font size="7" color="#6b7280"><i>{esc_n}</i></font>'
                 )
             if ds:
                 parts.append(ds)
@@ -4775,11 +5131,19 @@ class PDFService:
         # === EN-TÊTE SIMPLIFIÉ (SANS LOGO) : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
         company_name = company.name or "[Nom entreprise non configuré]"
         company_address = self._get_company_address_for_pdf(company)
-        company_info = f"{company_name}<br/>{company_address}"
+        company_info = (
+            f'<font size="{FONT_HEADER_COMPANY}"><b>'
+            f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
+            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font>'
+        )
         company_para_min = Paragraph(company_info, normal_style)
 
         recipient_para_min, _ = _build_recipient_block_flowable(
-            invoice, normal_style, bookings_by_id=bookings_by_id
+            invoice,
+            normal_style,
+            bookings_by_id=bookings_by_id,
+            name_font_size=FONT_CLIENT_NAME,
+            addr_font_size=FONT_BODY,
         )
         recipient_top_padding_mm_min = 25.0  # destinataire légèrement plus bas
         recipient_left_padding_mm_min = (
@@ -4793,7 +5157,7 @@ class PDFService:
             label_style_min = ParagraphStyle(
                 "DestLabelMin",
                 parent=normal_style,
-                fontSize=8,
+                fontSize=FONT_SECONDARY,
                 spaceAfter=2,
             )
             label_para_min = Paragraph("<b>Facturé à :</b>", label_style_min)
@@ -4848,8 +5212,9 @@ class PDFService:
 
         # === INFORMATIONS FACTURE (SIMPLIFIÉES) ===
         echeance_label = "Échéance initiale:" if is_reminder else "Échéance:"
+        _inv_m = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
         invoice_info = (
-            f"<b>Facture {invoice.invoice_number}</b> - "
+            f"<b>Facture {_inv_m}</b> - "
             f"{invoice.issued_at.strftime('%d.%m.%Y')} - "
             f"{echeance_label} {invoice.due_date.strftime('%d.%m.%Y')}"
         )
@@ -5203,7 +5568,9 @@ class PDFService:
                     [disc_label, _format_chf_discount_pdf(disc_ht)],
                 ]
                 if note_gd:
-                    total_data.append([note_gd[:280], ""])
+                    total_data.append(
+                        [_pdf_note_global_discount_for_totals_table(note_gd), ""]
+                    )
                     gd_min_style_extra.extend(
                         [
                             ("SPAN", (0, 2), (1, 2)),
@@ -5437,10 +5804,12 @@ class PDFService:
         )
 
         styles = getSampleStyleSheet()
+        _det_lead = int(round(FONT_BODY * 1.3))
         normal_style = ParagraphStyle(
             "Normal",
             parent=styles["Normal"],
-            fontSize=10,
+            fontSize=FONT_BODY,
+            leading=_det_lead,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceAfter=6,
@@ -5452,7 +5821,8 @@ class PDFService:
         centered_style = ParagraphStyle(
             "Centered",
             parent=styles["Normal"],
-            fontSize=10,
+            fontSize=FONT_BODY,
+            leading=_det_lead,
             textColor=colors.black,
             alignment=TA_CENTER,
             spaceAfter=6,
@@ -5461,7 +5831,7 @@ class PDFService:
         detail_style = ParagraphStyle(
             "Detail",
             parent=styles["Normal"],
-            fontSize=9,
+            fontSize=FONT_COMPANY_CONTACT,
             textColor=colors.darkgrey,
             alignment=TA_LEFT,
             spaceAfter=4,
@@ -5470,8 +5840,8 @@ class PDFService:
         s2_main_style = ParagraphStyle(
             "S2Main",
             parent=styles["Normal"],
-            fontSize=13,
-            leading=16,
+            fontSize=FONT_BODY,
+            leading=_det_lead,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceBefore=0,
@@ -5511,7 +5881,11 @@ class PDFService:
 
         # === EN-TÊTE DETAILED : ENTREPRISE (gauche) | DESTINATAIRE (droite) ===
         recipient_para, _ = _build_recipient_block_flowable(
-            invoice, normal_style, bookings_by_id=bookings_by_id
+            invoice,
+            normal_style,
+            bookings_by_id=bookings_by_id,
+            name_font_size=FONT_CLIENT_NAME,
+            addr_font_size=FONT_BODY,
         )
         recipient_top_padding_mm = 25.0  # destinataire légèrement plus bas
         recipient_left_padding_mm = (
@@ -5537,13 +5911,20 @@ class PDFService:
             else:
                 vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
-        vat_line_d = f"<br/>{vat_status_text}" if vat_status_text else ""
+        vat_line_d = (
+            f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
+            if vat_status_text
+            else ""
+        )
         company_info_detailed = (
-            f"<b>{company_name}</b><br/>"
-            f"{company_address}<br/>"
-            f"{company_phone}<br/>"
-            f"{company_email}<br/>"
-            f"IDE/UID: {company_uid}{vat_line_d}"
+            f'<font size="{FONT_HEADER_COMPANY}"><b>'
+            f"{_xml_escape_for_paragraph(company_name)}</b></font><br/>"
+            f'<font size="{FONT_BODY}">{_reportlab_safe_footer_html(company_address)}</font><br/>'
+            f'<font size="{FONT_COMPANY_CONTACT}" color="{COLOR_MUTED_PDF}">'
+            f"{_xml_escape_for_paragraph(company_phone)}<br/>"
+            f"{_xml_escape_for_paragraph(company_email)}<br/>"
+            f"IDE/UID: {_xml_escape_for_paragraph(company_uid)}{vat_line_d}"
+            f"</font>"
         )
         company_para = Paragraph(company_info_detailed, normal_style)
 
@@ -5589,7 +5970,7 @@ class PDFService:
             label_style_d = ParagraphStyle(
                 "DestLabelD",
                 parent=normal_style,
-                fontSize=8,
+                fontSize=FONT_SECONDARY,
                 spaceAfter=2,
             )
             label_para_d = Paragraph("<b>Facturé à :</b>", label_style_d)
@@ -5713,12 +6094,16 @@ class PDFService:
             else "Date d'échéance :"
         )
 
+        _inv_d = _xml_escape_for_paragraph(str(invoice.invoice_number or ""))
+        _per_d = _xml_escape_for_paragraph(period_label_d)
+        _st_d = _xml_escape_for_paragraph(str(status_value))
+        _ech_d = _xml_escape_for_paragraph(echeance_label)
         invoice_info_detailed = (
-            f"<b>Numéro de facture :</b> {invoice.invoice_number}<br/>"
+            f"<b>Numéro de facture :</b> {_inv_d}<br/>"
             f"<b>Date d'émission :</b> {invoice.issued_at.strftime('%d.%m.%Y')}<br/>"
-            f"<b>{echeance_label}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
-            f"<b>Période de facturation :</b> {period_label_d}<br/>"
-            f"<b>Statut :</b> {status_value}"
+            f"<b>{_ech_d}</b> {invoice.due_date.strftime('%d.%m.%Y')}<br/>"
+            f"<b>Période de facturation :</b> {_per_d}<br/>"
+            f"<b>Statut :</b> {_st_d}"
         )
         if reminder_ctx.get("is_reminder"):
             invoice_info_detailed += (
@@ -5847,10 +6232,11 @@ class PDFService:
         story.append(Spacer(1, 6))
         story.append(s2_table)
         # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
-        if _pdf_show_ar_legend(invoice, consolidated_lines):
+        if _pdf_show_ar_legend(invoice, consolidated_lines, bookings_by_id):
             note_para = Paragraph(
-                '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
-                detail_style,
+                f'<font size="{FONT_SECONDARY}" color="{COLOR_MUTED_PDF}">'
+                f"[A/R] = transport aller-retour</font>",
+                normal_style,
             )
             story.append(Spacer(1, 8))
             story.append(note_para)
@@ -5905,7 +6291,11 @@ class PDFService:
         # === NOTES ET INFORMATIONS SUPPLÉMENTAIRES ===
         if invoice.notes:
             story.append(Paragraph("<b>Notes :</b>", normal_style))
-            story.append(Paragraph(invoice.notes, detail_style))
+            story.append(
+                Paragraph(
+                    _reportlab_multiline_plain_to_html(invoice.notes), detail_style
+                )
+            )
             story.append(Spacer(1, 15))
 
         # === PIED DE PAGE DÉTAILLÉ ===
@@ -6083,10 +6473,17 @@ class PDFService:
 
         # Informations créancier
         left_section.append(Paragraph("Konto / Zahlbar an", label_style))
-        left_section.append(Paragraph(billing_settings.iban, value_style))
+        left_section.append(
+            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+        )
         company = invoice.company
         left_section.append(
-            Paragraph(company.name or "[Nom non configuré]", normal_style)
+            Paragraph(
+                _xml_escape_for_paragraph(
+                    company.name or "[Nom non configuré]"
+                ),
+                normal_style,
+            )
         )
         # Utiliser l'adresse de domiciliation
         street = (
@@ -6094,46 +6491,46 @@ class PDFService:
             or company.address
             or "[Adresse non configurée]"
         )
-        left_section.append(Paragraph(street, normal_style))
+        left_section.append(Paragraph(_xml_escape_for_paragraph(street), normal_style))
         postal_city = (
             f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
             or "[Code postal/ville non configuré]"
         )
-        left_section.append(Paragraph(postal_city, normal_style))
+        left_section.append(
+            Paragraph(_xml_escape_for_paragraph(postal_city), normal_style)
+        )
         left_section.append(Spacer(1, 8))
 
         # Informations débiteur
         left_section.append(Paragraph("Zahlbar durch", label_style))
+        _zbd_name = (
+            f"{invoice.client.user.first_name or ''} "
+            f"{invoice.client.user.last_name or ''}"
+        ).strip()
+        left_section.append(
+            Paragraph(_xml_escape_for_paragraph(_zbd_name), normal_style)
+        )
         left_section.append(
             Paragraph(
-                (
-                    f"{invoice.client.user.first_name or ''} "
-                    f"{invoice.client.user.last_name or ''}"
+                _xml_escape_for_paragraph(
+                    invoice.client.domicile_address or "Adresse non renseignée"
                 ),
                 normal_style,
             )
         )
+        _zbd_pc = (
+            f"{invoice.client.domicile_zip or ''} "
+            f"{invoice.client.domicile_city or ''}"
+        ).strip()
         left_section.append(
-            Paragraph(
-                invoice.client.domicile_address or "Adresse non renseignée",
-                normal_style,
-            )
-        )
-        left_section.append(
-            Paragraph(
-                (
-                    f"{invoice.client.domicile_zip or ''} "
-                    f"{invoice.client.domicile_city or ''}"
-                ),
-                normal_style,
-            )
+            Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style)
         )
         left_section.append(Spacer(1, 8))
 
         # Référence
         left_section.append(Paragraph("Referenz", label_style))
         qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        left_section.append(Paragraph(qr_ref, value_style))
+        left_section.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
         left_section.append(Spacer(1, 8))
 
         # Montant
@@ -6161,12 +6558,21 @@ class PDFService:
 
         # Informations créancier
         right_section.append(Paragraph("Konto / Zahlbar an", label_style))
-        right_section.append(Paragraph(billing_settings.iban, value_style))
         right_section.append(
-            Paragraph(company.name or "[Nom non configuré]", normal_style)
+            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
         )
-        right_section.append(Paragraph(street, normal_style))
-        right_section.append(Paragraph(postal_city, normal_style))
+        right_section.append(
+            Paragraph(
+                _xml_escape_for_paragraph(
+                    company.name or "[Nom non configuré]"
+                ),
+                normal_style,
+            )
+        )
+        right_section.append(Paragraph(_xml_escape_for_paragraph(street), normal_style))
+        right_section.append(
+            Paragraph(_xml_escape_for_paragraph(postal_city), normal_style)
+        )
         right_section.append(Spacer(1, 8))
 
         # QR Code
@@ -6176,35 +6582,25 @@ class PDFService:
         # Informations débiteur
         right_section.append(Paragraph("Zahlbar durch", label_style))
         right_section.append(
+            Paragraph(_xml_escape_for_paragraph(_zbd_name), normal_style)
+        )
+        right_section.append(
             Paragraph(
-                (
-                    f"{invoice.client.user.first_name or ''} "
-                    f"{invoice.client.user.last_name or ''}"
+                _xml_escape_for_paragraph(
+                    invoice.client.domicile_address or "Adresse non renseignée"
                 ),
                 normal_style,
             )
         )
         right_section.append(
-            Paragraph(
-                invoice.client.domicile_address or "Adresse non renseignée",
-                normal_style,
-            )
-        )
-        right_section.append(
-            Paragraph(
-                (
-                    f"{invoice.client.domicile_zip or ''} "
-                    f"{invoice.client.domicile_city or ''}"
-                ),
-                normal_style,
-            )
+            Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style)
         )
         right_section.append(Spacer(1, 8))
 
         # Référence
         right_section.append(Paragraph("Referenz", label_style))
         qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        right_section.append(Paragraph(qr_ref, value_style))
+        right_section.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
         right_section.append(Spacer(1, 8))
 
         # Montant
@@ -6300,56 +6696,63 @@ class PDFService:
 
         # Konto / Zahlbar an
         left_content.append(Paragraph("Konto / Zahlbar an", label_style))
-        left_content.append(Paragraph(billing_settings.iban, value_style))
+        left_content.append(
+            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+        )
         company = invoice.company
         left_content.append(
-            Paragraph(company.name or "[Nom non configuré]", normal_text_style)
+            Paragraph(
+                _xml_escape_for_paragraph(
+                    company.name or "[Nom non configuré]"
+                ),
+                normal_text_style,
+            )
         )
         street = (
             company.domicile_address_line1
             or company.address
             or "[Adresse non configurée]"
         )
-        left_content.append(Paragraph(street, normal_text_style))
+        left_content.append(Paragraph(_xml_escape_for_paragraph(street), normal_text_style))
         postal_city = (
             f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
             or "[Code postal/ville non configuré]"
         )
-        left_content.append(Paragraph(postal_city, normal_text_style))
+        left_content.append(
+            Paragraph(_xml_escape_for_paragraph(postal_city), normal_text_style)
+        )
         left_content.append(Spacer(1, 6))
 
         # Zahlbar durch
         left_content.append(Paragraph("Zahlbar durch", label_style))
+        _ofl_zbd = (
+            f"{invoice.client.user.first_name or ''} "
+            f"{invoice.client.user.last_name or ''}"
+        ).strip()
+        left_content.append(
+            Paragraph(_xml_escape_for_paragraph(_ofl_zbd), normal_text_style)
+        )
         left_content.append(
             Paragraph(
-                (
-                    f"{invoice.client.user.first_name or ''} "
-                    f"{invoice.client.user.last_name or ''}"
+                _xml_escape_for_paragraph(
+                    invoice.client.domicile_address or "Adresse non renseignée"
                 ),
                 normal_text_style,
             )
         )
+        _ofl_zpc = (
+            f"{invoice.client.domicile_zip or ''} "
+            f"{invoice.client.domicile_city or ''}"
+        ).strip()
         left_content.append(
-            Paragraph(
-                invoice.client.domicile_address or "Adresse non renseignée",
-                normal_text_style,
-            )
-        )
-        left_content.append(
-            Paragraph(
-                (
-                    f"{invoice.client.domicile_zip or ''} "
-                    f"{invoice.client.domicile_city or ''}"
-                ),
-                normal_text_style,
-            )
+            Paragraph(_xml_escape_for_paragraph(_ofl_zpc), normal_text_style)
         )
         left_content.append(Spacer(1, 6))
 
         # Referenz
         left_content.append(Paragraph("Referenz", label_style))
         qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        left_content.append(Paragraph(qr_ref, value_style))
+        left_content.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
         left_content.append(Spacer(1, 6))
 
         # Währung et Betrag
@@ -6376,12 +6779,21 @@ class PDFService:
 
         # Konto / Zahlbar an
         right_content.append(Paragraph("Konto / Zahlbar an", label_style))
-        right_content.append(Paragraph(billing_settings.iban, value_style))
         right_content.append(
-            Paragraph(company.name or "[Nom non configuré]", normal_text_style)
+            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
         )
-        right_content.append(Paragraph(street, normal_text_style))
-        right_content.append(Paragraph(postal_city, normal_text_style))
+        right_content.append(
+            Paragraph(
+                _xml_escape_for_paragraph(
+                    company.name or "[Nom non configuré]"
+                ),
+                normal_text_style,
+            )
+        )
+        right_content.append(Paragraph(_xml_escape_for_paragraph(street), normal_text_style))
+        right_content.append(
+            Paragraph(_xml_escape_for_paragraph(postal_city), normal_text_style)
+        )
         right_content.append(Spacer(1, 6))
 
         # QR Code
@@ -6391,35 +6803,25 @@ class PDFService:
         # Zahlbar durch
         right_content.append(Paragraph("Zahlbar durch", label_style))
         right_content.append(
+            Paragraph(_xml_escape_for_paragraph(_ofl_zbd), normal_text_style)
+        )
+        right_content.append(
             Paragraph(
-                (
-                    f"{invoice.client.user.first_name or ''} "
-                    f"{invoice.client.user.last_name or ''}"
+                _xml_escape_for_paragraph(
+                    invoice.client.domicile_address or "Adresse non renseignée"
                 ),
                 normal_text_style,
             )
         )
         right_content.append(
-            Paragraph(
-                invoice.client.domicile_address or "Adresse non renseignée",
-                normal_text_style,
-            )
-        )
-        right_content.append(
-            Paragraph(
-                (
-                    f"{invoice.client.domicile_zip or ''} "
-                    f"{invoice.client.domicile_city or ''}"
-                ),
-                normal_text_style,
-            )
+            Paragraph(_xml_escape_for_paragraph(_ofl_zpc), normal_text_style)
         )
         right_content.append(Spacer(1, 6))
 
         # Referenz
         right_content.append(Paragraph("Referenz", label_style))
         qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        right_content.append(Paragraph(qr_ref, value_style))
+        right_content.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
         right_content.append(Spacer(1, 6))
 
         # Währung et Betrag
@@ -6585,7 +6987,12 @@ class PDFService:
             or "Client"
         )
 
-        story.append(Paragraph(f"Cher/Chère {client_name},", styles["Normal"]))
+        story.append(
+            Paragraph(
+                f"Cher/Chère {_xml_escape_for_paragraph(client_name)},",
+                styles["Normal"],
+            )
+        )
         story.append(Spacer(1, 20))
 
         # Message selon le niveau
@@ -6648,7 +7055,7 @@ class PDFService:
                     "procédure légale."
                 )
 
-        story.append(Paragraph(message, styles["Normal"]))
+        story.append(Paragraph(_reportlab_safe_footer_html(message), styles["Normal"]))
         story.append(Spacer(1, 20))
 
         # Informations bancaires
@@ -6656,7 +7063,9 @@ class PDFService:
             banking_info = (
                 f"Paiement par virement bancaire : IBAN : {billing_settings.iban}"
             )
-            story.append(Paragraph(banking_info, styles["Normal"]))
+            story.append(
+                Paragraph(_xml_escape_for_paragraph(banking_info), styles["Normal"])
+            )
 
         # ✅ QR-BILL pour le rappel consolidé (si reminder fourni avec montant total)
         if reminder and reminder.total_due > 0 and reminder.qr_reference:

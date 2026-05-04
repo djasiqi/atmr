@@ -45,6 +45,7 @@ from services.documents.pdf import (
     _make_legal_footer_page_callback,
     _make_qr_bill_table,
     _svg_content_to_drawing,
+    _xml_escape_for_paragraph,
 )
 
 # Constantes alignées avec pdf.py
@@ -72,6 +73,16 @@ MAX_CLIENT_NAME_LENGTH = 20
 MIN_IBAN_LENGTH = 21
 
 app_logger = logging.getLogger("partner_invoice_pdf_service")
+
+
+def _escape_multiline_address_html(fragment: str) -> str:
+    """Fragment pouvant contenir des ``<br/>`` (voir `_format_address_multiline`) — tout échapper."""
+    import re
+
+    if not fragment:
+        return ""
+    parts = re.split(r"(?i)<br\s*/?>", fragment)
+    return "<br/>".join(_xml_escape_for_paragraph(p) for p in parts)
 
 
 def _format_address_multiline(address: str | None) -> str:
@@ -327,14 +338,19 @@ def generate_partner_invoice_pdf_content(
         else:
             vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
-    vat_line = f"<br/>{vat_status_text}" if vat_status_text else ""
-    company_info_html = f"""
-    {company_name}<br/>
-    {company_address}<br/>
-    {company_email}<br/>
-    {company_phone}<br/>
-    IDE/UID : {company_uid}{vat_line}
-    """
+    vat_line = (
+        f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
+        if vat_status_text
+        else ""
+    )
+    _addr_emit = _escape_multiline_address_html(company_address)
+    company_info_html = (
+        f"{_xml_escape_for_paragraph(company_name)}<br/>"
+        f"{_addr_emit}<br/>"
+        f"{_xml_escape_for_paragraph(company_email)}<br/>"
+        f"{_xml_escape_for_paragraph(company_phone)}<br/>"
+        f"IDE/UID : {_xml_escape_for_paragraph(company_uid)}{vat_line}"
+    )
     company_para = Paragraph(company_info_html, normal_style)
 
     # Informations destinataire (partenaire)
@@ -343,11 +359,15 @@ def generate_partner_invoice_pdf_content(
     billed_email = billed_company.billing_email or billed_company.contact_email or ""
     billed_phone = billed_company.contact_phone or ""
 
-    recipient_parts = [f"<b>{billed_name}</b>", billed_address]
+    _bill_addr = _escape_multiline_address_html(billed_address)
+    recipient_parts = [
+        f"<b>{_xml_escape_for_paragraph(billed_name)}</b>",
+        _bill_addr,
+    ]
     if billed_email:
-        recipient_parts.append(billed_email)
+        recipient_parts.append(_xml_escape_for_paragraph(billed_email))
     if billed_phone:
-        recipient_parts.append(billed_phone)
+        recipient_parts.append(_xml_escape_for_paragraph(billed_phone))
     recipient_html = "<br/>".join(recipient_parts)
 
     # Label "Facturé à" avec même style que pdf.py
@@ -439,12 +459,24 @@ def generate_partner_invoice_pdf_content(
     else:
         period_label = f"{period_month:02d}.{period_year}"
 
-    invoice_info_html = f"""
-    <b>Numéro de facture :</b> {partner_invoice.invoice_number}<br/>
-    <b>Date d'émission :</b> {partner_invoice.issued_at.strftime("%d.%m.%Y") if partner_invoice.issued_at else "N/A"}<br/>
-    <b>Date d'échéance :</b> {partner_invoice.due_date.strftime("%d.%m.%Y") if partner_invoice.due_date else "N/A"}<br/>
-    <b>Période de facturation :</b> {period_label}
-    """
+    _pinv = _xml_escape_for_paragraph(str(partner_invoice.invoice_number or ""))
+    _per_esc = _xml_escape_for_paragraph(period_label)
+    _iss = (
+        partner_invoice.issued_at.strftime("%d.%m.%Y")
+        if partner_invoice.issued_at
+        else "N/A"
+    )
+    _due = (
+        partner_invoice.due_date.strftime("%d.%m.%Y")
+        if partner_invoice.due_date
+        else "N/A"
+    )
+    invoice_info_html = (
+        f"<b>Numéro de facture :</b> {_pinv}<br/>"
+        f"<b>Date d'émission :</b> {_iss}<br/>"
+        f"<b>Date d'échéance :</b> {_due}<br/>"
+        f"<b>Période de facturation :</b> {_per_esc}"
+    )
     story.append(Paragraph(invoice_info_html, normal_style))
     story.append(Spacer(1, 20))
 

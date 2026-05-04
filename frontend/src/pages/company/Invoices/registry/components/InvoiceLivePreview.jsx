@@ -60,6 +60,19 @@ function safeText(value, fallback = '—') {
   return fallback;
 }
 
+/** Parité PDF : préfixe livraison matériel (pas « Trajet : »). */
+function lineDescriptionWithPrefix(line) {
+  const kind = String(line?.type ?? line?.line_type ?? '')
+    .trim()
+    .toUpperCase();
+  const raw = safeText(line.description);
+  if (kind === 'MATERIAL_DELIVERY' && raw && raw !== '—') {
+    if (/^livraison\s*:/i.test(String(raw).trim())) return raw;
+    return `Livraison : ${raw}`;
+  }
+  return raw;
+}
+
 /** Quantité durée affichée sous la description (évite « 4.00 h » quand c’est un entier). */
 function formatTimeBillingQty(qty) {
   if (!Number.isFinite(qty)) return '—';
@@ -111,14 +124,20 @@ function lineDetailDateLabel(line, invoice) {
     if (formatted != null && formatted !== '') return formatted;
   }
 
-  const y = invoice?.period_year;
-  const m = invoice?.period_month;
+  // Libellé « mois année » uniquement pour prestation CUSTOM au mode « mois » (pas pour trajet/livraison).
+  const cpMo = meta?.custom_prestation;
   if (
-    (kind === 'RIDE' || kind === 'MATERIAL_DELIVERY' || kind === 'CUSTOM') &&
-    Number.isFinite(Number(y)) &&
-    Number.isFinite(Number(m))
+    kind === 'CUSTOM' &&
+    cpMo &&
+    typeof cpMo === 'object' &&
+    cpMo.mode === 'time' &&
+    cpMo.time_unit === 'mois'
   ) {
-    return billingPeriodLabel(invoice);
+    const y = invoice?.period_year;
+    const mo = invoice?.period_month;
+    if (Number.isFinite(Number(y)) && Number.isFinite(Number(mo))) {
+      return billingPeriodLabel(invoice);
+    }
   }
   return null;
 }
@@ -201,12 +220,18 @@ function linePreviewHiddenMergedRoundTrip(line) {
   return m.preview_hide_merged_round_trip === true;
 }
 
-/** Aligné PDF : trajets aller-retour (même logique que `transport_type` / consolidation A/R). */
+/**
+ * [A/R] uniquement si deux segments sont fusionnés (payeur / ligne masquée),
+ * ou si l’aperçu période a fusionné un vrai A/R (jambe + borne fin → deux créneaux).
+ * Ne pas se fier à `is_round_trip_leg` seul (faux positifs aller simple).
+ */
+/** [A/R] uniquement si fusion métier explicite (partenaire réservation ou ligne masquée). */
 function lineIsRoundTrip(line) {
   const m = line?.line_meta;
   if (!m || typeof m !== 'object') return false;
-  if (m.is_round_trip_leg === true) return true;
-  return String(m.transport_type || '').trim().toUpperCase() === 'A/R';
+  if (m.round_trip_merge_partner_reservation_id != null) return true;
+  if (m.preview_hide_merged_round_trip === true) return true;
+  return false;
 }
 
 /** Montants HT / TVA / TTC pour une ligne principale A/R (somme des deux segments facturés). */
@@ -251,11 +276,11 @@ function customPrestationSubline(line) {
   const unit = Number(line.unit_price);
   const tu = cp.time_unit;
   const ht = Number(line.line_total);
-  if (mode === 'time' && tu && Number.isFinite(qty) && Number.isFinite(unit)) {
+  if (mode === 'time' && Number.isFinite(qty) && Number.isFinite(unit)) {
     const unitLbl =
-      tu === 'min' ? 'min' : tu === 'h' ? 'h' : tu === 'd' ? 'j' : tu === 'mois' ? 'mois' : tu;
+      tu === 'min' ? 'min' : tu === 'h' ? 'h' : tu === 'd' ? 'j' : tu === 'mois' ? 'mois' : 'h';
     const dur = formatTimeBillingQty(qty);
-    return `${unit.toFixed(2)} CHF/${unitLbl} × ${dur} ${unitLbl} = ${
+    return `${unit.toFixed(2)} × ${dur} ${unitLbl} → ${
       Number.isFinite(ht) ? ht.toFixed(2) : '—'
     } CHF HT`;
   }
@@ -394,7 +419,7 @@ export default function InvoiceLivePreview({
                   <th className={styles.colDate}>Date</th>
                 ) : null}
                 <th>Description</th>
-                <th className={styles.colNum}>HT</th>
+                <th className={styles.colNum}>Montant</th>
                 {showVatColumn ? <th className={styles.colNum}>TVA</th> : null}
                 {showTtcColumn ? <th className={styles.colNum}>TTC</th> : null}
               </tr>
@@ -431,7 +456,7 @@ export default function InvoiceLivePreview({
                         <div className={styles.lineClinicContext}>{patientSub}</div>
                       ) : null}
                       <div className={styles.lineDesc}>
-                        {safeText(line.description)}
+                        {lineDescriptionWithPrefix(line)}
                         {isAr ? (
                           <span className={styles.lineArTag} title="Transport aller-retour">
                             {' '}
