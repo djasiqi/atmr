@@ -58,6 +58,8 @@ _META_PER_LINE_DISCOUNT_LINE = "per_line_discount_line"
 _META_ORIGINAL_LINE_TOTAL = "original_line_total"
 _ISO_DATE_SLICE_LEN = 10
 _MAX_DISCOUNT_PERCENT = 100.0
+# Paramètre optionnel ``update_draft_invoice_line(service_date_iso=…)`` : omit du PATCH ⇒ pas de changement.
+_SERVICE_DATE_ISO_ARG_UNSET = object()
 
 
 def _normalize_optional_service_date_iso(raw: Any) -> str | None:
@@ -337,6 +339,7 @@ def update_draft_invoice_line(
     adjustment_note: str | None = None,
     description: str | None = None,
     expected_updated_at: str | None = None,
+    service_date_iso: Any = _SERVICE_DATE_ISO_ARG_UNSET,
 ) -> EditDraftResult:
     inv, err_code, err_msg = _resolve_draft_invoice(
         company_id, invoice_id, expected_updated_at=expected_updated_at
@@ -404,6 +407,27 @@ def update_draft_invoice_line(
         meta = dict(line.line_meta) if line.line_meta else {}
         meta["description_overridden"] = True
         line.line_meta = meta
+
+    if service_date_iso is not _SERVICE_DATE_ISO_ARG_UNSET:
+        if line.type == InvoiceLineType.CUSTOM:
+            meta_sd = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+            if service_date_iso is None or (
+                isinstance(service_date_iso, str) and not str(service_date_iso).strip()
+            ):
+                meta_sd.pop("service_date_iso", None)
+                meta_sd.pop("service_date", None)
+            else:
+                norm_sd = _normalize_optional_service_date_iso(service_date_iso)
+                if norm_sd is None:
+                    return EditDraftResult(
+                        False,
+                        error={
+                            "error": "service_date_iso invalide (format YYYY-MM-DD attendu).",
+                        },
+                        status_code=400,
+                    )
+                meta_sd["service_date_iso"] = norm_sd
+            line.line_meta = meta_sd if meta_sd else None
 
     _recompute_totals_from_lines(inv)
     _mark_pdf_stale(inv)

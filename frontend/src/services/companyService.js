@@ -94,7 +94,7 @@ export const fetchCompanyReservationsPaginated = async ({
   try {
     const params = {
       flat: true,
-      include_stats: false,
+      include_stats: true,
       page,
       per_page: perPage,
       sort_order: sortOrder,

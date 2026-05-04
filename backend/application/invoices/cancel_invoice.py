@@ -151,45 +151,62 @@ class CancelInvoiceUseCase:
         is_direct_client = _is_direct_client_invoice(invoice)
         freed_count = 0
 
+        line_ids: set[int] = set()
+        for line in invoice.lines:
+            lid = getattr(line, "id", None)
+            if lid is not None:
+                line_ids.add(int(lid))
+
+        # Tous les bookings pointant vers une ligne de cette facture (y compris
+        # segments A/R secondaires non couverts par line.reservation_id seul).
+        bookings_by_id: dict[int, Any] = {}
+        if line_ids:
+            for b in Booking.query.filter(Booking.invoice_line_id.in_(line_ids)).all():
+                bookings_by_id[int(b.id)] = b
+
         for line in invoice.lines:
             if hasattr(line, "reservation_id") and line.reservation_id:
                 booking_dto = self._booking_repo.find_by_id(line.reservation_id)
                 if booking_dto:
-                    # Récupérer le modèle SQLAlchemy depuis le DTO pour la compatibilité
-                    booking = Booking.query.get(booking_dto.id)
-                    if (
-                        booking
-                        and hasattr(booking, "invoice_line_id")
-                        and booking.invoice_line_id == line.id
-                    ):
-                        booking.invoice_line_id = None
-                        booking.updated_at = datetime.now(UTC)
-                        # Facture client directe : NE JAMAIS recalculer billed_to_type ni
-                        # appliquer résolution patient→clinique. Ré-asserter l'override
-                        # « facturer client » pour garder billed_to_type = 'patient'
-                        # (idempotent sur le payeur).
-                        if is_direct_client:
-                            try:
-                                booking.billed_to_type = "patient"
-                                booking.billed_to_company_id = None
-                                booking.billing_party_id = None
-                            except Exception:  # best-effort (DTO / champs absents)
-                                pass
-                        freed_count += 1
-                        if os.getenv("BILLING_DEBUG", "0") == "1":
-                            _fmt = (
-                                "[CancelInvoice] freed booking_id=%s billed_to_type=%s "
-                                "billed_to_company_id=%s billing_party_id=%s status=%s invoice_line_id=%s"
-                            )
-                            logger.info(
-                                _fmt,
-                                booking.id,
-                                getattr(booking, "billed_to_type", None),
-                                getattr(booking, "billed_to_company_id", None),
-                                getattr(booking, "billing_party_id", None),
-                                getattr(booking, "status", None),
-                                getattr(booking, "invoice_line_id", None),
-                            )
+                    b2 = Booking.query.get(booking_dto.id)
+                    if b2 is not None:
+                        bookings_by_id[int(b2.id)] = b2
+
+        for booking in bookings_by_id.values():
+            if not booking or not hasattr(booking, "invoice_line_id"):
+                continue
+            if booking.invoice_line_id is None:
+                continue
+            if int(booking.invoice_line_id) not in line_ids:
+                continue
+            booking.invoice_line_id = None
+            booking.updated_at = datetime.now(UTC)
+            # Facture client directe : NE JAMAIS recalculer billed_to_type ni
+            # appliquer résolution patient→clinique. Ré-asserter l'override
+            # « facturer client » pour garder billed_to_type = 'patient'
+            # (idempotent sur le payeur).
+            if is_direct_client:
+                try:
+                    booking.billed_to_type = "patient"
+                    booking.billed_to_company_id = None
+                    booking.billing_party_id = None
+                except Exception:  # best-effort (DTO / champs absents)
+                    pass
+            freed_count += 1
+            if os.getenv("BILLING_DEBUG", "0") == "1":
+                _fmt = (
+                    "[CancelInvoice] freed booking_id=%s billed_to_type=%s "
+                    "billed_to_company_id=%s billing_party_id=%s status=%s invoice_line_id=%s"
+                )
+                logger.info(
+                    _fmt,
+                    booking.id,
+                    getattr(booking, "billed_to_type", None),
+                    getattr(booking, "billed_to_company_id", None),
+                    getattr(booking, "billing_party_id", None),
+                    getattr(booking, "status", None),
+                    getattr(booking, "invoice_line_id", None),
+                )
 
         invoice_id_val = getattr(invoice, "id", None)
         logger.info(

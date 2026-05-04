@@ -1,5 +1,7 @@
 import contextlib
+import json
 import logging
+import math
 import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime
@@ -1969,6 +1971,11 @@ def _global_discount_hint_flowable(
     from reportlab.platypus import KeepTogether, Paragraph
 
     meta = getattr(invoice, "meta", None)
+    if isinstance(meta, str) and meta.strip():
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = None
     if not isinstance(meta, dict) or not meta.get("global_discount"):
         return None
     gd = meta.get("global_discount")
@@ -2019,6 +2026,36 @@ def _global_discount_hint_flowable(
         radius_pt=4.5,
     )
     return KeepTogether(box)
+
+
+def _invoice_line_meta_indicates_round_trip_tag(line: Any) -> bool:
+    """True si la ligne DB est un trajet A/R (fusion à l'émission ou méta alignée aperçu HTML)."""
+    if line is None:
+        return False
+    lm = getattr(line, "line_meta", None)
+    if not isinstance(lm, dict):
+        return False
+    if lm.get("is_round_trip_leg") is True:
+        return True
+    tt = str(lm.get("transport_type") or "").strip().upper().replace(" ", "")
+    return tt in ("A/R", "AR")
+
+
+def _pdf_show_ar_legend(
+    invoice: Any,
+    consolidated: list[dict[str, Any]],
+) -> bool:
+    """Comme ``InvoiceLivePreview`` : légende si A/R consolidé ou méta sur une ligne."""
+    for item in consolidated:
+        if item.get("is_round_trip"):
+            return True
+        for k in ("line", "line1", "line2"):
+            if _invoice_line_meta_indicates_round_trip_tag(item.get(k)):
+                return True
+    for ln in getattr(invoice, "lines", []) or []:
+        if _invoice_line_meta_indicates_round_trip_tag(ln):
+            return True
+    return False
 
 
 def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None:
@@ -2088,8 +2125,10 @@ def _build_s2_table(
         )
         or is_s2_invoice
     )
-    # Remise globale % : sous-total + ligne « Réduction globale » dans le bloc totaux uniquement.
-    suppress_line_discount_breakdown = _invoice_has_global_discount_meta(invoice)
+    # Aligné InvoiceLivePreview : afficher « catalogue → net HT » sur chaque ligne si
+    # `original_line_total` est en méta, y compris lorsqu'une remise globale est enregistrée
+    # (l'encadré et le bloc totaux restent la synthèse).
+    suppress_line_discount_breakdown = False
 
     lines_with_bookings: list[dict[str, Any]] = []
     for line in invoice.lines:
@@ -2171,30 +2210,40 @@ def _build_s2_table(
         )
     consolidated = _detect_and_group_round_trips(lines_with_bookings)
     consolidated = _sort_consolidated_lines_for_s2(consolidated)
+    show_date_column = _pdf_detail_table_show_date_column(invoice, consolidated)
 
     # Client privé direct : pas tierce / pas S2 (comportement remise globale dans le détail).
     is_compact_private = not is_third_party_invoice and not is_s2_invoice
-    # En-tête identique à InvoiceLivePreview (.table th : #475569, fond #f8fafc).
+    # En-tête identique à InvoiceLivePreview (`.table` / `th` : 13px, #475569, fond #f8fafc).
     _thead_color = colors.HexColor("#475569")
     _thead_ps = ParagraphStyle(
         "InvoiceCompactThead",
         fontName=font_name_bold,
-        fontSize=11,
-        leading=14,
+        fontSize=13,
+        leading=17,
         textColor=_thead_color,
         spaceBefore=0,
         spaceAfter=0,
     )
-    _header_row = [
-        Paragraph(
-            "Date", ParagraphStyle("ThDate", parent=_thead_ps, alignment=TA_LEFT)
-        ),
-        Paragraph(
-            "Description",
-            ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
-        ),
-        Paragraph("HT", ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT)),
-    ]
+    if show_date_column:
+        _header_row = [
+            Paragraph(
+                "Date", ParagraphStyle("ThDate", parent=_thead_ps, alignment=TA_LEFT)
+            ),
+            Paragraph(
+                "Description",
+                ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
+            ),
+            Paragraph("HT", ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT)),
+        ]
+    else:
+        _header_row = [
+            Paragraph(
+                "Description",
+                ParagraphStyle("ThDesc", parent=_thead_ps, alignment=TA_LEFT),
+            ),
+            Paragraph("HT", ParagraphStyle("ThHt", parent=_thead_ps, alignment=TA_RIGHT)),
+        ]
     if is_compact_private:
         # Avec remise globale, l'aperçu HTML conserve les sous-lignes catalogue → net par ligne.
         suppress_line_discount_breakdown = False
@@ -2207,7 +2256,13 @@ def _build_s2_table(
             pk_cur = (item.get("patient_id"), item.get("patient_name", ""))
             if pk_prev != pk_cur:
                 s2_patient_separator_after_rows.append(len(table_data))
-        date_str = item["date"].strftime("%d.%m.%Y") if item.get("date") else ""
+        date_str = ""
+        if item.get("date"):
+            date_str = item["date"].strftime("%d.%m.%Y")
+        else:
+            _ln_item = item.get("line") or item.get("line1")
+            if _ln_item is not None:
+                date_str = _pdf_line_detail_date_str(_ln_item, invoice)
         pn_raw = item.get("patient_name", "Patient")
         if len(pn_raw) > MAX_PATIENT_NAME_LENGTH:
             pn_raw = pn_raw[: MAX_PATIENT_NAME_LENGTH - 1] + "."
@@ -2223,7 +2278,7 @@ def _build_s2_table(
             item.get("is_round_trip")
             and item.get("aller_detail")
             and item.get("retour_detail")
-        )
+        ) or _invoice_line_meta_indicates_round_trip_tag(item.get("line"))
         disc_suffix = ""
         if (
             not suppress_line_discount_breakdown
@@ -2339,14 +2394,12 @@ def _build_s2_table(
                     is_round_trip=False,
                     ht_column_plain=True,
                 )
-                svc_date_o = _line_meta_service_date_display_fr(line)
-                table_data.append(
-                    [
-                        _compact_private_date_paragraph(svc_date_o or "", font_name),
-                        desc_cell,
-                        amt_cell_o,
-                    ]
-                )
+                svc_date_o = _pdf_line_detail_date_str(line, invoice)
+                _date_cell_o = _compact_private_date_paragraph(svc_date_o or "", font_name)
+                if show_date_column:
+                    table_data.append([_date_cell_o, desc_cell, amt_cell_o])
+                else:
+                    table_data.append([desc_cell, amt_cell_o])
         # Transport MATÉRIEL / course sans réservation résolue : absent du bloc consolidé mais dans le total
         for line in invoice.lines:
             if line.type not in (
@@ -2394,61 +2447,94 @@ def _build_s2_table(
                 is_round_trip=False,
                 ht_column_plain=True,
             )
-            orphan_date = _line_meta_service_date_display_fr(line) or ""
-            table_data.append(
-                [
-                    _compact_private_date_paragraph(orphan_date, font_name),
-                    desc_cell,
-                    amt_cell_or,
-                ]
-            )
+            orphan_date = _pdf_line_detail_date_str(line, invoice) or ""
+            _date_cell_or = _compact_private_date_paragraph(orphan_date, font_name)
+            if show_date_column:
+                table_data.append([_date_cell_or, desc_cell, amt_cell_or])
+            else:
+                table_data.append([desc_cell, amt_cell_or])
 
     # Largeurs : Date fixe, montant fixe, colonne description = tout l'espace utile (aperçu HTML).
     date_w = 2.1 * cm
     amount_w = 1.65 * cm
     if available_width_pt is not None and available_width_pt > 0:
-        desc_w = max(available_width_pt - date_w - amount_w, 1 * cm)
+        if show_date_column:
+            desc_w = max(available_width_pt - date_w - amount_w, 1 * cm)
+            col_widths = [date_w, desc_w, amount_w]
+        else:
+            desc_w = max(available_width_pt - amount_w, 1 * cm)
+            col_widths = [desc_w, amount_w]
     else:
-        desc_w = 12 * cm
-    col_widths = [date_w, desc_w, amount_w]
+        if show_date_column:
+            desc_w = 12 * cm
+            col_widths = [date_w, desc_w, amount_w]
+        else:
+            desc_w = 13 * cm
+            col_widths = [desc_w, amount_w]
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
     _hdr_bg = colors.HexColor("#f8fafc")
     _row_sep = colors.HexColor("#f1f5f9")
     # Aligné InvoiceLivePreview : th padding 8px 10px ; date / desc resserrés (.colDate + td).
     _pad_tb_h = 6.0
+    _pad_tb_body = 6.0
     _pad_lr = 7.5
     _pad_date_r = 1.0
     _pad_desc_l = 3.0
-    style_rules = [
-        ("BACKGROUND", (0, 0), (-1, 0), _hdr_bg),
-        ("ALIGN", (0, 0), (0, -1), "LEFT"),
-        ("ALIGN", (1, 0), (1, -1), "LEFT"),
-        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, 0), _pad_tb_h),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), _pad_tb_h),
-        ("LEFTPADDING", (0, 0), (0, 0), _pad_lr),
-        ("RIGHTPADDING", (0, 0), (0, 0), _pad_date_r),
-        ("LEFTPADDING", (1, 0), (1, 0), _pad_desc_l),
-        ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
-        ("LEFTPADDING", (2, 0), (2, 0), _pad_lr),
-        ("RIGHTPADDING", (2, 0), (2, 0), _pad_lr),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
-        ("FONTNAME", (0, 1), (-1, -1), font_name),
-        ("FONTSIZE", (0, 1), (-1, -1), 9),
-        ("TEXTCOLOR", (0, 1), (0, -1), colors.HexColor("#334155")),
-        ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#0f172a")),
-        ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#0f172a")),
-        ("TOPPADDING", (0, 1), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 7),
-        ("LEFTPADDING", (0, 1), (0, -1), _pad_lr),
-        ("RIGHTPADDING", (0, 1), (0, -1), _pad_date_r),
-        ("LEFTPADDING", (1, 1), (1, -1), _pad_desc_l),
-        ("RIGHTPADDING", (1, 1), (1, -1), _pad_lr),
-        ("LEFTPADDING", (2, 1), (2, -1), _pad_lr),
-        ("RIGHTPADDING", (2, 1), (2, -1), _pad_lr),
-    ]
+    if show_date_column:
+        style_rules = [
+            ("BACKGROUND", (0, 0), (-1, 0), _hdr_bg),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("ALIGN", (1, 0), (1, -1), "LEFT"),
+            ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, 0), _pad_tb_h),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), _pad_tb_h),
+            ("LEFTPADDING", (0, 0), (0, 0), _pad_lr),
+            ("RIGHTPADDING", (0, 0), (0, 0), _pad_date_r),
+            ("LEFTPADDING", (1, 0), (1, 0), _pad_desc_l),
+            ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
+            ("LEFTPADDING", (2, 0), (2, 0), _pad_lr),
+            ("RIGHTPADDING", (2, 0), (2, 0), _pad_lr),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
+            ("FONTNAME", (0, 1), (-1, -1), font_name),
+            ("FONTSIZE", (0, 1), (-1, -1), 13),
+            ("TEXTCOLOR", (0, 1), (0, -1), colors.HexColor("#334155")),
+            ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#0f172a")),
+            ("TEXTCOLOR", (2, 1), (2, -1), colors.HexColor("#0f172a")),
+            ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
+            ("LEFTPADDING", (0, 1), (0, -1), _pad_lr),
+            ("RIGHTPADDING", (0, 1), (0, -1), _pad_date_r),
+            ("LEFTPADDING", (1, 1), (1, -1), _pad_desc_l),
+            ("RIGHTPADDING", (1, 1), (1, -1), _pad_lr),
+            ("LEFTPADDING", (2, 1), (2, -1), _pad_lr),
+            ("RIGHTPADDING", (2, 1), (2, -1), _pad_lr),
+        ]
+    else:
+        style_rules = [
+            ("BACKGROUND", (0, 0), (-1, 0), _hdr_bg),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, 0), _pad_tb_h),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), _pad_tb_h),
+            ("LEFTPADDING", (0, 0), (0, 0), _pad_desc_l),
+            ("RIGHTPADDING", (0, 0), (0, 0), _pad_lr),
+            ("LEFTPADDING", (1, 0), (1, 0), _pad_lr),
+            ("RIGHTPADDING", (1, 0), (1, 0), _pad_lr),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.75, _row_sep),
+            ("FONTNAME", (0, 1), (-1, -1), font_name),
+            ("FONTSIZE", (0, 1), (-1, -1), 13),
+            ("TEXTCOLOR", (0, 1), (0, -1), colors.HexColor("#0f172a")),
+            ("TEXTCOLOR", (1, 1), (1, -1), colors.HexColor("#0f172a")),
+            ("TOPPADDING", (0, 1), (-1, -1), _pad_tb_body),
+            ("BOTTOMPADDING", (0, 1), (-1, -1), _pad_tb_body),
+            ("LEFTPADDING", (0, 1), (0, -1), _pad_desc_l),
+            ("RIGHTPADDING", (0, 1), (0, -1), _pad_lr),
+            ("LEFTPADDING", (1, 1), (1, -1), _pad_lr),
+            ("RIGHTPADDING", (1, 1), (1, -1), _pad_lr),
+        ]
     n_rows = len(table_data)
     if n_rows > LEVEL_THRESHOLD:
         for r in range(1, n_rows - 1):
@@ -2550,35 +2636,50 @@ def _format_money_two_decimals(d: Any) -> str:
 
 
 def _custom_prestation_subline_for_pdf(line: InvoiceLine) -> str | None:
-    """Sous-ligne factu : détail « durée / quantité » pour prestations CUSTOM > 0."""
+    """Sous-ligne factu : détail « durée / quantité » pour prestations CUSTOM > 0.
+
+    Aligné sur ``InvoiceLivePreview.jsx`` ``customPrestationSubline`` : même formule
+    « tarif × durée = HT » (mode temps) et pas de sous-ligne sans ``custom_prestation``.
+    """
     if line.type != InvoiceLineType.CUSTOM or line.line_total <= 0:
+        return None
+    meta = getattr(line, "line_meta", None)
+    cp = meta.get("custom_prestation") if isinstance(meta, dict) else None
+    if not isinstance(cp, dict):
         return None
     qv = _format_qty_unit_for_custom_pdf(line.qty)
     up = _format_money_two_decimals(line.unit_price)
     tot = _format_money_two_decimals(line.line_total)
-    meta = getattr(line, "line_meta", None)
-    cp = meta.get("custom_prestation") if isinstance(meta, dict) else None
-    if not isinstance(cp, dict):
-        return f"{qv} × {up} CHF = {tot} CHF HT"
+    try:
+        qty_f = float(line.qty)
+        unit_f = float(line.unit_price)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(qty_f) and math.isfinite(unit_f)):
+        return None
     mode = cp.get("mode")
     if mode == "time":
-        tu = cp.get("time_unit") or "h"
-        if tu not in ("min", "h", "d", "mois"):
-            tu = "h"
+        tu = cp.get("time_unit")
+        if not tu or tu not in ("min", "h", "d", "mois"):
+            return None
         qsym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
         psym = {"min": "min", "h": "h", "d": "j", "mois": "mois"}
-        return f"{qv} {qsym[tu]} × {up} CHF/{psym[tu]} = {tot} CHF HT"
+        # Même ordre que l'aperçu HTML : « 50.00 CHF/h × 4 h = 200.00 CHF HT »
+        return f"{up} CHF/{psym[tu]} × {qv} {qsym[tu]} = {tot} CHF HT"
     if mode == "quantity":
         return f"{qv} × {up} CHF = {tot} CHF HT"
-    return f"{qv} × {up} CHF = {tot} CHF HT"
+    return None
 
 
 def _line_meta_service_date_display_fr(inv_line: Any) -> str:
-    """JJ.MM.AAAA ou MM.YYYY si prestation CUSTOM au mois."""
+    """JJ.MM.AAAA ou MM.YYYY si prestation CUSTOM au mois.
+
+    A/R consolidé : plage ``service_date`` / ``service_date_end`` (ou *_iso_*).
+    """
     lm = getattr(inv_line, "line_meta", None)
     if not isinstance(lm, dict):
         return ""
-    raw = lm.get("service_date_iso") or lm.get("service_date")
+    raw = lm.get("service_date") or lm.get("service_date_iso")
     if raw is None:
         return ""
     s = str(raw).strip()[:_ISO_DATE_LEN]
@@ -2595,7 +2696,94 @@ def _line_meta_service_date_display_fr(inv_line: Any) -> str:
         and cp.get("time_unit") == "mois"
     ):
         return f"{dp.month:02d}.{dp.year}"
+    raw_end = lm.get("service_date_end") or lm.get("service_date_iso_end")
+    if raw_end is not None:
+        s_end = str(raw_end).strip()[:_ISO_DATE_LEN]
+        if len(s_end) == _ISO_DATE_LEN:
+            try:
+                dp_end = date.fromisoformat(s_end)
+            except ValueError:
+                dp_end = None
+            if dp_end is not None and dp_end != dp:
+                return (
+                    f"{dp.day:02d}.{dp.month:02d}.{dp.year} – "
+                    f"{dp_end.day:02d}.{dp_end.month:02d}.{dp_end.year}"
+                )
     return f"{dp.day:02d}.{dp.month:02d}.{dp.year}"
+
+
+def _pdf_billing_period_label_fr(invoice: Any) -> str | None:
+    """Même libellé que ``InvoiceLivePreview.billingPeriodLabel`` (« avril 2026 »)."""
+    y = getattr(invoice, "period_year", None)
+    m = getattr(invoice, "period_month", None)
+    if y is None or m is None:
+        return None
+    try:
+        yi, mi = int(y), int(m)
+    except (TypeError, ValueError):
+        return None
+    if not (1 <= mi <= 12):
+        return None
+    _names = (
+        "janvier",
+        "février",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "août",
+        "septembre",
+        "octobre",
+        "novembre",
+        "décembre",
+    )
+    return f"{_names[mi - 1]} {yi}"
+
+
+def _pdf_line_detail_date_str(line: Any, invoice: Any) -> str:
+    """Texte colonne Date — aligné sur ``InvoiceLivePreview.lineDetailDateLabel``."""
+    if not line:
+        return ""
+    lm = getattr(line, "line_meta", None)
+    if not isinstance(lm, dict):
+        lm = {}
+    if lm.get("global_discount_line") or lm.get("per_line_discount_line"):
+        return ""
+    t = getattr(line.type, "value", line.type)
+    kind = str(t or "").strip().upper()
+    if kind not in ("RIDE", "CUSTOM", "MATERIAL_DELIVERY"):
+        return ""
+    base = _line_meta_service_date_display_fr(line)
+    if base:
+        return base
+    pl = _pdf_billing_period_label_fr(invoice)
+    if pl and kind in ("RIDE", "MATERIAL_DELIVERY", "CUSTOM"):
+        return pl
+    return ""
+
+
+def _pdf_detail_table_show_date_column(
+    invoice: Any,
+    consolidated: list[dict[str, Any]],
+) -> bool:
+    """True si l’aperçu HTML afficherait la colonne Date (≥ une date ou repli période)."""
+    for item in consolidated:
+        if item.get("date"):
+            return True
+        for key in ("line", "line1"):
+            ln = item.get(key)
+            if ln is not None and _pdf_line_detail_date_str(ln, invoice):
+                return True
+    for line in getattr(invoice, "lines", []) or []:
+        if _pdf_line_detail_date_str(line, invoice):
+            return True
+    return False
+
+
+def _invoice_preview_chf_amount(amount: float) -> str:
+    """Comme le frontend ``formatCurrencyCHF`` : « 67.50 CHF »."""
+    return f"{float(amount):.2f} CHF"
 
 
 def _line_meta_skips_custom_pdf_detail(line_meta: Any) -> bool:
@@ -2629,12 +2817,6 @@ def _custom_line_include_in_s2_detail_table(line: Any) -> bool:
 # Aligné sur application/invoices/edit_draft_invoice._META_ORIGINAL_LINE_TOTAL
 _META_ORIGINAL_LINE_TOTAL_HT = "original_line_total"
 _PDF_CATALOG_NET_EPS = Decimal("0.02")
-
-
-def _invoice_has_global_discount_meta(invoice: Any) -> bool:
-    """Remise globale % : le détail prix initial/après réduction se lit dans le bloc totaux, pas ligne à ligne."""
-    meta = getattr(invoice, "meta", None)
-    return isinstance(meta, dict) and bool(meta.get("global_discount"))
 
 
 def _decimal_from_meta_original(raw: Any) -> Decimal | None:
@@ -2717,9 +2899,7 @@ def _pdf_s2_per_line_discount_suffix_html(
 
 
 def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
-    """Colonne Date client privé — alignée sur `.colDate` (#334155).
-
-    Police resserrée (7,5 pt) pour que « JJ.MM.AAAA » tienne sur une ligne dans la colonne étroite.
+    """Colonne Date client privé — alignée sur `.colDate` (#334155), même corps que `.table` (13px).
     """
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
@@ -2732,8 +2912,8 @@ def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
     ps = ParagraphStyle(
         "CompactPrivateDateCell",
         fontName=font_name,
-        fontSize=7.5,
-        leading=9,
+        fontSize=13,
+        leading=16,
         textColor=colors.HexColor("#334155"),
     )
     # Évite la coupure au dernier caractère si le moteur peut garder la ligne entière.
@@ -2884,7 +3064,7 @@ def _build_totals_table(
         principal_float = subtotal
 
     total_label = "TOTAL À FACTURER :" if is_s2 else "TOTAL :"
-    total_amt = f"CHF {final_total:.2f}" if is_s2 else f"{final_total:.2f}"
+    total_amt = _invoice_preview_chf_amount(final_total)
 
     reminder_fee_label = "Frais de rappel :"
     reminder_fee_amt = f"CHF {reminder_fee_float:.2f}"
@@ -2936,7 +3116,7 @@ def _build_totals_table(
                 total_data = [
                     [
                         "Sous-total HT (avant réduction globale)",
-                        _format_chf_pdf(gross_ht),
+                        _invoice_preview_chf_amount(gross_ht),
                     ],
                     [disc_label, _format_chf_discount_pdf(disc_ht)],
                 ]
@@ -2956,13 +3136,13 @@ def _build_totals_table(
                         [
                             [
                                 "Total HT après réduction globale",
-                                _format_chf_pdf(subtotal),
+                                _invoice_preview_chf_amount(subtotal),
                             ],
                             [
                                 f"{vat_label_display} :",
-                                _format_chf_pdf(vat_total),
+                                _invoice_preview_chf_amount(vat_total),
                             ],
-                            [total_label, _format_chf_pdf(total)],
+                            [total_label, _invoice_preview_chf_amount(total)],
                         ]
                     )
                 else:
@@ -2970,21 +3150,24 @@ def _build_totals_table(
                         [
                             [
                                 "Total HT après réduction globale",
-                                _format_chf_pdf(subtotal),
+                                _invoice_preview_chf_amount(subtotal),
                             ],
-                            [total_label, _format_chf_pdf(total)],
+                            [total_label, _invoice_preview_chf_amount(total)],
                         ]
                     )
             elif vat_is_applicable:
                 total_data = [
-                    ["Sous-total :", f"{subtotal:.2f}"],
-                    [f"{vat_label_display} :", f"{vat_total:.2f}"],
-                    [total_label, total_amt],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [
+                        f"{vat_label_display} :",
+                        _invoice_preview_chf_amount(vat_total),
+                    ],
+                    [total_label, _invoice_preview_chf_amount(total)],
                 ]
             # Facture clinique S2 (tierce) : même pied que InvoiceLivePreview — Sous-total HT puis TOTAL À FACTURER.
             elif is_s2:
                 total_data = [
-                    ["Sous-total HT", f"{subtotal:.2f} CHF"],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
                     [total_label, total_amt],
                 ]
             else:
@@ -2996,26 +3179,32 @@ def _build_totals_table(
                 # pied = sous-total HT et TOTAL (nets après remise globale).
                 if vat_is_applicable:
                     total_data = [
-                        ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                        [f"{vat_label_display} :", f"{vat_total:.2f} CHF"],
-                        ["TOTAL", f"{total:.2f} CHF"],
+                        ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                        [
+                            f"{vat_label_display} :",
+                            _invoice_preview_chf_amount(vat_total),
+                        ],
+                        [total_label, _invoice_preview_chf_amount(total)],
                     ]
                 else:
                     total_data = [
-                        ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                        ["TOTAL", f"{total:.2f} CHF"],
+                        ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                        [total_label, _invoice_preview_chf_amount(total)],
                     ]
             elif vat_is_applicable:
                 total_data = [
-                    ["Sous-total :", f"{subtotal:.2f}"],
-                    [f"{vat_label_display} :", f"{vat_total:.2f}"],
-                    [total_label, total_amt],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [
+                        f"{vat_label_display} :",
+                        _invoice_preview_chf_amount(vat_total),
+                    ],
+                    [total_label, _invoice_preview_chf_amount(total)],
                 ]
             else:
                 # Aligné InvoiceLivePreview : Sous-total HT + TOTAL (montants « 304.00 CHF »).
                 total_data = [
-                    ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                    ["TOTAL", f"{total:.2f} CHF"],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [total_label, _invoice_preview_chf_amount(total)],
                 ]
             col_widths = list(_tot_col_widths)
     elif is_third_party:
@@ -3031,7 +3220,10 @@ def _build_totals_table(
             note_gd = str(gd_meta.get("note") or "").strip()
             disc_label = _format_global_discount_pdf_label(pct_gd)
             total_data = [
-                ["Sous-total HT (avant réduction globale)", _format_chf_pdf(gross_ht)],
+                [
+                    "Sous-total HT (avant réduction globale)",
+                    _invoice_preview_chf_amount(gross_ht),
+                ],
                 [disc_label, _format_chf_discount_pdf(disc_ht)],
             ]
             if note_gd:
@@ -3056,13 +3248,13 @@ def _build_totals_table(
                     [
                         [
                             "Total HT après réduction globale",
-                            _format_chf_pdf(subtotal),
+                            _invoice_preview_chf_amount(subtotal),
                         ],
                         [
                             f"{vat_label_display} :",
-                            _format_chf_pdf(vat_total),
+                            _invoice_preview_chf_amount(vat_total),
                         ],
-                        [total_label, _format_chf_pdf(total)],
+                        [total_label, _invoice_preview_chf_amount(total)],
                     ]
                 )
             else:
@@ -3070,21 +3262,21 @@ def _build_totals_table(
                     [
                         [
                             "Total HT après réduction globale",
-                            _format_chf_pdf(subtotal),
+                            _invoice_preview_chf_amount(subtotal),
                         ],
-                        [total_label, _format_chf_pdf(total)],
+                        [total_label, _invoice_preview_chf_amount(total)],
                     ]
                 )
         elif vat_is_applicable:
             total_data = [
-                ["Sous-total :", f"{subtotal:.2f}"],
-                [f"{vat_label_display} :", f"{vat_total:.2f}"],
-                [total_label, total_amt],
+                ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                [f"{vat_label_display} :", _invoice_preview_chf_amount(vat_total)],
+                [total_label, _invoice_preview_chf_amount(total)],
             ]
         # Facture clinique S2 : InvoiceLivePreview affiche toujours « Sous-total HT » puis le total.
         elif is_s2:
             total_data = [
-                ["Sous-total HT", f"{subtotal:.2f} CHF"],
+                ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
                 [total_label, total_amt],
             ]
         else:
@@ -3094,26 +3286,29 @@ def _build_totals_table(
         if gd_meta is not None and not is_reminder:
             if vat_is_applicable:
                 total_data = [
-                    ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                    [f"{vat_label_display} :", f"{vat_total:.2f} CHF"],
-                    ["TOTAL", f"{total:.2f} CHF"],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [
+                        f"{vat_label_display} :",
+                        _invoice_preview_chf_amount(vat_total),
+                    ],
+                    [total_label, _invoice_preview_chf_amount(total)],
                 ]
             else:
                 total_data = [
-                    ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                    ["TOTAL", f"{total:.2f} CHF"],
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [total_label, _invoice_preview_chf_amount(total)],
                 ]
         elif vat_is_applicable:
             total_data = [
-                ["Sous-total :", f"{subtotal:.2f}"],
-                [f"{vat_label_display} :", f"{vat_total:.2f}"],
-                [total_label, total_amt],
+                ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                [f"{vat_label_display} :", _invoice_preview_chf_amount(vat_total)],
+                [total_label, _invoice_preview_chf_amount(total)],
             ]
         else:
             # Aligné InvoiceLivePreview : Sous-total HT + TOTAL (montants « 304.00 CHF »).
             total_data = [
-                ["Sous-total HT", f"{subtotal:.2f} CHF"],
-                ["TOTAL", f"{total:.2f} CHF"],
+                ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                [total_label, _invoice_preview_chf_amount(total)],
             ]
         col_widths = list(_tot_col_widths)
 
@@ -3135,7 +3330,7 @@ def _build_totals_table(
     ]
     style_rules.extend(totals_extra_style_rules)
     style_rules.append(
-        ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e1"))
+        ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#e2e8f0"))
     )
     style_rules.append(("TOPPADDING", (0, -1), (-1, -1), 8))
     # Aligner strictement à droite la dernière ligne (TOTAL À FACTURER)
@@ -3863,8 +4058,8 @@ class PDFService:
         s2_main_style = ParagraphStyle(
             "S2Main",
             parent=styles["Normal"],
-            fontSize=9,
-            leading=9.5,
+            fontSize=13,
+            leading=16,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceBefore=0,
@@ -4279,7 +4474,7 @@ class PDFService:
         story.append(Spacer(1, 6))
         story.append(s2_table)
         # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
-        if consolidated_lines:
+        if _pdf_show_ar_legend(invoice, consolidated_lines):
             note_para = Paragraph(
                 '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
                 normal_style,
@@ -4746,9 +4941,7 @@ class PDFService:
         )
         story.append(detail_title_min)
         story.append(Spacer(1, 6))
-        suppress_line_discount_breakdown_min = _invoice_has_global_discount_meta(
-            invoice
-        )
+        suppress_line_discount_breakdown_min = False
         table_data: list[list[Any]] = (
             [["Date", "Patient", "Montant"]]
             if is_third_party
@@ -4949,6 +5142,17 @@ class PDFService:
         story.append(services_table)
         story.append(Spacer(1, 10))
 
+        # Aligné InvoiceLivePreview + templates standard/détaillé : encadré explicatif remise globale.
+        _gd_hint_min = _global_discount_hint_flowable(
+            invoice, styles, font_name, content_width_pt=usable_width_pt_min
+        )
+        if _gd_hint_min is not None:
+            story.append(Spacer(1, 10))
+            story.append(_gd_hint_min)
+            story.append(Spacer(1, 9))
+        else:
+            story.append(Spacer(1, 2))
+
         # === TOTAL SIMPLIFIÉ ===
         # ✅ Mode rappel : mini-table (Sous-total facture + Frais + TOTAL)
         gd_min: dict[str, Any] | None = None
@@ -5098,7 +5302,7 @@ class PDFService:
                 ]
             )
         style_rules.append(
-            ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#cbd5e1"))
+            ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#e2e8f0"))
         )
         style_rules.append(("TOPPADDING", (0, -1), (-1, -1), 8))
         total_table.setStyle(TableStyle(style_rules))
@@ -5266,8 +5470,8 @@ class PDFService:
         s2_main_style = ParagraphStyle(
             "S2Main",
             parent=styles["Normal"],
-            fontSize=9,
-            leading=9.5,
+            fontSize=13,
+            leading=16,
             textColor=colors.black,
             alignment=TA_LEFT,
             spaceBefore=0,
@@ -5643,7 +5847,7 @@ class PDFService:
         story.append(Spacer(1, 6))
         story.append(s2_table)
         # Légende A/R : même ordre que l'aperçu HTML (sous le tableau, avant remise globale / totaux).
-        if consolidated_lines:
+        if _pdf_show_ar_legend(invoice, consolidated_lines):
             note_para = Paragraph(
                 '<font size="7" color="grey">[A/R] = transport aller-retour</font>',
                 detail_style,

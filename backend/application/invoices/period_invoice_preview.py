@@ -124,6 +124,9 @@ def _consolidate_period_preview_round_trip_rows(
         sum_origin = round(sum(float(p.origin_amount_ht) for p in pls), 2)
         _sched_candidates = [p.scheduled_at for p in pls if p.scheduled_at]
         sched = min(_sched_candidates) if _sched_candidates else None
+        sched_end = max(_sched_candidates) if _sched_candidates else None
+        if sched is not None and sched_end is not None and sched == sched_end:
+            sched_end = None
         merged_rows[pri] = PeriodPreviewLine(
             booking_id=pri,
             scheduled_at=sched,
@@ -134,6 +137,7 @@ def _consolidate_period_preview_round_trip_rows(
             is_locked=any(p.is_locked for p in pls),
             already_invoiced=any(p.already_invoiced for p in pls),
             is_round_trip_leg=True,
+            scheduled_at_end=sched_end,
         )
         for p in pls:
             if p.booking_id != pri:
@@ -163,6 +167,7 @@ class PeriodPreviewLine:
     is_locked: bool
     already_invoiced: bool
     is_round_trip_leg: bool = False
+    scheduled_at_end: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -441,7 +446,7 @@ def build_period_invoice_preview(
 
 
 def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
-    return {
+    d: dict[str, Any] = {
         "booking_id": pl.booking_id,
         "scheduled_at": pl.scheduled_at,
         "amount_ht": pl.amount_ht,
@@ -452,6 +457,9 @@ def preview_line_to_dict(pl: PeriodPreviewLine) -> dict[str, Any]:
         "already_invoiced": pl.already_invoiced,
         "is_round_trip_leg": pl.is_round_trip_leg,
     }
+    if pl.scheduled_at_end:
+        d["scheduled_at_end"] = pl.scheduled_at_end
+    return d
 
 
 def preview_to_dict(p: PeriodPreviewResult) -> dict[str, Any]:

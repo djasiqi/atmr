@@ -35,6 +35,44 @@ import styles from './CompanyReservations.module.css';
 
 const PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
+const EMPTY_STATS = {
+  total: 0,
+  pending: 0,
+  inProgress: 0,
+  completed: 0,
+  canceled: 0,
+  revenue: 0,
+};
+
+function computeStatsFromReservations(reservationsData) {
+  return {
+    total: reservationsData.length,
+    pending: reservationsData.filter((r) => r.status === 'pending').length,
+    inProgress: reservationsData.filter((r) =>
+      ['accepted', 'assigned', 'in_progress', 'en_route'].includes(
+        (r.status || '').toLowerCase()
+      )
+    ).length,
+    completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
+    canceled: reservationsData.filter((r) => r.status === 'canceled').length,
+    revenue: reservationsData
+      .filter((r) => isCompletedStatus(r.status))
+      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
+  };
+}
+
+function normalizeApiStats(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  return {
+    total: Number(raw.total) || 0,
+    pending: Number(raw.pending) || 0,
+    inProgress: Number(raw.inProgress) || 0,
+    completed: Number(raw.completed) || 0,
+    canceled: Number(raw.canceled) || 0,
+    revenue: Number(raw.revenue) || 0,
+  };
+}
+
 function PerPageChip({ value, onChange }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
@@ -107,24 +145,11 @@ const CompanyReservations = () => {
   const [alertFilter, setAlertFilter] = useState(null);
   const [topClientsOpen, setTopClientsOpen] = useState(false);
   const [alerts, setAlerts] = useState([]);
-  const [stats, setStats] = useState({
-    total: 0,
-    pending: 0,
-    inProgress: 0,
-    completed: 0,
-    canceled: 0,
-    revenue: 0,
-  });
 
   const [exporting, setExporting] = useState(false);
 
   const searchInputRef = useRef(null);
   const { initialSearch, shouldFocus, consumeFocus, initialized } = useUrlSearchSync();
-
-  const isSingleDay = useMemo(
-    () => Boolean(selectedDay && selectedDay !== 'all' && !selectedDay.includes(':')),
-    [selectedDay]
-  );
 
   const listQueryFilterScope = useMemo(
     () => ({
@@ -179,6 +204,16 @@ const CompanyReservations = () => {
   const totalReservations = listPayload?.total ?? 0;
   const totalPages = listPayload?.total_pages ?? 0;
 
+  // KPI = agrégats API (même période / visibilité que le compteur total) — pas seulement la page courante
+  const stats = useMemo(() => {
+    const fromApi = normalizeApiStats(listPayload?.stats);
+    if (fromApi) return fromApi;
+    if (!listPayload) return EMPTY_STATS;
+    return computeStatsFromReservations(
+      Array.isArray(listPayload.reservations) ? listPayload.reservations : []
+    );
+  }, [listPayload]);
+
   // Force table mode for date ranges
   useEffect(() => {
     const isDateRange = selectedDay && selectedDay.includes(':');
@@ -186,23 +221,6 @@ const CompanyReservations = () => {
       setViewMode('table');
     }
   }, [selectedDay, viewMode]);
-
-  // Calculate stats
-  const calculateStats = useCallback((reservationsData) => {
-    const newStats = {
-      total: reservationsData.length,
-      pending: reservationsData.filter((r) => r.status === 'pending').length,
-      inProgress: reservationsData.filter((r) =>
-        ['accepted', 'assigned', 'in_progress'].includes(r.status)
-      ).length,
-      completed: reservationsData.filter((r) => isCompletedStatus(r.status)).length,
-      canceled: reservationsData.filter((r) => r.status === 'canceled').length,
-      revenue: reservationsData
-        .filter((r) => isCompletedStatus(r.status))
-        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
-    };
-    setStats(newStats);
-  }, []);
 
   // Generate alerts
   const generateAlerts = (reservationsData) => {
@@ -245,13 +263,8 @@ const CompanyReservations = () => {
   useEffect(() => {
     if (!listPayload) return;
     const reservationsData = Array.isArray(listPayload.reservations) ? listPayload.reservations : [];
-    if (listPayload.stats) {
-      setStats(listPayload.stats);
-    } else if (!isSingleDay) {
-      calculateStats(reservationsData);
-    }
     generateAlerts(reservationsData);
-  }, [listPayload, isSingleDay, calculateStats]);
+  }, [listPayload]);
 
   const afterListMutation = useCallback(() => {
     void lirieInvalidateCompanyReservationLists(queryClient);

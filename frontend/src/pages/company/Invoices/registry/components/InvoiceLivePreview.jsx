@@ -60,30 +60,67 @@ function safeText(value, fallback = '—') {
   return fallback;
 }
 
-/** Date pour colonne « Date » : trajet (RIDE) ou ligne perso. (CUSTOM). Prestation au mois → MM.YYYY. */
-function lineDetailDateLabel(line) {
+/** Quantité durée affichée sous la description (évite « 4.00 h » quand c’est un entier). */
+function formatTimeBillingQty(qty) {
+  if (!Number.isFinite(qty)) return '—';
+  const r = Math.round(qty);
+  if (Math.abs(qty - r) < 1e-6) return String(r);
+  return String(qty);
+}
+
+/** Date pour colonne « Date » : trajet, livraison matériel ou ligne perso. (CUSTOM). Prestation au mois → MM.YYYY. */
+function lineDetailDateLabel(line, invoice) {
   if (!line) return null;
+  const meta0 = parseMeta(line?.line_meta);
+  if (meta0?.global_discount_line || meta0?.per_line_discount_line) return null;
   const kind = String(line?.type ?? line?.line_type ?? '')
     .trim()
     .toUpperCase();
-  if (kind !== 'RIDE' && kind !== 'CUSTOM') return null;
-  const m = line.line_meta;
-  const meta = m && typeof m === 'object' && !Array.isArray(m) ? m : null;
-  const dateRaw = meta?.service_date ?? meta?.service_date_iso;
-  if (dateRaw == null || String(dateRaw).trim() === '') return null;
-  const cp = meta?.custom_prestation;
   if (
-    kind === 'CUSTOM' &&
-    cp &&
-    typeof cp === 'object' &&
-    cp.mode === 'time' &&
-    cp.time_unit === 'mois'
+    kind !== 'RIDE' &&
+    kind !== 'CUSTOM' &&
+    kind !== 'MATERIAL_DELIVERY'
   ) {
-    const dm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateRaw).trim());
-    if (dm) return `${dm[2]}.${dm[1]}`;
+    return null;
   }
-  const formatted = formatServiceDateFr(String(dateRaw));
-  return formatted == null || formatted === '' ? null : formatted;
+  const meta = meta0;
+  const dateRaw = meta?.service_date ?? meta?.service_date_iso;
+  const hasDate = dateRaw != null && String(dateRaw).trim() !== '';
+
+  if (hasDate) {
+    const cp = meta?.custom_prestation;
+    if (
+      kind === 'CUSTOM' &&
+      cp &&
+      typeof cp === 'object' &&
+      cp.mode === 'time' &&
+      cp.time_unit === 'mois'
+    ) {
+      const dm = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateRaw).trim());
+      if (dm) return `${dm[2]}.${dm[1]}`;
+    }
+    const dateEndRaw = meta?.service_date_end ?? meta?.service_date_iso_end;
+    if (dateEndRaw != null && String(dateEndRaw).trim() !== '') {
+      const startLbl = formatServiceDateFr(String(dateRaw));
+      const endLbl = formatServiceDateFr(String(dateEndRaw));
+      if (startLbl && endLbl && startLbl !== endLbl) {
+        return `${startLbl} – ${endLbl}`;
+      }
+    }
+    const formatted = formatServiceDateFr(String(dateRaw));
+    if (formatted != null && formatted !== '') return formatted;
+  }
+
+  const y = invoice?.period_year;
+  const m = invoice?.period_month;
+  if (
+    (kind === 'RIDE' || kind === 'MATERIAL_DELIVERY' || kind === 'CUSTOM') &&
+    Number.isFinite(Number(y)) &&
+    Number.isFinite(Number(m))
+  ) {
+    return billingPeriodLabel(invoice);
+  }
+  return null;
 }
 
 /** Facture clinique S2 : nom du patient sous la description (la date est en colonne). */
@@ -104,7 +141,7 @@ function rideLinePatientSubline(line, invoice) {
  * Le rendu actuel utilise `rideLineTransportDateLabel` + `rideLinePatientSubline`.
  */
 function _rideLineContextSubline(line, invoice) {
-  const date = lineDetailDateLabel(line);
+  const date = lineDetailDateLabel(line, invoice);
   const patientLine = rideLinePatientSubline(line, invoice);
   if (invoice?.billing_strategy === 's2_clinic_monthly') {
     const parts = [];
@@ -128,6 +165,7 @@ function primaryPartyLabel(inv) {
   const bs = inv?.billing_strategy;
   /** Facturation mensuelle établissement (S2) — pas le même vocabulaire que le particulier S1. */
   if (bs === 's2_clinic_monthly') return 'Contact clinique';
+  if (bs === 'partner_monthly') return 'Entreprise partenaire';
   return 'Client / Patient';
 }
 
@@ -205,7 +243,8 @@ function catalogNetHint(line) {
 }
 
 function customPrestationSubline(line) {
-  const cp = line?.line_meta?.custom_prestation;
+  const meta = parseMeta(line?.line_meta);
+  const cp = meta?.custom_prestation;
   if (!cp || typeof cp !== 'object') return null;
   const mode = cp.mode;
   const qty = Number(line.qty);
@@ -215,7 +254,10 @@ function customPrestationSubline(line) {
   if (mode === 'time' && tu && Number.isFinite(qty) && Number.isFinite(unit)) {
     const unitLbl =
       tu === 'min' ? 'min' : tu === 'h' ? 'h' : tu === 'd' ? 'j' : tu === 'mois' ? 'mois' : tu;
-    return `${qty} ${unitLbl} × ${unit.toFixed(2)} CHF/${unitLbl} = ${Number.isFinite(ht) ? ht.toFixed(2) : '—'} CHF HT`;
+    const dur = formatTimeBillingQty(qty);
+    return `${unit.toFixed(2)} CHF/${unitLbl} × ${dur} ${unitLbl} = ${
+      Number.isFinite(ht) ? ht.toFixed(2) : '—'
+    } CHF HT`;
   }
   if (mode === 'quantity' && Number.isFinite(qty) && Number.isFinite(unit)) {
     return `${qty} × ${unit.toFixed(2)} CHF = ${Number.isFinite(ht) ? ht.toFixed(2) : '—'} CHF HT`;
@@ -286,11 +328,24 @@ export default function InvoiceLivePreview({
       .map(({ ln }) => ln)
       .filter((ln) => !linePreviewHiddenMergedRoundTrip(ln));
   }, [invoice?.lines]);
-  const showTransportDateColumn = lines.some((ln) => lineDetailDateLabel(ln) != null);
+  const showTransportDateColumn = lines.some(
+    (ln) => lineDetailDateLabel(ln, invoice) != null
+  );
   const showRoundTripLegend = lines.some((ln) => lineIsRoundTrip(ln));
   const payer = payerHint(invoice);
+
+  const gdBreakdown = useMemo(() => {
+    if (!gd || typeof gd !== 'object') return null;
+    const gross = Number(gd.subtotal_before_ht);
+    const disc = Number(gd.amount_ht);
+    const pct = Number(gd.percent);
+    if (!Number.isFinite(gross) || !Number.isFinite(disc) || disc <= 0.005) return null;
+    return { gross, disc, pct };
+  }, [gd]);
+
+  /** Aligné PDF (`pdf.py`) : deux-points séparateur avant les montants du pied. */
   const totalLabel =
-    invoice?.billing_strategy === 's2_clinic_monthly' ? 'TOTAL À FACTURER' : 'TOTAL';
+    invoice?.billing_strategy === 's2_clinic_monthly' ? 'TOTAL À FACTURER :' : 'TOTAL :';
 
   return (
     <div className={[styles.root, className].filter(Boolean).join(' ')}>
@@ -348,9 +403,10 @@ export default function InvoiceLivePreview({
               {lines.map((line) => {
                 const cn = catalogNetHint(line);
                 const sub = customPrestationSubline(line);
-                const transportDate = lineDetailDateLabel(line);
+                const transportDate = lineDetailDateLabel(line, invoice);
                 const patientSub = rideLinePatientSubline(line, invoice);
-                const partnerRid = line?.line_meta?.round_trip_merge_partner_reservation_id;
+                const lineMeta = parseMeta(line?.line_meta);
+                const partnerRid = lineMeta?.round_trip_merge_partner_reservation_id;
                 const mergePartner =
                   partnerRid != null ? rideLinesByReservationId.get(Number(partnerRid)) : null;
                 const isAr = lineIsRoundTrip(line);
@@ -409,7 +465,9 @@ export default function InvoiceLivePreview({
             </tbody>
           </table>
           {showRoundTripLegend ? (
-            <p className={styles.arLegend}>[A/R] = transport aller-retour</p>
+            <p className={styles.arLegend} role="note">
+              [A/R] = transport aller-retour
+            </p>
           ) : null}
         </section>
 
@@ -422,13 +480,29 @@ export default function InvoiceLivePreview({
         ) : null}
 
         <footer className={styles.totals}>
+          {gdBreakdown ? (
+            <>
+              <div className={styles.totalRow}>
+                <span>Sous-total HT (avant réduction globale)</span>
+                <span>{formatCurrencyCHF(gdBreakdown.gross)}</span>
+              </div>
+              <div className={styles.totalRow}>
+                <span>
+                  Réduction globale ({Number.isFinite(gdBreakdown.pct) ? gdBreakdown.pct : '—'} %)
+                </span>
+                <span className={styles.totalDiscountAmt}>
+                  − {formatCurrencyCHF(gdBreakdown.disc)}
+                </span>
+              </div>
+            </>
+          ) : null}
           <div className={styles.totalRow}>
-            <span>Sous-total HT</span>
+            <span>{gdBreakdown ? 'Total HT après réduction globale' : 'Sous-total HT'}</span>
             <span>{formatCurrencyCHF(invoice?.subtotal_amount ?? 0)}</span>
           </div>
           {showTaxColumns && vatApplicable ? (
             <div className={styles.totalRow}>
-              <span>{vatMeta?.label ? String(vatMeta.label) : 'TVA'}</span>
+              <span>{vatMeta?.label ? `${String(vatMeta.label)} :` : 'TVA :'}</span>
               <span>{formatCurrencyCHF(invoice?.vat_total_amount ?? 0)}</span>
             </div>
           ) : null}

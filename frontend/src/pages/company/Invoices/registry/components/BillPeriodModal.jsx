@@ -268,6 +268,15 @@ function mergePeriodPreviewInvoice(baseInvoice, linePatch, extraLinesRaw, remise
 /**
  * Facture factice pour InvoiceLivePreview : lignes = sélection courante, totaux proportionnels au sous-total HT.
  */
+function periodPreviewRowKey(row) {
+  if (row == null || typeof row !== 'object') return null;
+  const pr = row.preview_row_id;
+  if (pr != null && Number.isFinite(Number(pr))) return Number(pr);
+  const bid = row.booking_id;
+  if (bid != null && Number.isFinite(Number(bid))) return Number(bid);
+  return null;
+}
+
 function buildSyntheticInvoiceForPeriodAssembly({
   preview,
   selectedBookingIds,
@@ -276,15 +285,21 @@ function buildSyntheticInvoiceForPeriodAssembly({
   periodMonth,
   clientId,
   clinicKey,
+  partnershipId,
   clients,
   institutions,
+  billablePartners,
 }) {
   const lines = Array.isArray(preview?.preview_lines) ? preview.preview_lines : [];
   const subHt = Number(preview.estimated_subtotal_ht ?? 0);
   const vatFull = Number(preview.estimated_vat_total ?? 0);
   const ttcFull = Number(preview.estimated_total_with_vat ?? preview.estimated_total ?? 0);
 
-  const selectedRows = lines.filter((row) => !row.is_locked && selectedBookingIds.has(row.booking_id));
+  const selectedRows = lines.filter((row) => {
+    if (row.is_locked) return false;
+    const k = periodPreviewRowKey(row);
+    return k != null && selectedBookingIds.has(k);
+  });
   let htSum = 0;
   for (const row of selectedRows) {
     htSum += Number(row.amount_ht ?? 0);
@@ -292,7 +307,11 @@ function buildSyntheticInvoiceForPeriodAssembly({
 
   const selectable = lines.filter((l) => !l.is_locked);
   const allIdsSelected =
-    selectable.length > 0 && selectable.every((l) => selectedBookingIds.has(l.booking_id));
+    selectable.length > 0 &&
+    selectable.every((l) => {
+      const k = periodPreviewRowKey(l);
+      return k != null && selectedBookingIds.has(k);
+    });
 
   let scale = 1;
   if (subHt > 0 && htSum >= 0 && !allIdsSelected) {
@@ -323,8 +342,13 @@ function buildSyntheticInvoiceForPeriodAssembly({
       row.is_round_trip_leg === true
         ? { is_round_trip_leg: true, transport_type: 'A/R' }
         : {};
+    const endDateMeta =
+      row.scheduled_at_end != null && String(row.scheduled_at_end).trim() !== ''
+        ? { service_date_end: row.scheduled_at_end }
+        : {};
+    const rowKey = periodPreviewRowKey(row);
     invoiceLines.push({
-      id: `pv-${row.booking_id}`,
+      id: rowKey != null ? `pv-${rowKey}` : `pv-${row.booking_id}`,
       type: lineType,
       line_type: lineType,
       description: row.description || '—',
@@ -333,12 +357,18 @@ function buildSyntheticInvoiceForPeriodAssembly({
       total_with_vat: lineTtc,
       line_meta: {
         service_date: row.scheduled_at,
+        ...endDateMeta,
         ...arMeta,
       },
     });
   });
 
-  const billing_strategy = preview.mode === 'clinic_monthly' ? 's2_clinic_monthly' : undefined;
+  const billing_strategy =
+    preview.mode === 'clinic_monthly'
+      ? 's2_clinic_monthly'
+      : preview.mode === 'partner_monthly'
+        ? 'partner_monthly'
+        : undefined;
 
   let client = { first_name: '', last_name: '—' };
   if (payerType === 'patient' && clientId) {
@@ -356,6 +386,15 @@ function buildSyntheticInvoiceForPeriodAssembly({
         first_name: '',
         last_name: '',
         institution_name: inst.institution_name,
+      };
+    }
+  } else if (payerType === 'partner' && partnershipId && Array.isArray(billablePartners)) {
+    const prow = billablePartners.find((p) => String(p.partnership_id) === String(partnershipId));
+    if (prow?.partner_company_name) {
+      client = {
+        first_name: '',
+        last_name: '',
+        institution_name: String(prow.partner_company_name),
       };
     }
   }
@@ -626,7 +665,7 @@ const BillPeriodModal = ({
   }, []);
 
   useEffect(() => {
-    if (!preview || payerType === 'partner') {
+    if (!preview) {
       setSelectedBookingIds(new Set());
       return;
     }
@@ -635,12 +674,19 @@ const BillPeriodModal = ({
       setSelectedBookingIds(new Set());
       return;
     }
-    const next = new Set(lines.filter((l) => !l.is_locked).map((l) => l.booking_id));
+    const next = new Set(
+      lines
+        .filter((l) => !l.is_locked)
+        .map((l) => periodPreviewRowKey(l))
+        .filter((k) => k != null)
+    );
     setSelectedBookingIds(next);
   }, [preview, payerType]);
 
   const hasAssemblyLines =
-    (payerType === 'patient' || payerType === 'clinic') &&
+    (payerType === 'patient' ||
+      payerType === 'clinic' ||
+      payerType === 'partner') &&
     Array.isArray(preview?.preview_lines) &&
     preview.preview_lines.length > 0;
 
@@ -659,8 +705,22 @@ const BillPeriodModal = ({
       const inst = institutions.find((i) => String(i.id) === String(clinicKey));
       if (inst?.institution_name) return `${periodPart} · ${inst.institution_name}`;
     }
+    if (payerType === 'partner' && partnershipId) {
+      const pr = billablePartners.find((p) => String(p.partnership_id) === String(partnershipId));
+      if (pr?.partner_company_name) return `${periodPart} · ${pr.partner_company_name}`;
+    }
     return periodPart;
-  }, [periodMonth, periodYear, payerType, clientId, clinicKey, clients, institutions]);
+  }, [
+    periodMonth,
+    periodYear,
+    payerType,
+    clientId,
+    clinicKey,
+    partnershipId,
+    clients,
+    institutions,
+    billablePartners,
+  ]);
 
   const syntheticPeriodInvoice = useMemo(() => {
     if (!hasAssemblyLines || !preview) return null;
@@ -672,8 +732,10 @@ const BillPeriodModal = ({
       periodMonth,
       clientId,
       clinicKey,
+      partnershipId,
       clients,
       institutions,
+      billablePartners,
     });
   }, [
     hasAssemblyLines,
@@ -684,8 +746,10 @@ const BillPeriodModal = ({
     periodMonth,
     clientId,
     clinicKey,
+    partnershipId,
     clients,
     institutions,
+    billablePartners,
   ]);
 
   const mergedPeriodInvoice = useMemo(
@@ -714,7 +778,7 @@ const BillPeriodModal = ({
       value: String(c.id),
       label: `${c.first_name} ${c.last_name}${
         c.unbilled_total_amount
-          ? ` (${c.unbilled_total_amount} CHF non fact., direct patient)`
+          ? ` (${c.unbilled_total_amount} CHF non fact. sur la période, direct patient)`
           : ''
       }`,
     }));
@@ -1005,10 +1069,18 @@ const BillPeriodModal = ({
       if (validated === 0 && unbilled === 0) {
         warnings.push('Aucun transfert facturable sur cette période pour ce partenaire.');
       }
+      const previewLines = Array.isArray(row.preview_lines) ? row.preview_lines : [];
+      const estHt = Number(row.estimated_subtotal_ht ?? total ?? 0);
+      const estVat = Number(row.estimated_vat_total ?? 0);
+      const estTtc = Number(row.estimated_total_with_vat ?? total ?? estHt + estVat);
       setPreview({
         mode: 'partner_monthly',
         transports_count: validated,
         estimated_total: total,
+        preview_lines: previewLines,
+        estimated_subtotal_ht: estHt,
+        estimated_vat_total: estVat,
+        estimated_total_with_vat: estTtc,
         warnings,
       });
       return;
@@ -1474,10 +1546,10 @@ const BillPeriodModal = ({
             </div>
           )}
 
-          {payerType === 'partner' && preview && (
+          {payerType === 'partner' && preview && !hasAssemblyLines && (
             <p className={styles.partnerHint} role="note">
-              Les factures partenaires sont générées globalement pour la période. La sélection individuelle des
-              transferts sera disponible prochainement.
+              Aucun détail de ligne n&apos;a pu être chargé pour ce partenaire. Vérifiez les transferts validés sur
+              la période.
             </p>
           )}
 

@@ -1638,7 +1638,10 @@ class CompanyReservations(Resource):
         exclude_canceled = (
             request.args.get("exclude_canceled", "false").lower() == "true"
         )
-        max_days_range = 31  # Maximum 31 jours
+        # Plages type « export / reporting » (défaut 400 j ≈ 13 mois) — surchargeable.
+        max_days_range = int(
+            getenv("LIRIE_COMPANY_RESERVATIONS_MAX_RANGE_DAYS", "400") or "400"
+        )
 
         # Ajouter des paramètres de pagination
         page = int(request.args.get("page", 1))

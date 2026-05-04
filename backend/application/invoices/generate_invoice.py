@@ -877,6 +877,14 @@ class GenerateInvoiceUseCase:
                 reservation.updated_at = datetime.now(UTC)
                 _append_ride_accounting(d.base_amount, vat_amount, d.line_vat_rate)
 
+            def _booking_scheduled_date_iso(b: Booking) -> str | None:
+                st = getattr(b, "scheduled_time", None)
+                if st is None:
+                    return None
+                if hasattr(st, "date"):
+                    return st.date().isoformat()
+                return None
+
             def emit_merged_round_trip_group(segments: list[Booking]) -> None:
                 if len(segments) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
                     return
@@ -930,6 +938,14 @@ class GenerateInvoiceUseCase:
                 if others:
                     line_meta["round_trip_secondary_reservation_id"] = others[0]
                     line_meta["secondary_segment_description"] = sec_descriptions[0]
+                d_start = _booking_scheduled_date_iso(ordered[0])
+                d_end = _booking_scheduled_date_iso(ordered[-1])
+                if d_start:
+                    line_meta["service_date"] = d_start
+                    line_meta["service_date_iso"] = d_start
+                if d_end and d_end != d_start:
+                    line_meta["service_date_end"] = d_end
+                    line_meta["service_date_iso_end"] = d_end
                 line_data = {
                     "invoice_id": invoice.id,
                     "type": InvoiceLineType.RIDE,

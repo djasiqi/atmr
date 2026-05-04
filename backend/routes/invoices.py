@@ -2265,15 +2265,15 @@ class DraftInvoiceLineEdit(Resource):
         body = request.get_json() or {}
         exp = body.get("expected_updated_at")
         exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
-        r = update_draft_invoice_line(
-            company_id,
-            invoice_id,
-            line_id,
-            line_total=body.get("line_total"),
-            adjustment_note=body.get("adjustment_note"),
-            description=body.get("description"),
-            expected_updated_at=exp_s,
-        )
+        _line_kw: dict[str, Any] = {
+            "line_total": body.get("line_total"),
+            "adjustment_note": body.get("adjustment_note"),
+            "description": body.get("description"),
+            "expected_updated_at": exp_s,
+        }
+        if "service_date_iso" in body:
+            _line_kw["service_date_iso"] = body.get("service_date_iso")
+        r = update_draft_invoice_line(company_id, invoice_id, line_id, **_line_kw)
         if not r.success:
             return r.error, r.status_code or 400
         return success_response(
@@ -5434,12 +5434,16 @@ class BillablePartners(Resource):
                 # Le service de génération de facture vérifiera que seuls les transferts validés
                 # sont inclus dans la facture.
 
-                all_transfers_query = db.session.query(BookingTransfer).filter(
-                    BookingTransfer.partnership_id == partnership.id,
-                    BookingTransfer.executing_company_id
-                    == company.id,  # L'entreprise actuelle est l'exécutante
-                    BookingTransfer.status
-                    == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
+                all_transfers_query = (
+                    db.session.query(BookingTransfer)
+                    .options(joinedload(BookingTransfer.booking))
+                    .filter(
+                        BookingTransfer.partnership_id == partnership.id,
+                        BookingTransfer.executing_company_id
+                        == company.id,  # L'entreprise actuelle est l'exécutante
+                        BookingTransfer.status
+                        == TransferStatus.COMPLETED,  # ✅ Seulement COMPLETED
+                    )
                 )
                 if year and month:
                     DECEMBER = 12
@@ -5557,6 +5561,40 @@ class BillablePartners(Resource):
                     t for t in unbilled_transfers if t.is_validated
                 ]
 
+                preview_lines: list[dict[str, Any]] = []
+                for t in validated_unbilled_transfers:
+                    b = t.booking
+                    bid = int(b.id) if b is not None else int(t.booking_id)
+                    sched: str | None = None
+                    if b is not None and b.scheduled_time is not None:
+                        st = b.scheduled_time
+                        sched = (
+                            st.isoformat()
+                            if hasattr(st, "isoformat")
+                            else str(st)
+                        )
+                    pu = str(getattr(b, "pickup_location", "") or "").strip() if b else ""
+                    do = str(getattr(b, "dropoff_location", "") or "").strip() if b else ""
+                    if pu or do:
+                        desc = f"Transfert partenaire — {pu} → {do}"
+                    else:
+                        desc = f"Transfert partenaire #{t.id} (course {bid})"
+                    amt = float(t.partner_cost or 0)
+                    preview_lines.append(
+                        {
+                            "booking_id": bid,
+                            "preview_row_id": int(t.id),
+                            "scheduled_at": sched,
+                            "amount_ht": amt,
+                            "origin_amount_ht": amt,
+                            "description": desc[:500],
+                            "source_type": "ride",
+                            "is_locked": False,
+                            "already_invoiced": False,
+                            "is_round_trip_leg": False,
+                        }
+                    )
+
                 if unbilled_transfers:
                     # Montant total des transferts validés et non facturés
                     total_amount = sum(
@@ -5577,6 +5615,10 @@ class BillablePartners(Resource):
                             "currency": unbilled_transfers[0].currency
                             if unbilled_transfers
                             else "CHF",
+                            "preview_lines": preview_lines,
+                            "estimated_subtotal_ht": float(total_amount),
+                            "estimated_vat_total": 0.0,
+                            "estimated_total_with_vat": float(total_amount),
                         }
                     )
 

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from collections.abc import Generator
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 from application.invoices.cancel_invoice import (
     CancelInvoiceInput,
@@ -61,6 +64,28 @@ class _MockBookingRepository:
         return None
 
 
+@contextmanager
+def _patch_booking_query_for_cancel(
+    bookings: dict[int, _MockBooking],
+) -> Generator[MagicMock, None, None]:
+    """Évite un vrai accès DB pour Booking.query (PostgreSQL optionnel en CI locale)."""
+    mock_cls = MagicMock()
+
+    def _filter(*_args: Any, **_kwargs: Any) -> MagicMock:
+        inner = MagicMock()
+        inner.all.return_value = list(bookings.values())
+        return inner
+
+    mock_cls.query.filter.side_effect = _filter
+    mock_cls.query.get.side_effect = lambda bid: (
+        bookings.get(int(bid)) if bid is not None else None
+    )
+
+    # ``from models import Booking`` lit ``models.Booking`` à l'appel d'execute.
+    with patch("models.Booking", mock_cls):
+        yield mock_cls
+
+
 def test_cancel_invoice_draft_success(db) -> None:
     """Test d'annulation réussie d'une facture en brouillon."""
     # Arrange
@@ -81,7 +106,8 @@ def test_cancel_invoice_draft_success(db) -> None:
     uc = CancelInvoiceUseCase(booking_repo=booking_repo)
 
     # Act
-    result = uc.execute(CancelInvoiceInput(invoice=invoice, force=False))
+    with _patch_booking_query_for_cancel(bookings):
+        result = uc.execute(CancelInvoiceInput(invoice=invoice, force=False))
 
     # Assert
     assert result.success is True
@@ -90,6 +116,8 @@ def test_cancel_invoice_draft_success(db) -> None:
     assert invoice.status == InvoiceStatus.CANCELLED
     assert invoice.cancelled_at is not None
     assert invoice.balance_due == Decimal("0.00")
+    assert bookings[10].invoice_line_id is None
+    assert bookings[20].invoice_line_id is None
 
 
 def test_cancel_invoice_already_cancelled() -> None:
@@ -148,12 +176,14 @@ def test_cancel_invoice_force(db) -> None:
     uc = CancelInvoiceUseCase(booking_repo=booking_repo)
 
     # Act
-    result = uc.execute(CancelInvoiceInput(invoice=invoice, force=True))
+    with _patch_booking_query_for_cancel(bookings):
+        result = uc.execute(CancelInvoiceInput(invoice=invoice, force=True))
 
     # Assert
     assert result.success is True
     assert result.error is None
     assert result.status_code is None
+    assert bookings[10].invoice_line_id is None
 
 
 def test_cancel_invoice_invalid_status_string() -> None:
@@ -196,12 +226,12 @@ def test_cancel_invoice_releases_bookings(db) -> None:
     uc = CancelInvoiceUseCase(booking_repo=booking_repo)
 
     # Act
-    result = uc.execute(CancelInvoiceInput(invoice=invoice, force=False))
+    with _patch_booking_query_for_cancel(bookings):
+        result = uc.execute(CancelInvoiceInput(invoice=invoice, force=False))
 
     # Assert
     assert result.success is True
-    # Note: La libération des réservations se fait via db.session dans le code réel
-    # Ici on vérifie juste que le use case s'exécute sans erreur
+    assert bookings[10].invoice_line_id is None
 
 
 def test_is_direct_client_invoice() -> None:
