@@ -1,77 +1,112 @@
-/* ReminderModal — SaaS Pro Design (cohérent avec PaymentModal) */
+/* ReminderModal — même gabarit que SendEmailModal (facturation entreprise) */
 
-.overlay {
+.modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  animation: fadeIn 0.15s ease;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  animation: fadeIn 0.2s ease;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal {
-  background: var(--bg-primary, #fff);
-  border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
-  overflow-y: auto;
-  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-/* Header */
+.modal {
+  width: 100%;
+  max-width: var(--modal-width-secondary);
+  max-height: var(--modal-max-height);
+  min-height: 0;
+  background: var(--bg-primary, #fff);
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow:
+    0 24px 64px rgba(15, 23, 42, 0.2),
+    0 8px 24px rgba(15, 23, 42, 0.08);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 18px 20px;
   border-bottom: 1px solid var(--border-primary, #e2e8f0);
-}
-
-.headerTitle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.headerTitle h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary, #1e293b);
-}
-
-.headerIcon {
-  color: var(--warning-primary, #d97706);
   flex-shrink: 0;
 }
 
-.closeBtn {
+.headerTitleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerIconWrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--brand-light, #f0fdfa);
+  color: var(--brand-primary, #00796b);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+}
+
+.headerSubtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary, #64748b);
+  line-height: 1.4;
+}
+
+.closeBtn {
+  flex-shrink: 0;
   width: 32px;
   height: 32px;
-  border: none;
-  background: var(--bg-tertiary, #f1f5f9);
   border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-tertiary, #f1f5f9);
   color: var(--text-tertiary, #94a3b8);
   cursor: pointer;
-  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .closeBtn:hover {
@@ -79,150 +114,139 @@
   color: var(--text-primary, #1e293b);
 }
 
-/* Invoice summary card */
-.invoiceCard {
-  margin: 16px 20px;
+.content {
+  padding: 18px 20px 8px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Résumé facture — identique SendEmail .infoBox */
+.infoBox {
   background: var(--bg-tertiary, #f8fafc);
   border: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 10px;
-  overflow: hidden;
+  padding: 12px 14px;
 }
 
-.invoiceCardHeader {
+.infoRow {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--bg-secondary, #f1f5f9);
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
   border-bottom: 1px solid var(--border-primary, #e2e8f0);
 }
 
-.invoiceNumber {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-primary, #00796b);
+.infoRow:last-child {
+  border-bottom: none;
 }
 
-.clientName {
+.infoRowBalance {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-primary, #e2e8f0);
+  border-bottom: none;
+}
+
+.infoLabel {
   font-size: 12px;
-  color: var(--text-secondary, #64748b);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 200px;
-}
-
-.invoiceDetails {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.detailRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.detailLabel {
-  font-size: 12px;
-  color: var(--text-tertiary, #94a3b8);
-}
-
-.detailValue {
-  font-size: 13px;
-  color: var(--text-secondary, #64748b);
   font-weight: 500;
+  color: var(--text-tertiary, #64748b);
+}
+
+.infoValue {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
   font-variant-numeric: tabular-nums;
 }
 
-.detailValueBold {
+.infoValueBalance {
   font-size: 15px;
   font-weight: 700;
   color: var(--danger-primary, #dc2626);
-  font-variant-numeric: tabular-nums;
 }
 
-.detailSeparator {
-  border: none;
-  border-top: 1px dashed var(--border-primary, #e2e8f0);
-  margin: 4px 0;
-}
-
-/* Form body */
-.body {
-  padding: 0 20px;
-}
-
-/* Level selector — radio cards */
-.levelSectionLabel {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
+.fieldLabel {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
-  margin-bottom: 8px;
+  color: var(--text-secondary, #475569);
 }
 
+/* Niveaux — version compacte */
 .levelOptions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
 }
 
 .levelCard {
   position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 2px solid var(--border-primary, #e2e8f0);
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: var(--bg-primary, #fff);
-}
-
-.levelCard:hover {
-  border-color: var(--brand-primary-light, #4db6ac);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
   background: var(--bg-tertiary, #f8fafc);
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
 
-.levelCardActive {
+.levelCard:hover:not(.levelCardDone):not(.levelCardLocked) {
+  background: var(--bg-hover, #f1f5f9);
+  border-color: var(--border-secondary, #d1d5db);
+}
+
+.levelCard:has(.levelRadio:checked) {
+  background: var(--brand-primary-lightest, #e0f2f1);
   border-color: var(--brand-primary, #00796b);
-  background: #f0fdfa;
   box-shadow: 0 0 0 1px var(--brand-primary, #00796b);
 }
 
+.levelCard:has(.levelRadio:focus-visible) {
+  outline: none;
+  box-shadow: var(--focus-ring, 0 0 0 3px rgba(0, 121, 107, 0.15));
+}
+
+.levelCard:has(.levelRadio:checked):has(.levelRadio:focus-visible) {
+  box-shadow:
+    0 0 0 1px var(--brand-primary, #00796b),
+    var(--focus-ring, 0 0 0 3px rgba(0, 121, 107, 0.15));
+}
+
 .levelCardDone {
-  opacity: 0.55;
+  opacity: 0.72;
   cursor: default;
   pointer-events: none;
-  border-color: var(--success-border, #bbf7d0);
-  background: var(--success-bg, #f0fdf4);
+  background: var(--success-bg, #dcfce7);
+  border-color: var(--success-border, #86efac);
 }
 
 .levelCardLocked {
-  opacity: 0.4;
+  opacity: 0.48;
   cursor: not-allowed;
   pointer-events: none;
   border-style: dashed;
+  background: var(--bg-tertiary, #f8fafc);
 }
 
 .levelRadio {
-  margin-top: 2px;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   accent-color: var(--brand-primary, #00796b);
   cursor: pointer;
 }
 
 .levelDoneIcon {
-  margin-top: 1px;
   color: var(--success-primary, #16a34a);
   flex-shrink: 0;
   display: flex;
@@ -230,7 +254,6 @@
 }
 
 .levelLockedIcon {
-  margin-top: 1px;
   color: var(--text-tertiary, #94a3b8);
   flex-shrink: 0;
   display: flex;
@@ -246,234 +269,258 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 2px;
+  gap: 6px;
 }
 
 .levelTitle {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, #0f172a);
+  line-height: 1.25;
 }
 
 .levelBadge {
   display: inline-flex;
   align-items: center;
-  padding: 1px 8px;
+  padding: 0 6px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  line-height: 16px;
 }
 
 .levelBadge1 {
-  background: var(--warning-bg, #fffbeb);
-  color: var(--warning-primary, #d97706);
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-hover, #d97706);
 }
 
 .levelBadge2 {
-  background: var(--danger-bg, #fef2f2);
-  color: #ea580c;
+  background: var(--info-bg, #dbeafe);
+  color: var(--info-hover, #2563eb);
 }
 
 .levelBadge3 {
-  background: var(--danger-primary, #dc2626);
+  background: var(--danger-primary, #ef4444);
   color: #fff;
 }
 
 .levelDesc {
-  font-size: 12px;
-  color: var(--text-tertiary, #94a3b8);
-  line-height: 1.4;
+  font-size: 11px;
+  color: var(--text-tertiary, #64748b);
+  line-height: 1.35;
+  margin-top: 1px;
 }
 
 .levelDelay {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-tertiary, #94a3b8);
-  margin-top: 4px;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-tertiary, #64748b);
+  margin-top: 3px;
 }
 
 .levelDelay svg {
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.65;
 }
 
-/* Fee summary card */
+/* Récap frais : ligne montant + méta délai (cohérent avec les cartes niveau) */
 .feeSummary {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 10px;
   background: var(--bg-tertiary, #f8fafc);
   border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 10px;
-  margin-bottom: 16px;
+  border-radius: var(--radius-md, 8px);
+  border-left: 3px solid var(--brand-primary, #00796b);
 }
 
 .feeSummaryIcon {
+  flex-shrink: 0;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--brand-primary-lightest, #e0f2f1);
+  color: var(--brand-primary, #00796b);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: var(--warning-bg, #fffbeb);
-  color: var(--warning-primary, #d97706);
-  flex-shrink: 0;
 }
 
-.feeSummaryContent {
+.feeSummaryBody {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.feeSummaryTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .feeSummaryTitle {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary, #64748b);
-  margin: 0 0 2px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary, #64748b);
 }
 
 .feeSummaryAmount {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, #0f172a);
   font-variant-numeric: tabular-nums;
-  margin: 0;
-}
-
-.feeSummaryAmountZero {
-  color: var(--text-tertiary, #94a3b8);
-}
-
-.feeSummaryDelay {
-  font-size: 11px;
-  color: var(--text-tertiary, #94a3b8);
-  margin: 2px 0 0 0;
-}
-
-/* Settings warning */
-.settingsWarning {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: var(--warning-bg, #fffbeb);
-  border: 1px solid var(--warning-border, #fde68a);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--warning-primary, #d97706);
-  margin-bottom: 16px;
-}
-
-.settingsWarning svg {
   flex-shrink: 0;
 }
 
-/* Error */
-.error {
-  background: var(--danger-bg, #fef2f2);
-  color: var(--danger-primary, #dc2626);
-  border: 1px solid var(--danger-border, #fecaca);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 14px;
+.feeSummaryAmountZero {
+  font-size: 14px;
+  color: var(--text-tertiary, #64748b);
+  font-weight: 600;
 }
 
-/* Footer */
+.feeSummaryMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-tertiary, #64748b);
+  line-height: 1.35;
+}
+
+.feeSummaryMeta svg {
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.settingsWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, #475569);
+}
+
+.settingsWarningIcon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-hover, #d97706);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error {
+  padding: 10px 12px;
+  background: var(--danger-bg, #fef2f2);
+  border: 1px solid var(--danger-border, #fecaca);
+  border-radius: 8px;
+  color: var(--danger-primary, #b91c1c);
+  font-size: 13px;
+}
+
 .footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 14px 20px;
+  padding: 14px 20px 18px;
   border-top: 1px solid var(--border-primary, #e2e8f0);
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 
-.cancelBtn,
-.submitBtn {
+.btn {
   height: 38px;
-  padding: 0 18px;
+  padding: 0 16px;
   border-radius: 10px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
-  border: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
   white-space: nowrap;
 }
 
-.cancelBtn {
-  background: var(--bg-secondary, #f1f5f9);
-  color: var(--text-secondary, #64748b);
-  border: 1px solid var(--border-primary, #e2e8f0);
-}
-
-.cancelBtn:hover {
-  background: var(--bg-hover, #e2e8f0);
-  color: var(--text-primary, #1e293b);
-}
-
-.submitBtn {
-  background: linear-gradient(180deg, var(--warning-primary, #d97706) 0%, #b45309 100%);
-  color: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
-
-.submitBtn:hover:not(:disabled) {
-  filter: brightness(1.08);
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
-}
-
-.submitBtn:disabled,
-.cancelBtn:disabled {
+.btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.emptyState {
-  text-align: center;
-  padding: 24px 20px;
-  color: var(--text-tertiary, #94a3b8);
-  font-size: 13px;
+.btnSecondary {
+  background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+  border-color: var(--border-primary, #e2e8f0);
 }
 
-/* Responsive */
+.btnSecondary:hover:not(:disabled) {
+  background: var(--bg-hover, #e2e8f0);
+  color: var(--text-primary, #1e293b);
+}
+
+.btnPrimary {
+  background: linear-gradient(
+    180deg,
+    var(--brand-primary, #00796b) 0%,
+    var(--brand-primary-dark, #00695c) 100%
+  );
+  color: #fff;
+  border-color: var(--brand-primary, #00796b);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 2px 8px rgba(0, 121, 107, 0.3);
+}
+
+.emptyState {
+  text-align: center;
+  padding: 24px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-tertiary, #64748b);
+}
+
 @media (max-width: 480px) {
   .modal {
-    max-width: 100%;
     border-radius: 12px;
   }
 
-  .header {
-    padding: 14px 16px;
-  }
-
-  .headerTitle h2 {
-    font-size: 15px;
-  }
-
-  .invoiceCard {
-    margin: 12px 16px;
-  }
-
-  .body {
-    padding: 0 16px;
+  .header,
+  .content,
+  .footer {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .footer {
-    padding: 14px 16px;
     flex-direction: column-reverse;
   }
 
-  .cancelBtn,
-  .submitBtn {
+  .btn {
     width: 100%;
   }
 }

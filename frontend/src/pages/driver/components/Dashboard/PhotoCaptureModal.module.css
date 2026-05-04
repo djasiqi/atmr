@@ -2,7 +2,7 @@
 
 .video {
   width: 100%;
-  max-height: 300px;
+  max-height: min(18.75rem, 50vh, var(--modal-max-height));
   border-radius: var(--radius-md);
   margin-bottom: var(--spacing-sm);
   background: var(--bg-tertiary);

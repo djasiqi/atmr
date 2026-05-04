@@ -4,8 +4,6 @@
  */
 
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-script';
-const SDK_READY_TIMEOUT_MS = 12000;
-const POLL_MS = 80;
 
 /**
  * Librairies chargées en plus du cœur `maps` (paramètre `libraries=`).
@@ -28,21 +26,55 @@ export function isGoogleMapsSdkReady() {
   );
 }
 
-function pollUntilReady(startedAt) {
+const NAMESPACE_WAIT_MS = 15000;
+const NAMESPACE_POLL_MS = 50;
+
+/** Attend que `google.maps` existe (bootstrap chargé), avant `importLibrary`. */
+function waitForGoogleMapsNamespace() {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
     const tick = () => {
-      if (isGoogleMapsSdkReady()) {
+      if (typeof window !== 'undefined' && window.google?.maps) {
         resolve();
         return;
       }
-      if (Date.now() - startedAt > SDK_READY_TIMEOUT_MS) {
+      if (Date.now() - startedAt > NAMESPACE_WAIT_MS) {
         reject(new Error('SDK Google Maps indisponible (timeout)'));
         return;
       }
-      window.setTimeout(tick, POLL_MS);
+      window.setTimeout(tick, NAMESPACE_POLL_MS);
     };
     tick();
   });
+}
+
+/**
+ * Avec `loading=async` (recommandé par Google), `google.maps.Map` n'existe pas tant que
+ * la librairie « maps » n'est pas importée via `importLibrary()`.
+ * Sans cet appel, le chargement du script réussit mais `Map` reste indéfini → timeout.
+ *
+ * @returns {Promise<void>}
+ */
+async function bootstrapGoogleMapsLibraries() {
+  if (isGoogleMapsSdkReady()) {
+    return;
+  }
+  const gm = window.google?.maps;
+  if (!gm) {
+    throw new Error('google.maps absent après chargement du script');
+  }
+  // Ancien chargement synchrone : rien à faire
+  if (typeof gm.Map === 'function') {
+    return;
+  }
+  if (typeof gm.importLibrary !== 'function') {
+    throw new Error(
+      'Google Maps : importLibrary indisponible (script incomplet ou API obsolète)'
+    );
+  }
+  await gm.importLibrary('maps');
+  const extra = getGoogleMapsLibraryList().filter((name) => name !== 'maps');
+  await Promise.all(extra.map((lib) => gm.importLibrary(lib)));
 }
 
 let inFlight = null;
@@ -96,7 +128,8 @@ export function loadGoogleMapsScript() {
 
     const existing = document.getElementById(GOOGLE_MAPS_SCRIPT_ID);
     if (existing) {
-      pollUntilReady(Date.now())
+      waitForGoogleMapsNamespace()
+        .then(() => bootstrapGoogleMapsLibraries())
         .then(ok)
         .catch(fail);
       return;
@@ -110,7 +143,8 @@ export function loadGoogleMapsScript() {
     script.defer = true;
 
     script.onload = () => {
-      pollUntilReady(Date.now())
+      waitForGoogleMapsNamespace()
+        .then(() => bootstrapGoogleMapsLibraries())
         .then(ok)
         .catch(fail);
     };

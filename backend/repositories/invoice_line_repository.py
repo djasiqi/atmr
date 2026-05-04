@@ -59,6 +59,7 @@ class InvoiceLineRepository:
             total_with_vat=line.total_with_vat,
             adjustment_note=line.adjustment_note,
             reservation_id=cast(int | None, line.reservation_id),
+            line_meta=cast(dict[str, Any] | None, line.line_meta),
         )
 
     def create(self, line_data: dict[str, Any]) -> InvoiceLineDTO:
@@ -88,6 +89,10 @@ class InvoiceLineRepository:
         line.total_with_vat = line_data.get("total_with_vat", line.line_total)
         line.adjustment_note = line_data.get("adjustment_note")
         line.reservation_id = line_data.get("reservation_id")
+        _lm = line_data.get("line_meta")
+        if _lm is None:
+            _lm = line_data.get("meta")
+        line.line_meta = _lm
 
         db.session.add(line)
         db.session.flush()  # Pour obtenir l'ID sans commit
@@ -122,6 +127,10 @@ class InvoiceLineRepository:
             line.total_with_vat = line_data.get("total_with_vat", line.line_total)
             line.adjustment_note = line_data.get("adjustment_note")
             line.reservation_id = line_data.get("reservation_id")
+            _lm_b = line_data.get("line_meta")
+            if _lm_b is None:
+                _lm_b = line_data.get("meta")
+            line.line_meta = _lm_b
             db.session.add(line)
             lines.append(line)
 

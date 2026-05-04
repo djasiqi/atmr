@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, Text, useWindowDimensions, View, Platform, StyleSheet } from "react-native";
+import { Image, Pressable, View, Platform, StyleSheet } from "react-native";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
+import { AppText } from "../../../design/ui/AppText";
 import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveMediaUrl } from "../../../core/api/mediaUrl";
 import { SharedChatMessage } from "../types";
 import { VoiceMessageBar } from "./VoiceMessageBar";
 import { VOICE_GROUP_MAX_W } from "./voiceMessageStyles";
+
+/**
+ * Bulles : contenu long → mise à l’échelle large (`maxFontSizeMultiplier` ~1.5) ; métadonnées courtes → cap plus bas.
+ * Jamais `allowFontScaling={false}` sur le fil.
+ */
 
 type MessageBubbleProps = {
   message: SharedChatMessage;
@@ -86,8 +93,9 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
   const sender = message.senderName ?? message.senderRole ?? "Équipe";
   const isOwn = isOwnMessage(message);
   const time = formatMessageTime(message.timestamp);
-  const { width: windowW } = useWindowDimensions();
-  const maxImageW = capChatImageWidth(windowW);
+  const { usableWidth } = useAppViewport();
+  /** Contenu bulle : scaling système libre ; métadonnées courtes maxFontSizeMultiplier plus bas. */
+  const maxImageW = capChatImageWidth(usableWidth);
 
   const imageUri = useMemo(() => resolveMediaUrl(message.imageUrl), [message.imageUrl]);
   const pdfUri = useMemo(() => resolveMediaUrl(message.pdfUrl), [message.pdfUrl]);
@@ -167,19 +175,21 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
     <View style={[styles.row, isOwn && styles.rowOwn]}>
       {!isOwn && (
         <View style={[styles.avatar, { backgroundColor: avatarColor(sender) }]}>
-          <Text style={styles.avatarText}>{initialsFromName(sender)}</Text>
+          <AppText variant="caption" maxFontSizeMultiplier={1.22} style={styles.avatarText}>
+            {initialsFromName(sender)}
+          </AppText>
         </View>
       )}
 
       <View style={[styles.column, isOwn && styles.columnOwn]}>
         <View style={[styles.header, isOwn && styles.headerOwn]}>
-          <Text style={styles.senderName} numberOfLines={1}>
+          <AppText variant="label" maxFontSizeMultiplier={1.28} style={styles.senderName} numberOfLines={1}>
             {sender}
-          </Text>
+          </AppText>
           {time ? (
-            <Text style={styles.timeHeader} accessibilityLabel={`Heure ${time}`}>
+            <AppText variant="caption" style={styles.timeHeader} accessibilityLabel={`Heure ${time}`}>
               {time}
-            </Text>
+            </AppText>
           ) : null}
         </View>
 
@@ -192,9 +202,13 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
           ]}
         >
           {showText ? (
-            <Text style={[styles.bodyText, isOwn && styles.bodyTextOwn, failed && styles.bodyTextFail]}>
+            <AppText
+              variant="body"
+              maxFontSizeMultiplier={1.5}
+              style={[styles.bodyText, isOwn && styles.bodyTextOwn, failed && styles.bodyTextFail]}
+            >
               {message.content}
-            </Text>
+            </AppText>
           ) : null}
 
           {hasImage && imageUri && !imageLoadFailed ? (
@@ -238,11 +252,11 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
               ]}
             >
               <Ionicons name="image-outline" size={20} color={C_BODY} />
-              <Text style={[styles.imageErrorText, isOwn && styles.bodyTextOwn]}>
+              <AppText variant="caption" style={[styles.imageErrorText, isOwn && styles.bodyTextOwn]}>
                 {imageLoadFailed
                   ? "Image indisponible. Touchez pour ouvrir dans le navigateur."
                   : "Lien d’image invalide."}
-              </Text>
+              </AppText>
             </Pressable>
           ) : null}
 
@@ -257,10 +271,17 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
                 <Ionicons name="document-text" size={22} color={isOwn ? "#ecfdf5" : C_BUBBLE_OWN} />
               </View>
               <View style={styles.pdfTextBlock}>
-                <Text style={[styles.pdfTitle, isOwn && styles.pdfTitleOwn]} numberOfLines={2}>
+                <AppText
+                  variant="label"
+                  maxFontSizeMultiplier={1.35}
+                  style={[styles.pdfTitle, isOwn && styles.pdfTitleOwn]}
+                  numberOfLines={2}
+                >
                   {message.pdfFilename ?? message.content ?? "Document PDF"}
-                </Text>
-                <Text style={[styles.pdfMeta, isOwn && styles.pdfMetaOwn]}>PDF</Text>
+                </AppText>
+                <AppText variant="caption" maxFontSizeMultiplier={1.22} style={[styles.pdfMeta, isOwn && styles.pdfMetaOwn]}>
+                  PDF
+                </AppText>
               </View>
               <Ionicons name="arrow-down-circle-outline" size={22} color={isOwn ? "rgba(255,255,255,0.85)" : C_BODY} />
             </Pressable>
@@ -279,15 +300,17 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
         </View>
 
         {isOwn ? (
-          <Text style={[styles.status, failed && styles.statusFail]}>
+          <AppText variant="caption" maxFontSizeMultiplier={1.25} style={[styles.status, failed && styles.statusFail]}>
             {failed ? "Échec d’envoi" : "Envoyé"}
-          </Text>
+          </AppText>
         ) : null}
       </View>
 
       {isOwn && (
         <View style={[styles.avatar, { backgroundColor: avatarColor(sender) }]}>
-          <Text style={styles.avatarText}>{initialsFromName(sender)}</Text>
+          <AppText variant="caption" maxFontSizeMultiplier={1.22} style={styles.avatarText}>
+            {initialsFromName(sender)}
+          </AppText>
         </View>
       )}
     </View>
@@ -316,8 +339,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   avatarText: {
+    // DS_EXCEPTION: initiales sur pastille colorée (contraste forcé)
     color: "#fff",
-    fontSize: 12,
     fontWeight: "700",
   },
   column: {
@@ -339,13 +362,11 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   senderName: {
-    fontSize: 14,
     fontWeight: "600",
     color: C_HEADING,
     maxWidth: "70%",
   },
   timeHeader: {
-    fontSize: 14,
     color: C_BODY,
   },
   bubble: {
@@ -370,8 +391,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fef2f2",
   },
   bodyText: {
-    fontSize: 14,
-    lineHeight: 20,
     color: C_HEADING,
   },
   bodyTextOwn: {
@@ -430,9 +449,7 @@ const styles = StyleSheet.create({
   },
   imageErrorText: {
     flex: 1,
-    fontSize: 13,
     color: C_BODY,
-    lineHeight: 18,
   },
   pdfCard: {
     flexDirection: "row",
@@ -465,7 +482,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   pdfTitle: {
-    fontSize: 14,
     fontWeight: "600",
     color: C_HEADING,
   },
@@ -473,7 +489,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   pdfMeta: {
-    fontSize: 12,
     color: C_BODY,
     marginTop: 2,
   },
@@ -486,7 +501,6 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   status: {
-    fontSize: 12,
     color: C_BODY,
   },
   statusFail: {

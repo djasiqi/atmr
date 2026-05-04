@@ -1026,7 +1026,7 @@
    MENU DÉROULANT - React-Select (Clients)
    ======================== */
 
-/* P0.1: z-index via styles.menuPortal dans le JSX (menuPortalTarget + zIndex: 10000)
+/* P0.1: z-index via styles.menuPortal dans le JSX (menuPortalTarget + var(--z-modal-popover))
    Pas de règle globale pour éviter conflits avec autres modals/tooltips. */
 
 /* Menu dropdown */

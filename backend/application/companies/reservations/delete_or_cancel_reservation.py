@@ -75,9 +75,11 @@ class DeleteOrCancelCompanyReservationUseCase:
         if validation_error:
             return validation_error
 
-        status_at_cancel = getattr(booking, "status", None)
-        if hasattr(status_at_cancel, "value"):
-            status_at_cancel = status_at_cancel.value
+        raw_status = getattr(booking, "status", None)
+        if raw_status is not None and hasattr(raw_status, "value"):
+            status_at_cancel = raw_status.value
+        else:
+            status_at_cancel = raw_status
 
         set_status(booking, "status", "CANCELED")
         if getattr(booking, "driver_id", None):

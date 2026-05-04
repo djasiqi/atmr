@@ -162,7 +162,7 @@ class InstitutionPatient(db.Model):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Traçabilité sync curatelle : quels champs proviennent d'une synchronisation
-    data_source_flags: Mapped[dict | None] = mapped_column(
+    data_source_flags: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True,
         comment='Ex: {"address": "sync_curatelle", "phone": "local"}',
     )

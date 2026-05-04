@@ -108,11 +108,10 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     ...cardShadow,
   },
+  /** Typo via `AppText` ; espacement chip uniquement. */
   actionLabel: {
-    fontSize: 9,
-    fontWeight: "600",
-    color: C_TEXT,
     marginTop: 1,
+    textAlign: "center" as const,
   },
   pressedOp: {
     opacity: 0.88,

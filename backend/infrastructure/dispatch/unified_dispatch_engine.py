@@ -1,4 +1,5 @@
 # backend/infrastructure/dispatch/unified_dispatch_engine.py
+# pyright: reportImportCycles=false
 from __future__ import annotations
 
 import logging

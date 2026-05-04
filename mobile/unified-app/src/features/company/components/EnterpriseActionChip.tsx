@@ -1,6 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { AppText } from "../../../design/ui/AppText";
 import { E } from "../theme/enterpriseOpsTheme";
 
 type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -80,7 +81,8 @@ export function EnterpriseActionChip({
       ) : (
         <Ionicons name={icon} size={iconSize} color={iconColor} />
       )}
-      <Text
+      <AppText
+        variant="caption"
         style={[
           s.txt,
           compact && s.txtCompact,
@@ -90,7 +92,7 @@ export function EnterpriseActionChip({
         numberOfLines={1}
       >
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }
@@ -221,7 +223,7 @@ const s = StyleSheet.create({
   chipUrgentCtaShadow: { elevation: 2, shadowColor: E.URGENT, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2 },
   chipDim: { opacity: 0.9 },
   chipOff: { opacity: 0.5 },
-  txt: { fontSize: 12, fontWeight: "600" as const, flexShrink: 1 as const },
-  txtCompact: { fontSize: 11, fontWeight: "700" as const },
-  txtDetailsCase: { fontSize: 13, fontWeight: "600" as const, letterSpacing: 0.2 },
+  txt: { fontWeight: "600" as const, flexShrink: 1 as const },
+  txtCompact: { fontWeight: "700" as const },
+  txtDetailsCase: { fontWeight: "600" as const, letterSpacing: 0.2 },
 });

@@ -1213,7 +1213,7 @@ const UnifiedDispatchRefactored = () => {
           {/* 🆕 Panneau paramètres avancés */}
           {showAdvancedSettings && (
             <div className="modal-overlay" onClick={() => setShowAdvancedSettings(false)}>
-              <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
                 <button className="modal-close" onClick={() => setShowAdvancedSettings(false)}>
                   ✕
                 </button>

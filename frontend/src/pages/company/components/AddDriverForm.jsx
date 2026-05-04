@@ -69,7 +69,7 @@ function PortalChipDropdown({ options, value, onChange, disabled, placeholder })
         <div
           ref={menuRef}
           className={s.chipMenu}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 'var(--z-modal-popover)' }}
         >
           {options.map((o) => (
             <button

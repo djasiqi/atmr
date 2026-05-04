@@ -135,7 +135,7 @@ const FAQ_PATIENTS = [
   },
   {
     q: 'Puis-je réserver directement sur LIRIE ?',
-    a: 'Cela dépend des conventions locales et de l’organisation mise en place avec votre institution ou le transporteur partenaire. Dans la plupart des cas, c’est votre institution qui initie la demande.',
+    a: 'Oui : lorsque vous disposez d’un accès personnel sur la plateforme ou que votre organisation le prévoit, vous pouvez réserver directement sur LIRIE. Selon les conventions locales et l’organisation mise en place avec votre institution ou le transporteur partenaire, la demande peut aussi être initiée par l’institution ou un coordinateur — renseignez-vous auprès de votre contact pour savoir quel circuit s’applique à votre situation.',
   },
   {
     q: 'Qui réalise le transport ?',
@@ -143,11 +143,11 @@ const FAQ_PATIENTS = [
   },
   {
     q: 'Puis-je modifier ou annuler une course ?',
-    a: 'Contactez en priorité l’acteur ayant organisé le transport : institution, service coordinateur ou transporteur partenaire. Ils disposent des outils pour gérer les modifications.',
+    a: 'Oui, lorsque votre accès le permet : vous pouvez le faire depuis votre portail LIRIE selon les options proposées pour votre mission. Sinon, ou si vous avez besoin d’aide, contactez l’acteur ayant organisé le transport (institution, service coordinateur ou transporteur partenaire). Selon les conditions applicables (délai, convention locale), des frais peuvent s’appliquer — renseignez-vous auprès de votre institution ou du transporteur.',
   },
   {
     q: 'Comment savoir si le transport est confirmé ?',
-    a: 'Le statut dépend de la validation par les acteurs responsables. En cas de doute, votre institution ou le transporteur pourra vous confirmer la mission.',
+    a: 'Consultez le statut de votre mission dans votre espace compte / portail LIRIE lorsque vous y avez accès — il reflète l’avancement et la confirmation lorsque les acteurs concernés l’ont saisi. En cas de doute ou si vous n’avez pas d’accès, contactez l’acteur qui a effectué ou organisé la réservation (institution, coordinateur ou transporteur partenaire).',
   },
 ];
 

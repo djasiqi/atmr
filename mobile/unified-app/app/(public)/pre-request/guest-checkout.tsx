@@ -17,7 +17,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ResponsiveContainer, Screen, useAppViewport } from "../../../src/design/responsive";
 import {
   createGuestBooking,
   initializeGuestSaferpay,
@@ -112,7 +112,7 @@ function formatPickupLabel(date: string, pickupTime: string): string {
 
 export default function GuestCheckoutScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { topInset, bottomInset } = useAppViewport();
   const params = useLocalSearchParams<{
     draftId?: string;
     paid?: string;
@@ -324,8 +324,8 @@ export default function GuestCheckoutScreen() {
               style={[
                 styles.postPayModalSheet,
                 {
-                  marginTop: Math.max(insets.top, 12),
-                  marginBottom: Math.max(insets.bottom, 16),
+                  marginTop: Math.max(topInset, 12),
+                  marginBottom: Math.max(bottomInset, 16),
                 },
               ]}
             >
@@ -419,18 +419,14 @@ export default function GuestCheckoutScreen() {
           imageStyle={styles.backgroundImage}
         />
         <View style={styles.overlay} />
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingTop: Math.max(insets.top, 16) + 8,
-              paddingBottom: Math.max(insets.bottom, 24) + 16,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <Screen
+          scroll
+          backgroundColor="transparent"
+          keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+          contentContainerStyle={styles.screenScrollContent}
         >
-          <View style={styles.card}>
+          <ResponsiveContainer>
+            <View style={styles.card}>
             <Pressable
               onPress={goBack}
               style={styles.backButton}
@@ -490,7 +486,8 @@ export default function GuestCheckoutScreen() {
               <Ionicons name="home-outline" size={20} color="#FFFFFF" style={styles.primaryIcon} />
             </Pressable>
           </View>
-        </ScrollView>
+          </ResponsiveContainer>
+        </Screen>
       </View>
     );
   }
@@ -505,18 +502,14 @@ export default function GuestCheckoutScreen() {
       />
       <View style={styles.overlay} />
 
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(insets.top, 16) + 8,
-            paddingBottom: Math.max(insets.bottom, 24) + 16,
-          },
-        ]}
+      <Screen
+        scroll
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.screenScrollContent}
       >
-        <View style={styles.card}>
+        <ResponsiveContainer>
+          <View style={styles.card}>
           <Pressable
             onPress={goBack}
             style={styles.backButton}
@@ -620,7 +613,8 @@ export default function GuestCheckoutScreen() {
             <Text style={styles.outlineButtonText}>Modifier le trajet</Text>
           </Pressable>
         </View>
-      </ScrollView>
+        </ResponsiveContainer>
+      </Screen>
     </View>
   );
 }
@@ -637,9 +631,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(234,243,241,0.88)",
   },
-  scrollContent: {
+  screenScrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   card: {
     width: "100%",

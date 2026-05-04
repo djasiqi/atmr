@@ -121,12 +121,18 @@ const DriverSchedulePage = lazy(() => import('./pages/driver/DriverSchedulePage'
 const DriverMapPage = lazy(() => import('./pages/driver/Map/DriverMapPage'));
 const DriverHistoryPage = lazy(() => import('./pages/driver/History/DriverHistoryPage'));
 const DriverSettingsPage = lazy(() => import('./pages/driver/Settings/DriverSettingsPage'));
-const CompanyDashboard = lazy(() => import('./pages/company/Dashboard/CompanyDashboard'));
+const CompanyDashboard = lazy(() =>
+  import(/* webpackPrefetch: true */ './pages/company/Dashboard/CompanyDashboard')
+);
 const CompanyReservations = lazy(() => import('./pages/company/Reservations/CompanyReservations'));
 const CompanyDriver = lazy(() => import('./pages/company/Driver/CompanyDriver'));
 const CompanyDriverPlanning = lazy(() => import('./pages/company/Driver/CompanyDriverPlanning'));
-const CompanyInvoices = lazy(() => import('./pages/company/Invoices/CompanyInvoices'));
-const ClientInvoices = lazy(() => import('./pages/company/Invoices/ClientInvoices'));
+const CompanyInvoices = lazy(() =>
+  import(/* webpackPrefetch: true */ './pages/company/Invoices/CompanyInvoices')
+);
+const ClientInvoices = lazy(() =>
+  import(/* webpackPrefetch: true */ './pages/company/Invoices/ClientInvoices')
+);
 const CompanyPlanning = lazy(() => import('./pages/company/Planning/CompanyPlanning'));
 const CompanySettings = lazy(() => import('./pages/company/Settings/CompanySettings'));
 const CompanyClients = lazy(() => import('./pages/company/Clients/CompanyClients'));

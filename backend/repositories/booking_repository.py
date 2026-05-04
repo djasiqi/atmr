@@ -790,7 +790,7 @@ class BookingRepository:
             .all()
         )
 
-    def find_models_unbilled_by_company_and_client(
+    def find_models_eligible_for_billing_period_by_company_and_client(
         self,
         company_id: int,
         client_id: int,
@@ -798,23 +798,10 @@ class BookingRepository:
         period_month: int | None = None,
         billed_to_type: str | None = None,
     ) -> list[Booking]:
-        """Trouve les bookings terminés ou annulations facturables non facturés pour un client.
+        """Même périmètre statuts/période que ``find_models_unbilled_*``, y compris déjà facturés.
 
-        Aligné sur l'éligibilité facturation : COMPLETED, RETURN_COMPLETED, ou
-        CANCELED + is_cancellation_billable + amount > 0 (si billed_to_type=patient).
-        Période sur scheduled_time. Politique : la règle « aller annulé ⇒ retour exclu »
-        s'applique uniquement pour billed_to_type=patient (facturation directe).
-        Pour clinic (S2), la même règle est gérée côté routes / génération facture.
-
-        Args:
-            company_id: ID de l'entreprise
-            client_id: ID du client
-            period_year: Année de la période (optionnel)
-            period_month: Mois de la période (optionnel)
-            billed_to_type: "patient", "clinic", "insurance" (optionnel)
-
-        Returns:
-            Liste de Booking triés par scheduled_time ascendant
+        Nécessaire pour détecter les unités aller-retour : un segment peut être facturé
+        alors que d'autres segments du même groupe ont encore ``invoice_line_id`` NULL.
         """
         from sqlalchemy import or_
         from sqlalchemy.orm import aliased
@@ -824,7 +811,6 @@ class BookingRepository:
             BookingStatus.RETURN_COMPLETED.value,
         ]
         status_filter = Booking.status.in_(target_statuses)
-        # Annulations facturables : patient ou clinique (S2)
         if billed_to_type in ("patient", "clinic"):
             canceled_eligible = (
                 (Booking.status == BookingStatus.CANCELED.value)
@@ -843,13 +829,11 @@ class BookingRepository:
             Booking.company_id == company_id,
             Booking.client_id == client_id,
             status_filter,
-            Booking.invoice_line_id.is_(None),
         )
 
         if billed_to_type and billed_to_type in ("patient", "clinic", "insurance"):
             query = query.filter(Booking.billed_to_type == billed_to_type)
 
-        # Règle « aller annulé ⇒ retour exclu » uniquement pour facturation directe patient.
         if billed_to_type == "patient":
             parent_alias = aliased(Booking)
             query = query.outerjoin(
@@ -876,6 +860,45 @@ class BookingRepository:
 
         return query.order_by(Booking.scheduled_time.asc()).all()
 
+    def find_models_unbilled_by_company_and_client(
+        self,
+        company_id: int,
+        client_id: int,
+        period_year: int | None = None,
+        period_month: int | None = None,
+        billed_to_type: str | None = None,
+    ) -> list[Booking]:
+        """Trouve les bookings terminés ou annulations facturables non facturés pour un client.
+
+        Aligné sur l'éligibilité facturation : COMPLETED, RETURN_COMPLETED, ou
+        CANCELED + is_cancellation_billable + amount > 0 (si billed_to_type=patient).
+        Période sur scheduled_time. Politique : la règle « aller annulé ⇒ retour exclu »
+        s'applique uniquement pour billed_to_type=patient (facturation directe).
+        Pour clinic (S2), la même règle est gérée côté routes / génération facture.
+
+        Args:
+            company_id: ID de l'entreprise
+            client_id: ID du client
+            period_year: Année de la période (optionnel)
+            period_month: Mois de la période (optionnel)
+            billed_to_type: "patient", "clinic", "insurance" (optionnel)
+
+        Returns:
+            Liste de Booking triés par scheduled_time ascendant
+        """
+        from application.invoices.round_trip_billing_lock import (
+            filter_bookings_open_for_new_invoice_line,
+        )
+
+        eligible = self.find_models_eligible_for_billing_period_by_company_and_client(
+            company_id=company_id,
+            client_id=client_id,
+            period_year=period_year,
+            period_month=period_month,
+            billed_to_type=billed_to_type,
+        )
+        return filter_bookings_open_for_new_invoice_line(eligible)
+
     def find_unbilled_ids_by_company_and_client(
         self,
         company_id: int,
@@ -898,78 +921,19 @@ class BookingRepository:
         Returns:
             Liste d'IDs de Booking triés par scheduled_time ascendant
         """
-        from datetime import datetime
-
-        from sqlalchemy import or_
-        from sqlalchemy.orm import aliased
-
-        from models import BookingStatus, Invoice, InvoiceLine, InvoiceStatus, db
-
-        target_statuses = [
-            BookingStatus.COMPLETED.value,
-            BookingStatus.RETURN_COMPLETED.value,
-        ]
-        status_filter = Booking.status.in_(target_statuses)
-        if billed_to_type in ("patient", "clinic"):
-            canceled_eligible = (
-                (Booking.status == BookingStatus.CANCELED.value)
-                & (Booking.amount > 0)
-                & (
-                    (Booking.is_cancellation_billable == True)  # noqa: E712
-                    | (
-                        Booking.billing_override_reason.isnot(None)
-                        & (Booking.billing_override_reason != "")
-                    )
-                )
-            )
-            status_filter = or_(status_filter, canceled_eligible)
-
-        query = (
-            db.session.query(Booking.id)
-            .outerjoin(InvoiceLine, Booking.invoice_line_id == InvoiceLine.id)
-            .outerjoin(Invoice, InvoiceLine.invoice_id == Invoice.id)
-            .filter(
-                Booking.company_id == company_id,
-                Booking.client_id == client_id,
-                status_filter,
-                or_(
-                    Booking.invoice_line_id.is_(None),
-                    Invoice.status == InvoiceStatus.CANCELLED,
-                ),
-            )
+        from application.invoices.round_trip_billing_lock import (
+            filter_bookings_open_for_new_invoice_line,
         )
 
-        if billed_to_type and billed_to_type in ("patient", "clinic", "insurance"):
-            query = query.filter(Booking.billed_to_type == billed_to_type)
-
-        # Même politique que find_models_* : règle parent uniquement pour patient.
-        if billed_to_type == "patient":
-            parent_alias = aliased(Booking)
-            query = query.outerjoin(
-                parent_alias, parent_alias.id == Booking.parent_booking_id
-            ).filter(
-                or_(
-                    Booking.is_return == False,  # noqa: E712
-                    parent_alias.id.is_(None),
-                    parent_alias.status != BookingStatus.CANCELED.value,
-                )
-            )
-
-        # Filtrer par période si fournie (scheduled_time pour inclure annulations)
-        if period_year and period_month:
-            PERIOD_MONTH_THRESHOLD = 12
-            start_date = datetime(period_year, period_month, 1)
-            if period_month == PERIOD_MONTH_THRESHOLD:
-                end_date = datetime(period_year + 1, 1, 1)
-            else:
-                end_date = datetime(period_year, period_month + 1, 1)
-
-            query = query.filter(
-                Booking.scheduled_time >= start_date,
-                Booking.scheduled_time < end_date,
-            )
-
-        return [row[0] for row in query.order_by(Booking.scheduled_time.asc()).all()]
+        eligible = self.find_models_eligible_for_billing_period_by_company_and_client(
+            company_id=company_id,
+            client_id=client_id,
+            period_year=period_year,
+            period_month=period_month,
+            billed_to_type=billed_to_type,
+        )
+        open_bookings = filter_bookings_open_for_new_invoice_line(eligible)
+        return [b.id for b in open_bookings]
 
     def find_model_by_id_with_full_eager_loading(
         self, booking_id: int, company_id: int

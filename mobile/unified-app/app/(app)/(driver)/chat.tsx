@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { InteractionManager, KeyboardAvoidingView, Platform, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { InteractionManager, Platform, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { io, Socket } from "socket.io-client";
@@ -14,6 +13,7 @@ import {
 } from "../../../src/features/driver/chatHooks";
 import { getDriverMessages, type DriverChatMessage } from "../../../src/features/driver/api";
 import { ChatComposer, ChatList, getChatListInitialScroll } from "../../../src/features/chat";
+import { AppText, Screen, useAppViewport, useResponsiveTokens } from "../../../src/design/responsive";
 
 function toCompanyId(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -25,7 +25,8 @@ function toCompanyId(value: unknown): number | null {
 }
 
 export default function DriverChatScreen() {
-  const insets = useSafeAreaInsets();
+  const { topInset, bottomInset, horizontalPadding } = useAppViewport();
+  const t = useResponsiveTokens();
   const { activeContext } = useSession();
   const missionsQuery = useDriverMissionsQuery();
   const [input, setInput] = useState("");
@@ -288,34 +289,33 @@ export default function DriverChatScreen() {
     setSendError(null);
   };
 
-  const keyboardBehavior =
-    Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
-  const keyboardOffset = Platform.OS === "ios" ? insets.top : 0;
+  const keyboardOffset = Platform.OS === "ios" ? topInset : 0;
 
   return (
     <DriverContextGuard>
       <PermissionGuard permission="chat:read">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={keyboardBehavior}
+        <Screen
+          scroll={false}
+          keyboardAware={Platform.OS !== "web"}
           keyboardVerticalOffset={keyboardOffset}
-          enabled={Platform.OS !== "web"}
+          withHorizontalPadding={false}
+          safeBottom
         >
           <View
             style={{
               flex: 1,
-              paddingTop: 24,
-              paddingHorizontal: 24,
-              paddingBottom: Math.max(24, insets.bottom),
-              gap: 10,
+              paddingTop: t.spacingMd,
+              paddingHorizontal: horizontalPadding,
+              paddingBottom: Math.max(t.spacingMd, bottomInset),
+              gap: t.spacingSm,
               position: "relative",
             }}
           >
-            <Text style={{ fontSize: 22, fontWeight: "700" }}>Chat chauffeur</Text>
-            <Text style={{ color: "#666" }}>
+            <AppText variant="sectionTitle">Chat chauffeur</AppText>
+            <AppText variant="bodyMuted">
               Canal: {socketConnected ? "socket connecte" : "socket deconnecte"} | Non lus:{" "}
               {unread.unreadCount}
-            </Text>
+            </AppText>
             <View style={{ flex: 1, minHeight: 0 }}>
               <ChatList
                 loading={messagesQuery.isLoading}
@@ -349,20 +349,21 @@ export default function DriverChatScreen() {
               onVoiceMessage={sendVoiceMessage}
             />
             {messagesQuery.error ? (
-              <Text style={{ color: "#B00020" }}>
+              <AppText variant="error">
                 {messagesQuery.error instanceof Error
                   ? messagesQuery.error.message
                   : "Impossible de charger les messages."}
-              </Text>
+              </AppText>
             ) : null}
-            {sendError ? <Text style={{ color: "#B00020" }}>{sendError}</Text> : null}
+            {sendError ? <AppText variant="error">{sendError}</AppText> : null}
             {typingNames.length > 0 ? (
-              <Text style={{ color: "#666" }}>
-                {typingNames.join(", ")} {typingNames.length > 1 ? "sont en train d'ecrire..." : "est en train d'ecrire..."}
-              </Text>
+              <AppText variant="bodyMuted">
+                {typingNames.join(", ")}{" "}
+                {typingNames.length > 1 ? "sont en train d'ecrire..." : "est en train d'ecrire..."}
+              </AppText>
             ) : null}
           </View>
-        </KeyboardAvoidingView>
+        </Screen>
       </PermissionGuard>
     </DriverContextGuard>
   );

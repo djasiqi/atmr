@@ -46,29 +46,8 @@ const ProposeTimeModal = ({ offer, onConfirm, onClose }) => {
   };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.4)',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: 'white',
-          borderRadius: 'var(--radius-lg)',
-          padding: '24px',
-          minWidth: 380,
-          maxWidth: 440,
-          boxShadow: 'var(--shadow-lg)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className={styles.proposeTimeOverlay} onClick={onClose}>
+      <div className={styles.proposeTimeDialog} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: '0 0 16px', fontSize: '16px' }}>
           Proposer un horaire de prise en charge
         </h3>

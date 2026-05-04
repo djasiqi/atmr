@@ -2,10 +2,8 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,7 +11,7 @@ import {
 } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Screen, useAppViewport } from "../../src/design/responsive";
 import {
   fetchGuestBookingStatus,
   fetchPublicBookingStatus,
@@ -35,7 +33,7 @@ function redirectForReason(reason: FallbackReason) {
 
 export default function BookingStatusScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { topInset } = useAppViewport();
   const { bootstrap } = useSession();
   const params = useLocalSearchParams<{ token?: string }>();
   const [token, setToken] = useState((params.token ?? "").trim());
@@ -110,23 +108,13 @@ export default function BookingStatusScreen() {
       />
       <View style={styles.overlay} />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      <Screen
+        scroll
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.scrollContent}
       >
-        <ScrollView
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              paddingTop: Math.max(insets.top, 12) + 8,
-              paddingBottom: Math.max(insets.bottom, 16) + 24,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.card}>
+        <View style={styles.card}>
             <Pressable
               onPress={() => {
                 if (router.canGoBack()) {
@@ -264,8 +252,7 @@ export default function BookingStatusScreen() {
               </View>
             ) : null}
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </Screen>
     </View>
   );
 }
@@ -274,9 +261,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: "#EAF3F1",
-  },
-  keyboardWrap: {
-    flex: 1,
   },
   backgroundImage: {
     opacity: 0.08,
@@ -288,7 +272,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   card: {
     width: "100%",

@@ -1,13 +1,13 @@
 import {
-  ActivityIndicator,
+  Image,
   ImageBackground,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import type { TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSession } from "../../src/core/sessionProvider";
@@ -15,6 +15,21 @@ import { resolveInitialRoute } from "../../src/core/navigation/resolveInitialRou
 import { useRuntimeUpdateGate } from "../../src/core/version/useRuntimeUpdateGate";
 import { getLastDraftId } from "../../src/core/public/preRequestDraft";
 import { queueExternalIntentResume } from "../../src/core/navigation/externalIntent";
+import {
+  AppButton,
+  AppInput,
+  AppNotice,
+  AppSwitch,
+  AppText,
+  brandPrimary,
+  brandText,
+  brandTextMuted,
+  getPublicBackButtonMetrics,
+  ResponsiveContainer,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../src/design/responsive";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -25,6 +40,7 @@ type LoginApiError = {
 };
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
+const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -44,6 +60,24 @@ export default function LoginScreen() {
   );
   const passwordInputRef = ReactRuntime.useRef(null as TextInput | null);
   const updateGate = useRuntimeUpdateGate();
+  const viewport = useAppViewport();
+  const { topInset } = viewport;
+  const { landing: layout } = useResponsiveTokens();
+
+  const accentLayout = ReactRuntime.useMemo(() => {
+    const narrow = viewport.isTiny || viewport.isCompact;
+    return {
+      largeTop: viewport.isTablet ? -105 : narrow ? -98 : -92,
+      largeRight: viewport.isTablet ? -48 : -32,
+      smallTop: viewport.isTablet ? 95 : narrow ? 72 : 82,
+      smallRight: viewport.isTablet ? 72 : 52,
+    };
+  }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
+
+  const backBtn = ReactRuntime.useMemo(
+    () => getPublicBackButtonMetrics(viewport),
+    [viewport.isCompact, viewport.isTiny]
+  );
 
   if (bootstrap?.is_authenticated) {
     return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
@@ -111,9 +145,53 @@ export default function LoginScreen() {
         imageStyle={styles.backgroundImage}
       />
       <View style={styles.overlay} />
+      <View
+        style={[
+          styles.accentGlowLarge,
+          {
+            top: accentLayout.largeTop,
+            right: accentLayout.largeRight,
+            pointerEvents: "none",
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.accentGlowSmall,
+          {
+            top: accentLayout.smallTop,
+            right: accentLayout.smallRight,
+            pointerEvents: "none",
+          },
+        ]}
+      />
 
-      <View style={styles.centerWrap}>
-        <View style={styles.card}>
+      <Screen
+        scroll
+        withHorizontalPadding={false}
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.screenScrollContent}
+      >
+        <ResponsiveContainer
+          style={{
+            padding: layout.columnPadding,
+            maxWidth: layout.contentMaxWidth,
+          }}
+        >
+          <View
+            style={[
+              styles.card,
+              {
+                maxWidth: layout.cardMaxWidth,
+                paddingHorizontal: layout.cardPadding + 6,
+                paddingTop: layout.cardPadding + 10,
+                paddingBottom: layout.cardPadding + 14,
+                borderRadius: layout.cardRadius,
+              },
+            ]}
+          >
+          <View style={styles.cardBrandAccent} />
           <Pressable
             onPress={() => {
               if (router.canGoBack()) {
@@ -122,39 +200,97 @@ export default function LoginScreen() {
               }
               router.replace("/(public)" as any);
             }}
-            style={styles.backButton}
+            style={({ pressed }) => [
+              styles.backButtonBase,
+              {
+                paddingVertical: backBtn.paddingVertical,
+                paddingHorizontal: backBtn.paddingHorizontal,
+                marginLeft: backBtn.marginLeft,
+                marginBottom: backBtn.marginBottom,
+                borderRadius: backBtn.borderRadius,
+                backgroundColor: pressed
+                  ? backBtn.backgroundColorPressed
+                  : backBtn.backgroundColorIdle,
+              },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Retour"
+            hitSlop={12}
           >
-            <Ionicons name="arrow-back" size={22} color="#0A8F7A" />
+            <Ionicons name="arrow-back" size={backBtn.iconSize} color={brandPrimary} />
           </Pressable>
 
-          <Text style={styles.kicker}>Espace client</Text>
-          <Text style={styles.title}>Connexion sécurisée</Text>
-          <Text style={styles.subtitle}>
+          <View style={[styles.logoBlock, { marginBottom: layout.cardLineGap + 6 }]}>
+            <Image
+              source={LIRIE_LOGO}
+              style={{ height: layout.logoHeight, width: layout.logoWidth }}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="LIRIE"
+            />
+          </View>
+
+          <Text
+            style={[
+              styles.kicker,
+              {
+                fontSize: layout.secondaryFontSize,
+                marginBottom: layout.cardLineGap,
+                letterSpacing: viewport.isTiny ? 0.8 : 1.2,
+              },
+            ]}
+            maxFontSizeMultiplier={1.22}
+          >
+            Espace client
+          </Text>
+          <Text
+            style={[
+              styles.title,
+              {
+                fontSize: layout.titleFontSize,
+                lineHeight: layout.titleLineHeight,
+                maxWidth: layout.titleMaxWidth,
+              },
+            ]}
+            maxFontSizeMultiplier={1.28}
+          >
+            Connexion sécurisée
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                fontSize: layout.microProofFontSize,
+                lineHeight: layout.microProofLineHeight,
+                marginTop: layout.cardLineGap + 4,
+              },
+            ]}
+            maxFontSizeMultiplier={1.45}
+          >
             Suivi en temps réel · Coordination médicale · Transport accompagné.
           </Text>
           {params.next ? (
-            <Text style={styles.resumeHint}>
+            <Text style={styles.resumeHint} maxFontSizeMultiplier={1.45}>
               Connectez-vous pour finaliser votre réservation en reprenant vos informations.
             </Text>
           ) : null}
 
+          <View style={[styles.heroDivider, { marginTop: layout.cardBlockGap + 4 }]} />
+
           {updateGate.requiresUpdate ? (
-            <View style={[styles.notice, styles.noticeDanger]}>
-              <Text style={styles.noticeDangerTitle}>Mise à jour obligatoire</Text>
-              <Text style={styles.noticeDangerText}>
-                Version minimum requise: {updateGate.minimumSupportedVersion ?? "n/a"}
-              </Text>
-              <Pressable onPress={() => void updateGate.applyUpdate()} style={styles.noticeDangerCta}>
-                <Text style={styles.noticeDangerCtaText}>Mettre à jour pour continuer</Text>
-              </Pressable>
-            </View>
+            <AppNotice
+              variant="danger"
+              title="Mise à jour obligatoire"
+              ctaLabel="Mettre à jour pour continuer"
+              onCtaPress={() => void updateGate.applyUpdate()}
+            >
+              {`Version minimum requise: ${updateGate.minimumSupportedVersion ?? "n/a"}`}
+            </AppNotice>
           ) : null}
 
-          <View style={styles.fieldBlock}>
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
+          <View style={{ marginTop: layout.cardBlockGap + layout.cardLineGap }}>
+            <AppInput
+              label="Email"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -164,90 +300,110 @@ export default function LoginScreen() {
               returnKeyType="next"
               onSubmitEditing={() => passwordInputRef.current?.focus()}
               placeholder="email@exemple.ch"
-              placeholderTextColor="#91A59D"
-              style={styles.fieldInput}
+              {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
             />
           </View>
 
-          <View style={styles.fieldBlock}>
-            <Text style={styles.fieldLabel}>Mot de passe</Text>
-            <View style={styles.passwordWrap}>
-              <TextInput
-                ref={passwordInputRef}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoComplete="current-password"
-                textContentType="password"
-                returnKeyType="done"
-                onSubmitEditing={() => void onSubmit()}
-                placeholder="Mot de passe"
-                placeholderTextColor="#91A59D"
-                style={[styles.fieldInput, styles.passwordInput]}
-              />
-              <Pressable onPress={() => setShowPassword((v: boolean) => !v)} style={styles.passwordToggle}>
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={20}
-                  color="#5F7369"
-                  accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                />
-              </Pressable>
-            </View>
+          <View style={{ marginTop: layout.cardBlockGap }}>
+            <AppInput
+              ref={passwordInputRef}
+              label="Mot de passe"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="current-password"
+              textContentType="password"
+              returnKeyType="done"
+              onSubmitEditing={() => void onSubmit()}
+              placeholder="Mot de passe"
+              {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
+              rightSlot={
+                <Pressable
+                  onPress={() => setShowPassword((v: boolean) => !v)}
+                  style={styles.passwordToggle}
+                  hitSlop={8}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={18}
+                    color="#5F7369"
+                    accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  />
+                </Pressable>
+              }
+            />
           </View>
 
-          <Pressable
-            onPress={() => setRememberSession((v: boolean) => !v)}
-            style={styles.rememberRow}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: rememberSession }}
+          <AppSwitch
+            value={rememberSession}
+            onValueChange={setRememberSession}
             accessibilityLabel="Se souvenir de moi"
-          >
-            <View style={[styles.rememberSwitch, rememberSession ? styles.rememberSwitchOn : null]}>
-              <View style={[styles.rememberThumb, rememberSession ? styles.rememberThumbOn : null]} />
-            </View>
-            <Text style={styles.rememberText}>Se souvenir de moi</Text>
-          </Pressable>
+            style={styles.rememberRow}
+            label={
+              <AppText variant="bodyMuted" style={{ fontSize: layout.secondaryFontSize, fontWeight: "500" }}>
+                Se souvenir de moi
+              </AppText>
+            }
+          />
 
-          {(localError || error) ? <Text style={styles.errorText}>{localError ?? error}</Text> : null}
-
-          {!updateGate.requiresUpdate && (updateGate.updateAvailable || updateGate.recommendedUpdate) ? (
-            <View style={[styles.notice, styles.noticeWarning]}>
-              <Text style={styles.noticeWarningText}>
-                Une mise à jour est disponible et recommandée (cible:{" "}
-                {updateGate.recommendedVersion ?? "latest"}).
-              </Text>
-              <Pressable onPress={() => void updateGate.applyUpdate()} style={styles.noticeWarningCta}>
-                <Text style={styles.noticeWarningCtaText}>Mettre à jour maintenant</Text>
-              </Pressable>
-            </View>
+          {(localError || error) ? (
+            <AppText variant="error" style={{ marginTop: 14 }} accessibilityRole="alert">
+              {localError ?? error}
+            </AppText>
           ) : null}
 
-          <Pressable
-            onPress={() => void onSubmit()}
-            disabled={submitting || updateGate.requiresUpdate}
-            style={[
-              styles.submitButton,
-              submitting || updateGate.requiresUpdate ? styles.submitButtonDisabled : null,
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitText}>Se connecter</Text>
-            )}
-          </Pressable>
+          {!updateGate.requiresUpdate && (updateGate.updateAvailable || updateGate.recommendedUpdate) ? (
+            <AppNotice
+              variant="warning"
+              ctaLabel="Mettre à jour maintenant"
+              onCtaPress={() => void updateGate.applyUpdate()}
+              style={{ marginTop: 18 }}
+            >
+              {`Une mise à jour est disponible et recommandée (cible: ${updateGate.recommendedVersion ?? "latest"}).`}
+            </AppNotice>
+          ) : null}
 
-          <View style={styles.linksBlock}>
-            <Pressable onPress={() => router.push("/(public)/forgot-password" as any)}>
-              <Text style={styles.primaryLink}>Mot de passe oublié ?</Text>
+          <AppButton
+            title="Se connecter"
+            variant="primary"
+            loading={submitting}
+            disabled={updateGate.requiresUpdate}
+            onPress={() => void onSubmit()}
+            style={{ marginTop: layout.spaceCardToCta - 6, alignSelf: "stretch" }}
+          />
+
+          <View style={[styles.linksRow, { marginTop: layout.spaceCtaToProof + 4 }]}>
+            <Pressable
+              onPress={() => router.push("/(public)/forgot-password" as any)}
+              style={({ pressed }) => [styles.linkHit, pressed && styles.linkHitPressed]}
+            >
+              <AppText variant="body" style={styles.primaryLink} maxFontSizeMultiplier={1.28}>
+                Mot de passe oublié ?
+              </AppText>
             </Pressable>
-            <Pressable onPress={() => router.push("/(public)/signup" as any)}>
-              <Text style={styles.secondaryLink}>Créer un compte</Text>
+            <AppText
+              variant="caption"
+              style={[styles.linksDot, { fontSize: layout.secondaryFontSize }]}
+              accessible={false}
+            >
+              ·
+            </AppText>
+            <Pressable
+              onPress={() => router.push("/(public)/signup" as any)}
+              style={({ pressed }) => [styles.linkHit, pressed && styles.linkHitPressed]}
+            >
+              <AppText
+                variant="bodyMuted"
+                style={[styles.secondaryLink, { fontSize: layout.secondaryFontSize }]}
+                maxFontSizeMultiplier={1.28}
+              >
+                Créer un compte
+              </AppText>
             </Pressable>
           </View>
-        </View>
-      </View>
+          </View>
+        </ResponsiveContainer>
+      </Screen>
     </View>
   );
 }
@@ -255,223 +411,147 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#EAF3F1",
+    backgroundColor: "#F4FAF8",
   },
   backgroundImage: {
-    opacity: 0.08,
+    opacity: 0.1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(234,243,241,0.88)",
+    backgroundColor: "rgba(244, 250, 248, 0.88)",
   },
-  centerWrap: {
-    flex: 1,
+  accentGlowLarge: {
+    position: "absolute",
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    backgroundColor: "rgba(10, 143, 122, 0.11)",
+    zIndex: 0,
+  },
+  accentGlowSmall: {
+    position: "absolute",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(10, 143, 122, 0.08)",
+    zIndex: 0,
+  },
+  /** Contenu formulaire : centré verticalement, scroll si clavier / grande police. */
+  screenScrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 30,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",
-    maxWidth: 420,
     alignSelf: "center",
-    borderRadius: 26,
-    padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(145,165,157,0.45)",
+    borderColor: "rgba(145, 165, 157, 0.42)",
     backgroundColor: "#FFFFFF",
+    overflow: "hidden",
     ...Platform.select({
-      web: { boxShadow: "0 20px 48px rgba(22,58,52,0.12)" },
+      web: { boxShadow: "0 12px 40px rgba(22, 58, 52, 0.14)" },
       default: {
         shadowColor: "#163A34",
-        shadowOpacity: 0.12,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-        elevation: 4,
+        shadowOpacity: 0.14,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 6,
       },
     }),
   },
-  backButton: {
+  cardBrandAccent: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 4,
+    backgroundColor: brandPrimary,
+    opacity: 0.95,
+  },
+  backButtonBase: {
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    marginBottom: 14,
+  },
+  logoBlock: {
+    alignItems: "center",
   },
   kicker: {
-    color: "#0A8F7A",
-    fontSize: 13,
-    fontWeight: "500",
-    letterSpacing: 0.5,
+    color: brandPrimary,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 1.2,
     textTransform: "uppercase",
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: "center",
   },
   title: {
     fontFamily: "Philosopher_700Bold",
-    color: "#163A34",
-    fontSize: 30,
-    lineHeight: 34,
+    color: brandText,
+    textAlign: "center",
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: "#5F7369",
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: 10,
+    color: brandTextMuted,
+    textAlign: "center",
+  },
+  heroDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(145, 165, 157, 0.35)",
+    marginBottom: 2,
+    alignSelf: "stretch",
   },
   resumeHint: {
-    marginTop: 12,
+    marginTop: 14,
     color: "#45655D",
-    fontSize: 13.5,
-    lineHeight: 19,
-  },
-  notice: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    gap: 8,
-    marginTop: 18,
-  },
-  noticeDanger: {
-    borderColor: "#D92D20",
-    backgroundColor: "#FFF1F1",
-  },
-  noticeDangerTitle: {
-    color: "#7A0012",
-    fontWeight: "700",
-  },
-  noticeDangerText: {
-    color: "#7A0012",
-  },
-  noticeDangerCta: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: "#B00020",
-  },
-  noticeDangerCtaText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  fieldBlock: {
-    marginTop: 18,
-    gap: 8,
-  },
-  fieldLabel: {
-    color: "#5F7369",
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  fieldInput: {
-    minHeight: 50,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#91A59D",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    color: "#163A34",
-    fontSize: 16,
-  },
-  passwordWrap: {
-    position: "relative",
-  },
-  passwordInput: {
-    paddingRight: 92,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
   },
   passwordToggle: {
-    position: "absolute",
-    right: 12,
-    top: 0,
-    bottom: 0,
     justifyContent: "center",
     paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   rememberRow: {
     marginTop: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  rememberSwitch: {
-    width: 38,
-    height: 22,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#B7C7C2",
-    backgroundColor: "#E6EEEB",
-    justifyContent: "center",
-    paddingHorizontal: 2,
-  },
-  rememberSwitchOn: {
-    backgroundColor: "#0A8F7A",
-    borderColor: "#0A8F7A",
-  },
-  rememberThumb: {
-    width: 16,
-    height: 16,
-    borderRadius: 999,
-    backgroundColor: "#FFFFFF",
-    transform: [{ translateX: 0 }],
-  },
-  rememberThumbOn: {
-    transform: [{ translateX: 16 }],
-  },
-  rememberText: {
-    color: "#5F7369",
-    fontSize: 14,
-    fontWeight: "500",
   },
   errorText: {
     marginTop: 14,
     color: "#B42318",
     fontWeight: "600",
   },
-  noticeWarning: {
-    borderColor: "#E0B86C",
-    backgroundColor: "#FFF7E6",
-  },
-  noticeWarningText: {
-    color: "#6A5320",
-    fontWeight: "600",
-    lineHeight: 20,
-  },
-  noticeWarningCta: {
+  linksRow: {
+    marginTop: 22,
+    flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: "#0A8F7A",
-  },
-  noticeWarningCtaText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-  },
-  submitButton: {
-    marginTop: 20,
-    minHeight: 54,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0A8F7A",
-  },
-  submitButtonDisabled: {
-    backgroundColor: "#84B7AE",
-  },
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  linksBlock: {
-    marginTop: 18,
     gap: 10,
+    rowGap: 12,
+  },
+  linkHit: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  linkHitPressed: {
+    backgroundColor: "rgba(10, 143, 122, 0.06)",
+  },
+  linksDot: {
+    color: brandTextMuted,
+    fontSize: 14,
+    fontWeight: "700",
+    opacity: 0.65,
+    paddingHorizontal: 2,
   },
   primaryLink: {
-    color: "#0A8F7A",
+    color: brandPrimary,
     fontWeight: "700",
+    fontSize: 14,
   },
   secondaryLink: {
     color: "#45655D",
     fontWeight: "600",
+    fontSize: 14,
   },
 });

@@ -1,0 +1,174 @@
+/* Sélecteur type chip — aligné sur CommandBar (hauteur ~28px pour panneau facture période) */
+.wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #4b5563);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.btnActive {
+  border-color: var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  background: #f0fdfa;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btnCombobox {
+  cursor: text;
+  padding: 0 4px 0 8px;
+}
+
+.btnCombobox:focus-within {
+  border-color: var(--brand-primary, #00796b);
+  box-shadow: 0 0 0 2px rgba(0, 121, 107, 0.12);
+}
+
+.inputFilter {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 2px 0 2px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  outline: none;
+  cursor: text;
+}
+
+.inputFilter::placeholder {
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.inputFilter:disabled {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.btnCombobox.btnActive .inputFilter {
+  color: var(--brand-primary, #00796b);
+}
+
+.chevronBtn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chevronBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.emptyHint {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+  text-align: center;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.arrow {
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: transform 0.15s ease;
+}
+
+.arrowOpen {
+  transform: rotate(180deg);
+}
+
+.menu {
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e0e3e8);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary, #e2e8f0) transparent;
+}
+
+.menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.menu::-webkit-scrollbar-thumb {
+  background: var(--border-primary, #e2e8f0);
+  border-radius: 2px;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.option:hover {
+  background: var(--bg-tertiary, #f1f5f9);
+}
+
+.optionActive {
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+  background: #f0fdfa;
+}

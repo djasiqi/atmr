@@ -1,4 +1,6 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { brandPrimary, brandText } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 
 type Recurrence = "none" | "daily" | "weekly";
 
@@ -11,7 +13,7 @@ export function RecurrenceSelector({ value, onChange }: RecurrenceSelectorProps)
   const options: Recurrence[] = ["none", "daily", "weekly"];
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "600" }}>Recurrence</Text>
+      <AppText variant="label">Recurrence</AppText>
       <View style={{ flexDirection: "row", gap: 8 }}>
         {options.map((option) => (
           <Pressable
@@ -19,13 +21,15 @@ export function RecurrenceSelector({ value, onChange }: RecurrenceSelectorProps)
             onPress={() => onChange(option)}
             style={{
               borderWidth: 1,
-              borderColor: value === option ? "#0a7ea4" : "#ddd",
+              borderColor: value === option ? "#0A8F7A" : "#ddd",
               borderRadius: 8,
               paddingHorizontal: 10,
               paddingVertical: 6,
             }}
           >
-            <Text style={{ color: value === option ? "#0a7ea4" : "#333" }}>{option}</Text>
+            <AppText variant="body" style={{ color: value === option ? brandPrimary : brandText }}>
+              {option}
+            </AppText>
           </Pressable>
         ))}
       </View>

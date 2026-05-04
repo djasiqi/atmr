@@ -1001,3 +1001,28 @@
     font-size: 9px;
   }
 }
+
+/* Modale proposition d’horaire (InstitutionOffersTable — ProposeTimeModal) */
+.proposeTimeOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.proposeTimeDialog {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  min-width: min(380px, 100%);
+  max-width: min(440px, var(--modal-width-narrow));
+  width: 100%;
+  max-height: var(--modal-max-height);
+  overflow: auto;
+  box-shadow: var(--shadow-lg);
+}

@@ -43,9 +43,7 @@ class JwtIdentityAdapter(GetJwtIdentityPort):
 
     def get_jwt_identity(self) -> str | None:  # pyright: ignore[reportImplicitOverride]
         """Récupère l'identité depuis le token JWT."""
-        from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
-            get_jwt_identity,
-        )
+        from flask_jwt_extended import get_jwt_identity
 
         return get_jwt_identity()
 

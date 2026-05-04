@@ -58,9 +58,7 @@ class GetCurrentCompanyUseCase:
             # même si l'utilisateur dans la DB a un user_id différent
             company = None
             try:
-                from flask_jwt_extended import (  # pyright: ignore[reportMissingImports]
-                    get_jwt,
-                )
+                from flask_jwt_extended import get_jwt
 
                 jwt_data = get_jwt()
                 if jwt_data and "company_id" in jwt_data:

@@ -684,7 +684,7 @@ class ClientMyBookingPreview(Resource):
                     and bool(ind_cfg.is_enabled)
                 ):
                     # Même source dist/dur que POST /me/indicative-fare/estimate
-                    # pour aligner le montant sur l’indicatif affiché (ex. 45 CHF).
+                    # pour aligner le montant sur l'indicatif affiché (ex. 45 CHF).
                     route_res = get_optimized_route(
                         str(validated["pickup_location"]),
                         str(validated["dropoff_location"]),

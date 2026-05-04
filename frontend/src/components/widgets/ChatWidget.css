@@ -402,12 +402,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
-  padding: 20px;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 .chat-modal-content {
   position: relative;
-  max-width: 90vw;
+  max-width: min(90vw, var(--modal-width-xl));
+  /* Aperçu média : hauteur quasi plein viewport (hors charte 80vh des modales formulaire) */
   max-height: 90vh;
   background: white;
   border-radius: 12px;

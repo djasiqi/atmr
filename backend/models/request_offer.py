@@ -156,12 +156,13 @@ class RequestOffer(db.Model):
         """Retourne True si l'offre a expiré (temps dépassé mais status pas encore EXPIRED)."""
         if self.expires_at is None:
             return False
-        from datetime import UTC, timezone
+        from datetime import UTC
+
         now = datetime.now(UTC)
         exp = self.expires_at
         # Gérer le cas où expires_at est naive (sans timezone)
         if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=timezone.utc)
+            exp = exp.replace(tzinfo=UTC)
         return now > exp
 
     @property
@@ -235,7 +236,8 @@ class RequestOffer(db.Model):
                 "mission_type": request.mission_type,
                 "delivery_description": request.delivery_description,
                 "scheduled_time": _iso(request.scheduled_time),
-                "scheduled_time_type": getattr(request, 'scheduled_time_type', None) or 'departure',
+                "scheduled_time_type": getattr(request, "scheduled_time_type", None)
+                or "departure",
                 "pickup_location": request.pickup_location,
                 "pickup_lat": float(request.pickup_lat) if request.pickup_lat else None,
                 "pickup_lng": float(request.pickup_lng) if request.pickup_lng else None,

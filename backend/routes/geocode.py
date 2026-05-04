@@ -48,6 +48,10 @@ USE_GOOGLE_PLACES = os.getenv("USE_GOOGLE_PLACES", "true").lower() in (
 # Constantes pour éviter les valeurs magiques
 MIN_COORDINATES_COUNT = 2
 MIN_QUERY_LENGTH = 2
+LATITUDE_MIN = -90.0
+LATITUDE_MAX = 90.0
+LONGITUDE_MIN = -180.0
+LONGITUDE_MAX = 180.0
 MIN_RING_POINTS = 4
 RING_SIMPLIFY_MIN_POINTS = 20
 ZONE_DEFAULT_LIMIT = 20
@@ -298,12 +302,14 @@ def _zone_cache_set_dict(cache_key: str, payload: Dict[str, Any], ttl_seconds: i
         return
 
 
-def _geocode_autocomplete_cache_key(q: str, lat: float, lon: float) -> str:
-    """Clé Redis pour le cache autocomplete (q + bias arrondi)."""
+def _geocode_autocomplete_cache_key(
+    q: str, lat: float, lon: float, country_mode: str = "ALL"
+) -> str:
+    """Clé Redis pour le cache autocomplete (q + bias arrondi + filtre pays)."""
     q_norm = (q or "").strip().lower()
     lat_rnd = round(lat, 4)
     lon_rnd = round(lon, 4)
-    raw = f"{q_norm}|{lat_rnd}|{lon_rnd}"
+    raw = f"{q_norm}|{lat_rnd}|{lon_rnd}|{country_mode}"
     h = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
     return f"geocode:autocomplete:{h}"
 
@@ -1281,7 +1287,10 @@ class GeocodeReverse(Resource):
                 field="lat",
                 logger_instance=current_app.logger,
             )
-        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        if not (
+            LATITUDE_MIN <= lat <= LATITUDE_MAX
+            and LONGITUDE_MIN <= lon <= LONGITUDE_MAX
+        ):
             return APIErrorHandler.handle_validation_error(
                 "Coordonnées hors limites.",
                 field="lat",
@@ -1338,6 +1347,9 @@ class GeocodeAutocomplete(Resource):
             limit = 8
         limit = max(1, min(limit, 12))
 
+        country_raw = (request.args.get("country") or "").strip().upper()
+        country_mode = country_raw if country_raw in ("CH", "FR") else "ALL"
+
         results: List[Dict[str, Any]] = []
 
         # 1) Alias rapides (HUG…)
@@ -1381,7 +1393,7 @@ class GeocodeAutocomplete(Resource):
                 current_app.logger.warning("Favorites lookup failed: %s", e)
 
         # 3) Google Places API (prioritaire) ou fallback Photon — avec cache Redis
-        cache_key = _geocode_autocomplete_cache_key(q, lat, lon)
+        cache_key = _geocode_autocomplete_cache_key(q, lat, lon, country_mode)
         api_results = _geocode_autocomplete_cache_get(cache_key)
 
         if api_results is not None:
@@ -1389,41 +1401,38 @@ class GeocodeAutocomplete(Resource):
         elif USE_GOOGLE_PLACES:
             api_results = []
             try:
-                # ✅ FIX: Recherche multi-pays - d'abord Suisse (CH), puis France (FR)
-                # Pour la zone frontalière Genève, permettre recherche dans les deux pays
+                # Filtre pays optionnel : CH / FR seuls, ou défaut zone frontalière (CH puis FR)
                 google_results_ch: List[Dict[str, Any]] = []
                 google_results_fr: List[Dict[str, Any]] = []
+                google_results: List[Dict[str, Any]]
 
-                # 3a) Recherche en Suisse (CH) en premier
-                try:
-                    google_results_ch = autocomplete_address(
-                        q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
-                    )
-                    if google_results_ch:
-                        current_app.logger.debug(
-                            "✅ Google Places (CH) retourne %d résultats pour '%s'",
-                            len(google_results_ch),
-                            q,
-                        )
-                except Exception as e_ch:
-                    current_app.logger.warning(
-                        "⚠️ Erreur Google Places (CH) pour '%s': %s", q, e_ch
-                    )
-
-                # 3b) Recherche en France (FR) ensuite (si on n'a pas assez de résultats)
-                # On limite à 3 résultats FR pour compléter (max 5 total)
-                if len(google_results_ch) < limit:
+                if country_mode == "CH":
                     try:
-                        fr_limit = max(1, limit - len(google_results_ch))
+                        google_results_ch = autocomplete_address(
+                            q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
+                        )
+                        if google_results_ch:
+                            current_app.logger.debug(
+                                "✅ Google Places (CH only) %d résultats pour '%s'",
+                                len(google_results_ch),
+                                q,
+                            )
+                    except Exception as e_ch:
+                        current_app.logger.warning(
+                            "⚠️ Erreur Google Places (CH) pour '%s': %s", q, e_ch
+                        )
+                    google_results = google_results_ch
+                elif country_mode == "FR":
+                    try:
                         google_results_fr = autocomplete_address(
                             q,
                             country="FR",
                             location={"lat": lat, "lng": lon},
-                            limit=fr_limit,
+                            limit=limit,
                         )
                         if google_results_fr:
                             current_app.logger.debug(
-                                "✅ Google Places (FR) retourne %d résultats pour '%s'",
+                                "✅ Google Places (FR only) %d résultats pour '%s'",
                                 len(google_results_fr),
                                 q,
                             )
@@ -1431,9 +1440,45 @@ class GeocodeAutocomplete(Resource):
                         current_app.logger.warning(
                             "⚠️ Erreur Google Places (FR) pour '%s': %s", q, e_fr
                         )
+                    google_results = google_results_fr
+                else:
+                    # Zone frontalière : CH en priorité, puis FR pour compléter
+                    try:
+                        google_results_ch = autocomplete_address(
+                            q, country="CH", location={"lat": lat, "lng": lon}, limit=limit
+                        )
+                        if google_results_ch:
+                            current_app.logger.debug(
+                                "✅ Google Places (CH) retourne %d résultats pour '%s'",
+                                len(google_results_ch),
+                                q,
+                            )
+                    except Exception as e_ch:
+                        current_app.logger.warning(
+                            "⚠️ Erreur Google Places (CH) pour '%s': %s", q, e_ch
+                        )
 
-                # Combiner les résultats : CH en premier, puis FR
-                google_results = google_results_ch + google_results_fr
+                    if len(google_results_ch) < limit:
+                        try:
+                            fr_limit = max(1, limit - len(google_results_ch))
+                            google_results_fr = autocomplete_address(
+                                q,
+                                country="FR",
+                                location={"lat": lat, "lng": lon},
+                                limit=fr_limit,
+                            )
+                            if google_results_fr:
+                                current_app.logger.debug(
+                                    "✅ Google Places (FR) retourne %d résultats pour '%s'",
+                                    len(google_results_fr),
+                                    q,
+                                )
+                        except Exception as e_fr:
+                            current_app.logger.warning(
+                                "⚠️ Erreur Google Places (FR) pour '%s': %s", q, e_fr
+                            )
+
+                    google_results = google_results_ch + google_results_fr
 
                 if google_results:
                     current_app.logger.debug(

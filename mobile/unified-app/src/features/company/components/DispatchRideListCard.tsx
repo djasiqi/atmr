@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
 
+import { AppText } from "../../../design/ui/AppText";
 import type { CompanyDispatchMission } from "../api/contracts";
 import { E } from "../theme/enterpriseOpsTheme";
 import { getEnterpriseStatusColors } from "../theme/enterpriseStatusColors";
@@ -108,7 +109,9 @@ export function DispatchRideListCard({
               <Ionicons name="time-outline" size={18} color={palette.timeUndefined} />
             )
           ) : (
-            <Text style={styles.time}>{pickupTime}</Text>
+            <AppText variant="caption" style={styles.time}>
+              {pickupTime}
+            </AppText>
           )}
         </View>
         {unassignedCta ? (
@@ -120,9 +123,9 @@ export function DispatchRideListCard({
               accessibilityRole="button"
               accessibilityLabel="Afficher ou masquer le détail de la course"
             >
-              <Text style={styles.client} numberOfLines={1} ellipsizeMode="tail">
+              <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
                 {client}
-              </Text>
+              </AppText>
             </TouchableOpacity>
             <View style={styles.badgeContainer}>
               <Pressable
@@ -137,9 +140,14 @@ export function DispatchRideListCard({
                 accessibilityLabel="Assigner un chauffeur"
                 accessibilityState={{ disabled: unassignedPressDisabled === true }}
               >
-                <Text style={styles.badgeUnassignedCtaLabel} numberOfLines={1} ellipsizeMode="tail">
+                <AppText
+                  variant="caption"
+                  style={styles.badgeUnassignedCtaLabel}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   Non assigné
-                </Text>
+                </AppText>
               </Pressable>
             </View>
           </View>
@@ -151,9 +159,9 @@ export function DispatchRideListCard({
             accessibilityRole="button"
             accessibilityLabel="Afficher ou masquer le détail de la course"
           >
-            <Text style={styles.client} numberOfLines={1} ellipsizeMode="tail">
+            <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
               {client}
-            </Text>
+            </AppText>
             <View style={styles.badgeContainer}>
               {isCompleted ? (
                 <View
@@ -162,9 +170,14 @@ export function DispatchRideListCard({
                     { backgroundColor: statusColors.bg, borderColor: `${statusColors.text}40` },
                   ]}
                 >
-                  <Text style={[styles.badgeLabel, { color: statusColors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                  <AppText
+                    variant="caption"
+                    style={[styles.badgeLabel, { color: statusColors.text }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
                     {assignedTo ? formatBadge(assignedTo) : "Terminée"}
-                  </Text>
+                  </AppText>
                 </View>
               ) : assignedTo ? (
                 (() => {
@@ -193,13 +206,14 @@ export function DispatchRideListCard({
                         hasDelay && (isLong ? styles.badgeLongDelay : styles.badgeShortDelay),
                       ]}
                     >
-                      <Text
+                      <AppText
+                        variant="caption"
                         style={[styles.badgeLabel, { color: tx }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
                         {delayText}
-                      </Text>
+                      </AppText>
                     </View>
                   );
                 })()
@@ -210,9 +224,14 @@ export function DispatchRideListCard({
                     { backgroundColor: statusColors.bg, borderColor: `${statusColors.text}40` },
                   ]}
                 >
-                  <Text style={[styles.badgeLabel, { color: statusColors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                  <AppText
+                    variant="caption"
+                    style={[styles.badgeLabel, { color: statusColors.text }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
                     {isCancelled ? "Annulée" : "Non assigné"}
-                  </Text>
+                  </AppText>
                 </View>
               )}
             </View>
@@ -242,18 +261,18 @@ export function DispatchRideListCard({
                 <View style={styles.routeIcon}>
                   <Ionicons name="location-outline" size={16} color={palette.pickupIcon} />
                 </View>
-                <Text style={styles.route} numberOfLines={2} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.route} numberOfLines={2} ellipsizeMode="tail">
                   {mission.pickup_label ?? "—"}
-                </Text>
+                </AppText>
               </View>
               <View style={styles.routeDivider} />
               <View style={styles.routeRow}>
                 <View style={styles.routeIcon}>
                   <Ionicons name="flag-outline" size={16} color={palette.dropoffIcon} />
                 </View>
-                <Text style={styles.route} numberOfLines={2} ellipsizeMode="tail">
+                <AppText variant="caption" style={styles.route} numberOfLines={2} ellipsizeMode="tail">
                   {mission.dropoff_label ?? "—"}
-                </Text>
+                </AppText>
               </View>
             </View>
           </View>
@@ -288,8 +307,8 @@ const styles = StyleSheet.create({
   summaryMain: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 },
   summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "row", alignItems: "center" },
   timeContainer: { width: 50, minHeight: 32, marginRight: 6, alignItems: "center", justifyContent: "center" },
-  time: { color: palette.time, fontWeight: "700", fontSize: 15, letterSpacing: 0.2 },
-  client: { color: palette.client, fontSize: 14, fontWeight: "600", width: 110, marginRight: 6, flexShrink: 0 },
+  time: { color: palette.time, fontWeight: "700", letterSpacing: 0.2 },
+  client: { color: palette.client, fontWeight: "600", width: 110, marginRight: 6, flexShrink: 0 },
   chevronContainer: {
     width: 28,
     alignItems: "center",
@@ -308,7 +327,6 @@ const styles = StyleSheet.create({
     borderColor: E.BORDER,
   },
   badgeLabel: {
-    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -329,7 +347,6 @@ const styles = StyleSheet.create({
   badgeCtaPressed: { opacity: 0.86 },
   badgeCtaDisabled: { opacity: 0.55 },
   badgeUnassignedCtaLabel: {
-    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -346,7 +363,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginLeft: 24,
   },
-  route: { color: palette.routeText, fontSize: 13, flex: 1, flexShrink: 1 },
+  route: { color: palette.routeText, flex: 1, flexShrink: 1 },
   expandedContent: { marginTop: 10 },
   routeColumn: { width: "100%" },
   footerSlot: { marginTop: 10 },

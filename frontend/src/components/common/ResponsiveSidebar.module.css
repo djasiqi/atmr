@@ -27,7 +27,7 @@
     position: fixed;
     top: var(--spacing-lg);
     left: var(--spacing-lg);
-    z-index: var(--z-modal);
+    z-index: var(--z-popover);
   }
 
   .sidebar {
@@ -39,7 +39,7 @@
     height: calc(100vh - 60px); /* Ajusté pour compenser le header mobile */
     background: var(--bg-primary);
     transform: translateX(-100%);
-    z-index: var(--z-modal-backdrop);
+    z-index: var(--z-fixed);
     box-shadow: var(--shadow-lg);
     padding: var(--spacing-lg);
   }

@@ -1,5 +1,5 @@
-import { Text } from "react-native";
-import { Button, Modal } from "../../../components/ui";
+import { AppButton, Modal } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 
 type PdfPreviewModalProps = {
   visible: boolean;
@@ -18,12 +18,12 @@ export function PdfPreviewModal({
 }: PdfPreviewModalProps) {
   return (
     <Modal visible={visible} title="Apercu document PDF" onClose={onClose}>
-      <Text style={{ color: "#666" }}>{filename ?? "Document sans nom"}</Text>
-      <Text numberOfLines={2} style={{ color: "#999", fontSize: 12 }}>
+      <AppText variant="bodyMuted">{filename ?? "Document sans nom"}</AppText>
+      <AppText variant="caption" numberOfLines={2} style={{ marginTop: 4 }}>
         {pdfUrl ?? "URL indisponible"}
-      </Text>
-      <Button label="Ouvrir PDF" onPress={onOpenPdf} disabled={!pdfUrl} />
-      <Button label="Fermer" variant="secondary" onPress={onClose} />
+      </AppText>
+      <AppButton title="Ouvrir PDF" variant="secondary" onPress={onOpenPdf} disabled={!pdfUrl} />
+      <AppButton title="Fermer" variant="secondary" onPress={onClose} />
     </Modal>
   );
 }

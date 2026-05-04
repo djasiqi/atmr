@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from "react-native";
-import { Button } from "../../../../components/ui";
+import { StyleSheet, View } from "react-native";
+import { AppButton } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 
 const BORDER = "rgba(145, 165, 157, 0.4)";
 
@@ -12,10 +13,13 @@ type TransferCardProps = {
 export function TransferCard({ missionId, busy = false, onPress }: TransferCardProps) {
   return (
     <View style={s.root}>
-      <Text style={s.title}>Transfert de course</Text>
-      <Text style={s.sub}>Course #{missionId}</Text>
-      <Button
-        label={busy ? "Ouverture…" : "Transférer"}
+      <AppText variant="label">Transfert de course</AppText>
+      <AppText variant="caption" style={s.subSpacing}>
+        Course #{missionId}
+      </AppText>
+      <AppButton
+        title={busy ? "Ouverture…" : "Transférer"}
+        variant="secondary"
         onPress={onPress}
         disabled={busy}
       />
@@ -25,6 +29,5 @@ export function TransferCard({ missionId, busy = false, onPress }: TransferCardP
 
 const s = StyleSheet.create({
   root: { borderWidth: 1, borderColor: BORDER, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 8, gap: 4, backgroundColor: "#FAFCFB" },
-  title: { fontSize: 13, fontWeight: "800", color: "#163A34" },
-  sub: { color: "#5F7369", fontSize: 11, marginBottom: 1 },
+  subSpacing: { marginBottom: 1 },
 });

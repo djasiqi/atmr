@@ -8,7 +8,7 @@ from __future__ import annotations  # noqa: I001
 
 import logging
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 from models import Invoice, InvoiceStatus
 from application.invoices.cancel_invoice import CancelInvoiceUseCase
@@ -85,8 +85,7 @@ class DuplicateInvoiceUseCase:
 
         try:
             # 1. Vérifier que la facture n'est pas déjà un brouillon
-            current_status = cast(InvoiceStatus, invoice.status)
-            if current_status == InvoiceStatus.DRAFT:
+            if invoice.status == InvoiceStatus.DRAFT:
                 msg = (
                     "La facture est déjà un brouillon et peut être modifiée "
                     "directement."

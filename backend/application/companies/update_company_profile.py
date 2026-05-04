@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Protocol
+from typing import Any, Callable, ClassVar, Protocol, cast
 
 
 class _CompanyLike(Protocol):
@@ -96,9 +96,12 @@ class UpdateCompanyProfileUseCase:
 
         # ✅ IBAN : aligner company_billing_settings + CompanyBillingProfile (QR-facture)
         if "iban" in validated_data:
-            from services.billing.banking_identifiers_sync import sync_banking_identifiers
+            from models import Company
+            from services.billing.banking_identifiers_sync import (
+                sync_banking_identifiers,
+            )
 
-            sync_banking_identifiers(company, source="company")
+            sync_banking_identifiers(cast(Company, company), source="company")
 
         # ✅ Synchroniser CompanyBillingProfile si champs domicile_* modifiés
         billing_profile_synced = False

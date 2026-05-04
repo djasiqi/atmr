@@ -155,6 +155,37 @@
   --sidebar-width-expanded: 240px;
   --container-max-width: 1280px;
 
+  /* ============ MODALES (charte LIRIE / ATMR) ============
+     Shell : max-height en vh, largeur min(px, vw). Overlay : padding homogène.
+
+     Règle de choix (largeur) :
+     • --modal-width-narrow   → petite action sensible, alerte courte
+     • --modal-width-compact  → confirmation simple, petit formulaire
+     • --modal-width-secondary → formulaire court / métier secondaire (e-mail, paiement…)
+     • --modal-width-editor   → édition dense (facture, aperçu, période) — ~960px
+     • --modal-width-workspace → parcours complet / wizard — ~1100px
+     • --modal-width-xl → très large (édition client xl, tableaux) — ~1200px
+     • --modal-workspace-height → shell réservation / client (92vh plafonné 928px)
+
+     Facturation : editor = 960px, workspace = 1100px sont les repères desktop confortables. */
+  --modal-max-height: 80vh;
+  --modal-overlay-padding: 16px;
+  --modal-width-editor: min(960px, 95vw);
+  --modal-width-workspace: min(1100px, calc(100vw - 2 * var(--modal-overlay-padding)));
+  --modal-width-secondary: min(640px, 95vw);
+  --modal-width-compact: min(480px, 96vw);
+  --modal-width-narrow: min(400px, 96vw);
+  /* Très large (tableaux, certains écrans admin) — au-dessus du workspace wizard */
+  --modal-width-xl: min(1200px, 96vw);
+  /* Hauteur shell réservation manuelle / client : scroll interne, un peu plus haute que --modal-max-height */
+  --modal-workspace-height: min(92vh, 928px);
+  /* Réserve verticale (bandeau outils + pied) pour la pile aperçu facture PDF/HTML dans l’éditeur */
+  --modal-invoice-preview-reserve: 9rem;
+  --modal-invoice-preview-reserve-expanded: 5.25rem;
+  --z-modal-app: 10001;
+  /* Listes / pickers / portails (react-select) rendus au-dessus du shell modale (--z-modal-app) */
+  --z-modal-popover: 10020;
+
   /* ============ Z-INDEX ============ */
   --z-base: 1; /* Contenu normal de page */
   --z-dropdown: 1000;
@@ -166,6 +197,8 @@
   --z-modal: 1050;
   --z-popover: 1060;
   --z-tooltip: 1070;
+  /* Sidebar company / admin + panneaux latéraux alignés (QuickAssign, même palier que l’impl. sidebar) */
+  --z-side-rail: 1100;
 
   /* ============ TRANSITIONS ============ */
   --transition-fast: 150ms ease;
@@ -191,6 +224,14 @@
     --sidebar-w: 60px; /* Variable utilisée par le dashboard */
     --spacing-lg: 20px;
     --spacing-xl: 28px;
+  }
+}
+
+/* Modales : petits écrans — plus de marge utile, hauteur un peu plus haute (encoche / barre nav) */
+@media (max-width: 640px) {
+  :root {
+    --modal-overlay-padding: 8px;
+    --modal-max-height: 92vh;
   }
 }
 

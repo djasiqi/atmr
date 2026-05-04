@@ -2,15 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Href, useRouter, useSegments } from "expo-router";
 import { useCallback, useMemo } from "react";
-import { Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, Pressable, View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
+import {
+  BaseFloatingBar,
+  brandPrimary,
+  computeClientFloatingBottomPad,
+} from "../../../design/responsive";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
 
-const BRAND = "#0a7ea4";
-const BRAND_STRONG = "#087a9a";
+const BRAND = brandPrimary;
+const BRAND_STRONG = "#067A66";
 
 const C = {
-  border: "rgba(228, 231, 236, 0.95)",
-  barBg: "rgba(255, 255, 255, 0.94)",
   iconMuted: "#64748b",
   labelMuted: "#64748b",
 } as const;
@@ -31,11 +36,11 @@ export function useClientFloatingBarVisible(): boolean {
 }
 
 export function useClientBottomContentPadding(): number {
-  const insets = useSafeAreaInsets();
+  const { bottomInset } = useAppViewport();
   const segments = useSegments();
   const visible = !shouldHideClientFloatingBar(segments);
-  if (!visible) return Math.max(24, insets.bottom + 8);
-  return CLIENT_FLOATING_BAR_BASE_HEIGHT + Math.max(12, insets.bottom + 4);
+  if (!visible) return Math.max(24, bottomInset + 8);
+  return CLIENT_FLOATING_BAR_BASE_HEIGHT + Math.max(12, bottomInset + 4);
 }
 
 /** Masquer la barre sur les écrans « plein flux » (paiement, fiche course). La création garde le menu. */
@@ -49,7 +54,7 @@ function shouldHideClientFloatingBar(segments: string[]): boolean {
 }
 
 function useActiveFlags() {
-  const segments = useSegments();
+  const segments = useSegments() as readonly string[];
   return useMemo(() => {
     const clientIdx = segments.lastIndexOf("(client)");
     const rest = clientIdx >= 0 ? segments.slice(clientIdx + 1) : [];
@@ -82,14 +87,17 @@ async function hapticLight() {
 /**
  * Barre inférieure flottante (pilule) type Flowbite « application bar » :
  * Accueil, Portefeuille → réservations, CTA central Réserver, Réglages, Profil.
+ *
+ * Texte (UI critique) : libellés courts avec `maxFontSizeMultiplier` bas, `numberOfLines` + ellipsize ;
+ * pas de `allowFontScaling={false}`. Grande police : minHeight barre via `isLargeText`.
  */
 export function ClientFloatingAppBar() {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
+  const { isLargeText } = useAccessibilityScale();
   const router = useRouter();
   const active = useActiveFlags();
-  const maxBarWidth = Math.min(512, width - 32);
-  const bottomPad = Math.max(16, insets.bottom + 8);
+  const maxBarWidth = Math.min(512, usableWidth - 2 * horizontalPadding);
+  const bottomPad = computeClientFloatingBottomPad(bottomInset);
 
   const goTab = useCallback(
     (href: Href) => {
@@ -109,108 +117,76 @@ export function ClientFloatingAppBar() {
   }, [router, active.newBooking]);
 
   return (
-    <View style={{ height: CLIENT_FLOATING_BAR_BASE_HEIGHT + bottomPad, backgroundColor: "transparent" }} pointerEvents="box-none">
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          alignItems: "center",
-          paddingBottom: bottomPad,
-        }}
-      >
-        <View
-          style={[
+    <BaseFloatingBar
+      containerHeight={CLIENT_FLOATING_BAR_BASE_HEIGHT + bottomPad}
+      paddingBottom={bottomPad}
+      maxBarWidth={maxBarWidth}
+      horizontalPadding={horizontalPadding}
+      preset="client"
+      minInnerHeight={64}
+      minInnerHeightLargeText={72}
+      isLargeText={isLargeText}
+    >
+      <BarIconTab
+        label="Accueil"
+        icon="home-outline"
+        active={active.home}
+        onPress={() => goTab(HREF.home)}
+        roundedLeft
+      />
+      <BarIconTab
+        label="Courses"
+        accessibilityLabel="Mes réservations"
+        icon="wallet-outline"
+        active={active.wallet}
+        onPress={() => goTab(HREF.bookings)}
+      />
+      <View style={{ width: 56, alignItems: "center", justifyContent: "center" }}>
+        <Pressable
+          onPress={goNewBooking}
+          accessibilityLabel="Réserver un transport"
+          accessibilityState={{ selected: active.newBooking }}
+          style={({ pressed }) => [
             {
-              maxWidth: maxBarWidth,
-              width: "100%",
-              marginHorizontal: 16,
-              minHeight: 64,
-              flexDirection: "row",
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: BRAND,
               alignItems: "center",
-              paddingHorizontal: 6,
-              paddingVertical: 6,
-              backgroundColor: C.barBg,
-              borderWidth: 1,
-              borderColor: C.border,
-              borderRadius: 9999,
+              justifyContent: "center",
+              borderWidth: active.newBooking ? 3 : 0,
+              borderColor: "rgba(255, 255, 255, 0.95)",
             },
             Platform.select({
-              web: { boxShadow: "0 8px 28px rgba(15, 23, 42, 0.1)" },
+              web: { boxShadow: "0 2px 8px rgba(10, 126, 164, 0.35)" } as const,
               default: {
-                shadowColor: "#0f172a",
-                shadowOpacity: 0.12,
-                shadowOffset: { width: 0, height: 6 },
-                shadowRadius: 16,
-                elevation: 8,
+                elevation: 4,
+                shadowColor: BRAND,
+                shadowOpacity: 0.35,
+                shadowOffset: { width: 0, height: 2 },
+                shadowRadius: 6,
               },
             }),
+            pressed && { backgroundColor: BRAND_STRONG },
           ]}
         >
-          <BarIconTab
-            label="Accueil"
-            icon="home-outline"
-            active={active.home}
-            onPress={() => goTab(HREF.home)}
-            roundedLeft
-          />
-          <BarIconTab
-            label="Courses"
-            accessibilityLabel="Mes réservations"
-            icon="wallet-outline"
-            active={active.wallet}
-            onPress={() => goTab(HREF.bookings)}
-          />
-          <View style={{ width: 56, alignItems: "center", justifyContent: "center" }}>
-            <Pressable
-              onPress={goNewBooking}
-              accessibilityLabel="Réserver un transport"
-              accessibilityState={{ selected: active.newBooking }}
-              style={({ pressed }) => [
-                {
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: BRAND,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: active.newBooking ? 3 : 0,
-                  borderColor: "rgba(255, 255, 255, 0.95)",
-                },
-                Platform.select({
-                  web: { boxShadow: "0 2px 8px rgba(10, 126, 164, 0.35)" } as const,
-                  default: {
-                    elevation: 4,
-                    shadowColor: BRAND,
-                    shadowOpacity: 0.35,
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowRadius: 6,
-                  },
-                }),
-                pressed && { backgroundColor: BRAND_STRONG },
-              ]}
-            >
-              <Ionicons name="add" size={28} color="#FFFFFF" />
-            </Pressable>
-          </View>
-          <BarIconTab
-            label="Réglages"
-            icon="options-outline"
-            active={active.settings}
-            onPress={() => goTab(HREF.account)}
-          />
-          <BarIconTab
-            label="Profil"
-            icon="person-outline"
-            active={active.profile}
-            onPress={() => goTab(HREF.account)}
-            roundedRight
-          />
-        </View>
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </Pressable>
       </View>
-    </View>
+      <BarIconTab
+        label="Réglages"
+        icon="options-outline"
+        active={active.settings}
+        onPress={() => goTab(HREF.account)}
+      />
+      <BarIconTab
+        label="Profil"
+        icon="person-outline"
+        active={active.profile}
+        onPress={() => goTab(HREF.account)}
+        roundedRight
+      />
+    </BaseFloatingBar>
   );
 }
 
@@ -252,17 +228,19 @@ function BarIconTab({
       ]}
     >
       <Ionicons name={icon} size={24} color={active ? BRAND : C.iconMuted} />
-      <Text
+      <AppText
+        variant="caption"
         numberOfLines={1}
+        maxFontSizeMultiplier={1.28}
+        ellipsizeMode="tail"
         style={{
           marginTop: 2,
-          fontSize: 9,
           fontWeight: "700",
           color: active ? BRAND : C.labelMuted,
         }}
       >
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }

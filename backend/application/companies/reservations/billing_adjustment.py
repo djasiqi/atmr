@@ -58,9 +58,11 @@ def _company_may_adjust_billing_by_origin(booking: Any) -> tuple[bool, str | Non
     if v in blocked:
         return (
             False,
-            "L'ajustement du destinataire de facture n'est disponible que pour les courses "
-            "créées manuellement par l'entreprise (saisie dispatch). Les demandes invité, "
-            "portail client, institution ou partenaire API ne sont pas modifiables ici.",
+            (
+                "L'ajustement du destinataire de facture n'est disponible que pour les courses "
+                "créées manuellement par l'entreprise (saisie dispatch). Les demandes invité, "
+                "portail client, institution ou partenaire API ne sont pas modifiables ici."
+            ),
         )
     return True, None
 
@@ -134,8 +136,10 @@ class CompanyBookingBillingAdjustmentUseCase:
             return BookingBillingAdjustmentResult(
                 ok=False,
                 error={
-                    "error": "Au moins un champ amount, billed_to_type ou "
-                    "billed_to_company_id est requis."
+                    "error": (
+                        "Au moins un champ amount, billed_to_type ou "
+                        "billed_to_company_id est requis."
+                    )
                 },
                 status_code=400,
             )
@@ -143,7 +147,7 @@ class CompanyBookingBillingAdjustmentUseCase:
         raw_old_type = getattr(booking, "billed_to_type", None) or "patient"
         old_type_str = str(raw_old_type).lower().strip()
         old = {
-            "amount": float(booking.amount) if booking.amount is not None else None,
+            "amount": float(booking.amount),
             "billed_to_type": old_type_str,
             "billed_to_company_id": getattr(booking, "billed_to_company_id", None),
         }
@@ -221,7 +225,7 @@ class CompanyBookingBillingAdjustmentUseCase:
         booking.billed_to_company_id = target_bcomp
 
         after = {
-            "amount": float(booking.amount) if booking.amount is not None else None,
+            "amount": float(booking.amount),
             "billed_to_type": str(getattr(booking, "billed_to_type", None) or "patient")
             .lower()
             .strip(),

@@ -4,7 +4,6 @@ import {
   ImageBackground,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ResponsiveContainer, Screen, useAppViewport } from "../../../src/design/responsive";
 import { checkServiceArea, upsertPublicPreRequestDraft } from "../../../src/core/api/client";
 import { queueExternalIntentResume } from "../../../src/core/navigation/externalIntent";
 import {
@@ -21,12 +20,9 @@ import {
   loadPublicPreRequestDraft,
   savePublicPreRequestDraft,
 } from "../../../src/core/public/preRequestDraft";
+import { ADDRESS_INPUT_PLACEHOLDER_VISUAL } from "../../../src/features/public/addressInputPlaceholder";
 
 const LANDING_BACKGROUND = require("../../../assets/images/landing-background.png");
-
-/** Aligné sur l’accueil public (`app/(public)/index.tsx`) pour une expérience cohérente. */
-const DEFAULT_PUBLIC_DEPARTURE = "Clinique des Grangettes";
-const DEFAULT_PUBLIC_DESTINATION = "HUG Genève";
 
 function firstSearchParam(value: string | string[] | undefined): string {
   if (value == null) return "";
@@ -54,7 +50,7 @@ export default function PublicPreRequestStepOneScreen() {
     source?: string;
     schedule?: string;
   }>();
-  const insets = useSafeAreaInsets();
+  const { topInset } = useAppViewport();
   const depParamLive = firstSearchParam(params.departure);
   const destParamLive = firstSearchParam(params.destination);
   const sourceParamLive = firstSearchParam(params.source);
@@ -63,8 +59,8 @@ export default function PublicPreRequestStepOneScreen() {
     sourceParamLive === "home" && depParamLive.length > 0 && destParamLive.length > 0;
   const scheduleImmediate = scheduleParamLive === "immediate";
   const [draftId, setDraftId] = useState("");
-  const [departure, setDeparture] = useState(DEFAULT_PUBLIC_DEPARTURE);
-  const [destination, setDestination] = useState(DEFAULT_PUBLIC_DESTINATION);
+  const [departure, setDeparture] = useState("");
+  const [destination, setDestination] = useState("");
   const [date, setDate] = useState("");
   const [pickupTime, setPickupTime] = useState("");
   const [tripType, setTripType] = useState<"one_way" | "round_trip">("one_way");
@@ -104,8 +100,8 @@ export default function PublicPreRequestStepOneScreen() {
 
       if (!existing) {
         setDraftId(createDraftId());
-        setDeparture(depParam || DEFAULT_PUBLIC_DEPARTURE);
-        setDestination(destParam || DEFAULT_PUBLIC_DESTINATION);
+        setDeparture(depParam || "");
+        setDestination(destParam || "");
         // Parcours classique : l'utilisateur saisit une heure précise ; "immédiat" = heure courante, modifiable.
         setPickupScheduleExact(!isImmediate);
         if (isImmediate) {
@@ -117,11 +113,11 @@ export default function PublicPreRequestStepOneScreen() {
 
       setDraftId(existing.draft_id);
       const nextDep = fromHomeExpress
-        ? depParam || existing.departure?.trim() || DEFAULT_PUBLIC_DEPARTURE
-        : existing.departure?.trim() || depParam || DEFAULT_PUBLIC_DEPARTURE;
+        ? depParam || existing.departure?.trim() || ""
+        : existing.departure?.trim() || depParam || "";
       const nextDest = fromHomeExpress
-        ? destParam || existing.destination?.trim() || DEFAULT_PUBLIC_DESTINATION
-        : existing.destination?.trim() || destParam || DEFAULT_PUBLIC_DESTINATION;
+        ? destParam || existing.destination?.trim() || ""
+        : existing.destination?.trim() || destParam || "";
       setDeparture(nextDep);
       setDestination(nextDest);
 
@@ -272,18 +268,15 @@ export default function PublicPreRequestStepOneScreen() {
       />
       <View style={styles.overlay} />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(insets.top, 16) + 8,
-            paddingBottom: Math.max(insets.bottom, 24) + 16,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <Screen
+        scroll
+        withHorizontalPadding={false}
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.card}>
+        <ResponsiveContainer>
+          <View style={styles.card}>
           <Pressable
             onPress={() => {
               if (router.canGoBack()) {
@@ -380,9 +373,13 @@ export default function PublicPreRequestStepOneScreen() {
                 <TextInput
                   value={departure}
                   onChangeText={setDeparture}
-                  placeholder="Adresse ou lieu de prise en charge"
+                  placeholder={ADDRESS_INPUT_PLACEHOLDER_VISUAL}
+                  accessibilityLabel="Adresse ou lieu de prise en charge"
                   placeholderTextColor="#91A59D"
-                  style={styles.fieldInput}
+                  style={[
+                    styles.fieldInput,
+                    departure.trim().length === 0 ? styles.fieldInputEmpty : null,
+                  ]}
                 />
               </View>
 
@@ -391,9 +388,13 @@ export default function PublicPreRequestStepOneScreen() {
                 <TextInput
                   value={destination}
                   onChangeText={setDestination}
-                  placeholder="Adresse ou lieu d'arrivee"
+                  placeholder={ADDRESS_INPUT_PLACEHOLDER_VISUAL}
+                  accessibilityLabel="Adresse ou lieu d'arrivée"
                   placeholderTextColor="#91A59D"
-                  style={styles.fieldInput}
+                  style={[
+                    styles.fieldInput,
+                    destination.trim().length === 0 ? styles.fieldInputEmpty : null,
+                  ]}
                 />
               </View>
 
@@ -683,7 +684,8 @@ export default function PublicPreRequestStepOneScreen() {
             )}
           </Pressable>
         </View>
-      </ScrollView>
+        </ResponsiveContainer>
+      </Screen>
     </View>
   );
 }
@@ -702,7 +704,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   card: {
     width: "100%",
@@ -883,6 +885,11 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === "web" ? 12 : 10,
     color: "#163A34",
     fontSize: 16,
+  },
+  fieldInputEmpty: {
+    borderWidth: 2,
+    borderColor: "rgba(91,115,107,0.55)",
+    backgroundColor: "#FFFFFF",
   },
   fieldInputMultiline: {
     minHeight: 100,

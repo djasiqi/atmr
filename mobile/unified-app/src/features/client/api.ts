@@ -151,7 +151,7 @@ export async function assertSaferpayCheckout(
 
 export async function autocompleteAddress(
   query: string,
-  options?: { lat?: number; lon?: number; limit?: number }
+  options?: { lat?: number; lon?: number; limit?: number; country?: "CH" | "FR" }
 ): Promise<AddressAutocompleteSuggestion[]> {
   if (query.trim().length < 2) {
     return [];
@@ -165,6 +165,7 @@ export async function autocompleteAddress(
           limit: options?.limit ?? 8,
           ...(typeof options?.lat === "number" ? { lat: options.lat } : {}),
           ...(typeof options?.lon === "number" ? { lon: options.lon } : {}),
+          ...(options?.country ? { country: options.country } : {}),
         },
       }
     );
@@ -215,7 +216,6 @@ export async function getGeocodePlaceDetails(
     const line = (data.address ?? data.name ?? "").trim();
     if (!line) {
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // eslint-disable-next-line no-console
         console.warn("[getGeocodePlaceDetails] empty address/name", { place_id: pid });
       }
       return null;
@@ -224,14 +224,12 @@ export async function getGeocodePlaceDetails(
     const lonN = data.lon != null ? data.lon : data.lng;
     if (typeof latN !== "number" || !Number.isFinite(latN)) {
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // eslint-disable-next-line no-console
         console.warn("[getGeocodePlaceDetails] invalid lat", { place_id: pid, lat: data.lat });
       }
       return null;
     }
     if (typeof lonN !== "number" || !Number.isFinite(lonN)) {
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // eslint-disable-next-line no-console
         console.warn("[getGeocodePlaceDetails] invalid lon/lng", {
           place_id: pid,
           lon: data.lon,
@@ -257,7 +255,6 @@ export async function getGeocodePlaceDetails(
         : error instanceof Error
           ? error.message
           : String(error);
-      // eslint-disable-next-line no-console
       console.warn("[getGeocodePlaceDetails] request failed", {
         place_id: pid,
         status,

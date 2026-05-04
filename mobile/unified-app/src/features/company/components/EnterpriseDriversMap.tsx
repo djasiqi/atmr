@@ -1,6 +1,8 @@
 ﻿import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { brandPrimary, brandText } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import ClusteredMapView from "react-native-map-clustering";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
@@ -42,9 +44,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FBFA",
   },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
-  title: { fontSize: 14, fontWeight: "800", color: "#163A34" },
-  subtitle: { color: "#5F7369", fontSize: 12, marginTop: 1 },
-  subtitleCompact: { color: "#5F7369", fontSize: 11, fontWeight: "600", marginBottom: 2 },
+  subtitleSpacing: { marginTop: 1 },
+  subtitleCompactSpacing: { marginBottom: 2 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   chip: {
     borderWidth: 1.5,
@@ -54,8 +55,6 @@ const styles = StyleSheet.create({
   },
   chipOn: { borderColor: BRAND, backgroundColor: "rgba(10, 143, 122, 0.1)" },
   chipOff: { borderColor: BORDER, backgroundColor: "#FFFFFF" },
-  chipTextOn: { color: BRAND, fontSize: 11, fontWeight: "700" },
-  chipTextOff: { color: "#3D4F47", fontSize: 11, fontWeight: "600" },
   map: { height: 200, width: "100%" as const },
 });
 
@@ -107,16 +106,16 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
           <>
             <View style={styles.headerRow}>
               <Ionicons name="map-outline" size={15} color={BRAND} />
-              <Text style={styles.title}>Carte live · chauffeurs</Text>
+              <AppText variant="sectionTitle">Carte live · chauffeurs</AppText>
             </View>
-            <Text style={styles.subtitle}>
+            <AppText variant="caption" style={styles.subtitleSpacing}>
               {filteredDrivers.length} sur {drivers.length} après filtre
-            </Text>
+            </AppText>
           </>
         ) : (
-          <Text style={styles.subtitleCompact}>
+          <AppText variant="label" style={styles.subtitleCompactSpacing}>
             {filteredDrivers.length} / {drivers.length} après filtre
-          </Text>
+          </AppText>
         )}
         <View style={[styles.chipRow, !showTitleRow && { marginTop: 2 }]}>
           {[
@@ -137,7 +136,9 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
                 ]}
                 accessibilityState={{ selected: on }}
               >
-                <Text style={on ? styles.chipTextOn : styles.chipTextOff}>{option.label}</Text>
+                <AppText variant={on ? "label" : "caption"} style={{ color: on ? brandPrimary : brandText }}>
+                  {option.label}
+                </AppText>
               </Pressable>
             );
           })}

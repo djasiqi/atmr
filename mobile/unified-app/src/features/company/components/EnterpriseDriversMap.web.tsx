@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { brandPrimary, brandText } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 import type { CompanyDriverLiveLocation } from "../api/contracts";
 
 type Props = {
@@ -34,17 +36,14 @@ const s = StyleSheet.create({
   },
   header: { paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: BORDER, backgroundColor: "#F8FBFA" },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
-  title: { fontSize: 14, fontWeight: "800", color: "#163A34" },
-  subtitle: { color: "#5F7369", fontSize: 12, marginTop: 1 },
-  subtitleCompact: { color: "#5F7369", fontSize: 11, fontWeight: "600", marginBottom: 2 },
+  subtitleSpacing: { marginTop: 1 },
+  subtitleCompactSpacing: { marginBottom: 2 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   chip: { borderWidth: 1.5, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
   chipOn: { borderColor: BRAND, backgroundColor: "rgba(10, 143, 122, 0.1)" },
   chipOff: { borderColor: BORDER, backgroundColor: "#FFFFFF" },
-  chipTextOn: { color: BRAND, fontSize: 11, fontWeight: "700" },
-  chipTextOff: { color: "#3D4F47", fontSize: 11, fontWeight: "600" },
   listWrap: { padding: 10, backgroundColor: "#EAF3F1", gap: 8 },
-  info: { color: "#5F7369", fontSize: 12, lineHeight: 17 },
+  infoLineHeight: { lineHeight: 17 },
   driverCard: {
     borderWidth: 1,
     borderColor: "rgba(145, 165, 157, 0.4)",
@@ -53,9 +52,8 @@ const s = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: "#FFFFFF",
   },
-  driverName: { fontSize: 14, fontWeight: "800", color: "#163A34" },
-  driverLine: { color: "#5F7369", fontSize: 11, marginTop: 2, lineHeight: 16 },
-  more: { color: "#0A7A6A", fontSize: 12, fontWeight: "600" },
+  driverLineSpacing: { marginTop: 2, lineHeight: 16 },
+  moreSpacing: { marginTop: 4 },
 });
 
 type DriverMapFilter = "all" | "available" | "en_mission" | "offline";
@@ -92,16 +90,16 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
           <>
             <View style={s.headerRow}>
               <Ionicons name="map-outline" size={15} color={BRAND} />
-              <Text style={s.title}>Carte live · chauffeurs</Text>
+              <AppText variant="sectionTitle">Carte live · chauffeurs</AppText>
             </View>
-            <Text style={s.subtitle}>
+            <AppText variant="caption" style={s.subtitleSpacing}>
               {filteredDrivers.length} sur {drivers.length} après filtre
-            </Text>
+            </AppText>
           </>
         ) : (
-          <Text style={s.subtitleCompact}>
+          <AppText variant="label" style={s.subtitleCompactSpacing}>
             {filteredDrivers.length} / {drivers.length} après filtre
-          </Text>
+          </AppText>
         )}
         <View style={[s.chipRow, !showTitleRow && { marginTop: 2 }]}>
           {[
@@ -118,7 +116,9 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
                 style={({ pressed }) => [s.chip, on ? s.chipOn : s.chipOff, pressed && { opacity: 0.9 }]}
                 accessibilityState={{ selected: on }}
               >
-                <Text style={on ? s.chipTextOn : s.chipTextOff}>{option.label}</Text>
+                <AppText variant={on ? "label" : "caption"} style={{ color: on ? brandPrimary : brandText }}>
+                  {option.label}
+                </AppText>
               </Pressable>
             );
           })}
@@ -127,28 +127,30 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
 
       <View style={s.listWrap}>
         {showTitleRow ? (
-          <Text style={s.info}>
+          <AppText variant="bodyMuted" style={s.infoLineHeight}>
             La carte n’est pas disponible sur le web. Aperçu des positions ci-dessous — pour la vue cartographique, utilisez
             l’application mobile.
-          </Text>
+          </AppText>
         ) : null}
         {filteredDrivers.slice(0, 6).map((driver) => {
           const status = resolveDriverStatus(driver);
           return (
             <View key={driver.driver_id} style={s.driverCard}>
-              <Text style={s.driverName}>Chauffeur #{driver.driver_id}</Text>
-              <Text style={s.driverLine}>
+              <AppText variant="sectionTitle">Chauffeur #{driver.driver_id}</AppText>
+              <AppText variant="caption" style={s.driverLineSpacing}>
                 {statusLabel(status)}
                 {driver.mission_id ? ` · mission #${driver.mission_id}` : " · aucune mission"}
-              </Text>
-              <Text style={s.driverLine}>
+              </AppText>
+              <AppText variant="caption" style={s.driverLineSpacing}>
                 {driver.latitude.toFixed(5)}, {driver.longitude.toFixed(5)}
-              </Text>
+              </AppText>
             </View>
           );
         })}
         {filteredDrivers.length > 6 ? (
-          <Text style={s.more}>+ {filteredDrivers.length - 6} autre(s) chauffeur(s)</Text>
+          <AppText variant="label" style={[s.moreSpacing, { color: brandPrimary }]}>
+            + {filteredDrivers.length - 6} autre(s) chauffeur(s)
+          </AppText>
         ) : null}
       </View>
     </View>

@@ -8,9 +8,137 @@ from typing import Any, Protocol, cast
 from sqlalchemy.orm import joinedload
 
 from domain.invoice_dto import InvoiceDTO, InvoiceLineDTO
-from models import Invoice, InvoiceStatus
+from models import Invoice, InvoiceLine, InvoiceStatus
+from models.client import Client
+from models.enums import InvoiceLineType
 
 logger = __import__("logging").getLogger(__name__)
+
+
+def _merge_s2_clinic_line_meta_from_booking(
+    line: InvoiceLine,
+    booking: Any,
+    client: Any | None,
+) -> dict[str, Any]:
+    """Complète patient_name / service_date pour une ligne liée à une réservation (facture clinique S2)."""
+    out: dict[str, Any] = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    if booking is None:
+        return out
+
+    _existing_pn = out.get("patient_name")
+    if _existing_pn is None or str(_existing_pn).strip() == "":
+        cn = getattr(booking, "customer_name", None)
+        if cn and str(cn).strip():
+            out["patient_name"] = str(cn).strip()
+        elif client is not None:
+            u = getattr(client, "user", None)
+            if u is not None:
+                fn = (getattr(u, "first_name", "") or "").strip()
+                ln = (getattr(u, "last_name", "") or "").strip()
+                if ln and fn:
+                    out["patient_name"] = f"{ln.upper()} {fn.capitalize()}".strip()
+                elif ln:
+                    out["patient_name"] = ln.upper()
+                elif fn:
+                    out["patient_name"] = fn.capitalize()
+                elif getattr(u, "username", None):
+                    out["patient_name"] = str(u.username)
+                else:
+                    cid = getattr(booking, "client_id", None)
+                    out["patient_name"] = (
+                        f"Client #{cid}" if cid is not None else "Client"
+                    )
+            else:
+                cid = getattr(booking, "client_id", None)
+                out["patient_name"] = (
+                    f"Client #{cid}" if cid is not None else "Client"
+                )
+
+    _existing_sd = out.get("service_date")
+    if _existing_sd is None or str(_existing_sd).strip() == "":
+        st = getattr(booking, "scheduled_time", None)
+        if st is not None:
+            try:
+                if hasattr(st, "date"):
+                    out["service_date"] = st.date().isoformat()
+            except Exception:
+                pass
+
+    return out
+
+
+def _merge_ride_service_date_from_booking(
+    line: InvoiceLine,
+    booking: Any | None,
+) -> dict[str, Any] | None:
+    """Ajoute ``service_date`` depuis la réservation si absent (ex. facturation patient S1)."""
+    out: dict[str, Any] = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
+    if booking is None:
+        return out if out else None
+    _sd = out.get("service_date")
+    if _sd is not None and str(_sd).strip() != "":
+        return out if out else None
+    st = getattr(booking, "scheduled_time", None)
+    if st is not None:
+        try:
+            if hasattr(st, "date"):
+                out["service_date"] = st.date().isoformat()
+        except Exception:
+            pass
+    return out if out else None
+
+
+def _billing_strategy_str(inv: Invoice) -> str | None:
+    bs = getattr(inv, "billing_strategy", None)
+    if bs is None:
+        return None
+    return bs.value if hasattr(bs, "value") else str(bs)
+
+
+def _snapshot_bill_to_client(inv: Invoice) -> dict[str, Any] | None:
+    btc = inv.bill_to_client
+    if not btc:
+        return None
+    u = getattr(btc, "user", None)
+    fn = getattr(u, "first_name", "") if u else ""
+    ln = getattr(u, "last_name", "") if u else ""
+    un = getattr(u, "username", "") if u else ""
+    return {
+        "id": btc.id,
+        "first_name": fn or "",
+        "last_name": ln or "",
+        "username": un or "",
+        "is_institution": bool(getattr(btc, "is_institution", False)),
+        "institution_name": btc.institution_name,
+        "billing_address": getattr(btc, "billing_address", None),
+        "contact_email": getattr(btc, "contact_email", None),
+    }
+
+
+def _snapshot_billing_party(inv: Invoice) -> dict[str, Any] | None:
+    bp = getattr(inv, "billing_party", None)
+    if not bp:
+        return None
+    t = getattr(bp, "type", None)
+    type_str = getattr(t, "value", str(t)) if t is not None else ""
+    return {
+        "id": bp.id,
+        "display_name": bp.display_name,
+        "contact_email": getattr(bp, "contact_email", None),
+        "type": type_str,
+    }
+
+
+def _snapshot_billed_company(inv: Invoice) -> dict[str, Any] | None:
+    co = getattr(inv, "billed_to_company", None)
+    if not co:
+        return None
+    return {
+        "id": co.id,
+        "name": co.name,
+        "billing_email": getattr(co, "billing_email", None),
+        "contact_email": getattr(co, "contact_email", None),
+    }
 
 
 class InvoiceRepositoryPort(Protocol):
@@ -84,25 +212,92 @@ class InvoiceRepository:
         """
         lines = None
         if include_lines and invoice.lines:
-            lines = [
-                InvoiceLineDTO(
-                    id=line.id,
-                    invoice_id=line.invoice_id,
-                    line_type=line.type.value
-                    if hasattr(line.type, "value")
-                    else str(line.type),
-                    description=line.description,
-                    quantity=line.qty,
-                    unit_price=line.unit_price,
-                    line_total=line.line_total,
-                    vat_rate=line.vat_rate,
-                    vat_amount=line.vat_amount,
-                    total_with_vat=line.total_with_vat,
-                    adjustment_note=line.adjustment_note,
-                    reservation_id=line.reservation_id,
-                )
-                for line in invoice.lines
+            bs_raw = getattr(invoice, "billing_strategy", None)
+            if bs_raw is None:
+                bs_val = None
+            elif hasattr(bs_raw, "value"):
+                bs_val = str(bs_raw.value)
+            else:
+                bs_val = str(bs_raw)
+
+            booking_by_id: dict[int, Any] = {}
+            client_by_id: dict[int, Any] = {}
+
+            from models.booking import Booking
+
+            rids_ord = [
+                ln.reservation_id
+                for ln in invoice.lines
+                if ln.reservation_id is not None
             ]
+            unique_rids = list(dict.fromkeys(rids_ord))
+            if unique_rids:
+                bookings = Booking.query.filter(Booking.id.in_(unique_rids)).all()
+                booking_by_id = {b.id: b for b in bookings}
+
+            if bs_val == "s2_clinic_monthly" and unique_rids:
+                cids_uniq: list[int] = []
+                for _rid in unique_rids:
+                    _bk = booking_by_id.get(_rid)
+                    if _bk and getattr(_bk, "client_id", None):
+                        cids_uniq.append(int(_bk.client_id))
+                unique_cids = list(dict.fromkeys(cids_uniq))
+                if unique_cids:
+                    clients_loaded = (
+                        Client.query.options(joinedload(Client.user))
+                        .filter(Client.id.in_(unique_cids))
+                        .all()
+                    )
+                    client_by_id = {c.id: c for c in clients_loaded}
+
+            dto_lines: list[InvoiceLineDTO] = []
+            for line in invoice.lines:
+                lm_final = cast(dict[str, Any] | None, line.line_meta)
+                if bs_val == "s2_clinic_monthly" and line.reservation_id:
+                    _bk = booking_by_id.get(line.reservation_id)
+                    _cl = (
+                        client_by_id.get(_bk.client_id)
+                        if _bk and getattr(_bk, "client_id", None)
+                        else None
+                    )
+                    lm_final = _merge_s2_clinic_line_meta_from_booking(
+                        line, _bk, _cl
+                    )
+                elif (
+                    bs_val != "s2_clinic_monthly"
+                    and line.reservation_id
+                    and line.type == InvoiceLineType.RIDE
+                ):
+                    _bk = booking_by_id.get(line.reservation_id)
+                    lm_final = _merge_ride_service_date_from_booking(line, _bk)
+                dto_lines.append(
+                    InvoiceLineDTO(
+                        id=line.id,
+                        invoice_id=line.invoice_id,
+                        line_type=line.type.value
+                        if hasattr(line.type, "value")
+                        else str(line.type),
+                        description=line.description,
+                        quantity=line.qty,
+                        unit_price=line.unit_price,
+                        line_total=line.line_total,
+                        vat_rate=line.vat_rate,
+                        vat_amount=line.vat_amount,
+                        total_with_vat=line.total_with_vat,
+                        adjustment_note=line.adjustment_note,
+                        reservation_id=line.reservation_id,
+                        line_meta=lm_final,
+                    )
+                )
+            lines = dto_lines
+
+        payments_payload: list[dict[str, Any]] | None = None
+        if include_lines and getattr(invoice, "payments", None) is not None:
+            payments_payload = [p.to_dict() for p in invoice.payments]
+
+        pdf_url = cast(str | None, getattr(invoice, "pdf_url", None))
+        meta_val = getattr(invoice, "meta", None)
+        meta_payload = cast(dict[str, Any] | None, meta_val) if meta_val is not None else None
 
         return InvoiceDTO(
             id=invoice.id,
@@ -124,8 +319,17 @@ class InvoiceRepository:
             due_date=invoice.due_date,
             sent_at=invoice.sent_at,
             paid_at=invoice.paid_at,
+            updated_at=cast(datetime | None, getattr(invoice, "updated_at", None)),
             status=invoice.status,
             lines=lines,
+            pdf_url=pdf_url,
+            meta=meta_payload,
+            payments=payments_payload,
+            billing_strategy=_billing_strategy_str(invoice),
+            client=invoice._serialize_client(),
+            bill_to_client=_snapshot_bill_to_client(invoice),
+            billing_party=_snapshot_billing_party(invoice),
+            billed_to_company=_snapshot_billed_company(invoice),
         )
 
     def find_by_id_and_company(
@@ -140,7 +344,16 @@ class InvoiceRepository:
         Returns:
             InvoiceDTO ou None si non trouvée
         """
-        invoice = Invoice.query.filter_by(id=invoice_id, company_id=company_id).first()
+        invoice = (
+            Invoice.query.filter_by(id=invoice_id, company_id=company_id)
+            .options(
+                joinedload(Invoice.client).joinedload(Client.user),
+                joinedload(Invoice.bill_to_client).joinedload(Client.user),
+                joinedload(Invoice.billing_party),
+                joinedload(Invoice.billed_to_company),
+            )
+            .first()
+        )
         if invoice is None:
             return None
         return self._to_dto(invoice)
@@ -159,20 +372,18 @@ class InvoiceRepository:
         """
         invoice = (
             Invoice.query.filter_by(id=invoice_id, company_id=company_id)
-            .options(joinedload(Invoice.lines))
+            .options(
+                joinedload(Invoice.lines),
+                joinedload(Invoice.payments),
+                joinedload(Invoice.client).joinedload(Client.user),
+                joinedload(Invoice.bill_to_client).joinedload(Client.user),
+                joinedload(Invoice.billing_party),
+                joinedload(Invoice.billed_to_company),
+            )
             .first()
         )
         if invoice is None:
             return None
-        # Brouillon : corriger TTC ligne à 0 avec HT ≠ 0 (anciennes données / bug) pour total cohérent.
-        if invoice.status == InvoiceStatus.DRAFT:
-            from application.invoices.edit_draft_invoice import (
-                repair_draft_invoice_if_line_totals_inconsistent,
-            )
-            from ext import db
-
-            if repair_draft_invoice_if_line_totals_inconsistent(invoice):
-                db.session.commit()
         return self._to_dto(invoice, include_lines=True)
 
     def find_by_client_id_and_company(

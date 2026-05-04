@@ -53,7 +53,7 @@ function MethodChipDropdown({ options, value, onChange }) {
         <div
           ref={menuRef}
           className={styles.chipMenu}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10001 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 'var(--z-modal-popover)' }}
         >
           {options.map((o) => (
             <button

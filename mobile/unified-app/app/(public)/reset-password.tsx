@@ -1,7 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiClient } from "../../src/core/api/client";
+import { ResponsiveContainer, Screen, useAppViewport } from "../../src/design/responsive";
 
 type ResetApiError = {
   response?: {
@@ -17,6 +26,7 @@ export default function ResetPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const token = useMemo(() => String(params.token ?? "").trim(), [params.token]);
+  const { topInset } = useAppViewport();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -69,59 +79,136 @@ export default function ResetPasswordScreen() {
   };
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Nouveau mot de passe</Text>
-      <Text style={{ color: "#555" }}>
-        Saisissez votre nouveau mot de passe pour finaliser la réinitialisation.
-      </Text>
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Nouveau mot de passe"
-        secureTextEntry={!showPassword}
-        textContentType="newPassword"
-        autoComplete="new-password"
-        returnKeyType="next"
-        onSubmitEditing={() => confirmRef.current?.focus()}
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <TextInput
-        ref={confirmRef}
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="Confirmer le mot de passe"
-        secureTextEntry={!showPassword}
-        textContentType="newPassword"
-        autoComplete="new-password"
-        returnKeyType="done"
-        onSubmitEditing={() => void submit()}
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <Pressable onPress={() => setShowPassword((v) => !v)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>
-          {showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-        </Text>
-      </Pressable>
-      {success ? <Text style={{ color: "#2e7d32" }}>{success}</Text> : null}
-      {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
-      <Pressable
-        onPress={() => void submit()}
-        disabled={pending || !token}
-        style={{
-          backgroundColor: pending || !token ? "#91b9c6" : "#0a7ea4",
-          borderRadius: 10,
-          padding: 12,
-          alignItems: "center",
-        }}
-      >
-        {pending ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff" }}>Valider</Text>}
-      </Pressable>
-      <Pressable onPress={() => router.replace("/(public)/forgot-password" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Demander un nouveau lien</Text>
-      </Pressable>
-      <Pressable onPress={() => router.replace("/(public)/login" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour connexion</Text>
-      </Pressable>
-    </View>
+    <Screen
+      scroll
+      backgroundColor="#EAF3F1"
+      keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+      contentContainerStyle={styles.scrollContent}
+    >
+      <ResponsiveContainer>
+        <View style={styles.card}>
+          <Text style={styles.title}>Nouveau mot de passe</Text>
+          <Text style={styles.subtitle}>
+            Saisissez votre nouveau mot de passe pour finaliser la réinitialisation.
+          </Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Nouveau mot de passe"
+            placeholderTextColor="#91A59D"
+            secureTextEntry={!showPassword}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+            style={styles.input}
+          />
+          <TextInput
+            ref={confirmRef}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirmer le mot de passe"
+            placeholderTextColor="#91A59D"
+            secureTextEntry={!showPassword}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            returnKeyType="done"
+            onSubmitEditing={() => void submit()}
+            style={styles.input}
+          />
+          <Pressable onPress={() => setShowPassword((v) => !v)} style={styles.toggleWrap}>
+            <Text style={styles.toggle}>
+              {showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            </Text>
+          </Pressable>
+          {success ? <Text style={styles.success}>{success}</Text> : null}
+          {error ? <Text style={styles.err}>{error}</Text> : null}
+          <Pressable
+            onPress={() => void submit()}
+            disabled={pending || !token}
+            style={[styles.primaryBtn, pending || !token ? styles.primaryBtnDisabled : null]}
+          >
+            {pending ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Valider</Text>}
+          </Pressable>
+          <Pressable onPress={() => router.replace("/(public)/forgot-password" as any)}>
+            <Text style={styles.link}>Demander un nouveau lien</Text>
+          </Pressable>
+          <Pressable onPress={() => router.replace("/(public)/login" as any)}>
+            <Text style={styles.link}>Retour connexion</Text>
+          </Pressable>
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  card: {
+    gap: 12,
+    borderRadius: 26,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(145,165,157,0.45)",
+    backgroundColor: "#FFFFFF",
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#163A34",
+  },
+  subtitle: {
+    color: "#5F7369",
+    lineHeight: 21,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#91A59D",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#163A34",
+    minHeight: 50,
+  },
+  toggleWrap: {
+    alignSelf: "flex-start",
+  },
+  toggle: {
+    color: "#0A8F7A",
+    fontWeight: "600",
+  },
+  success: {
+    color: "#2e7d32",
+    fontWeight: "600",
+  },
+  err: {
+    color: "#B00020",
+    fontWeight: "600",
+  },
+  primaryBtn: {
+    marginTop: 8,
+    minHeight: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0A8F7A",
+  },
+  primaryBtnDisabled: {
+    backgroundColor: "#84B7AE",
+  },
+  primaryBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  link: {
+    color: "#0A8F7A",
+    fontWeight: "600",
+    marginTop: 4,
+  },
+});

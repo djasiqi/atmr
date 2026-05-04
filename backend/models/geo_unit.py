@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,7 +48,7 @@ class GeoUnit(db.Model):
 
     parent = relationship("GeoUnit", remote_side=[id], backref="children")
 
-    def lineage(self) -> list["GeoUnit"]:
+    def lineage(self) -> list[GeoUnit]:
         chain: list[GeoUnit] = []
         current: GeoUnit | None = self
         while current:

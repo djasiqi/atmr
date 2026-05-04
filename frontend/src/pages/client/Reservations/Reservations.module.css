@@ -1689,11 +1689,12 @@
 .contactModalBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--z-modal-app);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
   background: rgb(15 23 42 / 45%);
   backdrop-filter: blur(2px);
 }
@@ -1701,7 +1702,7 @@
 .contactModal {
   width: 100%;
   max-width: 440px;
-  max-height: min(90vh, 640px);
+  max-height: min(var(--modal-max-height), 640px);
   display: flex;
   flex-direction: column;
   border-radius: 14px;

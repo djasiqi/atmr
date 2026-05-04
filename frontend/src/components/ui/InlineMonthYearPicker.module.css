@@ -1,0 +1,308 @@
+/* Champ : icône calendrier à gauche (type Flowbite) + saisie lecture seule */
+.field {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+.iconLeft {
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--text-tertiary, #64748b);
+  z-index: 1;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  height: 28px;
+  padding: 2px 8px 2px 30px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--brand-primary, #00796b) 20%, var(--border-primary, #e2e8f0));
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--text-primary, #0f172a);
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    color-mix(in srgb, var(--bg-tertiary, #f1f5f9) 45%, #ffffff) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 1px 2px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.input:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand-primary, #00796b) 38%, var(--border-primary, #e2e8f0));
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--brand-primary, #00796b);
+  box-shadow:
+    0 0 0 3px rgba(0, 121, 107, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 2px 8px rgba(0, 121, 107, 0.1);
+}
+
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.inputInvalid {
+  border-color: var(--color-danger, #dc2626);
+}
+
+/* Popover */
+.popover {
+  position: fixed;
+  z-index: var(--z-modal-popover);
+  width: 268px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 10px;
+  animation: myFadeIn 0.15s ease;
+}
+
+@keyframes myFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.yearTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
+
+.yearTitleBtn {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #0f172a);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.yearTitleBtn:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+  color: var(--brand-primary, #00796b);
+}
+
+.decadeTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #0f172a);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.backToMonths {
+  display: block;
+  width: 100%;
+  margin: -4px 0 8px;
+  padding: 2px 0 6px;
+  border: none;
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+  background: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: color 0.12s ease;
+}
+
+.backToMonths:hover {
+  color: var(--brand-primary, #00796b);
+}
+
+.yearGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.yearCell {
+  padding: 10px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary, #0f172a);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.yearCell:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+}
+
+.yearCellSelected {
+  background: var(--brand-primary, #00796b) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.yearCellCurrent {
+  box-shadow: inset 0 0 0 1.5px var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+}
+
+.navBtn {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #374151);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.navBtn:hover:not(:disabled) {
+  background: var(--bg-tertiary, #f3f4f6);
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.monthCell {
+  padding: 8px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary, #0f172a);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.monthCell:hover {
+  background: var(--bg-tertiary, #f3f4f6);
+}
+
+.monthCellSelected {
+  background: var(--brand-primary, #00796b) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.monthCellCurrent {
+  box-shadow: inset 0 0 0 1.5px var(--brand-primary, #00796b);
+  color: var(--brand-primary, #00796b);
+  font-weight: 600;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-primary, #e5e7eb);
+  gap: 8px;
+}
+
+.footerBtnClear {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary, #9ca3af);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+}
+
+.footerBtnClear:hover {
+  color: var(--color-danger, #dc2626);
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.footerBtnToday {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--brand-primary, #00796b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.12s;
+  font-family: inherit;
+  margin-left: auto;
+}
+
+.footerBtnToday:hover {
+  background: var(--brand-primary-lightest, #e0f2f1);
+}

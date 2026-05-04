@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ImageBackground,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,8 +17,25 @@ import * as ExpoLinking from "expo-linking";
 import { apiClient } from "../../src/core/api/client";
 import { autocompleteAddress } from "../../src/features/client/api";
 import { AddressAutocompleteSuggestion } from "../../src/features/client/types";
+import {
+  AppButton,
+  AppInput,
+  AppText,
+  brandPrimary,
+  brandText,
+  brandTextMuted,
+  getPublicBackButtonMetrics,
+  ResponsiveContainer,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
+const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
+
+const UI_SURFACE = "#F3F7F5";
+const UI_BORDER_SOFT = "rgba(145, 165, 157, 0.38)";
 
 type Gender = "male" | "female" | "other";
 type PhoneCountry = {
@@ -169,6 +186,23 @@ function splitSuggestionLabel(value: string): { primary: string; secondary: stri
 
 export default function SignupScreen() {
   const router = useRouter();
+  const viewport = useAppViewport();
+  const { topInset } = viewport;
+  const { landing: layout } = useResponsiveTokens();
+
+  const accentLayout = useMemo(() => {
+    const narrow = viewport.isTiny || viewport.isCompact;
+    return {
+      largeTop: viewport.isTablet ? -105 : narrow ? -98 : -92,
+      largeRight: viewport.isTablet ? -48 : -32,
+      smallTop: viewport.isTablet ? 95 : narrow ? 72 : 82,
+      smallRight: viewport.isTablet ? 72 : 52,
+    };
+  }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
+  const backBtn = useMemo(
+    () => getPublicBackButtonMetrics(viewport),
+    [viewport]
+  );
   const params = useLocalSearchParams<{ next?: string }>();
   const isWeb = Platform.OS === "web";
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
@@ -407,29 +441,127 @@ export default function SignupScreen() {
         imageStyle={styles.backgroundImage}
       />
       <View style={styles.overlay} />
+      <View
+        style={[
+          styles.accentGlowLarge,
+          {
+            top: accentLayout.largeTop,
+            right: accentLayout.largeRight,
+            pointerEvents: "none",
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.accentGlowSmall,
+          {
+            top: accentLayout.smallTop,
+            right: accentLayout.smallRight,
+            pointerEvents: "none",
+          },
+        ]}
+      />
 
-      <ScrollView
+      <Screen
+        scroll
+        withHorizontalPadding={false}
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
         contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
+        <ResponsiveContainer
+          style={{
+            padding: layout.columnPadding,
+            maxWidth: layout.contentMaxWidth,
+          }}
+        >
+          <View
+            style={[
+              styles.card,
+              {
+                maxWidth: layout.cardMaxWidth,
+                paddingHorizontal: layout.cardPadding + 6,
+                paddingTop: layout.cardPadding + 10,
+                paddingBottom: layout.cardPadding + 14,
+                borderRadius: layout.cardRadius,
+              },
+            ]}
+          >
+          <View style={styles.cardBrandAccent} />
           <Pressable
             onPress={() => router.replace("/(public)/login" as any)}
-            style={styles.backButton}
+            style={({ pressed }) => [
+              styles.backButtonBase,
+              {
+                paddingVertical: backBtn.paddingVertical,
+                paddingHorizontal: backBtn.paddingHorizontal,
+                marginLeft: backBtn.marginLeft,
+                marginBottom: backBtn.marginBottom,
+                borderRadius: backBtn.borderRadius,
+                backgroundColor: pressed
+                  ? backBtn.backgroundColorPressed
+                  : backBtn.backgroundColorIdle,
+              },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Retour"
+            hitSlop={12}
           >
-            <Ionicons name="arrow-back" size={22} color="#0A8F7A" />
+            <Ionicons name="arrow-back" size={backBtn.iconSize} color={brandPrimary} />
           </Pressable>
 
-          <Text style={styles.kicker}>Informations</Text>
-          <Text style={styles.title}>Créer un compte</Text>
-          <Text style={styles.subtitle}>
+          <View style={[styles.logoBlock, { marginBottom: layout.cardLineGap + 6 }]}>
+            <Image
+              source={LIRIE_LOGO}
+              style={{ height: layout.logoHeight, width: layout.logoWidth }}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="LIRIE"
+            />
+          </View>
+
+          <Text
+            style={[
+              styles.kicker,
+              {
+                fontSize: layout.secondaryFontSize,
+                marginBottom: layout.cardLineGap,
+                letterSpacing: viewport.isTiny ? 0.8 : 1.2,
+              },
+            ]}
+            maxFontSizeMultiplier={1.22}
+          >
+            Informations
+          </Text>
+          <Text
+            style={[
+              styles.title,
+              {
+                fontSize: layout.titleFontSize,
+                lineHeight: layout.titleLineHeight,
+                maxWidth: layout.titleMaxWidth,
+              },
+            ]}
+            maxFontSizeMultiplier={1.28}
+          >
+            Créer un compte
+          </Text>
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                fontSize: layout.microProofFontSize,
+                lineHeight: layout.microProofLineHeight,
+                marginTop: layout.cardLineGap + 4,
+              },
+            ]}
+            maxFontSizeMultiplier={1.45}
+          >
             Coordonnées utilisées pour les réservations et les confirmations.
           </Text>
+          <View style={[styles.heroDivider, { marginTop: layout.cardBlockGap + 4 }]} />
 
-          <View style={styles.stepperWrap}>
+          <View style={[styles.stepperWrap, { marginTop: layout.cardLineGap + 4 }]}>
             <View style={styles.stepItem}>
               <View
                 style={[
@@ -439,12 +571,20 @@ export default function SignupScreen() {
                 ]}
               >
                 {currentStep === 2 ? (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={12} color="#FFFFFF" />
                 ) : (
-                  <Text style={[styles.stepDotText, currentStep === 1 ? styles.stepDotTextActive : null]}>1</Text>
+                  <Text
+                    style={[styles.stepDotText, currentStep === 1 ? styles.stepDotTextActive : null]}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    1
+                  </Text>
                 )}
               </View>
-              <Text style={[styles.stepLabel, currentStep >= 1 ? styles.stepLabelActive : null]}>
+              <Text
+                style={[styles.stepLabel, currentStep >= 1 ? styles.stepLabelActive : null]}
+                maxFontSizeMultiplier={1.22}
+              >
                 Contact & sécurité
               </Text>
             </View>
@@ -453,9 +593,17 @@ export default function SignupScreen() {
 
             <View style={styles.stepItem}>
               <View style={[styles.stepDot, currentStep === 2 ? styles.stepDotActive : null]}>
-                <Text style={[styles.stepDotText, currentStep === 2 ? styles.stepDotTextActive : null]}>2</Text>
+                <Text
+                  style={[styles.stepDotText, currentStep === 2 ? styles.stepDotTextActive : null]}
+                  maxFontSizeMultiplier={1.2}
+                >
+                  2
+                </Text>
               </View>
-              <Text style={[styles.stepLabel, currentStep === 2 ? styles.stepLabelActive : null]}>
+              <Text
+                style={[styles.stepLabel, currentStep === 2 ? styles.stepLabelActive : null]}
+                maxFontSizeMultiplier={1.22}
+              >
                 Profil & adresse
               </Text>
             </View>
@@ -466,7 +614,15 @@ export default function SignupScreen() {
               <Pressable
                 onPress={() => void submitWithGoogle()}
                 disabled={googlePending}
-                style={[styles.googleButton, googlePending ? styles.googleButtonDisabled : null]}
+                style={[
+                  styles.googleButton,
+                  googlePending ? styles.googleButtonDisabled : null,
+                  {
+                    marginTop: layout.cardBlockGap + 4,
+                    minHeight: layout.ctaHeight + 8,
+                    borderRadius: layout.ctaRadius + 5,
+                  },
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="S'inscrire avec Google"
               >
@@ -474,34 +630,44 @@ export default function SignupScreen() {
                   <ActivityIndicator color="#163A34" />
                 ) : (
                   <>
-                    <Ionicons name="logo-google" size={18} color="#DB4437" />
-                    <Text style={styles.googleButtonText}>S&apos;inscrire avec Google</Text>
+                    <Ionicons name="logo-google" size={16} color="#DB4437" />
+                    <Text
+                      style={[styles.googleButtonText, { fontSize: layout.secondaryFontSize + 1 }]}
+                      maxFontSizeMultiplier={1.28}
+                    >
+                      S&apos;inscrire avec Google
+                    </Text>
                   </>
                 )}
               </Pressable>
 
               <View style={styles.googleDivider}>
                 <View style={styles.googleDividerLine} />
-                <Text style={styles.googleDividerText}>ou</Text>
+                <Text style={styles.googleDividerText} maxFontSizeMultiplier={1.22}>
+                  ou
+                </Text>
                 <View style={styles.googleDividerLine} />
               </View>
 
-              <View style={styles.sectionBlock}>
-                <Text style={styles.sectionTitle}>Contact</Text>
+              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 4 }]}>
+                <Text
+                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  maxFontSizeMultiplier={1.22}
+                >
+                  Contact
+                </Text>
                 <View style={styles.fieldBlock}>
-                  <TextInput
+                  <AppInput
                     ref={emailRef}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="Courriel (ou téléphone)"
-                    placeholderTextColor="#91A59D"
                     autoCapitalize="none"
                     keyboardType="email-address"
                     autoComplete="email"
                     textContentType="emailAddress"
                     returnKeyType="next"
                     onSubmitEditing={() => phoneRef.current?.focus()}
-                    style={styles.fieldInput}
                   />
                 </View>
                 <View style={styles.fieldBlock}>
@@ -513,8 +679,12 @@ export default function SignupScreen() {
                         accessibilityRole="button"
                         accessibilityLabel="Indicatif pays"
                       >
-                        <Text style={styles.phoneCountryCode}>{phoneCountry.code}</Text>
-                        <Text style={styles.phoneCountryDial}>{phoneCountry.dialCode}</Text>
+                        <Text style={styles.phoneCountryCode} maxFontSizeMultiplier={1.22}>
+                          {phoneCountry.code}
+                        </Text>
+                        <Text style={styles.phoneCountryDial} maxFontSizeMultiplier={1.22}>
+                          {phoneCountry.dialCode}
+                        </Text>
                         <Ionicons
                           name={phoneCountryOpen ? "chevron-up-outline" : "chevron-down-outline"}
                           size={14}
@@ -576,76 +746,82 @@ export default function SignupScreen() {
                 </View>
               </View>
 
-              <View style={styles.sectionBlock}>
-                <Text style={styles.sectionTitle}>Sécurité</Text>
+              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 10 }]}>
+                <Text
+                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  maxFontSizeMultiplier={1.22}
+                >
+                  Sécurité
+                </Text>
                 <View style={styles.fieldBlock}>
-                  <View style={styles.passwordWrap}>
-                    <TextInput
-                      ref={passwordRef}
-                      value={password}
-                      onChangeText={setPassword}
-                      placeholder="Min. 8 caractères"
-                      placeholderTextColor="#91A59D"
-                      secureTextEntry={!showPassword}
-                      autoComplete="new-password"
-                      textContentType="newPassword"
-                      returnKeyType="next"
-                      onSubmitEditing={() => confirmPasswordRef.current?.focus()}
-                      style={[styles.fieldInput, styles.passwordInput]}
-                    />
-                    <Pressable
-                      onPress={() => setShowPassword((v) => !v)}
-                      style={styles.passwordToggle}
-                      accessibilityRole="button"
-                      accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                    >
-                      <Ionicons
-                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color="#5F7369"
-                      />
-                    </Pressable>
-                  </View>
+                  <AppInput
+                    ref={passwordRef}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Min. 8 caractères"
+                    secureTextEntry={!showPassword}
+                    autoComplete="new-password"
+                    textContentType="newPassword"
+                    returnKeyType="next"
+                    onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                    rightSlot={
+                      <Pressable
+                        onPress={() => setShowPassword((v) => !v)}
+                        style={styles.passwordToggle}
+                        accessibilityRole="button"
+                        accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                      >
+                        <Ionicons
+                          name={showPassword ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                          color="#5F7369"
+                        />
+                      </Pressable>
+                    }
+                  />
                 </View>
                 <View style={styles.fieldBlock}>
-                  <View style={styles.passwordWrap}>
-                    <TextInput
-                      ref={confirmPasswordRef}
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      placeholder="Confirmer le mot de passe"
-                      placeholderTextColor="#91A59D"
-                      secureTextEntry={!showConfirmPassword}
-                      autoComplete="new-password"
-                      textContentType="newPassword"
-                      returnKeyType="done"
-                      onSubmitEditing={goToStepTwo}
-                      style={[styles.fieldInput, styles.passwordInput]}
-                    />
-                    <Pressable
-                      onPress={() => setShowConfirmPassword((v) => !v)}
-                      style={styles.passwordToggle}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        showConfirmPassword
-                          ? "Masquer la confirmation du mot de passe"
-                          : "Afficher la confirmation du mot de passe"
-                      }
-                    >
-                      <Ionicons
-                        name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
-                        size={20}
-                        color="#5F7369"
-                      />
-                    </Pressable>
-                  </View>
+                  <AppInput
+                    ref={confirmPasswordRef}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirmer le mot de passe"
+                    secureTextEntry={!showConfirmPassword}
+                    autoComplete="new-password"
+                    textContentType="newPassword"
+                    returnKeyType="done"
+                    onSubmitEditing={goToStepTwo}
+                    rightSlot={
+                      <Pressable
+                        onPress={() => setShowConfirmPassword((v) => !v)}
+                        style={styles.passwordToggle}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          showConfirmPassword
+                            ? "Masquer la confirmation du mot de passe"
+                            : "Afficher la confirmation du mot de passe"
+                        }
+                      >
+                        <Ionicons
+                          name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                          color="#5F7369"
+                        />
+                      </Pressable>
+                    }
+                  />
                 </View>
               </View>
             </>
           ) : (
             <>
-              <View style={styles.sectionBlock}>
-                <Text style={styles.sectionTitle}>Informations personnelles</Text>
+              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 8 }]}>
+                <Text
+                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  maxFontSizeMultiplier={1.22}
+                >
+                  Informations personnelles
+                </Text>
 
                 <View style={styles.fieldBlock}>
                   <View style={styles.civilityWrap}>
@@ -703,27 +879,23 @@ export default function SignupScreen() {
                 </View>
 
                 <View style={styles.fieldBlock}>
-                  <TextInput
+                  <AppInput
                     value={firstName}
                     onChangeText={setFirstName}
                     placeholder="Prénom"
-                    placeholderTextColor="#91A59D"
                     returnKeyType="next"
                     onSubmitEditing={() => lastNameRef.current?.focus()}
-                    style={styles.fieldInput}
                   />
                 </View>
 
                 <View style={styles.fieldBlock}>
-                  <TextInput
+                  <AppInput
                     ref={lastNameRef}
                     value={lastName}
                     onChangeText={setLastName}
                     placeholder="Nom"
-                    placeholderTextColor="#91A59D"
                     returnKeyType="next"
                     onSubmitEditing={() => birthDateRef.current?.focus()}
-                    style={styles.fieldInput}
                   />
                 </View>
 
@@ -834,8 +1006,13 @@ export default function SignupScreen() {
                 ) : null}
               </View>
 
-              <View style={styles.sectionBlock}>
-                <Text style={styles.sectionTitle}>Adresse et accès</Text>
+              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 10 }]}>
+                <Text
+                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  maxFontSizeMultiplier={1.22}
+                >
+                  Adresse et accès
+                </Text>
                 <View style={styles.fieldBlock}>
                   <View style={styles.addressAutocompleteWrap}>
                     <TextInput
@@ -956,15 +1133,13 @@ export default function SignupScreen() {
                       />
                     </View>
                     <View style={styles.fieldBlock}>
-                      <TextInput
+                      <AppInput
                         ref={accessRef}
                         value={accessNote}
                         onChangeText={setAccessNote}
                         placeholder="Complément d'accès"
-                        placeholderTextColor="#91A59D"
                         returnKeyType="done"
                         onSubmitEditing={() => void submit()}
-                        style={styles.fieldInput}
                       />
                     </View>
                   </>
@@ -973,12 +1148,14 @@ export default function SignupScreen() {
             </>
           )}
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error ? (
+            <AppText variant="error" style={{ marginTop: 12 }} accessibilityRole="alert">
+              {error}
+            </AppText>
+          ) : null}
 
           {currentStep === 1 ? (
-            <Pressable onPress={goToStepTwo} style={styles.submitButton}>
-              <Text style={styles.submitText}>Continuer</Text>
-            </Pressable>
+            <AppButton title="Continuer" variant="primary" onPress={goToStepTwo} style={{ alignSelf: "stretch" }} />
           ) : (
             <>
               <Pressable
@@ -991,7 +1168,7 @@ export default function SignupScreen() {
                 <View style={[styles.termsBox, acceptedTerms ? styles.termsBoxChecked : null]}>
                   {acceptedTerms ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
                 </View>
-                <Text style={styles.termsText}>
+                <Text style={styles.termsText} maxFontSizeMultiplier={1.35}>
                   J&apos;accepte les{" "}
                   <Text
                     style={styles.termsLink}
@@ -1011,37 +1188,43 @@ export default function SignupScreen() {
               </Pressable>
 
               <Pressable onPress={() => router.push("/(public)/why-create-account" as any)}>
-                <Text style={styles.whyLink}>Pourquoi créer un compte ?</Text>
+                <Text style={styles.whyLink} maxFontSizeMultiplier={1.28}>
+                  Pourquoi créer un compte ?
+                </Text>
               </Pressable>
 
               <View style={styles.stepActions}>
                 <Pressable onPress={() => setCurrentStep(1)} style={styles.secondaryAction}>
-                  <Text style={styles.secondaryActionText}>Retour</Text>
+                  <Text style={styles.secondaryActionText} maxFontSizeMultiplier={1.28}>
+                    Retour
+                  </Text>
                 </Pressable>
-                <Pressable
-                  onPress={() => void submit()}
+                <AppButton
+                  title={"Sauvegarder et s'inscrire"}
+                  variant="primary"
+                  loading={pending}
                   disabled={pending || !acceptedTerms}
+                  onPress={() => void submit()}
                   style={[
-                    styles.submitButton,
                     styles.submitButtonInline,
-                    pending || !acceptedTerms ? styles.submitButtonDisabled : null,
+                    { minHeight: layout.ctaHeight + 2, borderRadius: layout.ctaRadius },
                   ]}
-                >
-                  {pending ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.submitText}>Sauvegarder et s&apos;inscrire</Text>
-                  )}
-                </Pressable>
+                />
               </View>
             </>
           )}
 
-          <Pressable onPress={() => router.replace("/(public)/login" as any)} style={styles.bottomLinkWrap}>
-            <Text style={styles.bottomLink}>Déjà un compte ? Se connecter</Text>
+          <Pressable
+            onPress={() => router.replace("/(public)/login" as any)}
+            style={({ pressed }) => [styles.bottomLinkWrap, pressed && styles.bottomLinkPressed]}
+          >
+            <Text style={styles.bottomLink} maxFontSizeMultiplier={1.28}>
+              Déjà un compte ? Se connecter
+            </Text>
           </Pressable>
-        </View>
-      </ScrollView>
+          </View>
+        </ResponsiveContainer>
+      </Screen>
     </View>
   );
 }
@@ -1049,70 +1232,93 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#EAF3F1",
+    backgroundColor: "#F4FAF8",
   },
   backgroundImage: {
-    opacity: 0.08,
+    opacity: 0.1,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(234,243,241,0.88)",
+    backgroundColor: "rgba(244, 250, 248, 0.88)",
+  },
+  accentGlowLarge: {
+    position: "absolute",
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    backgroundColor: "rgba(10, 143, 122, 0.11)",
+    zIndex: 0,
+  },
+  accentGlowSmall: {
+    position: "absolute",
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: "rgba(10, 143, 122, 0.08)",
+    zIndex: 0,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 30,
+    paddingVertical: 18,
   },
   card: {
     width: "100%",
-    maxWidth: 420,
     alignSelf: "center",
-    borderRadius: 26,
-    padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(145,165,157,0.45)",
+    borderColor: "rgba(145, 165, 157, 0.42)",
     backgroundColor: "#FFFFFF",
+    overflow: "hidden",
     ...Platform.select({
-      web: { boxShadow: "0 20px 48px rgba(22,58,52,0.12)" },
+      web: { boxShadow: "0 8px 28px rgba(22, 58, 52, 0.11)" },
       default: {
         shadowColor: "#163A34",
-        shadowOpacity: 0.12,
-        shadowRadius: 18,
+        shadowOpacity: 0.11,
+        shadowRadius: 16,
         shadowOffset: { width: 0, height: 8 },
         elevation: 4,
       },
     }),
   },
-  backButton: {
+  cardBrandAccent: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 4,
+    backgroundColor: brandPrimary,
+    opacity: 0.95,
+  },
+  backButtonBase: {
     alignSelf: "flex-start",
-    paddingVertical: 6,
-    paddingHorizontal: 2,
-    marginBottom: 14,
+  },
+  logoBlock: {
+    alignItems: "center",
   },
   kicker: {
-    color: "#0A8F7A",
-    fontSize: 13,
-    fontWeight: "500",
-    letterSpacing: 0.5,
+    color: brandPrimary,
+    fontWeight: "600",
     textTransform: "uppercase",
-    marginBottom: 8,
+    textAlign: "center",
   },
   title: {
     fontFamily: "Philosopher_700Bold",
-    color: "#163A34",
-    fontSize: 30,
-    lineHeight: 34,
+    color: brandText,
+    textAlign: "center",
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: "#5F7369",
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: 10,
+    color: brandTextMuted,
+    textAlign: "center",
+  },
+  heroDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(145, 165, 157, 0.35)",
+    marginBottom: 2,
+    alignSelf: "stretch",
   },
   stepperWrap: {
-    marginTop: 16,
-    minHeight: 58,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1120,7 +1326,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   stepConnector: {
     flex: 0.8,
@@ -1133,8 +1339,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10,143,122,0.55)",
   },
   stepDot: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.55)",
@@ -1152,7 +1358,7 @@ const styles = StyleSheet.create({
   },
   stepDotText: {
     color: "#6F857E",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   stepDotTextActive: {
@@ -1168,28 +1374,34 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   googleButton: {
-    marginTop: 18,
-    minHeight: 50,
-    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(145,165,157,0.5)",
+    borderColor: UI_BORDER_SOFT,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
+    ...Platform.select({
+      web: { boxShadow: "0 1px 8px rgba(22, 58, 52, 0.06)" },
+      default: {
+        shadowColor: "#163A34",
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 1,
+      },
+    }),
   },
   googleButtonDisabled: {
     opacity: 0.7,
   },
   googleButtonText: {
     color: "#163A34",
-    fontSize: 15.5,
     fontWeight: "700",
-    letterSpacing: 0.2,
+    letterSpacing: 0.15,
   },
   googleDivider: {
-    marginTop: 12,
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
@@ -1206,22 +1418,20 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   sectionBlock: {
-    marginTop: 18,
     gap: 2,
   },
   sectionTitle: {
-    color: "#163A34",
-    fontSize: 15,
+    color: brandText,
     fontWeight: "700",
     marginBottom: 2,
   },
   mobilityTrigger: {
-    minHeight: 50,
+    minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#91A59D",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
+    borderColor: UI_BORDER_SOFT,
+    backgroundColor: UI_SURFACE,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1279,23 +1489,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   fieldBlock: {
-    marginTop: 16,
-    gap: 8,
+    marginTop: 12,
+    gap: 6,
   },
   fieldLabel: {
     color: "#5F7369",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     letterSpacing: 0.2,
   },
   fieldInput: {
-    minHeight: 50,
+    minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#91A59D",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 14,
-    color: "#163A34",
+    borderColor: UI_BORDER_SOFT,
+    backgroundColor: UI_SURFACE,
+    paddingHorizontal: 16,
+    color: brandText,
     fontSize: 16,
   },
   fieldInputActive: {
@@ -1372,9 +1582,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   optionalToggleRow: {
-    marginTop: 14,
-    minHeight: 42,
-    borderRadius: 12,
+    marginTop: 12,
+    minHeight: 36,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.45)",
     backgroundColor: "#F8FBFA",
@@ -1392,11 +1602,11 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   phoneRow: {
-    minHeight: 50,
+    minHeight: Platform.OS === "web" ? 32 : 48,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#91A59D",
-    backgroundColor: "#FFFFFF",
+    borderColor: UI_BORDER_SOFT,
+    backgroundColor: UI_SURFACE,
     flexDirection: "row",
     alignItems: "center",
     overflow: "hidden",
@@ -1404,15 +1614,15 @@ const styles = StyleSheet.create({
   phoneCountryButton: {
     minHeight: "100%",
     borderRightWidth: 1,
-    borderRightColor: "rgba(145,165,157,0.45)",
-    paddingHorizontal: 10,
+    borderRightColor: "rgba(145,165,157,0.35)",
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F8FBFA",
+    backgroundColor: "rgba(10, 143, 122, 0.05)",
   },
   phoneCountryCode: {
-    color: "#163A34",
+    color: brandText,
     fontWeight: "700",
     fontSize: 12,
   },
@@ -1423,10 +1633,12 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    minHeight: 50,
+    minHeight: Platform.OS === "web" ? 30 : 44,
+    paddingVertical: Platform.OS === "web" ? 5 : 10,
     paddingHorizontal: 12,
-    color: "#163A34",
-    fontSize: 16,
+    color: brandText,
+    fontSize: 15,
+    backgroundColor: UI_SURFACE,
   },
   phoneCountryList: {
     marginTop: 8,
@@ -1475,30 +1687,21 @@ const styles = StyleSheet.create({
   phoneCountryItemDialActive: {
     color: "#0A8F7A",
   },
-  passwordWrap: {
-    position: "relative",
-  },
-  passwordInput: {
-    paddingRight: 52,
-  },
   passwordToggle: {
-    position: "absolute",
-    right: 10,
-    top: 0,
-    bottom: 0,
     justifyContent: "center",
     paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   civilityWrap: {
     marginTop: 2,
     position: "relative",
   },
   civilityTrigger: {
-    minHeight: 50,
-    borderRadius: 14,
+    minHeight: 30,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#91A59D",
-    backgroundColor: "#FFFFFF",
+    borderColor: UI_BORDER_SOFT,
+    backgroundColor: UI_SURFACE,
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -1583,59 +1786,44 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
     fontWeight: "700",
   },
-  errorText: {
-    marginTop: 12,
-    color: "#B42318",
-    fontWeight: "600",
-  },
-  submitButton: {
-    marginTop: 18,
-    minHeight: 54,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0A8F7A",
-  },
-  submitButtonDisabled: {
-    backgroundColor: "#84B7AE",
-  },
   submitButtonInline: {
     flex: 1,
     marginTop: 0,
   },
   stepActions: {
-    marginTop: 18,
+    marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   secondaryAction: {
-    minHeight: 54,
-    borderRadius: 14,
+    minHeight: 30,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "rgba(10,143,122,0.35)",
     backgroundColor: "#F4FAF8",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: 14,
   },
   secondaryActionText: {
     color: "#0A8F7A",
     fontWeight: "700",
-    fontSize: 15,
-  },
-  submitText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
+    fontSize: 13,
   },
   bottomLinkWrap: {
     marginTop: 14,
     alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  bottomLinkPressed: {
+    backgroundColor: "rgba(10, 143, 122, 0.06)",
   },
   bottomLink: {
-    color: "#0A8F7A",
-    fontWeight: "600",
+    color: brandPrimary,
+    fontWeight: "700",
+    fontSize: 13,
   },
 });

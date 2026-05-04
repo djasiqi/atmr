@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 
 const BORDER = "rgba(145, 165, 157, 0.45)";
 
@@ -23,8 +24,12 @@ type EnterpriseSheetProps = {
 export function EnterpriseSheet({ title, subtitle, children }: EnterpriseSheetProps) {
   return (
     <View style={s.root}>
-      <Text style={s.title}>{title}</Text>
-      {subtitle ? <Text style={s.subtitle}>{subtitle}</Text> : null}
+      <AppText variant="sectionTitle">{title}</AppText>
+      {subtitle ? (
+        <AppText variant="caption" style={s.subtitleSpacing}>
+          {subtitle}
+        </AppText>
+      ) : null}
       <View style={s.body}>{children}</View>
     </View>
   );
@@ -41,7 +46,6 @@ const s = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     ...sheetShadow,
   },
-  title: { fontSize: 14, fontWeight: "800", color: "#163A34" },
-  subtitle: { color: "#5F7369", fontSize: 11, lineHeight: 15, marginTop: 1 },
+  subtitleSpacing: { marginTop: 1 },
   body: { gap: 6, marginTop: 2 },
 });

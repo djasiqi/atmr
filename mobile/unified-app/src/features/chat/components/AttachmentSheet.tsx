@@ -1,4 +1,4 @@
-import { Button, Modal } from "../../../components/ui";
+import { AppButton, Modal } from "../../../design/responsive";
 
 type AttachmentSheetProps = {
   visible: boolean;
@@ -10,9 +10,9 @@ type AttachmentSheetProps = {
 export function AttachmentSheet({ visible, onClose, onPickImage, onPickPdf }: AttachmentSheetProps) {
   return (
     <Modal visible={visible} title="Ajouter une piece jointe" onClose={onClose}>
-      <Button label="Choisir une image" onPress={onPickImage} />
-      <Button label="Choisir un PDF" onPress={onPickPdf} />
-      <Button label="Fermer" variant="secondary" onPress={onClose} />
+      <AppButton title="Choisir une image" variant="secondary" onPress={onPickImage} />
+      <AppButton title="Choisir un PDF" variant="secondary" onPress={onPickPdf} />
+      <AppButton title="Fermer" variant="secondary" onPress={onClose} />
     </Modal>
   );
 }

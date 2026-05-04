@@ -322,9 +322,9 @@ class Config:
     # Portail client (ClientType PORTAL) : entreprise de référence pour
     # POST /clients/me/bookings/preview (grille de tarification entreprise).
     # 0 = le backend utilise la grille indicatif plateforme
-    # (``PlatformClientIndicativeFareConfig``), alignée sur
-    # ``POST /clients/me/indicative-fare/estimate`` — même ordre de grandeur
-    # que l’indicatif affiché dans l’app. Sinon, ID d’une company dont le
+    # (``PlatformClientIndicativeFareConfig``), alignee sur
+    # ``POST /clients/me/indicative-fare/estimate`` — meme ordre de grandeur
+    # que l'indicatif affiche dans l'app. Sinon, ID d'une company dont le
     # PricingProfile sert de prévisualisation contractuelle.
     PORTAL_CLIENT_PREVIEW_COMPANY_ID: int = int(
         (os.getenv("PORTAL_CLIENT_PREVIEW_COMPANY_ID") or "0").strip() or "0"
@@ -576,7 +576,7 @@ class DevelopmentConfig(Config):
     # prepare_threshold=0 : requis avec PgBouncer en mode transaction (psycopg3
     # uniquement ; exclu si postgresql:// → psycopg2).
     _dev_db_uri = SQLALCHEMY_DATABASE_URI
-    _dev_connect_args: dict[str, str | int] = {
+    _dev_connect_args: ClassVar[dict[str, str | int]] = {
         "client_encoding": "utf8",
     }
     if _is_psycopg3_dialect_in_url(_dev_db_uri):

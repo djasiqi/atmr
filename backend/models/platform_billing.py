@@ -34,7 +34,7 @@ class PlatformBillingPeriod(db.Model):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     billing_year: Mapped[int] = mapped_column(Integer, nullable=False)
-    billing_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1–12
+    billing_month: Mapped[int] = mapped_column(Integer, nullable=False)  # 1-12
     status: Mapped[str] = mapped_column(
         String(16),
         nullable=False,

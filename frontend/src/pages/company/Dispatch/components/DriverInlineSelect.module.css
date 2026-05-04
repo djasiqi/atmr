@@ -83,7 +83,7 @@
 /* Dropdown position:fixed */
 .dropdown {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--z-modal-popover);
   background: var(--bg-primary, white);
   border: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 8px;

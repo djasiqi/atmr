@@ -22,6 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+from typing_extensions import override
 
 from ext import db
 from models.base import _iso
@@ -52,7 +53,7 @@ class CompanyNotification(db.Model):
         Text,
         nullable=False,
     )
-    metadata_json: Mapped[dict | None] = mapped_column(
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata",
         JSONB,
         nullable=False,
@@ -95,6 +96,7 @@ class CompanyNotification(db.Model):
         ),
     )
 
+    @override
     def __repr__(self) -> str:
         return (
             f"<CompanyNotification id={self.id} "

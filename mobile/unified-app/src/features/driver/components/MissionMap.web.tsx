@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 
 type MissionMapProps = {
   pickupLat?: number | null;
@@ -26,10 +27,10 @@ export function MissionMap(props: MissionMapProps) {
         gap: 6,
       }}
     >
-      <Text style={{ fontWeight: "700" }}>Carte mission (web)</Text>
-      <Text>Le rendu cartographique natif n&apos;est pas disponible sur web.</Text>
-      <Text>Pickup: {formatCoord(props.pickupLat, props.pickupLng)}</Text>
-      <Text>Dropoff: {formatCoord(props.dropoffLat, props.dropoffLng)}</Text>
+      <AppText variant="sectionTitle">Carte mission (web)</AppText>
+      <AppText variant="body">Le rendu cartographique natif n&apos;est pas disponible sur web.</AppText>
+      <AppText variant="body">Pickup: {formatCoord(props.pickupLat, props.pickupLng)}</AppText>
+      <AppText variant="body">Dropoff: {formatCoord(props.dropoffLat, props.dropoffLng)}</AppText>
     </View>
   );
 }

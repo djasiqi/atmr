@@ -1,41 +1,94 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { ResponsiveContainer, Screen } from "../../src/design/responsive";
 
 export default function HelpScreen() {
   const router = useRouter();
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center", gap: 12 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Aide et FAQ operationnelle</Text>
-      <Text style={{ color: "#444" }}>
-        Retrouvez ici les solutions les plus frequentes avant connexion.
-      </Text>
-      <Text style={{ fontWeight: "700" }}>Puis-je reserver pour quelqu&apos;un d&apos;autre ?</Text>
-      <Text style={{ color: "#334" }}>Oui, depuis la pre-demande, ajoutez les besoins specifiques.</Text>
-      <Text style={{ fontWeight: "700" }}>Qui paie le transport ?</Text>
-      <Text style={{ color: "#334" }}>
-        Selon votre contexte: patient, compagnie, institution ou prise en charge.
-      </Text>
-      <Text style={{ fontWeight: "700" }}>Combien de temps a l&apos;avance reserver ?</Text>
-      <Text style={{ color: "#334" }}>
-        Le plus tot possible. Le systeme vous indique la disponibilite lors du check de zone.
-      </Text>
-      <Text style={{ fontWeight: "700" }}>Je ne peux pas me connecter</Text>
-      <Pressable onPress={() => router.push("/(public)/forgot-password" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Réinitialiser mon mot de passe</Text>
-      </Pressable>
-      <Text style={{ fontWeight: "700" }}>Mon compte n&apos;est pas activé</Text>
-      <Pressable onPress={() => router.push("/(public)/login" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>
-          Reprendre l&apos;activation depuis la connexion
-        </Text>
-      </Pressable>
-      <Text style={{ fontWeight: "700" }}>Je n&apos;ai pas reçu le SMS ou l&apos;email</Text>
-      <Pressable onPress={() => router.push("/(public)/contact" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Contacter le support</Text>
-      </Pressable>
-      <Pressable onPress={() => router.push("/(public)/how-it-works" as any)}>
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Voir comment ca marche</Text>
-      </Pressable>
-    </View>
+    <Screen scroll backgroundColor="#F7FBFA" contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <View style={styles.block}>
+          <Text style={styles.title}>Aide et FAQ</Text>
+          <Text style={styles.intro}>
+            Retrouvez ici les réponses les plus fréquentes avant connexion.
+          </Text>
+
+          <Text style={styles.question}>Puis-je réserver pour quelqu&apos;un d&apos;autre ?</Text>
+          <Text style={styles.answer}>
+            Oui : depuis la pré-demande, ajoutez les besoins spécifiques dans les champs prévus.
+          </Text>
+
+          <Text style={styles.question}>Qui paie le transport ?</Text>
+          <Text style={styles.answer}>
+            Selon votre contexte : patient, compagnie, institution ou prise en charge.
+          </Text>
+
+          <Text style={styles.question}>Combien de temps à l&apos;avance réserver ?</Text>
+          <Text style={styles.answer}>
+            Le plus tôt possible. Le système indique la disponibilité lors du contrôle de zone.
+          </Text>
+
+          <Text style={styles.question}>Je ne peux pas me connecter</Text>
+          <Pressable onPress={() => router.push("/(public)/forgot-password" as any)} style={styles.linkWrap}>
+            <Text style={styles.link}>Réinitialiser mon mot de passe</Text>
+          </Pressable>
+
+          <Text style={styles.question}>Mon compte n&apos;est pas activé</Text>
+          <Pressable onPress={() => router.push("/(public)/login" as any)} style={styles.linkWrap}>
+            <Text style={styles.link}>Reprendre l&apos;activation depuis la connexion</Text>
+          </Pressable>
+
+          <Text style={styles.question}>Je n&apos;ai pas reçu le SMS ou l&apos;e-mail</Text>
+          <Pressable onPress={() => router.push("/(public)/contact" as any)} style={styles.linkWrap}>
+            <Text style={styles.link}>Contacter le support</Text>
+          </Pressable>
+
+          <Pressable onPress={() => router.push("/(public)/how-it-works" as any)} style={styles.linkWrap}>
+            <Text style={styles.link}>Voir comment ça marche</Text>
+          </Pressable>
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    paddingVertical: 24,
+  },
+  block: {
+    gap: 14,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#163A34",
+  },
+  intro: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#5F7369",
+    marginBottom: 4,
+  },
+  question: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#163A34",
+    marginTop: 6,
+  },
+  answer: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#475569",
+  },
+  linkWrap: {
+    alignSelf: "flex-start",
+  },
+  link: {
+    color: "#0A8F7A",
+    fontWeight: "600",
+    fontSize: 15,
+    textDecorationLine: "underline",
+  },
+});

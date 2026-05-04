@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../../../../src/features/driver/hooks";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
 import { DriverMissionStatus } from "../../../../src/features/driver/types";
-import { Card, Loader } from "../../../../src/components/ui";
+import { AppCard, AppSpinner, AppText, brandSurfaceSoft, Screen } from "../../../../src/design/responsive";
 import { MissionMap } from "../../../../src/features/driver/components/MissionMap";
 import { ConfirmCompletionModal } from "../../../../src/features/driver/components/ConfirmCompletionModal";
 import { CancelJustificationModal } from "../../../../src/features/driver/components/CancelJustificationModal";
@@ -73,38 +73,44 @@ export default function DriverMissionDetailScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:update_status">
-        <ScrollView
+        <Screen
+          scroll
+          backgroundColor={brandSurfaceSoft}
+          withHorizontalPadding={false}
           contentContainerStyle={{
             paddingHorizontal: missionLayout.horizontalPadding,
             paddingVertical: 20,
             gap: 12,
             alignItems: "center",
+            paddingBottom: 32,
           }}
         >
           <View style={{ width: missionLayout.contentWidth, gap: 12 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700" }}>Mission detail</Text>
+          <AppText variant="sectionTitle">Mission detail</AppText>
           <DriverStateBanners />
-          {missionQuery.isLoading ? <Loader /> : null}
+          {missionQuery.isLoading ? <AppSpinner size="small" /> : null}
           {missionQuery.isError ? (
-            <Text>
+            <AppText variant="error">
               Impossible de charger le detail mission: {(missionQuery.error as Error)?.message ?? "Erreur"}
-            </Text>
+            </AppText>
           ) : null}
           {mission ? (
-            <Card>
-              <Text style={{ fontWeight: "700" }}>Mission #{mission.id}</Text>
-              <Text>Statut: {statusUx.label}</Text>
-              <Text>
+            <AppCard>
+              <AppText variant="label">Mission #{mission.id}</AppText>
+              <AppText variant="body">Statut: {statusUx.label}</AppText>
+              <AppText variant="body">
                 {(mission.pickup_location as string | undefined) ?? "Depart"}
                 {" -> "}
                 {(mission.dropoff_location as string | undefined) ?? "Arrivee"}
-              </Text>
-              <Text>Planifie: {(mission.scheduled_time as string | undefined) ?? "N/A"}</Text>
-              <Text>
+              </AppText>
+              <AppText variant="body">
+                Planifie: {(mission.scheduled_time as string | undefined) ?? "N/A"}
+              </AppText>
+              <AppText variant="body">
                 ETA dynamique:{" "}
                 {etaQuery.data?.eta_minutes != null ? `${etaQuery.data.eta_minutes} min` : "indisponible"}
-              </Text>
-            </Card>
+              </AppText>
+            </AppCard>
           ) : null}
 
           {mission ? (
@@ -137,9 +143,11 @@ export default function DriverMissionDetailScreen() {
             />
           ) : null}
 
-          {transition.isPending ? <Text>Transition en cours...</Text> : null}
+          {transition.isPending ? (
+            <AppText variant="bodyMuted">Transition en cours...</AppText>
+          ) : null}
           </View>
-        </ScrollView>
+        </Screen>
         <ConfirmCompletionModal
           visible={confirmCompletionOpen}
           missionId={mission?.id ?? null}

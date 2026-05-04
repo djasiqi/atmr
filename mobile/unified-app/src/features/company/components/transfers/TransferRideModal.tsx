@@ -1,5 +1,6 @@
-import { Pressable, Text } from "react-native";
-import { Button, Loader, Modal } from "../../../../components/ui";
+import { Pressable } from "react-native";
+import { AppButton, AppSpinner, Modal, brandPrimary, brandText } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 
 type TransferOption = { id: number; label: string };
 
@@ -26,9 +27,9 @@ export function TransferRideModal({
 }: TransferRideModalProps) {
   return (
     <Modal visible={visible} title="Transferer la course" onClose={onClose}>
-      {pending ? <Loader /> : null}
+      {pending ? <AppSpinner size="small" /> : null}
       {!pending && options.length === 0 ? (
-        <Text style={{ color: "#666" }}>Aucun partenaire disponible.</Text>
+        <AppText variant="bodyMuted">Aucun partenaire disponible.</AppText>
       ) : null}
       {options.map((company) => (
         <Pressable
@@ -36,23 +37,26 @@ export function TransferRideModal({
           onPress={() => onSelect(company.id)}
           style={{
             borderWidth: 1,
-            borderColor: selectedPartnerId === company.id ? "#0a7ea4" : "#ddd",
+            borderColor: selectedPartnerId === company.id ? "#0A8F7A" : "#ddd",
             borderRadius: 8,
             padding: 10,
           }}
         >
-          <Text style={{ color: selectedPartnerId === company.id ? "#0a7ea4" : "#333" }}>
+          <AppText
+            variant="body"
+            style={{ color: selectedPartnerId === company.id ? brandPrimary : brandText }}
+          >
             {company.label}
-          </Text>
+          </AppText>
         </Pressable>
       ))}
-      <Button
-        label={pending ? "Transfert..." : "Confirmer le transfert"}
+      <AppButton
+        title={pending ? "Transfert..." : "Confirmer le transfert"}
         variant="primary"
         onPress={onConfirm}
         disabled={pending || selectedPartnerId == null}
       />
-      {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+      {error ? <AppText variant="error">{error}</AppText> : null}
     </Modal>
   );
 }

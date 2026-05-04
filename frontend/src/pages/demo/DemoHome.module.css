@@ -33,8 +33,9 @@
   backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
-  padding: 20px;
-  z-index: 1200;
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
+  z-index: var(--z-modal-app);
 }
 
 .modalCard {

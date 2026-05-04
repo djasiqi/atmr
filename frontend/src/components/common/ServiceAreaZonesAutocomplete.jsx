@@ -8,6 +8,13 @@ const TYPE_LABELS = {
   district: 'District',
 };
 const CANONICAL_TOKEN_REGEX = /^(commune|canton|district):[A-Za-z0-9_-]+$/;
+/** Aligné sur OperationsTab / backend : GeoAdmin ou fallback Photon peuvent renvoyer canton_name:… */
+const NAMED_TOKEN_REGEX = /^(commune_name|canton_name|district_name):.+$/;
+
+const isPersistableZoneToken = (token) => {
+  const t = String(token || '');
+  return CANONICAL_TOKEN_REGEX.test(t) || NAMED_TOKEN_REGEX.test(t);
+};
 const normalizeKey = (item) =>
   `${String(item?.type || '').toLowerCase()}::${String(item?.name || '').trim().toLowerCase()}`;
 
@@ -65,12 +72,12 @@ export default function ServiceAreaZonesAutocomplete({
         });
         const rawItems = Array.isArray(response?.items) ? response.items : [];
         const degraded = Boolean(response?.meta?.degraded);
-        const canonicalOnly = rawItems.filter((item) =>
-          CANONICAL_TOKEN_REGEX.test(String(item?.token || ''))
+        const persistableItems = rawItems.filter((item) =>
+          isPersistableZoneToken(String(item?.token || ''))
         );
-        let filteredItems = canonicalOnly;
+        let filteredItems = persistableItems;
         if (allowFallbackResults && degraded) {
-          filteredItems = canonicalOnly.length > 0 ? canonicalOnly : rawItems;
+          filteredItems = persistableItems.length > 0 ? persistableItems : rawItems;
         }
         const grouped = new Map();
         filteredItems.forEach((item) => {
@@ -80,9 +87,9 @@ export default function ServiceAreaZonesAutocomplete({
         });
         const nextItems = [];
         grouped.forEach((group) => {
-          const canonical = group.filter((item) => CANONICAL_TOKEN_REGEX.test(String(item?.token || '')));
-          if (canonical.length > 0) {
-            nextItems.push(...canonical);
+          const preferred = group.filter((item) => isPersistableZoneToken(String(item?.token || '')));
+          if (preferred.length > 0) {
+            nextItems.push(...preferred);
             return;
           }
           nextItems.push(group[0]);

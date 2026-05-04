@@ -643,7 +643,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
   animation: fadeIn 0.2s ease;
 }
 
@@ -660,7 +662,7 @@
   background: var(--bg-primary);
   padding: var(--spacing-xl);
   border-radius: var(--radius-lg);
-  max-width: 500px;
+  max-width: var(--modal-width-compact);
   width: 90%;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   animation: slideUp 0.3s ease;

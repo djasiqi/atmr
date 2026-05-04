@@ -8,8 +8,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 16px;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
   animation: fadeIn 0.15s ease;
 }
 
@@ -24,8 +24,9 @@
   border-radius: 14px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
   width: 100%;
-  max-width: 560px;
-  max-height: calc(100vh - 32px);
+  max-width: var(--modal-width-secondary);
+  max-height: min(var(--modal-max-height), calc(100vh - 2 * var(--modal-overlay-padding)));
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -391,13 +392,13 @@
    ======================== */
 @media (max-width: 768px) {
   .overlay {
-    padding: 8px;
+    padding: var(--modal-overlay-padding);
     align-items: flex-end;
   }
 
   .modal {
     max-width: 100%;
-    max-height: 92vh;
+    max-height: var(--modal-max-height);
     border-radius: 14px 14px 0 0;
   }
 

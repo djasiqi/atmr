@@ -4,15 +4,12 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PermissionGuard } from "../../../src/core/guards";
 import {
   useClientBookingsQuery,
@@ -22,7 +19,19 @@ import {
 import { useClientBottomContentPadding } from "../../../src/features/client/navigation/ClientFloatingAppBar";
 import type { Booking } from "../../../src/features/client/types";
 
-const ACCENT = "#0a7ea4";
+import {
+  AppButton,
+  AppCard,
+  AppNotice,
+  AppStatusBadge,
+  AppText,
+  brandPrimary,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../src/design/responsive";
+
+const ACCENT = brandPrimary;
 
 function formatBookingWhen(value: string | null | undefined): string {
   const raw = String(value ?? "").trim();
@@ -60,33 +69,6 @@ function bookingStatusLabel(status: string | null | undefined): string {
   return map[s] || (status ? status.replace(/_/g, " ") : "Inconnu");
 }
 
-/** Pastilles discrètes, alignées charte web / mobile (slate + accents sémantiques légers). */
-function statusPillStyles(status: string | null | undefined) {
-  const s = String(status ?? "")
-    .trim()
-    .toLowerCase();
-  const base = {
-    backgroundColor: "#f1f5f9",
-    borderColor: "#e2e8f0",
-    color: "#475569",
-  };
-  const variants: Record<string, { backgroundColor: string; borderColor: string; color: string }> = {
-    pending: { backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#92400e" },
-    requested: { backgroundColor: "#eff6ff", borderColor: "#bfdbfe", color: "#1e40af" },
-    confirmed: { backgroundColor: "#ecfdf5", borderColor: "#bbf7d0", color: "#166534" },
-    /* Export RN Web client home : pastille neutre pour « Chauffeur assigné » */
-    assigned: base,
-    accepted: base,
-    en_route: { backgroundColor: "#ecfeff", borderColor: "#a5f3fc", color: "#0e7490" },
-    on_route: { backgroundColor: "#ecfeff", borderColor: "#a5f3fc", color: "#0e7490" },
-    in_progress: { backgroundColor: "#fffbeb", borderColor: "#fde68a", color: "#92400e" },
-    completed: { backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534" },
-    cancelled: { backgroundColor: "#fef2f2", borderColor: "#fecaca", color: "#991b1b" },
-    canceled: { backgroundColor: "#fef2f2", borderColor: "#fecaca", color: "#991b1b" },
-  };
-  return variants[s] ?? base;
-}
-
 async function hapticLight() {
   if (Platform.OS === "ios") {
     try {
@@ -104,14 +86,16 @@ function NextBookingCard({
   booking: Booking;
   onPressDetail: () => void;
 }) {
+  const t = useResponsiveTokens();
   const pickup = booking.pickup_location?.trim() || "Départ";
   const dropoff = booking.dropoff_location?.trim() || "Arrivée";
   const statusFr = bookingStatusLabel(booking.status);
-  const pillColors = statusPillStyles(booking.status);
 
   return (
-    <View style={styles.nextCard}>
-      <Text style={styles.nextCardTitle}>Prochaine réservation</Text>
+    <AppCard variant="elevated" style={styles.nextCard}>
+      <AppText variant="sectionTitle" style={styles.nextCardTitle}>
+        Prochaine réservation
+      </AppText>
 
       <View style={styles.routeBlock}>
         <View style={styles.routeLeg}>
@@ -119,38 +103,56 @@ function NextBookingCard({
             <View style={[styles.routeDot, styles.routeDotPickup]} />
             <View style={styles.routeLine} />
           </View>
-          <View style={styles.routeLegText}>
-            <Text style={styles.routeEyebrow}>Départ</Text>
-            <Text style={styles.routeAddr}>{pickup}</Text>
+          <View
+            style={[
+              styles.routeLegText,
+              {
+                paddingLeft: t.spacingSm + 2,
+                paddingBottom: t.spacingMd - 2,
+              },
+            ]}
+          >
+            <AppText variant="caption" style={styles.routeEyebrow}>
+              Départ
+            </AppText>
+            <AppText variant="body" style={styles.routeAddr}>
+              {pickup}
+            </AppText>
           </View>
         </View>
         <View style={styles.routeLeg}>
           <View style={styles.routeRail}>
             <View style={[styles.routeDot, styles.routeDotDropoff]} />
           </View>
-          <View style={styles.routeLegText}>
-            <Text style={styles.routeEyebrow}>Arrivée</Text>
-            <Text style={styles.routeAddr}>{dropoff}</Text>
+          <View
+            style={[
+              styles.routeLegText,
+              {
+                paddingLeft: t.spacingSm + 2,
+                paddingBottom: t.spacingMd - 2,
+              },
+            ]}
+          >
+            <AppText variant="caption" style={[styles.routeEyebrow, { marginBottom: t.spacingXs }]}>
+              Arrivée
+            </AppText>
+            <AppText variant="body" style={styles.routeAddr}>
+              {dropoff}
+            </AppText>
           </View>
         </View>
       </View>
 
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
-          <Text style={styles.metaLabel}>Date</Text>
-          <Text style={styles.metaValue}>{formatBookingWhen(booking.scheduled_time)}</Text>
+          <AppText variant="caption" style={[styles.metaLabel, { marginBottom: t.spacingXs }]}>
+            Date
+          </AppText>
+          <AppText variant="body" style={styles.metaValue}>
+            {formatBookingWhen(booking.scheduled_time)}
+          </AppText>
         </View>
-        <View
-          style={[
-            styles.statusPill,
-            {
-              backgroundColor: pillColors.backgroundColor,
-              borderColor: pillColors.borderColor,
-            },
-          ]}
-        >
-          <Text style={[styles.statusPillText, { color: pillColors.color }]}>{statusFr}</Text>
-        </View>
+        <AppStatusBadge status={booking.status} label={statusFr} />
       </View>
 
       <Pressable
@@ -161,18 +163,21 @@ function NextBookingCard({
         style={({ pressed }) => [styles.detailLinkWrap, pressed && styles.pressedOpacity]}
         accessibilityRole="button"
         accessibilityLabel="Voir le détail de la réservation"
-        android_ripple={{ color: "rgba(10, 126, 164, 0.12)", borderless: true }}
+        android_ripple={{ color: "rgba(10, 143, 122, 0.15)", borderless: true }}
       >
-        <Text style={styles.detailLink}>Voir le détail</Text>
+        <AppText variant="body" style={styles.detailLink}>
+          Voir le détail
+        </AppText>
         <Ionicons name="chevron-forward" size={18} color={ACCENT} />
       </Pressable>
-    </View>
+    </AppCard>
   );
 }
 
 export default function ClientHomeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const t = useResponsiveTokens();
+  const { horizontalPadding } = useAppViewport();
   const bottomPad = useClientBottomContentPadding();
   const [refreshing, setRefreshing] = useState(false);
   usePrefetchClientDashboard();
@@ -195,19 +200,26 @@ export default function ClientHomeScreen() {
     }
   }, [profileQuery, bookingsQuery]);
 
+  const scrollContentStyle = useMemo(
+    () => [
+      styles.scrollContent,
+      {
+        paddingHorizontal: horizontalPadding,
+        paddingTop: t.spacingSm + t.spacingXs,
+        gap: t.spacingSm + t.spacingXs,
+      },
+    ],
+    [horizontalPadding, t.spacingSm, t.spacingXs]
+  );
+
   return (
     <PermissionGuard permission="booking:read:self">
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(24, insets.top + 12),
-            paddingBottom: Math.max(bottomPad, insets.bottom + 20),
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <Screen
+        scroll
+        backgroundColor="#f8fafc"
+        withHorizontalPadding={false}
+        includeSafeAreaInScrollBottomPadding={false}
+        extraScrollBottomPadding={bottomPad}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -216,52 +228,57 @@ export default function ClientHomeScreen() {
             colors={[ACCENT]}
           />
         }
+        contentContainerStyle={scrollContentStyle}
       >
-        <Text style={styles.kicker}>Espace client</Text>
-        <Text style={styles.title}>
+        <AppText variant="caption" style={styles.kicker}>
+          Espace client
+        </AppText>
+        <AppText variant="screenTitle" style={styles.title}>
           {profileQuery.isLoading ? "Bonjour" : `Bonjour ${greetingName}`}
-        </Text>
-        <Text style={styles.subtitle}>
+        </AppText>
+        <AppText variant="body" style={styles.subtitle}>
           Réservez en quelques étapes et suivez vos trajets en cours.
-        </Text>
+        </AppText>
 
-        <Pressable
+        <AppButton
+          title="Réserver un transport"
+          variant="primary"
           onPress={() => {
             void hapticLight();
             router.push("/(app)/(client)/booking/new");
           }}
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-          accessibilityRole="button"
+          style={[styles.cta, { marginTop: t.spacingXs }]}
           accessibilityLabel="Réserver un transport"
-          android_ripple={{ color: "rgba(255, 255, 255, 0.28)" }}
-        >
-          <Text style={styles.ctaText}>Réserver un transport</Text>
-        </Pressable>
+        />
 
         {bookingsQuery.isLoading ? (
-          <View style={styles.loadingRow}>
+          <View
+            style={[
+              styles.loadingRow,
+              { gap: t.spacingSm + 2, paddingVertical: t.spacingSm },
+            ]}
+          >
             <ActivityIndicator color={ACCENT} />
-            <Text style={styles.loadingText}>Chargement des courses…</Text>
+            <AppText variant="caption">Chargement des courses…</AppText>
           </View>
         ) : null}
 
         {bookingsQuery.isError ? (
-          <View style={styles.messageCard}>
-            <Text style={styles.messageTitle}>Impossible de charger les courses</Text>
-            <Text style={styles.messageBody}>
-              {(bookingsQuery.error as Error)?.message ?? "Une erreur est survenue."}
-            </Text>
-          </View>
+          <AppNotice variant="danger" title="Impossible de charger les courses" style={styles.messageCard}>
+            {(bookingsQuery.error as Error)?.message ?? "Une erreur est survenue."}
+          </AppNotice>
         ) : null}
 
         {!bookingsQuery.isLoading && !bookingsQuery.isError && !nextBooking ? (
-          <View style={styles.emptyCard}>
+          <AppCard variant="surface" style={styles.emptyCard}>
             <Ionicons name="calendar-outline" size={28} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>Aucune réservation à venir</Text>
-            <Text style={styles.emptyHint}>
+            <AppText variant="sectionTitle" style={styles.emptyTitle}>
+              Aucune réservation à venir
+            </AppText>
+            <AppText variant="bodyMuted" style={styles.emptyHint}>
               Votre prochaine course apparaîtra ici dès qu’elle sera planifiée.
-            </Text>
-          </View>
+            </AppText>
+          </AppCard>
         ) : null}
 
         {nextBooking ? (
@@ -275,129 +292,50 @@ export default function ClientHomeScreen() {
             }
           />
         ) : null}
-      </ScrollView>
+      </Screen>
     </PermissionGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
   scrollContent: {
-    paddingHorizontal: 24,
-    gap: 12,
+    flexGrow: 1,
   },
   kicker: {
-    fontSize: 13,
-    color: "#64748b",
-    fontWeight: "600",
     letterSpacing: 0.35,
+    fontWeight: "600",
   },
   title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0f172a",
     letterSpacing: -0.5,
     marginTop: 2,
   },
   subtitle: {
-    color: "#334155",
-    fontSize: 15,
-    lineHeight: 22,
     marginTop: 2,
   },
   cta: {
-    borderRadius: 12,
-    backgroundColor: ACCENT,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginTop: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  ctaPressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.99 }],
-  },
-  ctaText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 16,
-    textAlign: "center",
+    alignSelf: "stretch",
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 8,
-  },
-  loadingText: {
-    color: "#64748b",
-    fontSize: 14,
   },
   messageCard: {
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: "#fef2f2",
-    gap: 6,
-  },
-  messageTitle: {
-    fontWeight: "700",
-    color: "#991b1b",
-    fontSize: 15,
-  },
-  messageBody: {
-    color: "#7f1d1d",
-    fontSize: 14,
-    lineHeight: 20,
+    marginTop: 4,
   },
   emptyCard: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 20,
-    backgroundColor: "#fff",
     alignItems: "center",
     gap: 8,
   },
   emptyTitle: {
-    fontWeight: "700",
-    color: "#0f172a",
-    fontSize: 16,
     textAlign: "center",
   },
   emptyHint: {
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 20,
     textAlign: "center",
   },
   nextCard: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 16,
     gap: 12,
-    backgroundColor: "#fff",
-    shadowColor: "#0f172a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
   },
   nextCardTitle: {
-    fontWeight: "700",
-    fontSize: 16,
-    color: "#0f172a",
     letterSpacing: -0.2,
   },
   routeBlock: {
@@ -441,22 +379,14 @@ const styles = StyleSheet.create({
   },
   routeLegText: {
     flex: 1,
-    paddingLeft: 10,
-    paddingBottom: 14,
     minWidth: 0,
   },
   routeEyebrow: {
-    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: "#94a3b8",
-    marginBottom: 4,
   },
   routeAddr: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#334155",
     fontWeight: "500",
   },
   metaRow: {
@@ -464,8 +394,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "flex-end",
     justifyContent: "space-between",
-    gap: 12,
-    paddingTop: 12,
     marginTop: 2,
     borderTopWidth: 1,
     borderTopColor: "#f1f5f9",
@@ -475,28 +403,13 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   metaLabel: {
-    fontSize: 11,
     fontWeight: "600",
-    color: "#94a3b8",
     textTransform: "uppercase",
     letterSpacing: 0.55,
     marginBottom: 4,
   },
   metaValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0f172a",
     fontVariant: ["tabular-nums"],
-  },
-  statusPill: {
-    alignSelf: "flex-end",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  statusPillText: {
-    fontSize: 12,
     fontWeight: "600",
   },
   detailLinkWrap: {
@@ -510,7 +423,6 @@ const styles = StyleSheet.create({
   detailLink: {
     color: ACCENT,
     fontWeight: "600",
-    fontSize: 15,
   },
   pressedOpacity: {
     opacity: 0.75,

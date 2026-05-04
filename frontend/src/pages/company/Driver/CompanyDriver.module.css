@@ -373,11 +373,11 @@
 .chipBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: calc(var(--z-modal-popover) - 1);
 }
 
 .chipMenu {
-  z-index: 9999;
+  z-index: var(--z-modal-popover);
   background: var(--bg-primary, #fff);
   border: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 8px;
@@ -979,7 +979,7 @@
     max-width: 100%;
     border-radius: 0;
     border-left: none;
-    z-index: 1000;
+    z-index: var(--z-modal-app);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   }
 
@@ -1142,11 +1142,12 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.25);
   backdrop-filter: blur(2px);
-  z-index: 10000;
+  z-index: var(--z-modal-app);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
   animation: confirmFadeIn 0.1s ease;
 }
 

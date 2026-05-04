@@ -408,7 +408,7 @@ class SendTransportRequestUseCase:
             )
 
             sched = transport_request.scheduled_time
-            time_str = sched.strftime("%d.%m.%Y %H:%M") if sched else ""
+            time_str = sched.strftime("%d.%m.%Y %H:%M")
             round_trip = " (A/R)" if transport_request.is_round_trip else ""
 
             title = "Nouvelle demande de transport"

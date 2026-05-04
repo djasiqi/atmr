@@ -7,11 +7,11 @@
   inset: 0;
   background: rgba(15, 23, 42, 0.25);
   backdrop-filter: blur(2px);
-  z-index: 10000;
+  z-index: var(--z-modal-app);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--modal-overlay-padding);
   animation: schedFadeIn 0.1s ease;
 }
 
@@ -26,7 +26,8 @@
   border: 1px solid var(--border-primary, #e2e8f0);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 400px;
+  max-width: var(--modal-width-narrow);
+  max-height: var(--modal-max-height);
   overflow: hidden;
   animation: schedSlideUp 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }

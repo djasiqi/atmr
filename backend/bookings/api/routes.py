@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from flask_restx import Namespace  # pyright: ignore[reportMissingImports]
+from flask_restx import Namespace
 
 # Pour l'instant, on garde les routes dans routes/bookings.py
 # et on les migrera progressivement ici

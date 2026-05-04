@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from marshmallow import ValidationError  # pyright: ignore[reportMissingImports]
+from marshmallow import ValidationError
 
 from domain.dispatch.commands import DispatchRunRequestCommand
 from schemas.dispatch_overrides_schema import DispatchOverridesSchema

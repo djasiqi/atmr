@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List
 
 from sqlalchemy import (

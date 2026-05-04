@@ -6,11 +6,11 @@ vers l'architecture DDD.
 
 from __future__ import annotations  # noqa: I001
 
-# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false
+# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false, reportUnusedFunction=false
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
@@ -21,6 +21,19 @@ from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
 )
+from application.invoices.invoice_line_description import (
+    build_merged_round_trip_invoice_line_description_from_segments,
+)
+from application.invoices.ride_line_draft import (
+    MaterialDeliveryPriceNotConfiguredError,
+    RideLineDraft,
+    compute_ride_line_draft,
+)
+from application.invoices.round_trip_billing_lock import (
+    filter_bookings_open_for_new_invoice_line,
+    round_trip_component_id_sets,
+)
+from application.invoices.invoice_pdf_state import mark_pdf_failed, mark_pdf_ready
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
@@ -46,37 +59,7 @@ logger = logging.getLogger(__name__)
 
 PERIOD_MONTH_THRESHOLD = 12
 MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
-
-
-def _adjustment_note_looks_like_global_remise_legacy(note: Any) -> bool:
-    """Note d'ajustement typique quand l'UI avait appliqué la remise sur chaque ligne."""
-    if note is None:
-        return False
-    s = str(note).strip().lower()
-    if not s:
-        return False
-    return (
-        "remise commerciale" in s
-        or "remise globale" in s
-        or "rabais" in s
-        or s.startswith("remise ")
-    )
-
-
-def _override_amount_matches_discounted_catalog(
-    catalog_ht: Decimal,
-    override_ht: Decimal,
-    discount_percent: Decimal,
-    *,
-    tolerance: Decimal = Decimal("0.05"),
-) -> bool:
-    """Override ≈ catalogue × (1 − %/100) après arrondi 5 cts (anciens brouillons)."""
-    if catalog_ht <= 0 or discount_percent <= 0:
-        return False
-    expected = round_to_5_cents(
-        catalog_ht * (Decimal("100") - discount_percent) / Decimal("100")
-    )
-    return abs(override_ht - expected) <= tolerance
+ROUND_TRIP_MERGE_MIN_SEGMENTS = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +176,7 @@ class GenerateInvoiceUseCase:
         Returns:
             GenerateInvoiceOutput avec la facture créée
         """
+        generated_pdf_url: str | None = None
         try:
             # Garde-fou: un seul mode "destinataire" à la fois.
             destinations = [
@@ -349,23 +333,52 @@ class GenerateInvoiceUseCase:
                             filtered_booking_dtos.append(dto)
 
                 booking_ids = [dto.id for dto in filtered_booking_dtos]
-                reservations = (
-                    Booking.query.filter(Booking.id.in_(booking_ids)).all()
-                    if booking_ids
-                    else []
+                if not booking_ids:
+                    msg = "Aucune réservation valide dans la sélection"
+                    raise ValueError(msg)
+                eligible_period = self.booking_repo.find_models_eligible_for_billing_period_by_company_and_client(
+                    company_id=input_data.company_id,
+                    client_id=input_data.client_id,
+                    period_year=input_data.period_year,
+                    period_month=input_data.period_month,
+                    billed_to_type=None,
                 )
-                if len(reservations) != len(input_data.reservation_ids):
+                selected_ids = {int(x) for x in booking_ids}
+                comps = round_trip_component_id_sets(
+                    eligible_period,
+                    amount_ht_fn=None,
+                )
+                expanded_ids: set[int] = set(selected_ids)
+                for comp in comps:
+                    if comp & selected_ids:
+                        expanded_ids |= comp
+                eligible_by_id = {int(b.id): b for b in eligible_period}
+                for sid in selected_ids:
+                    if sid in bookings_by_id:
+                        eligible_by_id.setdefault(sid, bookings_by_id[sid])
+                expanded_bookings = [
+                    eligible_by_id[i] for i in expanded_ids if i in eligible_by_id
+                ]
+                reservations = filter_bookings_open_for_new_invoice_line(
+                    expanded_bookings
+                )
+                if not reservations:
+                    msg = (
+                        "Aucune réservation facturable : les courses sélectionnées appartiennent "
+                        "à un aller-retour dont un segment est déjà facturé sur une facture valide, "
+                        "ou la sélection ne contient aucune course éligible."
+                    )
+                    raise ValueError(msg)
+                if len(booking_ids) < len(input_data.reservation_ids):
                     logger.warning(
                         (
                             "Certaines réservations ne sont pas valides ou "
-                            "déjà facturées. Demandé: %s, Trouvé: %s"
+                            "déjà facturées. Demandé: %s, éligibles après filtre: %s"
                         ),
                         len(input_data.reservation_ids),
-                        len(reservations),
+                        len(booking_ids),
                     )
-                if not reservations:
-                    msg = "Aucune réservation valide dans la sélection"
-                    raise ValueError(msg)
+                bookings_by_id = {r.id: r for r in reservations}
             else:
                 # Mode automatique : récupérer toutes les réservations de la période
                 start_date = datetime(
@@ -378,22 +391,16 @@ class GenerateInvoiceUseCase:
                         input_data.period_year, input_data.period_month + 1, 1
                     )
                 )
-                reservations = self.booking_repo.find_by_company_and_client_and_period(
+                eligible_owner = self.booking_repo.find_models_eligible_for_billing_period_by_company_and_client(
                     company_id=input_data.company_id,
                     client_id=input_data.client_id,
-                    start_date=start_date,
-                    end_date=end_date,
-                    statuses=target_statuses,
+                    period_year=input_data.period_year,
+                    period_month=input_data.period_month,
+                    billed_to_type="patient",
                 )
-                # Filtrer celles déjà facturées
-                reservations = [
-                    r
-                    for r in reservations
-                    if getattr(r, "invoice_line_id", None) is None
-                ]
 
                 # Pour ASSIGN_TO_PARTNER : inclure aussi les bookings où
-                # l'entreprise est exécutante
+                # l'entreprise est exécutante (y compris déjà facturés pour le graphe A/R)
                 from sqlalchemy import and_
 
                 from models.booking_transfer import BookingTransfer
@@ -407,7 +414,6 @@ class GenerateInvoiceUseCase:
                             Booking.company_id != input_data.company_id,
                             Booking.client_id == input_data.client_id,
                             Booking.status.in_(target_statuses),
-                            Booking.invoice_line_id.is_(None),
                             Booking.scheduled_time >= start_date,
                             Booking.scheduled_time < end_date,
                             BookingTransfer.transfer_model
@@ -418,10 +424,13 @@ class GenerateInvoiceUseCase:
                     )
                     .all()
                 )
-                # Ajouter les bookings assignés qui ne sont pas déjà dans la liste
-                existing_ids = {r.id for r in reservations}
-                reservations.extend(
-                    [b for b in assigned_bookings if b.id not in existing_ids]
+                merged_for_lock: dict[int, Booking] = {
+                    int(b.id): b for b in eligible_owner
+                }
+                for b in assigned_bookings:
+                    merged_for_lock[int(b.id)] = b
+                reservations = filter_bookings_open_for_new_invoice_line(
+                    list(merged_for_lock.values())
                 )
                 # Même accès qu'en mode reservation_ids (annulation / frais d'annulation)
                 bookings_by_id = {r.id: r for r in reservations}
@@ -747,198 +756,222 @@ class GenerateInvoiceUseCase:
                 except (InvalidOperation, ValueError, TypeError):
                     gd_pct_early = None
 
+            drafts: dict[int, RideLineDraft] = {}
             for reservation in reservations:
-                # ✅ Livraison matériel : utiliser prix fixe entreprise
-                mission_type = (
-                    getattr(reservation, "mission_type", None) or "patient_transport"
-                )
-                if mission_type == "material_delivery":
-                    fixed_price = billing_settings_dto.material_delivery_price_fixed
-                    if fixed_price is None or fixed_price <= 0:
-                        msg = (
-                            f"Impossible de facturer : configurez le prix fixe livraison "
-                            f"dans Paramètres > Facturation (réservation #{reservation.id})."
-                        )
-                        logger.error(msg)
-                        return GenerateInvoiceOutput(
-                            success=False,
-                            error={
-                                "error": msg,
-                                "error_code": ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED,
-                                "details": {
-                                    "field": "material_delivery_price_fixed",
-                                    "booking_id": str(reservation.id),
-                                },
+                try:
+                    drafts[reservation.id] = compute_ride_line_draft(
+                        reservation,
+                        two_places=two_places,
+                        billing_settings_dto=billing_settings_dto,
+                        overrides_map=overrides_map,
+                        bookings_by_id=bookings_by_id,
+                        gd_pct_early=gd_pct_early,
+                        patient_name=patient_name,
+                        bill_to_client_id=input_data.bill_to_client_id,
+                        clinic_company_id=input_data.clinic_company_id,
+                        billing_party_id=billing_party_id,
+                        default_vat_rate=default_vat_rate,
+                        vat_applicable=vat_applicable,
+                        description_builder=self.description_builder,
+                    )
+                except MaterialDeliveryPriceNotConfiguredError as e:
+                    msg = (
+                        f"Impossible de facturer : configurez le prix fixe livraison "
+                        f"dans Paramètres > Facturation (réservation #{e.booking_id})."
+                    )
+                    logger.error(msg)
+                    return GenerateInvoiceOutput(
+                        success=False,
+                        error={
+                            "error": msg,
+                            "error_code": ErrorCodes.MATERIAL_DELIVERY_PRICE_NOT_CONFIGURED,
+                            "details": {
+                                "field": "material_delivery_price_fixed",
+                                "booking_id": str(e.booking_id),
                             },
-                            status_code=400,
-                        )
-                    base_amount = Decimal(str(fixed_price)).quantize(two_places)
-                else:
-                    base_amount = Decimal(str(reservation.amount or 0)).quantize(
-                        two_places
-                    )
-                catalog_ht_patient = (
-                    base_amount if mission_type != "material_delivery" else None
-                )
-                override = overrides_map.get(reservation.id)
-                # Override montant : uniquement pour transport patient (pas livraison)
-                if (
-                    mission_type != "material_delivery"
-                    and override
-                    and "amount" in override
-                    and override["amount"] is not None
-                ):
-                    try:
-                        base_amount = Decimal(str(override["amount"])).quantize(
-                            two_places, rounding=ROUND_HALF_UP
-                        )
-                    except (InvalidOperation, ValueError, TypeError):
-                        logger.warning(
-                            "Montant override invalide pour réservation %s",
-                            reservation.id,
-                        )
-
-                # Déterminer le taux de TVA pour cette ligne
-                line_vat_rate = Decimal("0")
-                if vat_applicable:
-                    if override and override.get("vat_rate") is not None:
-                        try:
-                            override_vat_rate = Decimal(
-                                str(override["vat_rate"])
-                            ).quantize(Decimal("0.01"))
-                            if override_vat_rate > Decimal("0"):
-                                line_vat_rate = override_vat_rate
-                        except (InvalidOperation, ValueError, TypeError):
-                            logger.warning(
-                                "TVA override invalide pour réservation %s",
-                                reservation.id,
-                            )
-                            line_vat_rate = default_vat_rate
-                    else:
-                        line_vat_rate = default_vat_rate
-
-                # Annulation facturable : utiliser cancellation_fee_amount si disponible
-                booking_obj = bookings_by_id.get(reservation.id)
-                cancellation_fee_applied = False
-                if (
-                    booking_obj
-                    and str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-                    and getattr(booking_obj, "cancellation_fee_amount", None) is not None
-                ):
-                    base_amount = Decimal(str(booking_obj.cancellation_fee_amount)).quantize(two_places)
-                    cancellation_fee_applied = True
-
-                # Arrondir base_amount à 5 centimes avant de calculer la TVA
-                base_amount = round_to_5_cents(base_amount)
-
-                line_adjustment_note = (
-                    str(override["note"])[:500]
-                    if override and override.get("note")
-                    else None
-                )
-                override_had_amount = (
-                    mission_type != "material_delivery"
-                    and override
-                    and "amount" in override
-                    and override.get("amount") is not None
-                )
-                # Remise globale en fin de facture : ne pas conserver montant déjà remisé + note par ligne
-                if (
-                    gd_pct_early is not None
-                    and not cancellation_fee_applied
-                    and mission_type != "material_delivery"
-                    and catalog_ht_patient is not None
-                    and catalog_ht_patient > 0
-                    and _override_amount_matches_discounted_catalog(
-                        catalog_ht_patient, base_amount, gd_pct_early
-                    )
-                    and (
-                        _adjustment_note_looks_like_global_remise_legacy(
-                            line_adjustment_note
-                        )
-                        or (
-                            override_had_amount and line_adjustment_note is None
-                        )
-                    )
-                ):
-                    base_amount = round_to_5_cents(catalog_ht_patient)
-                    line_adjustment_note = None
-
-                # Calculer TVA et total avec TVA
-                vat_amount, total_with_vat = self.invoice_calculator.calculate_vat(
-                    base_amount, line_vat_rate
-                )
-
-                # Construire la description
-                is_delivery = mission_type == "material_delivery"
-                delivery_desc = (
-                    getattr(reservation, "delivery_description", None) or None
-                )
-                _is_cancelled = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-                _fee_pct = getattr(booking_obj, "cancellation_fee_percent", None) if booking_obj and _is_cancelled else None
-                _fee_tier = getattr(booking_obj, "cancellation_fee_tier_id", None) if booking_obj and _is_cancelled else None
-                description = self.description_builder.build_description(
-                    pickup_location=reservation.pickup_location or "",
-                    dropoff_location=reservation.dropoff_location or "",
-                    patient_name=patient_name
-                    if (
-                        input_data.bill_to_client_id
-                        or input_data.clinic_company_id
-                        or input_data.billing_party_id
-                    )
-                    and not is_delivery
-                    else None,
-                    bill_to_client_id=input_data.bill_to_client_id
-                    if not is_delivery
-                    else None,
-                    is_material_delivery=is_delivery,
-                    delivery_description=delivery_desc,
-                    is_cancelled=_is_cancelled,
-                    cancellation_fee_percent=_fee_pct,
-                    cancellation_fee_label=_fee_tier,
-                )
-
-                # Créer la ligne
-                line_type = (
-                    InvoiceLineType.MATERIAL_DELIVERY
-                    if is_delivery
-                    else InvoiceLineType.RIDE
-                )
-                line_data = {
-                    "invoice_id": invoice.id,
-                    "type": line_type,
-                    "description": description,
-                    "qty": Decimal("1"),
-                    "unit_price": base_amount,
-                    "line_total": base_amount,
-                    "vat_rate": line_vat_rate if line_vat_rate > Decimal("0") else None,
-                    "vat_amount": vat_amount,
-                    "total_with_vat": total_with_vat,
-                    "adjustment_note": line_adjustment_note,
-                    "reservation_id": reservation.id,
-                }
-                line_dto = self.invoice_line_repo.create(line_data)
-
-                line_model = db.session.get(InvoiceLine, line_dto.id)
-                if line_model is not None:
-                    ride_line_entries.append(
-                        (line_model, base_amount, line_vat_rate)
+                        },
+                        status_code=400,
                     )
 
-                # Lier la réservation à la ligne de facture
-                reservation.invoice_line_id = line_dto.id
-                reservation.updated_at = datetime.now(UTC)
+            ride_bookings = [
+                r
+                for r in reservations
+                if (getattr(r, "mission_type", None) or "patient_transport")
+                != "material_delivery"
+            ]
+            def rt_amount_ht(booking: Booking) -> Decimal:
+                return drafts[int(booking.id)].base_amount
 
+            round_trip_group_sets = [
+                s
+                for s in round_trip_component_id_sets(
+                    ride_bookings, amount_ht_fn=rt_amount_ht
+                )
+                if len(s) >= ROUND_TRIP_MERGE_MIN_SEGMENTS
+            ]
+            in_round_trip_merge: set[int] = set()
+            round_trip_primary_by_booking_id: dict[int, int] = {}
+            for comp in round_trip_group_sets:
+                in_round_trip_merge |= comp
+                segs_b = [
+                    bookings_by_id[i] for i in comp if i in bookings_by_id
+                ]
+                if len(segs_b) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
+                    continue
+                pri_b = min(
+                    segs_b,
+                    key=lambda b: (
+                        b.scheduled_time or datetime.min.replace(tzinfo=UTC),
+                        int(b.id),
+                    ),
+                )
+                for sb in segs_b:
+                    round_trip_primary_by_booking_id[int(sb.id)] = int(pri_b.id)
+
+            def _append_ride_accounting(
+                base_amount: Decimal, vat_amt: Decimal, rate: Decimal
+            ) -> None:
+                nonlocal subtotal, vat_total
                 subtotal += base_amount
-                vat_total += vat_amount
-                rate_key = f"{line_vat_rate.normalize()}"
+                vat_total += vat_amt
+                rate_key = f"{rate.normalize()}"
                 if rate_key not in vat_breakdown:
                     vat_breakdown[rate_key] = {
                         "base": Decimal("0.00"),
                         "vat": Decimal("0.00"),
                     }
                 vat_breakdown[rate_key]["base"] += base_amount
-                vat_breakdown[rate_key]["vat"] += vat_amount
+                vat_breakdown[rate_key]["vat"] += vat_amt
+
+            def emit_single_line(reservation: Booking, d: RideLineDraft) -> None:
+                vat_amount, total_with_vat = self.invoice_calculator.calculate_vat(
+                    d.base_amount, d.line_vat_rate
+                )
+                line_data = {
+                    "invoice_id": invoice.id,
+                    "type": d.line_type,
+                    "description": d.description,
+                    "qty": Decimal("1"),
+                    "unit_price": d.base_amount,
+                    "line_total": d.base_amount,
+                    "vat_rate": d.line_vat_rate if d.line_vat_rate > Decimal("0") else None,
+                    "vat_amount": vat_amount,
+                    "total_with_vat": total_with_vat,
+                    "adjustment_note": d.line_adjustment_note,
+                    "reservation_id": reservation.id,
+                }
+                line_dto = self.invoice_line_repo.create(line_data)
+                line_model = db.session.get(InvoiceLine, line_dto.id)
+                if line_model is not None:
+                    ride_line_entries.append(
+                        (line_model, d.base_amount, d.line_vat_rate)
+                    )
+                reservation.invoice_line_id = line_dto.id
+                reservation.updated_at = datetime.now(UTC)
+                _append_ride_accounting(d.base_amount, vat_amount, d.line_vat_rate)
+
+            def emit_merged_round_trip_group(segments: list[Booking]) -> None:
+                if len(segments) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
+                    return
+                ordered = sorted(
+                    segments,
+                    key=lambda b: (
+                        b.scheduled_time
+                        or datetime.min.replace(tzinfo=UTC),
+                        int(b.id),
+                    ),
+                )
+                primary = ordered[0]
+                d_pri = drafts[int(primary.id)]
+                base_total = round_to_5_cents(
+                    sum(drafts[int(b.id)].base_amount for b in segments)
+                )
+                rate = d_pri.line_vat_rate
+                for b in segments:
+                    if int(b.id) == int(primary.id):
+                        continue
+                    if drafts[int(b.id)].line_vat_rate != rate:
+                        logger.warning(
+                            "Segments A/R groupe incluant #%s : taux TVA différents — "
+                            "taux du segment principal #%s",
+                            b.id,
+                            primary.id,
+                        )
+                vat_amount, total_with_vat = self.invoice_calculator.calculate_vat(
+                    base_total, rate
+                )
+                merged_desc = (
+                    build_merged_round_trip_invoice_line_description_from_segments(
+                        ordered,
+                        primary_segment_description=d_pri.description,
+                    )
+                )
+                others = [int(b.id) for b in ordered if int(b.id) != int(primary.id)]
+                sec_descriptions = [
+                    drafts[int(b.id)].description[:500]
+                    for b in ordered
+                    if int(b.id) != int(primary.id)
+                ]
+                line_meta: dict[str, Any] = {
+                    "is_round_trip_leg": True,
+                    "transport_type": "A/R",
+                    "billing_unit": "round_trip",
+                    "booking_ids": [int(b.id) for b in ordered],
+                    "round_trip_secondary_reservation_ids": others,
+                    "secondary_segment_descriptions": sec_descriptions,
+                    "merged_segment_count": len(segments),
+                }
+                if others:
+                    line_meta["round_trip_secondary_reservation_id"] = others[0]
+                    line_meta["secondary_segment_description"] = sec_descriptions[0]
+                line_data = {
+                    "invoice_id": invoice.id,
+                    "type": InvoiceLineType.RIDE,
+                    "description": merged_desc[:500],
+                    "qty": Decimal("1"),
+                    "unit_price": base_total,
+                    "line_total": base_total,
+                    "vat_rate": rate if rate > Decimal("0") else None,
+                    "vat_amount": vat_amount,
+                    "total_with_vat": total_with_vat,
+                    "adjustment_note": d_pri.line_adjustment_note,
+                    "reservation_id": primary.id,
+                    "line_meta": line_meta,
+                }
+                line_dto = self.invoice_line_repo.create(line_data)
+                line_model = db.session.get(InvoiceLine, line_dto.id)
+                if line_model is not None:
+                    ride_line_entries.append((line_model, base_total, rate))
+                for b in segments:
+                    b.invoice_line_id = line_dto.id
+                    b.updated_at = datetime.now(UTC)
+                _append_ride_accounting(base_total, vat_amount, rate)
+
+            for reservation in reservations:
+                d = drafts[reservation.id]
+                if d.mission_type == "material_delivery":
+                    emit_single_line(reservation, d)
+                    continue
+                rid = int(reservation.id)
+                if rid in in_round_trip_merge:
+                    primary_rid = round_trip_primary_by_booking_id.get(rid)
+                    if primary_rid is None or primary_rid != rid:
+                        continue
+                    grp_bookings = [
+                        bookings_by_id[i]
+                        for i in next(
+                            gs
+                            for gs in round_trip_group_sets
+                            if rid in gs
+                        )
+                        if i in bookings_by_id
+                    ]
+                    if len(grp_bookings) < ROUND_TRIP_MERGE_MIN_SEGMENTS:
+                        emit_single_line(reservation, d)
+                        continue
+                    emit_merged_round_trip_group(grp_bookings)
+                else:
+                    emit_single_line(reservation, d)
 
             # 10. Mettre à jour les totaux de la facture
             gross_subtotal = round_to_5_cents(subtotal)
@@ -971,14 +1004,13 @@ class GenerateInvoiceUseCase:
             if apply_global_discount:
                 assert gd_pct_dec is not None
                 # Remise globale : un seul arrondi 0,05 sur le montant (pas % ni ligne par ligne).
-                discount_ht = round_to_5_cents(
-                    gross_subtotal * gd_pct_dec / Decimal("100")
+                discount_ht = min(
+                    round_to_5_cents(gross_subtotal * gd_pct_dec / Decimal("100")),
+                    gross_subtotal,
                 )
-                if discount_ht > gross_subtotal:
-                    discount_ht = gross_subtotal
                 net_ht = round_to_5_cents(gross_subtotal - discount_ht)
 
-                desc = f"Remise commerciale {str(gd_pct_dec.normalize())} %"
+                desc = f"Remise commerciale {gd_pct_dec.normalize()!s} %"
                 if gd_note_stripped:
                     desc = (
                         f"{desc} — appliquée sur le sous-total HT des prestations"
@@ -1093,12 +1125,33 @@ class GenerateInvoiceUseCase:
                         qr_ref,
                     )
 
-            # 12. Générer le PDF
-            pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
-            invoice.pdf_url = pdf_url
-
-            # 13. Commit de la transaction
+            # 12. Commit métier (facture + lignes + réservations). PDF fichier dans une 2e transaction.
             db.session.commit()
+
+            # 13. PDF + meta.pdf (``generate_invoice_pdf`` recharge la facture après ``expire_all``).
+            generated_pdf_url = None
+            try:
+                pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
+                generated_pdf_url = pdf_url or None
+                if pdf_url:
+                    mark_pdf_ready(invoice, pdf_url)
+                else:
+                    mark_pdf_failed(invoice, "PDF_EMPTY")
+                db.session.commit()
+            except Exception as pdf_err:
+                logger.exception(
+                    "Échec génération ou persistance PDF après création facture invoice_id=%s",
+                    getattr(invoice, "id", None),
+                )
+                try:
+                    mark_pdf_failed(invoice, str(pdf_err))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    logger.exception(
+                        "Échec persistance mark_pdf_failed invoice_id=%s",
+                        getattr(invoice, "id", None),
+                    )
 
             if input_data.bill_to_client_id:
                 logger.info(
@@ -1119,6 +1172,11 @@ class GenerateInvoiceUseCase:
             )
 
         except (OperationalError, DBAPIError) as e:
+            if generated_pdf_url:
+                logger.warning(
+                    "Rollback après génération PDF — fichier possiblement orphelin (pdf_url=%s)",
+                    generated_pdf_url,
+                )
             db.session.rollback()
             err_msg = str(e).lower()
             orig = getattr(e, "orig", None)
@@ -1160,6 +1218,11 @@ class GenerateInvoiceUseCase:
                 status_code=500,
             )
         except IntegrityError as e:
+            if generated_pdf_url:
+                logger.warning(
+                    "Rollback après génération PDF — fichier possiblement orphelin (pdf_url=%s)",
+                    generated_pdf_url,
+                )
             db.session.rollback()
             err_msg = str(e).lower()
             # CHECK constraint : livraison sans description (priorité sur enum)
@@ -1233,6 +1296,11 @@ class GenerateInvoiceUseCase:
                 status_code=400,
             )
         except ValueError as e:
+            if generated_pdf_url:
+                logger.warning(
+                    "Rollback après génération PDF — fichier possiblement orphelin (pdf_url=%s)",
+                    generated_pdf_url,
+                )
             db.session.rollback()
             logger.warning(
                 "Erreur de validation lors de la génération de facture: %s", e
@@ -1243,6 +1311,11 @@ class GenerateInvoiceUseCase:
                 status_code=400,
             )
         except Exception:
+            if generated_pdf_url:
+                logger.warning(
+                    "Rollback après génération PDF — fichier possiblement orphelin (pdf_url=%s)",
+                    generated_pdf_url,
+                )
             db.session.rollback()
             logger.exception("Erreur inattendue lors de la génération de la facture")
             return GenerateInvoiceOutput(

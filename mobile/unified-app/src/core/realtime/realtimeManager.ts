@@ -175,7 +175,8 @@ class RealtimeManager {
       desired_transport: desiredTransport,
     }, contextId);
     const initialActual: RealtimeState["actualTransport"] = "polling";
-    const socketPending = desiredTransport === "socket" && initialActual !== "socket";
+    /* Connexion socket demandée : démarrage effectif encore en polling jusqu'à upgradeEngine */
+    const socketPending = desiredTransport === "socket";
     this.setState({
       activeContextId: contextId,
       connected: true,

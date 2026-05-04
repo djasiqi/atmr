@@ -1,4 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  AppText,
+  brandPrimary,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../../src/design/responsive";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -10,7 +16,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useClientBottomContentPadding } from "../../../../src/features/client/navigation/ClientFloatingAppBar";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import DateTimePicker, {
@@ -252,7 +257,7 @@ function roundChfToFiveRappen(value: number): number {
   return Math.round((x + Number.EPSILON) * 20) / 20;
 }
 
-const ACCENT = "#0a7ea4";
+const ACCENT = brandPrimary;
 const ACCENT_SOFT = "#e6f6fb";
 const BORDER = "#e2e8f0";
 
@@ -894,7 +899,8 @@ export default function ClientBookingCreateScreen(
 ) {
   const { _testFormStep: testFormStep } = props;
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { topInset } = useAppViewport();
+  const t = useResponsiveTokens();
   const bottomBarPad = useClientBottomContentPadding();
   const params = useLocalSearchParams<{ publicDraftId?: string }>();
   const queryClient = useQueryClient();
@@ -2573,8 +2579,8 @@ export default function ClientBookingCreateScreen(
 
   if (!activeContext || activeContext.context_type !== "client") {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
-        <Text>Contexte client requis.</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: t.pageGap }}>
+        <AppText variant="body">Contexte client requis.</AppText>
       </View>
     );
   }
@@ -2607,7 +2613,7 @@ export default function ClientBookingCreateScreen(
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: Math.max(16, insets.top + 8),
+            paddingTop: Math.max(16, topInset + 8),
             paddingBottom: Math.max(bottomBarPad, 24),
           },
         ]}
@@ -2615,31 +2621,37 @@ export default function ClientBookingCreateScreen(
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroPanel}>
-          <Text style={styles.title}>Transport médical</Text>
+          <AppText variant="sectionTitle" style={styles.title}>
+            Transport médical
+          </AppText>
           <Text testID="booking-form-step" style={styles.stepPill}>
             {formStep === "details" ? "1/2 · Demande" : "2/2 · Récapitulatif"}
           </Text>
           {formStep === "details" ? (
-            <Text style={styles.lead}>
+            <AppText variant="bodyMuted" style={styles.lead}>
               Indiquez le trajet et l’horaire. Vous pourrez ajouter des détails utiles si nécessaire.
-            </Text>
+            </AppText>
           ) : (
-            <Text style={styles.summaryLegal}>
+            <AppText variant="bodyMuted" style={styles.summaryLegal}>
               Votre demande sera transmise après le paiement.
-            </Text>
+            </AppText>
           )}
         </View>
 
         {formStep === "details" ? (
           <View>
         <View style={styles.formCard}>
-          <Text style={styles.cardEyebrow}>Itinéraire</Text>
+          <AppText variant="caption" style={styles.cardEyebrow}>
+            Itinéraire
+          </AppText>
           <View style={styles.addressBlock}>
             <View style={styles.fieldLabelRow}>
               <View style={styles.fieldLabelIconWrap}>
                 <Ionicons name="location-outline" size={18} color={ACCENT} />
               </View>
-              <Text style={styles.sectionLabel}>Prise en charge</Text>
+              <AppText variant="sectionTitle" style={styles.sectionLabel}>
+                Prise en charge
+              </AppText>
             </View>
             <TextInput
             key={Platform.OS === "web" ? `client-booking-pickup-${pickupInputRevision}` : undefined}
@@ -2790,9 +2802,9 @@ export default function ClientBookingCreateScreen(
               <View style={styles.fieldLabelIconWrap}>
                 <Ionicons name="flag-outline" size={18} color={ACCENT} />
               </View>
-              <Text style={styles.sectionLabel} numberOfLines={1}>
+              <AppText variant="sectionTitle" style={styles.sectionLabel} numberOfLines={1}>
                 Arrivée
-              </Text>
+              </AppText>
             </View>
             <Pressable
               onPress={handleSwapAddresses}
@@ -2898,14 +2910,18 @@ export default function ClientBookingCreateScreen(
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.cardEyebrow}>Planification</Text>
+          <AppText variant="caption" style={styles.cardEyebrow}>
+            Planification
+          </AppText>
           <View style={styles.planningBody}>
             <View style={styles.planningSection}>
               <View style={styles.planningLabelRow}>
                 <View style={styles.fieldLabelIconWrap}>
                   <Ionicons name="time-outline" size={18} color={ACCENT} />
                 </View>
-                <Text style={styles.sectionLabel}>Horaire du transport</Text>
+                <AppText variant="sectionTitle" style={styles.sectionLabel}>
+                  Horaire du transport
+                </AppText>
               </View>
               <View style={styles.segmentRow}>
                 <Pressable
@@ -3059,7 +3075,9 @@ export default function ClientBookingCreateScreen(
                 <View style={styles.fieldLabelIconWrap}>
                   <Ionicons name="swap-horizontal-outline" size={18} color={ACCENT} />
                 </View>
-                <Text style={styles.sectionLabel}>Aller / retour</Text>
+                <AppText variant="sectionTitle" style={styles.sectionLabel}>
+                  Aller / retour
+                </AppText>
               </View>
               <View style={styles.segmentRow}>
                 <Pressable
@@ -3376,10 +3394,12 @@ export default function ClientBookingCreateScreen(
             ]}
           >
             <View style={styles.instructionsToggleTextCol}>
-              <Text style={styles.sectionLabel}>Détails (facultatif)</Text>
-              <Text style={[styles.sectionHint, { marginTop: 0 }]}>
+              <AppText variant="sectionTitle" style={styles.sectionLabel}>
+                Détails (facultatif)
+              </AppText>
+              <AppText variant="bodyMuted" style={[styles.sectionHint, { marginTop: 0 }]}>
                 Ajoutez ces informations seulement si elles peuvent aider le transporteur.
-              </Text>
+              </AppText>
             </View>
             <Ionicons
               name={optionalDetailsExpanded ? "chevron-up" : "chevron-down"}
@@ -3632,12 +3652,16 @@ export default function ClientBookingCreateScreen(
 
         {errorMessage ? (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
+            <AppText variant="error" style={styles.errorText}>
+              {errorMessage}
+            </AppText>
           </View>
         ) : null}
         {precisionWarning ? (
           <View style={styles.warnBanner}>
-            <Text style={styles.warnText}>{precisionWarning}</Text>
+            <AppText variant="body" style={styles.warnText}>
+              {precisionWarning}
+            </AppText>
           </View>
         ) : null}
 

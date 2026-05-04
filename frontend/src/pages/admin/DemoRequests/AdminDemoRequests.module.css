@@ -255,13 +255,14 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
-  z-index: 1200;
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
+  z-index: var(--z-modal-app);
 }
 
 .modalCard {
   width: min(1100px, 96vw);
-  max-height: 92vh;
+  max-height: min(92vh, var(--modal-max-height));
   overflow: auto;
   background: #fff;
   border-radius: 14px;

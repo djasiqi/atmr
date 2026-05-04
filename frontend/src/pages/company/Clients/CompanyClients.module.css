@@ -811,7 +811,7 @@
     max-width: 100% !important;
     border-radius: 0;
     border-left: none;
-    z-index: 1000;
+    z-index: var(--z-modal-app);
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   }
 

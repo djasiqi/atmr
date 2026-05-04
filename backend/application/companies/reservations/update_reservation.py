@@ -95,6 +95,12 @@ class UpdateCompanyReservationUseCase:
                     error={"error": f"Format de date invalide: {e}"},
                     status_code=400,
                 )
+            if scheduled_local is None:
+                return UpdateCompanyReservationResult(
+                    ok=False,
+                    error={"error": "Heure planifiée invalide ou manquante."},
+                    status_code=400,
+                )
             booking.scheduled_time = scheduled_local
             updated_fields.append("scheduled_time")
             # Règle métier: 00:00 => heure à confirmer, sinon heure confirmée.

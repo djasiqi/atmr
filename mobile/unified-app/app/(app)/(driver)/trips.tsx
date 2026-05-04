@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
 import { useSession } from "../../../src/core/sessionProvider";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
 import { DriverCompletedTrip, getDriverCompletedTrips } from "../../../src/features/driver/api";
-import { Button } from "../../../src/components/ui";
+import { AppButton, AppText, brandSurfaceSoft, Screen } from "../../../src/design/responsive";
 import { MissionCard } from "../../../src/features/driver/components/MissionCard";
 
 export default function DriverTripsScreen() {
@@ -49,37 +49,44 @@ export default function DriverTripsScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 10 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700" }}>Courses</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button
-              label="Missions actives"
+        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+          <AppText variant="sectionTitle" style={styles.title}>
+            Courses
+          </AppText>
+          <View style={styles.row}>
+            <AppButton
+              title="Missions actives"
               variant={mode === "active" ? "primary" : "secondary"}
               onPress={() => setMode("active")}
             />
-            <Button
-              label={historyPending ? "Chargement..." : "Historique operations"}
+            <AppButton
+              title={historyPending ? "Chargement…" : "Historique opérations"}
               variant={mode === "history" ? "primary" : "secondary"}
               disabled={historyPending}
               onPress={loadHistory}
             />
           </View>
 
-          {missionsQuery.isLoading ? <Text>Chargement des courses...</Text> : null}
-          {missionsQuery.error ? (
-            <Text style={{ color: "#B00020" }}>
-              {missionsQuery.error instanceof Error ? missionsQuery.error.message : "Erreur chargement courses."}
-            </Text>
+          {missionsQuery.isLoading ? (
+            <AppText variant="bodyMuted" style={styles.muted}>
+              Chargement des courses…
+            </AppText>
           ) : null}
-          {historyError ? <Text style={{ color: "#B00020" }}>{historyError}</Text> : null}
+          {missionsQuery.error ? (
+            <AppText variant="error" style={styles.error}>
+              {missionsQuery.error instanceof Error ? missionsQuery.error.message : "Erreur chargement courses."}
+            </AppText>
+          ) : null}
+          {historyError ? (
+            <AppText variant="error" style={styles.error}>
+              {historyError}
+            </AppText>
+          ) : null}
 
           {mode === "active" &&
             activeMissions.map((mission) => {
               return (
-                <View
-                  key={mission.id}
-                  style={{ gap: 6 }}
-                >
+                <View key={mission.id} style={styles.block}>
                   <MissionCard
                     mission={mission}
                     onOpen={(missionId) =>
@@ -89,8 +96,8 @@ export default function DriverTripsScreen() {
                       })
                     }
                   />
-                  <Button
-                    label="Voir details course"
+                  <AppButton
+                    title="Voir détails course"
                     variant="secondary"
                     onPress={() =>
                       router.push({
@@ -113,13 +120,21 @@ export default function DriverTripsScreen() {
             historyTrips.map((trip) => {
               const id = String(trip.id);
               return (
-                <View key={id} style={{ padding: 12, borderWidth: 1, borderColor: "#E3E3E3", borderRadius: 8, gap: 4 }}>
-                  <Text style={{ fontWeight: "700" }}>Course #{id}</Text>
-                  <Text>Pickup: {trip.pickup_location ?? "N/A"}</Text>
-                  <Text>Dropoff: {trip.dropoff_location ?? "N/A"}</Text>
-                  <Text>Status: {trip.status ?? "N/A"}</Text>
-                  <Button
-                    label="Voir details course"
+                <View key={id} style={styles.historyCard}>
+                  <AppText variant="label" style={styles.cardTitle}>
+                    Course #{id}
+                  </AppText>
+                  <AppText variant="body" style={styles.body}>
+                    Pickup : {trip.pickup_location ?? "N/A"}
+                  </AppText>
+                  <AppText variant="body" style={styles.body}>
+                    Dropoff : {trip.dropoff_location ?? "N/A"}
+                  </AppText>
+                  <AppText variant="body" style={styles.body}>
+                    Statut : {trip.status ?? "N/A"}
+                  </AppText>
+                  <AppButton
+                    title="Voir détails course"
                     variant="secondary"
                     onPress={() =>
                       router.push({
@@ -138,13 +153,57 @@ export default function DriverTripsScreen() {
             })}
 
           {mode === "active" && !missionsQuery.isLoading && activeMissions.length === 0 ? (
-            <Text style={{ color: "#666" }}>Aucune course trouvee.</Text>
+            <AppText variant="bodyMuted" style={styles.muted}>
+              Aucune course trouvée.
+            </AppText>
           ) : null}
           {mode === "history" && !historyPending && historyTrips.length === 0 ? (
-            <Text style={{ color: "#666" }}>Historique vide ou indisponible.</Text>
+            <AppText variant="bodyMuted" style={styles.muted}>
+              Historique vide ou indisponible.
+            </AppText>
           ) : null}
-        </ScrollView>
+        </Screen>
       </PermissionGuard>
     </DriverContextGuard>
   );
 }
+
+const styles = StyleSheet.create({
+  page: {
+    padding: 20,
+    gap: 10,
+    paddingBottom: 28,
+  },
+  title: {
+    color: "#0f172a",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  block: {
+    gap: 6,
+  },
+  historyCard: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 8,
+    gap: 4,
+    backgroundColor: "#fff",
+  },
+  cardTitle: {
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  body: {
+    color: "#334155",
+  },
+  muted: {
+    color: "#64748b",
+  },
+  error: {
+    color: "#B42318",
+  },
+});

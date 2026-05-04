@@ -247,15 +247,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: var(--z-modal-backdrop);
+  z-index: var(--z-modal-app);
+  box-sizing: border-box;
+  padding: var(--modal-overlay-padding);
   animation: fadeIn 0.2s ease-out;
-}
-
-/* Modals : au-dessus de la sidebar (z-index 1100) */
-.modal-overlay.modal-booking,
-.modal-overlay.modal-xl.modal-booking,
-.modal-overlay.modal-client {
-  z-index: 1200;
 }
 
 /* Facture (souvent en portail body) : au-dessus sidebar + notches (safe area) */
@@ -306,7 +301,7 @@
   background: var(--bg-primary);
   border-radius: var(--radius-xl);
   max-width: 90%;
-  max-height: 90vh;
+  max-height: var(--modal-max-height);
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   animation: slideUp 0.3s ease-out;
@@ -317,7 +312,7 @@
 
 /* Modal booking : design pro SaaS — format 3x4 responsive, dimensions alignées sur modal-client (1100 x 928) */
 .modal-overlay.modal-booking .modal-content {
-  max-width: 980px;
+  max-width: min(980px, var(--modal-width-workspace));
   width: 95%;
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -325,8 +320,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: min(92vh, 928px);
-  height: 92vh;
+  max-height: var(--modal-workspace-height);
+  height: var(--modal-workspace-height);
 }
 
 /* Petits écrans : modal pleine largeur, bords arrondis réduits */
@@ -366,10 +361,10 @@
 /* Large desktop : modal plus large pour grille 3 colonnes */
 @media (min-width: 1200px) {
   .modal-overlay.modal-booking .modal-content {
-    max-width: 1100px;
-    width: min(95%, 1100px);
+    max-width: var(--modal-width-workspace);
+    width: min(95%, var(--modal-width-workspace));
     height: auto;
-    max-height: min(92vh, 928px);
+    max-height: var(--modal-workspace-height);
   }
 }
 
@@ -382,7 +377,7 @@
 
 /* Modal client : single scroll, footer sticky — dimensions alignées sur modal-booking (1100 x ~928) */
 .modal-overlay.modal-client .modal-content {
-  max-width: 980px;
+  max-width: min(980px, var(--modal-width-workspace));
   width: 95%;
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -390,16 +385,16 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: min(92vh, 928px);
-  height: 92vh;
+  max-height: var(--modal-workspace-height);
+  height: var(--modal-workspace-height);
 }
 
 @media (min-width: 1200px) {
   .modal-overlay.modal-client .modal-content {
-    max-width: 1100px;
-    width: min(95%, 1100px);
+    max-width: var(--modal-width-workspace);
+    width: min(95%, var(--modal-width-workspace));
     height: auto;
-    max-height: min(92vh, 928px);
+    max-height: var(--modal-workspace-height);
   }
 }
 
@@ -482,18 +477,23 @@
   justify-content: flex-end;
 }
 
-/* Tailles de modals */
-.modal-sm .modal-content {
-  max-width: 400px !important;
+/* Tailles de modals — alignées sur tokens.css (narrow / secondary / editor / xl)
+   Parent .modal-{size} (composant Modal.jsx) OU même élément .modal-content.modal-{size} */
+.modal-sm .modal-content,
+.modal-content.modal-sm {
+  max-width: var(--modal-width-narrow) !important;
 }
-.modal-md .modal-content {
-  max-width: 600px !important;
+.modal-md .modal-content,
+.modal-content.modal-md {
+  max-width: var(--modal-width-secondary) !important;
 }
-.modal-lg .modal-content {
-  max-width: 900px !important;
+.modal-lg .modal-content,
+.modal-content.modal-lg {
+  max-width: var(--modal-width-editor) !important;
 }
-.modal-xl .modal-content {
-  max-width: 1200px !important;
+.modal-xl .modal-content,
+.modal-content.modal-xl {
+  max-width: var(--modal-width-xl) !important;
   width: 95%;
   border-radius: 16px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -502,19 +502,21 @@
   overflow-y: hidden !important;
   display: flex;
   flex-direction: column;
-  height: 80vh;
-  max-height: 860px;
+  height: var(--modal-max-height);
+  max-height: min(var(--modal-max-height), 860px);
 }
 
 @media (min-width: 1200px) {
-  .modal-xl .modal-content {
-    max-width: 1200px !important;
-    width: min(95%, 1200px);
+  .modal-xl .modal-content,
+  .modal-content.modal-xl {
+    max-width: var(--modal-width-xl) !important;
+    width: min(95%, var(--modal-width-xl));
   }
 }
 
 @media (max-height: 700px) {
-  .modal-xl .modal-content {
+  .modal-xl .modal-content,
+  .modal-content.modal-xl {
     height: 95vh;
     max-height: none;
   }
@@ -530,7 +532,8 @@
 }
 
 /* Enfant direct remplit toute la hauteur — le scroll est géré par le formulaire */
-.modal-xl .modal-content > * {
+.modal-xl .modal-content > *,
+.modal-content.modal-xl > * {
   flex: 1 1 0%;
   min-height: 0;
   overflow: hidden;
@@ -539,7 +542,7 @@
 
 /* Taille spéciale pour les modales compactes (planification, assignation) */
 .modal-compact .modal-content {
-  max-width: 420px !important;
+  max-width: var(--modal-width-compact) !important;
   width: auto;
 }
 

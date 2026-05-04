@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiX, FiAlertTriangle, FiClock, FiDollarSign, FiCheckCircle, FiLock } from 'react-icons/fi';
+import { FiX, FiBell, FiAlertTriangle, FiClock, FiDollarSign, FiCheckCircle, FiLock } from 'react-icons/fi';
 import styles from './ReminderModal.module.css';
 import { getNextReminderLevel } from '../../../../../services/invoiceService';
 import { fetchBillingSettings } from '../../../../../services/settingsService';
@@ -172,9 +172,12 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
       return invoice.billed_to_company.name || 'Clinique';
     }
     if (invoice.client) {
+      const fullName = `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`
+        .trim()
+        .replace(/\s+/g, ' ');
       return (
         invoice.client.institution_name ||
-        `${invoice.client.first_name || ''} ${invoice.client.last_name || ''}`.trim() ||
+        fullName ||
         invoice.client.username ||
         ''
       );
@@ -183,140 +186,168 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
   };
 
   return (
-    <div className={styles.overlay} onClick={handleClose}>
+    <div className={styles.modalOverlay} onClick={handleClose}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className={styles.header}>
-          <div className={styles.headerTitle}>
-            <FiAlertTriangle size={18} className={styles.headerIcon} />
-            <h2>Générer un rappel</h2>
+          <div className={styles.headerTitleWrap}>
+            <div className={styles.headerIconWrap}>
+              <FiBell size={16} aria-hidden />
+            </div>
+            <div>
+              <h2>Générer un rappel</h2>
+              <p className={styles.headerSubtitle}>
+                Frais et délais selon vos paramètres de facturation de l&apos;entreprise.
+              </p>
+            </div>
           </div>
-          <button className={styles.closeBtn} onClick={handleClose} aria-label="Fermer">
+          <button type="button" className={styles.closeBtn} onClick={handleClose} aria-label="Fermer">
             <FiX size={18} />
           </button>
         </div>
 
-        {/* Invoice summary card */}
-        <div className={styles.invoiceCard}>
-          <div className={styles.invoiceCardHeader}>
-            <span className={styles.invoiceNumber}>{invoice.invoice_number}</span>
-            <span className={styles.clientName}>{getClientName()}</span>
-          </div>
-          <div className={styles.invoiceDetails}>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Niveau actuel</span>
-              <span className={styles.detailValue}>
-                {invoice.reminder_level === 0 ? 'Aucun rappel' : `Rappel ${invoice.reminder_level}`}
-              </span>
-            </div>
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Dernier rappel</span>
-              <span className={styles.detailValue}>
-                {invoice.last_reminder_at
-                  ? new Date(invoice.last_reminder_at).toLocaleDateString('fr-CH')
-                  : 'Jamais'}
-              </span>
-            </div>
-            <hr className={styles.detailSeparator} />
-            <div className={styles.detailRow}>
-              <span className={styles.detailLabel}>Solde dû</span>
-              <span className={styles.detailValueBold}>{invoice.balance_due.toFixed(2)} CHF</span>
-            </div>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit}>
-          <div className={styles.body}>
-            {/* Level selector */}
-            <div className={styles.levelSectionLabel}>Niveau du rappel</div>
-
-            {nextLevel > 3 ? (
-              <div className={styles.emptyState}>
-                Tous les niveaux de rappel ont été utilisés pour cette facture.
+          <div className={styles.content}>
+            <div className={styles.infoBox}>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Facture</span>
+                <span className={styles.infoValue}>{invoice.invoice_number}</span>
               </div>
-            ) : (
-              <div className={styles.levelOptions}>
-                {reminderLevels.map((rl) => {
-                  const badge = LEVEL_BADGES[rl.value];
-                  const isNext = rl.value === nextLevel;
-                  const isDone = rl.value < nextLevel;
-                  const isLocked = rl.value > nextLevel;
-                  const isActive = level === rl.value;
-                  return (
-                    <label
-                      key={rl.value}
-                      className={[
-                        styles.levelCard,
-                        isActive ? styles.levelCardActive : '',
-                        isDone ? styles.levelCardDone : '',
-                        isLocked ? styles.levelCardLocked : '',
-                      ].filter(Boolean).join(' ')}
-                    >
-                      {isNext && (
-                        <input
-                          type="radio"
-                          name="level"
-                          value={rl.value}
-                          checked={isActive}
-                          onChange={() => setLevel(rl.value)}
-                          className={styles.levelRadio}
-                        />
-                      )}
-                      {isDone && (
-                        <div className={styles.levelDoneIcon}>
-                          <FiCheckCircle size={16} />
-                        </div>
-                      )}
-                      {isLocked && (
-                        <div className={styles.levelLockedIcon}>
-                          <FiLock size={14} />
-                        </div>
-                      )}
-                      <div className={styles.levelContent}>
-                        <div className={styles.levelHeader}>
-                          <span className={styles.levelTitle}>{rl.label}</span>
-                          {badge && (
-                            <span className={`${styles.levelBadge} ${badge.className}`}>
-                              {isDone ? 'Fait' : badge.label}
-                            </span>
-                          )}
-                        </div>
-                        <div className={styles.levelDesc}>
-                          {isDone
-                            ? 'Rappel déjà envoyé'
-                            : isLocked
-                              ? `Disponible après le rappel niveau ${rl.value - 1}`
-                              : rl.description}
-                        </div>
-                        {isNext && rl.delayDescription && (
-                          <div className={styles.levelDelay}>
-                            <FiClock size={11} />
-                            {rl.delayDescription}
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Client</span>
+                <span className={styles.infoValue}>{getClientName()}</span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Niveau actuel</span>
+                <span className={styles.infoValue}>
+                  {invoice.reminder_level === 0 ? 'Aucun rappel' : `Rappel ${invoice.reminder_level}`}
+                </span>
+              </div>
+              <div className={styles.infoRow}>
+                <span className={styles.infoLabel}>Dernier rappel</span>
+                <span className={styles.infoValue}>
+                  {invoice.last_reminder_at
+                    ? new Date(invoice.last_reminder_at).toLocaleDateString('fr-CH')
+                    : 'Jamais'}
+                </span>
+              </div>
+              <div className={`${styles.infoRow} ${styles.infoRowBalance}`}>
+                <span className={styles.infoLabel}>Solde dû</span>
+                <span className={`${styles.infoValue} ${styles.infoValueBalance}`}>
+                  {Number(invoice.balance_due ?? 0).toFixed(2)} CHF
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <span className={styles.fieldLabel}>Niveau du rappel</span>
+
+              {nextLevel > 3 ? (
+                <div className={styles.emptyState}>
+                  Tous les niveaux de rappel ont été utilisés pour cette facture.
+                </div>
+              ) : (
+                <div className={styles.levelOptions}>
+                  {reminderLevels.map((rl) => {
+                    const badge = LEVEL_BADGES[rl.value];
+                    const isNext = rl.value === nextLevel;
+                    const isDone = rl.value < nextLevel;
+                    const isLocked = rl.value > nextLevel;
+                    const isActive = level === rl.value;
+                    const cardClass = [
+                      styles.levelCard,
+                      isDone ? styles.levelCardDone : '',
+                      isLocked ? styles.levelCardLocked : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+
+                    const body = (
+                      <>
+                        {isNext && (
+                          <input
+                            type="radio"
+                            name="level"
+                            value={rl.value}
+                            checked={isActive}
+                            onChange={() => setLevel(rl.value)}
+                            className={styles.levelRadio}
+                          />
+                        )}
+                        {isDone && (
+                          <div className={styles.levelDoneIcon}>
+                            <FiCheckCircle size={14} aria-hidden />
                           </div>
                         )}
+                        {isLocked && (
+                          <div className={styles.levelLockedIcon}>
+                            <FiLock size={12} aria-hidden />
+                          </div>
+                        )}
+                        <div className={styles.levelContent}>
+                          <div className={styles.levelHeader}>
+                            <span className={styles.levelTitle}>{rl.label}</span>
+                            {badge && (
+                              <span className={`${styles.levelBadge} ${badge.className}`}>
+                                {isDone ? 'Fait' : badge.label}
+                              </span>
+                            )}
+                          </div>
+                          <div className={styles.levelDesc}>
+                            {isDone
+                              ? 'Rappel déjà envoyé'
+                              : isLocked
+                                ? `Disponible après le rappel niveau ${rl.value - 1}`
+                                : rl.description}
+                          </div>
+                          {isNext && rl.delayDescription && (
+                            <div className={styles.levelDelay}>
+                              <FiClock size={10} aria-hidden />
+                              {rl.delayDescription}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+
+                    return isNext ? (
+                      <label key={rl.value} className={cardClass}>
+                        {body}
+                      </label>
+                    ) : (
+                      <div
+                        key={rl.value}
+                        className={cardClass}
+                        aria-disabled={isLocked ? true : undefined}
+                      >
+                        {body}
                       </div>
-                    </label>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
+            </div>
 
-            {/* Fee summary */}
+            {/* Frais + délai (récap lisible, une ligne forte + méta) */}
             {selectedLevel && (
               <div className={styles.feeSummary}>
-                <div className={styles.feeSummaryIcon}>
-                  <FiDollarSign size={18} />
+                <div className={styles.feeSummaryIcon} aria-hidden>
+                  <FiDollarSign size={15} strokeWidth={2.25} />
                 </div>
-                <div className={styles.feeSummaryContent}>
-                  <p className={styles.feeSummaryTitle}>Frais de rappel</p>
-                  <p className={`${styles.feeSummaryAmount} ${fee === 0 ? styles.feeSummaryAmountZero : ''}`}>
-                    {fee === 0 ? 'Aucun frais' : `${fee.toFixed(2)} CHF`}
-                  </p>
-                  {selectedLevel.delayDescription && (
-                    <p className={styles.feeSummaryDelay}>
-                      {selectedLevel.delayDescription}
-                    </p>
-                  )}
+                <div className={styles.feeSummaryBody}>
+                  <div className={styles.feeSummaryTop}>
+                    <span className={styles.feeSummaryTitle}>Frais de rappel</span>
+                    <span
+                      className={`${styles.feeSummaryAmount} ${fee === 0 ? styles.feeSummaryAmountZero : ''}`}
+                    >
+                      {fee === 0 ? 'Aucun frais' : `${fee.toFixed(2)} CHF`}
+                    </span>
+                  </div>
+                  {selectedLevel.delayDescription ? (
+                    <div className={styles.feeSummaryMeta}>
+                      <FiClock size={11} aria-hidden />
+                      <span>{selectedLevel.delayDescription}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -324,13 +355,17 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
             {/* Warnings */}
             {settingsLoadFailed && (
               <div className={styles.settingsWarning}>
-                <FiAlertTriangle size={14} />
+                <span className={styles.settingsWarningIcon}>
+                  <FiAlertTriangle size={14} aria-hidden />
+                </span>
                 Impossible de charger les paramètres de rappels — valeurs par défaut appliquées
               </div>
             )}
             {settingsUsingDefaults && !settingsLoadFailed && (
               <div className={styles.settingsWarning}>
-                <FiAlertTriangle size={14} />
+                <span className={styles.settingsWarningIcon}>
+                  <FiAlertTriangle size={14} aria-hidden />
+                </span>
                 Paramètres de rappel non configurés — valeurs par défaut appliquées
               </div>
             )}
@@ -338,11 +373,10 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
             {error && <div className={styles.error}>{error}</div>}
           </div>
 
-          {/* Footer */}
           <div className={styles.footer}>
             <button
               type="button"
-              className={styles.cancelBtn}
+              className={`${styles.btn} ${styles.btnSecondary}`}
               onClick={handleClose}
               disabled={loading}
             >
@@ -350,10 +384,17 @@ const ReminderModal = ({ open, invoice, onClose, onReminder }) => {
             </button>
             <button
               type="submit"
-              className={styles.submitBtn}
+              className={`${styles.btn} ${styles.btnPrimary}`}
               disabled={loading || nextLevel > 3}
             >
-              {loading ? 'Génération...' : `Générer le rappel niveau ${level}`}
+              {loading ? (
+                'Génération...'
+              ) : (
+                <>
+                  <FiBell size={14} aria-hidden />
+                  Générer le rappel niveau {level}
+                </>
+              )}
             </button>
           </div>
         </form>

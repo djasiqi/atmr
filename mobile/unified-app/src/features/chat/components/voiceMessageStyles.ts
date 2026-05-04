@@ -1,7 +1,5 @@
 import { StyleSheet } from "react-native";
 
-const C_HEADING = "#111827";
-const C_BODY = "#6b7280";
 const C_BUBBLE_OWN = "#0d9488";
 
 /** Aligné sur `CHAT_IMAGE_INNER_MAX_W` dans MessageBubble. */
@@ -37,17 +35,11 @@ export const voiceStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  voiceTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: C_HEADING,
-  },
+  /** Typo via `AppText` ; ici uniquement couleurs contexte bulle (voir VoiceMessageBar). */
   voiceTitleOwn: {
     color: "#fff",
   },
-  voiceMeta: {
-    fontSize: 12,
-    color: C_BODY,
+  voiceMetaSpacing: {
     marginTop: 2,
   },
   voiceMetaOwn: {

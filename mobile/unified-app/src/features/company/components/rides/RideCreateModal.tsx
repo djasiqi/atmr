@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
-import { Button, Modal } from "../../../../components/ui";
+import { TextInput, View } from "react-native";
+import { AppButton, Modal } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
 import { useRideCreate, useRideFormState } from "../../useRideForms";
 import { AddressSelector } from "./AddressSelector";
@@ -72,7 +73,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       <Modal visible={visible} title="Creer une mission" onClose={onClose}>
         <View style={{ gap: 8 }}>
           <ClientSelector value={form.clientId} onChange={form.setClientId} />
-          <Button label="Nouveau client" onPress={() => setCreateClientVisible(true)} />
+          <AppButton title="Nouveau client" variant="secondary" onPress={() => setCreateClientVisible(true)} />
           <AddressSelector
             label="Pickup"
             value={form.pickup}
@@ -94,12 +95,12 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
             multiline
             style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, minHeight: 80 }}
           />
-          <Button
-            label={createRide.isPending ? "Creation..." : "Creer la mission"}
+          <AppButton
+            title={createRide.isPending ? "Creation..." : "Creer la mission"}
             variant="primary"
             onPress={() => void submit()}
           />
-          {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+          {error ? <AppText variant="error">{error}</AppText> : null}
         </View>
       </Modal>
       <ClientCreateModal

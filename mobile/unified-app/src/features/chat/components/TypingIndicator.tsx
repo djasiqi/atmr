@@ -1,4 +1,4 @@
-import { Text } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 
 type TypingIndicatorProps = {
   visible: boolean;
@@ -7,5 +7,9 @@ type TypingIndicatorProps = {
 
 export function TypingIndicator({ visible, label = "Saisie en cours..." }: TypingIndicatorProps) {
   if (!visible) return null;
-  return <Text style={{ color: "#666", fontStyle: "italic" }}>{label}</Text>;
+  return (
+    <AppText variant="caption" style={{ fontStyle: "italic" }}>
+      {label}
+    </AppText>
+  );
 }

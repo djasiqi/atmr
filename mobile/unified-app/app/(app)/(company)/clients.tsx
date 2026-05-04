@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
@@ -8,7 +8,20 @@ import {
   useCompanyClientsReadonlyQuery,
   useCompanyInvoicesReadonlyQuery,
 } from "../../../src/features/company/hooks";
-import { Button, InputField, Loader } from "../../../src/components/ui";
+import {
+  AppButton,
+  AppCard,
+  AppEmptyState,
+  AppInput,
+  AppSpinner,
+  AppText,
+  brandPrimary,
+  brandSurfaceSoft,
+  brandTextMuted,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../src/design/responsive";
 
 function extractClientId(row: Record<string, unknown>): number | null {
   const candidate = row.client_id ?? row.id;
@@ -61,6 +74,8 @@ export default function CompanyClientsScreen() {
     () => invoiceRows.filter((row) => resolveUnpaid(row)).length,
     [invoiceRows]
   );
+  const t = useResponsiveTokens();
+  const { horizontalPadding } = useAppViewport();
 
   useEffect(() => {
     setActiveSection(requestedSection);
@@ -69,145 +84,153 @@ export default function CompanyClientsScreen() {
   if (!clientsReadonlyEnabled && !invoicesReadonlyEnabled) {
     return (
       <PermissionGuard permission="company:dashboard:read">
-        <View style={{ flex: 1, padding: 24, justifyContent: "center", gap: 8 }}>
-          <Text style={{ fontWeight: "700", fontSize: 18 }}>Clients & Facturation</Text>
-          <Text style={{ color: "#666" }}>
-            Les surfaces en lecture seule sont désactivées via feature flags.
-          </Text>
+        <View style={{ flex: 1, padding: horizontalPadding, justifyContent: "center" }}>
+          <AppEmptyState
+            title="Clients & Facturation"
+            description="Les surfaces en lecture seule sont désactivées via feature flags."
+          />
         </View>
       </PermissionGuard>
     );
   }
 
+  const contentPad = {
+    paddingHorizontal: horizontalPadding,
+    paddingVertical: t.spacingMd,
+    gap: t.pageGap,
+  };
+
   return (
     <PermissionGuard permission="company:dashboard:read">
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
-        <Text style={{ fontWeight: "700", fontSize: 22 }}>Clients & Facturation</Text>
-        <Text style={{ color: "#667085" }}>
-          Vue unifiée pour consulter les clients et les factures en lecture seule.
-        </Text>
+      <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={contentPad}>
+        <AppText variant="screenTitle">Clients & Facturation</AppText>
+        <AppText variant="bodyMuted">Vue unifiée pour consulter les clients et les factures en lecture seule.</AppText>
 
         <View
           style={{
             flexDirection: "row",
-            gap: 8,
+            gap: t.spacingSm,
             backgroundColor: "#F2F4F7",
-            borderRadius: 12,
-            padding: 4,
+            borderRadius: t.radiusMd,
+            padding: t.spacingXs,
           }}
         >
           <Pressable
             onPress={() => setActiveSection("clients")}
             style={{
               flex: 1,
-              borderRadius: 10,
-              paddingVertical: 10,
+              borderRadius: t.radiusSm,
+              paddingVertical: t.spacingSm,
               alignItems: "center",
               backgroundColor: activeSection === "clients" ? "#FFFFFF" : "transparent",
             }}
           >
-            <Text style={{ fontWeight: "700", color: activeSection === "clients" ? "#0A7EA4" : "#667085" }}>
+            <AppText
+              variant="body"
+              style={{
+                fontWeight: "700",
+                color: activeSection === "clients" ? brandPrimary : brandTextMuted,
+              }}
+            >
               Clients
-            </Text>
+            </AppText>
           </Pressable>
           <Pressable
             onPress={() => setActiveSection("invoices")}
             style={{
               flex: 1,
-              borderRadius: 10,
-              paddingVertical: 10,
+              borderRadius: t.radiusSm,
+              paddingVertical: t.spacingSm,
               alignItems: "center",
               backgroundColor: activeSection === "invoices" ? "#FFFFFF" : "transparent",
             }}
           >
-            <Text style={{ fontWeight: "700", color: activeSection === "invoices" ? "#0A7EA4" : "#667085" }}>
+            <AppText
+              variant="body"
+              style={{
+                fontWeight: "700",
+                color: activeSection === "invoices" ? brandPrimary : brandTextMuted,
+              }}
+            >
               Facturation
-            </Text>
+            </AppText>
           </Pressable>
         </View>
 
         {activeSection === "clients" ? (
           <>
             {!clientsReadonlyEnabled ? (
-              <View style={{ borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 10, padding: 14 }}>
-                <Text style={{ fontWeight: "700", fontSize: 16 }}>Clients (lecture seule)</Text>
-                <Text style={{ color: "#667085", marginTop: 6 }}>
+              <AppCard variant="surface">
+                <AppText variant="sectionTitle">Clients (lecture seule)</AppText>
+                <AppText variant="bodyMuted" style={{ marginTop: t.fieldGap }}>
                   Cette section est désactivée par feature flag.
-                </Text>
-              </View>
+                </AppText>
+              </AppCard>
             ) : (
               <>
-                <InputField
+                <AppInput
                   value={clientSearch}
                   onChangeText={setClientSearch}
                   placeholder="Rechercher un client"
                 />
-                {clientsQuery.isLoading ? <Loader /> : null}
+                {clientsQuery.isLoading ? <AppSpinner size="small" /> : null}
                 {rows.map((row, index) => {
                   const id = extractClientId(row);
                   if (id == null) return null;
                   const selected = selectedClientId === id;
                   return (
-                    <Pressable
+                    <AppCard
                       key={`${id}-${index}`}
+                      variant="interactive"
                       onPress={() => setSelectedClientId(id)}
                       style={{
-                        borderWidth: 1,
-                        borderColor: selected ? "#0A7EA4" : "#E4E7EC",
-                        borderRadius: 12,
-                        padding: 12,
+                        borderColor: selected ? brandPrimary : undefined,
                         backgroundColor: selected ? "#F5FBFF" : "#FFFFFF",
-                        gap: 4,
                       }}
                     >
-                      <Text style={{ fontWeight: "700", color: selected ? "#0A7EA4" : "#101828" }}>
+                      <AppText
+                        variant="body"
+                        style={{ fontWeight: "700", color: selected ? brandPrimary : "#101828" }}
+                      >
                         {extractClientLabel(row)}
-                      </Text>
-                      <Text style={{ color: "#667085" }}>Client ID: {id}</Text>
-                    </Pressable>
+                      </AppText>
+                      <AppText variant="bodyMuted">Client ID: {id}</AppText>
+                    </AppCard>
                   );
                 })}
                 {!clientsQuery.isLoading && rows.length === 0 ? (
-                  <Text style={{ color: "#667085" }}>Aucun client trouvé.</Text>
+                  <AppEmptyState title="Aucun client" description="Aucun client ne correspond à la recherche." />
                 ) : null}
                 {clientsQuery.error ? (
-                  <Text style={{ color: "#B42318" }}>
+                  <AppText variant="error">
                     {clientsQuery.error instanceof Error
                       ? clientsQuery.error.message
                       : "Chargement clients impossible."}
-                  </Text>
+                  </AppText>
                 ) : null}
                 {selectedClientId != null ? (
-                  <View
-                    style={{
-                      borderWidth: 1,
-                      borderColor: "#E4E7EC",
-                      borderRadius: 12,
-                      padding: 12,
-                      gap: 6,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "700" }}>Fiche client #{selectedClientId}</Text>
-                    {detailQuery.isLoading ? <Loader /> : null}
+                  <AppCard variant="surface">
+                    <AppText variant="sectionTitle">Fiche client #{selectedClientId}</AppText>
+                    {detailQuery.isLoading ? <AppSpinner size="small" /> : null}
                     {detailQuery.data ? (
                       <>
-                        <Text>
+                        <AppText variant="body">
                           Nom: {String((detailQuery.data.full_name ?? detailQuery.data.name ?? "n/a") as string)}
-                        </Text>
-                        <Text>Email: {String((detailQuery.data.email ?? "n/a") as string)}</Text>
-                        <Text>Téléphone: {String((detailQuery.data.phone ?? "n/a") as string)}</Text>
-                        <Text>Notes: {String((detailQuery.data.notes ?? "n/a") as string)}</Text>
+                        </AppText>
+                        <AppText variant="body">Email: {String((detailQuery.data.email ?? "n/a") as string)}</AppText>
+                        <AppText variant="body">Téléphone: {String((detailQuery.data.phone ?? "n/a") as string)}</AppText>
+                        <AppText variant="body">Notes: {String((detailQuery.data.notes ?? "n/a") as string)}</AppText>
                       </>
                     ) : null}
                     {detailQuery.error ? (
-                      <Text style={{ color: "#B42318" }}>
+                      <AppText variant="error">
                         {detailQuery.error instanceof Error
                           ? detailQuery.error.message
                           : "Chargement fiche client impossible."}
-                      </Text>
+                      </AppText>
                     ) : null}
-                    <Button label="Fermer la fiche" onPress={() => setSelectedClientId(null)} />
-                  </View>
+                    <AppButton title="Fermer la fiche" variant="secondary" onPress={() => setSelectedClientId(null)} />
+                  </AppCard>
                 ) : null}
               </>
             )}
@@ -215,86 +238,83 @@ export default function CompanyClientsScreen() {
         ) : (
           <>
             {!invoicesReadonlyEnabled ? (
-              <View style={{ borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 10, padding: 14 }}>
-                <Text style={{ fontWeight: "700", fontSize: 16 }}>Factures (lecture seule)</Text>
-                <Text style={{ color: "#667085", marginTop: 6 }}>
+              <AppCard variant="surface">
+                <AppText variant="sectionTitle">Factures (lecture seule)</AppText>
+                <AppText variant="bodyMuted" style={{ marginTop: t.fieldGap }}>
                   Cette section est désactivée par feature flag.
-                </Text>
-              </View>
+                </AppText>
+              </AppCard>
             ) : (
               <>
-                <InputField
+                <AppInput
                   value={invoiceSearch}
                   onChangeText={setInvoiceSearch}
                   placeholder="Rechercher une facture"
                 />
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View
+                <View style={{ flexDirection: "row", gap: t.spacingSm }}>
+                  <AppCard variant="compact" style={{ flex: 1 }}>
+                    <AppText variant="caption">Total</AppText>
+                    <AppText variant="sectionTitle" style={{ marginTop: 4 }}>
+                      {invoiceRows.length}
+                    </AppText>
+                  </AppCard>
+                  <AppCard
+                    variant="compact"
                     style={{
                       flex: 1,
-                      borderWidth: 1,
-                      borderColor: "#E4E7EC",
-                      borderRadius: 10,
-                      padding: 10,
-                    }}
-                  >
-                    <Text style={{ color: "#667085" }}>Total</Text>
-                    <Text style={{ fontWeight: "700", fontSize: 18 }}>{invoiceRows.length}</Text>
-                  </View>
-                  <View
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
                       borderColor: "#FECACA",
-                      borderRadius: 10,
-                      padding: 10,
                       backgroundColor: "#FFF7F7",
                     }}
                   >
-                    <Text style={{ color: "#B42318" }}>Impayées</Text>
-                    <Text style={{ fontWeight: "700", fontSize: 18, color: "#B42318" }}>{unpaidCount}</Text>
-                  </View>
+                    <AppText variant="caption" style={{ color: "#B42318" }}>
+                      Impayées
+                    </AppText>
+                    <AppText variant="sectionTitle" style={{ marginTop: 4, color: "#B42318" }}>
+                      {unpaidCount}
+                    </AppText>
+                  </AppCard>
                 </View>
-                {invoicesQuery.isLoading ? <Loader /> : null}
+                {invoicesQuery.isLoading ? <AppSpinner size="small" /> : null}
                 {invoiceRows.map((row, index) => {
                   const unpaid = resolveUnpaid(row);
                   return (
-                    <View
+                    <AppCard
                       key={`${extractInvoiceValue(row, "id", "invoice_id", "number")}-${index}`}
+                      variant="surface"
                       style={{
-                        borderWidth: 1,
-                        borderColor: unpaid ? "#FECACA" : "#E4E7EC",
-                        borderRadius: 12,
-                        padding: 12,
-                        gap: 4,
+                        borderColor: unpaid ? "#FECACA" : undefined,
                         backgroundColor: unpaid ? "#FFF7F7" : "#FFFFFF",
                       }}
                     >
-                      <Text style={{ fontWeight: "700" }}>
+                      <AppText variant="body" style={{ fontWeight: "700" }}>
                         Facture {extractInvoiceValue(row, "number", "invoice_number", "id", "invoice_id")}
-                      </Text>
-                      <Text>Statut: {extractInvoiceValue(row, "status", "payment_status")}</Text>
-                      <Text>Montant: {extractInvoiceValue(row, "total_amount", "amount_total", "amount")}</Text>
-                      <Text>Mission: {extractInvoiceValue(row, "booking_id", "mission_id", "reservation_id")}</Text>
-                      {unpaid ? <Text style={{ color: "#B42318", fontWeight: "700" }}>Impayée</Text> : null}
-                    </View>
+                      </AppText>
+                      <AppText variant="body">Statut: {extractInvoiceValue(row, "status", "payment_status")}</AppText>
+                      <AppText variant="body">Montant: {extractInvoiceValue(row, "total_amount", "amount_total", "amount")}</AppText>
+                      <AppText variant="body">Mission: {extractInvoiceValue(row, "booking_id", "mission_id", "reservation_id")}</AppText>
+                      {unpaid ? (
+                        <AppText variant="error" style={{ fontWeight: "700" }}>
+                          Impayée
+                        </AppText>
+                      ) : null}
+                    </AppCard>
                   );
                 })}
                 {!invoicesQuery.isLoading && invoiceRows.length === 0 ? (
-                  <Text style={{ color: "#667085" }}>Aucune facture trouvée.</Text>
+                  <AppEmptyState title="Aucune facture" description="Aucune facture ne correspond à la recherche." />
                 ) : null}
                 {invoicesQuery.error ? (
-                  <Text style={{ color: "#B42318" }}>
+                  <AppText variant="error">
                     {invoicesQuery.error instanceof Error
                       ? invoicesQuery.error.message
                       : "Chargement factures impossible."}
-                  </Text>
+                  </AppText>
                 ) : null}
               </>
             )}
           </>
         )}
-      </ScrollView>
+      </Screen>
     </PermissionGuard>
   );
 }

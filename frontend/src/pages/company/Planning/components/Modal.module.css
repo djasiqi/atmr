@@ -3,29 +3,41 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 
 .modalContent {
   background: #fff;
-  padding: 16px;
-  max-width: 420px;
-  margin: 10vh auto;
-  border-radius: 8px;
+  padding: var(--modal-overlay-padding);
+  max-width: var(--modal-width-compact);
+  width: 100%;
+  max-height: var(--modal-max-height);
+  overflow: auto;
+  margin: 0;
+  border-radius: var(--radius-md);
 }
 
 .modalContentLarge {
   background: #fff;
-  padding: 16px;
-  max-width: 640px;
-  margin: 8vh auto;
-  border-radius: 8px;
+  padding: var(--modal-overlay-padding);
+  max-width: var(--modal-width-secondary);
+  width: 100%;
+  max-height: var(--modal-max-height);
+  overflow: auto;
+  margin: 0;
+  border-radius: var(--radius-md);
 }
 
 .modalActions {
-  margin-top: 12px;
+  margin-top: var(--spacing-md);
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
   justify-content: flex-end;
 }
 

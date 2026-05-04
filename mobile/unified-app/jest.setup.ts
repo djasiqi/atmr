@@ -24,9 +24,8 @@ jest.mock("expo-font", () => ({
 }));
 
 jest.mock("@expo/vector-icons", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factory (pas d'import dynamique ES)
   const React = require("react");
-  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   const Icon = () => React.createElement(React.Fragment);
   return {
     __esModule: true,
@@ -38,30 +37,37 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   jest.requireActual("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
+jest.mock("lottie-react-native", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.mock factory
+  const React = require("react");
+  const MockLottie = () => React.createElement(React.Fragment);
+  return { __esModule: true, default: MockLottie };
+});
+
 // Après `jest.preload.cjs` (fetch retiré) : forcer l’adaptateur http Node.
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+  /* eslint-disable @typescript-eslint/no-require-imports -- bindings Node pour axios en Jest */
   const nodeHttp = require("http");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const nodeHttps = require("https");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const axiosLib = require("axios");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const httpAdapter = require("axios/lib/adapters/http");
+  /* eslint-enable @typescript-eslint/no-require-imports */
   axiosLib.defaults.adapter = (config: object) => httpAdapter(config, { http: nodeHttp, https: nodeHttps });
 } catch {
   // no-op
 }
 
-// Restaurer fetch pour les tests / libs qui s’y attendent (client déjà initialisé).
-if (typeof (globalThis as { __JEST_SAVED_FETCH__?: typeof fetch }).__JEST_SAVED_FETCH__ === "function") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = (globalThis as { __JEST_SAVED_FETCH__: typeof fetch }).__JEST_SAVED_FETCH__;
+// Restaurer fetch pour les tests / libs qui s'y attendent (client déjà initialisé).
+const _globalWithSavedFetch = globalThis as unknown as {
+  __JEST_SAVED_FETCH__?: typeof fetch;
+  fetch: typeof fetch;
+};
+if (typeof _globalWithSavedFetch.__JEST_SAVED_FETCH__ === "function") {
+  _globalWithSavedFetch.fetch = _globalWithSavedFetch.__JEST_SAVED_FETCH__;
 }
 
 // expo-linking.parse s’appuie sur l’hôte / schéma natifs (Bare) : polyfill Jest.
 jest.mock("expo-linking", () => {
-  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   function parseLink(url: string) {
     if (typeof url !== "string" || !url) {
       return { scheme: null, hostname: "", path: "", queryParams: {} as Record<string, string> };

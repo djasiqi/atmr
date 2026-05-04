@@ -1033,7 +1033,7 @@ export default function Home() {
               { value: platformStats?.completedBookings, label: 'courses coordonnées' },
               { value: platformStats?.activeCompanies, label: 'entreprises partenaires' },
               { value: platformStats?.activeDrivers, label: 'chauffeurs actifs' },
-              { value: platformStats?.citiesServed, label: 'villes desservies' },
+              { value: platformStats?.cantonsServed, label: 'cantons desservis' },
             ].map((s, i) => (
               <div key={i} className={styles.statItem}>
                 <span className={styles.statNumber}>

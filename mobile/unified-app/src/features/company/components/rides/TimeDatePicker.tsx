@@ -1,4 +1,5 @@
-import { Text, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
+import { AppText } from "../../../../design/ui/AppText";
 
 const SWISS_TZ = "Europe/Zurich";
 
@@ -27,15 +28,15 @@ export function TimeDatePicker({ value, onChange }: TimeDatePickerProps) {
   const preview = formatSwissPreviewLocal(value);
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "600" }}>Date et heure</Text>
-      <Text style={{ color: "#5F6368", fontSize: 12 }}>
+      <AppText variant="label">Date et heure</AppText>
+      <AppText variant="bodyMuted">
         Fuseau affichage : Suisse (Europe/Zurich). Saisir une date-heure au format ISO (même règle que
         côté API) — ex. 2026-04-23T19:12:00
-      </Text>
+      </AppText>
       {preview ? (
-        <Text style={{ color: "#163A34", fontSize: 13, fontWeight: "500" }}>
+        <AppText variant="body" style={{ fontWeight: "500" }}>
           Aperçu (CH) : {preview}
-        </Text>
+        </AppText>
       ) : null}
       <TextInput
         value={value}

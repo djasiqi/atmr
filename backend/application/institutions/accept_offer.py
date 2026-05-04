@@ -451,12 +451,13 @@ class AcceptOfferUseCase:
             transport_request.id,
         )
 
-        if transport_request.is_round_trip and not transport_request.return_time:
+        return_time = getattr(transport_request, "return_time", None)
+        if transport_request.is_round_trip and return_time is None:
             logger.warning(
                 "[AcceptOffer] A/R sans return_time, skip retour request_id=%s",
                 transport_request.id,
             )
-        elif transport_request.is_round_trip and transport_request.return_time:
+        elif transport_request.is_round_trip and return_time is not None:
             return_booking = Booking(
                 company_id=company_id,
                 user_id=user_id,
@@ -464,7 +465,7 @@ class AcceptOfferUseCase:
                 customer_name=booking.customer_name,
                 mission_type=booking.mission_type,
                 delivery_description=booking.delivery_description,
-                scheduled_time=transport_request.return_time,
+                scheduled_time=return_time,
                 is_round_trip=False,
                 is_return=True,
                 parent_booking_id=booking.id,

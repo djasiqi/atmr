@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { useSession } from "../../../core/sessionProvider";
@@ -20,8 +21,13 @@ function Banner(props: { title: string; message: string; tone?: "warn" | "error"
         gap: 2,
       }}
     >
-      <Text style={{ fontWeight: "700", color: errorTone ? "#8a1f1f" : "#6a5320" }}>{props.title}</Text>
-      <Text style={{ color: errorTone ? "#8a1f1f" : "#6a5320" }}>{props.message}</Text>
+      {/* DS_EXCEPTION: couleurs sémantiques bannière warning / erreur sur fond teinté */}
+      <AppText variant="sectionTitle" style={{ color: errorTone ? "#8a1f1f" : "#6a5320" }}>
+        {props.title}
+      </AppText>
+      <AppText variant="body" style={{ color: errorTone ? "#8a1f1f" : "#6a5320" }}>
+        {props.message}
+      </AppText>
     </View>
   );
 }

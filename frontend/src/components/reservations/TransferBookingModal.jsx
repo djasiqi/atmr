@@ -56,7 +56,7 @@ function PartnerChipDropdown({ partnerships, selected, onSelect, getModelLabel }
         <div
           ref={menuRef}
           className={styles.chipMenu}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 'var(--z-modal-popover)' }}
         >
           <button
             type="button"

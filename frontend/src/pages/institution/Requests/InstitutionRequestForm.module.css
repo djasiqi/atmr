@@ -64,7 +64,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 
 .quickPatientForm {
@@ -123,7 +125,7 @@
   width: 100%;
   max-width: 600px;
   margin: 20px;
-  max-height: 90vh;
+  max-height: var(--modal-max-height);
   overflow-y: auto;
 }
 
@@ -610,7 +612,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 
 .recapModal {
@@ -618,8 +622,8 @@
   border-radius: 12px;
   width: 100%;
   max-width: 600px;
-  margin: 20px;
-  max-height: 90vh;
+  margin: 0;
+  max-height: var(--modal-max-height);
   overflow-y: auto;
   padding: 24px;
 }
@@ -2564,7 +2568,10 @@ details[open] > .detailsSummary::before {
   .footerSummaryText { white-space: normal; }
 
   /* Recap modal */
-  .recapModal { max-height: 85vh; padding: 16px; }
+  .recapModal {
+    max-height: min(85vh, var(--modal-max-height));
+    padding: var(--modal-overlay-padding);
+  }
   .recapActions { flex-direction: column; }
   .recapActions button { width: 100%; }
   .routeBlock { gap: 6px; }

@@ -7,7 +7,7 @@ import logging
 import uuid
 from typing import Any
 
-from flask import g, request  # pyright: ignore[reportMissingImports]
+from flask import g, request
 
 logger = logging.getLogger(__name__)
 

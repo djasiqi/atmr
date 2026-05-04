@@ -10,23 +10,33 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  useWindowDimensions,
 } from "react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  ResponsiveContainer,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../src/design/responsive";
 import { autocompleteAddress } from "../../src/features/client/api";
 import { AddressAutocompleteSuggestion } from "../../src/features/client/types";
 import { useSession } from "../../src/core/sessionProvider";
 import { resolveInitialRoute } from "../../src/core/navigation/resolveInitialRoute";
+import { ADDRESS_SEARCH_TEXT_PLACEHOLDER } from "../../src/features/public/addressInputPlaceholder";
+import {
+  PublicAddressSearchBar,
+  type AddressSearchRegion,
+} from "../../src/features/public/PublicAddressSearchBar";
 
 const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 const UI_DARK_TEXT = "#163A34";
 const UI_MUTED_TEXT = "#5F7369";
-const UI_BORDER = "#91A59D";
 const UI_SURFACE = "#F3F7F5";
+
+/** Aligné sur la barre d’adresse compacte (`PublicAddressSearchBar`). */
+const SUGGESTION_ROW_HEIGHT = 30;
 
 function splitSuggestionLabel(value: string): { primary: string; secondary: string } {
   const raw = String(value || "").trim();
@@ -36,15 +46,16 @@ function splitSuggestionLabel(value: string): { primary: string; secondary: stri
   return { primary: parts[0], secondary: parts.slice(1).join(", ") };
 }
 
-function randomInRange(min: number, max: number): number {
-  return Math.round(Math.random() * (max - min) + min);
-}
-
+/**
+ * Écran d’accueil public : géométrie via `useAppViewport` / `useResponsiveTokens().landing`.
+ * Texte : UI dense (libellés carte, CTA, onglets implicites) → `maxFontSizeMultiplier` ~1.25–1.28 ;
+ * preuve / hints / adresses → scaling plus large (jusqu’à ~1.5) pour lisibilité.
+ */
 export default function PublicHomeScreen() {
   const router = useRouter();
   const { bootstrap } = useSession();
-  const insets = useSafeAreaInsets();
-  const { height, width } = useWindowDimensions();
+  const viewport = useAppViewport();
+  const { landing: layout } = useResponsiveTokens();
   const [reduceMotion, setReduceMotion] = useState(false);
 
   const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -56,10 +67,14 @@ export default function PublicHomeScreen() {
   const cardTranslateY = useRef(new Animated.Value(16)).current;
   const ctaOpacity = useRef(new Animated.Value(0)).current;
   const ctaScale = useRef(new Animated.Value(0.98)).current;
-  const [pickupValue, setPickupValue] = useState("Clinique des Grangettes");
-  const [dropoffValue, setDropoffValue] = useState("HUG Genève");
-  const [pickupPrefilled, setPickupPrefilled] = useState(true);
-  const [dropoffPrefilled, setDropoffPrefilled] = useState(true);
+  const [pickupValue, setPickupValue] = useState("");
+  const [dropoffValue, setDropoffValue] = useState("");
+  /**
+   * Toujours false — conservés pour compatibilité avec d’anciens bundles web / Metro
+   * qui référencent encore ces noms (évite ReferenceError après mise à jour du code source).
+   */
+  const [pickupPrefilled] = useState(false);
+  const [dropoffPrefilled] = useState(false);
   const [pickupSuggestions, setPickupSuggestions] = useState<AddressAutocompleteSuggestion[]>([]);
   const [dropoffSuggestions, setDropoffSuggestions] = useState<AddressAutocompleteSuggestion[]>([]);
   const [activeAutocomplete, setActiveAutocomplete] = useState<"pickup" | "dropoff" | null>(null);
@@ -74,64 +89,21 @@ export default function PublicHomeScreen() {
   /** Biais lat/lon pour l’API autocomplete après géolocalisation. */
   const pickupGeoBiasRef = useRef<{ lat: number; lon: number } | null>(null);
   const pickupValueRef = useRef(pickupValue);
+  const [addressSearchRegion, setAddressSearchRegion] = useState<AddressSearchRegion>("CH");
+  const addressSearchRegionRef = useRef<AddressSearchRegion>("CH");
   const useNativeDriver = Platform.OS !== "web";
-  const accentLayoutRef = useRef<{
-    largeTop: number;
-    largeRight: number;
-    smallTop: number;
-    smallRight: number;
-  } | null>(null);
-
-  if (!accentLayoutRef.current) {
-    const shortestSide = Math.min(width, height);
-    const isTablet = shortestSide >= 768;
-    accentLayoutRef.current = {
-      largeTop: randomInRange(isTablet ? -120 : -110, isTablet ? -70 : -55),
-      largeRight: randomInRange(isTablet ? -90 : -75, isTablet ? -26 : -12),
-      smallTop: randomInRange(isTablet ? 58 : 50, isTablet ? 130 : 118),
-      smallRight: randomInRange(isTablet ? 28 : 20, isTablet ? 88 : 76),
-    };
-  }
-
-  const layout = useMemo(() => {
-    const shortestSide = Math.min(width, height);
-    const isTablet = shortestSide >= 768;
-    const isCompact = shortestSide < 390;
-    const isShort = height < 760;
-
+  const accentLayout = useMemo(() => {
+    const narrowShortSide = viewport.isTiny || viewport.isCompact;
     return {
-      horizontalPadding: isTablet ? 32 : isCompact ? 16 : 20,
-      contentMaxWidth: isTablet ? 560 : 420,
-      topPadding: Math.max(insets.top + (isShort ? 12 : 20), isTablet ? 64 : isShort ? 34 : 56),
-      bottomPadding: Math.max(insets.bottom + (isShort ? 16 : 24), isShort ? 20 : 32),
-      logoHeight: isShort ? 20 : isCompact ? 22 : 28,
-      logoWidth: isShort ? 136 : isCompact ? 148 : 180,
-      titleFontSize: isTablet ? 52 : isShort ? 32 : isCompact ? 34 : 46,
-      titleLineHeight: isTablet ? 58 : isShort ? 38 : isCompact ? 40 : 52,
-      titleMaxWidth: isTablet ? 360 : isCompact ? 240 : 280,
-      titleMarginTop: isShort ? 14 : isCompact ? 18 : 32,
-      cardMarginTop: isShort ? 16 : isCompact ? 22 : 36,
-      cardMaxWidth: isTablet ? 520 : 420,
-      cardPadding: isTablet ? 24 : isShort ? 14 : isCompact ? 16 : 20,
-      cardLabelSize: 13,
-      cardLabelOpacity: 0.6,
-      cardValueSize: 17,
-      cardValueWeight: "500" as const,
-      cardLineGap: 6,
-      cardBlockGap: 12,
-      ctaHeight: isTablet ? 58 : isShort ? 48 : isCompact ? 50 : 56,
-      ctaRadius: 18,
-      ctaFontSize: isShort ? 15 : isCompact ? 16 : 17,
-      microProofFontSize: isShort ? 12 : isCompact ? 13 : 15,
-      secondaryFontSize: isShort ? 12 : isCompact ? 13 : 15,
-      spaceCardToCta: isShort ? 20 : isCompact ? 30 : 42,
-      spaceCtaToProof: isShort ? 10 : isCompact ? 14 : 18,
-      spaceProofToSecondary: isShort ? 14 : 24,
+      largeTop: viewport.isTablet ? -105 : narrowShortSide ? -98 : -92,
+      largeRight: viewport.isTablet ? -48 : -32,
+      smallTop: viewport.isTablet ? 95 : narrowShortSide ? 72 : 82,
+      smallRight: viewport.isTablet ? 72 : 52,
     };
-  }, [height, insets.bottom, insets.top, width]);
+  }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
 
-  const pickupInputValue = pickupPrefilled ? "" : pickupValue.trim();
-  const dropoffInputValue = dropoffPrefilled ? "" : dropoffValue.trim();
+  const pickupInputValue = pickupValue.trim();
+  const dropoffInputValue = dropoffValue.trim();
   const pickupProgress = Math.max(0, Math.min(pickupInputValue.length / 14, 1));
   const dropoffProgress = Math.max(0, Math.min(dropoffInputValue.length / 14, 1));
   const routeProgress = Math.max(0, Math.min((pickupProgress + dropoffProgress) / 2, 1));
@@ -171,6 +143,10 @@ export default function PublicHomeScreen() {
   useEffect(() => {
     pickupValueRef.current = pickupValue;
   }, [pickupValue]);
+
+  useEffect(() => {
+    addressSearchRegionRef.current = addressSearchRegion;
+  }, [addressSearchRegion]);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -297,6 +273,7 @@ export default function PublicHomeScreen() {
       try {
         const results = await autocompleteAddress(trimmed, {
           limit: 4,
+          country: addressSearchRegion,
           ...(bias ? { lat: bias.lat, lon: bias.lon } : {}),
         });
         if (cancelled) return;
@@ -324,7 +301,7 @@ export default function PublicHomeScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeAutocomplete, pickupValue]);
+  }, [activeAutocomplete, pickupValue, addressSearchRegion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,7 +315,10 @@ export default function PublicHomeScreen() {
 
     const timer = setTimeout(async () => {
       try {
-        const results = await autocompleteAddress(trimmed, { limit: 4 });
+        const results = await autocompleteAddress(trimmed, {
+          limit: 4,
+          country: addressSearchRegion,
+        });
         if (!cancelled) {
           setDropoffSuggestions(results.slice(0, 4));
         }
@@ -353,7 +333,7 @@ export default function PublicHomeScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeAutocomplete, dropoffValue]);
+  }, [activeAutocomplete, dropoffValue, addressSearchRegion]);
 
   async function suggestPickupFromCurrentLocation(): Promise<void> {
     if (isResolvingPickupLocation) return;
@@ -379,11 +359,21 @@ export default function PublicHomeScreen() {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
           pickupGeoBiasRef.current = { lat, lon };
-          let nearest = await autocompleteAddress(`${lat},${lon}`, { lat, lon, limit: 1 });
+          let nearest = await autocompleteAddress(`${lat},${lon}`, {
+            lat,
+            lon,
+            limit: 1,
+            country: addressSearchRegionRef.current,
+          });
           if (!nearest[0]) {
             const nearbyQueries = ["Rue", "Avenue", "Chemin"];
             for (const query of nearbyQueries) {
-              const around = await autocompleteAddress(query, { lat, lon, limit: 1 });
+              const around = await autocompleteAddress(query, {
+                lat,
+                lon,
+                limit: 1,
+                country: addressSearchRegionRef.current,
+              });
               if (around[0]) {
                 nearest = around;
                 break;
@@ -409,7 +399,12 @@ export default function PublicHomeScreen() {
           const trimmed = pickupValueRef.current.trim();
           if (trimmed.length >= 2) {
             try {
-              const results = await autocompleteAddress(trimmed, { lat, lon, limit: 4 });
+              const results = await autocompleteAddress(trimmed, {
+                lat,
+                lon,
+                limit: 4,
+                country: addressSearchRegionRef.current,
+              });
               if (!isMountedRef.current || requestGen !== pickupLocationGenRef.current) return;
               const geoLabel = label.trim().toLowerCase();
               let merged = results.slice(0, 4);
@@ -471,8 +466,8 @@ export default function PublicHomeScreen() {
         style={[
           styles.accentGlowLarge,
           {
-            top: accentLayoutRef.current.largeTop,
-            right: accentLayoutRef.current.largeRight,
+            top: accentLayout.largeTop,
+            right: accentLayout.largeRight,
             pointerEvents: "none",
           },
         ]}
@@ -481,14 +476,22 @@ export default function PublicHomeScreen() {
         style={[
           styles.accentGlowSmall,
           {
-            top: accentLayoutRef.current.smallTop,
-            right: accentLayoutRef.current.smallRight,
+            top: accentLayout.smallTop,
+            right: accentLayout.smallRight,
             pointerEvents: "none",
           },
         ]}
       />
 
       <View style={styles.staticContainer}>
+        <Screen
+          scroll
+          safeTop={false}
+          safeBottom={false}
+          withHorizontalPadding={false}
+          includeSafeAreaInScrollBottomPadding={false}
+          contentContainerStyle={{ minHeight: viewport.usableHeight }}
+        >
         <View
           style={[
             styles.mainColumn,
@@ -499,7 +502,9 @@ export default function PublicHomeScreen() {
             },
           ]}
         >
-          <View style={[styles.centerColumn, { maxWidth: layout.contentMaxWidth }]}>
+          <ResponsiveContainer
+            style={[styles.centerColumn, { padding: layout.columnPadding, maxWidth: layout.contentMaxWidth }]}
+          >
             <View style={styles.heroSection}>
               <Animated.View
                 style={[
@@ -531,12 +536,13 @@ export default function PublicHomeScreen() {
                 ]}
               >
                 <Text
+                  maxFontSizeMultiplier={1.28}
                   style={[
                     styles.title,
                     {
                       fontSize: layout.titleFontSize,
                       lineHeight: layout.titleLineHeight + 1,
-                      maxWidth: Math.min(layout.titleMaxWidth, 260),
+                      maxWidth: layout.titleMaxWidth,
                     },
                   ]}
                 >
@@ -550,6 +556,7 @@ export default function PublicHomeScreen() {
                   {
                     marginTop: layout.cardMarginTop,
                     maxWidth: layout.cardMaxWidth,
+                    borderRadius: layout.cardRadius,
                     opacity: cardOpacity,
                     transform: [{ translateY: cardTranslateY }],
                   },
@@ -558,7 +565,10 @@ export default function PublicHomeScreen() {
                 <View
                   style={[
                     styles.cardInner,
-                    { padding: layout.cardPadding },
+                    {
+                      padding: layout.cardPadding,
+                      borderRadius: layout.cardRadius,
+                    },
                     Platform.OS === "android" ? styles.cardInnerFallback : null,
                   ]}
                 >
@@ -578,6 +588,7 @@ export default function PublicHomeScreen() {
                         />
                       </View>
                       <Text
+                        maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
                           { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
@@ -586,80 +597,70 @@ export default function PublicHomeScreen() {
                         Départ
                       </Text>
                       <View style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}>
-                        <TextInput
+                        <PublicAddressSearchBar
                           value={pickupValue}
                           onChangeText={(value) => {
                             pickupLocationGenRef.current += 1;
                             if (isMountedRef.current) {
                               setIsResolvingPickupLocation(false);
                             }
-                            setPickupPrefilled(false);
                             setPickupValue(value);
                           }}
                           onFocus={() => {
                             setActiveAutocomplete("pickup");
                             setFocusedField("pickup");
-                            let shouldSuggestLocation = false;
-                            if (pickupPrefilled) {
-                              setPickupValue("");
-                              setPickupPrefilled(false);
-                              shouldSuggestLocation = true;
-                            }
-                            if (shouldSuggestLocation || !pickupValue.trim()) {
+                            if (!pickupValue.trim()) {
                               void suggestPickupFromCurrentLocation();
                             }
                           }}
                           onBlur={() => setFocusedField((prev) => (prev === "pickup" ? null : prev))}
-                          placeholder="Rechercher une adresse"
-                          placeholderTextColor="#91A59D"
-                          autoComplete="off"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          textContentType="none"
-                          importantForAutofill="no"
-                          style={[
-                            styles.cardInput,
-                            styles.cardInputWithClear,
-                            pickupPrefilled ? styles.cardInputPrefilled : null,
-                            focusedField === "pickup" ? styles.cardInputActive : null,
-                            {
-                              fontSize: layout.cardValueSize,
-                              fontWeight: layout.cardValueWeight,
-                            },
-                          ]}
+                          focused={focusedField === "pickup"}
+                          empty={pickupValue.trim().length === 0}
+                          prefilled={pickupPrefilled}
+                          showClear={pickupValue.trim().length > 0}
+                          clearAccessibilityLabel="Effacer l'adresse de départ"
+                          onClear={() => {
+                            pickupLocationGenRef.current += 1;
+                            pickupGeoSuggestionRef.current = null;
+                            pickupGeoBiasRef.current = null;
+                            setPickupValue("");
+                            setPickupSuggestions([]);
+                            setPickupLocationHint(null);
+                            setIsResolvingPickupLocation(false);
+                            setActiveAutocomplete("pickup");
+                            setFocusedField("pickup");
+                          }}
+                          placeholder={ADDRESS_SEARCH_TEXT_PLACEHOLDER}
+                          accessibilityLabel="Rechercher une adresse de départ"
+                          fontSize={layout.cardValueSize}
+                          fontWeight={layout.cardValueWeight}
+                          region={addressSearchRegion}
+                          onRegionChange={setAddressSearchRegion}
                         />
-                        {pickupValue.trim().length > 0 ? (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Effacer l'adresse de départ"
-                            onPress={() => {
-                              pickupLocationGenRef.current += 1;
-                              pickupGeoSuggestionRef.current = null;
-                              pickupGeoBiasRef.current = null;
-                              setPickupValue("");
-                              setPickupPrefilled(false);
-                              setPickupSuggestions([]);
-                              setPickupLocationHint(null);
-                              setIsResolvingPickupLocation(false);
-                              setActiveAutocomplete("pickup");
-                              setFocusedField("pickup");
-                            }}
-                            style={({ pressed }) => [
-                              styles.clearInputButton,
-                              pressed ? styles.clearInputButtonPressed : null,
-                            ]}
-                          >
-                            <Text style={styles.clearInputText}>x</Text>
-                          </Pressable>
-                        ) : null}
                       </View>
                       {isResolvingPickupLocation ? (
-                        <Text style={styles.locationHintText}>Recherche de votre position...</Text>
+                        <Text
+                          maxFontSizeMultiplier={1.5}
+                          style={[
+                            styles.locationHintText,
+                            { fontSize: layout.hintFontSize, lineHeight: layout.hintLineHeight },
+                          ]}
+                        >
+                          Recherche de votre position...
+                        </Text>
                       ) : pickupLocationHint ? (
-                        <Text style={styles.locationHintText}>{pickupLocationHint}</Text>
+                        <Text
+                          maxFontSizeMultiplier={1.5}
+                          style={[
+                            styles.locationHintText,
+                            { fontSize: layout.hintFontSize, lineHeight: layout.hintLineHeight },
+                          ]}
+                        >
+                          {pickupLocationHint}
+                        </Text>
                       ) : null}
                       {activeAutocomplete === "pickup" && pickupSuggestions.length > 0 ? (
-                        <View style={styles.suggestionList}>
+                        <View style={[styles.suggestionList, { maxHeight: layout.suggestionListMaxHeight }]}>
                           {pickupSuggestions.map((item, index) => {
                             const suggestion = item.address ?? item.label;
                             const { primary, secondary } = splitSuggestionLabel(suggestion);
@@ -675,7 +676,6 @@ export default function PublicHomeScreen() {
                                 }
                                 pickupGeoSuggestionRef.current = null;
                                 setPickupValue(suggestion);
-                                setPickupPrefilled(false);
                                 setPickupSuggestions([]);
                                 setActiveAutocomplete(null);
                               }}
@@ -685,11 +685,19 @@ export default function PublicHomeScreen() {
                                 pressed && styles.suggestionItemPressed,
                               ]}
                             >
-                              <Text style={styles.suggestionPrimary} numberOfLines={1}>
+                              <Text
+                                maxFontSizeMultiplier={1.35}
+                                style={styles.suggestionPrimary}
+                                numberOfLines={1}
+                              >
                                 {primary}
                               </Text>
                               {secondary ? (
-                                <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                                <Text
+                                  maxFontSizeMultiplier={1.3}
+                                  style={styles.suggestionSecondary}
+                                  numberOfLines={1}
+                                >
                                   {secondary}
                                 </Text>
                               ) : null}
@@ -707,6 +715,7 @@ export default function PublicHomeScreen() {
                         ]}
                       />
                       <Text
+                        maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
                           { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
@@ -715,61 +724,37 @@ export default function PublicHomeScreen() {
                         Destination
                       </Text>
                       <View style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}>
-                        <TextInput
+                        <PublicAddressSearchBar
                           value={dropoffValue}
                           onChangeText={(value) => {
-                            setDropoffPrefilled(false);
                             setDropoffValue(value);
                           }}
                           onFocus={() => {
                             setActiveAutocomplete("dropoff");
                             setFocusedField("dropoff");
-                            if (dropoffPrefilled) {
-                              setDropoffValue("");
-                              setDropoffPrefilled(false);
-                            }
                           }}
                           onBlur={() => setFocusedField((prev) => (prev === "dropoff" ? null : prev))}
-                          placeholder="Rechercher une adresse"
-                          placeholderTextColor="#91A59D"
-                          autoComplete="off"
-                          autoCorrect={false}
-                          spellCheck={false}
-                          textContentType="none"
-                          importantForAutofill="no"
-                          style={[
-                            styles.cardInput,
-                            styles.cardInputWithClear,
-                            dropoffPrefilled ? styles.cardInputPrefilled : null,
-                            focusedField === "dropoff" ? styles.cardInputActive : null,
-                            {
-                              fontSize: layout.cardValueSize,
-                              fontWeight: layout.cardValueWeight,
-                            },
-                          ]}
+                          focused={focusedField === "dropoff"}
+                          empty={dropoffValue.trim().length === 0}
+                          prefilled={dropoffPrefilled}
+                          showClear={dropoffValue.trim().length > 0}
+                          clearAccessibilityLabel="Effacer l'adresse de destination"
+                          onClear={() => {
+                            setDropoffValue("");
+                            setDropoffSuggestions([]);
+                            setActiveAutocomplete("dropoff");
+                            setFocusedField("dropoff");
+                          }}
+                          placeholder={ADDRESS_SEARCH_TEXT_PLACEHOLDER}
+                          accessibilityLabel="Rechercher une adresse de destination"
+                          fontSize={layout.cardValueSize}
+                          fontWeight={layout.cardValueWeight}
+                          region={addressSearchRegion}
+                          onRegionChange={setAddressSearchRegion}
                         />
-                        {dropoffValue.trim().length > 0 ? (
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Effacer l'adresse de destination"
-                            onPress={() => {
-                              setDropoffValue("");
-                              setDropoffPrefilled(false);
-                              setDropoffSuggestions([]);
-                              setActiveAutocomplete("dropoff");
-                              setFocusedField("dropoff");
-                            }}
-                            style={({ pressed }) => [
-                              styles.clearInputButton,
-                              pressed ? styles.clearInputButtonPressed : null,
-                            ]}
-                          >
-                            <Text style={styles.clearInputText}>x</Text>
-                          </Pressable>
-                        ) : null}
                       </View>
                       {activeAutocomplete === "dropoff" && dropoffSuggestions.length > 0 ? (
-                        <View style={styles.suggestionList}>
+                        <View style={[styles.suggestionList, { maxHeight: layout.suggestionListMaxHeight }]}>
                           {dropoffSuggestions.map((item, index) => {
                             const suggestion = item.address ?? item.label;
                             const { primary, secondary } = splitSuggestionLabel(suggestion);
@@ -779,7 +764,6 @@ export default function PublicHomeScreen() {
                               key={`${item.label}-${index}`}
                               onPress={() => {
                                 setDropoffValue(suggestion);
-                                setDropoffPrefilled(false);
                                 setDropoffSuggestions([]);
                                 setActiveAutocomplete(null);
                               }}
@@ -789,11 +773,19 @@ export default function PublicHomeScreen() {
                                 pressed && styles.suggestionItemPressed,
                               ]}
                             >
-                              <Text style={styles.suggestionPrimary} numberOfLines={1}>
+                              <Text
+                                maxFontSizeMultiplier={1.35}
+                                style={styles.suggestionPrimary}
+                                numberOfLines={1}
+                              >
                                 {primary}
                               </Text>
                               {secondary ? (
-                                <Text style={styles.suggestionSecondary} numberOfLines={1}>
+                                <Text
+                                  maxFontSizeMultiplier={1.3}
+                                  style={styles.suggestionSecondary}
+                                  numberOfLines={1}
+                                >
                                   {secondary}
                                 </Text>
                               ) : null}
@@ -805,6 +797,7 @@ export default function PublicHomeScreen() {
                     </View>
                     <View style={[styles.cardBlock, { marginBottom: layout.cardBlockGap }]}>
                       <Text
+                        maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
                           { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
@@ -813,6 +806,7 @@ export default function PublicHomeScreen() {
                         Départ prévu
                       </Text>
                       <Text
+                        maxFontSizeMultiplier={1.28}
                         style={[
                           styles.cardValue,
                           {
@@ -829,13 +823,14 @@ export default function PublicHomeScreen() {
               </Animated.View>
             </View>
 
-            <View style={styles.flexSpacer} />
+            <View style={[styles.flexSpacer, { minHeight: layout.flexSpacerMinHeight }]} />
 
             <View style={[styles.actionSection, { marginTop: layout.spaceCardToCta }]}>
               <Animated.View
                 style={[
                   styles.ctaContainer,
                   {
+                    maxWidth: layout.contentMaxWidth,
                     opacity: ctaOpacity,
                     transform: [{ scale: ctaScale }],
                   },
@@ -865,51 +860,84 @@ export default function PublicHomeScreen() {
                   }}
                   style={({ pressed }) => [
                     styles.ctaButton,
-                    { height: layout.ctaHeight, borderRadius: layout.ctaRadius },
+                    {
+                      height: layout.ctaHeight,
+                      borderRadius: layout.ctaRadius,
+                      width: "100%",
+                    },
                     pressed && styles.ctaPressed,
                   ]}
                 >
-                  <Text style={[styles.ctaText, { fontSize: layout.ctaFontSize }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.28}
+                    style={[styles.ctaText, { fontSize: layout.ctaFontSize }]}
+                  >
                     Réservation rapide
                   </Text>
                 </Pressable>
               </Animated.View>
 
               <Text
+                maxFontSizeMultiplier={1.5}
                 style={[
                   styles.microProof,
-                  { fontSize: layout.microProofFontSize, marginTop: layout.spaceCtaToProof },
+                  {
+                    fontSize: layout.microProofFontSize,
+                    lineHeight: layout.microProofLineHeight,
+                    marginTop: layout.spaceCtaToProof,
+                    maxWidth: layout.contentMaxWidth,
+                  },
                 ]}
               >
                 Suivi en temps réel · Coordination médicale · Transport accompagné
               </Text>
 
-              <View style={[styles.secondaryRow, { marginTop: layout.spaceProofToSecondary }]}>
+              <View
+                style={[
+                  styles.secondaryRow,
+                  layout.stackSecondaryLinks ? styles.secondaryRowStacked : null,
+                  { marginTop: layout.spaceProofToSecondary },
+                ]}
+              >
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push("/(public)/login" as any)}
                   style={({ pressed }) => [styles.secondaryLinkPressable, pressed && styles.secondaryPressed]}
                 >
-                  <Text style={[styles.secondaryLinkText, { fontSize: layout.secondaryFontSize }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.28}
+                    style={[styles.secondaryLinkText, { fontSize: layout.secondaryFontSize }]}
+                  >
                     Se connecter
                   </Text>
                 </Pressable>
 
-                <Text style={[styles.secondaryDot, { fontSize: layout.secondaryFontSize }]}>·</Text>
+                {layout.stackSecondaryLinks ? null : (
+                  <Text
+                    maxFontSizeMultiplier={1.28}
+                    style={[styles.secondaryDot, { fontSize: layout.secondaryFontSize }]}
+                  >
+                    ·
+                  </Text>
+                )}
 
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push("/(public)/booking-status" as any)}
                   style={({ pressed }) => [styles.secondaryLinkPressable, pressed && styles.secondaryPressed]}
                 >
-                  <Text style={[styles.secondaryLinkText, { fontSize: layout.secondaryFontSize }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.28}
+                    style={[styles.secondaryLinkText, { fontSize: layout.secondaryFontSize }]}
+                  >
                     Suivre ma réservation
                   </Text>
                 </Pressable>
               </View>
             </View>
-          </View>
+          </ResponsiveContainer>
         </View>
+        </Screen>
       </View>
     </View>
   );
@@ -955,7 +983,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     width: "100%",
     alignSelf: "center",
-    padding: 12,
   },
   flexSpacer: {
     flexGrow: 1,
@@ -982,9 +1009,7 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     width: "100%",
-    maxWidth: 420,
     alignSelf: "center",
-    borderRadius: 24,
     ...Platform.select({
       web: { boxShadow: "0 10px 24px rgba(30,75,67,0.11)" },
       default: {
@@ -997,7 +1022,6 @@ const styles = StyleSheet.create({
     }),
   },
   cardInner: {
-    borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.34)",
     backgroundColor: "#FFFFFF",
@@ -1069,81 +1093,28 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: UI_DARK_TEXT,
   },
-  cardInput: {
-    color: UI_DARK_TEXT,
-    lineHeight: 21,
-    borderWidth: 1,
-    borderColor: UI_BORDER,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 48,
-    backgroundColor: "rgba(255,255,255,0.92)",
-  },
   cardInputRow: {
     position: "relative",
-  },
-  cardInputWithClear: {
-    paddingRight: 42,
-  },
-  clearInputButton: {
-    position: "absolute",
-    right: 10,
-    top: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(145,165,157,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(145,165,157,0.28)",
-  },
-  clearInputButtonPressed: {
-    backgroundColor: "rgba(145,165,157,0.28)",
-  },
-  clearInputText: {
-    color: "#45655D",
-    fontSize: 15,
-    lineHeight: 15,
-    fontWeight: "700",
-    textTransform: "lowercase",
   },
   locationHintText: {
     marginTop: 6,
     color: "#4D6A63",
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  cardInputPrefilled: {
-    color: "#7B8E86",
-  },
-  cardInputActive: {
-    borderColor: "#00796B",
-    backgroundColor: "#FFFFFF",
-    ...Platform.select({
-      web: { boxShadow: "0 2px 6px rgba(0,121,107,0.08)" },
-      default: {
-        shadowColor: "#00796B",
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
-      },
-    }),
   },
   suggestionList: {
     marginTop: 8,
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.62)",
     backgroundColor: UI_SURFACE,
-    maxHeight: 172,
   },
   suggestionItem: {
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    minHeight: SUGGESTION_ROW_HEIGHT,
+    maxHeight: SUGGESTION_ROW_HEIGHT,
+    height: SUGGESTION_ROW_HEIGHT,
+    paddingVertical: 0,
+    paddingHorizontal: 10,
+    justifyContent: "center",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(145,165,157,0.36)",
   },
@@ -1155,22 +1126,29 @@ const styles = StyleSheet.create({
   },
   suggestionPrimary: {
     color: UI_DARK_TEXT,
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: "600",
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
   },
   suggestionSecondary: {
-    marginTop: 2,
+    marginTop: 1,
     color: UI_MUTED_TEXT,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 11,
+    ...Platform.select({
+      android: { includeFontPadding: false },
+      default: {},
+    }),
   },
   actionSection: {
     alignItems: "center",
   },
   ctaContainer: {
     width: "100%",
-    maxWidth: 420,
     alignSelf: "center",
   },
   ctaButton: {
@@ -1200,15 +1178,19 @@ const styles = StyleSheet.create({
     textAlign: "center",
     alignSelf: "center",
     color: "#365B53",
-    lineHeight: 20,
-    maxWidth: 420,
     fontWeight: "600",
     letterSpacing: 0.15,
+    paddingHorizontal: 4,
   },
   secondaryRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    flexWrap: "wrap",
+  },
+  secondaryRowStacked: {
+    flexDirection: "column",
+    gap: 10,
   },
   secondaryLinkPressable: {
     paddingVertical: 4,

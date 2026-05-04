@@ -93,7 +93,10 @@ const InvoiceRowActions = ({
   const actions = [
     {
       key: 'editDraft',
-      label: 'Éditer le brouillon',
+      label:
+        invoiceStatusLower(invoice) === 'draft'
+          ? 'Éditer le brouillon'
+          : 'Éditer la facture',
       icon: <FiEdit size={14} />,
       onClick: () => onEditDraft?.(),
       className: styles.actionBtnPrimary,

@@ -105,8 +105,8 @@ export default function ServiceSelect({
       }
       loadingMessage={() => 'Chargement des services...'}
       styles={{
-        container: (base) => ({ ...base, zIndex: 9999 }),
-        menu: (base) => ({ ...base, zIndex: 9999 }),
+        container: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }),
+        menu: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }),
       }}
     />
   );

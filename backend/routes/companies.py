@@ -3,6 +3,7 @@ import json
 import logging
 from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
+from http import HTTPStatus
 from os import getenv
 from pathlib import Path
 from typing import Any, cast
@@ -76,6 +77,13 @@ PARTNERSHIP_PERCENT_CHANGE_THRESHOLD = (
 
 # Configuration du logger
 logger = logging.getLogger(__name__)
+
+# Liste clients entreprise (GET /me/clients) : UI + recherche / autocomplete —
+# 300/h saturait vite ; surcharge via RATELIMIT_COMPANY_CLIENTS_LIST.
+_RATELIMIT_COMPANY_CLIENTS_LIST = getenv(
+    "RATELIMIT_COMPANY_CLIENTS_LIST", "2000 per hour"
+)
+
 companies_ns = Namespace(
     "companies",
     description="Opérations liées aux entreprises et à la gestion des réservations",
@@ -3845,7 +3853,7 @@ class CompanyInstitutionSearch(Resource):
 class CompanyClients(Resource):
     @jwt_required()
     @role_required(UserRole.company)
-    @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste clients
+    @limiter.limit(_RATELIMIT_COMPANY_CLIENTS_LIST)  # ✅ 2.8 + surcharge env
     @companies_ns.param(
         "search", "Terme à chercher dans le prénom ou le nom", type="string"
     )
@@ -4062,8 +4070,8 @@ class CompanyClients(Resource):
             err = uc_result.error or {}
             msg = err.get("error") or err.get("message") or "Erreur de validation"
             code = getattr(uc_result, "status_code", None) or 400
-            if code == 409:
-                return {"success": False, "error": msg}, 409
+            if code == HTTPStatus.CONFLICT:
+                return {"success": False, "error": msg}, HTTPStatus.CONFLICT
             return APIErrorHandler.handle_validation_error(
                 msg,
                 logger_instance=logger,

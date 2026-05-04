@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { AppState, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -32,6 +32,7 @@ import {
   type CompanyOptimizerRuntime,
   type DashboardRuntimeMetrics,
 } from "../../../src/features/company/dashboard/dispatchDashboardPresentation";
+import { AppText, Screen } from "../../../src/design/responsive";
 
 dayjs.extend(relativeTime);
 dayjs.locale("fr");
@@ -163,20 +164,22 @@ function KpiTile({
           <Ionicons name={def.icon} size={16} color={C.brand} />
         </View>
         <View style={styles.kpiTextCol}>
-          <Text style={styles.kpiLabel} numberOfLines={1}>
+          <AppText variant="caption" style={styles.kpiLabel} numberOfLines={1}>
             {def.label}
-          </Text>
+          </AppText>
           {isUnavailable ? (
             <View>
-              <Text style={styles.kpiValue} accessibilityLabel="Non disponible —">
+              <AppText variant="sectionTitle" style={styles.kpiValue} accessibilityLabel="Non disponible —">
                 —
-              </Text>
-              <Text style={styles.kpiSubUnavailable}>Non disponible</Text>
+              </AppText>
+              <AppText variant="caption" style={styles.kpiSubUnavailable}>
+                Non disponible
+              </AppText>
             </View>
           ) : (
-            <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>
+            <AppText variant="sectionTitle" style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>
               {display.line1}
-            </Text>
+            </AppText>
           )}
         </View>
       </View>
@@ -590,8 +593,10 @@ export default function CompanyDashboardScreen() {
 
   return (
     <PermissionGuard permission="company:dashboard:read">
-      <ScrollView
-        style={styles.scroll}
+      <Screen
+        scroll
+        backgroundColor={C.pageBg}
+        withHorizontalPadding={false}
         contentContainerStyle={styles.page}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={() => void refreshAll()} tintColor={C.brand} />
@@ -602,22 +607,28 @@ export default function CompanyDashboardScreen() {
           accessibilityLabel="Statut flux temps réel"
         >
           <View style={styles.statusRow}>
-            <Text style={styles.statusStripLabel}>Flux</Text>
-            <Text style={styles.statusStripValue}>
+            <AppText variant="caption" style={styles.statusStripLabel}>
+              Flux
+            </AppText>
+            <AppText variant="caption" style={styles.statusStripValue}>
               {mapSocketFr(realtime.status, realtime.connected, companyRealtimeEnabled)}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.statusRow}>
-            <Text style={styles.statusStripLabel}>Chauffeurs en ligne</Text>
-            <Text style={styles.statusStripValue} accessibilityLabel={`Chauffeurs en ligne`}>
+            <AppText variant="caption" style={styles.statusStripLabel}>
+              Chauffeurs en ligne
+            </AppText>
+            <AppText variant="caption" style={styles.statusStripValue} accessibilityLabel={`Chauffeurs en ligne`}>
               {onlineCount} / {liveDrivers.drivers.length}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.statusRow}>
-            <Text style={styles.statusStripLabel}>Dernière synchro</Text>
-            <Text style={styles.statusStripValue} accessibilityLiveRegion="polite">
+            <AppText variant="caption" style={styles.statusStripLabel}>
+              Dernière synchro
+            </AppText>
+            <AppText variant="caption" style={styles.statusStripValue} accessibilityLiveRegion="polite">
               {lastSyncLabel}
-            </Text>
+            </AppText>
           </View>
           <Pressable
             onPress={() => {
@@ -645,19 +656,29 @@ export default function CompanyDashboardScreen() {
           {view.showAutomationCaution ? (
             <View style={styles.cautionChip}>
               <Ionicons name="warning-outline" size={16} color={C.warnText} />
-              <Text style={styles.cautionChipText}>Vérification recommandée</Text>
+              <AppText variant="caption" style={styles.cautionChipText}>
+                Vérification recommandée
+              </AppText>
             </View>
           ) : null}
-          <Text style={styles.contextQ}>{view.operationalQuestion}</Text>
-          <Text style={styles.contextTitle}>{view.contextTitle}</Text>
-          <Text style={styles.contextMessage}>{view.contextMessage}</Text>
+          <AppText variant="caption" style={styles.contextQ}>
+            {view.operationalQuestion}
+          </AppText>
+          <AppText variant="sectionTitle" style={styles.contextTitle}>
+            {view.contextTitle}
+          </AppText>
+          <AppText variant="bodyMuted" style={styles.contextMessage}>
+            {view.contextMessage}
+          </AppText>
           <Pressable
             onPress={onPrimaryCta}
             style={({ pressed }) => [styles.primaryCta, pressed && { opacity: 0.92 }]}
             accessibilityRole="button"
             accessibilityLabel={view.primaryCta.label}
           >
-            <Text style={styles.primaryCtaText}>{view.primaryCta.label}</Text>
+            <AppText variant="label" style={styles.primaryCtaText}>
+              {view.primaryCta.label}
+            </AppText>
             <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
@@ -688,32 +709,48 @@ export default function CompanyDashboardScreen() {
             <View style={styles.emptyIconRing}>
               <Ionicons name="car-outline" size={30} color="#94A3B8" />
             </View>
-            <Text style={styles.emptyTitle}>Aucune course planifiée</Text>
-            <Text style={styles.emptySub}>
+            <AppText variant="sectionTitle" style={styles.emptyTitle}>
+              Aucune course planifiée
+            </AppText>
+            <AppText variant="caption" style={styles.emptySub}>
               Les courses apparaîtront ici dès qu’elles seront créées.
-            </Text>
+            </AppText>
           </View>
         ) : null}
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeaderRow}>
             <Ionicons name="people-outline" size={15} color={C.brand} />
-            <Text style={styles.summaryTitle}>Aperçu flotte</Text>
+            <AppText variant="label" style={styles.summaryTitle}>
+              Aperçu flotte
+            </AppText>
           </View>
           <View style={styles.fleetLine}>
-            <Text style={styles.fleetText}>En mission {fleet.enMission}</Text>
-            <Text style={styles.fleetText}>·</Text>
-            <Text style={styles.fleetText}>Disponibles {fleet.dispo}</Text>
-            <Text style={styles.fleetText}>·</Text>
-            <Text style={styles.fleetText}>Hors ligne {fleet.off}</Text>
+            <AppText variant="caption" style={styles.fleetText}>
+              En mission {fleet.enMission}
+            </AppText>
+            <AppText variant="caption" style={styles.fleetText}>
+              ·
+            </AppText>
+            <AppText variant="caption" style={styles.fleetText}>
+              Disponibles {fleet.dispo}
+            </AppText>
+            <AppText variant="caption" style={styles.fleetText}>
+              ·
+            </AppText>
+            <AppText variant="caption" style={styles.fleetText}>
+              Hors ligne {fleet.off}
+            </AppText>
           </View>
           {Platform.OS === "web" ? (
-            <Text style={styles.fleetWebHint}>
+            <AppText variant="caption" style={styles.fleetWebHint}>
               La carte n’est pas disponible sur le web. Utilisez l’app mobile.
-            </Text>
+            </AppText>
           ) : (
             <Pressable onPress={onFleetMap} style={({ pressed }) => [styles.fleetCta, pressed && { opacity: 0.9 }]}>
-              <Text style={styles.fleetCtaText}>Voir la carte</Text>
+              <AppText variant="label" style={styles.fleetCtaText}>
+                Voir la carte
+              </AppText>
               <Ionicons name="chevron-forward" size={16} color={C.brand} />
             </Pressable>
           )}
@@ -722,7 +759,9 @@ export default function CompanyDashboardScreen() {
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeaderRow}>
             <Ionicons name="options-outline" size={15} color={C.brand} />
-            <Text style={styles.summaryTitle}>Lecture moteur dispatch</Text>
+            <AppText variant="label" style={styles.summaryTitle}>
+              Lecture moteur dispatch
+            </AppText>
           </View>
           {view.technicalLines.map((r, i) => (
             <View
@@ -732,10 +771,12 @@ export default function CompanyDashboardScreen() {
                 i < view.technicalLines.length - 1 && styles.kvDenseRowBorder,
               ]}
             >
-              <Text style={styles.kvDenseKey}>{r.label}</Text>
-              <Text style={styles.kvDenseVal} numberOfLines={2}>
+              <AppText variant="caption" style={styles.kvDenseKey}>
+                {r.label}
+              </AppText>
+              <AppText variant="caption" style={styles.kvDenseVal} numberOfLines={2}>
                 {r.value}
-              </Text>
+              </AppText>
             </View>
           ))}
         </View>
@@ -744,28 +785,36 @@ export default function CompanyDashboardScreen() {
           <View style={styles.summaryCard}>
             <View style={styles.summaryHeaderRow}>
               <Ionicons name="time-outline" size={15} color={C.brand} />
-              <Text style={styles.summaryTitle}>Prochaines courses</Text>
+              <AppText variant="label" style={styles.summaryTitle}>
+                Prochaines courses
+              </AppText>
             </View>
             {nextMissions.map((m) => (
               <View key={m.mission_id} style={styles.missionBlock} accessibilityLabel={`Prochaine course ${m.mission_id}`}>
-                <Text style={styles.missionWhen} numberOfLines={1}>
+                <AppText variant="label" style={styles.missionWhen} numberOfLines={1}>
                   {formatNextCourseWhen(m.scheduled_at)}
-                </Text>
-                <Text style={styles.missionClientName} numberOfLines={1}>
+                </AppText>
+                <AppText variant="label" style={styles.missionClientName} numberOfLines={1}>
                   {m.client_name?.trim() ? m.client_name.trim() : "Invité"}
-                </Text>
-                <Text style={styles.missionAddressLine} numberOfLines={2}>
-                  <Text style={styles.missionAddressKey}>Départ : </Text>
+                </AppText>
+                <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
+                  <AppText variant="caption" style={styles.missionAddressKey}>
+                    Départ :{" "}
+                  </AppText>
                   {conciseAddressSegment(m.pickup_label)}
-                </Text>
-                <Text style={styles.missionAddressLine} numberOfLines={2}>
-                  <Text style={styles.missionAddressKey}>Arrivée : </Text>
+                </AppText>
+                <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
+                  <AppText variant="caption" style={styles.missionAddressKey}>
+                    Arrivée :{" "}
+                  </AppText>
                   {conciseAddressSegment(m.dropoff_label)}
-                </Text>
+                </AppText>
               </View>
             ))}
             <Pressable onPress={onAllRides} style={({ pressed }) => [styles.fleetCta, pressed && { opacity: 0.9 }]}>
-              <Text style={styles.fleetCtaText}>Voir toutes les courses</Text>
+              <AppText variant="label" style={styles.fleetCtaText}>
+                Voir toutes les courses
+              </AppText>
               <Ionicons name="chevron-forward" size={16} color={C.brand} />
             </Pressable>
           </View>
@@ -775,24 +824,30 @@ export default function CompanyDashboardScreen() {
           <View style={styles.alertsBlock}>
             <View style={styles.alertsHeader}>
               <Ionicons name="alert-circle" size={18} color={C.err} />
-              <Text style={styles.alertsTitle}>Alertes</Text>
+              <AppText variant="sectionTitle" style={styles.alertsTitle}>
+                Alertes
+              </AppText>
             </View>
             {view.alertLines.map((a) => (
               <View
                 key={a.id}
                 style={[styles.alertItem, a.severity === "error" ? styles.alertItemErr : styles.alertItemWarn]}
               >
-                <Text style={styles.alertText}>{a.text}</Text>
+                <AppText variant="body" style={styles.alertText}>
+                  {a.text}
+                </AppText>
               </View>
             ))}
             {error && !isLikelyNetworkError && errMsg ? (
               <View style={[styles.alertItem, styles.alertItemErr]}>
-                <Text style={styles.alertText}>{errMsg}</Text>
+                <AppText variant="body" style={styles.alertText}>
+                  {errMsg}
+                </AppText>
               </View>
             ) : null}
           </View>
         ) : null}
-      </ScrollView>
+      </Screen>
     </PermissionGuard>
   );
 }
@@ -809,10 +864,6 @@ const kpiCardShadow = Platform.select({
 });
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: C.pageBg,
-  },
   page: {
     padding: 20,
     paddingBottom: 100,
@@ -842,8 +893,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
     minWidth: "30%",
   },
-  statusStripLabel: { color: C.textMuted, fontSize: 10, fontWeight: "600", textTransform: "uppercase" as const },
-  statusStripValue: { color: C.text, fontSize: 12, fontWeight: "800" },
+  statusStripLabel: { color: C.textMuted, fontWeight: "600", textTransform: "uppercase" as const },
+  statusStripValue: { color: C.text, fontWeight: "800" },
   reconnectIconBtn: { marginLeft: "auto", padding: 4 },
   contextCard: {
     backgroundColor: C.cardBg,
@@ -854,9 +905,9 @@ const styles = StyleSheet.create({
     gap: 6,
     ...kpiCardShadow,
   },
-  contextQ: { color: C.textSub, fontSize: 12, fontWeight: "600" },
-  contextTitle: { color: C.text, fontSize: 18, fontWeight: "800" },
-  contextMessage: { color: C.textMuted, fontSize: 13, lineHeight: 18 },
+  contextQ: { color: C.textSub, fontWeight: "600" },
+  contextTitle: { color: C.text, fontWeight: "800" },
+  contextMessage: { color: C.textMuted, lineHeight: 18 },
   primaryCta: {
     marginTop: 4,
     flexDirection: "row" as const,
@@ -868,7 +919,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
-  primaryCtaText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" },
+  primaryCtaText: { color: "#FFFFFF", fontWeight: "800" },
   cautionChip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
@@ -879,7 +930,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.warnBg,
     borderRadius: 8,
   },
-  cautionChipText: { color: C.warnText, fontSize: 12, fontWeight: "800" },
+  cautionChipText: { color: C.warnText, fontWeight: "800" },
   kpiRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
   kpiStat: {
     flexGrow: 1,
@@ -905,7 +956,6 @@ const styles = StyleSheet.create({
   kpiTextCol: { flex: 1, minWidth: 0, justifyContent: "center" as const },
   kpiLabel: {
     color: C.textSub,
-    fontSize: 10,
     fontWeight: "700" as const,
     letterSpacing: 0.25,
     textTransform: "uppercase" as const,
@@ -913,11 +963,10 @@ const styles = StyleSheet.create({
   kpiValue: {
     marginTop: 1,
     color: C.text,
-    fontSize: 18,
     fontWeight: "800" as const,
     lineHeight: 22,
   },
-  kpiSubUnavailable: { color: C.textMuted, fontSize: 10, fontWeight: "600", marginTop: 1 },
+  kpiSubUnavailable: { color: C.textMuted, fontWeight: "600", marginTop: 1 },
   emptyState: { alignItems: "center" as const, marginVertical: 4, gap: 4, paddingVertical: 8 },
   emptyIconRing: {
     width: 56,
@@ -939,10 +988,10 @@ const styles = StyleSheet.create({
     ...kpiCardShadow,
   },
   summaryHeaderRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginBottom: 8 },
-  summaryTitle: { color: C.text, fontSize: 14, fontWeight: "700" as const },
+  summaryTitle: { color: C.text, fontWeight: "700" as const },
   fleetLine: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 4 },
-  fleetText: { color: C.textMuted, fontSize: 12, fontWeight: "600" as const },
-  fleetWebHint: { color: C.mapHeroMuted, fontSize: 12, lineHeight: 16, marginTop: 4 },
+  fleetText: { color: C.textMuted, fontWeight: "600" as const },
+  fleetWebHint: { color: C.mapHeroMuted, lineHeight: 16, marginTop: 4 },
   fleetCta: {
     marginTop: 8,
     flexDirection: "row" as const,
@@ -961,16 +1010,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
-  kvDenseKey: { flex: 1, minWidth: 0, color: C.textMuted, fontSize: 11, fontWeight: "600" as const },
-  kvDenseVal: { maxWidth: "58%", color: C.text, fontSize: 12, fontWeight: "700" as const, textAlign: "right" as const },
+  kvDenseKey: { flex: 1, minWidth: 0, color: C.textMuted, fontWeight: "600" as const },
+  kvDenseVal: { maxWidth: "58%", color: C.text, fontWeight: "700" as const, textAlign: "right" as const },
   missionBlock: { gap: 3, marginBottom: 8 },
   missionWhen: {
     color: C.brand,
-    fontSize: 13,
     fontWeight: "800" as const,
   },
-  missionClientName: { color: C.text, fontSize: 14, fontWeight: "700" as const, marginTop: 2 },
-  missionAddressLine: { color: C.textSub, fontSize: 12, lineHeight: 16, fontWeight: "500" as const, marginTop: 2 },
+  missionClientName: { color: C.text, fontWeight: "700" as const, marginTop: 2 },
+  missionAddressLine: { color: C.textSub, lineHeight: 16, fontWeight: "500" as const, marginTop: 2 },
   missionAddressKey: { color: C.textMuted, fontWeight: "700" as const },
   alertsBlock: {
     backgroundColor: "rgba(180, 35, 24, 0.06)",
@@ -980,9 +1028,9 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   alertsHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginBottom: 4 },
-  alertsTitle: { color: C.err, fontSize: 15, fontWeight: "800" as const },
+  alertsTitle: { color: C.err, fontWeight: "800" as const },
   alertItem: { borderRadius: 8, padding: 8, marginTop: 4 },
   alertItemErr: { backgroundColor: "rgba(180, 35, 24, 0.1)" },
   alertItemWarn: { backgroundColor: C.warnBg },
-  alertText: { color: C.text, fontSize: 12, lineHeight: 16, fontWeight: "600" as const },
+  alertText: { color: C.text, lineHeight: 16, fontWeight: "600" as const },
 });

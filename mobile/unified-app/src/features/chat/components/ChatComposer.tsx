@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View, Platform } from "react-native";
+import { Pressable, TextInput, View, Platform } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -155,9 +156,9 @@ export function ChatComposer({
                   accessibilityLabel="Envoyer une image"
                 >
                   <Ionicons name="image-outline" size={16} color={C_MUTED} />
-                  <Text style={styles.actionLabel} numberOfLines={1}>
+                  <AppText variant="caption" style={styles.actionLabel} numberOfLines={1}>
                     Image
-                  </Text>
+                  </AppText>
                 </Pressable>
               ) : null}
               {onPickPdf ? (
@@ -167,9 +168,9 @@ export function ChatComposer({
                   accessibilityLabel="Envoyer un document PDF"
                 >
                   <Ionicons name="document-text-outline" size={16} color={C_MUTED} />
-                  <Text style={styles.actionLabel} numberOfLines={1}>
+                  <AppText variant="caption" style={styles.actionLabel} numberOfLines={1}>
                     PDF
-                  </Text>
+                  </AppText>
                 </Pressable>
               ) : null}
             </View>

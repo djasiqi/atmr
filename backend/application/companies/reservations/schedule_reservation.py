@@ -83,6 +83,13 @@ class ScheduleCompanyReservationUseCase:
                 status_code=400,
             )
 
+        if sched_local is None:
+            return ScheduleCompanyReservationResult(
+                ok=False,
+                error={"error": "Heure planifiée invalide ou manquante."},
+                status_code=400,
+            )
+
         booking.scheduled_time = sched_local
         # Règle métier: 00:00 signifie "heure à confirmer".
         is_sentinel_midnight = (

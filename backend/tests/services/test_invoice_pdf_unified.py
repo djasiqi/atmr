@@ -9,6 +9,7 @@ Teste que le template unifié génère correctement :
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
@@ -20,8 +21,41 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import SimpleDocTemplate
 
 from models import Booking, Client, Company, Invoice, InvoiceLine, User
-from models.enums import BookingStatus, InvoiceLineType, InvoiceStatus
+from models.enums import (
+    BookingStatus,
+    InvoiceBillingStrategy,
+    InvoiceLineType,
+    InvoiceStatus,
+    UserRole,
+)
 from services.documents.pdf import PDFService
+
+
+def _ensure_users_with_password(*users: User) -> None:
+    """PostgreSQL impose password NOT NULL sur user ; les tests doivent la renseigner."""
+    for u in users:
+        if not getattr(u, "public_id", None):
+            u.public_id = str(uuid.uuid4())
+        if not getattr(u, "password", None):
+            u.set_password("password123", force_change=False)
+
+
+def _assign_company_owner(db, company: Company, owner: User) -> None:
+    """company.user_id est NOT NULL en base."""
+    db.session.add(owner)
+    db.session.flush()
+    company.user_id = owner.id
+
+
+def _unique_pdf_users() -> tuple[User, User]:
+    """Évite les collisions username/email entre tests ; mot de passe renseigné."""
+    suf = str(uuid.uuid4())[:8]
+    driver = User(username=f"pdf_drv_{suf}", email=f"pdf_drv_{suf}@test.example")
+    client_u = User(username=f"pdf_cli_{suf}", email=f"pdf_cli_{suf}@test.example")
+    driver.role = UserRole.company
+    client_u.role = UserRole.client
+    _ensure_users_with_password(driver, client_u)
+    return driver, client_u
 
 
 @pytest.mark.integration
@@ -32,10 +66,10 @@ class TestInvoicePdfUnified:
         """Test que le PDF client contient 'Client' dans le header."""
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
-        client_user = User(username="clientuser", email="client@example.com")
+        user, client_user = _unique_pdf_users()
+        _assign_company_owner(db, company, user)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client_user, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -56,7 +90,7 @@ class TestInvoicePdfUnified:
         booking = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Test Customer",
             pickup_location="Rue de la Paix 1, 1204 Genève",
             dropoff_location="Avenue de France 2, 1202 Genève",
@@ -84,14 +118,14 @@ class TestInvoicePdfUnified:
 
         # Act
         pdf_service = PDFService()
-        pdf_content = pdf_service._create_invoice_pdf_content(invoice)
+        pdf_bytes, _nb = pdf_service._create_invoice_pdf_content(invoice)
 
         # Assert: Extraire le texte du PDF
-        pdf_text = _extract_text_from_pdf(pdf_content)
+        pdf_text = _extract_text_from_pdf(pdf_bytes)
         assert "Client" in pdf_text, "Header 'Client' manquant pour facture client"
         assert "TOTAL À FACTURER" in pdf_text, "Libellé 'TOTAL À FACTURER' manquant"
-        assert "DÉTAIL DES TRANSPORTS" in pdf_text, (
-            "Section 'DÉTAIL DES TRANSPORTS' manquante"
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )
 
     def test_s2_clinic_invoice_header(self, db):
@@ -99,10 +133,18 @@ class TestInvoicePdfUnified:
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
         clinic_company = Company(name="Clinic Company", uid_ide="CHE-987.654.321")
-        user = User(username="testuser", email="test@example.com")
-        client_user = User(username="clientuser", email="client@example.com")
+        user, client_user = _unique_pdf_users()
+        _co_suffix = str(uuid.uuid4())[:8]
+        clinic_owner = User(
+            username=f"clinicowner_{_co_suffix}",
+            email=f"clinic.owner.{_co_suffix}@test.example",
+        )
+        clinic_owner.role = UserRole.company
+        _ensure_users_with_password(clinic_owner)
+        _assign_company_owner(db, company, user)
+        _assign_company_owner(db, clinic_company, clinic_owner)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, clinic_company, user, client_user, client])
+        db.session.add_all([company, clinic_company, client_user, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -119,16 +161,13 @@ class TestInvoicePdfUnified:
             total_amount=Decimal("100.00"),
             billed_to_company_id=clinic_company.id,
         )
-        # Simuler billing_strategy S2
-        from models.enums import BillingStrategy
-
-        invoice.billing_strategy = BillingStrategy.S2_CLINIC_MONTHLY
+        invoice.billing_strategy = InvoiceBillingStrategy.S2_CLINIC_MONTHLY
         db.session.add(invoice)
 
         booking = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Patient Name",
             pickup_location="Rue de la Paix 1, 1204 Genève",
             dropoff_location="Avenue de France 2, 1202 Genève",
@@ -150,20 +189,20 @@ class TestInvoicePdfUnified:
             vat_rate=Decimal("0.00"),
             vat_amount=Decimal("0.00"),
             total_with_vat=Decimal("100.00"),
-            meta={"patient_name": "Patient Name", "patient_id": client.id},
+            line_meta={"patient_name": "Patient Name", "patient_id": client.id},
         )
         db.session.add(line)
         db.session.commit()
 
         # Act
         pdf_service = PDFService()
-        pdf_content = pdf_service._create_invoice_pdf_content(invoice)
+        pdf_bytes, _nb = pdf_service._create_invoice_pdf_content(invoice)
 
         # Assert
-        pdf_text = _extract_text_from_pdf(pdf_content)
+        pdf_text = _extract_text_from_pdf(pdf_bytes)
         assert "Patient" in pdf_text, "Header 'Patient' manquant pour facture clinique"
-        assert "DÉTAIL DES TRANSPORTS" in pdf_text, (
-            "Section 'DÉTAIL DES TRANSPORTS' manquante"
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Section 'DÉTAIL DES PRESTATIONS' manquante"
         )
         assert "TOTAL À FACTURER" in pdf_text, "Libellé 'TOTAL À FACTURER' manquant"
 
@@ -171,10 +210,10 @@ class TestInvoicePdfUnified:
         """Test que les aller/retour explicites (parent_booking_id) sont groupés."""
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
-        client_user = User(username="clientuser", email="client@example.com")
+        user, client_user = _unique_pdf_users()
+        _assign_company_owner(db, company, user)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client_user, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -196,7 +235,7 @@ class TestInvoicePdfUnified:
         booking_aller = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Test Customer",
             pickup_location="Point A",
             dropoff_location="Point B",
@@ -210,7 +249,7 @@ class TestInvoicePdfUnified:
         booking_retour = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Test Customer",
             pickup_location="Point B",
             dropoff_location="Point A",
@@ -252,10 +291,10 @@ class TestInvoicePdfUnified:
 
         # Act
         pdf_service = PDFService()
-        pdf_content = pdf_service._create_invoice_pdf_content(invoice)
+        pdf_bytes, _nb = pdf_service._create_invoice_pdf_content(invoice)
 
         # Assert
-        pdf_text = _extract_text_from_pdf(pdf_content)
+        pdf_text = _extract_text_from_pdf(pdf_bytes)
         assert "Aller :" in pdf_text, "Détail 'Aller :' manquant pour aller/retour"
         assert "Retour :" in pdf_text, "Détail 'Retour :' manquant pour aller/retour"
         # Vérifier qu'il n'y a qu'une seule ligne principale (pas de duplication)
@@ -266,10 +305,10 @@ class TestInvoicePdfUnified:
         """Test que les lignes MATERIAL_DELIVERY affichent 'Livraison' + description."""
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
-        client_user = User(username="clientuser", email="client@example.com")
+        user, client_user = _unique_pdf_users()
+        _assign_company_owner(db, company, user)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client_user, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -290,7 +329,7 @@ class TestInvoicePdfUnified:
         booking = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Test Customer",
             pickup_location="Clinique",
             dropoff_location="Domicile",
@@ -320,10 +359,10 @@ class TestInvoicePdfUnified:
 
         # Act
         pdf_service = PDFService()
-        pdf_content = pdf_service._create_invoice_pdf_content(invoice)
+        pdf_bytes, _nb = pdf_service._create_invoice_pdf_content(invoice)
 
         # Assert: "Livraison" et la description doivent apparaître dans le PDF
-        pdf_text = _extract_text_from_pdf(pdf_content)
+        pdf_text = _extract_text_from_pdf(pdf_bytes)
         assert "Livraison" in pdf_text, (
             "Libellé 'Livraison' manquant pour MATERIAL_DELIVERY"
         )
@@ -337,10 +376,10 @@ class TestInvoicePdfUnified:
 
         # Arrange
         company = Company(name="Test Company", uid_ide="CHE-123.456.789")
-        user = User(username="testuser", email="test@example.com")
-        client_user = User(username="clientuser", email="client@example.com")
+        user, client_user = _unique_pdf_users()
+        _assign_company_owner(db, company, user)
         client = Client(user=client_user, company=company)
-        db.session.add_all([company, user, client_user, client])
+        db.session.add_all([company, client_user, client])
         db.session.commit()
 
         invoice = Invoice(
@@ -363,7 +402,7 @@ class TestInvoicePdfUnified:
             booking = Booking(
                 company=company,
                 client=client,
-                user=user,
+                user_id=user.id,
                 customer_name="Test Customer",
                 pickup_location=pickup,
                 dropoff_location=dropoff,
@@ -391,7 +430,7 @@ class TestInvoicePdfUnified:
         booking_delivery = Booking(
             company=company,
             client=client,
-            user=user,
+            user_id=user.id,
             customer_name="Test Customer",
             pickup_location="Entrepôt",
             dropoff_location="Domicile",
@@ -420,10 +459,10 @@ class TestInvoicePdfUnified:
 
         # Act
         pdf_service = PDFService()
-        pdf_content = pdf_service._create_invoice_pdf_content(invoice)
+        pdf_bytes, _nb = pdf_service._create_invoice_pdf_content(invoice)
 
         # Assert: les 3 lignes apparaissent (2 transports + 1 livraison)
-        pdf_text = _extract_text_from_pdf(pdf_content)
+        pdf_text = _extract_text_from_pdf(pdf_bytes)
         assert "Livraison" in pdf_text, "Libellé livraison manquant"
         assert "Colis médical" in pdf_text, "Description livraison manquante"
         assert "Point A" in pdf_text or "Point B" in pdf_text, "Transports manquants"

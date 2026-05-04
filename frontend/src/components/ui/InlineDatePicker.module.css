@@ -44,14 +44,15 @@
 
 /* ── Popover (portalled to body) ── */
 .popover {
-  position: absolute;
-  z-index: 10000;
-  width: 240px;
+  position: fixed;
+  z-index: var(--z-modal-popover);
+  width: 222px;
+  box-sizing: border-box;
   background: var(--bg-primary, #fff);
   border: 1px solid var(--border-primary, #e5e7eb);
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  padding: 10px;
+  padding: 6px 8px 8px;
   animation: dpFadeIn 0.15s ease;
 }
 
@@ -65,11 +66,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .headerTitle {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary, #0f172a);
   text-transform: capitalize;
@@ -79,10 +80,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-secondary, #374151);
   cursor: pointer;
@@ -98,24 +99,24 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .weekDay {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: var(--text-tertiary, #9ca3af);
   text-align: center;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  padding: 2px 0;
+  letter-spacing: 0.2px;
+  padding: 1px 0;
 }
 
 /* ── Day grid ── */
 .grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 1px;
 }
 
 .emptyCell {
@@ -127,11 +128,12 @@
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
+  min-height: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-primary, #0f172a);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
@@ -149,7 +151,7 @@
 }
 
 .dayCellToday {
-  border: 1.5px solid var(--brand-primary, #00796b);
+  border: 1px solid var(--brand-primary, #00796b);
   font-weight: 700;
   color: var(--brand-primary, #00796b);
 }
@@ -159,19 +161,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid var(--border-primary, #e5e7eb);
 }
 
 .footerBtn {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--brand-primary, #00796b);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
   transition: background 0.12s;
   font-family: inherit;
@@ -182,13 +184,13 @@
 }
 
 .footerBtnClear {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: var(--text-tertiary, #9ca3af);
   background: none;
   border: none;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
   transition: background 0.12s, color 0.12s;
   font-family: inherit;

@@ -179,8 +179,7 @@ class ProcessAutomaticRemindersUseCase:
                                 )
                         except Exception as e:
                             logger.error(
-                                "Erreur lors de la génération du rappel "
-                                "niveau 1 pour facture %s: %s",
+                                "Erreur lors de la génération du rappel niveau 1 pour facture %s: %s",
                                 invoice.id,
                                 e,
                             )
@@ -218,8 +217,7 @@ class ProcessAutomaticRemindersUseCase:
                                 )
                         except Exception as e:
                             logger.error(
-                                "Erreur lors de la génération du rappel "
-                                "niveau 2 pour facture %s: %s",
+                                "Erreur lors de la génération du rappel niveau 2 pour facture %s: %s",
                                 invoice.id,
                                 e,
                             )
@@ -257,8 +255,7 @@ class ProcessAutomaticRemindersUseCase:
                                 )
                         except Exception as e:
                             logger.error(
-                                "Erreur lors de la génération du rappel "
-                                "niveau 3 pour facture %s: %s",
+                                "Erreur lors de la génération du rappel niveau 3 pour facture %s: %s",
                                 invoice.id,
                                 e,
                             )
@@ -267,8 +264,7 @@ class ProcessAutomaticRemindersUseCase:
 
                 except Exception as e:
                     logger.error(
-                        "Erreur lors du traitement des rappels pour "
-                        "l'entreprise %s: %s",
+                        "Erreur lors du traitement des rappels pour l'entreprise %s: %s",
                         company_id,
                         e,
                     )
@@ -276,8 +272,7 @@ class ProcessAutomaticRemindersUseCase:
                     continue
 
             logger.info(
-                "Traitement des rappels automatiques terminé: %s rappels "
-                "générés, %s erreurs",
+                "Traitement des rappels automatiques terminé: %s rappels générés, %s erreurs",
                 reminders_generated,
                 len(errors),
             )
@@ -291,8 +286,7 @@ class ProcessAutomaticRemindersUseCase:
         except (OperationalError, DBAPIError, IntegrityError) as e:
             db.session.rollback()
             logger.error(
-                "Erreur DB lors du traitement des rappels automatiques "
-                "(DB error: %s): %s",
+                "Erreur DB lors du traitement des rappels automatiques (DB error: %s): %s",
                 type(e).__name__,
                 str(e),
             )

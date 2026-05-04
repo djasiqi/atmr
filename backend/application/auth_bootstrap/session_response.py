@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from application.auth_bootstrap import access_denied_codes as codes
-from application.auth_bootstrap.session_bootstrap_snapshot import (
-    SessionBootstrapSnapshot,
-)
 from models.enums import UserRole
+
+from . import access_denied_codes as codes
+from .session_bootstrap_snapshot import SessionBootstrapSnapshot
 
 BOOTSTRAP_RESPONSE_VERSION = 1
 

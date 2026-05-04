@@ -6,7 +6,7 @@ sur une période donnée, avec support des exceptions (include/exclude clients).
 
 from __future__ import annotations  # noqa: I001
 
-# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false
+# pyright: reportUnusedImport=false, reportUnusedVariable=false, reportGeneralTypeIssues=false, reportUnusedFunction=false
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -23,6 +23,10 @@ from infrastructure.invoices.invoice_calculator import (
     InvoiceCalculator,
     round_to_5_cents,
 )
+from application.invoices.invoice_line_description import (
+    build_invoice_line_description_clinic_monthly,
+)
+from application.invoices.invoice_pdf_state import mark_pdf_failed, mark_pdf_ready
 from infrastructure.invoices.invoice_description_builder import (
     InvoiceDescriptionBuilder,
 )
@@ -43,6 +47,21 @@ from services.documents.pdf import PDFService
 logger = logging.getLogger(__name__)
 
 PERIOD_MONTH_THRESHOLD = 12
+
+
+def _booking_service_date_iso(reservation: Booking) -> str | None:
+    """Date calendaire du trajet (reservation) pour l'apercu / PDF facture clinique."""
+    st = getattr(reservation, "scheduled_time", None)
+    if st is None:
+        return None
+    try:
+        if hasattr(st, "date"):
+            return st.date().isoformat()
+    except Exception:
+        return None
+    return None
+
+
 HTTP_409_CONFLICT = 409  # HTTP Conflict (déjà générée)
 MAX_BOOKING_IDS_SHOWN = 10  # Limite le nombre d'IDs affichés dans les messages d'erreur
 
@@ -67,6 +86,7 @@ class GenerateClinicMonthlyInvoiceInput:
     period_month: int
     include_client_ids: list[int] | None = None
     exclude_client_ids: list[int] | None = None
+    reservation_ids: list[int] | None = None
     overrides: dict[str, Any] | None = None
 
 
@@ -394,6 +414,10 @@ class GenerateClinicMonthlyInvoiceUseCase:
             )
 
             reservations = query.order_by(Booking.scheduled_time.asc()).all()
+
+            if input_data.reservation_ids:
+                wanted = frozenset(int(x) for x in input_data.reservation_ids)
+                reservations = [r for r in reservations if r.id in wanted]
 
             # ✅ Pré-vérification : livraisons matériel sans description
             missing_desc_ids = [
@@ -805,24 +829,11 @@ class GenerateClinicMonthlyInvoiceUseCase:
                     base_amount, line_vat_rate
                 )
 
-                # Construire la description
+                # Construire la description (source unique : invoice_line_description)
                 is_delivery = mission_type == "material_delivery"
-                delivery_desc = (
-                    getattr(reservation, "delivery_description", None) or None
-                )
-                _is_cancelled_c = str(getattr(reservation, "status", "") or "").upper() == "CANCELED"
-                _fee_pct_c = getattr(reservation, "cancellation_fee_percent", None) if _is_cancelled_c else None
-                _fee_tier_c = getattr(reservation, "cancellation_fee_tier_id", None) if _is_cancelled_c else None
-                description = self.description_builder.build_description(
-                    pickup_location=reservation.pickup_location or "",
-                    dropoff_location=reservation.dropoff_location or "",
-                    patient_name=patient_name if not is_delivery else None,
-                    bill_to_client_id=None,
-                    is_material_delivery=is_delivery,
-                    delivery_description=delivery_desc,
-                    is_cancelled=_is_cancelled_c,
-                    cancellation_fee_percent=_fee_pct_c,
-                    cancellation_fee_label=_fee_tier_c,
+                description = build_invoice_line_description_clinic_monthly(
+                    reservation,
+                    description_builder=self.description_builder,
                 )
 
                 # ✅ Créer la ligne avec métadonnées patient (snapshot juridique)
@@ -847,12 +858,12 @@ class GenerateClinicMonthlyInvoiceUseCase:
                         else None
                     ),
                     "reservation_id": reservation.id,
-                    "meta": {
+                    "line_meta": {
                         # ✅ Snapshot patient: stocker patient_id + patient_name au moment de la génération
-                        # Le PDF lira uniquement ces valeurs snapshot (pas de recalcul)
                         "patient_id": patient_id,
-                        "patient_name": patient_name,  # Snapshot du nom au moment de la génération
-                        "patient_client_id": reservation.client_id,  # Pour référence
+                        "patient_name": patient_name,
+                        "patient_client_id": reservation.client_id,
+                        "service_date": _booking_service_date_iso(reservation),
                     },
                 }
                 line_dto = self.invoice_line_repo.create(line_data)
@@ -905,12 +916,31 @@ class GenerateClinicMonthlyInvoiceUseCase:
             }
             invoice.meta = cast(Any, current_meta)
 
-            # 11. Générer le PDF
-            pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
-            invoice.pdf_url = pdf_url
-
-            # 12. Commit de la transaction
+            # 11. Commit métier (facture + lignes + réservations), puis PDF dans une 2e transaction
             db.session.commit()
+
+            # 12. PDF + meta.pdf (le service recharge la facture après expire_all)
+            try:
+                pdf_url = self.pdf_service.generate_invoice_pdf(invoice)
+                if pdf_url:
+                    mark_pdf_ready(invoice, pdf_url)
+                else:
+                    mark_pdf_failed(invoice, "PDF_EMPTY")
+                db.session.commit()
+            except Exception as pdf_err:
+                logger.exception(
+                    "Échec génération ou persistance PDF après facture clinique mensuelle invoice_id=%s",
+                    getattr(invoice, "id", None),
+                )
+                try:
+                    mark_pdf_failed(invoice, str(pdf_err))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    logger.exception(
+                        "Échec persistance mark_pdf_failed clinique invoice_id=%s",
+                        getattr(invoice, "id", None),
+                    )
 
             # 13. Vérification post-commit : s'assurer que invoice_line_id
             # est bien persisté sur chaque booking (filet de sécurité)

@@ -1,0 +1,11 @@
+/**
+ * Masque l’UI injectée par l’extension Adobe Acrobat pour Chrome sur les PDF embarqués
+ * (boutons « Ouvrir dans Acrobat », préférences, poignée — hors contrôle React).
+ * Activé via document.body.classList dans DraftInvoiceEditorPanel.
+ */
+body.atmr-hide-acrobat-pdf-embed-overlay .acrobat-embedded-pdf-touch-point-container-wrapper,
+body.atmr-hide-acrobat-pdf-embed-overlay button.acrobat-embedded-pdf-touch-point {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

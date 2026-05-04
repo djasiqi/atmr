@@ -1270,7 +1270,7 @@ class TestInvoicesIntegration:
 
 @pytest.mark.integration
 class TestInvoicesV1PeriodPreviewAndDraftEdit:
-    """V1 : prévisualisation période, édition brouillon, refus si non brouillon."""
+    """V1 : prévisualisation période, édition lignes facture (brouillon ou émise), refus si payée / annulée."""
 
     def test_period_preview_patient(
         self, authenticated_client, test_company, test_client, test_completed_booking, db
@@ -1298,16 +1298,19 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert d.get("mode") == "standard"
         assert d.get("transports_count", 0) >= 1
         assert float(d.get("estimated_total", 0)) >= 80.0
+        assert len(d.get("preview_lines") or []) >= 1
+        assert float(d.get("estimated_total_with_vat", 0)) >= 0
 
     def test_period_preview_s2_clinic_only_billed_to_clinic(
         self, authenticated_client, test_company, db
     ):
         if not test_company:
             pytest.skip("test_company required")
+        import uuid as u
+
+        from ext import bcrypt
         from models import Client, ClientStay, User
         from models.enums import UserRole
-        from ext import bcrypt
-        import uuid as u
 
         mid = datetime.now(UTC) + timedelta(hours=3)
         y, m = mid.year, mid.month
@@ -1385,6 +1388,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         assert d["mode"] == "clinic_monthly"
         assert d["transports_count"] == 1
         assert float(d["estimated_total"]) == 120.0
+        assert len(d.get("preview_lines") or []) == 1
 
     def test_draft_remove_line_frees_booking(
         self, authenticated_client, test_company, test_client, test_completed_booking, db
@@ -1420,7 +1424,12 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         inv = Invoice.query.get(invoice_id)
         assert inv
         line = next(
-            (l for l in inv.lines if l.reservation_id == test_completed_booking.id), None
+            (
+                inv_line
+                for inv_line in inv.lines
+                if inv_line.reservation_id == test_completed_booking.id
+            ),
+            None,
         )
         assert line is not None
         del_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{line.id}"
@@ -1455,7 +1464,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         invoice_id = inv_data.get("id")
         before_total = float(inv_data.get("total_amount", 0))
         inv = Invoice.query.get(invoice_id)
-        line = [l for l in inv.lines if l.type == InvoiceLineType.RIDE][0]
+        line = next(inv_line for inv_line in inv.lines if inv_line.type == InvoiceLineType.RIDE)
         purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{line.id}"
         pr = authenticated_client.patch(purl, json={"line_total": 50.0})
         assert_response_status(pr, 200)
@@ -1466,7 +1475,7 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
     def test_draft_get_repairs_zero_total_with_vat_on_custom_line(
         self, authenticated_client, test_company, test_client, test_completed_booking, db
     ):
-        """GET brouillon : si une ligne a HT≠0 mais TTC=0, recalcul TTC + totaux facture."""
+        """Mutation brouillon : si une ligne a HT≠0 mais TTC=0, le repair recalcul TTC + totaux facture."""
         if not all([test_company, test_client, test_completed_booking]):
             pytest.skip("Required fixtures missing")
 
@@ -1500,17 +1509,24 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         inv = Invoice.query.get(invoice_id)
         assert inv
         custom = next(
-            (l for l in inv.lines if l.description and "Accompagnement QA" in l.description),
+            (
+                inv_line
+                for inv_line in inv.lines
+                if inv_line.description and "Accompagnement QA" in inv_line.description
+            ),
             None,
         )
         assert custom is not None
         custom.total_with_vat = Decimal("0")
         db.session.commit()
 
-        get_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}"
-        gr = authenticated_client.get(get_url)
+        purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/lines/{custom.id}"
+        gr = authenticated_client.patch(
+            purl,
+            json={"line_total": float(custom.line_total or 0)},
+        )
         assert_response_status(gr, 200)
-        payload = gr.get_json()["data"]
+        payload = gr.get_json()["data"]["invoice"]
         lines = payload.get("lines") or []
         tw_sum = sum(float(ln.get("total_with_vat") or 0) for ln in lines)
         assert float(payload["total_amount"]) == pytest.approx(tw_sum, rel=1e-5)
@@ -1559,7 +1575,173 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         if len(remise_lines) > 1:
             assert all("remise" in (ln.get("description") or "").lower() for ln in remise_lines)
 
-    def test_draft_edit_refused_when_invoice_sent(
+    def test_draft_remove_global_discount_restores_ride_line_ht(
+        self, authenticated_client, test_company, test_client, test_completed_booking, db
+    ):
+        """Après retrait remise globale %, le HT transport doit revenir au catalogue (pas rester remisé)."""
+        if not all([test_company, test_client, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        from models.enums import InvoiceLineType
+
+        st = datetime.now(UTC) + timedelta(hours=2)
+        y, m = st.year, st.month
+        test_completed_booking.billed_to_type = "patient"
+        test_completed_booking.invoice_line_id = None
+        test_completed_booking.status = BookingStatus.COMPLETED
+        test_completed_booking.scheduled_time = st
+        test_completed_booking.amount = Decimal("40.00")
+        db.session.commit()
+
+        gen_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/generate"
+        gen = authenticated_client.post(
+            gen_url,
+            json={"client_id": test_client.id, "period_year": y, "period_month": m},
+        )
+        assert gen.status_code in (200, 201)
+        invoice_id = gen.get_json().get("id")
+        assert invoice_id
+
+        inv0 = Invoice.query.get(invoice_id)
+        assert inv0 is not None
+        ride0 = next(
+            inv_line for inv_line in inv0.lines if inv_line.type == InvoiceLineType.RIDE
+        )
+        catalog_ht = ride0.line_total
+
+        disc_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/apply-global-discount"
+        dr = authenticated_client.post(
+            disc_url, json={"global_discount_percent": 20.0, "global_discount_note": "QA"}
+        )
+        assert_response_status(dr, 200)
+        db.session.expire_all()
+        inv1 = Invoice.query.get(invoice_id)
+        ride1 = next(
+            inv_line for inv_line in inv1.lines if inv_line.type == InvoiceLineType.RIDE
+        )
+        assert ride1.line_total < catalog_ht
+
+        rem_url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{invoice_id}/remove-global-discount"
+        rr = authenticated_client.post(rem_url)
+        assert_response_status(rr, 200)
+
+        db.session.expire_all()
+        inv2 = Invoice.query.get(invoice_id)
+        ride2 = next(
+            inv_line for inv_line in inv2.lines if inv_line.type == InvoiceLineType.RIDE
+        )
+        assert ride2.line_total == catalog_ht
+        lm = ride2.line_meta if isinstance(ride2.line_meta, dict) else {}
+        assert lm.get("original_line_total") is None
+
+    def test_draft_custom_line_manual_discount_updates_invoice_totals(
+        self, authenticated_client, test_company, test_client, test_invoice, db
+    ):
+        """Une remise HT manuelle (CUSTOM négatif) doit mettre à jour subtotal/total facture.
+
+        Régression : sans expire sur `Invoice.lines` après flush, le recalcul ignorait la nouvelle ligne
+        (total inchangé alors que le PDF listait la remise).
+        """
+        if not all([test_company, test_client, test_invoice]):
+            pytest.skip("Required fixtures missing")
+
+        from application.invoices.edit_draft_invoice import _recompute_totals_from_lines
+        from models import CompanyBillingSettings
+        from models.enums import InvoiceLineType
+
+        bs = CompanyBillingSettings.query.filter_by(company_id=test_company.id).first()
+        assert bs is not None
+        bs.vat_applicable = False
+        bs.vat_rate = Decimal("0.00")
+
+        for old in list(test_invoice.lines):
+            db.session.delete(old)
+        db.session.flush()
+        db.session.add(
+            InvoiceLine(
+                invoice_id=test_invoice.id,
+                reservation_id=None,
+                type=InvoiceLineType.RIDE,
+                description="Transport",
+                qty=Decimal("1.00"),
+                unit_price=Decimal("40.00"),
+                line_total=Decimal("40.00"),
+                vat_rate=None,
+                vat_amount=Decimal("0.00"),
+                total_with_vat=Decimal("40.00"),
+            )
+        )
+        db.session.add(
+            InvoiceLine(
+                invoice_id=test_invoice.id,
+                reservation_id=None,
+                type=InvoiceLineType.CUSTOM,
+                description="Location",
+                qty=Decimal("1.00"),
+                unit_price=Decimal("33.00"),
+                line_total=Decimal("33.00"),
+                vat_rate=None,
+                vat_amount=Decimal("0.00"),
+                total_with_vat=Decimal("33.00"),
+            )
+        )
+        db.session.flush()
+        db.session.expire(test_invoice, ["lines"])
+        _recompute_totals_from_lines(test_invoice)
+        db.session.commit()
+
+        url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/custom-line"
+        resp = authenticated_client.post(
+            url, json={"description": "Remise", "line_total": -20.0}
+        )
+        assert_response_status(resp, 200)
+        inv = db.session.get(Invoice, test_invoice.id)
+        assert inv is not None
+        db.session.refresh(inv)
+        assert inv.subtotal_amount == Decimal("53.00")
+        assert inv.total_amount == Decimal("53.00")
+
+    def test_remove_global_discount_without_pct_meta_preserves_ride_amounts(
+        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+    ):
+        """Sans méta global_discount / per_line_discounts, « Retirer les remises » ne doit pas
+        réécrire le HT transport depuis Booking (montant facturé A/R ≠ amount réservation)."""
+        if not all([test_company, test_client, test_invoice, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+
+        from models.enums import InvoiceLineType
+
+        test_completed_booking.amount = Decimal("12.70")
+        test_completed_booking.invoice_line_id = None
+        db.session.commit()
+
+        for old in list(test_invoice.lines):
+            db.session.delete(old)
+        db.session.flush()
+        ride = InvoiceLine(
+            invoice_id=test_invoice.id,
+            reservation_id=test_completed_booking.id,
+            type=InvoiceLineType.RIDE,
+            description="Course test",
+            qty=Decimal("1.00"),
+            unit_price=Decimal("40.00"),
+            line_total=Decimal("40.00"),
+            vat_rate=None,
+            vat_amount=Decimal("0.00"),
+            total_with_vat=Decimal("40.00"),
+        )
+        db.session.add(ride)
+        test_invoice.meta = None
+        db.session.commit()
+
+        url = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/remove-global-discount"
+        resp = authenticated_client.post(url)
+        assert_response_status(resp, 200)
+
+        db.session.refresh(ride)
+        assert ride.line_total == Decimal("40.00")
+
+    def test_sent_invoice_line_can_be_edited(
         self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
     ):
         if not all([test_company, test_client, test_invoice, test_completed_booking]):
@@ -1586,10 +1768,38 @@ class TestInvoicesV1PeriodPreviewAndDraftEdit:
         db.session.commit()
         purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/lines/{il.id}"
         pr = authenticated_client.patch(purl, json={"line_total": 5.0})
+        assert_response_status(pr, 200)
+
+    def test_draft_edit_refused_when_invoice_paid(
+        self, authenticated_client, test_company, test_client, test_invoice, test_completed_booking, db
+    ):
+        if not all([test_company, test_client, test_invoice, test_completed_booking]):
+            pytest.skip("Required fixtures missing")
+        from models.enums import InvoiceLineType
+
+        test_invoice.status = InvoiceStatus.PAID
+        for old in list(test_invoice.lines):
+            db.session.delete(old)
+        il = InvoiceLine(
+            invoice_id=test_invoice.id,
+            reservation_id=test_completed_booking.id,
+            type=InvoiceLineType.RIDE,
+            description="X",
+            qty=Decimal("1.00"),
+            unit_price=Decimal("10.00"),
+            line_total=Decimal("10.00"),
+            vat_amount=Decimal("0.00"),
+            total_with_vat=Decimal("10.00"),
+        )
+        db.session.add(il)
+        db.session.flush()
+        test_completed_booking.invoice_line_id = il.id
+        db.session.commit()
+        purl = f"/api/v1/invoices/companies/{test_company.id}/invoices/{test_invoice.id}/lines/{il.id}"
+        pr = authenticated_client.patch(purl, json={"line_total": 5.0})
         assert pr.status_code == 400
         err = pr.get_json() or {}
         emsg = err.get("error")
         if emsg is None and isinstance(err.get("data"), dict):
             emsg = err["data"].get("error")
         assert emsg
-        assert "brouillon" in str(emsg).lower() or "draft" in str(emsg).lower()

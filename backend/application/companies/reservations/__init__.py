@@ -1,5 +1,6 @@
 """Use-cases Reservations (Companies)."""
 
+from .billing_adjustment import CompanyBookingBillingAdjustmentUseCase
 from .complete_reservation import CompleteCompanyReservationUseCase
 from .create_manual_booking import (
     CreateManualBookingError,
@@ -11,9 +12,9 @@ from .dispatch_now import DispatchNowUseCase
 from .schedule_reservation import ScheduleCompanyReservationUseCase
 from .trigger_return_booking import TriggerReturnBookingUseCase
 from .update_reservation import UpdateCompanyReservationUseCase
-from .billing_adjustment import CompanyBookingBillingAdjustmentUseCase
 
 __all__ = [
+    "CompanyBookingBillingAdjustmentUseCase",
     "CompleteCompanyReservationUseCase",
     "CreateManualBookingError",
     "CreateManualBookingResult",
@@ -23,5 +24,4 @@ __all__ = [
     "ScheduleCompanyReservationUseCase",
     "TriggerReturnBookingUseCase",
     "UpdateCompanyReservationUseCase",
-    "CompanyBookingBillingAdjustmentUseCase",
 ]

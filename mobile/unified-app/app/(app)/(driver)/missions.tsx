@@ -1,9 +1,16 @@
-import { ScrollView, Text } from "react-native";
+import { StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
 import { getDriverStatusUx } from "../../../src/features/driver/statusDictionary";
-import { Button, Card, Loader } from "../../../src/components/ui";
+import {
+  AppButton,
+  AppCard,
+  AppSpinner,
+  AppText,
+  brandSurfaceSoft,
+  Screen,
+} from "../../../src/design/responsive";
 import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain/missionGrouping";
 
 export default function DriverMissionsScreen() {
@@ -13,36 +20,43 @@ export default function DriverMissionsScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700" }}>Missions chauffeur</Text>
-          {missionsQuery.isLoading ? <Loader /> : null}
+        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+          <AppText variant="sectionTitle" style={styles.title}>
+            Missions chauffeur
+          </AppText>
+          {missionsQuery.isLoading ? <AppSpinner size="small" /> : null}
           {missionsQuery.isError ? (
-            <Text>
-              Impossible de charger les missions: {(missionsQuery.error as Error)?.message ?? "Erreur"}
-            </Text>
+            <AppText variant="error" style={styles.error}>
+              Impossible de charger les missions : {(missionsQuery.error as Error)?.message ?? "Erreur"}
+            </AppText>
           ) : null}
 
           {groupMissionsByPickupWindow(missionsQuery.data ?? []).map((group) => (
-            <Card key={group.id}>
-              <Text style={{ fontWeight: "700" }}>
-                {group.isGrouped
-                  ? `Groupe ${group.missions.length} missions`
-                  : "Mission"}
-              </Text>
-              <Text style={{ color: "#666" }}>Depart: {group.displayLabel}</Text>
+            <AppCard key={group.id} variant="surface">
+              <AppText variant="label" style={styles.groupTitle}>
+                {group.isGrouped ? `Groupe ${group.missions.length} missions` : "Mission"}
+              </AppText>
+              <AppText variant="bodyMuted" style={styles.muted}>
+                Départ : {group.displayLabel}
+              </AppText>
               {group.missions.map((mission, index) => {
                 const ux = getDriverStatusUx(mission.status as string);
                 return (
-                  <Card key={mission.id} style={{ marginTop: index === 0 ? 8 : 10 }}>
-                    <Text style={{ fontWeight: "700" }}>Mission #{mission.id}</Text>
-                    <Text>{ux.label}</Text>
-                    <Text>
-                      {(mission.pickup_location as string | undefined) ?? "Depart"}
-                      {" -> "}
-                      {(mission.dropoff_location as string | undefined) ?? "Arrivee"}
-                    </Text>
-                    <Button
-                      label="Ouvrir mission"
+                  <AppCard key={mission.id} variant="surface" style={{ marginTop: index === 0 ? 8 : 10 }}>
+                    <AppText variant="label" style={styles.missionTitle}>
+                      Mission #{mission.id}
+                    </AppText>
+                    <AppText variant="body" style={styles.body}>
+                      {ux.label}
+                    </AppText>
+                    <AppText variant="body" style={styles.body}>
+                      {(mission.pickup_location as string | undefined) ?? "Départ"}
+                      {" → "}
+                      {(mission.dropoff_location as string | undefined) ?? "Arrivée"}
+                    </AppText>
+                    <AppButton
+                      title="Ouvrir mission"
+                      variant="secondary"
                       onPress={() =>
                         router.push({
                           pathname: "/(app)/(driver)/missions/[missionId]",
@@ -50,14 +64,41 @@ export default function DriverMissionsScreen() {
                         })
                       }
                     />
-                  </Card>
+                  </AppCard>
                 );
               })}
-            </Card>
+            </AppCard>
           ))}
-        </ScrollView>
+        </Screen>
       </PermissionGuard>
     </DriverContextGuard>
   );
 }
 
+const styles = StyleSheet.create({
+  page: {
+    padding: 20,
+    gap: 12,
+    paddingBottom: 28,
+  },
+  title: {
+    color: "#0f172a",
+  },
+  groupTitle: {
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  missionTitle: {
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  body: {
+    color: "#334155",
+  },
+  muted: {
+    color: "#64748b",
+  },
+  error: {
+    color: "#B42318",
+  },
+});

@@ -99,7 +99,7 @@ function GenderDropdown({ value, onChange, disabled }) {
         <div
           ref={menuRef}
           className={styles.chipMenu}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 'var(--z-modal-popover)' }}
         >
           {GENDER_OPTIONS.map((o) => (
             <button
@@ -175,7 +175,7 @@ function BillingTypeDropdown({ value, onChange, disabled }) {
         <div
           ref={menuRef}
           className={styles.chipMenu}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 10000 }}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 'var(--z-modal-popover)' }}
         >
           {BILLING_TYPE_OPTIONS.map((o) => (
             <button

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { Button, Modal } from "../../../../components/ui";
+import { Pressable, TextInput, View } from "react-native";
+import { AppButton, Modal, brandPrimary, brandText } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 import { useClientCreate, useCompanyBillingPartiesQuery } from "../../useRideForms";
 import { useSession } from "../../../../core/sessionProvider";
 
@@ -71,13 +72,13 @@ export function ClientCreateModal({ visible, onClose, onCreated }: ClientCreateM
         />
       </View>
       <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-        <Button
-          label={gender === "female" ? "Civilite: Femme" : "Femme"}
+        <AppButton
+          title={gender === "female" ? "Civilite: Femme" : "Femme"}
           onPress={() => setGender("female")}
           variant={gender === "female" ? "primary" : "secondary"}
         />
-        <Button
-          label={gender === "male" ? "Civilite: Homme" : "Homme"}
+        <AppButton
+          title={gender === "male" ? "Civilite: Homme" : "Homme"}
           onPress={() => setGender("male")}
           variant={gender === "male" ? "primary" : "secondary"}
         />
@@ -96,30 +97,33 @@ export function ClientCreateModal({ visible, onClose, onCreated }: ClientCreateM
         style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, marginTop: 8 }}
       />
       <View style={{ marginTop: 8, gap: 6 }}>
-        <Text style={{ fontWeight: "600" }}>Billing party par defaut (optionnel)</Text>
+        <AppText variant="label">Billing party par defaut (optionnel)</AppText>
         {billingParties.data?.map((party) => (
           <Pressable
             key={party.id}
             onPress={() => setSelectedBillingPartyId(party.id)}
             style={{
               borderWidth: 1,
-              borderColor: selectedBillingPartyId === party.id ? "#0a7ea4" : "#ddd",
+              borderColor: selectedBillingPartyId === party.id ? "#0A8F7A" : "#ddd",
               borderRadius: 8,
               padding: 8,
             }}
           >
-            <Text style={{ color: selectedBillingPartyId === party.id ? "#0a7ea4" : "#333" }}>
+            <AppText
+              variant="body"
+              style={{ color: selectedBillingPartyId === party.id ? brandPrimary : brandText }}
+            >
               {party.display_name} ({party.type})
-            </Text>
+            </AppText>
           </Pressable>
         ))}
       </View>
-      <Button
-        label={createClient.isPending ? "Creation..." : "Creer"}
+      <AppButton
+        title={createClient.isPending ? "Creation..." : "Creer"}
         variant="primary"
         onPress={() => void submit()}
       />
-      {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+      {error ? <AppText variant="error">{error}</AppText> : null}
     </Modal>
   );
 }

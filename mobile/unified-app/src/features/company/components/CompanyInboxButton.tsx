@@ -5,7 +5,6 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,7 +19,8 @@ import {
 } from "../hooks";
 import type { CompanyInboxNotification } from "../api/companyInboxApi";
 import { E } from "../theme/enterpriseOpsTheme";
-import { Button } from "../../../components/ui";
+import { AppButton } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 
 dayjs.extend(relativeTime);
 dayjs.locale("fr");
@@ -70,7 +70,9 @@ export function CompanyInboxButton() {
         <Ionicons name="notifications-outline" size={22} color={E.BRAND} />
         {unread > 0 ? (
           <View style={s.badge} accessibilityLabel={`${unread} non lues`}>
-            <Text style={s.badgeText}>{unread > 99 ? "99+" : String(unread)}</Text>
+            <AppText variant="caption" style={s.badgeText}>
+              {unread > 99 ? "99+" : String(unread)}
+            </AppText>
           </View>
         ) : null}
       </Pressable>
@@ -80,11 +82,13 @@ export function CompanyInboxButton() {
           <Pressable style={s.modalBackdropTap} onPress={() => setOpen(false)} />
           <View style={s.modalCard}>
             <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Notifications</Text>
+              <AppText variant="sectionTitle" style={s.modalTitle}>
+                Notifications
+              </AppText>
               <View style={s.headerActions}>
                 {unread > 0 ? (
-                  <Button
-                    label={readAll.isPending ? "…" : "Tout marquer lu"}
+                  <AppButton
+                    title={readAll.isPending ? "…" : "Tout marquer lu"}
                     onPress={() => readAll.mutate()}
                     disabled={readAll.isPending}
                     variant="secondary"
@@ -103,7 +107,9 @@ export function CompanyInboxButton() {
             {isLoading ? (
               <ActivityIndicator color={E.BRAND} style={{ padding: 24 }} />
             ) : items.length === 0 ? (
-              <Text style={s.empty}>Aucune notification récente.</Text>
+              <AppText variant="bodyMuted" style={s.empty}>
+                Aucune notification récente.
+              </AppText>
             ) : (
               <FlatList
                 data={items}
@@ -116,13 +122,15 @@ export function CompanyInboxButton() {
                     style={({ pressed }) => [s.row, !n.is_read && s.rowUnread, pressed && s.pressed]}
                   >
                     <View style={s.rowText}>
-                      <Text style={s.title} numberOfLines={2}>
+                      <AppText variant="label" style={s.title} numberOfLines={2}>
                         {n.title}
-                      </Text>
-                      <Text style={s.message} numberOfLines={3}>
+                      </AppText>
+                      <AppText variant="bodyMuted" style={s.message} numberOfLines={3}>
                         {n.message}
-                      </Text>
-                      <Text style={s.when}>{formatWhen(n.created_at)}</Text>
+                      </AppText>
+                      <AppText variant="caption" style={s.when}>
+                        {formatWhen(n.created_at)}
+                      </AppText>
                     </View>
                     {!n.is_read ? <View style={s.unreadPill} /> : null}
                   </Pressable>
@@ -130,7 +138,9 @@ export function CompanyInboxButton() {
               />
             )}
             {isError ? (
-              <Text style={s.error}>Impossible de charger la boîte. Vérifiez le rôle « entreprise ».</Text>
+              <AppText variant="error" style={s.error}>
+                Impossible de charger la boîte. Vérifiez le rôle « entreprise ».
+              </AppText>
             ) : null}
           </View>
         </View>
@@ -172,7 +182,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
-  modalTitle: { fontSize: 17, fontWeight: "700" as const, color: E.TEXT },
+  modalTitle: { color: E.TEXT },
   headerActions: { flexDirection: "row", alignItems: "center" },
   closeBtn: { padding: 4, marginLeft: 4 },
   list: { maxHeight: 400 },
@@ -189,9 +199,9 @@ const s = StyleSheet.create({
   },
   rowUnread: { backgroundColor: "rgba(0, 121, 107, 0.06)" },
   rowText: { flex: 1, minWidth: 0 },
-  title: { fontSize: 14, fontWeight: "700" as const, color: E.TEXT, marginBottom: 4 },
-  message: { fontSize: 13, color: E.TEXT_SEC, lineHeight: 18 },
-  when: { fontSize: 11, color: E.BRAND, marginTop: 4, fontWeight: "600" as const },
+  title: { marginBottom: 4, color: E.TEXT, fontWeight: "700" as const },
+  message: { lineHeight: 18 },
+  when: { color: E.BRAND, marginTop: 4, fontWeight: "600" as const },
   unreadPill: {
     width: 6,
     height: 6,
@@ -200,6 +210,6 @@ const s = StyleSheet.create({
     marginTop: 6,
     marginLeft: 6,
   },
-  empty: { padding: 20, textAlign: "center", color: E.TEXT_MUTED, fontSize: 14 },
-  error: { paddingHorizontal: 16, color: E.DANGER, fontSize: 12 },
+  empty: { padding: 20, textAlign: "center" },
+  error: { paddingHorizontal: 16 },
 });

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { ScrollView, Text } from "react-native";
+import { StyleSheet } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards";
 import { useDriverMissionDetailQuery } from "../../../../src/features/driver/hooks";
-import { Card, Loader } from "../../../../src/components/ui";
+import { AppCard, AppSpinner, AppText, brandSurfaceSoft, Screen } from "../../../../src/design/responsive";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
 
 export default function DriverTripDetailScreen() {
@@ -22,40 +22,70 @@ export default function DriverTripDetailScreen() {
   }, [params.tripId]);
 
   const missionDetail = useDriverMissionDetailQuery(tripId);
-  const mergedStatus = String(
-    missionDetail.data?.status ??
-      params.status ??
-      "UNKNOWN"
-  );
+  const mergedStatus = String(missionDetail.data?.status ?? params.status ?? "UNKNOWN");
   const ux = getDriverStatusUx(mergedStatus);
 
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700" }}>Detail course</Text>
-          {missionDetail.isLoading ? <Loader /> : null}
+        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+          <AppText variant="sectionTitle" style={styles.title}>
+            Détail course
+          </AppText>
+          {missionDetail.isLoading ? <AppSpinner size="small" /> : null}
           {missionDetail.error ? (
-            <Text style={{ color: "#B00020" }}>
-              {missionDetail.error instanceof Error
-                ? missionDetail.error.message
-                : "Detail indisponible"}
-            </Text>
+            <AppText variant="error" style={styles.error}>
+              {missionDetail.error instanceof Error ? missionDetail.error.message : "Détail indisponible"}
+            </AppText>
           ) : null}
-          <Card>
-            <Text style={{ fontWeight: "700" }}>Course #{params.tripId ?? "N/A"}</Text>
-            <Text>Source: {params.source ?? "unknown"}</Text>
-            <Text>Statut: {ux.label}</Text>
-            <Text>Pickup: {String(missionDetail.data?.pickup_location ?? params.pickup ?? "N/A")}</Text>
-            <Text>Dropoff: {String(missionDetail.data?.dropoff_location ?? params.dropoff ?? "N/A")}</Text>
-            <Text>Planifie: {String(missionDetail.data?.scheduled_time ?? params.scheduled ?? "N/A")}</Text>
-            <Text>
-              Derniere mise a jour: {String(missionDetail.data?.updated_at ?? "N/A")}
-            </Text>
-          </Card>
-        </ScrollView>
+          <AppCard>
+            <AppText variant="label" style={styles.cardTitle}>
+              Course #{params.tripId ?? "N/A"}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Source : {params.source ?? "unknown"}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Statut : {ux.label}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Pickup : {String(missionDetail.data?.pickup_location ?? params.pickup ?? "N/A")}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Dropoff : {String(missionDetail.data?.dropoff_location ?? params.dropoff ?? "N/A")}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Planifié : {String(missionDetail.data?.scheduled_time ?? params.scheduled ?? "N/A")}
+            </AppText>
+            <AppText variant="body" style={styles.body}>
+              Dernière mise à jour : {String(missionDetail.data?.updated_at ?? "N/A")}
+            </AppText>
+          </AppCard>
+        </Screen>
       </PermissionGuard>
     </DriverContextGuard>
   );
 }
 
+const styles = StyleSheet.create({
+  page: {
+    padding: 20,
+    gap: 12,
+    paddingBottom: 28,
+  },
+  title: {
+    color: "#0f172a",
+  },
+  cardTitle: {
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 4,
+  },
+  body: {
+    color: "#334155",
+    marginTop: 2,
+  },
+  error: {
+    color: "#B42318",
+  },
+});

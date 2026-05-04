@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Text, TextInput, View } from "react-native";
-import { Button, Modal } from "../../../../components/ui";
+import { TextInput, View } from "react-native";
+import { AppButton, Modal } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
 import { useRideEdit, useRideFormState } from "../../useRideForms";
 import { AddressSelector } from "./AddressSelector";
@@ -127,10 +128,10 @@ export function RideEditModal({
       <View style={{ gap: 8 }}>
         {isGuestMission ? (
           <View style={{ paddingVertical: 2 }}>
-            <Text style={{ color: "#5F6368", fontSize: 13, lineHeight: 18 }}>
+            <AppText variant="bodyMuted" style={{ lineHeight: 18 }}>
               Course invitée (sans fiche client). Vous modifiez uniquement cette course, pas de série
               récurrente ici.
-            </Text>
+            </AppText>
           </View>
         ) : (
           <ClientSelector value={form.clientId} onChange={form.setClientId} />
@@ -157,13 +158,13 @@ export function RideEditModal({
           multiline
           style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, minHeight: 80 }}
         />
-        <Button
-          label={editRide.isPending ? "Enregistrement..." : "Enregistrer"}
+        <AppButton
+          title={editRide.isPending ? "Enregistrement..." : "Enregistrer"}
           variant="primary"
           onPress={() => void submit()}
           disabled={!missionId}
         />
-        {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+        {error ? <AppText variant="error">{error}</AppText> : null}
       </View>
     </Modal>
   );

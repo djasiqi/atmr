@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
+import { AppText } from "../../../design/ui/AppText";
 import { E } from "../theme/enterpriseOpsTheme";
 import { createShadow } from "../../../styles/shadowStyles";
 
@@ -54,26 +55,48 @@ export function EnterpriseHeader({ date, mode, realtimeStatus, trailing }: Enter
             <Ionicons name="car-outline" size={20} color={E.BRAND} />
           </View>
           <View style={s.titleBlock}>
-            <Text style={s.headerTitle} accessibilityRole="header">
+            <AppText variant="sectionTitle" style={s.headerTitle} accessibilityRole="header">
               Courses
-            </Text>
-            <Text style={s.headerDate} accessibilityLabel={`Jour sélectionné : ${dayLine}`}>
+            </AppText>
+            <AppText
+              variant="caption"
+              style={s.headerDate}
+              accessibilityLabel={`Jour sélectionné : ${dayLine}`}
+            >
               {dayLine}
-            </Text>
+            </AppText>
           </View>
         </View>
         {trailing != null ? <View style={s.headerRight}>{trailing}</View> : null}
       </View>
-      <Text style={s.meta} numberOfLines={2}>
-        <Text style={s.metaKey}>Journée </Text>
-        <Text style={s.metaValue}>{date}</Text>
-        <Text style={s.meta}> · </Text>
-        <Text style={s.metaKey}>Mode </Text>
-        <Text style={s.metaValue}>{formatMode(mode)}</Text>
-        <Text style={s.meta}> · </Text>
-        <Text style={s.metaKey}>Réseau </Text>
-        <Text style={s.metaValue}>{formatRealtime(realtimeStatus)}</Text>
-      </Text>
+      <AppText variant="caption" style={s.meta} numberOfLines={2}>
+        <AppText variant="caption" style={s.metaKey}>
+          Journée{" "}
+        </AppText>
+        <AppText variant="caption" style={s.metaValue}>
+          {date}
+        </AppText>
+        <AppText variant="caption" style={s.metaSep}>
+          {" "}
+          ·{" "}
+        </AppText>
+        <AppText variant="caption" style={s.metaKey}>
+          Mode{" "}
+        </AppText>
+        <AppText variant="caption" style={s.metaValue}>
+          {formatMode(mode)}
+        </AppText>
+        <AppText variant="caption" style={s.metaSep}>
+          {" "}
+          ·{" "}
+        </AppText>
+        <AppText variant="caption" style={s.metaKey}>
+          Réseau{" "}
+        </AppText>
+        <AppText variant="caption" style={s.metaValue}>
+          {formatRealtime(realtimeStatus)}
+        </AppText>
+      </AppText>
     </View>
   );
 }
@@ -100,14 +123,14 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { fontSize: 17, fontWeight: "700" as const, color: E.TEXT, letterSpacing: -0.2 },
+  headerTitle: { color: E.TEXT, letterSpacing: -0.2 },
   headerDate: {
     color: E.TEXT_SEC,
-    fontSize: 12,
     marginTop: 1,
     textTransform: "capitalize" as const,
   },
-  meta: { color: E.TEXT_MUTED, fontSize: 12, lineHeight: 17.5, marginTop: 8 },
-  metaKey: { color: E.TEXT_MUTED, fontSize: 12, fontWeight: "600" as const },
-  metaValue: { color: E.TEXT, fontSize: 12, fontWeight: "700" as const },
+  meta: { color: E.TEXT_MUTED, marginTop: 8 },
+  metaSep: { color: E.TEXT_MUTED },
+  metaKey: { color: E.TEXT_MUTED, fontWeight: "600" as const },
+  metaValue: { color: E.TEXT_MUTED, fontWeight: "400" as const },
 });

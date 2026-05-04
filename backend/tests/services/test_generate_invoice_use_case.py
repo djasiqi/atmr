@@ -108,6 +108,19 @@ class _MockBookingRepository:
             ]
         return []
 
+    def find_models_eligible_for_billing_period_by_company_and_client(
+        self,
+        company_id: int,
+        client_id: int,
+        period_year: int | None = None,
+        period_month: int | None = None,
+        billed_to_type: str | None = None,
+    ) -> list[Any]:
+        """Aligné sur BookingRepository : même périmètre que l’ancien find_by période."""
+        if not self._bookings:
+            return []
+        return list(self._bookings)
+
     def find_model_by_id_and_company(self, booking_id: int, company_id: int) -> Any:
         """Retourne une réservation mockée."""
         if self._bookings:
@@ -365,12 +378,27 @@ class _MockPDFServiceRaisesKeyError:
 
 def test_integrity_error_enum_not_migrated_returns_400(db) -> None:
     """IntegrityError enum non migré → 400 + INVOICE_LINE_TYPE_MIGRATION_REQUIRED."""
-    from models import Booking, Client, Company, CompanyBillingSettings, User
-    from models.enums import BookingStatus
+    import uuid
 
+    from models import Booking, Client, Company, CompanyBillingSettings, User
+    from models.enums import BookingStatus, UserRole
+
+    _suffix = str(uuid.uuid4())[:8]
     # Setup minimal : company, client, booking pour atteindre invoice_line_repo.create
-    company_user = User(username="cu1", email="cu1@test.com")
-    client_user = User(username="c1", email="c1@test.com")
+    company_user = User(
+        username=f"cu1_{_suffix}",
+        email=f"cu1_{_suffix}@test.com",
+        public_id=str(uuid.uuid4()),
+        role=UserRole.company,
+    )
+    company_user.set_password("testpwd_cu1", force_change=False)
+    client_user = User(
+        username=f"c1_{_suffix}",
+        email=f"c1_{_suffix}@test.com",
+        public_id=str(uuid.uuid4()),
+        role=UserRole.CLIENT,
+    )
+    client_user.set_password("testpwd_c1", force_change=False)
     company = Company(name="Test Co", uid_ide="CHE-123.456.789", user=company_user)
     client = Client(user=client_user, company=company)
     db.session.add_all([company_user, client_user, company, client])
@@ -382,11 +410,11 @@ def test_integrity_error_enum_not_migrated_returns_400(db) -> None:
     booking = Booking(
         company=company,
         client=client,
-        user=client_user,
+        user_id=client_user.id,
         customer_name="Test",
         pickup_location="A",
         dropoff_location="B",
-        scheduled_time=datetime.now(UTC),
+        scheduled_time=datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
         amount=Decimal("50"),
         status=BookingStatus.COMPLETED,
     )
@@ -415,11 +443,26 @@ def test_integrity_error_enum_not_migrated_returns_400(db) -> None:
 
 def test_key_error_mapping_incomplete_returns_400(db) -> None:
     """KeyError mapping incomplet → 400 + UNKNOWN_LINE_TYPE."""
-    from models import Booking, Client, Company, CompanyBillingSettings, User
-    from models.enums import BookingStatus
+    import uuid
 
-    company_user = User(username="cu2", email="cu2@test.com")
-    client_user = User(username="c2", email="c2@test.com")
+    from models import Booking, Client, Company, CompanyBillingSettings, User
+    from models.enums import BookingStatus, UserRole
+
+    _suffix = str(uuid.uuid4())[:8]
+    company_user = User(
+        username=f"cu2_{_suffix}",
+        email=f"cu2_{_suffix}@test.com",
+        public_id=str(uuid.uuid4()),
+        role=UserRole.company,
+    )
+    company_user.set_password("testpwd_cu2", force_change=False)
+    client_user = User(
+        username=f"c2_{_suffix}",
+        email=f"c2_{_suffix}@test.com",
+        public_id=str(uuid.uuid4()),
+        role=UserRole.CLIENT,
+    )
+    client_user.set_password("testpwd_c2", force_change=False)
     company = Company(name="Test Co", uid_ide="CHE-456.789.012", user=company_user)
     client = Client(user=client_user, company=company)
     db.session.add_all([company_user, client_user, company, client])
@@ -431,11 +474,11 @@ def test_key_error_mapping_incomplete_returns_400(db) -> None:
     booking = Booking(
         company=company,
         client=client,
-        user=client_user,
+        user_id=client_user.id,
         customer_name="Test",
         pickup_location="A",
         dropoff_location="B",
-        scheduled_time=datetime.now(UTC),
+        scheduled_time=datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
         amount=Decimal("50"),
         status=BookingStatus.COMPLETED,
     )

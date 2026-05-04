@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   quickAcceptDriverMission,
@@ -7,7 +7,14 @@ import {
   quickRejectDriverMission,
   quickStartDriverMission,
 } from "../src/features/driver/api";
-import { Button, Card, Loader } from "../src/components/ui";
+import {
+  AppButton,
+  AppCard,
+  AppSpinner,
+  brandSurfaceSoft,
+  ResponsiveContainer,
+  Screen,
+} from "../src/design/responsive";
 
 type QuickAction = "accept" | "reject" | "start" | "complete";
 
@@ -75,20 +82,45 @@ export default function QuickActionScreen() {
   }
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
-      <Card>
-        <Text style={{ fontSize: 20, fontWeight: "700" }}>Quick action mission</Text>
-        <Text>Mission: {missionId ?? "N/A"}</Text>
-        <Text>Action demandee: {params.action ?? "manual"}</Text>
-        {busy ? <Loader /> : null}
-        {message ? <Text>{message}</Text> : null}
-        <Button label="Accepter" variant="primary" onPress={() => void executeQuickAction("accept")} />
-        <Button label="Refuser" onPress={() => void executeQuickAction("reject")} />
-        <Button label="Demarrer" onPress={() => void executeQuickAction("start")} />
-        <Button label="Terminer" onPress={() => void executeQuickAction("complete")} />
-        <Button label="Retour missions" onPress={() => router.replace("/(app)/(driver)/missions")} />
-      </Card>
-    </View>
+    <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <AppCard variant="surface">
+          <Text style={styles.title}>Action rapide — mission</Text>
+          <Text style={styles.line}>Mission : {missionId ?? "N/A"}</Text>
+          <Text style={styles.line}>Action demandée : {params.action ?? "manuel"}</Text>
+          {busy ? <AppSpinner size="small" /> : null}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
+          <AppButton title="Accepter" variant="primary" onPress={() => void executeQuickAction("accept")} />
+          <AppButton title="Refuser" variant="secondary" onPress={() => void executeQuickAction("reject")} />
+          <AppButton title="Démarrer" variant="secondary" onPress={() => void executeQuickAction("start")} />
+          <AppButton title="Terminer" variant="secondary" onPress={() => void executeQuickAction("complete")} />
+          <AppButton title="Retour missions" variant="secondary" onPress={() => router.replace("/(app)/(driver)/missions")} />
+        </AppCard>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
 
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#163A34",
+    marginBottom: 8,
+  },
+  line: {
+    fontSize: 15,
+    color: "#475569",
+    marginBottom: 4,
+  },
+  message: {
+    fontSize: 14,
+    color: "#334155",
+    marginBottom: 8,
+  },
+});

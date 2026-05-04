@@ -7,6 +7,8 @@ Objectif:
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,8 +40,8 @@ class BillingAuditLog(db.Model):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Snapshot avant/après (V1: JSONB libre, facile à étendre)
-    before: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    after: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    before: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    after: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     created_at = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

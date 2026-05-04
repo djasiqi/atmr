@@ -17,7 +17,7 @@
   top: 0;
   height: 100vh;
   background: var(--sidebar-bg);
-  z-index: 1100;
+  z-index: var(--z-side-rail);
   display: flex;
   flex-direction: column;
   overflow-y: auto;

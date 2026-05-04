@@ -1,4 +1,5 @@
-import { Pressable, Text } from "react-native";
+import { Pressable } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 
 type AssignFabProps = {
   onPress: () => void;
@@ -13,14 +14,17 @@ export function AssignFab({ onPress, label = "Assigner" }: AssignFabProps) {
         position: "absolute",
         right: 20,
         bottom: 20,
-        backgroundColor: "#0a7ea4",
+        backgroundColor: "#0A8F7A",
         borderRadius: 24,
         paddingHorizontal: 16,
         paddingVertical: 12,
         elevation: 3,
       }}
     >
-      <Text style={{ color: "#fff", fontWeight: "700" }}>{label}</Text>
+      {/* DS_EXCEPTION: libellé sur pastille CTA flottante verte (contraste blanc) */}
+      <AppText variant="label" style={{ color: "#fff" }}>
+        {label}
+      </AppText>
     </Pressable>
   );
 }

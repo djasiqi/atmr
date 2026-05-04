@@ -5,7 +5,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Platform } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryProvider } from "../src/core/QueryProvider";
+import { BootSplashGate } from "../src/core/boot/BootSplashGate";
 import { SessionProvider } from "../src/core/sessionProvider";
 import { MonitoringProvider } from "../src/core/providers/MonitoringProvider";
 import { NativeCapabilitiesProvider } from "../src/core/providers/NativeCapabilitiesProvider";
@@ -109,26 +111,30 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryProvider>
-      <MonitoringProvider>
-        <NativeCapabilitiesProvider>
-          <SessionProvider>
-            <ExternalIntentProvider>
-              <NotificationsProvider>
-                <Stack screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="index" />
-                  <Stack.Screen name="(public)" />
-                  <Stack.Screen name="(app)" />
-                  <Stack.Screen name="quick-action" />
-                  <Stack.Screen name="payment-return" />
-                  <Stack.Screen name="guest-payment-return" />
-                </Stack>
-                <StatusBar style="auto" />
-              </NotificationsProvider>
-            </ExternalIntentProvider>
-          </SessionProvider>
-        </NativeCapabilitiesProvider>
-      </MonitoringProvider>
-    </QueryProvider>
+    <SafeAreaProvider>
+      <QueryProvider>
+        <MonitoringProvider>
+          <NativeCapabilitiesProvider>
+            <SessionProvider>
+              <BootSplashGate>
+                <ExternalIntentProvider>
+                  <NotificationsProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="(public)" />
+                      <Stack.Screen name="(app)" />
+                      <Stack.Screen name="quick-action" />
+                      <Stack.Screen name="payment-return" />
+                      <Stack.Screen name="guest-payment-return" />
+                    </Stack>
+                    <StatusBar style="auto" />
+                  </NotificationsProvider>
+                </ExternalIntentProvider>
+              </BootSplashGate>
+            </SessionProvider>
+          </NativeCapabilitiesProvider>
+        </MonitoringProvider>
+      </QueryProvider>
+    </SafeAreaProvider>
   );
 }

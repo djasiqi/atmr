@@ -26,6 +26,11 @@ const SERVICE_AREA_SINGLE_MODES = new Set(['canton', 'district']);
 const SERVICE_AREA_JSON_VERSION = 1;
 const SERVICE_AREA_TOKEN_REGEX = /^(commune|district|canton):[A-Za-z0-9_-]+$/;
 const SERVICE_AREA_NAMED_REGEX = /^(commune_name|canton_name|district_name):.+$/;
+
+const isPersistableServiceAreaToken = (token) => {
+  const t = String(token || '');
+  return SERVICE_AREA_TOKEN_REGEX.test(t) || SERVICE_AREA_NAMED_REGEX.test(t);
+};
 const TOKEN_LOOKS_RAW_REGEX = /^(commune|district|canton):[A-Za-z0-9_-]+$/;
 const TYPE_LABELS = {
   commune: 'Commune',
@@ -388,7 +393,7 @@ const OperationsTab = forwardRef(({ isEditing }, ref) => {
       showError('Zone de service invalide.');
       return;
     }
-    if (!SERVICE_AREA_TOKEN_REGEX.test(nextToken)) {
+    if (!isPersistableServiceAreaToken(nextToken)) {
       showError('Cette zone est en fallback et ne peut pas être persistée. Choisis une zone officielle.');
       return;
     }
@@ -517,7 +522,7 @@ const OperationsTab = forwardRef(({ isEditing }, ref) => {
               <ServiceAreaZonesAutocomplete
                 inputId="service_area"
                 onSelect={handleServiceAreaSelect}
-                placeholder="Rechercher une commune, ville ou canton"
+                placeholder="Commune, ville ou canton (ex. Genève, GE, Lausanne)"
                 disabled={!isEditing}
                 allowFallbackResults={allowFallbackResults}
               />

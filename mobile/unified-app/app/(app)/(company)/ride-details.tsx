@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
@@ -23,7 +15,7 @@ import {
 import { emitCompanyDispatchTelemetry } from "../../../src/features/company/telemetry/companyTelemetry";
 import { useSession } from "../../../src/core/sessionProvider";
 import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtimeRouter";
-import { Button, Modal } from "../../../src/components/ui";
+import { AppButton, AppText, Modal, Screen } from "../../../src/design/responsive";
 import {
   scheduleCompanyRide,
   getCompanyAvailableDrivers,
@@ -35,7 +27,6 @@ import { TransferRideModal } from "../../../src/features/company/components/tran
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { getEnterpriseStatusColors } from "../../../src/features/company/theme/enterpriseStatusColors";
 import { createShadow } from "../../../src/styles/shadowStyles";
-
 dayjs.locale("fr");
 
 function resolveMissionIdFromEvent(payload: {
@@ -295,7 +286,9 @@ export default function CompanyRideDetailsScreen() {
       <PermissionGuard permission="company:rides:read">
         <View style={styles.loadWrap}>
           <ActivityIndicator color={E.BRAND} size="large" />
-          <Text style={styles.loadText}>Chargement…</Text>
+          <AppText variant="bodyMuted" style={styles.loadText}>
+            Chargement…
+          </AppText>
         </View>
       </PermissionGuard>
     );
@@ -303,8 +296,10 @@ export default function CompanyRideDetailsScreen() {
 
   return (
     <PermissionGuard permission="company:rides:read">
-      <ScrollView
-        style={styles.container}
+      <Screen
+        scroll
+        backgroundColor={E.BG}
+        withHorizontalPadding={false}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
@@ -321,20 +316,28 @@ export default function CompanyRideDetailsScreen() {
                 <Ionicons name="chevron-back" size={20} color={E.TEXT_SEC} />
               </TouchableOpacity>
               <View style={styles.headerCenter}>
-                <Text style={styles.headerTitle} numberOfLines={1}>
+                <AppText variant="sectionTitle" style={styles.headerTitle} numberOfLines={1}>
                   {titleLine}
-                </Text>
-                <Text style={styles.headerSub}>#{idLine}</Text>
+                </AppText>
+                <AppText variant="caption" style={styles.headerSub}>
+                  #{idLine}
+                </AppText>
               </View>
               <View style={styles.headerStatusBadge}>
                 <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
-                <Text style={[styles.statusLabel, { color: statusStyle.text }]} numberOfLines={1}>
+                <AppText
+                  variant="caption"
+                  style={[styles.statusLabel, { color: statusStyle.text }]}
+                  numberOfLines={1}
+                >
                   {mapStatusToLabel(statusStr).toUpperCase()}
-                </Text>
+                </AppText>
               </View>
             </View>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Informations</Text>
+              <AppText variant="sectionTitle" style={styles.sectionTitle}>
+                Informations
+              </AppText>
               {[
                 { label: "Statut", value: mapStatusToLabel(statusStr) },
                 { label: "Départ", value: pickup },
@@ -356,20 +359,25 @@ export default function CompanyRideDetailsScreen() {
                     idx === arr.length - 1 ? styles.infoRowLast : null,
                   ]}
                 >
-                  <Text style={styles.infoLabel}>{row.label}</Text>
-                  <Text
+                  <AppText variant="bodyMuted" style={styles.infoLabel}>
+                    {row.label}
+                  </AppText>
+                  <AppText
+                    variant="body"
                     style={[
                       styles.infoValue,
                       row.label === "Alerte" ? { color: E.DANGER, fontWeight: "600" } : null,
                     ]}
                   >
                     {row.value}
-                  </Text>
+                  </AppText>
                 </View>
               ))}
             </View>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Actions</Text>
+              <AppText variant="sectionTitle" style={styles.sectionTitle}>
+                Actions
+              </AppText>
               <View style={styles.quickRow}>
                 <TouchableOpacity
                   style={styles.quickBtn}
@@ -379,7 +387,9 @@ export default function CompanyRideDetailsScreen() {
                   {saving ? (
                     <ActivityIndicator color={E.BRAND} size="small" />
                   ) : (
-                    <Text style={styles.quickBtnText}>{driverId != null ? "Réassigner" : "Assigner"}</Text>
+                    <AppText variant="label" style={styles.quickBtnText}>
+                      {driverId != null ? "Réassigner" : "Assigner"}
+                    </AppText>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -410,7 +420,9 @@ export default function CompanyRideDetailsScreen() {
                   }}
                   disabled={!contextId || saving}
                 >
-                  <Text style={styles.quickBtnText}>{saving ? "Planif…" : "Planifier +20 min"}</Text>
+                  <AppText variant="label" style={styles.quickBtnText}>
+                    {saving ? "Planif…" : "Planifier +20 min"}
+                  </AppText>
                 </TouchableOpacity>
               </View>
               <View style={styles.quickRow}>
@@ -428,16 +440,18 @@ export default function CompanyRideDetailsScreen() {
                   }
                   disabled={!contextId || rideActions.urgent.isPending}
                 >
-                  <Text style={styles.quickBtnText}>
+                  <AppText variant="label" style={styles.quickBtnText}>
                     {rideActions.urgent.isPending ? "Urgent…" : "Urgent"}
-                  </Text>
+                  </AppText>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.quickBtn}
                   onPress={() => void openTransferModal()}
                   disabled={!contextId || saving}
                 >
-                  <Text style={styles.quickBtnText}>Transférer</Text>
+                  <AppText variant="label" style={styles.quickBtnText}>
+                    Transférer
+                  </AppText>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.quickBtn, { borderColor: "rgba(220,53,69,0.35)" }]}
@@ -450,14 +464,16 @@ export default function CompanyRideDetailsScreen() {
                   }
                   disabled={!contextId || rideActions.cancel.isPending}
                 >
-                  <Text style={[styles.quickBtnText, { color: E.DANGER }]}>
+                  <AppText variant="label" style={[styles.quickBtnText, { color: E.DANGER }]}>
                     {rideActions.cancel.isPending ? "…" : "Annuler"}
-                  </Text>
+                  </AppText>
                 </TouchableOpacity>
               </View>
             </View>
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Notes</Text>
+              <AppText variant="sectionTitle" style={styles.sectionTitle}>
+                Notes
+              </AppText>
               <NotesEditor
                 initialValue={String(d.notes ?? "")}
                 onSave={async (notes) => {
@@ -468,7 +484,9 @@ export default function CompanyRideDetailsScreen() {
               />
             </View>
             {mutationError ? (
-              <Text style={styles.mutationErr}>{mutationError}</Text>
+              <AppText variant="error" style={styles.mutationErr}>
+                {mutationError}
+              </AppText>
             ) : null}
             <TouchableOpacity
               style={styles.backCta}
@@ -476,29 +494,36 @@ export default function CompanyRideDetailsScreen() {
               activeOpacity={0.85}
             >
               <Ionicons name="arrow-back" size={18} color="#FFFFFF" style={styles.backIcon} />
-              <Text style={styles.backCtaText}>Retour aux courses</Text>
+              <AppText variant="label" style={styles.backCtaText}>
+                Retour aux courses
+              </AppText>
             </TouchableOpacity>
           </>
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="alert-circle-outline" size={48} color={E.DANGER} style={{ marginBottom: 12 }} />
-            <Text style={styles.emptyText}>Mission introuvable pour cette date.</Text>
+            <AppText variant="body" style={styles.emptyText}>
+              Mission introuvable pour cette date.
+            </AppText>
             <TouchableOpacity onPress={() => void missionQuery.refetch()} style={styles.retryPill}>
-              <Text style={styles.retryPillText}>Réessayer</Text>
+              <AppText variant="label" style={styles.retryPillText}>
+                Réessayer
+              </AppText>
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+      </Screen>
       <Modal visible={assignOpen} title="Selection chauffeur" onClose={() => !saving && setAssignOpen(false)}>
         {drivers.map((driver) => (
-          <Button
+          <AppButton
             key={driver.id}
-            label={`${selectedDriverId === driver.id ? "• " : ""}${driver.label}`}
+            title={`${selectedDriverId === driver.id ? "• " : ""}${driver.label}`}
+            variant="secondary"
             onPress={() => setSelectedDriverId(driver.id)}
           />
         ))}
-        <Button
-          label={saving ? "Assignation..." : "Confirmer assignation"}
+        <AppButton
+          title={saving ? "Assignation..." : "Confirmer assignation"}
           variant="primary"
           onPress={() => void assignDriver()}
           disabled={saving || selectedDriverId == null}
@@ -537,8 +562,7 @@ export default function CompanyRideDetailsScreen() {
 
 const styles = StyleSheet.create({
   loadWrap: { flex: 1, backgroundColor: E.BG, alignItems: "center", justifyContent: "center", padding: 24 },
-  loadText: { marginTop: 10, color: E.TEXT_MUTED, fontSize: 13 },
-  container: { flex: 1, backgroundColor: E.BG },
+  loadText: { marginTop: 10 },
   content: { paddingBottom: 48 },
   header: {
     flexDirection: "row",
@@ -572,7 +596,7 @@ const styles = StyleSheet.create({
     backgroundColor: E.BG,
   },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
-  statusLabel: { fontSize: 10, fontWeight: "600" as const, letterSpacing: 0.3, maxWidth: 84 },
+  statusLabel: { fontWeight: "600" as const, letterSpacing: 0.3, maxWidth: 84 },
   section: {
     backgroundColor: E.CARD,
     borderRadius: 14,
@@ -583,7 +607,7 @@ const styles = StyleSheet.create({
     borderColor: E.BORDER,
     ...cardShadow,
   },
-  sectionTitle: { color: E.TEXT, fontSize: 15, fontWeight: "700" as const, marginBottom: 12 },
+  sectionTitle: { color: E.TEXT, marginBottom: 12 },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -606,8 +630,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: E.BORDER,
   },
-  quickBtnText: { color: E.TEXT, fontWeight: "600" as const, fontSize: 13 },
-  mutationErr: { color: E.DANGER, marginHorizontal: 16, fontSize: 14, marginTop: 8, fontWeight: "600" },
+  quickBtnText: { color: E.TEXT, fontWeight: "600" as const },
+  mutationErr: { marginHorizontal: 16, marginTop: 8, fontWeight: "600" },
   backCta: {
     flexDirection: "row",
     alignItems: "center",
@@ -631,5 +655,5 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,121,107,0.1)",
     borderRadius: 10,
   },
-  retryPillText: { color: E.BRAND, fontWeight: "700" as const, fontSize: 14 },
+  retryPillText: { color: E.BRAND, fontWeight: "700" as const },
 });

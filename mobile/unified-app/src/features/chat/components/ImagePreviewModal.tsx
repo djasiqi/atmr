@@ -1,5 +1,6 @@
-import { Image, Text } from "react-native";
-import { Button, Modal } from "../../../components/ui";
+import { Image } from "react-native";
+import { AppButton, Modal } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 import { resolveMediaUrl } from "../../../core/api/mediaUrl";
 
 type ImagePreviewModalProps = {
@@ -18,9 +19,9 @@ export function ImagePreviewModal({ visible, imageUrl, onClose }: ImagePreviewMo
           style={{ width: "100%", aspectRatio: 1, borderRadius: 8, backgroundColor: "#f2f2f2" }}
         />
       ) : (
-        <Text style={{ color: "#666" }}>Aucune image selectionnee.</Text>
+        <AppText variant="bodyMuted">Aucune image selectionnee.</AppText>
       )}
-      <Button label="Fermer" onPress={onClose} />
+      <AppButton title="Fermer" variant="secondary" onPress={onClose} />
     </Modal>
   );
 }

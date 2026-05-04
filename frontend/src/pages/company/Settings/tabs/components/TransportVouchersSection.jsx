@@ -598,7 +598,9 @@ export default function TransportVouchersSection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-modal-app)',
+            padding: 'var(--modal-overlay-padding)',
+            boxSizing: 'border-box',
           }}
           onClick={() => setShowValidateModal(false)}
         >
@@ -665,7 +667,9 @@ export default function TransportVouchersSection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 'var(--z-modal-app)',
+            padding: 'var(--modal-overlay-padding)',
+            boxSizing: 'border-box',
           }}
           onClick={() => setShowRejectModal(false)}
         >

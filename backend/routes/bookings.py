@@ -4,6 +4,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from functools import wraps
 from io import BytesIO
+from os import getenv
 from typing import Any
 
 import sentry_sdk
@@ -64,6 +65,9 @@ _PDF_NEW_PAGE_Y_THRESHOLD = 70
 _PRICING_ADJUSTMENT_EPSILON = 0.01
 
 logger = logging.getLogger(__name__)
+
+# GET /bookings/ — liste ; surcharge env RATELIMIT_BOOKINGS_LIST
+_RATELIMIT_BOOKINGS_LIST = getenv("RATELIMIT_BOOKINGS_LIST", "2000 per hour")
 
 # Initialisation des repositories
 booking_repo = BookingRepository()
@@ -1328,7 +1332,7 @@ def _get_client_bookings(
 @bookings_ns.route("/")
 class ListBookings(Resource):
     @jwt_required()
-    @limiter.limit("300 per hour")  # ✅ 2.8: Rate limiting liste réservations
+    @limiter.limit(_RATELIMIT_BOOKINGS_LIST)  # ✅ 2.8 + surcharge env
     @bookings_ns.param(
         "page",
         "Numéro de page (défaut: 1, min: 1)",

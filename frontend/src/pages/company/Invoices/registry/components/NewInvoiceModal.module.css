@@ -1,11 +1,11 @@
 /* Styles spécifiques du formulaire complexe (structure modal migrée vers classes communes) */
 
-/* Gabarit modal fixe : 1100×760 par défaut, même format pour les 3 types de facturation */
+/* Gabarit wizard : --modal-width-workspace + plafond hauteur --modal-max-height */
 .modalInvoice {
-  width: min(1100px, calc(100vw - 32px));
-  height: min(760px, calc(100vh - 32px));
-  min-height: min(760px, calc(100vh - 32px));
-  max-height: min(760px, calc(100vh - 32px));
+  width: var(--modal-width-workspace);
+  height: min(760px, calc(100vh - 2 * var(--modal-overlay-padding)));
+  min-height: min(760px, calc(100vh - 2 * var(--modal-overlay-padding)));
+  max-height: min(760px, var(--modal-max-height), calc(100vh - 2 * var(--modal-overlay-padding)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -734,8 +734,8 @@
 
 @media (min-width: 641px) and (max-width: 900px) {
   .modalInvoice {
-    width: min(1100px, calc(100vw - 24px));
-    max-height: min(760px, calc(100vh - 24px));
+    width: var(--modal-width-workspace);
+    max-height: min(760px, var(--modal-max-height), calc(100vh - 2 * var(--modal-overlay-padding)));
   }
 }
 

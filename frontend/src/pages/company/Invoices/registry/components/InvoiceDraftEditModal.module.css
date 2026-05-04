@@ -3,11 +3,11 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 10001;
+  z-index: var(--z-modal-app);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--modal-overlay-padding);
   background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(6px);
   animation: fadeIn 0.2s ease;
@@ -33,10 +33,12 @@
   }
 }
 
+/* Shell : tokens globaux (--modal-width-editor, --modal-max-height) */
 .panel {
   width: 100%;
-  max-width: 720px;
-  max-height: 92vh;
+  max-width: var(--modal-width-editor);
+  max-height: var(--modal-max-height);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -55,6 +57,17 @@
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  flex-shrink: 0;
+}
+
+/** En-tête réduit : uniquement fermer (titres portés ailleurs, ex. bandeau PDF). */
+.headCloseOnly {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 16px 8px;
   border-bottom: 1px solid var(--border-primary, #e2e8f0);
   flex-shrink: 0;
 }
@@ -123,68 +136,85 @@
   border: 0;
 }
 
-/* Résumé */
-.summaryBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  margin: 8px -4px 0;
-  background: var(--bg-tertiary, #f8fafc);
-  border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 10px;
-}
-
-.badgeDraft,
-.badgeStatus {
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  border-radius: 6px;
-}
-
-.badgeDraft {
-  color: #1e3a5f;
-  background: #e0f2fe;
-  border: 1px solid #bae6fd;
-}
-
-.badgeStatus {
-  color: var(--text-secondary, #475569);
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-}
-
-.summaryTotal {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.summaryLabel {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-tertiary, #64748b);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.summaryAmount {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary, #0f172a);
-  font-variant-numeric: tabular-nums;
-}
-
 .muted {
   color: var(--text-tertiary, #94a3b8);
   font-size: 12px;
+}
+
+/** Pile description : badges, édition, métadonnées (#id, type remise) */
+.lineDescStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lineDescReadonly {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-primary, #0f172a);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cellEditDescRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cellEditDescRow .btnIconOk {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.textareaDescCompact {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  max-height: 220px;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.textareaDescCompact:focus {
+  outline: none;
+  border-color: var(--brand-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.lineMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.lineIdBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  color: var(--text-tertiary, #64748b);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .err {
@@ -200,16 +230,1428 @@
 /* Tableau */
 .tableScroll {
   border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: auto;
   max-width: 100%;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -4px;
+  margin: 0;
+  background: var(--bg-primary, #fff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+/* Factures avec beaucoup de lignes : zone scroll bornée, en-tête sticky déjà sur thead */
+.tableScrollHeavy {
+  max-height: min(40vh, 320px);
+}
+
+/** Table lignes très compact — minimum d’espace vertical */
+.tableScrollDense {
+  border-radius: 6px;
+}
+
+/**
+ * Légende alignée sur <colgroup> (Libellé / HT / Note / actions).
+ * Reste visible en haut du scroll (sticky).
+ */
+.linesColumnLegend {
+  display: grid;
+  grid-template-columns: 56% 16% 20% 8%;
+  align-items: end;
+  gap: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 6px 6px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #64748b);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.linesColumnLegendHt {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-right: 2px;
+}
+
+.linesColumnLegendActions {
+  min-width: 0;
+}
+
+.tableDense {
+  /*
+   * Couplée à `.table` : paddings et min-width sont surchargés par `.table.tableDense`
+   * (plus bas dans ce fichier pour gagner la spécificité).
+   */
+  table-layout: fixed;
+}
+
+.tableEmptyTight {
+  padding: 12px 8px !important;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-tertiary, #64748b);
+}
+
+.denseDesc {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.denseDesc > .denseTextarea,
+.denseDesc > .denseStatic {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.colNote .denseTextarea {
+  width: 100%;
+}
+
+.denseTextarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 30px;
+  max-height: 3.75rem;
+  padding: 4px 6px;
+  margin: 0;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  font-family: inherit;
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+  resize: none;
+  overflow-y: auto;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.denseTextarea:focus {
+  outline: none;
+  border-color: var(--brand-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.denseTextareaNote {
+  max-height: 3.2rem;
+}
+
+.denseStatic {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-primary, #0f172a);
+  max-height: 3.65rem;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.denseHt {
+  width: 4.85rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+}
+
+.denseHtGrow {
+  width: 100%;
+  max-width: 100%;
+}
+
+.denseHt:focus {
+  outline: none;
+  border-color: var(--brand-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.denseHtRead {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-primary, #0f172a);
+}
+
+.denseNoteRead {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-secondary, #475569);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.denseActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+.btnLineSave {
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.12);
+}
+
+.btnLineSave:focus-visible {
+  outline: 2px solid var(--brand-primary, #3b82f6);
+  outline-offset: 1px;
+}
+
+.btnIconOkXs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #99f6e4;
+  border-radius: 6px;
+  background: #f0fdfa;
+  color: #0f766e;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.btnIconOkXs:hover:not(:disabled) {
+  background: #ccfbf1;
+  border-color: #5eead4;
+}
+
+.btnIconOkXs:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btnTrashXs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+}
+
+.btnTrashXs:hover:not(:disabled) {
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.linesToolbarDense {
+  margin-bottom: 6px;
+  padding: 5px 7px !important;
+  gap: 6px 10px !important;
+  border-radius: 8px !important;
+}
+
+.linesToolbarDense .linesToolbarInput {
+  height: 29px !important;
+  padding: 0 8px !important;
+  font-size: 12px !important;
+}
+
+.linesToolbarDense .linesToolbarMeta {
+  font-size: 11px;
+}
+
+.linesToolbarDense .btnPager {
+  width: 28px;
+  height: 28px;
+}
+
+.linesToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+}
+
+.linesToolbarMeta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linesToolbarFilterWrap {
+  flex: 1;
+  min-width: 180px;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.linesToolbarFilterIcon {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.linesToolbarInput {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #0f172a);
+}
+
+.linesToolbarInput:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.linesToolbarPager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.btnPager {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.btnPager:hover:not(:disabled) {
+  background: var(--bg-hover, #f1f5f9);
+  border-color: #cbd5e1;
+  color: var(--text-primary, #0f172a);
+}
+
+.btnPager:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tableEmpty {
+  padding: 28px 16px !important;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary, #64748b);
+  border-bottom: none !important;
+}
+
+/* —— Édition brouillon : actions + aperçu PDF —— */
+.draftToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -4px 12px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf3 100%);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+}
+
+.draftToolbarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.draftToolbarBtn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.draftToolbarBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.draftToolbarBtnActive {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0c4a6e;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2);
+}
+
+.draftPopCard {
+  margin: 0 -4px 12px;
+  padding: 14px 16px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.draftPopCardTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.draftPopCardHint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-tertiary, #64748b);
+}
+
+.draftRemiseSection {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.draftRemiseSection:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.draftRemiseSectionTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+}
+
+.draftRemiseSectionHint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, #475569);
+}
+
+.draftRemiseMicroHint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary, #64748b);
+}
+
+/*
+ * Zone aperçu PDF / HTML : hauteurs en vh / calc(80vh − …) pour suivre la modale .panel
+ * (max 80vh, pas de plafond px fixe). flex + min-height:0 sur la pile viewer pour iframe scrollable.
+ */
+.draftPdfWrap {
+  margin: 0 -4px 16px;
+  border: 1px solid var(--border-primary, #e5e7eb);
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  background: var(--bg-primary, #ffffff);
+  box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.06));
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 220px;
+  /* Marge (head + barre + footer) : --modal-invoice-preview-reserve */
+  max-height: min(62vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve)));
+  height: min(56vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve)));
+}
+
+.draftPdfWrapExpanded {
+  min-height: 280px;
+  max-height: min(74vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve-expanded)));
+  height: min(70vh, calc(var(--modal-max-height) - var(--modal-invoice-preview-reserve-expanded)));
+}
+
+/**
+ * Colonne viewer : iframe + zone « suite du document » dans le flux (pas un calque).
+ * Fond neutre très léger (plus sobre que le slate-200 #e2e8f0).
+ */
+.draftPdfViewerStack {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 100%;
+  background: #f4f5f7;
+}
+
+.draftPdfViewerStack .draftPdfIframe {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: #f4f5f7;
+}
+
+/** Aperçu HTML brouillon : même flex que l’iframe ; fond transparent pour laisser le stack. */
+.draftPdfViewerStack .draftLivePreviewMount {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: transparent;
+}
+
+.draftPdfViewerStackWithSheet .draftLivePreviewMount {
+  flex: 1 1 56%;
+  min-height: 160px;
+}
+
+/** Répartition verticale : l’aperçu HTML un peu plus grand que le PDF dans la colonne. */
+.draftPdfViewerStackWithSheet .draftPdfIframe {
+  flex: 1 1 44%;
+  min-height: 120px;
+}
+
+/** Sous le PDF : bande formulaire (ligne sup.) limitée à 150px ; remises un peu plus haut. */
+.draftPdfLineSheetFlow {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 150px;
+  min-height: 0;
+  background: #f4f5f7;
+  animation: draftPdfLineSheetFlowIn 0.28s ease-out both;
+}
+
+.draftPdfLineSheetFlowRemise {
+  max-height: min(280px, 52vh);
+}
+
+.draftPdfLineSheetFlowLines {
+  max-height: min(340px, 48vh);
+}
+
+/** Panneau « Lignes » sous PDF : une ligne d’entête */
+.linesSheetPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+
+.linesSheetHead {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-primary, #e8ecf1);
+}
+
+.linesSheetHeading {
+  margin: 0;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text-primary, #0f172a);
+}
+
+.linesSheetHeadHint {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.linesSheetEditor {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.linesSheetEditor .linesToolbarDense {
+  margin-bottom: 4px;
+}
+
+.draftPdfLineSheetDoc {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary, #fff);
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+}
+
+.draftPdfLineSheetInner {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
+  background: var(--bg-primary, #fff);
+  scrollbar-width: thin;
+}
+
+/** Ligne suppl. sous PDF : version compacte (moins haut, cohérent Temps/Qté + champs). */
+.draftPdfLineSheetInner .addLineForm {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.draftPdfLineSheetInner .addLineFormHeader {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  gap: 8px 10px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.draftPdfLineSheetInner .addLineFormTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #0f172a);
+}
+
+.draftPdfLineSheetInner .addLineFormFields {
+  gap: 6px;
+}
+
+.draftPdfLineSheetInner .addLineFormMainRow {
+  gap: 6px 10px;
+}
+
+.draftPdfLineSheetInner .addLineFormDateGroup {
+  gap: 6px;
+}
+
+.draftPdfLineSheetInner .addLineFormDatePickerWrap {
+  max-width: 10rem;
+}
+
+.draftPdfLineSheetInner .addLineFormDatePickerWrap input {
+  font-size: 12px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+}
+
+.draftPdfLineSheetInner .addLineFormToolbar {
+  min-height: 28px;
+  gap: 6px;
+}
+
+.draftPdfLineSheetInner .modeSegSm {
+  padding: 0 2px;
+  height: 28px;
+  min-height: 28px;
+  background: #f1f5f9;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  gap: 2px;
+  box-sizing: border-box;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  --mode-seg-sm-col: 4.5rem;
+}
+
+.draftPdfLineSheetInner .modeSegBtnSm,
+.draftPdfLineSheetInner .modeSegBtnActiveSm {
+  min-height: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.draftPdfLineSheetInner .modeSegBtnActiveSm {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+
+.draftPdfLineSheetInner .inputLibelle {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.draftPdfLineSheetInner .inCell {
+  max-width: none;
+  flex: 1 1 5rem;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.draftPdfLineSheetInner .inCellSm {
+  height: 28px;
+  min-height: 28px;
+  font-size: 12px;
+}
+
+.draftPdfLineSheetInner .selectSm {
+  max-width: 6rem;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 24px 0 6px;
+  font-size: 12px;
+}
+
+.draftPdfLineSheetInner .btnIconAdd {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.draftPdfLineSheetInner .previewChfSm {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary, #0f172a);
+}
+
+/**
+ * Panneau « Lignes » sous PDF : aligné sur `.draftPdfLineSheetInner .addLineForm`
+ * (fond transparent, pas de carte externe — comme « Ligne supplémentaire HT »).
+ */
+.draftPdfLineSheetInner .linesSheetPanel {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.draftPdfLineSheetInner .linesSheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 0 0 8px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.draftPdfLineSheetInner .linesSheetHeading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text-primary, #0f172a);
+}
+
+.draftPdfLineSheetInner .linesSheetHeadHint {
+  flex: 0 1 auto;
+  max-width: min(100%, 16rem);
+  margin: 0;
+  padding: 4px 10px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--text-tertiary, #64748b);
+  background: #f1f5f9;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+  white-space: normal;
+}
+
+.draftPdfLineSheetInner .linesSheetEditor .tableScroll {
+  border-color: var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.draftPdfLineSheetInner .linesSheetEditor .linesColumnLegend {
+  background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 100%);
+  border-bottom-color: #cbd5e1;
+}
+
+.draftPdfLineSheetInner .linesToolbar {
+  margin-bottom: 8px;
+}
+
+/** Remises — même zone sous PDF, texte réduit */
+.remiseSheet {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.remiseSheetTitleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remiseSheetTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text-primary, #0f172a);
+}
+
+.remiseActiveBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, #64748b);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-secondary, #f1f5f9);
+  border: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.remiseSheetSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remiseSheetSection + .remiseSheetSection {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.remiseSheetSectionHead {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #64748b);
+}
+
+.remiseModeSeg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  background: var(--bg-secondary, #f1f5f9);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+}
+
+.remiseModeSegBtn,
+.remiseModeSegBtnActive {
+  flex: 1 1 auto;
+  min-width: 7rem;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.remiseModeSegBtn {
+  color: var(--text-secondary, #334155);
+  background: transparent;
+}
+
+.remiseModeSegBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.remiseModeSegBtnActive {
+  color: var(--text-primary, #0f172a);
+  background: var(--bg-primary, #fff);
+  border-color: var(--border-primary, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.remisePerLineList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(180px, 34vh);
+  overflow-y: auto;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+}
+
+.remisePerLineItem {
+  display: grid;
+  grid-template-columns: 1fr 4.5rem 5.5rem;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.remisePerLineItem:last-child {
+  border-bottom: none;
+}
+
+.remisePerLineDesc {
+  min-width: 0;
+  color: var(--text-primary, #0f172a);
+  word-break: break-word;
+}
+
+.remisePerLinePctWrap {
+  margin: 0;
+}
+
+.remisePerLinePctInput {
+  width: 100%;
+  max-width: 4.25rem;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 6px;
+  text-align: right;
+}
+
+.remisePerLineHt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary, #334155);
+  text-align: right;
+}
+
+.draftPdfLineSheetInner .remiseModeSegBtn,
+.draftPdfLineSheetInner .remiseModeSegBtnActive {
+  padding: 6px 10px;
+  font-size: 11px;
+  min-width: 6rem;
+}
+
+.draftPdfLineSheetInner .remisePerLineItem {
+  padding: 6px 8px;
+  font-size: 11px;
+  grid-template-columns: 1fr 4rem 5rem;
+}
+
+.draftPdfLineSheetInner .remisePerLinePctInput {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.draftPdfLineSheetInner .remisePerLineList {
+  max-height: min(140px, 28vh);
+}
+
+.remiseSheetRow {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.remiseSheetFoot {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary, #64748b);
+}
+
+.remiseDeductionCalc {
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  color: var(--text-secondary, #334155);
+  font-weight: 500;
+}
+
+.remiseDeductionCalc strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.remiseDeductionWarn {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-warning, #b45309);
+}
+
+.remiseRideToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.remiseRideChipBtn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #334155);
+  background: var(--bg-secondary, #f8fafc);
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.remiseRideChipBtn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.remiseRideChipBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.remiseRideList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(140px, 28vh);
+  overflow-y: auto;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 8px;
+  background: var(--bg-primary, #fff);
+}
+
+.remiseRideItem {
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
+}
+
+.remiseRideItem:last-child {
+  border-bottom: none;
+}
+
+.remiseRideRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: start;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.remiseRideCheckbox {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.remiseRideLabel {
+  min-width: 0;
+  color: var(--text-primary, #0f172a);
+  word-break: break-word;
+}
+
+.remiseRideHt {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-secondary, #334155);
+}
+
+.draftPdfLineSheetInner .remiseRideList {
+  max-height: min(120px, 24vh);
+}
+
+.draftPdfLineSheetInner .remiseRideChipBtn {
+  padding: 3px 8px;
+  font-size: 10px;
+}
+
+.draftPdfLineSheetInner .remiseRideRow {
+  padding: 5px 6px;
+  font-size: 11px;
+}
+
+.draftPdfLineSheetInner .remiseSheet {
+  gap: 6px;
+}
+
+.draftPdfLineSheetInner .remiseSheetTitle {
+  font-size: 13px;
+}
+
+.draftPdfLineSheetInner .remiseSheetSection {
+  gap: 4px;
+}
+
+.draftPdfLineSheetInner .remiseSheetSection + .remiseSheetSection {
+  padding-top: 6px;
+}
+
+.draftPdfLineSheetInner .remiseSheetSectionHead {
+  font-size: 10px;
+}
+
+.draftPdfLineSheetInner .remiseSheetFoot {
+  font-size: 10px;
+}
+
+@keyframes draftPdfLineSheetFlowIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draftPdfLineSheetFlow {
+    animation: none;
+  }
+}
+
+.draftPdfBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  row-gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(
+    180deg,
+    var(--bg-primary, #ffffff) 0%,
+    rgba(249, 250, 251, 0.92) 100%
+  );
+  border-bottom: 1px solid var(--border-primary, #e5e7eb);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/** Rail d’actions : une seule capsule (séparateurs entre familles de boutons). */
+.draftPdfBarRightMerged {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  /* Largeur = contenu : évite le pilule étiré avec du vide interne (ancien flex-grow). */
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  padding: 3px clamp(5px, 1.1vw + 3px, 10px);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: var(--radius-full, 9999px);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.draftPdfBarRightMerged::-webkit-scrollbar {
+  display: none;
+}
+
+.draftPdfBarToolGroup {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.draftPdfBarToolGroup:not(:first-of-type) {
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-primary, #e5e7eb);
+}
+
+.draftPdfBarToolGroupFile {
+  padding-right: 2px;
+}
+
+.draftPdfBarLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  justify-content: center;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+.draftPdfBarHeadText {
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--brand-primary, #00796b);
+}
+
+.draftPdfHeadTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--text-primary, #0f172a);
+  letter-spacing: -0.025em;
+}
+
+.draftPdfHeadSubtitle {
+  margin: 5px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text-secondary, #374151);
+  font-family: var(--font-family-mono, ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.draftPdfHeadMeta {
+  color: var(--text-secondary, #374151);
+  font-weight: 500;
+}
+
+.draftPdfBarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.draftPdfOpenLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--brand-primary, #00796b);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.draftPdfOpenLink:hover {
+  color: var(--brand-primary-dark, #00695c);
+  text-decoration: underline;
+}
+
+.draftPdfToolBtnActive {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: transparent;
+  color: var(--brand-primary-dark, #00695c);
+  box-shadow: 0 0 0 1px rgba(0, 121, 107, 0.28);
+}
+
+.draftPdfToolBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  background: transparent;
+  color: var(--text-secondary, #4b5563);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease;
+}
+
+.draftPdfToolBtn:hover {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: transparent;
+  color: var(--text-primary, #0f172a);
+}
+
+.draftPdfToolBtn:active {
+  transform: scale(0.96);
+}
+
+.draftPdfToolBtn:focus-visible {
+  outline: 2px solid var(--brand-primary, #00796b);
+  outline-offset: 2px;
+  z-index: 1;
+}
+
+.draftPdfToolBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.draftPdfToolBtnIconOnly {
+  padding: 0;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: var(--radius-full, 9999px);
+  box-sizing: border-box;
+  gap: 0;
+}
+
+.draftPdfBar .draftPdfToolBtnIconOnly:hover {
+  background: rgba(0, 121, 107, 0.08);
+  color: var(--brand-primary-dark, #00695c);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .draftPdfToolBtn:active {
+    transform: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .draftPdfBarHeadText {
+    padding-left: 10px;
+    border-left-width: 2px;
+  }
+
+  .draftPdfToolBtnIconOnly {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .draftPdfBarRightMerged {
+    border-radius: 14px;
+    margin-inline-start: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+
+.draftPdfToolLink {
+  text-decoration: none;
+}
+
+.draftPdfToolLink:hover {
+  text-decoration: none;
+}
+
+.draftPdfIframe {
+  flex: 1 1 auto;
+  align-self: stretch;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #f4f5f7;
+  display: block;
+}
+
+/**
+ * Adobe Acrobat (extension Chrome) — calques injectés à côté des iframes PDF (hors React).
+ * Masquage limité à la zone d’aperçu facture (pas sur tout le site).
+ */
+.draftPdfWrap :global(.acrobat-embedded-pdf-touch-point-container-wrapper),
+.draftPdfWrap :global(.acrobat-embedded-pdf-touch-point),
+.draftPdfViewerStack :global(.acrobat-embedded-pdf-touch-point-container-wrapper),
+.draftPdfViewerStack :global(.acrobat-embedded-pdf-touch-point),
+.draftPdfWrap :global([class*='acrobat-embedded-pdf-touch-point']) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+}
+
+.draftPdfMissing {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary, #475569);
+  background: #f8fafc;
+  border: 1px dashed var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+}
+
+/** Bloc liste de lignes en dessous de l’aperçu PDF (sans repliable `<details>`) */
+.draftLinesFoldBody {
+  margin-top: 10px;
+  padding: 4px 0 10px;
 }
 
 .table {
   width: 100%;
-  min-width: 480px;
+  min-width: 760px;
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
@@ -218,15 +1660,15 @@
 
 /* Répartition des largeurs (total 100 %) — colonne actions minimale pour laisser plus de place à Note */
 .colDesc {
-  width: 50%;
+  width: 56%;
 }
 
 .colHt {
-  width: 20%;
+  width: 16%;
 }
 
 .colNoteCol {
-  width: 22%;
+  width: 20%;
 }
 
 .colActions {
@@ -247,7 +1689,7 @@
 /* Poubelle : peu de marge côté Note ; retrait droit aligné Temps/Qté */
 .colActionsCell {
   min-width: 0;
-  padding: 10px 12px 10px 4px !important;
+  padding: 12px 12px 12px 4px !important;
   text-align: right;
   vertical-align: middle;
 }
@@ -263,13 +1705,13 @@
 /* Moins d’air entre Note et colonne poubelle ; un peu plus d’espace utile pour le texte */
 .colNote {
   min-width: 0;
-  padding: 10px 4px 10px 8px !important;
+  padding: 12px 6px 12px 10px !important;
   vertical-align: top;
 }
 
 .table th,
 .table td {
-  padding: 10px 12px;
+  padding: 12px 14px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--border-primary, #e2e8f0);
@@ -281,18 +1723,79 @@
 
 .table th {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: var(--text-tertiary, #64748b);
-  background: #fafbfc;
+  background: #f8fafc;
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
+.table.tableDense {
+  min-width: 0;
+  font-size: 12px;
+}
+
+.table.tableDense th,
+.table.tableDense td {
+  padding: 4px 6px !important;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border-primary, #eef2f6);
+}
+
+.table.tableDense thead th {
+  font-size: 10px !important;
+  letter-spacing: 0.05em !important;
+  line-height: 1.15;
+  padding: 4px 6px !important;
+  background: var(--bg-tertiary, #f8fafc);
+}
+
+.table.tableDense .colActionsCell {
+  padding: 3px 2px 3px 0 !important;
+}
+
+.table.tableDense .colNote {
+  padding: 3px 3px 3px 5px !important;
+}
+
+.table.tableDense tbody tr:nth-child(odd) td {
+  background: #f9fafb;
+}
+
+.table.tableDense tbody tr:nth-child(even) td {
+  background: #fff;
+}
+
+.table.tableDense tbody tr.rowAmountNegative td {
+  background: rgba(14, 165, 233, 0.072) !important;
+}
+
+.table.tableDense tbody tr.rowAmountNegative:nth-child(odd) td {
+  background: rgba(14, 165, 233, 0.085) !important;
+}
+
+.table.tableDense tbody tr.rowAmountNegative .denseHt,
+.table.tableDense tbody tr.rowAmountNegative .denseHtRead {
+  color: #0e7490;
+}
+
+.table.tableDense tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .table tbody tr:hover td {
-  background: rgba(248, 250, 252, 0.7);
+  background: #fbfdff;
+}
+
+.table.tableDense tbody tr:hover td {
+  background: #e0f2fe !important;
+}
+
+.table.tableDense tbody tr.rowAmountNegative:hover td {
+  background: #cffafe !important;
 }
 
 .remiseHint {
@@ -308,9 +1811,13 @@
   border-radius: 4px;
 }
 
+.lineMetaRow .remiseHint {
+  margin-top: 0;
+}
+
 .inputSm {
   width: 100%;
-  max-width: 104px;
+  max-width: 96px;
   padding: 6px 10px;
   border: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 8px;
@@ -328,12 +1835,15 @@
 
 /* Même hauteur / padding que le textarea en ligne (29px) pour aligner les ✓ */
 .cellEditRow .inputSm {
-  height: 29px;
-  min-height: 29px;
+  height: 30px;
+  min-height: 30px;
   padding: 4px 8px;
   box-sizing: border-box;
   line-height: 1.25;
   font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* Champ HT / note + bouton ✓ : même gap HT ↔ ✓ et Note ↔ ✓ */
@@ -360,6 +1870,7 @@
   border-radius: 8px;
   font-size: 12px;
   color: var(--text-primary, #0f172a);
+  background: #fff;
   resize: vertical;
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
@@ -370,8 +1881,8 @@
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
-  min-height: 29px;
-  height: 29px;
+  min-height: 30px;
+  height: 30px;
   max-height: 96px;
   padding: 4px 8px;
   line-height: 1.25;
@@ -407,10 +1918,10 @@
 }
 
 .btnIcon {
-  width: 29px;
-  height: 29px;
-  min-width: 29px;
-  min-height: 29px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   padding: 4px;
 }
 
@@ -419,10 +1930,10 @@
 }
 
 .btnIconOk {
-  width: 29px;
-  height: 29px;
-  min-width: 29px;
-  min-height: 29px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   padding: 4px;
   color: #0f766e;
   border-color: #99f6e4;
@@ -776,41 +2287,89 @@
   background: #f1f5f9;
 }
 
-/* —— Ligne suppl. HT (compact) —— */
-.sectionCompact {
-  padding: 10px 12px;
+/* —— Ligne suppl. HT (brouillon hors PDF + même bloc sous PDF) —— */
+.addLineForm {
+  padding: 12px 14px;
   background: var(--bg-tertiary, #f8fafc);
   border: 1px solid var(--border-primary, #e2e8f0);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
-.sectionHeaderRow {
+.addLineFormHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 10px 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-primary, #e2e8f0);
 }
 
-.sectionTitleInline {
+.addLineFormTitle {
   margin: 0;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-tertiary, #64748b);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--text-primary, #0f172a);
+}
+
+.addLineFormFields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/** Libellé date + barre Temps/Qté sur une même ligne (wrap si étroit). */
+.addLineFormMainRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.addLineFormDateGroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+}
+
+/** Enveloppe InlineDatePicker / InlineMonthYearPicker dans « ligne suppl. » */
+.addLineFormDatePickerWrap {
+  flex: 1 1 140px;
+  min-width: 0;
+  max-width: 11rem;
+}
+
+.addLineFormToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  flex: 1 1 12rem;
+  min-width: 0;
 }
 
 .modeSegSm {
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: repeat(2, var(--mode-seg-sm-col, 4.75rem));
   align-items: center;
+  justify-content: center;
   padding: 0 2px;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  height: 30px;
+  min-height: 30px;
+  gap: 2px;
   background: #e2e8f0;
   border-radius: 7px;
-  gap: 1px;
-  box-sizing: border-box;
-  height: 29px;
 }
 
 .modeSegBtnSm,
@@ -818,10 +2377,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
   min-height: 29px;
   height: 29px;
-  padding: 0 10px;
-  box-sizing: border-box;
+  padding: 0 6px;
   font-size: 12px;
   font-weight: 600;
   border: none;
@@ -845,18 +2406,12 @@
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
-.extraFormCompact {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .inputLibelle {
   width: 100%;
   box-sizing: border-box;
-  height: 29px;
-  min-height: 29px;
-  padding: 4px 8px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border-primary, #e2e8f0);
   border-radius: 6px;
   font-size: 12px;
@@ -881,8 +2436,8 @@
   min-width: 0;
   flex: 1 1 4.5rem;
   max-width: 7rem;
-  height: 29px;
-  min-height: 29px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 8px;
   box-sizing: border-box;
   border: 1px solid var(--border-primary, #e2e8f0);
@@ -895,8 +2450,8 @@
 .inCellSm {
   width: 3.75rem;
   flex: 0 0 auto;
-  height: 29px;
-  min-height: 29px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 6px;
   box-sizing: border-box;
   border: 1px solid var(--border-primary, #e2e8f0);
@@ -953,8 +2508,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 29px;
-  height: 29px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   padding: 0;
   border: 1px solid var(--border-primary, #e2e8f0);
@@ -975,15 +2530,6 @@
 }
 
 @media (max-width: 560px) {
-  .summaryBar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .summaryTotal {
-    justify-content: space-between;
-  }
-
   .formRow {
     flex-direction: column;
     align-items: stretch;
@@ -995,7 +2541,8 @@
     width: 100%;
   }
 
-  .compactToolbar {
+  .compactToolbar,
+  .addLineFormToolbar {
     align-items: stretch;
   }
 
@@ -1003,4 +2550,183 @@
     flex: 1 1 100%;
     text-align: right;
   }
+}
+
+.detailsFold {
+  margin-top: 12px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  border-radius: 10px;
+  padding: 0 12px 10px;
+  background: #fafbfc;
+}
+
+.detailsSummary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 4px 8px;
+  list-style: none;
+}
+
+.detailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.detailsFold[open] .detailsSummary {
+  padding-bottom: 4px;
+}
+
+.lineBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.lineBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.cellEditCol {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/** Bloc libellé : pile verticale pour trajets longs (adresses complètes) */
+.cellEditDescStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.textareaDesc {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 76px;
+  max-height: 220px;
+  resize: vertical;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  color: var(--text-primary, #0f172a);
+  background: #fff;
+}
+
+.textareaDesc:focus {
+  outline: none;
+  border-color: var(--brand-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.descActionsRow {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.descSaveHint {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary, #94a3b8);
+  white-space: nowrap;
+}
+
+.btnSaveDesc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  min-height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  background: var(--bg-primary, #fff);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.btnSaveDesc:hover:not(:disabled) {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+  color: #0f766e;
+}
+
+.btnSaveDesc:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.textareaSm {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  font-size: 13px;
+}
+
+.paymentSection {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.paymentHint {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.paymentBalances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.paymentList {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.paymentForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.selectSmInline {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-primary, #e2e8f0);
+  font-size: 13px;
 }

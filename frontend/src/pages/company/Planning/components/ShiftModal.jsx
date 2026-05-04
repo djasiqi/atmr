@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import styles from './Modal.module.css';
 
 export default function ShiftModal({ open, initial, onClose, onSave }) {
   const [form, setForm] = useState({
@@ -26,17 +27,8 @@ export default function ShiftModal({ open, initial, onClose, onSave }) {
   const save = () => onSave(form);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0006' }} onClick={onClose}>
-      <div
-        style={{
-          background: '#fff',
-          padding: 16,
-          maxWidth: 420,
-          margin: '10vh auto',
-          borderRadius: 8,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
         <h3>Shift</h3>
         <label>
           Driver ID
@@ -78,7 +70,7 @@ export default function ShiftModal({ open, initial, onClose, onSave }) {
             <option value="done">done</option>
           </select>
         </label>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className={styles.modalActions}>
           <button onClick={onClose}>Annuler</button>
           <button onClick={save}>Enregistrer</button>
         </div>

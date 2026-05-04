@@ -1,68 +1,71 @@
-import { Pressable, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View } from "react-native";
 import { PermissionGuard } from "../../../src/core/guards";
 import { useSession } from "../../../src/core/sessionProvider";
 import { useClientProfileQuery } from "../../../src/features/client/hooks";
 import { useClientBottomContentPadding } from "../../../src/features/client/navigation/ClientFloatingAppBar";
+import {
+  AppButton,
+  AppCard,
+  AppText,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../src/design/responsive";
 
 export default function ClientAccountScreen() {
   const { logout } = useSession();
-  const insets = useSafeAreaInsets();
   const bottomPad = useClientBottomContentPadding();
   const profileQuery = useClientProfileQuery();
+  const { horizontalPadding } = useAppViewport();
+  const t = useResponsiveTokens();
 
   return (
     <PermissionGuard permission="profile:read:self">
-      <View
-        style={{
-          flex: 1,
-          padding: 24,
-          paddingTop: Math.max(24, insets.top + 8),
-          paddingBottom: bottomPad,
-          gap: 12,
+      <Screen
+        scroll
+        backgroundColor="#f8fafc"
+        withHorizontalPadding={false}
+        includeSafeAreaInScrollBottomPadding={false}
+        extraScrollBottomPadding={bottomPad}
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: t.spacingSm,
+          gap: t.pageGap,
         }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Mon compte</Text>
-        <Text style={{ color: "#475569" }}>
-          Edition limitee aux informations supportees par le backend actuel.
-        </Text>
-        {profileQuery.isLoading ? <Text>Chargement du profil...</Text> : null}
+        <AppText variant="screenTitle">Mon compte</AppText>
+        <AppText variant="bodyMuted">
+          Édition limitée aux informations supportées par le backend actuel.
+        </AppText>
+        {profileQuery.isLoading ? <AppText variant="bodyMuted">Chargement du profil…</AppText> : null}
         {profileQuery.isError ? (
-          <Text>
-            Impossible de charger le profil: {(profileQuery.error as Error)?.message ?? "Erreur"}
-          </Text>
+          <AppText variant="error">
+            Impossible de charger le profil : {(profileQuery.error as Error)?.message ?? "Erreur"}
+          </AppText>
         ) : null}
         {profileQuery.data ? (
-          <>
-            <Text>
-              {(
-                profileQuery.data.full_name ??
-                `${profileQuery.data.first_name ?? ""} ${profileQuery.data.last_name ?? ""}`.trim()
-              ) || "Nom non renseigné"}
-            </Text>
-            <Text>{profileQuery.data.contact_email ?? profileQuery.data.user?.email ?? "Email non renseigné"}</Text>
-            <Text>{profileQuery.data.phone ?? "Téléphone non renseigné"}</Text>
-            <Text>{profileQuery.data.domicile?.address ?? "Adresse non renseignée"}</Text>
-          </>
+          <AppCard variant="surface">
+            <View style={{ gap: t.fieldGap }}>
+              <AppText variant="body">
+                {(
+                  profileQuery.data.full_name ??
+                  `${profileQuery.data.first_name ?? ""} ${profileQuery.data.last_name ?? ""}`.trim()
+                ) || "Nom non renseigné"}
+              </AppText>
+              <AppText variant="body">
+                {profileQuery.data.contact_email ?? profileQuery.data.user?.email ?? "Email non renseigné"}
+              </AppText>
+              <AppText variant="body">{profileQuery.data.phone ?? "Téléphone non renseigné"}</AppText>
+              <AppText variant="body">{profileQuery.data.domicile?.address ?? "Adresse non renseignée"}</AppText>
+            </View>
+          </AppCard>
         ) : null}
 
-        <Pressable
-          onPress={() => logout()}
-          style={{
-            marginTop: 16,
-            borderRadius: 8,
-            backgroundColor: "#0a7ea4",
-            paddingVertical: 10,
-            paddingHorizontal: 14,
-            alignSelf: "flex-start",
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Déconnexion</Text>
-        </Pressable>
-        <Text style={{ color: "#64748b" }}>
-          Besoin d&apos;aide ? Contactez le support depuis l&apos;ecran public d&apos;aide.
-        </Text>
-      </View>
+        <AppButton title="Déconnexion" variant="primary" onPress={() => logout()} />
+        <AppText variant="caption">
+          Besoin d&apos;aide ? Contactez le support depuis l&apos;écran public d&apos;aide.
+        </AppText>
+      </Screen>
     </PermissionGuard>
   );
 }

@@ -1,13 +1,14 @@
 import * as WebBrowser from "expo-web-browser";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { assertGuestSaferpay } from "../src/core/api/client";
 import {
   getGuestSaferpayPending,
   setGuestSaferpayPending,
 } from "../src/core/public/guestSaferpayPending";
 import * as SecureStore from "../src/core/storage/secureStoreCompat";
+import { brandPrimary, ResponsiveContainer, Screen } from "../src/design/responsive";
 
 const PUBLIC_BOOKING_TOKEN_KEY = "public_booking_status_token_v1";
 const PUBLIC_BOOKING_ID_KEY = "public_booking_id_v1";
@@ -173,9 +174,31 @@ export default function GuestPaymentReturnScreen() {
   }, [params.guestBookingId, params.outcome, router]);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
-      <ActivityIndicator />
-      <Text style={{ marginTop: 16, textAlign: "center", color: "#334155" }}>{msg}</Text>
-    </View>
+    <Screen scroll backgroundColor="#F7FBFA" contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <View style={styles.center}>
+          <ActivityIndicator color={brandPrimary} />
+          <Text style={styles.msg}>{msg}</Text>
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingVertical: 32,
+  },
+  center: {
+    alignItems: "center",
+    gap: 16,
+  },
+  msg: {
+    textAlign: "center",
+    color: "#334155",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+});

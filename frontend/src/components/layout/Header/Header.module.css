@@ -75,25 +75,11 @@
   gap: 10px;
 }
 
-.login {
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: var(--font-sm);
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: var(--radius-md);
-  transition:
-    color var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.login:hover {
-  color: var(--brand-primary);
-  background: var(--brand-primary-lightest);
-  text-decoration: none;
-}
-
-.signUp {
+/* Un seul CTA vers /login (connexion + inscription sur place) */
+.authEntry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 20px;
   background: var(--brand-primary);
   color: #ffffff;
@@ -102,28 +88,18 @@
   cursor: pointer;
   font-size: var(--font-sm);
   font-weight: 600;
+  text-decoration: none;
   transition:
     background-color var(--transition-fast),
     box-shadow var(--transition-fast);
   box-shadow: var(--shadow-brand);
 }
 
-.signUp:hover {
+.authEntry:hover {
   background: var(--brand-primary-dark);
   box-shadow: 0 4px 14px rgba(0, 121, 107, 0.3);
-}
-
-.signUpDisabled {
-  background: var(--bg-disabled);
-  color: var(--text-disabled);
-  opacity: 0.7;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.signUpDisabled:hover {
-  background: var(--bg-disabled);
-  box-shadow: none;
+  color: #ffffff;
+  text-decoration: none;
 }
 
 /* Hamburger button */

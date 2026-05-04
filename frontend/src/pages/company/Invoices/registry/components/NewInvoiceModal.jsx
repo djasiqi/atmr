@@ -2350,7 +2350,7 @@ const NewInvoiceModal = ({
       >
         <div className="modal-header">
           <h2 className="modal-title" id="invoice-new-modal-title">
-            Nouvelle facture
+            Facturation avancée
           </h2>
           <button className="modal-close" onClick={handleClose}>
             ✕
@@ -2373,7 +2373,7 @@ const NewInvoiceModal = ({
           {successMessage && <div className={styles.success}>{successMessage}</div>}
 
           <p className={styles.legacyPathBanner} role="note">
-            Parcours recommandé en routine : utiliser <strong>Facturer une période</strong> (liste
+            Parcours recommandé en routine : utiliser <strong>Nouvelle facture</strong> (liste
             des factures). Cet écran regroupe des options avancées et des scénarios hérités ; il sera
             progressivement remplacé.
           </p>

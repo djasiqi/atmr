@@ -1,5 +1,6 @@
-import { Text, View } from "react-native";
-import { Button, Modal } from "../../../components/ui";
+import { View } from "react-native";
+import { AppButton, Modal } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 
 type ConfirmCompletionModalProps = {
   visible: boolean;
@@ -13,13 +14,13 @@ export function ConfirmCompletionModal(props: ConfirmCompletionModalProps) {
   return (
     <Modal visible={props.visible} title="Confirmer la fin de mission" onClose={props.onCancel}>
       <View style={{ gap: 8 }}>
-        <Text>
+        <AppText variant="body">
           Confirmer le passage de la mission #{props.missionId ?? "n/a"} au statut COMPLETED ?
-        </Text>
+        </AppText>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <Button label="Annuler" onPress={props.onCancel} disabled={props.pending} />
-          <Button
-            label={props.pending ? "Validation..." : "Confirmer"}
+          <AppButton title="Annuler" variant="secondary" onPress={props.onCancel} disabled={props.pending} />
+          <AppButton
+            title={props.pending ? "Validation..." : "Confirmer"}
             variant="primary"
             onPress={props.onConfirm}
             disabled={props.pending}

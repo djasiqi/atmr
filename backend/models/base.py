@@ -93,7 +93,7 @@ def _as_dt(value):  # pyright: ignore[reportUnusedFunction]
     if isinstance(value, datetime):
         return value
     if isinstance(value, str):
-        from dateutil import parser  # pyright: ignore[reportMissingModuleSource]
+        from dateutil import parser
 
         return parser.parse(value)
     return value

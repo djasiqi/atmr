@@ -1,9 +1,11 @@
+import inspect
 import json
 import logging
 import os
 import traceback
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import Any, cast
 
 from flask import request
 from flask_jwt_extended import jwt_required
@@ -15,7 +17,7 @@ from flask_restx import (
 )
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
-from sqlalchemy.orm import aliased, joinedload, selectinload
+from sqlalchemy.orm import aliased, joinedload
 
 # ✅ DDD: Utilise use cases au lieu d'adapters
 from application.invoices import (
@@ -77,6 +79,7 @@ REMINDER_LEVEL_ZERO = 0
 AMOUNT_ZERO = 0
 CURRENT_REMINDER_FEE_ZERO = 0
 AMOUNT_PAID_ZERO = 0
+PERIOD_MONTH_MAX = 12
 PERIOD_MONTH_THRESHOLD = 12
 
 # Configuration du logger
@@ -352,8 +355,6 @@ filter_parser.add_argument("with_reminders", type=bool, help="Avec rappels en co
 class InvoicesList(Resource):
     def get(self, company_id):
         """Récupère la liste des factures avec filtres et pagination."""
-        logger.info("🚀 InvoicesList.get() company_id=%s", company_id)
-
         args = request.args
         status_raw = (args.get("status") or "").strip().lower()
         client_id = args.get("client_id", type=int)
@@ -788,7 +789,6 @@ class InvoicesList(Resource):
                     joinedload(Invoice.bill_to_client).joinedload(Client.user),
                     joinedload(Invoice.billing_party),
                     joinedload(Invoice.billed_to_company),
-                    selectinload(Invoice.reminders),
                     subqueryload(Invoice.lines),
                     subqueryload(Invoice.payments),
                 )
@@ -804,8 +804,15 @@ class InvoicesList(Resource):
             if kind == "regular":
                 inv = reg_by_id.get(eid)
                 if inv is not None:
-                    # reminders préchargés (selectinload) : pas de N+1, JSON inchangé pour le front
-                    paginated_invoices.append(inv.to_dict())
+                    # Brouillon : harmoniser total facture / TTC lignes (liste vs éditeur / PDF)
+                    if inv.status == InvoiceStatus.DRAFT:
+                        from application.invoices.edit_draft_invoice import (
+                            repair_draft_invoice_if_line_totals_inconsistent,
+                        )
+
+                        if repair_draft_invoice_if_line_totals_inconsistent(inv):
+                            db.session.commit()
+                    paginated_invoices.append(inv.to_dict(list_view=True))
             else:
                 row = partner_map.get(eid)
                 if row is not None:
@@ -2016,12 +2023,11 @@ class PeriodInvoicePreview(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id: int):
-        from routes.companies import _get_current_company_via_use_case
-
         from application.invoices.period_invoice_preview import (
             build_period_invoice_preview,
             preview_to_dict,
         )
+        from routes.companies import _get_current_company_via_use_case
 
         company, error_response, status_code = _get_current_company_via_use_case()
         if error_response or not company:
@@ -2034,7 +2040,7 @@ class PeriodInvoicePreview(Resource):
         m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
         c_id = request.args.get("client_id", type=int)
         cc_id = request.args.get("clinic_company_id", type=int)
-        if not y or not m or not (1 <= m <= 12):
+        if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
             return APIErrorHandler.handle_validation_error(
                 "Paramètres year (ou period_year) et month (1-12) requis",
                 logger_instance=logger,
@@ -2085,7 +2091,7 @@ class BillingOpportunities(Resource):
 
         y = request.args.get("year", type=int) or request.args.get("period_year", type=int)
         m = request.args.get("month", type=int) or request.args.get("period_month", type=int)
-        if not y or not m or not (1 <= m <= 12):
+        if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
             return APIErrorHandler.handle_validation_error(
                 "Paramètres year (ou period_year) et month (1-12) requis",
                 logger_instance=logger,
@@ -2110,9 +2116,8 @@ class InvoiceCeleryTaskStatus(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     def get(self, company_id: int, task_id: str):
-        from routes.companies import _get_current_company_via_use_case
-
         from celery_app import celery
+        from routes.companies import _get_current_company_via_use_case
 
         company, error_response, status_code = _get_current_company_via_use_case()
         if error_response or not company:
@@ -2124,7 +2129,7 @@ class InvoiceCeleryTaskStatus(Resource):
             )
 
         r = celery.AsyncResult(task_id)
-        data: dict = {
+        data: dict[str, Any] = {
             "task_id": task_id,
             "state": r.state,
             "ready": r.ready(),
@@ -2156,7 +2161,6 @@ class BatchGenerateDraftsForPeriod(Resource):
                 logger_instance=logger,
             )
         from routes.companies import _get_current_company_via_use_case
-
         from tasks.transport_invoicing_automation import (
             batch_generate_drafts_for_period_task,
         )
@@ -2172,12 +2176,12 @@ class BatchGenerateDraftsForPeriod(Resource):
         body = request.get_json(silent=True) or {}
         y = int(body.get("year") or body.get("period_year") or 0)
         m = int(body.get("month") or body.get("period_month") or 0)
-        if not y or not m or not (1 <= m <= 12):
+        if not y or not m or not (1 <= m <= PERIOD_MONTH_MAX):
             return APIErrorHandler.handle_validation_error(
                 "Corps JSON : year (ou period_year) et month (1-12) requis",
                 logger_instance=logger,
             )
-        ar = batch_generate_drafts_for_period_task.apply_async(
+        ar = cast(Any, batch_generate_drafts_for_period_task).apply_async(
             args=[company_id, y, m]
         )
         return success_response(
@@ -2197,14 +2201,21 @@ class DraftInvoiceLineEdit(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     def delete(self, company_id, invoice_id, line_id):
+        from application.invoices.edit_draft_invoice import remove_draft_invoice_line
         from routes.companies import _get_current_company_via_use_case
 
-        from application.invoices.edit_draft_invoice import remove_draft_invoice_line
-
-        company, err, code = _get_current_company_via_use_case()
+        company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
             return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
-        r = remove_draft_invoice_line(company_id, invoice_id, line_id)
+        body = request.get_json(silent=True) or {}
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
+        r = remove_draft_invoice_line(
+            company_id,
+            invoice_id,
+            line_id,
+            expected_updated_at=exp_s,
+        )
         if not r.success:
             return r.error, r.status_code or 400
         return success_response(
@@ -2214,20 +2225,23 @@ class DraftInvoiceLineEdit(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     def patch(self, company_id, invoice_id, line_id):
+        from application.invoices.edit_draft_invoice import update_draft_invoice_line
         from routes.companies import _get_current_company_via_use_case
 
-        from application.invoices.edit_draft_invoice import update_draft_invoice_line
-
-        company, err, code = _get_current_company_via_use_case()
+        company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
             return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
         body = request.get_json() or {}
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
         r = update_draft_invoice_line(
             company_id,
             invoice_id,
             line_id,
             line_total=body.get("line_total"),
             adjustment_note=body.get("adjustment_note"),
+            description=body.get("description"),
+            expected_updated_at=exp_s,
         )
         if not r.success:
             return r.error, r.status_code or 400
@@ -2243,17 +2257,29 @@ class ApplyGlobalDiscountDraftInvoice(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("20 per minute")
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
+        from application.invoices.edit_draft_invoice import apply_draft_global_discount
         from routes.companies import _get_current_company_via_use_case
 
-        from application.invoices.edit_draft_invoice import apply_draft_global_discount
-
-        company, err, code = _get_current_company_via_use_case()
+        company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
             return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
         body = request.get_json() or {}
         pct = body.get("global_discount_percent")
         note = body.get("global_discount_note")
+        raw_ride_ids = body.get("ride_line_ids")
+        ride_line_ids = None
+        if raw_ride_ids is not None:
+            if not isinstance(raw_ride_ids, list):
+                return APIErrorHandler.handle_validation_error(
+                    "ride_line_ids doit être une liste d'entiers", logger_instance=logger
+                )
+            try:
+                ride_line_ids = [int(x) for x in raw_ride_ids]
+            except (TypeError, ValueError):
+                return APIErrorHandler.handle_validation_error(
+                    "ride_line_ids invalide", logger_instance=logger
+                )
         if pct is None:
             return APIErrorHandler.handle_validation_error(
                 "global_discount_percent requis", logger_instance=logger
@@ -2264,11 +2290,52 @@ class ApplyGlobalDiscountDraftInvoice(Resource):
             return APIErrorHandler.handle_validation_error(
                 "global_discount_percent invalide", logger_instance=logger
             )
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
         r = apply_draft_global_discount(
             company_id,
             invoice_id,
             global_discount_percent=pf,
             global_discount_note=note if isinstance(note, str) else None,
+            ride_line_ids=ride_line_ids,
+            expected_updated_at=exp_s,
+        )
+        if not r.success:
+            return r.error, r.status_code or 400
+        return success_response(
+            data={"invoice": r.invoice.to_dict() if r.invoice else None}
+        )
+
+
+@invoices_ns.route(
+    "/companies/<int:company_id>/invoices/<int:invoice_id>/apply-per-line-discounts"
+)
+class ApplyPerLineDiscountsDraftInvoice(Resource):
+    @jwt_required()
+    @role_required(["ADMIN", "COMPANY"])
+    @limiter.limit("20 per minute")
+    def post(self, company_id, invoice_id):
+        from application.invoices.edit_draft_invoice import (
+            apply_draft_per_line_discounts,
+        )
+        from routes.companies import _get_current_company_via_use_case
+
+        company, err, _ = _get_current_company_via_use_case()
+        if err or not company or int(company.id) != company_id:
+            return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
+        body = request.get_json() or {}
+        raw = body.get("line_discounts")
+        if raw is not None and not isinstance(raw, list):
+            return APIErrorHandler.handle_validation_error(
+                "line_discounts doit être une liste", logger_instance=logger
+            )
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
+        r = apply_draft_per_line_discounts(
+            company_id,
+            invoice_id,
+            line_discounts=raw if isinstance(raw, list) else [],
+            expected_updated_at=exp_s,
         )
         if not r.success:
             return r.error, r.status_code or 400
@@ -2285,14 +2352,18 @@ class RemoveGlobalDiscountDraftInvoice(Resource):
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("20 per minute")
     def post(self, company_id, invoice_id):
+        from application.invoices.edit_draft_invoice import remove_draft_global_discount
         from routes.companies import _get_current_company_via_use_case
 
-        from application.invoices.edit_draft_invoice import remove_draft_global_discount
-
-        company, err, code = _get_current_company_via_use_case()
+        company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
             return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
-        r = remove_draft_global_discount(company_id, invoice_id)
+        body = request.get_json(silent=True) or {}
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
+        r = remove_draft_global_discount(
+            company_id, invoice_id, expected_updated_at=exp_s
+        )
         if not r.success:
             return r.error, r.status_code or 400
         return success_response(
@@ -2307,12 +2378,11 @@ class AddCustomLineDraftInvoice(Resource):
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @limiter.limit("30 per minute")
-    def post(self, company_id, invoice_id):
+    def post(self, company_id, invoice_id):  # noqa: PLR0911
+        from application.invoices.edit_draft_invoice import add_draft_custom_line
         from routes.companies import _get_current_company_via_use_case
 
-        from application.invoices.edit_draft_invoice import add_draft_custom_line
-
-        company, err, code = _get_current_company_via_use_case()
+        company, err, _ = _get_current_company_via_use_case()
         if err or not company or int(company.id) != company_id:
             return err or APIErrorHandler.handle_permission_error("Non autorisé", logger_instance=logger)
         body = request.get_json() or {}
@@ -2330,19 +2400,29 @@ class AddCustomLineDraftInvoice(Resource):
             return APIErrorHandler.handle_validation_error("line_total ou qty invalide", logger_instance=logger)
         custom_mode = body.get("custom_mode")
         time_unit = body.get("time_unit")
+        service_date_iso = body.get("service_date_iso")
         if custom_mode is not None and custom_mode not in ("time", "quantity"):
             return APIErrorHandler.handle_validation_error("custom_mode invalide", logger_instance=logger)
         if time_unit is not None and time_unit not in ("min", "h", "d", "mois"):
             return APIErrorHandler.handle_validation_error("time_unit invalide", logger_instance=logger)
-        r = add_draft_custom_line(
-            company_id,
-            invoice_id,
-            description=desc,
-            line_total=tf,
-            qty=qf,
-            custom_mode=custom_mode if isinstance(custom_mode, str) else None,
-            time_unit=time_unit if isinstance(time_unit, str) else None,
-        )
+        if service_date_iso is not None and not isinstance(service_date_iso, str):
+            return APIErrorHandler.handle_validation_error("service_date_iso invalide", logger_instance=logger)
+        exp = body.get("expected_updated_at")
+        exp_s = str(exp).strip() if exp is not None and str(exp).strip() else None
+
+        _kw = {
+            "description": desc,
+            "line_total": tf,
+            "qty": qf,
+            "custom_mode": custom_mode if isinstance(custom_mode, str) else None,
+            "time_unit": time_unit if isinstance(time_unit, str) else None,
+            "expected_updated_at": exp_s,
+            "service_date_iso": service_date_iso if isinstance(service_date_iso, str) else None,
+        }
+        _allowed = set(inspect.signature(add_draft_custom_line).parameters)
+        _kw = {k: v for k, v in _kw.items() if k in _allowed}
+
+        r = add_draft_custom_line(company_id, invoice_id, **_kw)
         if not r.success:
             return r.error, r.status_code or 400
         return success_response(
@@ -2444,6 +2524,7 @@ class GenerateInvoice(Resource):
                     period_month=period_month,
                     include_client_ids=include_client_ids,
                     exclude_client_ids=exclude_client_ids,
+                    reservation_ids=validated_data.get("reservation_ids"),
                     overrides=overrides,
                 )
                 invoice_result = uc.execute(input_data)
@@ -3000,6 +3081,19 @@ class SendInvoice(Resource):
                     invoice_id,
                     logger,
                 )
+
+            from application.invoices.invoice_pdf_state import (
+                ensure_draft_pdf_ready_for_send,
+            )
+
+            if invoice.status == InvoiceStatus.DRAFT:
+                ok_pdf, err_pdf = ensure_draft_pdf_ready_for_send(invoice)
+                if not ok_pdf:
+                    db.session.commit()
+                    return APIErrorHandler.handle_validation_error(
+                        err_pdf or "PDF indisponible.",
+                        logger_instance=logger,
+                    )
 
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.now(UTC)
@@ -3807,18 +3901,15 @@ class RegenerateInvoicePdf(Resource):
                     logger,
                 )
 
-            # ✅ PROTECTION IMMUTABILITÉ: Vérifier si la facture est "verrouillée"
-            from models.enums import InvoiceStatus
+            # Même périmètre que l'édition des lignes : pas de régénération si payée / annulée.
+            from application.invoices.edit_draft_invoice import (
+                invoice_allows_line_editing,
+            )
 
-            locked_statuses = {
-                InvoiceStatus.SENT,
-                InvoiceStatus.PARTIALLY_PAID,
-                InvoiceStatus.PAID,
-            }
-            if invoice.status in locked_statuses:
+            if not invoice_allows_line_editing(invoice):
                 logger.warning(
                     (
-                        "[PDF PROTECTION] Tentative de régénération PDF pour facture verrouillée: "
+                        "[PDF PROTECTION] Tentative de régénération PDF pour facture non éditable: "
                         "invoice_id=%s, status=%s, pdf_url=%s. Opération refusée."
                     ),
                     invoice.id,
@@ -3842,9 +3933,9 @@ class RegenerateInvoicePdf(Resource):
                     regenerate_standard_invoice_pdf_task,
                 )
 
-                async_result = regenerate_standard_invoice_pdf_task.apply_async(
-                    args=[company_id, invoice_id]
-                )
+                async_result = cast(
+                    Any, regenerate_standard_invoice_pdf_task
+                ).apply_async(args=[company_id, invoice_id])
                 return success_response(
                     data={
                         "async": True,
@@ -3859,12 +3950,25 @@ class RegenerateInvoicePdf(Resource):
             pdf_result = uc.execute(invoice=invoice, force_regenerate=True)
 
             if pdf_result.ok and pdf_result.pdf_url:
-                # ✅ Régénération : remplacer l'URL par le nouveau PDF (c'est le but de l'endpoint)
-                invoice.pdf_url = pdf_result.pdf_url
+                from application.invoices.invoice_pdf_state import mark_pdf_ready
+
+                mark_pdf_ready(invoice, pdf_result.pdf_url)
                 db.session.commit()
                 return {"message": "PDF régénéré", "pdf_url": pdf_result.pdf_url}
             if pdf_result.error:
+                if invoice.status == InvoiceStatus.DRAFT:
+                    from application.invoices.invoice_pdf_state import mark_pdf_failed
+
+                    pe = pdf_result.error
+                    err_txt = str(pe.get("error", "PDF_FAIL"))
+                    mark_pdf_failed(invoice, str(err_txt))
+                    db.session.commit()
                 return pdf_result.error, pdf_result.status_code or 400
+            if invoice.status == InvoiceStatus.DRAFT:
+                from application.invoices.invoice_pdf_state import mark_pdf_failed
+
+                mark_pdf_failed(invoice, "PDF_FAIL")
+                db.session.commit()
             return APIErrorHandler.handle_validation_error(
                 "Impossible de régénérer le PDF",
                 logger_instance=logger,
@@ -6006,17 +6110,17 @@ bulk_send_model = invoices_ns.model(
 
 @invoices_ns.route("/companies/<int:company_id>/invoices/bulk-send")
 class BulkSendInvoices(Resource):
-    """Marquer plusieurs factures brouillon comme envoyées en une seule opération."""
+    """Lot brouillons : papier = marquer SENT après PDF prêt ; email = envoi réel par facture."""
 
     @jwt_required()
     @role_required(["ADMIN", "COMPANY"])
     @invoices_ns.expect(bulk_send_model)
-    @invoices_ns.response(200, "Factures marquées comme envoyées")
+    @invoices_ns.response(200, "Factures traitées (réponse partielle possible)")
     @invoices_ns.response(400, "Erreur de validation", validation_error_model)
     @invoices_ns.response(401, "Non authentifié", permission_error_model)
     @invoices_ns.response(403, "Non autorisé", permission_error_model)
     def post(self, company_id):
-        """Marquer un lot de factures brouillon comme envoyées (papier)."""
+        """Papier : PDF à jour puis statut SENT. Email : ``SendInvoiceByEmailUseCase`` par facture."""
         try:
             from routes.companies import _get_current_company_via_use_case
 
@@ -6053,61 +6157,113 @@ class BulkSendInvoices(Resource):
                     logger_instance=logger,
                 )
 
+            from application.invoices.invoice_pdf_state import (
+                ensure_draft_pdf_ready_for_send,
+            )
+            from application.invoices.send_invoice_by_email import (
+                SendInvoiceByEmailInput,
+                SendInvoiceByEmailUseCase,
+            )
+
             now = datetime.now(UTC)
             updated = []
             skipped = []
+            sent: list[int] = []
+            failed_pdf: list[dict[str, str | int]] = []
 
             invoices = Invoice.query.filter(
                 Invoice.id.in_(invoice_ids),
                 Invoice.company_id == company_id,
             ).all()
 
-            found_ids = {inv.id for inv in invoices}
+            found_by_id = {inv.id: inv for inv in invoices}
 
             for inv_id in invoice_ids:
-                if inv_id not in found_ids:
-                    skipped.append(
-                        {"id": inv_id, "reason": "Facture introuvable"}
-                    )
+                inv_row = found_by_id.get(inv_id)
+                if inv_row is None:
+                    skipped.append({"id": inv_id, "reason": "Facture introuvable"})
+                    continue
 
-            for invoice in invoices:
-                if invoice.status != InvoiceStatus.DRAFT:
+                if inv_row.status != InvoiceStatus.DRAFT:
                     skipped.append(
                         {
-                            "id": invoice.id,
-                            "invoice_number": invoice.invoice_number,
-                            "reason": f"Statut actuel: {invoice.status.value}",
+                            "id": inv_row.id,
+                            "invoice_number": inv_row.invoice_number,
+                            "reason": f"Statut actuel: {inv_row.status.value}",
                         }
                     )
                     continue
 
-                invoice.status = InvoiceStatus.SENT
-                invoice.sent_at = now
+                if send_method == "email":
+                    email_uc = SendInvoiceByEmailUseCase()
+                    er = email_uc.execute(
+                        SendInvoiceByEmailInput(invoice_id=inv_row.id)
+                    )
+                    if not er.success:
+                        failed_pdf.append(
+                            {
+                                "invoice_id": inv_row.id,
+                                "error": er.error or "Échec envoi email",
+                            }
+                        )
+                        continue
+                    sent.append(inv_row.id)
+                    updated.append(
+                        {
+                            "id": inv_row.id,
+                            "invoice_number": inv_row.invoice_number,
+                        }
+                    )
+                    continue
+
+                ok_pdf, err_pdf = ensure_draft_pdf_ready_for_send(inv_row)
+                if not ok_pdf:
+                    failed_pdf.append(
+                        {
+                            "invoice_id": inv_row.id,
+                            "error": err_pdf or "PDF indisponible",
+                        }
+                    )
+                    continue
+                inv_row.status = InvoiceStatus.SENT
+                inv_row.sent_at = now
+                sent.append(inv_row.id)
                 updated.append(
                     {
-                        "id": invoice.id,
-                        "invoice_number": invoice.invoice_number,
+                        "id": inv_row.id,
+                        "invoice_number": inv_row.invoice_number,
                     }
                 )
 
             db.session.commit()
 
             logger.info(
-                "Bulk send: company_id=%s, updated=%s, skipped=%s",
+                "Bulk send: company_id=%s, updated=%s, skipped=%s, failed_pdf=%s",
                 company_id,
                 len(updated),
                 len(skipped),
+                len(failed_pdf),
             )
 
             return success_response(
                 data={
+                    "sent": sent,
+                    "failed": failed_pdf,
                     "updated": updated,
                     "skipped": skipped,
                     "send_method": send_method,
                     "total_updated": len(updated),
                     "total_skipped": len(skipped),
+                    "total_failed": len(failed_pdf),
                 },
-                message=f"{len(updated)} facture(s) marquée(s) comme envoyée(s)",
+                message=(
+                    f"{len(updated)} facture(s) traitée(s) avec succès"
+                    + (
+                        " (email)"
+                        if send_method == "email"
+                        else " (marquées envoyées papier)"
+                    )
+                ),
             )
 
         except Exception as e:

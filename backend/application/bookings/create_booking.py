@@ -374,14 +374,14 @@ class CreateBookingUseCase:
             dropoff_lat=dropoff_lat,
             dropoff_lon=dropoff_lon,
         )
-        # Paiement client = montant reçu, sauf tarifs préf. / « manual » (plus bas) :
+        # Paiement client = montant reçu, sauf tarifs préf. / "manual" (plus bas) :
         # - PORTAL : company_id is None → pas de gel côté entreprise
-        #   (le sous-traitant n’est pas encore connu) ; l’`amount` du body reprend
+        #   (le sous-traitant n'est pas encore connu) ; l'`amount` du body reprend
         #   la prévisualisation calculée côté plateforme
         #   (route preview + profil de référence PORTAL_CLIENT_PREVIEW_COMPANY_ID),
         #   cohérent avec Saferpay (booking.amount).
         # - TRANSPORT : `price_amount` peut remplacer le body si le moteur de
-        #   price freeze renvoie un montant pour l’entreprise rattachée.
+        #   price freeze renvoie un montant pour l'entreprise rattachée.
 
         if preferential_amount is not None:
             validated_data["amount"] = preferential_amount

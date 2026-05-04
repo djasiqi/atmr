@@ -105,7 +105,7 @@ class CreateCompanyClientUseCase:
         self._writer = client_writer
         self._make_public_id = make_public_id_fn
 
-    def execute(
+    def execute(  # noqa: PLR0911
         self, input_data: CreateCompanyClientInput
     ) -> CreateCompanyClientOutput:
         validated_data = input_data.validated_data

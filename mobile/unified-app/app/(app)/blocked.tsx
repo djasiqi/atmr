@@ -1,5 +1,6 @@
-import { Text, View, StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { AppText, brandSurfaceSoft, ResponsiveContainer, Screen } from "../../src/design/responsive";
 
 const MESSAGES: Record<string, { title: string; body: string }> = {
   driver_gate: {
@@ -18,30 +19,37 @@ export default function BlockedScreen() {
   const message = (reason ? MESSAGES[reason] : undefined) ?? DEFAULT_MESSAGE;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{message.title}</Text>
-      <Text style={styles.body}>{message.body}</Text>
-    </View>
+    <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <View style={styles.block}>
+          <AppText variant="sectionTitle" style={styles.title}>
+            {message.title}
+          </AppText>
+          <AppText variant="body" style={styles.body}>
+            {message.body}
+          </AppText>
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scroll: {
+    flexGrow: 1,
     justifyContent: "center",
-    alignItems: "center",
-    padding: 32,
+    paddingVertical: 32,
+  },
+  block: {
     gap: 16,
+    alignItems: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
     textAlign: "center",
+    color: "#163A34",
   },
   body: {
-    fontSize: 15,
     textAlign: "center",
-    opacity: 0.7,
     lineHeight: 22,
   },
 });

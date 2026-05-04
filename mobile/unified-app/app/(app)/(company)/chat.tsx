@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  InteractionManager,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { InteractionManager, Platform, Pressable, StyleSheet, View } from "react-native";
 import * as Linking from "expo-linking";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -38,6 +30,7 @@ import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContr
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { resolveMediaUrl } from "../../../src/core/api/mediaUrl";
 import type { CompanyRealtimeSnapshot, CompanyRealtimeStatus } from "../../../src/features/company/realtime/companyRealtimeState";
+import { AppText, Screen, useAppViewport, useResponsiveTokens } from "../../../src/design/responsive";
 
 function mapRealtimeChatMessage(event: unknown): SharedChatMessage | null {
   if (!event || typeof event !== "object") return null;
@@ -166,7 +159,8 @@ function getCompanyChatConnectionBanner(
 }
 
 export default function CompanyChatScreen() {
-  const insets = useSafeAreaInsets();
+  const { topInset, bottomInset, horizontalPadding } = useAppViewport();
+  const t = useResponsiveTokens();
   const params = useLocalSearchParams<{ threadId?: string }>();
   const { activeContext } = useSession();
   const date = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -374,10 +368,7 @@ export default function CompanyChatScreen() {
     ]);
   };
 
-  const keyboardBehavior =
-    Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined;
-  const keyboardOffset =
-    Platform.OS === "ios" ? insets.top : 0;
+  const keyboardOffset = Platform.OS === "ios" ? topInset : 0;
 
   const dispatchMetrics = useMemo(() => {
     const d = dashboardQuery.data;
@@ -400,27 +391,34 @@ export default function CompanyChatScreen() {
 
   return (
     <PermissionGuard permission="company:dashboard:read">
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={keyboardBehavior}
+      <Screen
+        scroll={false}
+        keyboardAware={Platform.OS !== "web"}
         keyboardVerticalOffset={keyboardOffset}
-        enabled={Platform.OS !== "web"}
+        withHorizontalPadding={false}
+        safeBottom
       >
         <View
           style={{
             flex: 1,
-            paddingTop: 24,
-            paddingHorizontal: 24,
-            paddingBottom: Math.max(24, insets.bottom),
-            gap: 8,
+            paddingTop: t.spacingMd,
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: Math.max(t.spacingMd, bottomInset),
+            gap: t.spacingXs,
             position: "relative",
           }}
         >
           <View>
-            <Text style={styles.headerTitle}>Chat dispatch</Text>
-            <Text style={styles.metricsLine}>{dispatchMetrics}</Text>
+            <AppText variant="sectionTitle" style={styles.headerTitle}>
+              Chat dispatch
+            </AppText>
+            <AppText variant="bodyMuted" style={styles.metricsLine}>
+              {dispatchMetrics}
+            </AppText>
             {params.threadId ? (
-              <Text style={styles.threadLine}>Fil lié: {params.threadId}</Text>
+              <AppText variant="caption" style={styles.threadLine}>
+                Fil lié: {params.threadId}
+              </AppText>
             ) : null}
           </View>
           {connectionBanner.show ? (
@@ -430,21 +428,23 @@ export default function CompanyChatScreen() {
                 connectionBanner.tone === "warning" ? styles.connectionBannerWarning : styles.connectionBannerCaution,
               ]}
             >
-              <Text
+              <AppText
+                variant="label"
                 style={
                   connectionBanner.tone === "warning" ? styles.connectionTitleWarning : styles.connectionTitleCaution
                 }
               >
                 {connectionBanner.title}
-              </Text>
+              </AppText>
               {connectionBanner.body ? (
-                <Text
+                <AppText
+                  variant="body"
                   style={
                     connectionBanner.tone === "warning" ? styles.connectionBodyWarning : styles.connectionBodyCaution
                   }
                 >
                   {connectionBanner.body}
-                </Text>
+                </AppText>
               ) : null}
             </View>
           ) : null}
@@ -477,16 +477,18 @@ export default function CompanyChatScreen() {
             sendLabel={sendMutation.isPending ? "Envoi..." : "Envoyer"}
           />
           {lastFailedContent ? (
-            <Text style={{ color: "#B00020" }} onPress={() => setInput(lastFailedContent)}>
-              Dernier envoi en echec. Touchez pour pre-remplir et renvoyer.
-            </Text>
+            <Pressable onPress={() => setInput(lastFailedContent)} accessibilityRole="button">
+              <AppText variant="error">
+                Dernier envoi en echec. Touchez pour pre-remplir et renvoyer.
+              </AppText>
+            </Pressable>
           ) : null}
           {messagesQuery.error ? (
-            <Text style={{ color: "#B00020" }}>
+            <AppText variant="error">
               {messagesQuery.error instanceof Error ? messagesQuery.error.message : "Chargement chat impossible."}
-            </Text>
+            </AppText>
           ) : null}
-          {error ? <Text style={{ color: "#B00020" }}>{error}</Text> : null}
+          {error ? <AppText variant="error">{error}</AppText> : null}
           <ImagePreviewModal
             visible={imagePreviewUrl != null}
             imageUrl={imagePreviewUrl}
@@ -502,25 +504,19 @@ export default function CompanyChatScreen() {
             onClose={() => setPdfPreview(null)}
           />
         </View>
-      </KeyboardAvoidingView>
+      </Screen>
     </PermissionGuard>
   );
 }
 
 const styles = StyleSheet.create({
   headerTitle: {
-    fontSize: 22,
-    fontWeight: "700",
     color: "#111827",
   },
   metricsLine: {
-    fontSize: 13,
-    color: "#4b5563",
     marginTop: 4,
   },
   threadLine: {
-    fontSize: 11,
-    color: "#9ca3af",
     marginTop: 4,
   },
   connectionBanner: {
@@ -539,23 +535,17 @@ const styles = StyleSheet.create({
   },
   connectionTitleCaution: {
     color: "#92400e",
-    fontSize: 14,
-    fontWeight: "600",
   },
   connectionTitleWarning: {
     color: "#991b1b",
-    fontSize: 14,
-    fontWeight: "600",
   },
   connectionBodyCaution: {
     color: "#b45309",
-    fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
   },
   connectionBodyWarning: {
     color: "#b91c1c",
-    fontSize: 13,
     marginTop: 4,
     lineHeight: 18,
   },

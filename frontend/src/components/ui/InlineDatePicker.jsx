@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { FiChevronLeft, FiChevronRight, FiCalendar } from 'react-icons/fi';
 import dp from './InlineDatePicker.module.css';
@@ -115,6 +115,8 @@ export default function InlineDatePicker({
   inputClassName = '',
   invalid = false,
   inputId,
+  ariaLabel,
+  title,
 }) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
@@ -219,20 +221,38 @@ export default function InlineDatePicker({
   const updatePosition = useCallback(() => {
     if (!wrapperRef.current) return;
     const rect = wrapperRef.current.getBoundingClientRect();
-    const popH = 310, popW = 240;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const top = spaceBelow >= popH ? rect.bottom + 4 : rect.top - popH - 4;
-    const left = Math.min(rect.left, window.innerWidth - popW - 8);
-    setPos({ top: top + window.scrollY, left: Math.max(8, left + window.scrollX) });
+    const popW = 222;
+    const margin = 8;
+    const gap = 6;
+    const el = popoverRef.current;
+    const measured = el?.offsetHeight;
+    const popH = measured && measured > 48 ? measured : 252;
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    let top;
+    if (spaceBelow >= popH + gap || spaceBelow >= spaceAbove) {
+      top = rect.bottom + gap;
+    } else {
+      top = rect.top - popH - gap;
+    }
+    let left = Math.min(rect.left, window.innerWidth - popW - margin);
+    left = Math.max(margin, Math.min(left, window.innerWidth - popW - margin));
+    top = Math.max(margin, Math.min(top, window.innerHeight - popH - margin));
+    setPos({ top, left });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     updatePosition();
+    const id = window.requestAnimationFrame(() => updatePosition());
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
-    return () => { window.removeEventListener('scroll', updatePosition, true); window.removeEventListener('resize', updatePosition); };
-  }, [open, updatePosition]);
+    return () => {
+      window.cancelAnimationFrame(id);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [open, viewMonth, viewYear, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -279,12 +299,16 @@ export default function InlineDatePicker({
           placeholder="__.__.____"
           maxLength={10}
           aria-invalid={invalid || inputError}
+          aria-label={ariaLabel}
+          title={title}
         />
         <button
           type="button"
           className={dp.iconBtn}
           onClick={() => setOpen(!open)}
           tabIndex={-1}
+          aria-expanded={open}
+          aria-haspopup="dialog"
           aria-label={open ? 'Fermer le sélecteur de date' : 'Ouvrir le sélecteur de date'}
         >
           <FiCalendar size={14} />
@@ -292,7 +316,14 @@ export default function InlineDatePicker({
       </div>
 
       {open && createPortal(
-        <div ref={popoverRef} className={dp.popover} style={{ top: pos.top, left: pos.left }}>
+        <div
+          ref={popoverRef}
+          className={dp.popover}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Choisir une date"
+          style={{ top: pos.top, left: pos.left }}
+        >
           <div className={dp.header}>
             <button type="button" className={dp.navBtn} onClick={prevMonth} aria-label="Mois précédent">
               <FiChevronLeft size={14} />
@@ -324,7 +355,14 @@ export default function InlineDatePicker({
             })}
           </div>
           <div className={dp.footer}>
-            <button type="button" className={dp.footerBtn} onClick={() => { selectDay(today.getDate()); setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); }}>
+            <button
+              type="button"
+              className={dp.footerBtn}
+              onClick={() => {
+                onChange(formatISO(today));
+                close();
+              }}
+            >
               Aujourd&apos;hui
             </button>
             {value && <button type="button" className={dp.footerBtnClear} onClick={clearDate}>Effacer</button>}

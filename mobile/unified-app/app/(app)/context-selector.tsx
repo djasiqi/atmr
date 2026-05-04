@@ -1,4 +1,4 @@
-import { Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { type AuthContext } from "../../src/core/contracts/auth";
 import { useSession } from "../../src/core/sessionProvider";
@@ -6,6 +6,12 @@ import {
   companyDriverSwitchBlockedReason,
   isCompanyDriverSwitchAllowedForRequest,
 } from "../../src/core/contextSwitchPolicy";
+import {
+  brandPrimary,
+  brandSurfaceSoft,
+  ResponsiveContainer,
+  Screen,
+} from "../../src/design/responsive";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
 
@@ -56,49 +62,108 @@ export default function ContextSelectorScreen() {
   );
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Choisir un espace</Text>
-      <Text>Contexte actif: {activeContext?.label ?? "Aucun"}</Text>
-      {contexts.map((ctx: AuthContext) => {
-        const companyDriverBlocked = !isCompanyDriverSwitchAllowedForRequest(
-          activeContext,
-          ctx,
-          bootstrap?.user?.role
-        );
-        const blockReason = companyDriverSwitchBlockedReason(
-          activeContext,
-          ctx,
-          bootstrap?.user?.role
-        );
-        const rowDisabled = Boolean(pendingContextId) || companyDriverBlocked;
-        return (
-        <TouchableOpacity
-          key={ctx.context_id}
-          onPress={() => void handleContextPress(ctx)}
-          disabled={rowDisabled}
-          style={{
-            padding: 12,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: "#ddd",
-            opacity: rowDisabled ? 0.5 : 1,
-          }}
-        >
-          <Text style={{ fontWeight: "600" }}>{ctx.label}</Text>
-          <Text>
-            {ctx.context_type} - {ctx.context_id}
-          </Text>
-          {companyDriverBlocked && ctx.context_id !== activeContext?.context_id ? (
-            <Text style={{ color: "#666", marginTop: 4, fontSize: 12 }}>
-              {blockReason === "not_company_account"
-                ? "Réservé au compte entreprise (un chauffeur seul n'accède pas à la gestion)."
-                : "Bascule entreprise / chauffeur : app mobile, compte entreprise, dispatch actif."}
-            </Text>
-          ) : null}
-        </TouchableOpacity>
-        );
-      })}
-      {error ? <Text style={{ color: "red" }}>{error}</Text> : null}
-    </View>
+    <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <Text style={styles.heading}>Choisir un espace</Text>
+        <Text style={styles.activeLabel}>
+          Contexte actif : {activeContext?.label ?? "Aucun"}
+        </Text>
+        {contexts.map((ctx: AuthContext) => {
+          const companyDriverBlocked = !isCompanyDriverSwitchAllowedForRequest(
+            activeContext,
+            ctx,
+            bootstrap?.user?.role
+          );
+          const blockReason = companyDriverSwitchBlockedReason(
+            activeContext,
+            ctx,
+            bootstrap?.user?.role
+          );
+          const rowDisabled = Boolean(pendingContextId) || companyDriverBlocked;
+          const selected = ctx.context_id === activeContext?.context_id;
+          return (
+            <TouchableOpacity
+              key={ctx.context_id}
+              onPress={() => void handleContextPress(ctx)}
+              disabled={rowDisabled}
+              style={[
+                styles.row,
+                selected && styles.rowSelected,
+                rowDisabled && styles.rowDisabled,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.rowTitle}>{ctx.label}</Text>
+              <Text style={styles.rowMeta}>
+                {ctx.context_type} · {ctx.context_id}
+              </Text>
+              {companyDriverBlocked && ctx.context_id !== activeContext?.context_id ? (
+                <Text style={styles.rowHint}>
+                  {blockReason === "not_company_account"
+                    ? "Réservé au compte entreprise (un chauffeur seul n'accède pas à la gestion)."
+                    : "Bascule entreprise / chauffeur : app mobile, compte entreprise, dispatch actif."}
+                </Text>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    paddingVertical: 28,
+    gap: 12,
+  },
+  heading: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#163A34",
+    marginBottom: 4,
+  },
+  activeLabel: {
+    fontSize: 15,
+    color: "#5F7369",
+    marginBottom: 8,
+  },
+  row: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(145,165,157,0.45)",
+    backgroundColor: "#FFFFFF",
+    marginBottom: 10,
+  },
+  rowSelected: {
+    borderColor: brandPrimary,
+    backgroundColor: "rgba(10,143,122,0.06)",
+  },
+  rowDisabled: {
+    opacity: 0.5,
+  },
+  rowTitle: {
+    fontWeight: "600",
+    fontSize: 16,
+    color: "#163A34",
+  },
+  rowMeta: {
+    marginTop: 4,
+    fontSize: 13,
+    color: "#64748b",
+  },
+  rowHint: {
+    color: "#64748b",
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  error: {
+    color: "#B42318",
+    marginTop: 8,
+    fontSize: 14,
+  },
+});

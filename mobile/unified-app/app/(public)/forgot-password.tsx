@@ -4,7 +4,6 @@ import {
   ImageBackground,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,11 +12,13 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "../../src/core/api/client";
+import { AppText, Screen, useAppViewport } from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { topInset } = useAppViewport();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,12 @@ export default function ForgotPasswordScreen() {
       />
       <View style={styles.overlay} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <Screen
+        scroll
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.card}>
           <Pressable
             onPress={() => {
@@ -100,18 +106,30 @@ export default function ForgotPasswordScreen() {
             {pending ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.submitText}>Envoyer le lien</Text>
+              <AppText variant="label" style={styles.submitText}>
+                Envoyer le lien
+              </AppText>
             )}
           </Pressable>
 
-          {message ? <Text style={styles.successText}>{message}</Text> : null}
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {message ? (
+            <AppText variant="body" style={styles.successText}>
+              {message}
+            </AppText>
+          ) : null}
+          {error ? (
+            <AppText variant="error" style={styles.errorText}>
+              {error}
+            </AppText>
+          ) : null}
 
           <Pressable onPress={() => router.replace("/(public)/login" as any)} style={styles.bottomLinkWrap}>
-            <Text style={styles.bottomLink}>Retour a la connexion</Text>
+            <AppText variant="label" style={styles.bottomLink}>
+              Retour a la connexion
+            </AppText>
           </Pressable>
         </View>
-      </ScrollView>
+      </Screen>
     </View>
   );
 }
@@ -131,8 +149,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 30,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",
@@ -206,8 +223,6 @@ const styles = StyleSheet.create({
   },
   submitText: {
     color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
     letterSpacing: 0.2,
   },
   successText: {
@@ -217,7 +232,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     marginTop: 12,
-    color: "#B42318",
     fontWeight: "600",
   },
   bottomLinkWrap: {

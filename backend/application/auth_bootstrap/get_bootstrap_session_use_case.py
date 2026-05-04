@@ -7,14 +7,12 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from application.auth_bootstrap.session_access_rules import (
+from .session_access_rules import (
     evaluate_access_denial,
     observe_driver_without_profile,
 )
-from application.auth_bootstrap.session_response import build_auth_me_payload
-from application.auth_bootstrap.sql_session_bootstrap_reader import (
-    SqlSessionBootstrapReader,
-)
+from .session_response import build_auth_me_payload
+from .sql_session_bootstrap_reader import SqlSessionBootstrapReader
 
 
 class JwtIdentityPort(Protocol):
@@ -36,6 +34,7 @@ class GetBootstrapSessionUseCase:
         jwt_port: JwtIdentityPort | None = None,
         reader: SqlSessionBootstrapReader | None = None,
     ) -> None:
+        super().__init__()
         if jwt_port is None:
             from shared.infrastructure.adapters.jwt_adapter import JwtIdentityAdapter
 
@@ -75,7 +74,7 @@ class GetBootstrapSessionUseCase:
             from services.monitoring import auth_bootstrap_metrics as abm
 
             abm.observe_auth_me_forbidden(code)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def _finish_metrics(self, status: int, t0: float, body: dict[str, Any]) -> None:
@@ -84,5 +83,5 @@ class GetBootstrapSessionUseCase:
 
             raw = json.dumps(body, ensure_ascii=False, default=str)
             abm.observe_auth_me(status, time.perf_counter() - t0, len(raw.encode("utf-8")))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

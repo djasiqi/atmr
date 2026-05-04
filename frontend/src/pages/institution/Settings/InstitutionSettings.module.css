@@ -357,7 +357,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 
 .modalContent {
@@ -365,7 +367,7 @@
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
-  margin: 20px;
+  margin: 0;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
 

@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import joinedload
 
-from ext import db
 from application.invoices.period_invoice_preview import build_period_invoice_preview
+from ext import db
 from models import Booking, Client, Company
 from repositories.booking_repository import BookingRepository
+from repositories.client_repository import ClientRepository
+
+logger = logging.getLogger(__name__)
+
+CALENDAR_MONTHS = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,9 +49,8 @@ class BillingOpportunitiesResult:
 
 
 def _period_bounds(period_year: int, period_month: int) -> tuple[datetime, datetime]:
-    PERIOD_MONTH_THRESHOLD = 12
     start_date = datetime(period_year, period_month, 1)
-    if period_month == PERIOD_MONTH_THRESHOLD:
+    if period_month == CALENDAR_MONTHS:
         end_date = datetime(period_year + 1, 1, 1)
     else:
         end_date = datetime(period_year, period_month + 1, 1)
@@ -74,20 +79,24 @@ def list_billing_opportunities(
     period_month: int,
 ) -> BillingOpportunitiesResult:
     """Liste les payeurs (patient direct + cliniques S2) avec au moins 1 transport éligible."""
-    if not 1 <= period_month <= 12:
+    if not 1 <= period_month <= CALENDAR_MONTHS:
         raise ValueError("period_month invalide (1-12)")
 
     repo = BookingRepository()
+    crepo = ClientRepository()
     start_date, end_date = _period_bounds(period_year, period_month)
 
     # --- Patient : clients distincts ayant au moins une course non facturée (piste large puis filtre repo) ---
     patient_items: list[PatientOpportunity] = []
+    # JOIN Client : évite les client_id orphelins / autre entreprise (sinon period_invoice_preview lève).
     raw_client_ids = [
         r[0]
         for r in (
             db.session.query(Booking.client_id)
+            .join(Client, Client.id == Booking.client_id)
             .filter(
                 Booking.company_id == company_id,
+                Client.company_id == company_id,
                 Booking.invoice_line_id.is_(None),
                 Booking.billed_to_type == "patient",
                 Booking.scheduled_time >= start_date,
@@ -98,12 +107,19 @@ def list_billing_opportunities(
         )
     ]
     for cid in raw_client_ids:
+        if not crepo.find_model_by_id_and_company(int(cid), company_id):
+            logger.warning(
+                "billing_opportunities: client_id=%s ignoré (introuvable pour company_id=%s)",
+                cid,
+                company_id,
+            )
+            continue
         bookings = repo.find_models_unbilled_by_company_and_client(
             company_id, cid, period_year, period_month, billed_to_type="patient"
         )
         if not bookings:
             continue
-        # Alignement montant : même preview qu’avant génération
+        # Alignement montant : meme preview qu'avant generation
         prev = build_period_invoice_preview(
             company_id=company_id,
             period_year=period_year,

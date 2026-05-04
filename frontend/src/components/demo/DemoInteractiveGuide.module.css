@@ -7,7 +7,7 @@
 }
 
 /* Étapes où l'utilisateur doit interagir (select patient, autocomplete destination, date/heure) :
-   z-index plus bas pour que les menus déroulants (react-select, AddressAutocomplete) à 10000 passent au-dessus */
+   z-index plus bas pour que les portails (react-select, AddressAutocomplete, var(--z-modal-popover)) passent au-dessus */
 .overlayAllowInteractions {
   z-index: 9998;
 }

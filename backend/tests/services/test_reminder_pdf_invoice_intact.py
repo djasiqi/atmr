@@ -22,9 +22,24 @@ from application.invoices.generate_invoice_reminder import (
     GenerateInvoiceReminderInput,
     GenerateInvoiceReminderUseCase,
 )
-from models import Company, Invoice, InvoiceLine, InvoiceReminder, User
+from models import (
+    Company,
+    CompanyBillingSettings,
+    Invoice,
+    InvoiceLine,
+    InvoiceReminder,
+    User,
+)
 from models.enums import InvoiceLineType, InvoiceStatus
 from services.documents.pdf import PDFService
+
+
+def _ensure_company_billing_settings(db, company_id: int) -> None:
+    """GenerateInvoiceReminderUseCase exige des paramètres de facturation."""
+    if CompanyBillingSettings.query.filter_by(company_id=company_id).first():
+        return
+    db.session.add(CompanyBillingSettings(company_id=company_id))
+    db.session.flush()
 
 
 def _extract_text_from_pdf(pdf_content: bytes) -> str:
@@ -46,16 +61,18 @@ class TestReminderPdfInvoiceIntact:
     """Tests pour vérifier que la facture initiale reste intacte lors de la génération d'un rappel."""
 
     def test_generate_reminder_does_not_modify_invoice_pdf_url(
-        self, db, test_company, test_client
+        self, db, sample_company, sample_client
     ):
         """Test que invoice.pdf_url reste inchangé après génération d'un rappel."""
-        if not all([test_company, test_client]):
+        if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
+
+        _ensure_company_billing_settings(db, sample_company.id)
 
         # Arrange: Créer une facture avec un PDF initial
         invoice = Invoice(
-            company=test_company,
-            client=test_client,
+            company=sample_company,
+            client=sample_client,
             invoice_number="INV-TEST-001",
             period_year=datetime.now(UTC).year,
             period_month=datetime.now(UTC).month,
@@ -143,15 +160,15 @@ class TestReminderPdfInvoiceIntact:
             f"Reçu: {invoice.reminder_level}"
         )
 
-    def test_generate_multiple_reminders_creates_distinct_pdfs(self, db, test_company, test_client):
+    def test_generate_multiple_reminders_creates_distinct_pdfs(self, db, sample_company, sample_client):
         """Test que plusieurs rappels génèrent des PDFs distincts."""
-        if not all([test_company, test_client]):
+        if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
 
         # Arrange: Créer une facture
         invoice = Invoice(
-            company=test_company,
-            client=test_client,
+            company=sample_company,
+            client=sample_client,
             invoice_number="INV-TEST-002",
             period_year=datetime.now(UTC).year,
             period_month=datetime.now(UTC).month,
@@ -203,15 +220,17 @@ class TestReminderPdfInvoiceIntact:
                 f"Reçu: {url}"
             )
 
-    def test_generate_reminder_pdf_service_does_not_modify_invoice(self, db, test_company, test_client):
+    def test_generate_reminder_pdf_service_does_not_modify_invoice(self, db, sample_company, sample_client):
         """Test que PDFService.generate_reminder_pdf ne modifie pas l'invoice."""
-        if not all([test_company, test_client]):
+        if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
+
+        _ensure_company_billing_settings(db, sample_company.id)
 
         # Arrange: Créer une facture
         invoice = Invoice(
-            company=test_company,
-            client=test_client,
+            company=sample_company,
+            client=sample_client,
             invoice_number="INV-TEST-003",
             period_year=datetime.now(UTC).year,
             period_month=datetime.now(UTC).month,
@@ -258,15 +277,17 @@ class TestReminderPdfInvoiceIntact:
             "Le PDF du rappel doit avoir un filename commençant par 'reminder_' !"
         )
 
-    def test_reminder_pdf_uses_invoice_template(self, db, test_company, test_client):
-        """Test que le PDF rappel utilise le template facture avec DÉTAIL DES TRANSPORTS."""
-        if not all([test_company, test_client]):
+    def test_reminder_pdf_uses_invoice_template(self, db, sample_company, sample_client):
+        """Test que le PDF rappel utilise le template facture avec DÉTAIL DES PRESTATIONS."""
+        if not all([sample_company, sample_client]):
             pytest.skip("Required fixtures missing")
+
+        _ensure_company_billing_settings(db, sample_company.id)
 
         # Arrange: Créer une facture avec des lignes
         invoice = Invoice(
-            company=test_company,
-            client=test_client,
+            company=sample_company,
+            client=sample_client,
             invoice_number="INV-TEST-004",
             period_year=datetime.now(UTC).year,
             period_month=datetime.now(UTC).month,
@@ -325,8 +346,8 @@ class TestReminderPdfInvoiceIntact:
 
         # Vérifier que le PDF rappel contient les sections du template facture
         # Marqueur stable et spécifique du template facture (évite flakiness "TOTAL" vs "TOTAL À FACTURER")
-        assert "DÉTAIL DES TRANSPORTS" in pdf_text, (
-            "Le PDF rappel doit contenir 'DÉTAIL DES TRANSPORTS' (template facture)"
+        assert "DÉTAIL DES PRESTATIONS" in pdf_text, (
+            "Le PDF rappel doit contenir 'DÉTAIL DES PRESTATIONS' (template facture)"
         )
         assert "RAPPEL N°1" in pdf_text or "RAPPEL N° 1" in pdf_text, (
             "Le PDF rappel doit contenir 'RAPPEL N°1'"

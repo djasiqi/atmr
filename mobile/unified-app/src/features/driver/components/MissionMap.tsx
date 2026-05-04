@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 import MapView, { Marker, Region } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 
@@ -26,7 +27,7 @@ export function MissionMap(props: MissionMapProps) {
   if (firstLat == null || firstLng == null) {
     return (
       <View style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}>
-        <Text>Carte indisponible (coordonnees manquantes).</Text>
+        <AppText variant="bodyMuted">Carte indisponible (coordonnees manquantes).</AppText>
       </View>
     );
   }
@@ -64,7 +65,7 @@ export function MissionMap(props: MissionMapProps) {
           destination={{ latitude: dropoffLat as number, longitude: dropoffLng as number }}
           apikey={process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string}
           strokeWidth={4}
-          strokeColor="#0a7ea4"
+          strokeColor="#0A8F7A"
         />
       ) : null}
     </MapView>

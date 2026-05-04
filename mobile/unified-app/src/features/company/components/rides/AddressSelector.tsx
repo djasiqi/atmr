@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
+import { AppText } from "../../../../design/ui/AppText";
 import { RideAddressOption, useCompanyAddressSearch } from "../../useRideForms";
 
 type AddressSelectorProps = {
@@ -26,7 +27,7 @@ export function AddressSelector({
 
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "600" }}>{label}</Text>
+      <AppText variant="label">{label}</AppText>
       <TextInput
         value={query}
         onChangeText={(next) => {
@@ -46,10 +47,10 @@ export function AddressSelector({
           }}
           style={{ borderWidth: 1, borderColor: "#eee", borderRadius: 8, padding: 8 }}
         >
-          <Text>{address.label}</Text>
+          <AppText variant="body">{address.label}</AppText>
         </Pressable>
       ))}
-      {addressesQuery.isLoading ? <Text style={{ color: "#666" }}>Suggestions adresses...</Text> : null}
+      {addressesQuery.isLoading ? <AppText variant="bodyMuted">Suggestions adresses...</AppText> : null}
     </View>
   );
 }

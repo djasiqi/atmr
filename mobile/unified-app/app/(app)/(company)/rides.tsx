@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, Platform, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
+import {
+  AppButton,
+  AppInput,
+  AppSpinner,
+  AppText,
+  Modal,
+  Screen,
+} from "../../../src/design/responsive";
 import { useSession } from "../../../src/core/sessionProvider";
 import {
   useActiveCompanyContextId,
@@ -16,7 +24,6 @@ import { emitCompanyDispatchTelemetry } from "../../../src/features/company/tele
 import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtimeRouter";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
-import { Button, InputField, Loader, Modal } from "../../../src/components/ui";
 import { RideCreateModal } from "../../../src/features/company/components/rides/RideCreateModal";
 import { RideEditModal } from "../../../src/features/company/components/rides/RideEditModal";
 import {
@@ -140,7 +147,6 @@ const tabActiveSurfaceShadow = createShadow({
 });
 
 const rideStyles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: E.BG },
   page: { padding: 16, paddingBottom: 32, gap: 10 },
   searchBar: {
     flexDirection: "row",
@@ -194,8 +200,8 @@ const rideStyles = StyleSheet.create({
   tabButtonActive: {
     backgroundColor: E.CARD,
   },
-  tabLabel: { color: E.TEXT_SEC, fontSize: 10, fontWeight: "600" as const },
-  tabLabelActive: { color: E.BRAND, fontWeight: "800" as const, fontSize: 10 },
+  tabLabel: { color: E.TEXT_SEC, fontWeight: "600" as const },
+  tabLabelActive: { color: E.BRAND, fontWeight: "800" as const },
   tabBadge: {
     backgroundColor: E.TEXT_MUTED,
     borderRadius: 100,
@@ -215,14 +221,14 @@ const rideStyles = StyleSheet.create({
   pressed: { opacity: 0.88 },
   rideCardWrapper: { marginBottom: 10 },
   listTop: { marginTop: 4 },
-  emptyHint: { color: E.TEXT_MUTED, fontSize: 13, textAlign: "center" as const, paddingVertical: 8 },
-  errorBlock: { color: E.DANGER, fontSize: 13, lineHeight: 19 },
-  mutedText: { color: E.TEXT_SEC, fontSize: 13 },
+  emptyHint: { color: E.TEXT_MUTED, textAlign: "center" as const, paddingVertical: 8 },
+  errorBlock: { color: E.DANGER, lineHeight: 19 },
+  mutedText: { color: E.TEXT_SEC },
   modalRow: { borderWidth: 1, borderRadius: 10, padding: 8, marginBottom: 5 },
   modalRowSelected: { borderColor: E.BRAND, backgroundColor: "rgba(0,121,107,0.08)" },
   modalRowNormal: { borderColor: E.BORDER, backgroundColor: E.CARD },
-  modalRowText: { color: E.TEXT, fontSize: 14, fontWeight: "600" },
-  modalRowTextSelected: { color: E.BRAND, fontSize: 14, fontWeight: "800" },
+  modalRowText: { color: E.TEXT, fontWeight: "600" },
+  modalRowTextSelected: { color: E.BRAND, fontWeight: "800" },
 });
 
 export default function CompanyRidesScreen() {
@@ -625,8 +631,10 @@ export default function CompanyRidesScreen() {
 
   return (
     <PermissionGuard permission="company:rides:read">
-      <ScrollView
-        style={rideStyles.scroll}
+      <Screen
+        scroll
+        backgroundColor={E.BG}
+        withHorizontalPadding={false}
         contentContainerStyle={rideStyles.page}
         refreshControl={
           <RefreshControl
@@ -642,28 +650,30 @@ export default function CompanyRidesScreen() {
           realtimeStatus={realtimeStatus.status}
           trailing={activeContext?.context_id ? <CompanyInboxButton /> : null}
         />
-        {missionsQuery.isLoading ? <Loader /> : null}
+        {missionsQuery.isLoading ? <AppSpinner size="small" /> : null}
         <View style={rideStyles.searchBar}>
           <Ionicons name="search-outline" size={16} color={E.TEXT_MUTED} />
-          <InputField
+          <AppInput
             value={search}
             onChangeText={setSearch}
             placeholder="Client, adresse ou chauffeur…"
             style={rideStyles.searchInput}
             placeholderTextColor={E.TEXT_MUTED}
+            containerStyle={{ flex: 1, minWidth: 0 }}
           />
         </View>
         {activeMode !== "manual" ? (
           <View style={rideStyles.actionsRow}>
-            <Button
-              label={actionPending === "dispatch" ? "Exécution…" : "Lancer le dispatch"}
+            <AppButton
+              title={actionPending === "dispatch" ? "Exécution…" : "Lancer le dispatch"}
               variant="primary"
               onPress={() => void runDispatchNow()}
               disabled={!contextId || actionPending !== null || !canDispatchManage}
               style={rideStyles.actionBtn}
             />
-            <Button
-              label={actionPending === "optimizer" ? "Optimiseur…" : "Lancer l’optimiseur"}
+            <AppButton
+              title={actionPending === "optimizer" ? "Optimiseur…" : "Lancer l’optimiseur"}
+              variant="secondary"
               onPress={() => void runOptimizerNow()}
               disabled={!contextId || actionPending !== null || !canDispatchManage}
               style={rideStyles.actionBtn}
@@ -671,10 +681,10 @@ export default function CompanyRidesScreen() {
           </View>
         ) : null}
         {params.filter?.toLowerCase() === "exceptions" ? (
-          <Text style={rideStyles.exceptionsRouteHint} accessibilityRole="text">
+          <AppText variant="caption" style={rideStyles.exceptionsRouteHint} accessibilityRole="text">
             Vue « exceptions » : filtre local sur l’échéance (pas le comptage moteur). Les puces
             ci-dessous restent les statuts de mission.
-          </Text>
+          </AppText>
         ) : null}
         <View
           style={rideStyles.tabsHeader}
@@ -700,15 +710,17 @@ export default function CompanyRidesScreen() {
                 testID={`ride-filter-tab-${item.key}`}
                 {...(Platform.OS === "web" ? ({ "data-tour-id": `tab-${item.key}` } as object) : {})}
               >
-                <Text
+                <AppText
+                  variant="caption"
                   style={on ? rideStyles.tabLabelActive : rideStyles.tabLabel}
                   numberOfLines={1}
-                  allowFontScaling
                 >
                   {item.label}
-                </Text>
+                </AppText>
                 <View style={[rideStyles.tabBadge, on && rideStyles.tabBadgeActive]}>
-                  <Text style={rideStyles.tabBadgeText}>{c}</Text>
+                  <AppText variant="caption" style={rideStyles.tabBadgeText}>
+                    {c}
+                  </AppText>
                 </View>
               </Pressable>
             );
@@ -806,16 +818,18 @@ export default function CompanyRidesScreen() {
           })}
         </View>
         {!missionsQuery.isLoading && filteredMissions.length === 0 ? (
-          <Text style={rideStyles.emptyHint}>Aucune course pour ce filtre.</Text>
+          <AppText variant="bodyMuted" style={rideStyles.emptyHint}>
+            Aucune course pour ce filtre.
+          </AppText>
         ) : null}
         {missionsQuery.error ? (
-          <Text style={rideStyles.errorBlock}>
+          <AppText variant="error" style={rideStyles.errorBlock}>
             {missionsQuery.error instanceof Error
               ? missionsQuery.error.message
               : "Erreur de chargement des courses."}
-          </Text>
+          </AppText>
         ) : null}
-      </ScrollView>
+      </Screen>
       <Modal
         visible={assignModalMissionId != null}
         title="Assigner un chauffeur"
@@ -823,9 +837,11 @@ export default function CompanyRidesScreen() {
           if (!modalPending) setAssignModalMissionId(null);
         }}
       >
-        {modalPending ? <Loader /> : null}
+        {modalPending ? <AppSpinner /> : null}
         {drivers.length === 0 && !modalPending ? (
-          <Text style={rideStyles.mutedText}>Aucun chauffeur disponible.</Text>
+          <AppText variant="bodyMuted" style={rideStyles.mutedText}>
+            Aucun chauffeur disponible.
+          </AppText>
         ) : null}
         {drivers.map((driver) => (
           <Pressable
@@ -836,22 +852,27 @@ export default function CompanyRidesScreen() {
               selectedDriverId === driver.id ? rideStyles.modalRowSelected : rideStyles.modalRowNormal,
             ]}
           >
-            <Text
+            <AppText
+              variant="body"
               style={
                 selectedDriverId === driver.id ? rideStyles.modalRowTextSelected : rideStyles.modalRowText
               }
             >
               {driver.label}
-            </Text>
+            </AppText>
           </Pressable>
         ))}
-        <Button
-          label={modalPending ? "Assignation…" : "Confirmer"}
+        <AppButton
+          title={modalPending ? "Assignation…" : "Confirmer"}
           variant="primary"
           onPress={() => void applyAssign()}
           disabled={modalPending || selectedDriverId == null}
         />
-        {modalError ? <Text style={rideStyles.errorBlock}>{modalError}</Text> : null}
+        {modalError ? (
+          <AppText variant="error" style={rideStyles.errorBlock}>
+            {modalError}
+          </AppText>
+        ) : null}
       </Modal>
       <TransferRideModal
         visible={transferModalMissionId != null}

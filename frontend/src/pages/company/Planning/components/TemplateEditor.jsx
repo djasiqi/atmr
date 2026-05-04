@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import styles from './Modal.module.css';
 
 export default function TemplateEditor({ open, onClose, onSave }) {
   const [rows, setRows] = useState([]);
@@ -13,17 +14,8 @@ export default function TemplateEditor({ open, onClose, onSave }) {
   const save = () => onSave(rows);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#0006' }} onClick={onClose}>
-      <div
-        style={{
-          background: '#fff',
-          padding: 16,
-          maxWidth: 640,
-          margin: '8vh auto',
-          borderRadius: 8,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modalContentLarge} onClick={(e) => e.stopPropagation()}>
         <h3>Modèle hebdomadaire</h3>
         <button onClick={addRow}>+ Ligne</button>
         <ul>
@@ -68,7 +60,7 @@ export default function TemplateEditor({ open, onClose, onSave }) {
             </li>
           ))}
         </ul>
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div className={styles.modalActions}>
           <button onClick={onClose}>Fermer</button>
           <button onClick={save}>Enregistrer</button>
         </div>

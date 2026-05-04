@@ -181,7 +181,9 @@ td:nth-child(4) {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: var(--z-modal-backdrop);
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
 }
 
 .modalContent {

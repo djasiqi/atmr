@@ -335,14 +335,16 @@ def _is_maintenance_sane_bypass_path() -> bool:
     from flask import request
 
     p = request.path or ""
-    if p in ("/health", "/api/health", "/api/v1/health"):
-        return True
-    if request.method == "OPTIONS" and (
-        p.startswith(("/static/", "/swaggerui/", "/uploads/"))
-        or p in ("/favicon.ico", "/robots.txt")
-    ):
-        return True
-    return False
+    return (
+        p in ("/health", "/api/health", "/api/v1/health")
+        or (
+            request.method == "OPTIONS"
+            and (
+                p.startswith(("/static/", "/swaggerui/", "/uploads/"))
+                or p in ("/favicon.ico", "/robots.txt")
+            )
+        )
+    )
 
 
 # Cache in-process (par worker) : public_id JWT -> user_id pour _track_unauthorized_access.
@@ -902,6 +904,8 @@ def create_app(config_name: str | None = None):
             return jsonify(
                 {"error": "Service en maintenance", "message": file_reason}
             ), 503
+
+        return None
 
     # ✅ S3: Middleware pour capturer les tentatives d'accès non autorisé
     @app.after_request

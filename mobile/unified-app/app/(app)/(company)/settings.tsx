@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
-import { Button } from "../../../src/components/ui";
 import type { AuthContext } from "../../../src/core/contracts/auth";
+import {
+  AppButton,
+  AppText,
+  brandSurfaceSoft,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../src/design/responsive";
 import {
   getCompanyBillingSettings,
   getCompanyDispatchModes,
@@ -17,6 +24,8 @@ import { getResolvedCompanySocketUrl } from "../../../src/features/company/realt
 import { isContextSwitchClientSupported } from "../../../src/core/contextSwitchPolicy";
 
 export default function CompanySettingsScreen() {
+  const { horizontalPadding } = useAppViewport();
+  const t = useResponsiveTokens();
   const router = useRouter();
   const {
     activeContext,
@@ -205,51 +214,57 @@ export default function CompanySettingsScreen() {
 
   return (
     <PermissionGuard permission="company:dashboard:read">
-      <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Parametres entreprise</Text>
-        <Text>
+      <Screen
+        scroll
+        backgroundColor={brandSurfaceSoft}
+        withHorizontalPadding={false}
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: t.spacingMd,
+          paddingBottom: t.spacingMd,
+          gap: t.spacingSm,
+        }}
+      >
+        <AppText variant="sectionTitle">Parametres entreprise</AppText>
+        <AppText variant="body">
           Cette page pilote la session, la bascule de role et le contexte actif.
-        </Text>
-        <Text>Etat session: {status}</Text>
-        <Text>Contexte actif: {activeContext?.context_id ?? "n/a"}</Text>
-        <Text>Type contexte actif: {activeContext?.context_type ?? "n/a"}</Text>
-        <Text>Compte chauffeur lie: {primaryDriverContext ? "oui" : "non"}</Text>
-        <Text>
+        </AppText>
+        <AppText variant="body">Etat session: {status}</AppText>
+        <AppText variant="body">Contexte actif: {activeContext?.context_id ?? "n/a"}</AppText>
+        <AppText variant="body">Type contexte actif: {activeContext?.context_type ?? "n/a"}</AppText>
+        <AppText variant="body">Compte chauffeur lie: {primaryDriverContext ? "oui" : "non"}</AppText>
+        <AppText variant="body">
           Bascule entreprise / chauffeur: {String(canTransportMobileRoleSwitch)} (compte entreprise, web
           / mobile, dispatch) role={String(bootstrap?.user?.role ?? "—")}
-        </Text>
-        <Text>
+        </AppText>
+        <AppText variant="body">
           company_dispatch_enabled: {String(isFeatureEnabled("company_dispatch_enabled"))}
-        </Text>
-        <Text>
+        </AppText>
+        <AppText variant="body">
           company_realtime_enabled: {String(isFeatureEnabled("company_realtime_enabled"))}
-        </Text>
-        <Text>
-          URL socket (résolue): {companySocketUrlResolved}
-        </Text>
-        <Text>
+        </AppText>
+        <AppText variant="body">URL socket (résolue): {companySocketUrlResolved}</AppText>
+        <AppText variant="body">
           Flux company (Socket.IO) : {companyRealtime.status} | branche:{" "}
           {companyRealtime.connected ? "oui" : "non"}
-        </Text>
+        </AppText>
         {companyRealtime.lastError ? (
-          <Text style={{ color: "#B00020" }}>
-            Erreur flux: {companyRealtime.lastError}
-          </Text>
+          <AppText variant="error">Erreur flux: {companyRealtime.lastError}</AppText>
         ) : null}
-        <Text>Mode dispatch actif: {dispatchMode}</Text>
-        <Text>Etat runtime dispatch: {dispatchState}</Text>
-        <Text>Billing party par defaut: {billingSummary}</Text>
-        <Text style={{ color: "#666" }}>Source verite status dispatch: scheduler runtime</Text>
-        {error ? <Text style={{ color: "#B00020" }}>Erreur session: {error}</Text> : null}
-        {actionMessage ? <Text>{actionMessage}</Text> : null}
+        <AppText variant="body">Mode dispatch actif: {dispatchMode}</AppText>
+        <AppText variant="body">Etat runtime dispatch: {dispatchState}</AppText>
+        <AppText variant="body">Billing party par defaut: {billingSummary}</AppText>
+        <AppText variant="caption">Source verite status dispatch: scheduler runtime</AppText>
+        {error ? <AppText variant="error">Erreur session: {error}</AppText> : null}
+        {actionMessage ? <AppText variant="body">{actionMessage}</AppText> : null}
 
-        <Button
-          label={pendingAction === "refresh" ? "Resynchronisation..." : "Resynchroniser la session"}
+        <AppButton
+          title={pendingAction === "refresh" ? "Resynchronisation..." : "Resynchroniser la session"}
           disabled={pendingAction !== null}
           onPress={handleRefreshSession}
         />
-        <Button
-          label={
+        <AppButton
+          title={
             pendingAction === "switch-driver"
               ? "Bascule chauffeur..."
               : "Passer en contexte chauffeur"
@@ -263,8 +278,8 @@ export default function CompanySettingsScreen() {
           }
           onPress={handleSwitchToDriver}
         />
-        <Button
-          label={
+        <AppButton
+          title={
             pendingAction === "switch-company"
               ? "Retour entreprise..."
               : "Revenir au contexte entreprise"
@@ -278,28 +293,30 @@ export default function CompanySettingsScreen() {
           }
           onPress={handleSwitchBackToCompany}
         />
-        <Button
-          label={pendingAction === "refresh" ? "Bascule mode..." : "Basculer mode dispatch"}
+        <AppButton
+          title={pendingAction === "refresh" ? "Bascule mode..." : "Basculer mode dispatch"}
           disabled={pendingAction !== null || !activeCompanyId || !canDispatchManage}
           onPress={handleToggleDispatchMode}
         />
-        <Button
-          label="Se deconnecter"
+        <AppButton
+          title="Se deconnecter"
           variant="secondary"
           disabled={pendingAction !== null}
           onPress={logout}
         />
 
-        <View style={{ gap: 6, marginTop: 10 }}>
-          <Text style={{ fontWeight: "700" }}>Contextes disponibles</Text>
+        <View style={{ gap: t.spacingXs, marginTop: t.spacingSm }}>
+          <AppText variant="sectionTitle">Contextes disponibles</AppText>
           {contexts.map((ctx: AuthContext) => (
-            <Text key={ctx.context_id}>
+            <AppText variant="body" key={ctx.context_id}>
               - {ctx.context_type} | {ctx.context_id} | default: {ctx.is_default ? "yes" : "no"}
-            </Text>
+            </AppText>
           ))}
-          {contexts.length === 0 ? <Text>Aucun contexte recu du bootstrap.</Text> : null}
+          {contexts.length === 0 ? (
+            <AppText variant="bodyMuted">Aucun contexte recu du bootstrap.</AppText>
+          ) : null}
         </View>
-      </ScrollView>
+      </Screen>
     </PermissionGuard>
   );
 }

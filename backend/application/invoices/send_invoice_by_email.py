@@ -16,8 +16,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from application.invoices.invoice_pdf_state import (
+    ensure_draft_pdf_ready_for_send,
+    get_pdf_state,
+    is_pdf_sendable,
+    mark_pdf_failed,
+    mark_pdf_ready,
+)
 from ext import db
 from models import Client, Company, CompanyBillingSettings, Invoice
+from models.enums import InvoiceStatus
 from services.documents.pdf import PDFService
 from services.email.brevo_provider import BrevoEmailProvider
 from services.email.recipient_utils import normalize_relationship_label
@@ -117,14 +125,81 @@ class SendInvoiceByEmailUseCase:
                     status_code=400,
                 )
 
-            # 4. Générer le PDF si nécessaire
+            # 4. Générer / préparer le PDF (brouillon : état meta.pdf + régénération si stale)
             pdf_path = None
             logger.info(
                 "[INVOICE EMAIL] invoice.pdf_url=%s, force_regenerate=%s",
                 invoice.pdf_url,
                 input_data.force_regenerate_pdf,
             )
-            if not invoice.pdf_url or input_data.force_regenerate_pdf:
+
+            def _pdf_path_from_url(pdf_url: str | None) -> str | None:
+                if not pdf_url:
+                    return None
+                from flask import current_app
+
+                uploads_dir = Path(
+                    current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+                )
+                if pdf_url.startswith("/uploads/"):
+                    relative_path = pdf_url.removeprefix("/uploads/")
+                elif "/uploads/" in pdf_url:
+                    relative_path = pdf_url.split("/uploads/", 1)[1]
+                else:
+                    logger.warning(
+                        "[INVOICE EMAIL] Format d'URL inattendu pour invoice.pdf_url: %s",
+                        pdf_url,
+                    )
+                    return None
+                return str(uploads_dir / relative_path)
+
+            if invoice.status == InvoiceStatus.DRAFT and input_data.force_regenerate_pdf:
+                logger.info(
+                    "Génération forcée du PDF pour la facture %s", invoice.invoice_number
+                )
+                try:
+                    pdf_url = self.pdf_service.generate_invoice_pdf(
+                        invoice, force_regenerate=True
+                    )
+                    if not pdf_url:
+                        mark_pdf_failed(invoice, "PDF_EMPTY")
+                        db.session.commit()
+                        return SendInvoiceByEmailResult(
+                            success=False,
+                            invoice_id=input_data.invoice_id,
+                            recipient=recipient_email,
+                            error="Impossible de générer le PDF.",
+                            status_code=500,
+                        )
+                    mark_pdf_ready(invoice, pdf_url)
+                    db.session.commit()
+                except Exception:
+                    logger.exception(
+                        "[INVOICE EMAIL] Échec régénération forcée facture %s",
+                        invoice.invoice_number,
+                    )
+                    mark_pdf_failed(invoice, "REGEN_FAILED")
+                    db.session.commit()
+                    return SendInvoiceByEmailResult(
+                        success=False,
+                        invoice_id=input_data.invoice_id,
+                        recipient=recipient_email,
+                        error="Erreur lors de la génération du PDF.",
+                        status_code=500,
+                    )
+            elif invoice.status == InvoiceStatus.DRAFT:
+                ok_pdf, err_pdf = ensure_draft_pdf_ready_for_send(invoice)
+                if not ok_pdf:
+                    db.session.commit()
+                    return SendInvoiceByEmailResult(
+                        success=False,
+                        invoice_id=input_data.invoice_id,
+                        recipient=recipient_email,
+                        error=err_pdf or "PDF indisponible.",
+                        status_code=400,
+                    )
+                db.session.commit()
+            elif not invoice.pdf_url or input_data.force_regenerate_pdf:
                 logger.info(
                     "Génération du PDF pour la facture %s", invoice.invoice_number
                 )
@@ -132,69 +207,20 @@ class SendInvoiceByEmailUseCase:
                     invoice, force_regenerate=input_data.force_regenerate_pdf
                 )
                 if pdf_url:
-                    invoice.pdf_url = pdf_url
+                    mark_pdf_ready(invoice, pdf_url)
                     db.session.commit()
-                    # Convertir l'URL en chemin système si nécessaire
-                    from flask import current_app
-
-                    uploads_dir = Path(
-                        current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
-                    )
-
-                    # Extraire le chemin relatif depuis l'URL
-                    if pdf_url.startswith("/uploads/"):
-                        relative_path = pdf_url.removeprefix("/uploads/")
-                    elif "/uploads/" in pdf_url:
-                        relative_path = pdf_url.split("/uploads/", 1)[1]
-                    else:
-                        relative_path = None
-
-                    if relative_path:
-                        pdf_path = str(uploads_dir / relative_path)
-                        logger.info(
-                            "[INVOICE EMAIL] PDF généré: %s -> %s",
-                            pdf_url,
-                            pdf_path,
-                        )
                 else:
                     logger.warning(
                         "Impossible de générer le PDF pour la facture %s",
                         invoice.invoice_number,
                     )
-            elif invoice.pdf_url:
-                # Utiliser le PDF existant
-                from flask import current_app
 
-                uploads_dir = Path(
-                    current_app.config.get("UPLOAD_FOLDER", "/app/uploads")
+            pdf_path = _pdf_path_from_url(invoice.pdf_url)
+            if pdf_path:
+                logger.info(
+                    "[INVOICE EMAIL] Après traitement PDF: pdf_path=%s",
+                    pdf_path,
                 )
-
-                # Extraire le chemin relatif depuis l'URL (gérer les URLs complètes et relatives)
-                if invoice.pdf_url.startswith("/uploads/"):
-                    # URL relative : /uploads/invoices/...
-                    relative_path = invoice.pdf_url.removeprefix("/uploads/")
-                elif "/uploads/" in invoice.pdf_url:
-                    # URL complète : http://localhost:5000/uploads/invoices/...
-                    relative_path = invoice.pdf_url.split("/uploads/", 1)[1]
-                else:
-                    logger.warning(
-                        "[INVOICE EMAIL] Format d'URL inattendu pour invoice.pdf_url: %s",
-                        invoice.pdf_url,
-                    )
-                    relative_path = None
-
-                if relative_path:
-                    pdf_path = str(uploads_dir / relative_path)
-                    logger.info(
-                        "[INVOICE EMAIL] PDF extrait de l'URL: %s -> %s",
-                        invoice.pdf_url,
-                        pdf_path,
-                    )
-
-            logger.info(
-                "[INVOICE EMAIL] Après traitement PDF: pdf_path=%s",
-                pdf_path,
-            )
 
             # 5. Charger les paramètres de facturation (pour config Brevo)
             billing_settings = CompanyBillingSettings.query.filter_by(
@@ -270,6 +296,54 @@ class SendInvoiceByEmailUseCase:
                     "[INVOICE EMAIL] Aucun PDF disponible pour la facture %s (pdf_path=%s)",
                     invoice.invoice_number,
                     pdf_path,
+                )
+
+            # Fichier manquant alors qu'une URL existe : dernière tentative (brouillon).
+            if (
+                not pdf_bytes
+                and invoice.status == InvoiceStatus.DRAFT
+                and invoice.pdf_url
+            ):
+                try:
+                    pdf_url = self.pdf_service.generate_invoice_pdf(
+                        invoice, force_regenerate=True
+                    )
+                    if pdf_url:
+                        mark_pdf_ready(invoice, pdf_url)
+                        db.session.commit()
+                        pdf_path = _pdf_path_from_url(invoice.pdf_url)
+                        if pdf_path and Path(pdf_path).exists():
+                            with Path(pdf_path).open("rb") as f:
+                                pdf_bytes = f.read()
+                except Exception:
+                    logger.exception(
+                        "[INVOICE EMAIL] Régénération PDF fichier absent facture %s",
+                        invoice.invoice_number,
+                    )
+
+            # Brouillon : n'envoyer que si l'état PDF effectif est ``ready``.
+            if invoice.status == InvoiceStatus.DRAFT and not is_pdf_sendable(invoice):
+                st = get_pdf_state(invoice)
+                db.session.commit()
+                return SendInvoiceByEmailResult(
+                    success=False,
+                    invoice_id=input_data.invoice_id,
+                    recipient=recipient_email,
+                    error=st.error or "PDF non prêt à l'envoi (régénérez le document).",
+                    status_code=400,
+                )
+
+            if not pdf_bytes:
+                db.session.commit()
+                return SendInvoiceByEmailResult(
+                    success=False,
+                    invoice_id=input_data.invoice_id,
+                    recipient=recipient_email,
+                    error=(
+                        "Pièce PDF introuvable ou illisible. "
+                        "Régénérez le document puis réessayez."
+                    ),
+                    status_code=400,
                 )
 
             # 8. Générer le contenu HTML de l'email

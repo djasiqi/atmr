@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
-import { Button, Modal } from "../../../components/ui";
+import { TextInput, View } from "react-native";
+import { AppButton, Modal } from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
 
 type CancelJustificationModalProps = {
   visible: boolean;
@@ -20,7 +21,7 @@ export function CancelJustificationModal({
   return (
     <Modal visible={visible} title="Annuler la mission" onClose={onCancel}>
       <View style={{ gap: 8 }}>
-        <Text>Precisez une justification d&apos;annulation.</Text>
+        <AppText variant="body">Precisez une justification d&apos;annulation.</AppText>
         <TextInput
           value={reason}
           onChangeText={setReason}
@@ -28,7 +29,11 @@ export function CancelJustificationModal({
           placeholder="Raison d'annulation"
           style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, minHeight: 90 }}
         />
-        <Button label={pending ? "Annulation..." : "Confirmer l'annulation"} onPress={() => onConfirm(reason)} />
+        <AppButton
+          title={pending ? "Annulation..." : "Confirmer l'annulation"}
+          variant="secondary"
+          onPress={() => onConfirm(reason)}
+        />
       </View>
     </Modal>
   );

@@ -1,8 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { PermissionGuard } from "../../../src/core/guards";
+import { AppText, Screen, useAppViewport, useResponsiveTokens } from "../../../src/design/responsive";
 
 const C = {
   pageBg: "#EAF3F1",
@@ -16,13 +16,16 @@ const C = {
  * CTA principal du dashboard : ouvert si le feature flag `company_dispatch_screen_enabled` est actif.
  */
 export default function CompanyDispatchProposalsScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { horizontalPadding } = useAppViewport();
+  const t = useResponsiveTokens();
   return (
     <PermissionGuard permission="company:rides:read">
-      <ScrollView
-        style={[styles.root, { paddingTop: insets.top }]}
-        contentContainerStyle={styles.page}
+      <Screen
+        scroll
+        backgroundColor={C.pageBg}
+        withHorizontalPadding={false}
+        contentContainerStyle={[styles.page, { paddingHorizontal: horizontalPadding, gap: t.spacingSm }]}
       >
         <View style={styles.headerRow}>
           <Pressable
@@ -33,30 +36,49 @@ export default function CompanyDispatchProposalsScreen() {
           >
             <Ionicons name="chevron-back" size={24} color={C.brand} />
           </Pressable>
-          <Text style={styles.title}>Propositions</Text>
+          <AppText variant="sectionTitle" style={styles.title}>
+            Propositions
+          </AppText>
         </View>
-        <Text style={styles.body}>
+        <AppText variant="bodyMuted" style={styles.body}>
           Les propositions issues du moteur apparaîtront ici lorsqu’elles seront exposées par l’API.
-        </Text>
+        </AppText>
         <Pressable
           onPress={() => router.push("/(app)/(company)/rides")}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.9 }]}
         >
-          <Text style={styles.ctaText}>Voir les courses à traiter</Text>
+          <AppText variant="label" style={styles.ctaText}>
+            Voir les courses à traiter
+          </AppText>
           <Ionicons name="chevron-forward" size={18} color={C.brand} />
         </Pressable>
-      </ScrollView>
+      </Screen>
     </PermissionGuard>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.pageBg },
-  page: { padding: 20, paddingBottom: 40, gap: 12 },
-  headerRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8, marginBottom: 8 },
+  page: { paddingTop: 20, paddingBottom: 40 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   backBtn: { padding: 4 },
-  title: { color: C.text, fontSize: 20, fontWeight: "800" as const, flex: 1 },
-  body: { color: C.textMuted, fontSize: 15, lineHeight: 22 },
-  cta: { flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const, marginTop: 8 },
-  ctaText: { color: C.brand, fontSize: 15, fontWeight: "800" as const },
+  title: { color: C.text, flex: 1 },
+  body: { lineHeight: 22 },
+  cta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(10,143,122,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(10,143,122,0.35)",
+  },
+  ctaText: { color: C.brand },
 });

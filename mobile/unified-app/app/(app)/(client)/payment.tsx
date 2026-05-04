@@ -3,7 +3,16 @@ import * as WebBrowser from "expo-web-browser";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import {
+  AppText,
+  brandPrimary,
+  brandSurfaceSoft,
+  ResponsiveContainer,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../src/design/responsive";
 import { useSession } from "../../../src/core/sessionProvider";
 import {
   assertSaferpayCheckout,
@@ -356,53 +365,86 @@ export default function ClientPaymentScreen() {
     }
   };
 
+  const t = useResponsiveTokens();
+  const { horizontalPadding } = useAppViewport();
+
+  const centeredScrollStyle = useMemo(
+    () => [
+      styles.centered,
+      {
+        paddingHorizontal: horizontalPadding,
+        gap: t.spacingMd,
+        paddingVertical: t.spacingLg,
+      },
+    ],
+    [horizontalPadding, t.spacingMd, t.spacingLg]
+  );
+
+  const pageScrollStyle = useMemo(
+    () => [
+      styles.page,
+      {
+        paddingHorizontal: horizontalPadding,
+        paddingTop: t.spacingSm + t.spacingXs,
+        gap: t.spacingSm + t.spacingXs,
+        paddingBottom: t.spacingMd,
+      },
+    ],
+    [horizontalPadding, t.spacingSm, t.spacingXs, t.spacingMd]
+  );
+
   if (!activeContext || activeContext.context_type !== "client") {
     return <Redirect href={"/(app)/unauthorized" as any} />;
   }
 
   if (!bookingId) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }}>
-        <Text>Booking invalide pour le paiement.</Text>
-        <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
-          <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour aux réservations</Text>
-        </Pressable>
-      </View>
+      <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={centeredScrollStyle}>
+        <ResponsiveContainer>
+          <AppText variant="screenTitle">Booking invalide pour le paiement.</AppText>
+          <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
+            <AppText variant="body" style={styles.link}>
+              Retour aux réservations
+            </AppText>
+          </Pressable>
+        </ResponsiveContainer>
+      </Screen>
     );
   }
 
   return (
-    <View style={{ flex: 1, padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 22, fontWeight: "700" }}>Paiement Saferpay</Text>
-      <Text>Réservation #{bookingId}</Text>
+    <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={pageScrollStyle}>
+      <ResponsiveContainer>
+      <AppText variant="screenTitle">Paiement Saferpay</AppText>
+      <AppText variant="body">Réservation #{bookingId}</AppText>
       {!paymentEnabled ? (
-        <Text>Le paiement est temporairement indisponible.</Text>
+        <AppText variant="body">Le paiement est temporairement indisponible.</AppText>
       ) : null}
       {invalidReturnPayload ? (
-        <Text style={{ color: "#b42318" }}>
+        <AppText variant="error">
           Retour paiement invalide. Le statut sera vérifié depuis le détail réservation.
-        </Text>
+        </AppText>
       ) : null}
-      {bookingQuery.isLoading ? <ActivityIndicator /> : null}
+      {bookingQuery.isLoading ? <ActivityIndicator color={brandPrimary} /> : null}
       {bookingQuery.data ? (
-        <View style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12, gap: 6 }}>
-          <Text style={{ fontWeight: "600" }}>
+        <View style={styles.card}>
+          <AppText variant="sectionTitle" style={styles.cardTitle}>
             {bookingQuery.data.pickup_location ?? "Départ"}
             {" -> "}
             {bookingQuery.data.dropoff_location ?? "Arrivée"}
-          </Text>
-          <Text>Statut course: {bookingQuery.data.status ?? "unknown"}</Text>
-          <Text>Statut paiement: {bookingQuery.data.payment_status ?? "unknown"}</Text>
+          </AppText>
+          <AppText variant="body">Statut course: {bookingQuery.data.status ?? "unknown"}</AppText>
+          <AppText variant="body">Statut paiement: {bookingQuery.data.payment_status ?? "unknown"}</AppText>
           {formatChf(displayedPayableAmount) ? (
-            <Text style={{ fontWeight: "700" }}>
+            <AppText variant="sectionTitle" style={styles.amount}>
               Montant à régler: {formatChf(displayedPayableAmount)}
-            </Text>
+            </AppText>
           ) : null}
           {showConsolidatedRoundTrip ? (
-            <Text>
+            <AppText variant="body">
               Aller: {formatChf(outboundAmount)} + Retour: {formatChf(returnAmount)} = Total:{" "}
               {formatChf(displayedPayableAmount)}
-            </Text>
+            </AppText>
           ) : null}
         </View>
       ) : null}
@@ -410,32 +452,36 @@ export default function ClientPaymentScreen() {
       <Pressable
         onPress={() => void onStartPayment()}
         disabled={!paymentEnabled || payDisabled}
-        style={{
-          opacity: !paymentEnabled || payDisabled ? 0.6 : 1,
-          borderRadius: 8,
-          backgroundColor: "#0a7ea4",
-          paddingVertical: 12,
-          alignItems: "center",
-        }}
+        style={({ pressed }) => [
+          styles.primaryBtn,
+          (!paymentEnabled || payDisabled) && styles.primaryBtnDisabled,
+          pressed && styles.primaryBtnPressed,
+        ]}
       >
-        {submitting ? <ActivityIndicator color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700" }}>Payer maintenant</Text>}
+        {submitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <AppText variant="label" style={styles.primaryBtnText}>
+            Payer maintenant
+          </AppText>
+        )}
       </Pressable>
 
       <Pressable
         onPress={() => void onManualVerify()}
         disabled={asserting}
-        style={{
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: "#cfcfcf",
-          paddingVertical: 12,
-          alignItems: "center",
-        }}
+        style={({ pressed }) => [styles.secondaryBtn, pressed && { opacity: 0.9 }]}
       >
-        {asserting ? <ActivityIndicator /> : <Text style={{ fontWeight: "600" }}>Actualiser le statut</Text>}
+        {asserting ? (
+          <ActivityIndicator />
+        ) : (
+          <AppText variant="label" style={styles.secondaryBtnText}>
+            Actualiser le statut
+          </AppText>
+        )}
       </Pressable>
 
-      {statusMessage ? <Text>{statusMessage}</Text> : null}
+      {statusMessage ? <AppText variant="caption">{statusMessage}</AppText> : null}
 
       <Pressable
         onPress={() =>
@@ -445,8 +491,65 @@ export default function ClientPaymentScreen() {
           })
         }
       >
-        <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour au détail réservation</Text>
+        <AppText variant="body" style={styles.link}>
+          Retour au détail réservation
+        </AppText>
       </Pressable>
-    </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  centered: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  page: {
+    flexGrow: 1,
+  },
+  card: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    backgroundColor: "#fff",
+  },
+  cardTitle: {
+    marginBottom: 2,
+  },
+  amount: {
+    marginTop: 4,
+  },
+  primaryBtn: {
+    borderRadius: 10,
+    backgroundColor: brandPrimary,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  primaryBtnDisabled: {
+    opacity: 0.55,
+  },
+  primaryBtnPressed: {
+    opacity: 0.92,
+  },
+  primaryBtnText: {
+    color: "#fff",
+  },
+  secondaryBtn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  secondaryBtnText: {
+    color: "#334155",
+  },
+  link: {
+    color: brandPrimary,
+    fontWeight: "600",
+  },
+});

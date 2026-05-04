@@ -782,7 +782,7 @@ export default function AddressAutocomplete({
                 top: `${top}px`,
                 left: `${left}px`,
                 width: `${width}px`,
-                zIndex: 10000,
+                zIndex: 'var(--z-modal-popover)',
               };
             })()}
           >

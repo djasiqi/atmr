@@ -3,7 +3,6 @@ import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-quer
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   FiFileText,
-  FiPlus,
   FiDownload,
   FiSettings,
   FiCheckCircle,
@@ -302,18 +301,44 @@ const InvoicesRegistry = () => {
     if (draftIds.length === 0) return;
 
     const label = method === 'email' ? 'par email' : 'par courrier papier';
+    const bulkTitle =
+      method === 'email'
+        ? `Envoyer ${draftIds.length} facture(s) par email`
+        : `Marquer ${draftIds.length} facture(s) comme envoyée(s)`;
+    const bulkMessage =
+      method === 'email'
+        ? `Envoyer ${draftIds.length} brouillon(s) par email (une facture par message) ? Les échecs seront listés sans bloquer les autres.`
+        : `Marquer ${draftIds.length} brouillon(s) comme envoyé(s) ${label} ?`;
     setConfirmDialog({
       open: true,
-      title: `Marquer ${draftIds.length} facture(s) comme envoyée(s)`,
-      message: `Marquer ${draftIds.length} brouillon(s) comme envoyé(s) ${label} ?`,
+      title: bulkTitle,
+      message: bulkMessage,
       variant: 'default',
       onConfirm: async () => {
         setConfirmDialog((d) => ({ ...d, open: false }));
         try {
           setBulkLoading(true);
-          await bulkMarkAsSent(company.id, draftIds, method);
-          setSelectedIds(new Set());
+          const payload = await bulkMarkAsSent(company.id, draftIds, method);
+          const inner = payload?.data ?? payload;
+          const sent = Array.isArray(inner?.sent) ? inner.sent : [];
+          const failed = Array.isArray(inner?.failed) ? inner.failed : [];
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            sent.forEach((id) => next.delete(id));
+            return next;
+          });
           await loadInvoices();
+          if (failed.length > 0) {
+            const preview = failed
+              .slice(0, 5)
+              .map((f) => `#${f.invoice_id}: ${String(f.error || '').slice(0, 96)}`)
+              .join(' ');
+            setActionError(
+              `${failed.length} facture(s) en échec${
+                sent.length ? ` (${sent.length} réussite(s))` : ''
+              }. ${preview}${failed.length > 5 ? ' …' : ''}`
+            );
+          }
         } catch (err) {
           setActionError(extractApiError(err, "Erreur lors de l'envoi groupé"));
         } finally {
@@ -493,20 +518,10 @@ const InvoicesRegistry = () => {
     });
   }, [setSearchParams]);
 
-  const handlePeriodFlowInvoiceCreated = useCallback(
-    (invoice) => {
-      if (!invoice?.id) return;
-      loadInvoices();
-      setDraftEditInvoice(invoice);
-      setSearchParams((prev) => {
-        const p = new URLSearchParams(prev);
-        p.set('invoice_id', String(invoice.id));
-        p.set('draft_edit', '1');
-        return p;
-      });
-    },
-    [loadInvoices, setSearchParams]
-  );
+  /** Rafraîchissement liste après génération depuis le compositeur « Nouvelle facture » (édition dans la même modale). */
+  const handleComposerInvoiceGenerated = useCallback(() => {
+    loadInvoices();
+  }, [loadInvoices]);
 
   const closeDraftEdit = useCallback(() => {
     setDraftEditInvoice(null);
@@ -715,18 +730,10 @@ const InvoicesRegistry = () => {
               type="button"
               className={styles.newInvoiceBtn}
               onClick={() => setBillPeriodOpen(true)}
-              data-tour-id="invoice-bill-period-button"
+              data-tour-id="invoice-new-invoice-button"
+              title="Nouvelle facture — par période ou assistant complet (dans la fenêtre)"
             >
               <FiFileText size={14} />
-              Facturer une période
-            </button>
-            <button
-              className={styles.newInvoiceBtn}
-              onClick={() => setNewInvoiceModal({ open: true, invoiceDraft: null })}
-              data-tour-id="invoice-new-button"
-              title="Assistant complet (S2, tierce, partenaire, …)"
-            >
-              <FiPlus size={14} />
               Nouvelle facture
             </button>
           </div>
@@ -788,7 +795,7 @@ const InvoicesRegistry = () => {
             className={styles.alertLink}
             onClick={() => setBillPeriodOpen(true)}
           >
-            Facturer une période
+            Nouvelle facture
           </button>
         </div>
       )}
@@ -901,7 +908,7 @@ const InvoicesRegistry = () => {
                   disabled={bulkLoading}
                 >
                   <FiMail size={13} />
-                  Envoyée (email) ({selectedDraftCount})
+                  Envoyer par email ({selectedDraftCount})
                 </button>
               </>
             )}
@@ -1087,11 +1094,11 @@ const InvoicesRegistry = () => {
         open={billPeriodOpen}
         onClose={() => setBillPeriodOpen(false)}
         companyId={company?.id}
-        onSuccess={handlePeriodFlowInvoiceCreated}
-        onOpenLegacy={() => {
-          setBillPeriodOpen(false);
-          setNewInvoiceModal({ open: true, invoiceDraft: null });
-        }}
+        onInvoiceGenerated={handleComposerInvoiceGenerated}
+        onOpenSendEmail={handleOpenSendEmail}
+        onMarkAsSent={(inv) =>
+          handleMarkAsSent(inv.id, { afterSuccess: () => setBillPeriodOpen(false) })
+        }
       />
 
       <InvoiceDraftEditModal

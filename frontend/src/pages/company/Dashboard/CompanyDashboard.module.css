@@ -336,7 +336,7 @@
   position: absolute;
   top: var(--spacing-sm);
   left: var(--spacing-sm);
-  z-index: 1000;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -758,8 +758,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: var(--z-modal-backdrop);
-  padding: var(--spacing-lg);
+  z-index: var(--z-modal-app);
+  padding: var(--modal-overlay-padding);
+  box-sizing: border-box;
   overflow-y: auto;
 }
 
@@ -769,7 +770,7 @@
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 800px;
-  max-height: 90vh;
+  max-height: var(--modal-max-height);
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
   animation: modalSlideIn 0.3s ease-out;

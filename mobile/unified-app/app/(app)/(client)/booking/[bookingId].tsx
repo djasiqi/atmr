@@ -1,10 +1,20 @@
+import { useMemo } from "react";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { PermissionGuard } from "../../../../src/core/guards";
 import { useSession } from "../../../../src/core/sessionProvider";
 import { bookingBelongsToActiveClient } from "../../../../src/features/client/accessControl";
 import { useBookingDetailQuery, useClientProfileQuery } from "../../../../src/features/client/hooks";
 import { getClientStatusUx } from "../../../../src/features/client/statusDictionary";
+import {
+  AppText,
+  brandPrimary,
+  brandSurfaceSoft,
+  ResponsiveContainer,
+  Screen,
+  useAppViewport,
+  useResponsiveTokens,
+} from "../../../../src/design/responsive";
 
 function parseBookingId(value: unknown): number | null {
   const parsed = Number(value);
@@ -20,14 +30,46 @@ export default function ClientBookingDetailScreen() {
   const profileQuery = useClientProfileQuery();
   const bookingQuery = useBookingDetailQuery(bookingId);
 
+  const t = useResponsiveTokens();
+  const { horizontalPadding } = useAppViewport();
+
+  const centeredStyle = useMemo(
+    () => [
+      styles.centered,
+      {
+        paddingHorizontal: horizontalPadding,
+        gap: t.spacingMd,
+        paddingVertical: t.spacingLg,
+      },
+    ],
+    [horizontalPadding, t.spacingMd, t.spacingLg]
+  );
+
+  const pageStyle = useMemo(
+    () => [
+      styles.page,
+      {
+        paddingHorizontal: horizontalPadding,
+        paddingTop: t.spacingSm + t.spacingXs,
+        gap: t.spacingMd,
+        paddingBottom: t.spacingLg,
+      },
+    ],
+    [horizontalPadding, t.spacingSm, t.spacingXs, t.spacingMd, t.spacingLg]
+  );
+
   if (!bookingId) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }}>
-        <Text>Identifiant réservation invalide.</Text>
-        <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
-          <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour à la liste</Text>
-        </Pressable>
-      </View>
+      <Screen scroll backgroundColor={brandSurfaceSoft} contentContainerStyle={centeredStyle}>
+        <ResponsiveContainer>
+          <AppText variant="screenTitle">Identifiant réservation invalide.</AppText>
+          <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
+            <AppText variant="body" style={styles.link}>
+              Retour à la liste
+            </AppText>
+          </Pressable>
+        </ResponsiveContainer>
+      </Screen>
     );
   }
 
@@ -47,106 +89,180 @@ export default function ClientBookingDetailScreen() {
 
   return (
     <PermissionGuard permission="booking:read:self">
-      <View style={{ flex: 1, padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Détail réservation</Text>
-        {bookingQuery.isLoading ? <Text>Chargement du détail...</Text> : null}
-        {bookingQuery.isError ? (
-          <Text>
-            Réservation introuvable ou inaccessible: {(bookingQuery.error as Error)?.message ?? "Erreur"}
-          </Text>
-        ) : null}
+      <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={pageStyle}>
+        <ResponsiveContainer>
+          <AppText variant="screenTitle">Détail réservation</AppText>
+          {bookingQuery.isLoading ? (
+            <AppText variant="bodyMuted">Chargement du détail…</AppText>
+          ) : null}
+          {bookingQuery.isError ? (
+            <AppText variant="error">
+              Réservation introuvable ou inaccessible : {(bookingQuery.error as Error)?.message ?? "Erreur"}
+            </AppText>
+          ) : null}
 
-        {bookingQuery.data ? (
-          <View style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12, gap: 6 }}>
-            {params.created === "1" ? (
-              <View style={{ backgroundColor: "#ecfdf3", borderRadius: 8, padding: 8 }}>
-                <Text style={{ color: "#14532d" }}>Reservation enregistree avec succes.</Text>
-              </View>
-            ) : null}
-            <Text style={{ fontWeight: "600" }}>
-              {bookingQuery.data.pickup_location ?? "Départ"}
-              {" -> "}
-              {bookingQuery.data.dropoff_location ?? "Arrivée"}
-            </Text>
-            <Text>{bookingQuery.data.scheduled_time ?? "Date inconnue"}</Text>
-            <Text>Statut: {bookingStatusUx.label}</Text>
-            <Text>Transporteur: {bookingQuery.data.company_name ?? "Non attribué"}</Text>
-            <Text>Paiement: {paymentStatus}</Text>
-            {bookingQuery.data.payment_amount ? (
-              <Text>
-                Montant: {bookingQuery.data.payment_amount} {bookingQuery.data.currency ?? "CHF"}
-              </Text>
-            ) : null}
-            {params.pricingReason ? (
-              <View style={{ backgroundColor: "#fff7ed", borderRadius: 8, padding: 8 }}>
-                <Text style={{ color: "#9a3412" }}>
-                  Ajustement tarifaire: {params.pricingReason}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+          {bookingQuery.data ? (
+            <View style={styles.card}>
+              {params.created === "1" ? (
+                <View style={styles.bannerOk}>
+                  <AppText variant="caption" style={styles.bannerOkText}>
+                    Réservation enregistrée avec succès.
+                  </AppText>
+                </View>
+              ) : null}
+              <AppText variant="sectionTitle" style={styles.cardTitle}>
+                {bookingQuery.data.pickup_location ?? "Départ"}
+                {" → "}
+                {bookingQuery.data.dropoff_location ?? "Arrivée"}
+              </AppText>
+              <AppText variant="body">{bookingQuery.data.scheduled_time ?? "Date inconnue"}</AppText>
+              <AppText variant="body">Statut : {bookingStatusUx.label}</AppText>
+              <AppText variant="body">
+                Transporteur : {bookingQuery.data.company_name ?? "Non attribué"}
+              </AppText>
+              <AppText variant="body">Paiement : {paymentStatus}</AppText>
+              {bookingQuery.data.payment_amount ? (
+                <AppText variant="body">
+                  Montant : {bookingQuery.data.payment_amount} {bookingQuery.data.currency ?? "CHF"}
+                </AppText>
+              ) : null}
+              {params.pricingReason ? (
+                <View style={styles.bannerWarn}>
+                  <AppText variant="caption" style={styles.bannerWarnText}>
+                    Ajustement tarifaire : {params.pricingReason}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
-        {paymentRequired ? (
-          <View
-            style={{
-              borderWidth: 1,
-              borderColor: "#ddd",
-              borderRadius: 10,
-              padding: 12,
-              gap: 8,
-            }}
-          >
-            <Text style={{ fontWeight: "600" }}>Paiement en ligne</Text>
-            {paymentStatus === "pending_verification" ? (
-              <Text>Paiement en cours de confirmation...</Text>
-            ) : null}
-            {paymentStatus === "failed" ? <Text>Paiement échoué ou annulé.</Text> : null}
-            {paymentStatus === "paid" ? <Text>Paiement confirmé.</Text> : null}
-            {paymentStatus === "required" ? <Text>Paiement requis pour cette réservation.</Text> : null}
+          {paymentRequired ? (
+            <View style={styles.card}>
+              <AppText variant="sectionTitle" style={styles.paySectionTitle}>
+                Paiement en ligne
+              </AppText>
+              {paymentStatus === "pending_verification" ? (
+                <AppText variant="body">Paiement en cours de confirmation…</AppText>
+              ) : null}
+              {paymentStatus === "failed" ? (
+                <AppText variant="body">Paiement échoué ou annulé.</AppText>
+              ) : null}
+              {paymentStatus === "paid" ? <AppText variant="body">Paiement confirmé.</AppText> : null}
+              {paymentStatus === "required" ? (
+                <AppText variant="body">Paiement requis pour cette réservation.</AppText>
+              ) : null}
 
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/(app)/(client)/payment",
-                  params: { bookingId: String(bookingId) },
-                })
-              }
-              disabled={!canStartPayment}
-              style={{
-                opacity: canStartPayment ? 1 : 0.6,
-                backgroundColor: "#0a7ea4",
-                borderRadius: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 14,
-                alignSelf: "flex-start",
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "600" }}>
-                {paymentStatus === "failed" ? "Réessayer le paiement" : "Payer maintenant"}
-              </Text>
-            </Pressable>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/(app)/(client)/payment",
+                    params: { bookingId: String(bookingId) },
+                  })
+                }
+                disabled={!canStartPayment}
+                style={({ pressed }) => [
+                  styles.payBtn,
+                  !canStartPayment && styles.payBtnDisabled,
+                  pressed && canStartPayment && styles.payBtnPressed,
+                ]}
+              >
+                <AppText variant="label" style={styles.payBtnText}>
+                  {paymentStatus === "failed" ? "Réessayer le paiement" : "Payer maintenant"}
+                </AppText>
+              </Pressable>
 
-            <Pressable
-              onPress={() => void bookingQuery.refetch()}
-              style={{
-                borderWidth: 1,
-                borderColor: "#cfcfcf",
-                borderRadius: 8,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                alignSelf: "flex-start",
-              }}
-            >
-              <Text style={{ fontWeight: "600" }}>Actualiser le statut</Text>
-            </Pressable>
-          </View>
-        ) : null}
+              <Pressable onPress={() => void bookingQuery.refetch()} style={({ pressed }) => [styles.outlineBtn, pressed && { opacity: 0.88 }]}>
+                <AppText variant="label" style={styles.outlineBtnText}>
+                  Actualiser le statut
+                </AppText>
+              </Pressable>
+            </View>
+          ) : null}
 
-        <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
-          <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour aux réservations</Text>
-        </Pressable>
-      </View>
+          <Pressable onPress={() => router.replace("/(app)/(client)/bookings")}>
+            <AppText variant="body" style={styles.link}>
+              Retour aux réservations
+            </AppText>
+          </Pressable>
+        </ResponsiveContainer>
+      </Screen>
     </PermissionGuard>
   );
 }
+
+const styles = StyleSheet.create({
+  centered: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  page: {
+    flexGrow: 1,
+  },
+  card: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    backgroundColor: "#fff",
+  },
+  cardTitle: {
+    marginBottom: 2,
+  },
+  bannerOk: {
+    backgroundColor: "#ecfdf3",
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 4,
+  },
+  bannerOkText: {
+    color: "#14532d",
+  },
+  bannerWarn: {
+    backgroundColor: "#fff7ed",
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 4,
+  },
+  bannerWarnText: {
+    color: "#9a3412",
+  },
+  paySectionTitle: {
+    marginBottom: 4,
+  },
+  payBtn: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    backgroundColor: brandPrimary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  payBtnDisabled: {
+    opacity: 0.55,
+  },
+  payBtnPressed: {
+    opacity: 0.9,
+  },
+  payBtnText: {
+    color: "#fff",
+  },
+  outlineBtn: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "#fff",
+  },
+  outlineBtnText: {
+    color: "#334155",
+  },
+  link: {
+    color: brandPrimary,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+});

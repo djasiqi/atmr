@@ -1,5 +1,6 @@
 """CLI Flask — facturation plateforme LIRIE V1 (config pilote, recalcul, grilles)."""
 
+# pyright: reportUnusedFunction=false
 from __future__ import annotations
 
 from datetime import datetime
@@ -18,18 +19,25 @@ from models.platform_billing import (
     PlatformSubscriptionPricing,
 )
 
+_ISO_DATE_STRING_LEN = 10
+_CALENDAR_MONTH_COUNT = 12
+
 
 def _parse_optional_datetime(s: str | None) -> datetime | None:
-    if s is None or (isinstance(s, str) and not s.strip()):
+    if s is None or not str(s).strip():
         return None
-    s = s.strip()
-    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+    s = str(s).strip()
+    if (
+        len(s) == _ISO_DATE_STRING_LEN
+        and s[4] == "-"
+        and s[7] == "-"
+    ):
         return datetime.fromisoformat(f"{s}T00:00:00+00:00")
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
 def _parse_optional_bool(s: str | None) -> bool | None:
-    if s is None or (isinstance(s, str) and s == ""):
+    if s is None or s == "":
         return None
     v = str(s).strip().lower()
     if v in ("true", "1", "yes", "on"):
@@ -129,7 +137,8 @@ def register_platform_billing_cli(app: Flask) -> None:
 
         cfg = _latest_company_config(company_id)
         if not cfg:
-            cfg = CompanyPlatformBillingConfig(company_id=company_id)
+            cfg = CompanyPlatformBillingConfig()
+            cfg.company_id = company_id
             db.session.add(cfg)
 
         be = _parse_optional_bool(billing_enabled)
@@ -168,8 +177,7 @@ def register_platform_billing_cli(app: Flask) -> None:
 
         db.session.commit()
         click.echo(
-            "OK — config enregistrée (id=%s, company_id=%s)"
-            % (cfg.id, company_id),
+            f"OK — config enregistrée (id={cfg.id}, company_id={company_id})",
             err=False,
         )
         click.echo(_serialize_config(cfg))
@@ -202,9 +210,7 @@ def register_platform_billing_cli(app: Flask) -> None:
         for r in rows:
             vmax = r.volume_max if r.volume_max is not None else "∞"
             click.echo(
-                f"id={r.id} mode={r.dispatch_mode} "
-                f"volume=[{r.volume_min}, {vmax}] "
-                f"price={r.price_monthly} CHF label={r.label!r}"
+                f"id={r.id} mode={r.dispatch_mode} volume=[{r.volume_min}, {vmax}] price={r.price_monthly} CHF label={r.label!r}"
             )
 
     @platform_billing.command("ensure-period")
@@ -212,7 +218,7 @@ def register_platform_billing_cli(app: Flask) -> None:
     @click.option("--month", type=int, required=True)
     @with_appcontext
     def ensure_period(year: int, month: int) -> None:
-        if month < 1 or month > 12:
+        if month < 1 or month > _CALENDAR_MONTH_COUNT:
             raise click.BadParameter("month doit être entre 1 et 12")
         from services.platform_billing.engine import get_or_create_period
 

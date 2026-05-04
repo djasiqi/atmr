@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './Header.module.css';
-import { showComingSoonToast } from '../../../utils/showComingSoonToast';
 
 const SIGNUP_DISABLED =
   typeof process.env.REACT_APP_SIGNUP_DISABLED === 'string'
@@ -14,11 +13,6 @@ const Header = () => {
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
-  };
-
-  const handleSignUpClick = (event) => {
-    event.preventDefault();
-    showComingSoonToast();
   };
 
   return (
@@ -66,20 +60,19 @@ const Header = () => {
         </ul>
       </nav>
 
-      {/* Auth actions + Hamburger */}
+      {/* Auth : une seule entrée — connexion et inscription sur /login */}
       <div className={styles.authAndMenu}>
-        <Link to="/login" className={styles.login}>
-          Connexion
-        </Link>
-        <button
-          type="button"
-          className={`${styles.signUp} ${SIGNUP_DISABLED ? styles.signUpDisabled : ''}`}
-          onClick={handleSignUpClick}
-          aria-disabled={SIGNUP_DISABLED ? 'true' : undefined}
-          title={SIGNUP_DISABLED ? 'Inscriptions suspendues – contactez info@lirie.ch' : undefined}
+        <Link
+          to="/login"
+          className={styles.authEntry}
+          title={
+            SIGNUP_DISABLED
+              ? 'Inscriptions suspendues – contactez info@lirie.ch (connexion toujours possible)'
+              : 'Connexion et création de compte sur la même page'
+          }
         >
-          S'inscrire
-        </button>
+          {SIGNUP_DISABLED ? 'Connexion' : 'Connexion ou inscription'}
+        </Link>
         <button
           className={styles.hamburgerButton}
           onClick={toggleMenu}

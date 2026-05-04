@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from marshmallow import Schema, fields, validate, validates_schema, ValidationError, post_load
+from typing import Any
+
+from marshmallow import (
+    Schema,
+    ValidationError,
+    fields,
+    post_load,
+    validate,
+    validates_schema,
+)
 
 from application.bookings.cancellation_rules import CANCELLATION_REASON_LABELS
 
@@ -18,17 +27,16 @@ class _TierSchema(Schema):
     label = fields.String(load_default=None, validate=validate.Length(max=80))
 
     @validates_schema
-    def _validate_tier(self, data: dict, **_kwargs) -> None:
+    def _validate_tier(self, data: dict[str, Any], **_kwargs) -> None:
         if data["type"] == "time":
             if data.get("hours_before") is None or data["hours_before"] <= 0:
                 raise ValidationError(
                     "hours_before must be > 0 for time tiers", field_name="hours_before"
                 )
-        elif data["type"] == "status":
-            if data.get("status") not in VALID_STATUSES:
-                raise ValidationError(
-                    f"status must be one of {VALID_STATUSES}", field_name="status"
-                )
+        elif data["type"] == "status" and data.get("status") not in VALID_STATUSES:
+            raise ValidationError(
+                f"status must be one of {VALID_STATUSES}", field_name="status"
+            )
 
 
 class _ReasonOverrideSchema(Schema):
@@ -52,7 +60,7 @@ class CancellationPolicySchema(Schema):
     )
 
     @validates_schema
-    def _validate_policy(self, data: dict, **_kwargs) -> None:
+    def _validate_policy(self, data: dict[str, Any], **_kwargs) -> None:
         tier_ids = [t["id"] for t in data.get("tiers", [])]
         if len(tier_ids) != len(set(tier_ids)):
             raise ValidationError("Tier IDs must be unique", field_name="tiers")
@@ -71,7 +79,7 @@ class CancellationPolicySchema(Schema):
                 )
 
     @post_load
-    def _sort_tiers(self, data: dict, **_kwargs) -> dict:
+    def _sort_tiers(self, data: dict[str, Any], **_kwargs) -> dict[str, Any]:
         """Sort time tiers ASC by hours_before (invariant for compute algorithm)."""
         tiers = data.get("tiers", [])
         time_tiers = sorted(

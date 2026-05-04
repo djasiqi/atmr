@@ -30,9 +30,15 @@ export const invoiceService = {
   },
 
   // Récupérer les détails d'une facture
-  async getInvoice(companyId, invoiceId) {
+  // options.cacheBust : évite un JSON / pdf_url obsolètes (cache navigateur ou intermédiaire) après régénération PDF
+  async getInvoice(companyId, invoiceId, options = {}) {
+    const params = new URLSearchParams();
+    if (options.cacheBust) {
+      params.set('_cb', String(Date.now()));
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const response = await apiClient.get(
-      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}`
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}${qs}`
     );
     return response.data;
   },
@@ -421,10 +427,13 @@ export const invoiceService = {
     return response.data;
   },
 
-  async removeDraftInvoiceLine(companyId, invoiceId, lineId) {
-    const response = await apiClient.delete(
-      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`
-    );
+  async removeDraftInvoiceLine(companyId, invoiceId, lineId, options = {}) {
+    const url = `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/lines/${lineId}`;
+    const cfg =
+      options.expected_updated_at != null && String(options.expected_updated_at).trim()
+        ? { data: { expected_updated_at: options.expected_updated_at } }
+        : {};
+    const response = await apiClient.delete(url, cfg);
     return response.data;
   },
 
@@ -444,9 +453,23 @@ export const invoiceService = {
     return response.data;
   },
 
-  async removeDraftGlobalDiscount(companyId, invoiceId) {
+  /** Remises % par ligne transport (pourcentages distincts). Liste vide = retirer toutes les remises % auto. */
+  async applyDraftPerLineDiscounts(companyId, invoiceId, payload) {
     const response = await apiClient.post(
-      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/remove-global-discount`
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/apply-per-line-discounts`,
+      payload
+    );
+    return response.data;
+  },
+
+  async removeDraftGlobalDiscount(companyId, invoiceId, options = {}) {
+    const body = {};
+    if (options.expected_updated_at != null && String(options.expected_updated_at).trim()) {
+      body.expected_updated_at = options.expected_updated_at;
+    }
+    const response = await apiClient.post(
+      `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/remove-global-discount`,
+      Object.keys(body).length ? body : {}
     );
     return response.data;
   },
@@ -454,11 +477,25 @@ export const invoiceService = {
   async addDraftCustomLine(
     companyId,
     invoiceId,
-    { description, line_total, qty = 1, custom_mode, time_unit }
+    {
+      description,
+      line_total,
+      qty = 1,
+      custom_mode,
+      time_unit,
+      expected_updated_at,
+      service_date_iso,
+    }
   ) {
     const body = { description, line_total, qty };
     if (custom_mode) body.custom_mode = custom_mode;
     if (time_unit) body.time_unit = time_unit;
+    if (service_date_iso != null && String(service_date_iso).trim()) {
+      body.service_date_iso = String(service_date_iso).trim();
+    }
+    if (expected_updated_at != null && String(expected_updated_at).trim()) {
+      body.expected_updated_at = expected_updated_at;
+    }
     const response = await apiClient.post(
       `${API_BASE}/invoices/companies/${companyId}/invoices/${invoiceId}/custom-line`,
       body
@@ -540,8 +577,10 @@ export const invoiceStatusLower = (invoice) => {
   return typeof s === 'string' ? s.toLowerCase() : '';
 };
 
+/** Édition lignes / remises : brouillon ou facture émise tant qu’elle n’est pas payée / annulée. */
 export const canEditDraft = (invoice) => {
-  return invoiceStatusLower(invoice) === 'draft';
+  const s = invoiceStatusLower(invoice);
+  return ['draft', 'sent', 'partially_paid', 'overdue'].includes(s);
 };
 
 export const canSendInvoice = (invoice) => {
@@ -616,6 +655,7 @@ export const {
   removeDraftInvoiceLine,
   updateDraftInvoiceLine,
   applyDraftGlobalDiscount,
+  applyDraftPerLineDiscounts,
   removeDraftGlobalDiscount,
   addDraftCustomLine,
 } = invoiceService;

@@ -4,11 +4,11 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
+  z-index: var(--z-modal-app);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: var(--modal-overlay-padding);
   animation: fadeIn 0.15s ease;
 }
 
@@ -22,8 +22,9 @@
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
   width: 100%;
-  max-width: 480px;
-  max-height: 90vh;
+  max-width: var(--modal-width-secondary);
+  max-height: var(--modal-max-height);
+  min-height: 0;
   overflow-y: auto;
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }

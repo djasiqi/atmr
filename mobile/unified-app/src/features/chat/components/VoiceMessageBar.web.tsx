@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { AppText } from "../../../design/ui/AppText";
 import { Ionicons } from "@expo/vector-icons";
 import { C_BUBBLE_OWN, voiceStyles as styles } from "./voiceMessageStyles";
 
@@ -56,10 +57,19 @@ export function VoiceMessageBar({ uri, isOwn }: VoiceMessageBarProps) {
         <Ionicons name={playing ? "pause" : "play"} size={20} color={isOwn ? "#ecfdf5" : C_BUBBLE_OWN} />
       </View>
       <View style={styles.voiceTextBlock}>
-        <Text style={[styles.voiceTitle, isOwn && styles.voiceTitleOwn]} numberOfLines={1}>
+        <AppText
+          variant="label"
+          numberOfLines={1}
+          style={isOwn ? styles.voiceTitleOwn : undefined}
+        >
           Message vocal
-        </Text>
-        <Text style={[styles.voiceMeta, isOwn && styles.voiceMetaOwn]}>Appuyez pour écouter</Text>
+        </AppText>
+        <AppText
+          variant="caption"
+          style={[styles.voiceMetaSpacing, isOwn && styles.voiceMetaOwn]}
+        >
+          Appuyez pour écouter
+        </AppText>
       </View>
     </Pressable>
   );

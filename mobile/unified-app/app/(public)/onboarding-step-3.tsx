@@ -2,20 +2,19 @@ import {
   ImageBackground,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Screen, useAppViewport } from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
 export default function OnboardingStepThreeScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { topInset } = useAppViewport();
 
   return (
     <View style={styles.screen}>
@@ -27,16 +26,11 @@ export default function OnboardingStepThreeScreen() {
       />
       <View style={styles.overlay} />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            paddingTop: Math.max(insets.top, 16) + 8,
-            paddingBottom: Math.max(insets.bottom, 20) + 16,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <Screen
+        scroll
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.card}>
           <Text style={styles.stepPill}>Étape 3 sur 3</Text>
@@ -106,7 +100,7 @@ export default function OnboardingStepThreeScreen() {
             <Text style={styles.tertiaryText}>Se connecter</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </Screen>
     </View>
   );
 }
@@ -126,7 +120,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",

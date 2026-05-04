@@ -701,7 +701,7 @@ const InstitutionRequestCreate = ({ onClose, onSuccess }) => {
                 }}
                 menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
                 menuPosition="fixed"
-                styles={{ menuPortal: (base) => ({ ...base, zIndex: 10000 }) }}
+                styles={{ menuPortal: (base) => ({ ...base, zIndex: 'var(--z-modal-popover)' }) }}
               />
             </div>
 

@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
+import { brandPrimary, brandText } from "../../../../design/responsive";
+import { AppText } from "../../../../design/ui/AppText";
 import { useCompanyClientSearch } from "../../useRideForms";
 
 type ClientSelectorProps = {
@@ -12,7 +14,7 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
   const clientsQuery = useCompanyClientSearch(query);
   return (
     <View style={{ gap: 6 }}>
-      <Text style={{ fontWeight: "600" }}>Client</Text>
+      <AppText variant="label">Client</AppText>
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -25,15 +27,17 @@ export function ClientSelector({ value, onChange }: ClientSelectorProps) {
           onPress={() => onChange(client.id)}
           style={{
             borderWidth: 1,
-            borderColor: value === client.id ? "#0a7ea4" : "#ddd",
+            borderColor: value === client.id ? "#0A8F7A" : "#ddd",
             borderRadius: 8,
             padding: 8,
           }}
         >
-          <Text style={{ color: value === client.id ? "#0a7ea4" : "#333" }}>{client.label}</Text>
+          <AppText variant="body" style={{ color: value === client.id ? brandPrimary : brandText }}>
+            {client.label}
+          </AppText>
         </Pressable>
       ))}
-      {clientsQuery.isLoading ? <Text style={{ color: "#666" }}>Recherche clients...</Text> : null}
+      {clientsQuery.isLoading ? <AppText variant="bodyMuted">Recherche clients...</AppText> : null}
     </View>
   );
 }

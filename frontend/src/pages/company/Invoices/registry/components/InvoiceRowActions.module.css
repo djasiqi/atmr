@@ -113,7 +113,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1000;
+  z-index: calc(var(--z-modal-popover) - 1);
   background-color: transparent;
 }
 
@@ -123,7 +123,7 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
-  z-index: 9999;
+  z-index: var(--z-modal-popover);
   width: 240px; /* Largeur fixe pour calculs précis */
   overflow-y: auto;
   overflow-x: hidden;

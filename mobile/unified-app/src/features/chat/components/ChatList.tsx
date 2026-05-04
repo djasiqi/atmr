@@ -4,17 +4,20 @@ import {
   type ListRenderItem,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type FlatList as FlatListType,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
+import { AppText } from "../../../design/ui/AppText";
 import type { SharedChatMessage } from "../types";
 import { MessageBubble } from "./MessageBubble";
 
 const CHAT_STRIP_BG = "#fafafa";
 const CHAT_STRIP_TOP_BORDER = "#e5e7eb";
-/** Marge de lecture typique + complément sûr (encoches) dans le contenu. */
+/**
+ * Marge de lecture horizontale + `safeLeft` / `safeRight` depuis `useAppViewport`
+ * (même normalisation que le reste de l’app ; pas d’insets bruts ici).
+ */
 const CONTENT_GUTTER = 16;
 
 export type ChatListInitialScroll = { type: "last" } | { type: "index"; index: number };
@@ -56,11 +59,11 @@ export function ChatList({
   initialScroll = { type: "last" },
   bleedOverParentPadding = 24,
 }: ChatListProps) {
-  const insets = useSafeAreaInsets();
+  const { safeLeft, safeRight } = useAppViewport();
   const listRef = useRef<FlatListType<SharedChatMessage> | null>(null);
   const contentPad = {
-    paddingLeft: CONTENT_GUTTER + insets.left,
-    paddingRight: CONTENT_GUTTER + insets.right,
+    paddingLeft: CONTENT_GUTTER + safeLeft,
+    paddingRight: CONTENT_GUTTER + safeRight,
   };
   const prevAnchorKeyRef = useRef<number | null>(null);
   const hadMessagesRef = useRef(false);
@@ -137,20 +140,22 @@ export function ChatList({
         opacity: loadMoreDisabled || loadingMore ? 0.6 : 1,
       }}
     >
-      <Text style={{ textAlign: "center", color: "#111827" }}>
+      <AppText variant="label" style={{ textAlign: "center" }}>
         {loadingMore ? "Chargement…" : loadMoreLabel}
-      </Text>
+      </AppText>
     </Pressable>
   ) : null;
 
   const emptyC =
     loading && messages.length === 0 ? (
       <View style={{ paddingVertical: 24, alignItems: "center" }}>
-        <Text style={{ color: "#6b7280" }}>Chargement des messages…</Text>
+        <AppText variant="bodyMuted" style={{ color: "#6b7280" }}>
+          Chargement des messages…
+        </AppText>
       </View>
     ) : (
       <View style={{ paddingVertical: 24, alignItems: "center" }}>
-        <Text style={{ color: "#6b7280" }}>{emptyLabel}</Text>
+        <AppText variant="bodyMuted">{emptyLabel}</AppText>
       </View>
     );
 

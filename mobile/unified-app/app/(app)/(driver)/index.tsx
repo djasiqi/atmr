@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
 import {
@@ -17,6 +17,7 @@ import { MissionCard } from "../../../src/features/driver/components/MissionCard
 import { StatusSwitch } from "../../../src/features/driver/components/StatusSwitch";
 import { DriverStateBanners } from "../../../src/features/driver/components/DriverStateBanners";
 import { filterNextMissionsOnly } from "../../../src/features/driver/domain/missionGrouping";
+import { AppText, Screen, useAppViewport, useResponsiveTokens } from "../../../src/design/responsive";
 
 function selectActiveMission(missions: DriverMission[] | undefined): DriverMission | null {
   if (!Array.isArray(missions) || missions.length === 0) return null;
@@ -31,6 +32,8 @@ function selectActiveMission(missions: DriverMission[] | undefined): DriverMissi
 
 export default function DriverHomeScreen() {
   const router = useRouter();
+  const t = useResponsiveTokens();
+  const { horizontalPadding } = useAppViewport();
   const { status: sessionStatus, activeContext } = useSession();
   const driverContextId = useActiveDriverContextId();
   const missionsQuery = useDriverMissionsQuery();
@@ -63,12 +66,40 @@ export default function DriverHomeScreen() {
   const [isAvailable, setIsAvailable] = useState(true);
   const bootstrapPending = sessionStatus !== "ready" || missionsQuery.isLoading;
 
+  const scrollContentStyle = useMemo(
+    () => ({
+      flexGrow: 1,
+      paddingHorizontal: horizontalPadding,
+      paddingTop: t.spacingSm + t.spacingXs,
+      gap: t.spacingSm + t.spacingXs,
+      paddingBottom: t.spacingMd,
+    }),
+    [horizontalPadding, t.spacingSm, t.spacingXs, t.spacingMd]
+  );
+
+  const outlineBtn = useMemo(
+    () => ({
+      borderWidth: 1,
+      borderColor: "#e2e8f0",
+      borderRadius: t.radiusSm,
+      padding: t.spacingSm,
+    }),
+    [t.radiusSm, t.spacingSm]
+  );
+
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <View style={{ flex: 1, justifyContent: "center", padding: 24, gap: 12 }}>
-          <Text style={{ fontSize: 22, fontWeight: "700" }}>Espace Driver</Text>
-          <Text>Missions, transitions, offline replay, realtime et tracking.</Text>
+        <Screen
+          scroll
+          backgroundColor="#f8fafc"
+          withHorizontalPadding={false}
+          contentContainerStyle={scrollContentStyle}
+        >
+          <AppText variant="screenTitle">Espace Driver</AppText>
+          <AppText variant="bodyMuted">
+            Missions, transitions, offline replay, realtime et tracking.
+          </AppText>
           <DriverStateBanners />
 
           <StatusSwitch
@@ -83,12 +114,14 @@ export default function DriverHomeScreen() {
             }}
           />
 
-          {bootstrapPending ? <Text>Initialisation mission active...</Text> : null}
+          {bootstrapPending ? (
+            <AppText variant="caption">Initialisation mission active…</AppText>
+          ) : null}
           {bootstrapPending ? <DashboardMissionListSkeleton /> : null}
           {missionsQuery.isError ? (
-            <Text>
+            <AppText variant="error">
               Erreur chargement missions: {(missionsQuery.error as Error)?.message ?? "Erreur"}
-            </Text>
+            </AppText>
           ) : null}
 
           {!bootstrapPending && activeMission ? (
@@ -102,47 +135,47 @@ export default function DriverHomeScreen() {
               }
             />
           ) : !bootstrapPending ? (
-            <Text>Aucune mission active.</Text>
+            <AppText variant="bodyMuted">Aucune mission active.</AppText>
           ) : null}
 
           <Pressable
             onPress={() => router.push("/(app)/(driver)/missions")}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
+            style={outlineBtn}
             disabled={bootstrapPending}
           >
-            <Text style={{ fontWeight: "600" }}>Voir toutes les missions</Text>
+            <AppText variant="label">Voir toutes les missions</AppText>
           </Pressable>
           <Pressable
             onPress={() => router.push("/(app)/(driver)/trips")}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
+            style={outlineBtn}
             disabled={bootstrapPending}
           >
-            <Text style={{ fontWeight: "600" }}>Ouvrir Courses</Text>
+            <AppText variant="label">Ouvrir Courses</AppText>
           </Pressable>
           <Pressable
             onPress={() => router.push("/(app)/(driver)/schedule" as any)}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
+            style={outlineBtn}
             disabled={bootstrapPending}
           >
-            <Text style={{ fontWeight: "600" }}>Ouvrir Planning</Text>
+            <AppText variant="label">Ouvrir Planning</AppText>
           </Pressable>
           <Pressable
             onPress={() => router.push("/(app)/(driver)/chat")}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
+            style={outlineBtn}
             disabled={bootstrapPending}
           >
-            <Text style={{ fontWeight: "600" }}>
+            <AppText variant="label">
               Ouvrir Chat {unread.unreadCount > 0 ? `(${unread.unreadCount})` : ""}
-            </Text>
+            </AppText>
           </Pressable>
           <Pressable
             onPress={() => router.push("/(app)/(driver)/profile")}
-            style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
+            style={outlineBtn}
             disabled={bootstrapPending}
           >
-            <Text style={{ fontWeight: "600" }}>Voir Profil</Text>
+            <AppText variant="label">Voir Profil</AppText>
           </Pressable>
-        </View>
+        </Screen>
       </PermissionGuard>
     </DriverContextGuard>
   );

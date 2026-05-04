@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TextInput, View } from "react-native";
-import { Button } from "../../../components/ui";
+import { AppButton } from "../../../design/responsive";
 
 type NotesEditorProps = {
   initialValue?: string | null;
@@ -21,8 +21,8 @@ export function NotesEditor({ initialValue, onSave, saveLabel = "Enregistrer not
         placeholder="Notes operateur"
         style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, minHeight: 80 }}
       />
-      <Button
-        label={saving ? "Enregistrement..." : saveLabel}
+      <AppButton
+        title={saving ? "Enregistrement..." : saveLabel}
         variant="secondary"
         onPress={async () => {
           setSaving(true);

@@ -1,52 +1,93 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
+import { ResponsiveContainer, Screen } from "../../src/design/responsive";
 
 export default function HowItWorksScreen() {
   const router = useRouter();
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 14 }}>
-      <Text style={{ fontSize: 24, fontWeight: "800", color: "#0f172a" }}>
-        Comment ca marche
-      </Text>
-      <Text style={{ color: "#334155", lineHeight: 22 }}>
-        Lirie simplifie l&apos;organisation des transports medicaux en 5 etapes.
-      </Text>
-      <View style={{ gap: 10 }}>
-        <Text style={{ fontWeight: "700" }}>1. Je fais une demande</Text>
-        <Text style={{ color: "#475569" }}>
-          Depart, destination, date et besoins specifiques. Vous pouvez commencer sans compte.
-        </Text>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={{ fontWeight: "700" }}>2. Un transporteur accepte</Text>
-        <Text style={{ color: "#475569" }}>
-          L&apos;ecosysteme Lirie assigne la demande selon disponibilite et contexte.
-        </Text>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={{ fontWeight: "700" }}>3. Vous recevez la confirmation</Text>
-        <Text style={{ color: "#475569" }}>
-          Notification claire de l&apos;etat: en attente, confirme, en route, termine.
-        </Text>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={{ fontWeight: "700" }}>4. Le transport est assure</Text>
-        <Text style={{ color: "#475569" }}>
-          Chauffeur, compagnie et etablissement restent synchronises selon votre contexte.
-        </Text>
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={{ fontWeight: "700" }}>5. Paiement ou facturation</Text>
-        <Text style={{ color: "#475569" }}>
-          Selon votre situation: parcours patient, institutionnel ou prise en charge.
-        </Text>
-      </View>
-      <Pressable
-        onPress={() => router.push("/(public)/pre-request/step-1" as any)}
-        style={{ marginTop: 8, backgroundColor: "#0a7ea4", borderRadius: 10, padding: 14, alignItems: "center" }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "700" }}>Demarrer une pre-demande</Text>
-      </Pressable>
-    </ScrollView>
+    <Screen scroll backgroundColor="#EAF3F1" contentContainerStyle={styles.scroll}>
+      <ResponsiveContainer>
+        <View style={styles.block}>
+          <Text style={styles.title}>Comment ca marche</Text>
+          <Text style={styles.intro}>Lirie simplifie l&apos;organisation des transports medicaux en 5 etapes.</Text>
+          <View style={styles.step}>
+            <Text style={styles.stepTitle}>1. Je fais une demande</Text>
+            <Text style={styles.stepBody}>
+              Depart, destination, date et besoins specifiques. Vous pouvez commencer sans compte.
+            </Text>
+          </View>
+          <View style={styles.step}>
+            <Text style={styles.stepTitle}>2. Un transporteur accepte</Text>
+            <Text style={styles.stepBody}>
+              L&apos;ecosysteme Lirie assigne la demande selon disponibilite et contexte.
+            </Text>
+          </View>
+          <View style={styles.step}>
+            <Text style={styles.stepTitle}>3. Vous recevez la confirmation</Text>
+            <Text style={styles.stepBody}>
+              Notification claire de l&apos;etat: en attente, confirme, en route, termine.
+            </Text>
+          </View>
+          <View style={styles.step}>
+            <Text style={styles.stepTitle}>4. Le transport est assure</Text>
+            <Text style={styles.stepBody}>
+              Chauffeur, compagnie et etablissement restent synchronises selon votre contexte.
+            </Text>
+          </View>
+          <View style={styles.step}>
+            <Text style={styles.stepTitle}>5. Paiement ou facturation</Text>
+            <Text style={styles.stepBody}>
+              Selon votre situation: parcours patient, institutionnel ou prise en charge.
+            </Text>
+          </View>
+          <Pressable onPress={() => router.push("/(public)/pre-request/step-1" as any)} style={styles.cta}>
+            <Text style={styles.ctaText}>Demarrer une pre-demande</Text>
+          </Pressable>
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    paddingVertical: 24,
+  },
+  block: {
+    gap: 14,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#163A34",
+  },
+  intro: {
+    color: "#45655D",
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  step: {
+    gap: 8,
+  },
+  stepTitle: {
+    fontWeight: "700",
+    color: "#163A34",
+  },
+  stepBody: {
+    color: "#45655D",
+    lineHeight: 22,
+  },
+  cta: {
+    marginTop: 8,
+    backgroundColor: "#0A8F7A",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  ctaText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+});

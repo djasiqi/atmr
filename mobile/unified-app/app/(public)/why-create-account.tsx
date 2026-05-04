@@ -1,6 +1,7 @@
-import { ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Screen, useAppViewport } from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -14,6 +15,7 @@ const BENEFITS = [
 
 export default function WhyCreateAccountScreen() {
   const router = useRouter();
+  const { topInset } = useAppViewport();
 
   return (
     <View style={styles.screen}>
@@ -25,7 +27,12 @@ export default function WhyCreateAccountScreen() {
       />
       <View style={styles.overlay} />
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <Screen
+        scroll
+        backgroundColor="transparent"
+        keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+        contentContainerStyle={styles.scrollContent}
+      >
         <View style={styles.card}>
           <Pressable
             onPress={() => {
@@ -73,7 +80,7 @@ export default function WhyCreateAccountScreen() {
             <Text style={styles.secondaryCtaText}>J&apos;ai deja un compte</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </Screen>
     </View>
   );
 }
@@ -93,8 +100,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 30,
+    paddingVertical: 24,
   },
   card: {
     width: "100%",

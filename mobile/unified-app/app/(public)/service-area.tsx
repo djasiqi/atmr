@@ -1,8 +1,18 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { checkServiceArea, ServiceAreaCheckResponse } from "../../src/core/api/client";
+import { ResponsiveContainer, Screen, useAppViewport } from "../../src/design/responsive";
 
 export default function ServiceAreaScreen() {
+  const { topInset } = useAppViewport();
   const [departure, setDeparture] = useState("");
   const [destination, setDestination] = useState("");
   const [date, setDate] = useState("");
@@ -35,52 +45,128 @@ export default function ServiceAreaScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 12 }}>
-      <Text style={{ fontSize: 24, fontWeight: "800", color: "#0f172a" }}>
-        Zone desservie
-      </Text>
-      <Text style={{ color: "#475569" }}>
-        Verifiez rapidement si Lirie couvre votre trajet avant l&apos;inscription.
-      </Text>
-      <TextInput
-        value={departure}
-        onChangeText={setDeparture}
-        placeholder="Lieu de depart"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <TextInput
-        value={destination}
-        onChangeText={setDestination}
-        placeholder="Lieu d'arrivee"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <TextInput
-        value={date}
-        onChangeText={setDate}
-        placeholder="Date (YYYY-MM-DD)"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <TextInput
-        value={transportType}
-        onChangeText={setTransportType}
-        placeholder="Type (assis, pmr, accompagnement...)"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 10, padding: 12 }}
-      />
-      <Pressable
-        onPress={() => void submit()}
-        disabled={pending}
-        style={{ borderRadius: 10, backgroundColor: pending ? "#9cb7c1" : "#0a7ea4", padding: 14, alignItems: "center" }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "700" }}>
-          {pending ? "Verification..." : "Verifier"}
-        </Text>
-      </Pressable>
-      {error ? <Text style={{ color: "#b91c1c" }}>{error}</Text> : null}
-      {result ? (
-        <Text style={{ color: result.status === "unavailable" ? "#b91c1c" : "#0f5132" }}>
-          {result.status.toUpperCase()} - {result.message}
-        </Text>
-      ) : null}
-    </ScrollView>
+    <Screen
+      scroll
+      backgroundColor="#EAF3F1"
+      keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+      contentContainerStyle={styles.scroll}
+    >
+      <ResponsiveContainer>
+        <View style={styles.card}>
+          <Text style={styles.title}>Zone desservie</Text>
+          <Text style={styles.lede}>Verifiez rapidement si Lirie couvre votre trajet avant l&apos;inscription.</Text>
+          <TextInput
+            value={departure}
+            onChangeText={setDeparture}
+            placeholder="Lieu de depart"
+            placeholderTextColor="#91A59D"
+            style={styles.input}
+          />
+          <TextInput
+            value={destination}
+            onChangeText={setDestination}
+            placeholder="Lieu d'arrivee"
+            placeholderTextColor="#91A59D"
+            style={styles.input}
+          />
+          <TextInput
+            value={date}
+            onChangeText={setDate}
+            placeholder="Date (YYYY-MM-DD)"
+            placeholderTextColor="#91A59D"
+            style={styles.input}
+          />
+          <TextInput
+            value={transportType}
+            onChangeText={setTransportType}
+            placeholder="Type (assis, pmr, accompagnement...)"
+            placeholderTextColor="#91A59D"
+            style={styles.input}
+          />
+          <Pressable
+            onPress={() => void submit()}
+            disabled={pending}
+            style={[styles.btn, pending && styles.btnDisabled]}
+          >
+            {pending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.btnText}>Verifier</Text>
+            )}
+          </Pressable>
+          {error ? <Text style={styles.err}>{error}</Text> : null}
+          {result ? (
+            <Text style={[styles.result, result.status === "unavailable" ? styles.resultBad : styles.resultOk]}>
+              {result.status.toUpperCase()} - {result.message}
+            </Text>
+          ) : null}
+        </View>
+      </ResponsiveContainer>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 1,
+    paddingVertical: 24,
+  },
+  card: {
+    gap: 12,
+    borderRadius: 26,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "rgba(145,165,157,0.45)",
+    backgroundColor: "#FFFFFF",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#163A34",
+  },
+  lede: {
+    color: "#45655D",
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#91A59D",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#163A34",
+    minHeight: 48,
+  },
+  btn: {
+    borderRadius: 14,
+    backgroundColor: "#0A8F7A",
+    paddingVertical: 14,
+    alignItems: "center",
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  btnDisabled: {
+    backgroundColor: "#84B7AE",
+  },
+  btnText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  err: {
+    color: "#b91c1c",
+    fontWeight: "600",
+  },
+  result: {
+    fontWeight: "600",
+    lineHeight: 22,
+  },
+  resultOk: {
+    color: "#0f5132",
+  },
+  resultBad: {
+    color: "#b91c1c",
+  },
+});

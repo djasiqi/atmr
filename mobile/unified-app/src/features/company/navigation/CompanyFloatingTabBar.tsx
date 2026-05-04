@@ -1,6 +1,12 @@
 import { useState } from "react";
-import { Modal, Platform, Pressable, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Modal, Platform, Pressable, View } from "react-native";
+import {
+  BaseFloatingBar,
+  computeCompanyFloatingBottomPad,
+} from "../../../design/responsive";
+import { AppText } from "../../../design/ui/AppText";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useRouter, type Href } from "expo-router";
@@ -10,7 +16,6 @@ import { useCompanyChatUnread } from "../hooks";
 
 const C = {
   border: "rgba(228, 231, 236, 0.9)",
-  bg: "#FFFCFC",
   text: "#2D3748",
   textMuted: "#7A808A",
   brand: "#0A8F7A",
@@ -38,65 +43,34 @@ function useActiveRouteName(state: BottomTabBarProps["state"]): string {
 /**
  * Barre d’onglets flottante (pilule) avec CTA centrale « nouvelle course »
  * (patron 2 + bouton rond + 2). « Autres » ouvre Clients et Paramètres.
+ *
+ * Texte (tabs / badges) : `maxFontSizeMultiplier` modéré, truncate ; pas de `allowFontScaling={false}`.
  */
 export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
+  const { isLargeText } = useAccessibilityScale();
   const router = useRouter();
   const canCreateRide = useCanCreateCompanyRide();
   const [moreOpen, setMoreOpen] = useState(false);
   const { unreadCount: chatUnread } = useCompanyChatUnread();
   const current = useActiveRouteName(state);
-  const maxBarWidth = Math.min(480, width - 32);
+  const maxBarWidth = Math.min(480, usableWidth - 2 * horizontalPadding);
   const focusedFromSheet = HIDDEN_SHEET_ROUTES.some((x) => x.name === current);
-  const bottomPad = Math.max(12, insets.bottom + 4);
-  const totalBarAreaHeight = 64 + insets.bottom;
+  const bottomPad = computeCompanyFloatingBottomPad(bottomInset);
+  const totalBarAreaHeight = 64 + bottomInset;
 
   return (
     <>
-    <View
-      style={{ height: totalBarAreaHeight, backgroundColor: "transparent" }}
-      pointerEvents="box-none"
+    <BaseFloatingBar
+      containerHeight={totalBarAreaHeight}
+      paddingBottom={bottomPad}
+      maxBarWidth={maxBarWidth}
+      horizontalPadding={horizontalPadding}
+      preset="company"
+      minInnerHeight={56}
+      minInnerHeightLargeText={62}
+      isLargeText={isLargeText}
     >
-      <View
-        pointerEvents="box-none"
-        style={{
-          position: "absolute" as const,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          alignItems: "center" as const,
-          paddingBottom: bottomPad,
-        }}
-      >
-        <View
-          style={[
-            {
-              maxWidth: maxBarWidth,
-              width: "100%" as const,
-              marginHorizontal: 16,
-              minHeight: 56,
-              flexDirection: "row" as const,
-              alignItems: "center" as const,
-              paddingHorizontal: 4,
-              paddingVertical: 4,
-              backgroundColor: C.bg,
-              borderWidth: 1,
-              borderColor: C.border,
-              borderRadius: 9999,
-            },
-            Platform.select({
-              web: { boxShadow: "0 4px 20px rgba(15, 23, 42, 0.08)" },
-              default: {
-                shadowColor: "#0F172A",
-                shadowOpacity: 0.1,
-                shadowOffset: { width: 0, height: 4 },
-                shadowRadius: 12,
-                elevation: 6,
-              },
-            }),
-          ]}
-        >
           <BarTabButton
             label="Dashboard"
             icon="speedometer-outline"
@@ -172,9 +146,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
             active={moreOpen || focusedFromSheet}
             onPress={() => setMoreOpen((v) => !v)}
           />
-        </View>
-      </View>
-    </View>
+    </BaseFloatingBar>
 
     <Modal visible={moreOpen} animationType="fade" transparent onRequestClose={() => setMoreOpen(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end" as const, backgroundColor: "rgba(0,0,0,0.4)" }}>
@@ -190,7 +162,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
                 borderTopLeftRadius: 16,
                 borderTopRightRadius: 16,
                 padding: 20,
-                paddingBottom: insets.bottom + 20,
+                paddingBottom: bottomInset + 20,
                 borderWidth: 1,
                 borderColor: C.border,
                 gap: 8,
@@ -200,7 +172,9 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
               },
             ]}
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: C.text, marginBottom: 4 }}>Autres écrans</Text>
+            <AppText variant="sectionTitle" style={{ color: C.text, marginBottom: 4 }}>
+              Autres écrans
+            </AppText>
             {HIDDEN_SHEET_ROUTES.map((row) => {
               const active = current === row.name;
               return (
@@ -226,7 +200,13 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
                   ]}
                 >
                   <Ionicons name={row.icon} size={22} color={active ? C.brand : C.textMuted} />
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: active ? C.brand : C.text }}>{row.label}</Text>
+                  <AppText
+                    variant="body"
+                    maxFontSizeMultiplier={1.35}
+                    style={{ fontWeight: "600", color: active ? C.brand : C.text }}
+                  >
+                    {row.label}
+                  </AppText>
                   <View style={{ flex: 1 }} />
                   <Ionicons name="chevron-forward" size={18} color={C.textMuted} />
                 </Pressable>
@@ -288,26 +268,30 @@ function BarTabButton({
             accessibilityRole="text"
             accessible
           >
-            <Text
+            <AppText
+              variant="caption"
               numberOfLines={1}
-              style={{ fontSize: 9, fontWeight: "800" as const, color: C.brand, lineHeight: 10 }}
+              maxFontSizeMultiplier={1.25}
+              style={{ fontWeight: "800" as const, color: C.brand }}
             >
               {badgeCount > 99 ? "99+" : String(badgeCount)}
-            </Text>
+            </AppText>
           </View>
         ) : null}
       </View>
-      <Text
+      <AppText
+        variant="caption"
         numberOfLines={1}
+        maxFontSizeMultiplier={1.28}
+        ellipsizeMode="tail"
         style={{
           marginTop: 2,
-          fontSize: 9,
           fontWeight: "700" as const,
           color: active ? C.brand : C.textMuted,
         }}
       >
         {label}
-      </Text>
+      </AppText>
     </Pressable>
   );
 }

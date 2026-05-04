@@ -1,13 +1,7 @@
 import { useMemo } from "react";
-import { useWindowDimensions } from "react-native";
+import { useAccessibilityScale } from "../../../design/responsive/useAccessibilityScale";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
 
-const WIDTH_SM = 375;
-const WIDTH_MD = 768;
-const WIDTH_LG = 1024;
-const CONTENT_MAX_PHONE = 400;
-const CONTENT_MAX_TABLET = 520;
-const CONTENT_MAX_DESKTOP = 600;
-const HORIZONTAL_PADDING = 16;
 const MAP_HEIGHT_PHONE = 180;
 const MAP_HEIGHT_TABLET = 260;
 const MAP_HEIGHT_MAX = 340;
@@ -20,38 +14,33 @@ export type MissionLayout = {
   isLargeScreen: boolean;
 };
 
+/**
+ * Layout mission : géométrie depuis useAppViewport (usableWidth, contentWidth).
+ * Texte très grand : carte un peu plus basse pour laisser la place au contenu scrollable parent.
+ */
 export function useMissionLayout(): MissionLayout {
-  const { width, height } = useWindowDimensions();
+  const viewport = useAppViewport();
+  const { isVeryLargeText } = useAccessibilityScale();
 
   return useMemo(() => {
-    const horizontalPadding = Math.max(12, Math.min(HORIZONTAL_PADDING, width * 0.05));
-    const isTablet = width >= WIDTH_MD;
-    const isLargeScreen = width >= WIDTH_LG;
-
-    let contentWidth: number;
-    if (width < WIDTH_SM) {
-      contentWidth = width - horizontalPadding * 2;
-    } else if (width < WIDTH_MD) {
-      contentWidth = Math.min(CONTENT_MAX_PHONE, width - horizontalPadding * 2);
-    } else if (width < WIDTH_LG) {
-      contentWidth = Math.min(CONTENT_MAX_TABLET, width - horizontalPadding * 2);
-    } else {
-      contentWidth = Math.min(CONTENT_MAX_DESKTOP, width - horizontalPadding * 2);
-    }
+    const { contentWidth, usableHeight, isTablet, longest } = viewport;
+    const isLargeScreen = longest >= 1024;
 
     let mapHeight = MAP_HEIGHT_PHONE;
     if (isTablet) {
-      mapHeight = Math.min(MAP_HEIGHT_TABLET, Math.round(height * 0.24));
+      mapHeight = Math.min(MAP_HEIGHT_TABLET, Math.round(usableHeight * 0.24));
       mapHeight = Math.max(MAP_HEIGHT_PHONE, Math.min(MAP_HEIGHT_MAX, mapHeight));
+    }
+    if (isVeryLargeText) {
+      mapHeight = Math.max(MAP_HEIGHT_PHONE, Math.round(mapHeight * 0.88));
     }
 
     return {
-      contentWidth: Math.max(280, contentWidth),
+      contentWidth: Math.max(0, contentWidth),
       mapHeight,
-      horizontalPadding,
+      horizontalPadding: viewport.horizontalPadding,
       isTablet,
       isLargeScreen,
     };
-  }, [height, width]);
+  }, [isVeryLargeText, viewport]);
 }
-

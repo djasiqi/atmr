@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import logging
-from application.auth_bootstrap import access_denied_codes as codes
-from application.auth_bootstrap.session_bootstrap_snapshot import (
-    SessionBootstrapSnapshot,
-)
+
 from models import User
 from models.enums import UserRole
 from services.demo.access_service import enforce_demo_user_access_validity
 
+from . import access_denied_codes as codes
+from .session_bootstrap_snapshot import SessionBootstrapSnapshot
+
 logger = logging.getLogger(__name__)
 
 
-def evaluate_access_denial(
+def evaluate_access_denial(  # noqa: PLR0911
     snapshot: SessionBootstrapSnapshot,
     user_orm: User,
 ) -> tuple[str, str] | None:
@@ -25,13 +25,19 @@ def evaluate_access_denial(
             "Compte en attente de validation email/SMS.",
         )
 
-    if snapshot.role == UserRole.DRIVER and snapshot.driver_id is not None:
-        if snapshot.driver_is_active is False:
-            return (codes.DRIVER_PROFILE_INACTIVE, "Compte désactivé")
+    if (
+        snapshot.role == UserRole.DRIVER
+        and snapshot.driver_id is not None
+        and snapshot.driver_is_active is False
+    ):
+        return (codes.DRIVER_PROFILE_INACTIVE, "Compte désactivé")
 
-    if snapshot.role == UserRole.CLIENT and snapshot.client_active_flags:
-        if not any(snapshot.client_active_flags):
-            return (codes.NO_ACTIVE_CLIENT_PROFILE, "Compte désactivé")
+    if (
+        snapshot.role == UserRole.CLIENT
+        and snapshot.client_active_flags
+        and not any(snapshot.client_active_flags)
+    ):
+        return (codes.NO_ACTIVE_CLIENT_PROFILE, "Compte désactivé")
 
     if snapshot.role == UserRole.INSTITUTION:
         if snapshot.account_status == "disabled":
@@ -59,7 +65,7 @@ def observe_driver_without_profile(snapshot: SessionBootstrapSnapshot) -> None:
         from services.monitoring import auth_bootstrap_metrics as abm
 
         abm.inc_driver_role_without_driver_row()
-    except Exception:  # noqa: BLE001 — métriques ne doivent pas casser le flux
+    except Exception:  # métriques ne doivent pas casser le flux
         pass
     logger.info(
         "bootstrap_session driver role without driver row (allowed by legacy rules)",

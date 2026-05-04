@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiClient } from "../../src/core/api/client";
+import { Screen, useAppViewport } from "../../src/design/responsive";
 
 const DEFAULT_COOLDOWN = 60;
 
@@ -32,6 +33,7 @@ function parseErrorMessage(e: unknown): string {
 
 export default function ActivateScreen() {
   const router = useRouter();
+  const { topInset } = useAppViewport();
   const params = useLocalSearchParams<{
     activation_session_id?: string;
     masked_email?: string;
@@ -273,48 +275,57 @@ export default function ActivateScreen() {
 
   if (!sessionId && !activationToken) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 16, color: "#B00020", textAlign: "center" }}>
-          Session d&apos;activation introuvable. Recommencez l&apos;inscription.
-        </Text>
-        <Pressable onPress={() => router.replace("/(public)/signup" as any)}>
-          <Text style={{ color: "#0a7ea4", fontWeight: "600" }}>Retour à l&apos;inscription</Text>
-        </Pressable>
-      </View>
+      <Screen backgroundColor="#EAF3F1">
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12 }}>
+          <Text style={{ fontSize: 16, color: "#B00020", textAlign: "center" }}>
+            Session d&apos;activation introuvable. Recommencez l&apos;inscription.
+          </Text>
+          <Pressable onPress={() => router.replace("/(public)/signup" as any)}>
+            <Text style={{ color: "#0A8F7A", fontWeight: "600" }}>Retour à l&apos;inscription</Text>
+          </Pressable>
+        </View>
+      </Screen>
     );
   }
 
   if (status.is_finalized) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24, gap: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700" }}>Compte activé</Text>
-        <Text style={{ color: "#2e7d32", textAlign: "center" }}>
-          Votre compte est actif. Vous pouvez vous connecter.
-        </Text>
-        <Pressable
-          onPress={() =>
-            router.replace({
-              pathname: "/(public)/login",
-              ...(nextRoute ? { params: { next: nextRoute } } : {}),
-            } as any)
-          }
-          style={{
-            backgroundColor: "#0a7ea4",
-            borderRadius: 10,
-            paddingVertical: 14,
-            paddingHorizontal: 32,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Se connecter</Text>
-        </Pressable>
-      </View>
+      <Screen backgroundColor="#EAF3F1">
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
+          <Text style={{ fontSize: 22, fontWeight: "700", color: "#163A34" }}>Compte activé</Text>
+          <Text style={{ color: "#2e7d32", textAlign: "center" }}>
+            Votre compte est actif. Vous pouvez vous connecter.
+          </Text>
+          <Pressable
+            onPress={() =>
+              router.replace({
+                pathname: "/(public)/login",
+                ...(nextRoute ? { params: { next: nextRoute } } : {}),
+              } as any)
+            }
+            style={{
+              backgroundColor: "#0A8F7A",
+              borderRadius: 14,
+              paddingVertical: 14,
+              paddingHorizontal: 32,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Se connecter</Text>
+          </Pressable>
+        </View>
+      </Screen>
     );
   }
 
   const finalizeEnabled = status.email_verified && status.phone_verified && !status.is_finalized;
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24 }}>
+    <Screen
+      scroll
+      backgroundColor="#EAF3F1"
+      keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
+      contentContainerStyle={{ flexGrow: 1, paddingVertical: 16 }}
+    >
       <View style={{ gap: 20 }}>
         <Text style={{ fontSize: 22, fontWeight: "700" }}>Activation du compte</Text>
         <Text style={{ color: "#555" }}>
@@ -372,14 +383,14 @@ export default function ActivateScreen() {
             disabled={loading || status.email_verified || emailCooldown > 0}
             style={{
               borderWidth: 1,
-              borderColor: "#0a7ea4",
+              borderColor: "#0A8F7A",
               borderRadius: 8,
               padding: 10,
               alignItems: "center",
               opacity: loading || status.email_verified || emailCooldown > 0 ? 0.5 : 1,
             }}
           >
-            <Text style={{ color: "#0a7ea4", fontWeight: "600", fontSize: 13 }}>
+            <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: 13 }}>
               {emailCooldown > 0 ? `Renvoyer l'email (${emailCooldown}s)` : "Renvoyer l'email"}
             </Text>
           </Pressable>
@@ -398,7 +409,7 @@ export default function ActivateScreen() {
           {/* Modifier numéro */}
           {!status.phone_verified ? (
             <Pressable onPress={() => { setShowPhoneEdit((v) => !v); clearMessages(); }}>
-              <Text style={{ color: "#0a7ea4", fontSize: 13 }}>
+              <Text style={{ color: "#0A8F7A", fontSize: 13 }}>
                 {showPhoneEdit ? "Annuler" : "Mauvais numéro ?"}
               </Text>
             </Pressable>
@@ -423,7 +434,7 @@ export default function ActivateScreen() {
                 onPress={() => void handleUpdatePhone()}
                 disabled={loading}
                 style={{
-                  backgroundColor: "#0a7ea4",
+                  backgroundColor: "#0A8F7A",
                   borderRadius: 8,
                   paddingHorizontal: 14,
                   justifyContent: "center",
@@ -473,7 +484,7 @@ export default function ActivateScreen() {
                 onPress={() => void handleVerifySms()}
                 disabled={loading || smsCode.length < 6}
                 style={{
-                  backgroundColor: "#0a7ea4",
+                  backgroundColor: "#0A8F7A",
                   borderRadius: 8,
                   paddingHorizontal: 14,
                   justifyContent: "center",
@@ -491,14 +502,14 @@ export default function ActivateScreen() {
               disabled={loading || smsCooldown > 0}
               style={{
                 borderWidth: 1,
-                borderColor: "#0a7ea4",
+                borderColor: "#0A8F7A",
                 borderRadius: 8,
                 padding: 10,
                 alignItems: "center",
                 opacity: loading || smsCooldown > 0 ? 0.5 : 1,
               }}
             >
-              <Text style={{ color: "#0a7ea4", fontWeight: "600", fontSize: 13 }}>
+              <Text style={{ color: "#0A8F7A", fontWeight: "600", fontSize: 13 }}>
                 {smsCooldown > 0 ? `Renvoyer le code (${smsCooldown}s)` : "Renvoyer le code"}
               </Text>
             </Pressable>
@@ -513,7 +524,7 @@ export default function ActivateScreen() {
           onPress={() => void handleFinalize()}
           disabled={!finalizeEnabled || loading}
           style={{
-            backgroundColor: finalizeEnabled ? "#0a7ea4" : "#bbb",
+            backgroundColor: finalizeEnabled ? "#0A8F7A" : "#bbb",
             borderRadius: 10,
             padding: 14,
             alignItems: "center",
@@ -541,6 +552,6 @@ export default function ActivateScreen() {
           </Text>
         </Pressable>
       </View>
-    </ScrollView>
+    </Screen>
   );
 }

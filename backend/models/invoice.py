@@ -343,14 +343,18 @@ class Invoice(db.Model):
             "patient_display_name": patient_display_name,
         }
 
-    def to_dict(self, *, include_reminder_rows: bool = True):
+    def to_dict(self, *, include_reminder_rows: bool = True, list_view: bool = False):
         """Sérialise la facture en dictionnaire.
 
         Args:
-            include_reminder_rows: Si False, ne charge pas la relation ``reminders``
-                (évite N+1 sur les listes ; ``reminder_level`` / ``last_reminder_at``
-                restent sur la facture).
+            include_reminder_rows: Si False, ne sérialise pas les lignes ``reminders``
+                (``reminder_level`` / ``last_reminder_at`` restent sur la facture).
+            list_view: Réponse liste / tableau : pas de lignes, paiements, méta lourde,
+                ni ventilation TVA détaillée (charge réseau et CPU réduites).
         """
+        if list_view:
+            include_reminder_rows = False
+
         reminder_payload: list[dict[str, Any]]
         if include_reminder_rows:
             reminder_payload = (
@@ -360,6 +364,24 @@ class Invoice(db.Model):
             )
         else:
             reminder_payload = []
+
+        lines_out: list[dict[str, Any]]
+        if list_view:
+            lines_out = []
+        elif hasattr(self, "lines"):
+            lines_out = [line.to_dict() for line in self.lines]
+            _enrich_invoice_line_payloads_booking_dates(list(self.lines), lines_out)
+            _enrich_invoice_line_payloads_round_trip_merge(list(self.lines), lines_out)
+        else:
+            lines_out = []
+
+        payments_out: list[dict[str, Any]]
+        if list_view:
+            payments_out = []
+        elif hasattr(self, "payments"):
+            payments_out = [payment.to_dict() for payment in self.payments]
+        else:
+            payments_out = []
 
         return {
             "id": self.id,
@@ -381,7 +403,7 @@ class Invoice(db.Model):
             "late_fee_amount": float(self.late_fee_amount),
             "reminder_fee_amount": float(self.reminder_fee_amount),
             "vat_total_amount": float(self.vat_total_amount),
-            "vat_breakdown": self.vat_breakdown,
+            "vat_breakdown": None if list_view else self.vat_breakdown,
             "total_amount": float(self.total_amount),
             "amount_paid": float(self.amount_paid),
             "balance_due": float(self.balance_due),
@@ -399,7 +421,7 @@ class Invoice(db.Model):
             "last_reminder_at": _iso(self.last_reminder_at),
             "pdf_url": self.pdf_url,
             "qr_reference": self.qr_reference,
-            "meta": self.meta,
+            "meta": None if list_view else self.meta,
             "client": self._serialize_client(),
             "bill_to_client": {
                 "id": self.bill_to_client.id,
@@ -449,12 +471,8 @@ class Invoice(db.Model):
                 "legacy_bill_to_client_id": self.bill_to_client_id,
                 "legacy_billed_to_company_id": self.billed_to_company_id,
             },
-            "lines": [line.to_dict() for line in self.lines]
-            if hasattr(self, "lines")
-            else [],
-            "payments": [payment.to_dict() for payment in self.payments]
-            if hasattr(self, "payments")
-            else [],
+            "lines": lines_out,
+            "payments": payments_out,
             "reminders": reminder_payload,
         }
 
@@ -525,9 +543,113 @@ class InvoiceLine(db.Model):
             "adjustment_note": self.adjustment_note,
             "reservation_id": self.reservation_id,
         }
-        if self.line_meta is not None:
-            d["line_meta"] = self.line_meta
+        line_meta_val = getattr(self, "line_meta", None)
+        if line_meta_val is not None:
+            d["line_meta"] = line_meta_val
         return d
+
+
+def _enrich_invoice_line_payloads_booking_dates(
+    invoice_lines: list[Any],
+    line_dicts: list[dict[str, Any]],
+) -> None:
+    """Ajoute ``line_meta.service_date`` depuis la réservation (trajets sans méta persistée)."""
+    from models.booking import Booking
+
+    targets: list[tuple[int, dict[str, Any]]] = []
+    for ln, d in zip(invoice_lines, line_dicts, strict=True):
+        if ln.type != InvoiceLineType.RIDE or not ln.reservation_id:
+            continue
+        meta = d.get("line_meta")
+        if isinstance(meta, dict) and meta.get("service_date"):
+            continue
+        targets.append((ln.reservation_id, d))
+
+    if not targets:
+        return
+
+    rids = list({rid for rid, _ in targets})
+    bookings = Booking.query.filter(Booking.id.in_(rids)).all()
+    by_id = {b.id: b for b in bookings}
+
+    for rid, d in targets:
+        bk = by_id.get(rid)
+        if bk is None:
+            continue
+        st = getattr(bk, "scheduled_time", None)
+        if st is None:
+            continue
+        try:
+            ds = st.date().isoformat() if hasattr(st, "date") else None
+        except Exception:
+            ds = None
+        if not ds:
+            continue
+        meta = dict(d.get("line_meta") or {})
+        if meta.get("service_date"):
+            continue
+        meta["service_date"] = ds
+        d["line_meta"] = meta
+
+
+def _enrich_invoice_line_payloads_round_trip_merge(
+    invoice_lines: list[Any],
+    line_dicts: list[dict[str, Any]],
+) -> None:
+    """Marque les paires aller-retour (RIDE) pour l'aperçu HTML : une ligne visible [A/R], l'autre masquée.
+
+    Réutilise ``find_round_trip_merge_booking_pairs`` (même famille que PDF / aperçu période).
+    Les montants affichés sont agrégés côté client à partir des deux lignes facture.
+    """
+    from application.invoices.round_trip_booking_pairs import (
+        find_round_trip_merge_booking_pairs,
+    )
+    from models.booking import Booking
+
+    _MIN_RIDE_ROWS_ROUND_TRIP = 2
+    ride_rows: list[tuple[Any, dict[str, Any]]] = []
+    for ln, d in zip(invoice_lines, line_dicts, strict=True):
+        if ln.type != InvoiceLineType.RIDE or not ln.reservation_id:
+            continue
+        ride_rows.append((ln, d))
+
+    if len(ride_rows) < _MIN_RIDE_ROWS_ROUND_TRIP:
+        return
+
+    rids = list({int(ln.reservation_id) for ln, _ in ride_rows})
+    bookings = Booking.query.filter(Booking.id.in_(rids)).all()
+    if len(bookings) < _MIN_RIDE_ROWS_ROUND_TRIP:
+        return
+
+    by_rid: dict[int, dict[str, Any]] = {}
+    for ln, d in ride_rows:
+        by_rid[int(ln.reservation_id)] = d
+
+    def amount_ht_fn(b: Any) -> Decimal:
+        dd = by_rid.get(int(b.id))
+        if not dd:
+            return Decimal("0")
+        try:
+            return Decimal(str(dd.get("line_total") or 0))
+        except Exception:
+            return Decimal("0")
+
+    pairs = find_round_trip_merge_booking_pairs(bookings, amount_ht_fn=amount_ht_fn)
+
+    for pri_id, sec_id in pairs:
+        d_pri = by_rid.get(int(pri_id))
+        d_sec = by_rid.get(int(sec_id))
+        if not d_pri or not d_sec:
+            continue
+        meta_pri = dict(d_pri.get("line_meta") or {})
+        meta_sec = dict(d_sec.get("line_meta") or {})
+        meta_pri["is_round_trip_leg"] = True
+        meta_pri["transport_type"] = "A/R"
+        meta_pri["round_trip_merge_partner_reservation_id"] = int(sec_id)
+        meta_sec["preview_hide_merged_round_trip"] = True
+        meta_sec["round_trip_merge_primary_reservation_id"] = int(pri_id)
+        d_pri["line_meta"] = meta_pri
+        d_sec["line_meta"] = meta_sec
 
 
 class InvoicePayment(db.Model):

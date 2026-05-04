@@ -3,6 +3,7 @@ import logging
 import random
 import string
 from datetime import UTC, datetime
+from os import getenv
 from typing import TYPE_CHECKING, Any, cast
 
 import sentry_sdk
@@ -72,6 +73,11 @@ MONTH_THRESHOLD = 12
 TOTAL_ACTIONS_ZERO = 0
 # Longueur minimale pour la recherche support par ref. Saferpay (évite requêtes trop larges)
 SAFERPAY_SUPPORT_REF_MIN_LEN = 4
+
+# GET /admin/bookings/:id — surcharge env RATELIMIT_ADMIN_BOOKING_DETAIL_GET
+_RATELIMIT_ADMIN_BOOKING_DETAIL_GET = getenv(
+    "RATELIMIT_ADMIN_BOOKING_DETAIL_GET", "2000 per hour"
+)
 
 
 def _is_synthetic_demo_email_expr(column):
@@ -476,7 +482,7 @@ class AdminPlatformBookingDetail(Resource):
     @jwt_required()
     @role_required(UserRole.admin)
     @ip_whitelist_required()
-    @limiter.limit("300 per hour")
+    @limiter.limit(_RATELIMIT_ADMIN_BOOKING_DETAIL_GET)
     def get(self, booking_id: int):
         try:
             booking = booking_repo.find_model_by_id_with_eager_loading(booking_id)
