@@ -1,5 +1,5 @@
 fastapi==0.116.1
-uvicorn[standard]==0.35.0
+uvicorn[standard]==0.46.0
 python-socketio==5.16.1
 redis[hiredis]==6.4.0
 PyJWT==2.12.1
