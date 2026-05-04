@@ -529,7 +529,7 @@ const BillPeriodModal = ({
     setPartnershipId('');
     setPreview(null);
     setSelectedBookingIds(new Set());
-  }, [companyId, periodYear, periodMonth, payerType]);
+  }, [companyId, open, periodYear, periodMonth, payerType]);
 
   useEffect(() => {
     if (!open) {

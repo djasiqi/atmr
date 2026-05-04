@@ -103,7 +103,7 @@ function rideLinePatientSubline(line, invoice) {
  * Conservé pour éviter `ReferenceError` si un chunk React Fast Refresh / cache référence encore cet identifiant.
  * Le rendu actuel utilise `rideLineTransportDateLabel` + `rideLinePatientSubline`.
  */
-function rideLineContextSubline(line, invoice) {
+function _rideLineContextSubline(line, invoice) {
   const date = lineDetailDateLabel(line);
   const patientLine = rideLinePatientSubline(line, invoice);
   if (invoice?.billing_strategy === 's2_clinic_monthly') {

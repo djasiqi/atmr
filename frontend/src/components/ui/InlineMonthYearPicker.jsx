@@ -80,7 +80,7 @@ export default function InlineMonthYearPicker({
     if (parsed) {
       setViewYear(Math.min(MAX_YEAR, Math.max(MIN_YEAR, parsed.year)));
     }
-  }, [parsed?.year, value]);
+  }, [parsed]);
 
   const minDecadeStart = Math.floor(MIN_YEAR / 10) * 10;
   const maxDecadeStart = Math.floor(MAX_YEAR / 10) * 10;
@@ -175,6 +175,7 @@ export default function InlineMonthYearPicker({
   };
 
   const display = labelFromYm(value);
+  const popoverId = `${inputId}-month-year-dialog`;
 
   return (
     <>
@@ -188,11 +189,14 @@ export default function InlineMonthYearPicker({
           type="text"
           readOnly
           tabIndex={disabled ? -1 : 0}
+          role="combobox"
+          aria-autocomplete="none"
           className={`${my.input} ${inputClassName} ${invalid ? my.inputInvalid : ''}`.trim()}
           value={display}
           placeholder="Mois et année"
           disabled={disabled}
           aria-expanded={open}
+          aria-controls={popoverId}
           aria-haspopup="dialog"
           aria-invalid={invalid}
           aria-label={ariaLabel}
@@ -211,6 +215,7 @@ export default function InlineMonthYearPicker({
       {open &&
         createPortal(
           <div
+            id={popoverId}
             ref={popoverRef}
             className={my.popover}
             style={{ top: pos.top, left: pos.left }}
