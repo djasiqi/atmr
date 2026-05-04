@@ -1,6 +1,5 @@
 import React from "react";
 import { act, create } from "react-test-renderer";
-import { View } from "react-native";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import PreRequestAuthGateScreen from "../../app/(public)/pre-request/auth-gate";
@@ -12,14 +11,19 @@ const safeAreaMetrics = {
 
 /** ScrollView dans Screen ne rend pas toujours les enfants avec react-test-renderer ; on neutralise pour ce test d’intention route. */
 jest.mock("../../src/design/responsive", () => {
+  /* Jest interdit les imports externes dans la factory (hoisting) ; require() est le pattern officiel. */
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see jest.mock factory scope
+  const ReactMod = require("react") as typeof import("react");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- see jest.mock factory scope
+  const { View } = require("react-native") as typeof import("react-native");
   const actual =
     jest.requireActual<typeof import("../../src/design/responsive")>(
       "../../src/design/responsive"
     );
   return {
     ...actual,
-    Screen: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(View, { style: { flex: 1 } }, children),
+    Screen: ({ children }: { children: ReactMod.ReactNode }) =>
+      ReactMod.createElement(View, { style: { flex: 1 } }, children),
   };
 });
 
