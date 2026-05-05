@@ -41,6 +41,8 @@ from models.partner_invoice import PartnerInvoice
 from services.documents.pdf import (
     INVOICE_PAGE_LEFT_MARGIN_CM,
     INVOICE_PAGE_RIGHT_MARGIN_CM,
+    INVOICE_PREVIEW_TOTALS_AMOUNT_CM,
+    INVOICE_PREVIEW_TOTALS_LABEL_CM,
     QR_BILL_SPACER_PT,
     _build_default_legal_footer_html,
     _format_company_contact_footer_bar,
@@ -579,34 +581,32 @@ def generate_partner_invoice_pdf_content(
     story.append(total_separator)
     story.append(Spacer(1, 8))
 
-    # Tableau des totaux (aligné à droite comme pdf.py)
+    # Tableau des totaux : 2 colonnes (libellé à gauche, montant à droite), comme pdf.py — évite
+    # le chevauchement observé quand les deux dernières colonnes du tableau principal étaient en RIGHT.
+    _tw_sum_pt = INVOICE_PREVIEW_TOTALS_LABEL_CM + INVOICE_PREVIEW_TOTALS_AMOUNT_CM
+    _tot_lbl_w = (INVOICE_PREVIEW_TOTALS_LABEL_CM / _tw_sum_pt) * usable_width_pt
+    _tot_amt_w = (INVOICE_PREVIEW_TOTALS_AMOUNT_CM / _tw_sum_pt) * usable_width_pt
     if vat_amount > 0:
         total_data = [
-            ["", "", "", "Sous-total HT :", f"{subtotal_amount:.2f}"],
-            ["", "", "", "TVA :", f"{vat_amount:.2f}"],
-            ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
+            ["Sous-total HT :", f"{subtotal_amount:.2f}"],
+            ["TVA :", f"{vat_amount:.2f}"],
+            ["TOTAL :", f"{total_amount:.2f}"],
         ]
     else:
         total_data = [
-            ["", "", "", f"Nombre de transferts : {len(transfers)}", ""],
-            ["", "", "", "TOTAL :", f"{total_amount:.2f}"],
+            [f"Nombre de transferts : {len(transfers)}", ""],
+            ["TOTAL :", f"{total_amount:.2f}"],
         ]
 
-    total_table = Table(
-        total_data,
-        colWidths=[
-            2 * cm * _cols_scale,
-            3.5 * cm * _cols_scale,
-            4.5 * cm * _cols_scale,
-            4.5 * cm * _cols_scale,
-            2.5 * cm * _cols_scale,
-        ],
-    )
+    total_table = Table(total_data, colWidths=[_tot_lbl_w, _tot_amt_w])
+    total_table.hAlign = "RIGHT"
     total_table.setStyle(
         TableStyle(
             [
-                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                ("ALIGN", (3, 0), (4, -1), "RIGHT"),
+                ("ALIGN", (0, 0), (0, -1), "LEFT"),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("RIGHTPADDING", (0, 0), (0, -1), 8),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),

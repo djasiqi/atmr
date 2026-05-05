@@ -73,9 +73,11 @@ QR_BILL_LEFT_PADDING_MM = -5.0
 # 0.5 cm = spacer 475 avec scale 1.6 (maximum descente sans débordement)
 QR_BILL_PAGE_BOTTOM_MARGIN_CM = 0.5
 
-# Pied « totaux » : même gabarit que InvoiceLivePreview `.totals` { max-width: 280px } (~74 mm).
-INVOICE_PREVIEW_TOTALS_LABEL_CM = 4.25
-INVOICE_PREVIEW_TOTALS_AMOUNT_CM = 3.15
+# Pied « totaux » : deux colonnes (libellé | montant), alignées à droite sous le détail.
+# Libellé élargi vs l’aperçu HTML (~280px) pour éviter que « TOTAL À FACTURER : » (12 pt gras)
+# ne chevauche le montant ; la colonne montant reste assez large pour « 12345678.90 CHF ».
+INVOICE_PREVIEW_TOTALS_LABEL_CM = 5.95
+INVOICE_PREVIEW_TOTALS_AMOUNT_CM = 3.55
 
 # --- Grille typo facture PDF (miroir InvoiceLivePreview.module.css, valeurs pt) ---
 FONT_HEADER_COMPANY = 14
@@ -3947,7 +3949,8 @@ def _build_totals_table(
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, -1), 8),
+        ("RIGHTPADDING", (1, 0), (1, -1), 0),
         ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
         ("FONTSIZE", (0, 0), (-1, -1), FONT_BODY),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
@@ -5955,15 +5958,19 @@ class PDFService:
         if _reminder_ok or gd_min is not None:
             _tot_min_w = [10.5 * cm, 4.5 * cm]
         else:
-            # Évite le chevauchement libellé/montant sur "TOTAL À FACTURER" avec montants à 6+ chiffres.
-            _tot_min_w = [6.4 * cm, 4.2 * cm]
+            # Même gabarit que `_build_totals_table` (facture standard / S2).
+            _tot_min_w = [
+                INVOICE_PREVIEW_TOTALS_LABEL_CM * cm,
+                INVOICE_PREVIEW_TOTALS_AMOUNT_CM * cm,
+            ]
         total_table = Table(total_data, colWidths=_tot_min_w)
         style_rules = [
             ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (0, -1), 8),
+            ("RIGHTPADDING", (1, 0), (1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
