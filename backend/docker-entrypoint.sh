@@ -447,6 +447,10 @@ start_application() {
         fi
         # Gunicorn 26+ ne fournit plus le worker eventlet ; défaut gevent.
         _gw="${GUNICORN_WORKER_CLASS:-gevent}"
+        if [ "$_gw" = "eventlet" ]; then
+            echo "⚠️  GUNICORN_WORKER_CLASS=eventlet incompatible avec Gunicorn 26+ — bascule sur gevent."
+            _gw=gevent
+        fi
         exec gunicorn wsgi:app \
             --bind 0.0.0.0:5000 \
             --worker-class "$_gw" \
