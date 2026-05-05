@@ -795,7 +795,7 @@ def apply_draft_global_discount(
         ride_lines = all_ride_lines
 
     custom_pos = _eligible_positive_custom_lines_for_global_discount(inv)
-    eligible = sorted(ride_lines + custom_pos, key=lambda x: (x.id or 0))
+    eligible = sorted(ride_lines + custom_pos, key=lambda x: x.id or 0)
 
     gross: Decimal = sum(
         (x.line_total or Decimal("0") for x in eligible),

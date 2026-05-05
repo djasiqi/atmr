@@ -71,9 +71,9 @@ class ResetDriverPasswordUseCase:
                 last_error = str(e)
                 continue
 
-            user.set_password(
+            user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
                 pwd
-            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - valide via `_policy.validate_password` avant application.
+            )
             user.force_password_change = True
             return ResetDriverPasswordResult(
                 ok=True,

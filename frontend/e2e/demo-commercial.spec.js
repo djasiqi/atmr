@@ -30,9 +30,7 @@ test.describe('Parcours demo commercial', () => {
     });
 
     await login(page, COMPANY_EMAIL);
-    await expect(page).toHaveURL(/\/dashboard\/company\//);
-
-    await page.goto('/demo/home');
+    await expect(page).toHaveURL(/\/demo\/home$/);
     await expect(page.locator('[data-tour-id="demo-home"]')).toBeVisible();
 
     await page.getByRole('button', { name: 'Commencer ce parcours' }).first().click();
@@ -52,9 +50,7 @@ test.describe('Parcours demo commercial', () => {
 
   test('parcours institution + exploration libre', async ({ page }) => {
     await login(page, INSTITUTION_EMAIL);
-    await expect(page).toHaveURL(/\/dashboard\/institution\//);
-
-    await page.goto('/demo/home');
+    await expect(page).toHaveURL(/\/demo\/home$/);
     await expect(page.locator('[data-tour-id="demo-home"]')).toBeVisible();
 
     const startButtons = page.getByRole('button', { name: 'Commencer ce parcours' });

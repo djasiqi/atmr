@@ -192,7 +192,8 @@ describe('API Interceptor - Cache et performance', () => {
       // (dans un vrai test, on vérifierait via l'intercepteur)
       expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
         expect.any(String),
-        newToken
+        newToken,
+        expect.anything()
       );
     });
 

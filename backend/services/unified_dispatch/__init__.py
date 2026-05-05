@@ -57,6 +57,9 @@ from . import locking  # noqa: I001
 from . import orchestration
 from .optimization import heuristics
 
+# Métriques perf (ancien performance_metrics.py → metrics/performance.py)
+from .metrics import performance as performance_metrics
+
 # ========== Exports Publics (Nouvelle API) ==========
 
 # Note: Ces exports seront complétés lors de la migration (Semaine 2)
@@ -112,6 +115,7 @@ __all__ = [
     "heuristics",
     "locking",
     "orchestration",
+    "performance_metrics",
     "queue",  # Compatibilité app.py
     "settings",  # Compatibilité agent/tools.py et agent/orchestrator.py
     # Les autres exports seront ajoutés lors de la migration

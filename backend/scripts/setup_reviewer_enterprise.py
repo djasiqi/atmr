@@ -81,9 +81,9 @@ def _ensure_user(
     except PasswordPolicyError as e:
         raise SystemExit(f"Mot de passe invalide (script reviewer): {e}") from e
 
-    user.set_password(
+    user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
         password
-    )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - Flask/SQLAlchemy: PasswordPolicyService.validate_password appele juste avant (pas Django).
+    )
     db.session.add(user)
     db.session.flush()
     return user

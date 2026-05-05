@@ -38,6 +38,53 @@ jest.mock("../networkState", () => ({
 import { logAuthEvent, beginRefreshCycle, getCurrentRefreshCycleId } from "../authLogging";
 import { setLogContextUser, getLogContextSnapshot } from "../logContext";
 
+/** Payloads JSON — authLogging émet via getLogger : console.debug/msg + objet `{ line: "<json>" }`. */
+function parseAuthLogPayloads(
+  logSpy: jest.SpyInstance,
+  debugSpy: jest.SpyInstance
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const spy of [logSpy, debugSpy]) {
+    for (const call of spy.mock.calls) {
+      const payload = call[1];
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "line" in payload &&
+        typeof (payload as { line: unknown }).line === "string"
+      ) {
+        try {
+          out.push(JSON.parse((payload as { line: string }).line));
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function countAuthLogLines(
+  logSpy: jest.SpyInstance,
+  debugSpy: jest.SpyInstance
+): number {
+  let n = 0;
+  for (const spy of [logSpy, debugSpy]) {
+    for (const call of spy.mock.calls) {
+      const payload = call[1];
+      if (
+        payload &&
+        typeof payload === "object" &&
+        "line" in payload &&
+        typeof (payload as { line: unknown }).line === "string"
+      ) {
+        n++;
+      }
+    }
+  }
+  return n;
+}
+
 describe("authLogging P2.2 — session_id", () => {
   let logSpy: jest.SpyInstance;
   let debugSpy: jest.SpyInstance;
@@ -54,14 +101,8 @@ describe("authLogging P2.2 — session_id", () => {
   });
 
   const getLastLoggedJson = (): Record<string, unknown> => {
-    const logCalls = logSpy.mock.calls.concat(debugSpy.mock.calls);
-    const authLogCall = logCalls.find((c) => c[0] === "[AUTH_LOG]");
-    if (!authLogCall || !authLogCall[1]) return {};
-    try {
-      return JSON.parse(authLogCall[1] as string);
-    } catch {
-      return {};
-    }
+    const all = parseAuthLogPayloads(logSpy, debugSpy);
+    return all[all.length - 1] ?? {};
   };
 
   it("session_id est présent sur tous les logs", () => {
@@ -96,18 +137,8 @@ describe("authLogging P2.2 — refresh_cycle_id", () => {
     debugSpy.mockRestore();
   });
 
-  const getAllLoggedJson = (): Record<string, unknown>[] => {
-    const logCalls = [...logSpy.mock.calls, ...debugSpy.mock.calls];
-    return logCalls
-      .filter((c) => c[0] === "[AUTH_LOG]")
-      .map((c) => {
-        try {
-          return JSON.parse((c[1] as string) || "{}");
-        } catch {
-          return {};
-        }
-      });
-  };
+  const getAllLoggedJson = (): Record<string, unknown>[] =>
+    parseAuthLogPayloads(logSpy, debugSpy);
 
   it("refresh_cycle_id: start/success/fail portent le même id", () => {
     const cycleId = beginRefreshCycle("driver");
@@ -115,7 +146,11 @@ describe("authLogging P2.2 — refresh_cycle_id", () => {
 
     logAuthEvent("AUTH_REFRESH_START", { route: "driver", trigger: "api_401" });
     logAuthEvent("AUTH_REFRESH_SUCCESS", { route: "driver" });
-    logAuthEvent("AUTH_REFRESH_FAIL", { route: "driver", status: 401, outcome: "logout" });
+    logAuthEvent("AUTH_REFRESH_FAIL", {
+      route: "driver",
+      status: 401,
+      outcome: "logout",
+    });
 
     const all = getAllLoggedJson();
     const withCycleId = all.filter((o) => "refresh_cycle_id" in o);
@@ -173,10 +208,7 @@ describe("authLogging P2.2 — dedupe", () => {
     debugSpy.mockRestore();
   });
 
-  const countAuthLogCalls = (): number => {
-    const logCalls = logSpy.mock.calls.concat(debugSpy.mock.calls);
-    return logCalls.filter((c) => c[0] === "[AUTH_LOG]").length;
-  };
+  const countAuthLogCalls = (): number => countAuthLogLines(logSpy, debugSpy);
 
   it("2 logs identiques <5s => 1 seul émis", () => {
     const payload = { route: "r", outcome: "o", status: "s" };
@@ -226,15 +258,8 @@ describe("authLogging P2.2 — sanitization (pas de secrets)", () => {
   });
 
   const getLastLoggedJson = (): Record<string, unknown> => {
-    const logCalls = [...logSpy.mock.calls, ...debugSpy.mock.calls];
-    const authLogCalls = logCalls.filter((c) => c[0] === "[AUTH_LOG]");
-    const lastCall = authLogCalls[authLogCalls.length - 1];
-    if (!lastCall || !lastCall[1]) return {};
-    try {
-      return JSON.parse(lastCall[1] as string);
-    } catch {
-      return {};
-    }
+    const all = parseAuthLogPayloads(logSpy, debugSpy);
+    return all[all.length - 1] ?? {};
   };
 
   it("token n'apparaît pas dans le log", () => {

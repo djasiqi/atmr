@@ -563,7 +563,6 @@ jobs:
           retention-days: 7
 
   security:
-    if: false # ⏸️ Suspendu temporairement - focus sur lint
     name: Security Audit (pip-audit)
     runs-on: ubuntu-latest
 
@@ -694,7 +693,6 @@ jobs:
           retention-days: 30
 
   migrations:
-    if: false # ⏸️ Suspendu temporairement - focus sur lint
     name: Migrations Check
     runs-on: ubuntu-latest
 

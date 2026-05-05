@@ -559,8 +559,8 @@ def get_company_from_token() -> tuple[
         is_company_user_fn=_is_company_user,
         user_repo=UserRepository(),
         create_company_for_user_fn=_create_company_for_user,
-        handle_user_not_found_fn=lambda user_id: (
-            APIErrorHandler.handle_not_found("User", user_id, logger)
+        handle_user_not_found_fn=lambda user_id: APIErrorHandler.handle_not_found(
+            "User", user_id, logger
         ),
     )
     result = uc.execute()

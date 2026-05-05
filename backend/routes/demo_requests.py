@@ -665,9 +665,9 @@ class SetDemoPassword(Resource):
                 "message": str(e),
             }, 400
 
-        user.set_password(
+        user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
             new_password
-        )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - Flask/SQLAlchemy: PasswordPolicyService.validate_password appele juste avant (pas Django).
+        )
         user.force_password_change = False
         db.session.commit()
         role = (

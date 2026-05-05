@@ -253,9 +253,9 @@ def _upsert_user(
     user.institution_id = institution_id
     user.institution_role = institution_role
     user.account_status = "active"
-    user.set_password(
+    user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
         get_demo_default_password()
-    )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (seed isole).
+    )
     db.session.add(user)
     db.session.flush()
     return user

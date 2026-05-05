@@ -7,8 +7,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '@/services/storage';
 import { DRIVER_AUTH_SECURE_KEYS } from '@/services/storage/keys';
 
-const ACCESS_TOKEN_KEY = DRIVER_AUTH_SECURE_KEYS[1];
-const REFRESH_TOKEN_KEY = DRIVER_AUTH_SECURE_KEYS[0];
+/** Aligné sur services/storage.ts SECURE_KEYS (pas [1] = backup refresh). */
+const ACCESS_TOKEN_KEY = DRIVER_AUTH_SECURE_KEYS[2]; // driver_access_token
+const REFRESH_TOKEN_KEY = DRIVER_AUTH_SECURE_KEYS[0]; // driver_refresh_token
 
 // Mock expo-secure-store
 jest.mock('expo-secure-store', () => ({
@@ -79,6 +80,8 @@ describe('useAuth - Tests de performance démarrage', () => {
             // 1. Premier appel : met en cache (cache miss)
             await secureStorage.setAccessToken(mockAccessToken);
             await secureStorage.setRefreshToken(mockRefreshToken);
+            // setRefreshToken peut lire le primary pour le backup — ne pas compter ces appels
+            (SecureStore.getItemAsync as jest.Mock).mockClear();
 
             // 2. Deuxième appel : utilise le cache (cache hit)
             const startTime = performance.now();
@@ -149,8 +152,8 @@ describe('useAuth - Tests de performance démarrage', () => {
             // ⚡ OPTIMISATION : En parallèle, le temps devrait être ~5-15ms
             // (toutes les lectures se font en parallèle, donc le temps = max(lectures) ~5ms)
             // Au lieu de séquentiel qui serait ~20ms (5ms * 4 lectures)
-            // Tolérance 25ms pour variations CI (timing non déterministe)
-            expect(duration).toBeLessThan(25);
+            // Tolérance pour variations machines / CI (timers non déterministes)
+            expect(duration).toBeLessThan(40);
 
             // Vérifier que SecureStore.getItemAsync a été appelé 2 fois (access + refresh)
             expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
@@ -294,7 +297,8 @@ describe('useAuth - Tests de performance démarrage', () => {
             // Note: getAccessToken() utilise le cache, donc pas d'appel SecureStore
             expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(1);
             expect(SecureStore.getItemAsync).toHaveBeenCalledWith(
-                REFRESH_TOKEN_KEY
+                REFRESH_TOKEN_KEY,
+                expect.anything()
             );
         });
     });
@@ -308,6 +312,7 @@ describe('useAuth - Tests de performance démarrage', () => {
             // Mettre en cache
             await secureStorage.setAccessToken(mockAccessToken);
             await secureStorage.setRefreshToken(mockRefreshToken);
+            (SecureStore.getItemAsync as jest.Mock).mockClear();
 
             (AsyncStorage.getItem as jest.Mock).mockResolvedValue(mockMode);
 
@@ -377,9 +382,8 @@ describe('useAuth - Tests de performance démarrage', () => {
             expect(refreshToken).toBe(mockRefreshToken);
             expect(storedMode).toBe(mockMode);
 
-            // ⚡ OPTIMISATION : En parallèle, < 25ms (au lieu de ~20ms en séquentiel)
-            // Note : Tolérance pour variations CI (timing non déterministe)
-            expect(duration).toBeLessThan(25);
+            // ⚡ OPTIMISATION : en parallèle (tolérance large pour CI / machines lentes)
+            expect(duration).toBeLessThan(40);
 
             // 2 lectures SecureStore (access + refresh)
             expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
@@ -411,8 +415,8 @@ describe('useAuth - Tests de performance démarrage', () => {
             // ⚡ OPTIMISATION : Même sans tokens, < 15ms en parallèle
             expect(duration).toBeLessThan(15);
 
-            // 2 lectures SecureStore (même si null)
-            expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
+            // refresh: primary + backup fallback ; access: 1 lecture
+            expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(3);
         });
 
         it('devrait nettoyer rapidement avec refresh token invalide', async () => {

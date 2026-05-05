@@ -1136,9 +1136,9 @@ class InstitutionUsers(Resource):
             new_user.invite_expires_at = get_invite_expiry()
             new_user.invite_sent_at = datetime.now(UTC)
             new_user.force_password_change = True
-            new_user.set_password(
+            new_user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
                 placeholder_password
-            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe opaque genere serveur jusqu'a activation invite.
+            )
 
             db.session.add(new_user)
             db.session.commit()

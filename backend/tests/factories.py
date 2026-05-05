@@ -263,14 +263,18 @@ class AssignmentFactory(SQLAlchemyModelFactory):
     status = AssignmentStatus.SCHEDULED
 
     planned_pickup_at = factory.LazyAttribute(
-        lambda obj: obj.booking.scheduled_time
-        if obj.booking
-        else datetime.utcnow() + timedelta(hours=1)
+        lambda obj: (
+            obj.booking.scheduled_time
+            if obj.booking
+            else datetime.utcnow() + timedelta(hours=1)
+        )
     )
     planned_dropoff_at = factory.LazyAttribute(
-        lambda obj: obj.planned_pickup_at + timedelta(minutes=30)
-        if obj.planned_pickup_at
-        else None
+        lambda obj: (
+            obj.planned_pickup_at + timedelta(minutes=30)
+            if obj.planned_pickup_at
+            else None
+        )
     )
 
     created_at = factory.LazyFunction(datetime.utcnow)
@@ -387,9 +391,11 @@ class AutonomousActionFactory(SQLAlchemyModelFactory):
         BookingFactory
     )  # Optionnel mais créé par défaut pour éviter FK errors
     driver = factory.LazyAttribute(
-        lambda obj: obj.booking.driver_id
-        if obj.booking and hasattr(obj.booking, "driver_id")
-        else None
+        lambda obj: (
+            obj.booking.driver_id
+            if obj.booking and hasattr(obj.booking, "driver_id")
+            else None
+        )
     )
 
     action_type = fuzzy.FuzzyChoice(

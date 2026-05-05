@@ -5256,9 +5256,9 @@ class ActivateAccount(Resource):
             except PasswordPolicyError as e:
                 return {"error": str(e), "code": "weak_password"}, 400
 
-            user.set_password(
+            user.set_password(  # nosemgrep: python.django.security.audit.unvalidated-password.unvalidated-password
                 password
-            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - Flask/SQLAlchemy: PasswordPolicyService.validate_password appele juste avant (pas Django).
+            )
             user.account_status = "active"
             user.force_password_change = False
             # Invalider le token (one-time use)

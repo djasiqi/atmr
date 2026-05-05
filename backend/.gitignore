@@ -9,6 +9,8 @@
 # Scripts de debug
 test_delete.py
 check_*.py
+# Use case métier (nom check_* historique), pas un script jetable
+!application/invoices/check_overdue_invoices.py
 
 # Celery Beat persistence
 celerybeat-schedule*
