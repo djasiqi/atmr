@@ -6,6 +6,7 @@ Create Date: 2026-03-02 09:00:00.000000
 """
 
 from alembic import op
+from sqlalchemy import text
 
 
 # revision identifiers, used by Alembic.
@@ -13,6 +14,25 @@ revision = "20260302_geo_unit_geom"
 down_revision = "20260226_platform_zone_sets"
 branch_labels = None
 depends_on = None
+
+
+def _postgis_packaged_on_server(bind) -> bool:
+    """True si le serveur expose l'extension postgis (fichier .control présent).
+
+    Évite complètement CREATE EXTENSION sur Postgres CI vanilla : pas d'exception,
+    pas de dépendance au wrapping SQLAlchemy/psycopg2.
+    """
+    try:
+        row = bind.execute(
+            text(
+                "SELECT EXISTS ("
+                "SELECT 1 FROM pg_available_extensions WHERE name = 'postgis'"
+                ")"
+            )
+        ).scalar()
+        return bool(row)
+    except Exception:
+        return False
 
 
 def _postgis_extend_failed(exc: BaseException) -> bool:
@@ -41,6 +61,11 @@ def upgrade():
     )
 
     if bind.dialect.name != "postgresql":
+        return
+
+    if not _postgis_packaged_on_server(bind):
+        # Postgres sans paquet postgis (ex. postgres:alpine en CI) : pg_available_extensions
+        # ne liste pas 'postgis', pas besoin d'appeler CREATE EXTENSION.
         return
 
     try:
