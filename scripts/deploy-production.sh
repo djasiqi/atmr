@@ -76,10 +76,8 @@ export SAFERPAY_CUSTOMER_ID="${34:-}"
 export SAFERPAY_TERMINAL_ID="${35:-}"
 export SAFERPAY_API_USERNAME="${36:-}"
 export SAFERPAY_API_PASSWORD="${37:-}"
-# API Saferpay de test autorisée en prod (paiements sandbox) — volontairement en dur dans ce script ;
-# GitHub Secrets : uniquement SAFERPAY_CUSTOMER_ID / TERMINAL_ID / API_USERNAME / API_PASSWORD.
-export SAFERPAY_API_BASE_URL="https://test.saferpay.com/api"
-export SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION="1"
+# SAFERPAY_API_BASE_URL + SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION : non sensibles →
+# scripts/env.production.defaults.fragment (append après le bloc CI).
 # Réglages mobile/token/websocket (optionnels, avec defaults robustes)
 export JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS="${JWT_MOBILE_ACCESS_TOKEN_EXPIRES_SECONDS:-259200}"
 export JWT_DECODE_LEEWAY_SECONDS="${JWT_DECODE_LEEWAY_SECONDS:-300}"
@@ -202,8 +200,6 @@ echo "✅ Stack production arrêtée ; monitoring non interrompu (volumes prése
   echo "SAFERPAY_TERMINAL_ID=${SAFERPAY_TERMINAL_ID:-}"
   echo "SAFERPAY_API_USERNAME=${SAFERPAY_API_USERNAME:-}"
   echo "SAFERPAY_API_PASSWORD=${SAFERPAY_API_PASSWORD:-}"
-  echo "SAFERPAY_API_BASE_URL=${SAFERPAY_API_BASE_URL:-}"
-  echo "SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION=${SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION}"
   echo "USE_GOOGLE_PLACES=${USE_GOOGLE_PLACES:-true}"
   echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER:-}"
   echo "GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-}"
