@@ -52,8 +52,10 @@ from services.unified_dispatch.optimization import solver
 # Les imports ci-dessous créent des cycles détectés par basedpyright, mais
 # sont nécessaires pour maintenir l'API publique du module. Les cycles seront
 # résolus en Semaine 3.
+from . import data  # noqa: I001
 from . import locking  # noqa: I001
 from . import orchestration
+from .optimization import heuristics
 
 # ========== Exports Publics (Nouvelle API) ==========
 
@@ -105,7 +107,9 @@ from .core import (
 
 __all__ = [
     # Modules
+    "data",
     "engine",  # Compatibilité tasks/dispatch_tasks.py
+    "heuristics",
     "locking",
     "orchestration",
     "queue",  # Compatibilité app.py

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -o errexit -o nounset -o pipefail
 
+# Déploiement « full stack » : ce script arrête puis relève toute la stack prod (voir « down » ci-dessous).
+# Pour réduire les coupures : préférer une mise à jour ciblée (ex. docker compose up -d --no-deps backend
+# puis ws-service), ou un orchestrateur avec rolling update (Swarm/Kubernetes).
+
 cd /srv/atmr
 
 # Alembic / flask db upgrade : connexion directe Postgres (pas PgBouncer) pour éviter les effets du pool transactionnel.
@@ -63,6 +67,26 @@ wait_postgres_ready() {
   echo "❌ Timeout attente ${label}"
   docker compose -f docker-compose.production.yml logs postgres --tail=100 || true
   return 1
+}
+
+wait_redis_ready() {
+  local label="${1:-Redis}"
+  local max="${2:-90}"
+  local i
+  for i in $(seq 1 "$max"); do
+    RD_STATUS=$(docker compose -f docker-compose.production.yml ps redis --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    if [ "$RD_STATUS" = "running" ]; then
+      HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-redis 2>/dev/null || echo "none")
+      if [ "$HEALTH" = "healthy" ]; then
+        echo "✅ ${label} prêt (healthy — fin chargement persistance / PING OK)"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  echo "⚠️  Timeout attente ${label} (healthy) — les applis ont des retries LOADING ; voir logs Redis"
+  docker compose -f docker-compose.production.yml logs redis --tail=80 || true
+  return 0
 }
 
 wait_pgbouncer_ready() {
@@ -396,6 +420,7 @@ sleep 5
 echo "⏳ Vérification Postgres / PgBouncer après démarrage de la stack..."
 wait_postgres_ready "PostgreSQL (post up -d)" 60
 wait_pgbouncer_ready 40 || true
+wait_redis_ready "Redis (post up -d)" 90 || true
 
 echo "⏳ Attente du démarrage du backend..."
 for i in $(seq 1 30); do

@@ -748,7 +748,9 @@ def _ensure_demo_shadow_user(user_public_id: str | None, token_role: str | None)
             user.username = demo_username
             user.first_name = "Demo"
             user.last_name = "Shadow"
-            user.set_password(secrets.token_urlsafe(24))  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - secret crypto genere (compte shadow demo).
+            user.set_password(
+                secrets.token_urlsafe(24)
+            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - secret crypto genere (compte shadow demo).
             db.session.add(user)
 
         user.public_id = str(user_public_id)

@@ -73,4 +73,6 @@ def run_with_kafka_bootstrap_retry(
             )
             time.sleep(sleep_s)
 
-    raise RuntimeError(f"{operation_label} kafka bootstrap retry loop exited unexpectedly")
+    raise RuntimeError(
+        f"{operation_label} kafka bootstrap retry loop exited unexpectedly"
+    )

@@ -1,0 +1,358 @@
+                    
+                    
+┌──────────────────┐
+│ 25 Code Findings │
+└──────────────────┘
+                                                          
+    application\companies\drivers\reset_driver_password.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(pwd, user=user):                                            
+              user.set_password(pwd)                                            
+           73┆ user.set_password(pwd)
+                                      
+    application\users\register_user.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(input_data.password, user=user):                            
+              user.set_password(input_data.password)                            
+          124┆ user.set_password(input_data.password)
+          
+    ext.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(secrets.token_urlsafe(24),                                  
+              user=user): user.set_password(secrets.token                       
+              _urlsafe(24))                                                     
+          751┆ user.set_password(secrets.token_urlsafe(24))
+                  
+    routes\auth.py
+    ❯❱ python.flask.security.audit.secure-set-cookie.secure-set-cookie
+          ❰❰ Blocking ❱❱
+          Found a Flask cookie with insecurely configured properties.
+          By default the secure, httponly and samesite ar configured 
+          insecurely. cookies should be handled securely by setting  
+          `secure=True`, `httponly=True`, and `samesite='Lax'` in    
+          response.set_cookie(...). If these parameters are not      
+          properly set, your cookies are not properly protected and  
+          are at risk of being stolen by an attacker. Include the    
+          `secure=True`, `httponly=True`, `samesite='Lax'` arguments 
+          or set these to be true in the Flask configuration.        
+          Details: https://sg.run/gLkZ                               
+                                                                     
+          2469┆ response.set_cookie(
+          2470┆                                               
+               current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
+          2471┆     "",
+          2472┆     expires=0,
+          2473┆     path=current_app.config["COOKIE_PATH"],
+          2474┆     domain=current_app.config["COOKIE_DOMAIN"],
+          2475┆ )
+            ⋮┆----------------------------------------
+          2476┆ response.set_cookie(
+          2477┆                                                
+               current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
+          2478┆     "",
+          2479┆     expires=0,
+          2480┆     path=current_app.config["COOKIE_PATH"],
+          2481┆     domain=current_app.config["COOKIE_DOMAIN"],
+          2482┆ )
+   
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(password, user=user):                                       
+              user.set_password(password)                                       
+          5238┆ user.set_password(password)
+                           
+    routes\demo_requests.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(new_password, user=user):                                   
+              user.set_password(new_password)                                   
+          655┆ user.set_password(new_password)
+                          
+    routes\institutions.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'new_user' is being set without validating  
+          the password. Call                                          
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(placeholder_password, user=new_user):                       
+              new_user.set_password(placeholder_password)                       
+          1139┆ new_user.set_password(placeholder_password)
+                                 
+    scripts\docker_smoke_tests.py
+    ❯❱ python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-
+       use-detected                                                          
+          ❰❰ Blocking ❱❱
+          Detected a dynamic value being used with urllib. urllib     
+          supports 'file://' schemes, so a dynamic value controlled by
+          a malicious actor may allow them to read arbitrary files.   
+          Audit uses of urllib calls to ensure user data cannot       
+          control the URLs, or consider using the 'requests' library  
+          instead.                                                    
+          Details: https://sg.run/dKZZ                                
+                                                                      
+          140┆ response = urllib.request.urlopen(
+          141┆     "http://localhost:5001/health", timeout=5
+          142┆ )
+            ⋮┆----------------------------------------
+          171┆ response =                                         
+               urllib.request.urlopen("http://localhost:5001/healt
+               h", timeout=5)                                     
+            ⋮┆----------------------------------------
+          208┆ response = urllib.request.urlopen(
+          209┆     f"http://localhost:5001{endpoint}", timeout=5
+          210┆ )
+                                        
+    scripts\setup_reviewer_enterprise.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(password, user=user):                                       
+              user.set_password(password)                                       
+           74┆ user.set_password(password)
+                               
+    scripts\smoke_rl_staging.py
+    ❯❱ python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-
+       use-detected                                                          
+          ❰❰ Blocking ❱❱
+          Detected a dynamic value being used with urllib. urllib     
+          supports 'file://' schemes, so a dynamic value controlled by
+          a malicious actor may allow them to read arbitrary files.   
+          Audit uses of urllib calls to ensure user data cannot       
+          control the URLs, or consider using the 'requests' library  
+          instead.                                                    
+          Details: https://sg.run/dKZZ                                
+                                                                      
+           77┆ with urllib.request.urlopen(req, timeout=timeout)
+               as resp:                                         
+                               
+    security\password_policy.py
+    ❯❱ python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-
+       sha1                                                                  
+          ❰❰ Blocking ❱❱
+          Detected SHA1 hash algorithm which is considered insecure.
+          SHA1 is not collision resistant and is therefore not      
+          suitable as a cryptographic signature. Use SHA256 or SHA3 
+          instead.                                                  
+          Details: https://sg.run/ydYx                              
+                                                                    
+           ▶▶┆ Autofix ▶ hashlib.sha256(password.encode("utf-8"),
+              usedforsecurity=False)                             
+          127┆ hashlib.sha1(password.encode("utf-8"),
+               usedforsecurity=False)                
+                                   
+    services\demo\access_service.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(secrets.token_urlsafe(24),                                  
+              user=user): user.set_password(secrets.token                       
+              _urlsafe(24))                                                     
+          389┆ user.set_password(secrets.token_urlsafe(24))
+            ⋮┆----------------------------------------
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'driver_user' is being set without          
+          validating the password. Call                               
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(get_demo_default_password(),                                
+              user=driver_user): driver_user.set_password                       
+              (get_demo_default_password())                                     
+          541┆                                                    
+               driver_user.set_password(get_demo_default_password(
+               ))                                                 
+            ⋮┆----------------------------------------
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'patient_user' is being set without         
+          validating the password. Call                               
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(get_demo_default_password(),                                
+              user=patient_user): patient_user.set_passwo                       
+              rd(get_demo_default_password())                                   
+          579┆                                                    
+               patient_user.set_password(get_demo_default_password
+               ())                                                
+            ⋮┆----------------------------------------
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'owner' is being set without validating the 
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(get_demo_default_password(),                                
+              user=owner): owner.set_password(get_demo_de                       
+              fault_password())                                                 
+          782┆ owner.set_password(get_demo_default_password())
+            ⋮┆----------------------------------------
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'demo_client_user' is being set without     
+          validating the password. Call                               
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(get_demo_default_password(),                                
+              user=demo_client_user): demo_client_user.se                       
+              t_password(get_demo_default_password())                           
+          819┆ demo_client_user.set_password(get_demo_default_pass
+               word())                                            
+                                 
+    services\demo\seed_service.py
+    ❯❱ python.django.security.audit.unvalidated-password.unvalidated-password
+          ❰❰ Blocking ❱❱
+          The password on 'user' is being set without validating the  
+          password. Call                                              
+          django.contrib.auth.password_validation.validate_password() 
+          with validation functions before setting the password. See  
+          https://docs.djangoproject.com/en/3.0/topics/auth/passwords/
+          for more information.                                       
+          Details: https://sg.run/OPBL                                
+                                                                      
+           ▶▶┆ Autofix ▶ if django.contrib.auth.password_validation.validate_pas
+              sword(get_demo_default_password(),                                
+              user=user): user.set_password(get_demo_defa                       
+              ult_password())                                                   
+          256┆ user.set_password(get_demo_default_password())
+                             
+    services\documents\pdf.py
+   ❯❯❱ python.lang.security.use-defused-xml.use-defused-xml
+          ❰❰ Blocking ❱❱
+          The Python documentation recommends using `defusedxml`      
+          instead of `xml` because the native Python `xml` library is 
+          vulnerable to XML External Entity (XXE) attacks. These      
+          attacks can leak confidential data and "XML bombs" can cause
+          denial of service.                                          
+          Details: https://sg.run/kX47                                
+                                                                      
+           14┆ from xml.sax.saxutils import escape as _xml_escape
+                                          
+    templates\emails\activation_email.html
+    ❯❱ generic.html-templates.security.var-in-href.var-in-href
+          ❰❰ Blocking ❱❱
+          Detected a template variable used in an anchor tag with the 
+          'href' attribute. This allows a malicious actor to input the
+          'javascript:' URI and is subject to cross- site scripting   
+          (XSS) attacks. If using Flask, use 'url_for()' to safely    
+          generate a URL. If using Django, use the 'url' filter to    
+          safely generate a URL. If using Mustache, use a URL encoding
+          library, or prepend a slash '/' to the variable for relative
+          links (`href="/{{link}}"`). You may also consider setting   
+          the Content Security Policy (CSP) header.                   
+          Details: https://sg.run/x1kP                                
+                                                                      
+           21┆ <a href="{{ activation_link }}"       
+               class="button">Confirmer mon email</a>
+            ⋮┆----------------------------------------
+           26┆ <a href="{{ activation_link }}" style="color:
+               #667eea;">{{ activation_link }}</a>          
+                                          
+    templates\emails\invitation_email.html
+    ❯❱ generic.html-templates.security.var-in-href.var-in-href
+          ❰❰ Blocking ❱❱
+          Detected a template variable used in an anchor tag with the 
+          'href' attribute. This allows a malicious actor to input the
+          'javascript:' URI and is subject to cross- site scripting   
+          (XSS) attacks. If using Flask, use 'url_for()' to safely    
+          generate a URL. If using Django, use the 'url' filter to    
+          safely generate a URL. If using Mustache, use a URL encoding
+          library, or prepend a slash '/' to the variable for relative
+          links (`href="/{{link}}"`). You may also consider setting   
+          the Content Security Policy (CSP) header.                   
+          Details: https://sg.run/x1kP                                
+                                                                      
+           27┆ <a href="{{ invite_url }}" class="button">Créer mon
+               accès</a>                                          
+            ⋮┆----------------------------------------
+           32┆ <a href="{{ invite_url }}" style="color:
+               #667eea;">{{ invite_url }}</a>          

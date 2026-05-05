@@ -39,7 +39,7 @@ providers:
     # ✅ 3.5: Watch pour auto-découverte des services
     watch: true
 
-# ✅ 3.5: Logs
+# ✅ 3.5: Logs — garder INFO en prod ; passer à DEBUG seulement pour enquêtes ponctuelles (volume de logs).
 log:
   level: INFO
 

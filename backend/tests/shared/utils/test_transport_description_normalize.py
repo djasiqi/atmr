@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from shared.utils.transport_description_normalize import normalize_transport_line_description
+from shared.utils.transport_description_normalize import (
+    normalize_transport_line_description,
+)
 
 
 def test_trajet_dup_space_ride_only():
@@ -89,6 +91,4 @@ def test_ride_does_not_touch_livraison_dup():
 def test_material_does_not_touch_trajet_dup():
     """Une livraison matériel ne doit pas modifier les motifs Trajet."""
     raw = "Trajet : Trajet Rue des Fleurs 1"
-    assert (
-        normalize_transport_line_description(raw, kind="material_delivery") == raw
-    )
+    assert normalize_transport_line_description(raw, kind="material_delivery") == raw

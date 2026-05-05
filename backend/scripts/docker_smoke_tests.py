@@ -140,9 +140,7 @@ class DockerSmokeTests:
             max_attempts = 30
             for _ in range(max_attempts):
                 try:
-                    r = requests.get(
-                        f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5
-                    )
+                    r = requests.get(f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5)
                     if r.status_code == 200:
                         json.loads(r.text)
                         print("✅ Endpoint de santé accessible")
@@ -168,9 +166,7 @@ class DockerSmokeTests:
         print("🤖 Test du chargement des modèles...")
 
         try:
-            response = requests.get(
-                f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5
-            )
+            response = requests.get(f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 models_loaded = data.get("models_loaded", False)

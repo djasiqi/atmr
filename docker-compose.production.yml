@@ -126,16 +126,18 @@ services:
       - "6379"
     networks:
       - atmr-network
+    # PING échoue pendant LOADING (restauration RDB/AOF) → pas « healthy » tant que Redis n'est pas prêt.
+    # start_period généreux : évite de marquer unhealthy trop tôt si la persistance met >15s.
     healthcheck:
       test:
         [
           "CMD-SHELL",
           'if [ -n "$${REDIS_PASSWORD}" ]; then redis-cli -a "$${REDIS_PASSWORD}" ping | grep -q PONG; else redis-cli ping | grep -q PONG; fi || exit 1',
         ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 15s
+      retries: 18
+      start_period: 120s
     deploy:
       resources:
         limits:
@@ -800,7 +802,8 @@ services:
     networks:
       - atmr-network
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:

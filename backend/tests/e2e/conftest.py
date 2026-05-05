@@ -28,6 +28,9 @@ from tests.e2e.helpers.e2e_helpers import (
     create_test_driver,
 )
 
+# Les E2E appellent l'API HTTP réelle ; ne pas hériter de SKIP_ROUTES_INIT (optim des suites unitaires).
+os.environ["SKIP_ROUTES_INIT"] = "false"
+
 logger = logging.getLogger(__name__)
 
 

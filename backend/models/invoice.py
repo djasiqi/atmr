@@ -533,9 +533,7 @@ class InvoiceLine(db.Model):
             )
 
             if self.type == InvoiceLineType.RIDE:
-                desc_out = normalize_transport_line_description(
-                    desc_out, kind="ride"
-                )
+                desc_out = normalize_transport_line_description(desc_out, kind="ride")
             else:
                 desc_out = normalize_transport_line_description(
                     desc_out, kind="material_delivery"

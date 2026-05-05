@@ -195,6 +195,49 @@ async def _resolve_redis_call(value: Any) -> Any:
     return value
 
 
+async def _wait_redis_ping_with_retry(client: Any) -> None:
+    """Attend que Redis réponde au PING (hors état LOADING / refus TCP après reboot)."""
+    try:
+        import redis.exceptions as redis_exc
+    except ImportError:
+        await _resolve_redis_call(client.ping())
+        return
+
+    max_attempts = int(os.getenv("WS_REDIS_STARTUP_MAX_ATTEMPTS", "90"))
+    sleep_sec = float(os.getenv("WS_REDIS_STARTUP_RETRY_SLEEP_SEC", "2"))
+    last_err: BaseException | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await _resolve_redis_call(client.ping())
+            return
+        except redis_exc.BusyLoadingError as e:
+            last_err = e
+        except redis_exc.ConnectionError as e:
+            last_err = e
+        except redis_exc.TimeoutError as e:
+            last_err = e
+        except redis_exc.ResponseError as e:
+            last_err = e
+            if "LOADING" not in str(e).upper():
+                raise
+        except OSError as e:
+            last_err = e
+
+        if attempt < max_attempts:
+            logger.warning(
+                "redis startup ping retry %s/%s: %s",
+                attempt,
+                max_attempts,
+                last_err,
+            )
+            await asyncio.sleep(sleep_sec)
+
+    if last_err is not None:
+        raise last_err
+    raise RuntimeError("redis ping retries exhausted")
+
+
 def _driver_room(driver_id: int) -> str:
     return f"driver:{driver_id}"
 
@@ -742,7 +785,7 @@ async def startup() -> None:
 
     redis_client = await _create_redis_client()
     try:
-        await _resolve_redis_call(redis_client.ping())
+        await _wait_redis_ping_with_retry(redis_client)
         mode_label = "cluster" if REDIS_CLUSTER_MODE else "single"
         logger.info("redis connected at startup (mode=%s)", mode_label)
     except Exception:

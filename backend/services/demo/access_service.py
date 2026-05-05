@@ -386,7 +386,9 @@ def _create_or_reuse_demo_user(
     user.phone = normalized_phone
     user.role = UserRole.client
     user.account_status = "active"
-    user.set_password(secrets.token_urlsafe(24))  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - secret crypto genere (flux demo).
+    user.set_password(
+        secrets.token_urlsafe(24)
+    )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - secret crypto genere (flux demo).
     db.session.add(user)
     db.session.flush()
     return user
@@ -538,7 +540,9 @@ def _seed_transport_demo_workspace(
         driver_user.first_name = driver_first_name
         driver_user.last_name = driver_last_name
         driver_user.account_status = "active"
-        driver_user.set_password(get_demo_default_password())  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
+        driver_user.set_password(
+            get_demo_default_password()
+        )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
         db.session.add(driver_user)
         db.session.flush()
 
@@ -576,7 +580,9 @@ def _seed_transport_demo_workspace(
         patient_user.first_name = patient_first_name
         patient_user.last_name = patient_last_name
         patient_user.account_status = "active"
-        patient_user.set_password(get_demo_default_password())  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
+        patient_user.set_password(
+            get_demo_default_password()
+        )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
         db.session.add(patient_user)
         db.session.flush()
 
@@ -779,7 +785,9 @@ def _seed_institution_demo_workspace(
             owner.first_name = "Compte"
             owner.last_name = "Demo Institution"
             owner.account_status = "active"
-            owner.set_password(get_demo_default_password())  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
+            owner.set_password(
+                get_demo_default_password()
+            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
             db.session.add(owner)
             db.session.flush()
 
@@ -816,7 +824,9 @@ def _seed_institution_demo_workspace(
             demo_client_user.first_name = "Patient"
             demo_client_user.last_name = "Demo Institution"
             demo_client_user.account_status = "active"
-            demo_client_user.set_password(get_demo_default_password())  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
+            demo_client_user.set_password(
+                get_demo_default_password()
+            )  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - mot de passe demo par defaut (environnement isole).
             db.session.add(demo_client_user)
             db.session.flush()
         demo_client = Client.query.filter_by(

@@ -115,7 +115,9 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       SOCKETIO_ASYNC_MODE: threading
       SKIP_SOCKETIO: "true"
-      SKIP_ROUTES_INIT: "true"
+      # Les tests (unitaires + intégration) partagent une app Flask session-scoped :
+      # les routes doivent être enregistrées pour les tests HTTP (factures, auth, etc.).
+      SKIP_ROUTES_INIT: "false"
 
     services:
       postgres:
@@ -328,7 +330,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       SOCKETIO_ASYNC_MODE: threading
       SKIP_SOCKETIO: "true"
-      SKIP_ROUTES_INIT: "true"
+      SKIP_ROUTES_INIT: "false"
 
     services:
       postgres:
@@ -436,7 +438,7 @@ jobs:
       PYTHONPATH: ${{ github.workspace }}
       SOCKETIO_ASYNC_MODE: threading
       SKIP_SOCKETIO: "true"
-      SKIP_ROUTES_INIT: "true"
+      SKIP_ROUTES_INIT: "false"
       RUN_E2E_TESTS: "1"
 
     services:

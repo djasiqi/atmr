@@ -310,6 +310,7 @@ check_redis() {
     python -c "
 import os
 import sys
+import time
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -332,16 +333,47 @@ if not redis_url:
 
 print(f'Redis URL: {redis_url}')
 
+max_attempts = int(os.getenv('REDIS_STARTUP_MAX_ATTEMPTS', '90'))
+sleep_sec = float(os.getenv('REDIS_STARTUP_RETRY_SLEEP_SEC', '2'))
+
 try:
     import redis
-    r = redis.from_url(redis_url, socket_connect_timeout=5)
-    r.ping()
-    print('✅ Connexion à Redis réussie')
-except Exception as e:
-    # ⚠️  Redis est NON-CRITIQUE: le backend peut démarrer avec fallback memory
-    print(f'⚠️  Erreur de connexion à Redis (non-critique, fallback memory utilisé): {e}')
+    import redis.exceptions as redis_exc
+except ImportError:
+    print('⚠️  Package redis non importable')
+    sys.exit(0)
 
-sys.exit(0)  # Toujours succès car Redis est optionnel
+last_err = None
+for attempt in range(1, max_attempts + 1):
+    try:
+        r = redis.from_url(redis_url, socket_connect_timeout=5, socket_timeout=5)
+        r.ping()
+        print('✅ Connexion à Redis réussie')
+        sys.exit(0)
+    except redis_exc.BusyLoadingError as e:
+        last_err = e
+    except redis_exc.ConnectionError as e:
+        last_err = e
+    except redis_exc.TimeoutError as e:
+        last_err = e
+    except redis_exc.ResponseError as e:
+        last_err = e
+        err_s = str(e).upper()
+        if 'LOADING' not in err_s and 'LOADING Redis' not in err_s:
+            break
+    except OSError as e:
+        last_err = e
+    except Exception as e:
+        last_err = e
+        break
+
+    if attempt < max_attempts:
+        print(f'⏳ Redis indisponible ou en chargement (tentative {attempt}/{max_attempts}): {last_err}')
+        time.sleep(sleep_sec)
+
+# ⚠️  Redis est NON-CRITIQUE: le backend peut démarrer avec fallback memory
+print(f'⚠️  Redis non joignable après {max_attempts} tentatives (non-critique, fallback memory): {last_err}')
+sys.exit(0)
 "
 }
 
