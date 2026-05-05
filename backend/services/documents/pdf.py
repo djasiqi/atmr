@@ -1935,6 +1935,8 @@ def _build_recipient_block_flowable(
     - Filtre les lignes vides (no data => no UI).
     - Wrap via stringWidth/simpleSplit (font metrics ReportLab).
     - Ne dessine rien si aucune ligne utile.
+    - 2ᵉ+ lignes du bloc nom (ex. ``c/o OPAD …`` après saut de ligne) : même taille que l’adresse,
+      pas le corps du nom en gras.
 
     ``name_font_size`` / ``addr_font_size`` : hiérarchie type facture pro (ex. 12 / 10 pt) ;
     si omis, réutilise la taille du ``normal_style``.
@@ -1970,20 +1972,25 @@ def _build_recipient_block_flowable(
     max_lines = max(1, int(DEST_ADDR_ZONE_HEIGHT_MM / DEST_ADDR_LINE_HEIGHT_MM))
     max_chars_fallback = max(30, int(DEST_ADDR_MAX_WIDTH_MM * 3))
 
-    visual_rows: list[tuple[str, bool]] = []
+    # Rôle par ligne source : nom principal (gras + name_fs) ; lignes suivantes du champ nom
+    # (c/o …) comme l’adresse (addr_fs, sans gras).
+    visual_rows: list[tuple[str, str]] = []
     for i, line in enumerate(lines):
-        is_name = i < name_count
-        fs = name_fs if is_name else addr_fs
+        if i < name_count:
+            role = "name_primary" if i == 0 else "name_co"
+        else:
+            role = "addr"
+        fs = name_fs if role == "name_primary" else addr_fs
         if line == "":
-            visual_rows.append(("", is_name))
+            visual_rows.append(("", role))
         else:
             wrapped = _wrap_line_by_width(line, font_name, fs, max_width_pt)
             for wline in wrapped:
-                visual_rows.append((wline, is_name))
+                visual_rows.append((wline, role))
 
     if len(visual_rows) > max_lines:
         visual_rows = visual_rows[:max_lines]
-        last_t, last_is_name = visual_rows[-1]
+        last_t, last_role = visual_rows[-1]
         if last_t == "":
             pass
         elif len(last_t) + 1 > max_chars_fallback:
@@ -1993,17 +2000,17 @@ def _build_recipient_block_flowable(
                 if " " in truncated
                 else truncated + "…"
             )
-            visual_rows[-1] = (last_t, last_is_name)
+            visual_rows[-1] = (last_t, last_role)
         else:
-            visual_rows[-1] = (last_t + "…", last_is_name)
+            visual_rows[-1] = (last_t + "…", last_role)
 
     parts: list[str] = []
-    for vl, is_name in visual_rows:
+    for vl, role in visual_rows:
         if vl == "":
             parts.append("<br/>")
             continue
         esc = _xml_escape_for_paragraph(vl)
-        if is_name:
+        if role == "name_primary":
             parts.append(f'<font size="{int(name_fs)}"><b>{esc}</b></font><br/>')
         else:
             parts.append(f'<font size="{int(addr_fs)}">{esc}</font><br/>')
@@ -2393,6 +2400,49 @@ def _pdf_escape_wrapped_plain(
     return "<br/>".join(_xml_escape_for_paragraph(x) for x in lines)
 
 
+def _pdf_limit_html_br_lines(html: str, max_lines: int | None) -> str:
+    """Limite un bloc HTML (séparateur ``<br/>``) à ``max_lines`` lignes."""
+    if not html or max_lines is None or max_lines <= 0:
+        return html
+    parts = html.split("<br/>")
+    if len(parts) <= max_lines:
+        return html
+    kept = parts[:max_lines]
+    kept[-1] = kept[-1].rstrip().rstrip(".… ") + "…"
+    return "<br/>".join(kept)
+
+
+def _truncate_text_to_width_with_ellipsis(
+    text: str,
+    *,
+    font_name: str,
+    font_size: float,
+    max_width_pt: float,
+) -> str:
+    """Tronque une chaîne pour tenir sur une seule ligne selon la largeur réelle."""
+    s = (text or "").strip()
+    if not s:
+        return ""
+    wrapped = _wrap_line_by_width(s, font_name, font_size, max_width_pt)
+    if len(wrapped) <= 1:
+        return wrapped[0] if wrapped else ""
+    ell = "…"
+    lo = 1
+    hi = len(s)
+    best = ""
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = s[:mid].rstrip()
+        probe = f"{candidate}{ell}" if candidate else ell
+        if len(_wrap_line_by_width(probe, font_name, font_size, max_width_pt)) <= 1:
+            best = probe
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    out = best or ell
+    return out.rstrip().rstrip(".… ") + "…"
+
+
 def _pdf_format_transport_detail_inner_wrapped(
     raw: str,
     *,
@@ -2400,9 +2450,12 @@ def _pdf_format_transport_detail_inner_wrapped(
     desc_inner_pt: float,
     is_ride_line: bool,
     is_material_delivery: bool,
+    force_balanced_two_lines: bool = False,
 ) -> str:
     """Trajet / Livraison / libellé : préfixes métier + wrap largeur colonne (adresse complète, pas ville seule)."""
     s = (raw or "").strip()
+    if s.lower().startswith("trajet :"):
+        s = s[8:].strip()
     fs = float(FONT_BODY)
     if is_material_delivery and s:
         lines = _wrap_line_by_width(f"Livraison : {s}", font_name, fs, desc_inner_pt)
@@ -2417,10 +2470,33 @@ def _pdf_format_transport_detail_inner_wrapped(
     for sep in (" ↔ ", " → "):
         if sep in s:
             a, b = s.split(sep, 1)
+            a_clean = a.strip()
+            if a_clean.lower().startswith("trajet :"):
+                a_clean = a_clean[8:].strip()
+            b_clean = b.strip()
+            if force_balanced_two_lines:
+                line_a = _truncate_text_to_width_with_ellipsis(
+                    f"Trajet : {a_clean}",
+                    font_name=font_name,
+                    font_size=fs,
+                    max_width_pt=desc_inner_pt,
+                )
+                line_b = _truncate_text_to_width_with_ellipsis(
+                    f"→ {b_clean}",
+                    font_name=font_name,
+                    font_size=fs,
+                    max_width_pt=desc_inner_pt,
+                )
+                return "<br/>".join(
+                    [
+                        _xml_escape_for_paragraph(line_a),
+                        _xml_escape_for_paragraph(line_b),
+                    ]
+                )
             chunk: list[str] = []
             chunk.extend(
                 _wrap_line_by_width(
-                    f"Trajet : {a.strip()}",
+                    f"Trajet : {a_clean}",
                     font_name,
                     fs,
                     desc_inner_pt,
@@ -2428,7 +2504,7 @@ def _pdf_format_transport_detail_inner_wrapped(
             )
             chunk.extend(
                 _wrap_line_by_width(
-                    f"→ {b.strip()}",
+                    f"→ {b_clean}",
                     font_name,
                     fs,
                     desc_inner_pt,
@@ -2448,12 +2524,13 @@ def _build_s2_table(
     *,
     include_non_ride: bool = False,
     available_width_pt: float | None = None,
+    max_simple_description_lines: int | None = None,
 ) -> tuple[Any, list[dict[str, Any]]]:
     """Construit le tableau de détail des prestations.
 
     Aligné sur ``InvoiceLivePreview`` pour tous les cas : **Date | Description | Montant**.
-    Le nom patient (clinique S2, tierce partie, institution S1 patient) est rendu dans
-    la description (``Patient : …``), pas dans une colonne séparée. La colonne Montant reprend
+    Le nom du client transporté (clinique S2, tierce partie, institution S1 patient) est rendu dans
+    la description (``Client : …``), pas dans une colonne séparée. La colonne Montant reprend
     uniquement le montant (sans « CHF » sur une deuxième ligne).
 
     Si ``available_width_pt`` est fourni (ex. ``doc.width``), la colonne description
@@ -2670,12 +2747,26 @@ def _build_s2_table(
         line_desc_opt = _line_description_from_consolidated_item(item)
         if is_ar:
             if line_desc_opt:
-                esc_desc = _pdf_escape_wrapped_plain(
-                    line_desc_opt, font_name, desc_inner_pt
+                if (
+                    max_simple_description_lines == 2
+                    and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+                ):
+                    esc_desc = _pdf_format_transport_detail_inner_wrapped(
+                        line_desc_opt,
+                        font_name=font_name,
+                        desc_inner_pt=desc_inner_pt,
+                        is_ride_line=True,
+                        is_material_delivery=False,
+                        force_balanced_two_lines=True,
+                    )
+                else:
+                    esc_desc = _pdf_escape_wrapped_plain(
+                        line_desc_opt, font_name, desc_inner_pt
+                    )
+                esc_desc = _pdf_limit_html_br_lines(
+                    esc_desc, max_simple_description_lines
                 )
-                inner_html = (
-                    f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
-                )
+                inner_html = f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
             else:
                 body_tr = _pdf_format_transport_detail_inner_wrapped(
                     item.get("transport_display", ""),
@@ -2683,10 +2774,10 @@ def _build_s2_table(
                     desc_inner_pt=desc_inner_pt,
                     is_ride_line=is_ride_td,
                     is_material_delivery=is_material_td,
+                    force_balanced_two_lines=max_simple_description_lines == 2,
                 )
-                inner_html = (
-                    f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
-                )
+                body_tr = _pdf_limit_html_br_lines(body_tr, max_simple_description_lines)
+                inner_html = f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
@@ -2695,16 +2786,38 @@ def _build_s2_table(
             )
         else:
             if line_desc_opt:
-                inner_html = (
-                    f"{_pdf_escape_wrapped_plain(line_desc_opt, font_name, desc_inner_pt)}"
-                    f"{disc_suffix}{note_suffix}"
+                if (
+                    max_simple_description_lines == 2
+                    and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+                ):
+                    line_desc_html = _pdf_format_transport_detail_inner_wrapped(
+                        line_desc_opt,
+                        font_name=font_name,
+                        desc_inner_pt=desc_inner_pt,
+                        is_ride_line=True,
+                        is_material_delivery=False,
+                        force_balanced_two_lines=True,
+                    )
+                else:
+                    line_desc_html = _pdf_escape_wrapped_plain(
+                        line_desc_opt, font_name, desc_inner_pt
+                    )
+                line_desc_html = _pdf_limit_html_br_lines(
+                    line_desc_html, max_simple_description_lines
                 )
+                inner_html = f"{line_desc_html}{disc_suffix}{note_suffix}"
             else:
                 transport = item.get("transport_display", "")
-                inner_html = (
-                    f"{_pdf_format_transport_detail_inner_wrapped(transport, font_name=font_name, desc_inner_pt=desc_inner_pt, is_ride_line=is_ride_td, is_material_delivery=is_material_td)}"
-                    f"{disc_suffix}{note_suffix}"
+                body_tr = _pdf_format_transport_detail_inner_wrapped(
+                    transport,
+                    font_name=font_name,
+                    desc_inner_pt=desc_inner_pt,
+                    is_ride_line=is_ride_td,
+                    is_material_delivery=is_material_td,
+                    force_balanced_two_lines=max_simple_description_lines == 2,
                 )
+                body_tr = _pdf_limit_html_br_lines(body_tr, max_simple_description_lines)
+                inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
@@ -2720,13 +2833,13 @@ def _build_s2_table(
                 and pn_raw
             ):
                 patient_prefix_html = (
-                    f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
+                    f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                     f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
                 )
         elif pn_raw and str(pn_raw).strip() not in ("Patient",):
             # Clinique S2 / tierce : ``InvoiceLivePreview`` `.lineClinicContext` (#475569, ~11px).
             patient_prefix_html = (
-                f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
+                f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                 f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
             )
         desc_cell = Paragraph(
@@ -2781,6 +2894,9 @@ def _build_s2_table(
                 else:
                     desc_html = esc_d
                 desc_html = f"{desc_html}{disc_o}"
+                desc_html = _pdf_limit_html_br_lines(
+                    desc_html, max_simple_description_lines
+                )
                 desc_cell = Paragraph(desc_html, s2_main_style)
                 amt_cell_o = _pdf_s2_amount_only_paragraph(
                     net_o,
@@ -2837,6 +2953,7 @@ def _build_s2_table(
                     desc_inner_pt=desc_inner_pt,
                     is_ride_line=True,
                     is_material_delivery=False,
+                    force_balanced_two_lines=max_simple_description_lines == 2,
                 )
             else:
                 esc_d = _pdf_escape_wrapped_plain(
@@ -2858,11 +2975,14 @@ def _build_s2_table(
                     if len(pn_disp) > MAX_PATIENT_NAME_LENGTH:
                         pn_disp = pn_disp[: MAX_PATIENT_NAME_LENGTH - 1] + "."
                     orphan_pn_prefix = (
-                        f'<font size="{int(FONT_SECONDARY)}" color="#475569">Patient : '
+                        f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                         f"{_xml_escape_for_paragraph(pn_disp)}</font><br/>"
                     )
+            orphan_inner_html = _pdf_limit_html_br_lines(
+                f"{esc_d}{ar_suffix}{disc_or}", max_simple_description_lines
+            )
             desc_cell = Paragraph(
-                f"{orphan_pn_prefix}{esc_d}{ar_suffix}{disc_or}", s2_main_style
+                f"{orphan_pn_prefix}{orphan_inner_html}", s2_main_style
             )
             amt_cell_or = _pdf_s2_amount_only_paragraph(
                 net_or,
@@ -3654,7 +3774,11 @@ def _build_totals_table(
                     [total_label, total_amt],
                 ]
             else:
-                total_data = [[total_label, total_amt]]
+                # Tierce sans TVA ni S2 (ex. facturation OPAD) : même pied que les autres — sous-total + total.
+                total_data = [
+                    ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                    [total_label, total_amt],
+                ]
             col_widths = list(_tot_col_widths)
         else:
             if gd_meta is not None and not is_reminder:
@@ -3765,7 +3889,11 @@ def _build_totals_table(
                 [total_label, total_amt],
             ]
         else:
-            total_data = [[total_label, total_amt]]
+            # Tierce standard sans TVA ni S2 : sous-total HT + total (aligné factures client / aperçu).
+            total_data = [
+                ["Sous-total HT", _invoice_preview_chf_amount(subtotal)],
+                [total_label, total_amt],
+            ]
         col_widths = list(_tot_col_widths)
     else:
         if gd_meta is not None and not is_reminder:
@@ -4930,6 +5058,7 @@ class PDFService:
             bookings_by_id,
             include_non_ride=True,
             available_width_pt=usable_width_pt,
+            max_simple_description_lines=2,
         )
         app_logger.info(
             "[PDF_PERF] _build_s2_table_ms=%s invoice_id=%s",
@@ -5815,14 +5944,15 @@ class PDFService:
         if _reminder_ok or gd_min is not None:
             _tot_min_w = [10.5 * cm, 4.5 * cm]
         else:
-            _tot_min_w = [5 * cm, 3.2 * cm]
+            # Évite le chevauchement libellé/montant sur "TOTAL À FACTURER" avec montants à 6+ chiffres.
+            _tot_min_w = [6.4 * cm, 4.2 * cm]
         total_table = Table(total_data, colWidths=_tot_min_w)
         style_rules = [
             ("ALIGN", (0, 0), (0, -1), "LEFT"),
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("RIGHTPADDING", (0, 0), (0, -1), 14),
-            ("LEFTPADDING", (1, 0), (1, -1), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
@@ -6355,6 +6485,7 @@ class PDFService:
             bookings_by_id,
             include_non_ride=True,
             available_width_pt=doc.width,
+            max_simple_description_lines=None,
         )
         app_logger.info(
             "[PDF_PERF] _build_s2_table_ms=%s invoice_id=%s",
