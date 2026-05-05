@@ -2466,12 +2466,18 @@ class Logout(Resource):
 
                 # Supprimer les cookies (web uniquement)
                 if not is_mobile_request:
+                    _ck_secure = bool(current_app.config.get("COOKIE_SECURE"))
+                    _ck_http = bool(current_app.config.get("COOKIE_HTTP_ONLY"))
+                    _ck_same = current_app.config.get("COOKIE_SAME_SITE") or "Lax"
                     response.set_cookie(
                         current_app.config["COOKIE_ACCESS_TOKEN_NAME"],
                         "",
                         expires=0,
                         path=current_app.config["COOKIE_PATH"],
                         domain=current_app.config["COOKIE_DOMAIN"],
+                        secure=_ck_secure,
+                        httponly=_ck_http,
+                        samesite=_ck_same,
                     )
                     response.set_cookie(
                         current_app.config["COOKIE_REFRESH_TOKEN_NAME"],
@@ -2479,6 +2485,9 @@ class Logout(Resource):
                         expires=0,
                         path=current_app.config["COOKIE_PATH"],
                         domain=current_app.config["COOKIE_DOMAIN"],
+                        secure=_ck_secure,
+                        httponly=_ck_http,
+                        samesite=_ck_same,
                     )
 
                 return response

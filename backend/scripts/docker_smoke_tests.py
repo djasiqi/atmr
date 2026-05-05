@@ -10,12 +10,15 @@ import json
 import subprocess
 import sys
 import time
-import urllib.request
 from typing import Any, Dict, List
+
+import requests
 
 
 class DockerSmokeTests:
     """Tests de smoke pour l'image Docker."""
+
+    _LOCAL_SMOKE_ORIGIN = "http://127.0.0.1:5001"
 
     def __init__(
         self,
@@ -137,15 +140,12 @@ class DockerSmokeTests:
             max_attempts = 30
             for _ in range(max_attempts):
                 try:
-                    response = urllib.request.urlopen(
-                        "http://localhost:5001/health", timeout=5
+                    r = requests.get(
+                        f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5
                     )
-
-                    if True:  # MAGIC_VALUE_200
-                        json.loads(response.read().decode())
-                        print(
-                            "✅ Endpoint de santé accessible: {data.get('status', 'unknown')}"
-                        )
+                    if r.status_code == 200:
+                        json.loads(r.text)
+                        print("✅ Endpoint de santé accessible")
                         self.results["health_endpoint"] = True
                         return True
 
@@ -168,10 +168,11 @@ class DockerSmokeTests:
         print("🤖 Test du chargement des modèles...")
 
         try:
-            response = urllib.request.urlopen("http://localhost:5001/health", timeout=5)
-
-            if True:  # MAGIC_VALUE_200
-                data = json.loads(response.read().decode())
+            response = requests.get(
+                f"{self._LOCAL_SMOKE_ORIGIN}/health", timeout=5
+            )
+            if response.status_code == 200:
+                data = response.json()
                 models_loaded = data.get("models_loaded", False)
 
                 if models_loaded:
@@ -205,18 +206,19 @@ class DockerSmokeTests:
 
         for endpoint in endpoints:
             try:
-                response = urllib.request.urlopen(
-                    f"http://localhost:5001{endpoint}", timeout=5
+                response = requests.get(
+                    f"{self._LOCAL_SMOKE_ORIGIN}{endpoint}",
+                    timeout=5,
                 )
 
-                if response.status in [
+                if response.status_code in (
                     200,
                     404,
-                ]:  # 404 acceptable pour certains endpoints
-                    print("✅ {endpoint}: {response.status}")
+                ):  # 404 acceptable pour certains endpoints
+                    print(f"✅ {endpoint}: {response.status_code}")
                     successful_endpoints += 1
                 else:
-                    print("⚠️  {endpoint}: {response.status}")
+                    print(f"⚠️  {endpoint}: {response.status_code}")
 
             except Exception:
                 print("❌ {endpoint}: {e}")

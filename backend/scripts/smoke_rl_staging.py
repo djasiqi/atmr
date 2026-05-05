@@ -37,9 +37,9 @@ import argparse
 import json
 import os
 import sys
-import urllib.error
-import urllib.request
 from typing import Any
+
+import requests
 
 ALLOWED_MODEL_SOURCES = frozenset({"dqn", "basic_fallback", "cache"})
 ALLOWED_FALLBACK_REASONS = frozenset({None, "model_missing"})
@@ -65,28 +65,23 @@ def http_get_json(
     url = f"{base_url.rstrip('/')}{path}"
     if query:
         url = f"{url}?{query.lstrip('?')}"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        },
-        method="GET",
-    )
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
-            status = resp.getcode() or 200
-            return status, _json_loads_maybe(raw), None
-    except urllib.error.HTTPError as e:
-        body = e.read()
-        try:
-            parsed = _json_loads_maybe(body)
-        except json.JSONDecodeError:
-            parsed = body.decode("utf-8", errors="replace") if body else None
-        return e.code, parsed, str(e)
-    except urllib.error.URLError as e:
-        return 0, None, str(e.reason)
+        resp = requests.get(url, headers=headers, timeout=timeout)
+    except requests.RequestException as e:
+        return 0, None, str(e)
+
+    status = resp.status_code
+    try:
+        parsed = resp.json()
+    except ValueError:
+        parsed = _json_loads_maybe(resp.text)
+    if status >= 400:
+        return status, parsed, resp.reason or f"HTTP {status}"
+    return status, parsed, None
 
 
 def validate_meta(meta: Any, *, label: str) -> list[str]:

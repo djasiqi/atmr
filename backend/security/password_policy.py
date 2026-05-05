@@ -121,10 +121,9 @@ class PasswordPolicyService:
             return True, None
 
         try:
-            # Calculer le hash SHA-1 du mot de passe
-            # SHA-1 utilisé pour l'API HIBP (k-anonymity), pas pour la sécurité cryptographique
+            # Calculer le hash SHA-1 du mot de passe (format imposé par Have I Been Pwned).
             password_hash = (
-                hashlib.sha1(password.encode("utf-8"), usedforsecurity=False)
+                hashlib.sha1(password.encode("utf-8"), usedforsecurity=False)  # nosemgrep python.lang.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
                 .hexdigest()
                 .upper()
             )  # nosec B324
