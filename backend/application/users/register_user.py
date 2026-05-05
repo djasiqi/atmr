@@ -118,10 +118,23 @@ class RegisterUserUseCase:
 
         try:
             # Créer l'utilisateur
+            from security.password_policy import PasswordPolicyError, PasswordPolicyService
+
+            try:
+                PasswordPolicyService.validate_password(
+                    input_data.password, user_id=None, check_history=False
+                )
+            except PasswordPolicyError as e:
+                return RegisterUserOutput(
+                    success=False,
+                    error={"error": str(e)},
+                    status_code=400,
+                )
+
             user = User()
             user.username = input_data.username
             user.email = input_data.email
-            user.set_password(input_data.password)
+            user.set_password(input_data.password)  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - Flask/SQLAlchemy: PasswordPolicyService.validate_password appele juste avant (pas Django).
             user.role = UserRole.CLIENT  # Par défaut, rôle client
             user.account_status = "pending_activation"
 

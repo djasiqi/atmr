@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
@@ -51,14 +51,14 @@ class ResetDriverPasswordResult:
 
 
 class ResetDriverPasswordUseCase:
-    """Use-case Application: réinitialiser le mot de passe d'un chauffeur."""
+    """Use-case Application: rÃ©initialiser le mot de passe d'un chauffeur."""
 
     def __init__(self, *, password_policy: _PasswordPolicyPort) -> None:
         super().__init__()
         self._policy = password_policy
 
     def execute(self, user: _UserLike) -> ResetDriverPasswordResult:
-        # On tente quelques générations au cas où une contrainte externe
+        # On tente quelques gÃ©nÃ©rations au cas oÃ¹ une contrainte externe
         # (HIBP/historique) rejette.
         last_error: str | None = None
         for _ in range(5):
@@ -70,7 +70,8 @@ class ResetDriverPasswordUseCase:
             except Exception as e:
                 last_error = str(e)
                 continue
-            user.set_password(pwd)
+
+            user.set_password(pwd)  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - valide via `_policy.validate_password` avant application.
             user.force_password_change = True
             return ResetDriverPasswordResult(
                 ok=True,
@@ -81,7 +82,8 @@ class ResetDriverPasswordUseCase:
         return ResetDriverPasswordResult(
             ok=False,
             error={
-                "error": last_error or "Impossible de générer un mot de passe valide"
+                "error": last_error or "Impossible de gÃ©nÃ©rer un mot de passe valide"
             },
             status_code=400,
         )
+

@@ -652,7 +652,20 @@ class SetDemoPassword(Resource):
                 "message": "Action reservee aux comptes demo.",
             }, 403
 
-        user.set_password(new_password)
+        from security.password_policy import PasswordPolicyError, PasswordPolicyService
+
+        try:
+            PasswordPolicyService.validate_password(
+                new_password, user_id=user.id, check_history=True
+            )
+        except PasswordPolicyError as e:
+            return {
+                "ok": False,
+                "code": "weak_password",
+                "message": str(e),
+            }, 400
+
+        user.set_password(new_password)  # nosemgrep python.django.security.audit.unvalidated-password.unvalidated-password - Flask/SQLAlchemy: PasswordPolicyService.validate_password appele juste avant (pas Django).
         user.force_password_change = False
         db.session.commit()
         role = (

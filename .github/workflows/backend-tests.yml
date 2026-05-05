@@ -637,8 +637,6 @@ jobs:
           cd backend
           # Générer rapport JSON (ne bloque pas)
           semgrep --config p/ci --config p/security-audit . \
-            --exclude-rule python.django.security.audit.unvalidated-password.unvalidated-password \
-            --exclude-rule generic.html-templates.security.var-in-href.var-in-href \
             --json -o ../artifacts/semgrep.json || true
 
           # Afficher un résumé des findings pour améliorer la lisibilité
@@ -674,8 +672,6 @@ jobs:
 
           # Vérifier règles de sécurité (bloque si trouvées)
           semgrep --config p/ci --config p/security-audit . \
-            --exclude-rule python.django.security.audit.unvalidated-password.unvalidated-password \
-            --exclude-rule generic.html-templates.security.var-in-href.var-in-href \
             --error
         continue-on-error: false
 

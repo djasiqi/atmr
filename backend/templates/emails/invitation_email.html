@@ -24,12 +24,14 @@
 <p>Pour accéder au portail, cliquez sur le bouton ci-dessous et créez votre mot de passe :</p>
 
 <div style="text-align: center;">
-    <a href="{{ invite_url }}" class="button">Créer mon accès</a>
+    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (token signe); pas une saisie utilisateur. -->
+<a href="{{ invite_url }}" class="button">Créer mon accès</a>
 </div>
 
 <p class="text-muted" style="text-align: center; font-size: 12px; word-break: break-all;">
     Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>
-    <a href="{{ invite_url }}" style="color: #667eea;">{{ invite_url }}</a>
+    <!-- nosemgrep generic.html-templates.security.var-in-href.var-in-href : URL https absolue emise serveur (token signe); pas une saisie utilisateur. -->
+<a href="{{ invite_url }}" style="color: #667eea;">{{ invite_url }}</a>
 </p>
 
 <div class="divider"></div>
