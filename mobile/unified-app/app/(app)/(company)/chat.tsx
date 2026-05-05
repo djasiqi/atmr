@@ -159,7 +159,7 @@ function getCompanyChatConnectionBanner(
 }
 
 export default function CompanyChatScreen() {
-  const { topInset, bottomInset, horizontalPadding } = useAppViewport();
+  const { topInset, horizontalPadding } = useAppViewport();
   const t = useResponsiveTokens();
   const params = useLocalSearchParams<{ threadId?: string }>();
   const { activeContext } = useSession();
@@ -213,12 +213,15 @@ export default function CompanyChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setListAnchorKey((k) => k + 1);
       let cancelled = false;
       const task = InteractionManager.runAfterInteractions(() => {
         if (cancelled) return;
         const latest = merged[merged.length - 1]?.timestamp;
         if (latest) void markAsRead(latest);
+        requestAnimationFrame(() => {
+          if (cancelled) return;
+          setListAnchorKey((k) => k + 1);
+        });
       });
       return () => {
         cancelled = true;
@@ -369,6 +372,12 @@ export default function CompanyChatScreen() {
   };
 
   const keyboardOffset = Platform.OS === "ios" ? topInset : 0;
+  /**
+   * Onglets : la zone scène s’arrête au-dessus de la barre ; `safeBottom` doublait l’inset home + padding interne.
+   * Web : le `Screen` applique déjà `bottomInset` quand `safeBottom` — éviter de l’empiler ici.
+   */
+  const isWeb = Platform.OS === "web";
+  const composerBottomPad = isWeb ? t.spacingSm : t.spacingXs;
 
   const dispatchMetrics = useMemo(() => {
     const d = dashboardQuery.data;
@@ -395,15 +404,16 @@ export default function CompanyChatScreen() {
         scroll={false}
         keyboardAware={Platform.OS !== "web"}
         keyboardVerticalOffset={keyboardOffset}
+        androidKeyboardFallback={Platform.OS === "android"}
         withHorizontalPadding={false}
-        safeBottom
+        safeBottom={isWeb}
       >
         <View
           style={{
             flex: 1,
             paddingTop: t.spacingMd,
             paddingHorizontal: horizontalPadding,
-            paddingBottom: Math.max(t.spacingMd, bottomInset),
+            paddingBottom: composerBottomPad,
             gap: t.spacingXs,
             position: "relative",
           }}

@@ -1,10 +1,12 @@
-import type { ReactNode, ReactElement } from "react";
+import React, { type ReactNode, type ReactElement, type RefObject } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
@@ -16,6 +18,11 @@ export type ScreenProps = {
   backgroundColor?: string;
   /** Si true, enveloppe le contenu dans un ScrollView (landing, formulaires longs). */
   scroll?: boolean;
+  /**
+   * Bandeau fixe au-dessus du scroll (ex. en-tête entreprise).
+   * uniquement avec `scroll={true}` : reste visible pendant le défilement.
+   */
+  stickyHeader?: ReactNode;
   keyboardVerticalOffset?: number;
   contentContainerStyle?: StyleProp<ViewStyle>;
   /** Mettre false pour fond full-bleed ; combiner avec ResponsiveContainer pour le texte. */
@@ -41,6 +48,16 @@ export type ScreenProps = {
    * pose problème malgré `softwareKeyboardLayoutMode: "resize"` (risque double-offset si abus).
    */
   androidKeyboardFallback?: boolean;
+  /**
+   * iOS (ScrollView) : ajuste `contentInset` / indicateurs quand le clavier est ouvert.
+   * Activable par écran pour les formulaires longs ou landing scrollable.
+   */
+  automaticallyAdjustKeyboardInsets?: boolean;
+  /** Référence au `ScrollView` interne lorsque `scroll` est activé (scroll programmatique, tests). */
+  scrollViewRef?: RefObject<ScrollView | null>;
+  /** Uniquement si `scroll` : propagé au `ScrollView`. */
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollEventThrottle?: number;
 };
 
 /**
@@ -65,11 +82,18 @@ export function Screen({
   showsVerticalScrollIndicator = false,
   keyboardAware = false,
   androidKeyboardFallback = false,
+  automaticallyAdjustKeyboardInsets = false,
+  scrollViewRef,
+  onScroll,
+  scrollEventThrottle,
+  stickyHeader,
 }: ScreenProps) {
   const { topInset, bottomInset, horizontalPadding } = useAppViewport();
   const { scrollExtraBottomPadding, effectiveFontScale, fontScale } = useResponsiveTokens();
 
-  const paddingTop = safeTop ? topInset : 0;
+  /** Avec sticky header, la safe area haute est gérée dans le bandeau (fond pleine largeur sous la barre système). */
+  const shellPaddingTop =
+    stickyHeader != null && scroll && safeTop ? 0 : safeTop ? topInset : 0;
   const paddingBottom = safeBottom ? bottomInset : 0;
   const paddingHorizontal = withHorizontalPadding ? horizontalPadding : 0;
 
@@ -79,9 +103,13 @@ export function Screen({
       ? scrollExtraBottomPadding + (effectiveFontScale > 1 ? 6 * (effectiveFontScale - 1) : 0)
       : 12 + fontBoost) + extraScrollBottomPadding;
 
-  const inner = scroll ? (
+  const scrollBody = (
     <ScrollView
+      ref={scrollViewRef}
       keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
+      onScroll={onScroll}
+      scrollEventThrottle={scrollEventThrottle}
       refreshControl={refreshControl}
       showsVerticalScrollIndicator={showsVerticalScrollIndicator}
       contentContainerStyle={[
@@ -97,6 +125,28 @@ export function Screen({
     >
       {children}
     </ScrollView>
+  );
+
+  const stickyRendered =
+    stickyHeader != null && React.isValidElement(stickyHeader)
+      ? React.cloneElement(stickyHeader as React.ReactElement<{ topSafeAreaPx?: number }>, {
+          topSafeAreaPx: safeTop ? topInset : 0,
+        })
+      : stickyHeader;
+
+  const inner = scroll ? (
+    stickyHeader != null ? (
+      <View style={styles.flex}>
+        {/*
+          Bandeau full-bleed : pas de padding ici (sinon fond blanc / bordure ne vont pas bord à bord).
+          Le composant sticky (ex. EnterpriseHeader) applique le même gutter que le scroll en interne.
+        */}
+        <View style={styles.stickyHeaderSlot}>{stickyRendered}</View>
+        {scrollBody}
+      </View>
+    ) : (
+      scrollBody
+    )
   ) : (
     <View
       style={[
@@ -116,7 +166,7 @@ export function Screen({
         styles.screen,
         {
           backgroundColor,
-          paddingTop,
+          paddingTop: shellPaddingTop,
           paddingBottom,
         },
       ]}
@@ -147,6 +197,11 @@ export function Screen({
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+  },
+  /** Largeur 100 % pour que l’en-tête colle aux bords (web + safe areas gérées dans le composant). */
+  stickyHeaderSlot: {
+    alignSelf: "stretch",
+    width: "100%",
   },
   screen: {
     flex: 1,

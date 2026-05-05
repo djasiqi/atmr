@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Platform, Pressable, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, View } from "react-native";
 import {
   BaseFloatingBar,
   computeCompanyFloatingBottomPad,
@@ -44,7 +44,7 @@ function useActiveRouteName(state: BottomTabBarProps["state"]): string {
  * Barre d’onglets flottante (pilule) avec CTA centrale « nouvelle course »
  * (patron 2 + bouton rond + 2). « Autres » ouvre Clients et Paramètres.
  *
- * Texte (tabs / badges) : `maxFontSizeMultiplier` modéré, truncate ; pas de `allowFontScaling={false}`.
+ * Onglets : icônes + badge (chat) ; pas de libellé sous la barre — `label` sert à l’accessibilité.
  */
 export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const { usableWidth, bottomInset, horizontalPadding } = useAppViewport();
@@ -89,13 +89,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
               navigation.navigate("rides" as never);
             }}
           />
-          <View
-            style={{
-              alignItems: "center" as const,
-              justifyContent: "center" as const,
-              width: 52,
-            }}
-          >
+          <View style={styles.fabSlot}>
             <Pressable
               onPress={() => {
                 setMoreOpen(false);
@@ -105,26 +99,16 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
               }}
               disabled={!canCreateRide}
               accessibilityLabel="Nouvelle course"
+              accessibilityRole="button"
+              android_ripple={
+                Platform.OS === "android"
+                  ? { color: "rgba(255, 255, 255, 0.35)", borderless: true }
+                  : undefined
+              }
               style={({ pressed }) => [
-                {
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: canCreateRide ? C.brand : "rgba(10, 143, 122, 0.35)",
-                  alignItems: "center" as const,
-                  justifyContent: "center" as const,
-                },
-                Platform.select({
-                  web: { boxShadow: "0 1px 4px rgba(10, 58, 52, 0.2)" } as const,
-                  default: {
-                    elevation: 2,
-                    shadowColor: "#163A34",
-                    shadowOpacity: 0.2,
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowRadius: 2,
-                  },
-                }),
-                pressed && canCreateRide && { opacity: 0.92 },
+                styles.fabOuter,
+                !canCreateRide && styles.fabOuterDisabled,
+                pressed && canCreateRide && styles.fabOuterPressed,
               ]}
             >
               <Ionicons name="add" size={26} color="#FFFFFF" />
@@ -148,31 +132,15 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
           />
     </BaseFloatingBar>
 
-    <Modal visible={moreOpen} animationType="fade" transparent onRequestClose={() => setMoreOpen(false)}>
-        <View style={{ flex: 1, justifyContent: "flex-end" as const, backgroundColor: "rgba(0,0,0,0.4)" }}>
+    <Modal visible={moreOpen} animationType="slide" transparent onRequestClose={() => setMoreOpen(false)}>
+        <View style={styles.modalBackdrop}>
           <Pressable
             onPress={() => setMoreOpen(false)}
             style={{ position: "absolute" as const, top: 0, left: 0, right: 0, bottom: 0 }}
             accessibilityLabel="Fermer le menu"
           />
-          <View
-            style={[
-              {
-                backgroundColor: "#FFF",
-                borderTopLeftRadius: 16,
-                borderTopRightRadius: 16,
-                padding: 20,
-                paddingBottom: bottomInset + 20,
-                borderWidth: 1,
-                borderColor: C.border,
-                gap: 8,
-                maxWidth: 480,
-                width: "100%" as const,
-                alignSelf: "center" as const,
-              },
-            ]}
-          >
-            <AppText variant="sectionTitle" style={{ color: C.text, marginBottom: 4 }}>
+          <View style={[styles.sheetPanel, { paddingBottom: bottomInset + 20 }]}>
+            <AppText variant="sectionTitle" style={styles.sheetTitle}>
               Autres écrans
             </AppText>
             {HIDDEN_SHEET_ROUTES.map((row) => {
@@ -185,25 +153,16 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
                     void router.push(row.href);
                   }}
                   style={({ pressed }) => [
-                    {
-                      flexDirection: "row" as const,
-                      alignItems: "center" as const,
-                      gap: 10,
-                      paddingVertical: 12,
-                      paddingHorizontal: 10,
-                      borderRadius: 12,
-                      backgroundColor: active ? "rgba(10, 143, 122, 0.1)" : "transparent",
-                      borderWidth: 1,
-                      borderColor: active ? C.brand : C.border,
-                    },
-                    pressed && { opacity: 0.9 },
+                    styles.sheetRow,
+                    active ? styles.sheetRowActive : styles.sheetRowIdle,
+                    pressed && styles.sheetRowPressed,
                   ]}
                 >
                   <Ionicons name={row.icon} size={22} color={active ? C.brand : C.textMuted} />
                   <AppText
                     variant="body"
                     maxFontSizeMultiplier={1.35}
-                    style={{ fontWeight: "600", color: active ? C.brand : C.text }}
+                    style={[styles.sheetRowLabel, { color: active ? C.brand : C.text }]}
                   >
                     {row.label}
                   </AppText>
@@ -241,57 +200,177 @@ function BarTabButton({
     <Pressable
       onPress={onPress}
       accessibilityLabel={a11y}
-      style={({ pressed }) => [
-        { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4, borderRadius: 24 },
-        pressed && { backgroundColor: "rgba(0,0,0,0.04)" },
-      ]}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      android_ripple={
+        Platform.OS === "android"
+          ? { color: "rgba(10, 58, 52, 0.12)", borderless: false, foreground: true }
+          : undefined
+      }
+      style={({ pressed }) => [styles.tabHit, pressed && styles.tabHitPressed]}
     >
-      <View style={{ position: "relative", width: 28, height: 24, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={icon} size={22} color={active ? C.brand : C.textMuted} />
-        {badgeCount > 0 ? (
-          <View
-            style={{
-              position: "absolute" as const,
-              right: -2,
-              top: -2,
-              minWidth: 16,
-              minHeight: 16,
-              paddingHorizontal: 4,
-              borderRadius: 8,
-              backgroundColor: "rgba(10, 143, 122, 0.2)",
-              borderWidth: 1,
-              borderColor: C.brand,
-              alignItems: "center" as const,
-              justifyContent: "center" as const,
-            }}
-            accessibilityLabel={`${badgeCount}`}
-            accessibilityRole="text"
-            accessible
-          >
-            <AppText
-              variant="caption"
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.25}
-              style={{ fontWeight: "800" as const, color: C.brand }}
-            >
-              {badgeCount > 99 ? "99+" : String(badgeCount)}
-            </AppText>
-          </View>
-        ) : null}
+      <View style={[styles.tabIconShell, active && styles.tabIconShellActive]}>
+        <View style={styles.iconBadgeWrap}>
+          <Ionicons name={icon} size={22} color={active ? C.brand : C.textMuted} />
+          {badgeCount > 0 ? (
+            <View style={styles.badge} accessibilityLabel={`${badgeCount}`} accessibilityRole="text" accessible>
+              <AppText
+                variant="caption"
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.25}
+                style={styles.badgeText}
+              >
+                {badgeCount > 99 ? "99+" : String(badgeCount)}
+              </AppText>
+            </View>
+          ) : null}
+        </View>
       </View>
-      <AppText
-        variant="caption"
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.28}
-        ellipsizeMode="tail"
-        style={{
-          marginTop: 2,
-          fontWeight: "700" as const,
-          color: active ? C.brand : C.textMuted,
-        }}
-      >
-        {label}
-      </AppText>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  tabHit: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    borderRadius: 28,
+  },
+  tabHitPressed: {
+    opacity: Platform.OS === "ios" ? 0.88 : 1,
+  },
+  tabIconShell: {
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 44,
+    minHeight: 40,
+  },
+  tabIconShellActive: {
+    backgroundColor: "rgba(10, 143, 122, 0.1)",
+  },
+  iconBadgeWrap: {
+    position: "relative",
+    width: 28,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    right: -2,
+    top: -2,
+    minWidth: 16,
+    minHeight: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(10, 143, 122, 0.2)",
+    borderWidth: 1,
+    borderColor: C.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    fontWeight: "800",
+    color: C.brand,
+    fontSize: 10,
+    lineHeight: 12,
+  },
+  fabSlot: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 52,
+  },
+  fabOuter: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: C.brand,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Platform.select({
+      web: {
+        boxShadow: "0 1px 4px rgba(10, 58, 52, 0.2)",
+      } as const,
+      default: {
+        elevation: 2,
+        shadowColor: "#163A34",
+        shadowOpacity: 0.2,
+        shadowOffset: { width: 0, height: 1 },
+        shadowRadius: 2,
+      },
+    }),
+  },
+  fabOuterDisabled: {
+    backgroundColor: "rgba(10, 143, 122, 0.38)",
+    ...Platform.select({
+      web: { boxShadow: "none" } as const,
+      default: { elevation: 0, shadowOpacity: 0 },
+    }),
+  },
+  fabOuterPressed: {
+    opacity: 0.9,
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(15, 23, 42, 0.38)",
+  },
+  sheetPanel: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    gap: 6,
+    maxWidth: 480,
+    width: "100%",
+    alignSelf: "center",
+    ...Platform.select({
+      web: {
+        boxShadow: "0 -8px 40px rgba(15, 23, 42, 0.08)",
+      } as const,
+      default: {
+        elevation: 16,
+        shadowColor: "#0f172a",
+        shadowOpacity: 0.12,
+        shadowOffset: { width: 0, height: -4 },
+        shadowRadius: 24,
+      },
+    }),
+  },
+  sheetTitle: {
+    color: C.text,
+    marginBottom: 6,
+    fontWeight: "700",
+  },
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sheetRowIdle: {
+    backgroundColor: "transparent",
+    borderColor: "rgba(228, 231, 236, 0.85)",
+  },
+  sheetRowActive: {
+    backgroundColor: "rgba(10, 143, 122, 0.08)",
+    borderColor: C.brand,
+  },
+  sheetRowPressed: {
+    opacity: 0.92,
+  },
+  sheetRowLabel: {
+    fontWeight: "600",
+  },
+});

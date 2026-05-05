@@ -1,20 +1,86 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import type { ViewStyle } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import dayjs from "dayjs";
 import "dayjs/locale/fr";
-import { AppText } from "../../../design/ui/AppText";
 import { E } from "../theme/enterpriseOpsTheme";
 import { createShadow } from "../../../styles/shadowStyles";
+import { useAppViewport } from "../../../design/responsive/useAppViewport";
 
 dayjs.locale("fr");
 
-type EnterpriseHeaderProps = {
+/** Même plafond que `AppText` — évite écarts dashboard vs Courses si zoom accessibilité. */
+const HEADER_MAX_FONT_MULTIPLIER = 1.35;
+
+/**
+ * Ardoise unique pour date, libellé mode et ligne méta (réf. `color-121wj93` / `1s7ct43`).
+ * On n’utilise pas `AppText` ici : le variant `caption` injecte `brandTextMuted` (#5F7369) et des tailles
+ * responsives, ce qui cassait l’homogénéité avec la pilule date en `Text`.
+ */
+const HEADER_SLATE_FG = E.TEXT_SEC;
+/** Réf. `borderBottomColor-1a8zoe3` — séparation bandeau / contenu. */
+const STRIP_BORDER_SLATE = "rgba(148, 163, 184, 0.28)";
+
+const stripShadow = createShadow({
+  shadowColor: "rgba(15, 54, 43, 0.06)",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 1,
+  shadowRadius: 8,
+  elevation: 2,
+});
+
+/** Réf. `boxShadow-1brrdx6` (web) — même esprit que les cartes dispatch (`companyShellCardShadow`). */
+const stripShadowResolved: ViewStyle =
+  Platform.OS === "web"
+    ? ({ boxShadow: "0 2px 10px rgba(22, 58, 52, 0.06)" } as ViewStyle)
+    : stripShadow;
+
+const pressableTransitionWeb: ViewStyle =
+  Platform.OS === "web" ? ({ transition: "opacity 0.25s ease" } as ViewStyle) : {};
+
+/** Même ombre que les tuiles KPI dashboard (`kpiStat` / `dashboardSurfaceShadow`). */
+const headerKpiTileShadowNative = createShadow({
+  shadowColor: "#000000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.04,
+  shadowRadius: 8,
+  elevation: 2,
+});
+const headerKpiTileShadow: ViewStyle =
+  Platform.OS === "web"
+    ? ({ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)" } as ViewStyle)
+    : headerKpiTileShadowNative;
+
+/** Hauteur de ligne unique pour la rangée (titre, pilule date, chip mode) — évite le décalage baseline. */
+const HEADER_ROW_LINE_HEIGHT = 20;
+/** Rangée : pilule date + chip mode = 39px (aligné tuiles « En cours »). */
+const HEADER_ROW_MIN_HEIGHT = 39;
+
+export type EnterpriseHeaderProps = {
   date: string;
   mode: string | null;
   realtimeStatus: string;
+  /**
+   * `full` : ligne méta complète (journée ISO, mode, réseau).
+   * `networkOnly` : uniquement le statut réseau/temps réel (ex. tableau de bord).
+   */
+  metaDetail?: "full" | "networkOnly";
   /** Icône cloche / autre, à droite (ex. boîte entreprise). */
   trailing?: ReactNode;
+  /** Titre court optionnel (ex. « Dispatch ») — masqué si absent. */
+  title?: string;
+  /** Jour précédent / suivant ; sans callback, les chevrons sont désactivés (sauf si `onOpenDatePicker` masque les chevrons). */
+  onShiftDay?: (deltaDays: number) => void;
+  /** Ouvre la feuille « Choisir une date » (pilule date entière). */
+  onOpenDatePicker?: () => void;
+  /** Ouvre la feuille « Mode de dispatch » (chip mode). */
+  onOpenModePicker?: () => void;
+  /**
+   * Injecté par `Screen` (sticky) : hauteur de la zone sous la barre de statut / encoche.
+   * Le fond de la bande (`E.CARD`) remplit cette zone ; le contenu reste en dessous.
+   */
+  topSafeAreaPx?: number;
 };
 
 function formatMode(mode: string | null): string {
@@ -25,112 +91,407 @@ function formatMode(mode: string | null): string {
   return mode;
 }
 
-function formatRealtime(s: string): string {
-  if (s === "healthy") return "ok";
-  if (s === "idle") return "inactif";
-  return s;
+/** Pastille à côté du mode : état flux WS (plus de ligne texte « Réseau … »). */
+function realtimeSocketDotColor(status: string): string {
+  const s = status.toLowerCase().trim();
+  if (s === "healthy") return E.BRAND;
+  if (s === "degraded" || s === "connecting" || s === "reconnecting") return "#F59E0B";
+  return E.DANGER;
 }
 
-function formatDayLine(isoDate: string): string {
+/** Libellé accessibilité pour la pastille flux. */
+function realtimeStatusA11yLabel(status: string): string {
+  const s = status.toLowerCase().trim();
+  if (s === "healthy") return "Flux temps réel connecté";
+  if (s === "connecting") return "Flux temps réel connexion en cours";
+  if (s === "reconnecting") return "Flux temps réel reconnexion";
+  if (s === "degraded") return "Flux temps réel dégradé";
+  if (s === "failed") return "Flux temps réel indisponible";
+  if (s === "idle") return "Flux temps réel déconnecté";
+  return `Flux temps réel ${status}`;
+}
+
+/** Réf. dashboard / Courses web : `mar. 5 mai` (`r-color-121wj93`, `r-fontSize-1b43r93`). */
+function formatDayLineHeader(isoDate: string): string {
   const d = dayjs(isoDate);
   if (!d.isValid()) return isoDate;
-  return d.format("dddd D MMMM");
+  return d.format("ddd D MMM");
 }
 
-const headerCardShadow = createShadow({
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.04,
-  shadowRadius: 8,
-  elevation: 2,
-});
+export function EnterpriseHeader({
+  date,
+  mode,
+  realtimeStatus,
+  metaDetail = "full",
+  trailing,
+  title,
+  onShiftDay,
+  onOpenDatePicker,
+  onOpenModePicker,
+  topSafeAreaPx: topSafeAreaPxProp,
+}: EnterpriseHeaderProps) {
+  const { horizontalPadding, safeLeft, safeRight, topInset } = useAppViewport();
+  const topSafe = topSafeAreaPxProp !== undefined ? topSafeAreaPxProp : topInset;
+  const stripContentPadLeft = Math.max(horizontalPadding, safeLeft);
+  const stripContentPadRight = Math.max(horizontalPadding, safeRight);
 
-export function EnterpriseHeader({ date, mode, realtimeStatus, trailing }: EnterpriseHeaderProps) {
-  const dayLine = formatDayLine(date);
+  const dayLine = formatDayLineHeader(date);
+  const sheetDate = typeof onOpenDatePicker === "function";
+  const canShift = typeof onShiftDay === "function" && !sheetDate;
+
+  /** Sans statut réseau : la pastille du chip mode porte l’état WS. */
+  const fullMetaLine = `Journée ${date} · ${formatMode(mode)}`;
+  const socketA11y = realtimeStatusA11yLabel(realtimeStatus);
+  const dotFill = realtimeSocketDotColor(realtimeStatus);
+
+  const iconColor = sheetDate || canShift ? E.TEXT_SEC : E.TEXT_MUTED;
+  const chevronLeftSize = 18;
+  const chevronRightSize = 16;
+  const headerIconSize = 16;
+  const headerChevronDownSize = 14;
+
+  const dateBlock = sheetDate ? (
+    <Pressable
+      onPress={onOpenDatePicker}
+      style={({ pressed }) => [
+        s.datePillWrap,
+        s.datePillWrapSheet,
+        headerKpiTileShadow,
+        pressableTransitionWeb,
+        pressed && s.pressed,
+        Platform.OS === "web" ? s.datePillWeb : null,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Choisir une date. Jour affiché : ${dayLine}`}
+    >
+      <View style={s.headerIconWell} accessibilityElementsHidden>
+        <Ionicons name="calendar-outline" size={headerIconSize} color={E.TEXT_SEC} accessible={false} />
+      </View>
+      <Text
+        maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+        style={[s.datePillText, s.datePillTextSheet, s.datePillTextEmphasis]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+        accessible={false}
+      >
+        {dayLine}
+      </Text>
+      <Ionicons
+        name="chevron-down-outline"
+        size={headerChevronDownSize}
+        color={E.TEXT_MUTED}
+        style={s.datePillTrailingChevron}
+        accessible={false}
+      />
+    </Pressable>
+  ) : (
+    <View
+      style={[s.datePillWrap, headerKpiTileShadow]}
+      accessibilityRole="summary"
+      accessibilityLabel={`Jour : ${dayLine}`}
+    >
+      <Pressable
+        onPress={() => onShiftDay?.(-1)}
+        disabled={!canShift}
+        style={({ pressed }) => [s.chevronHit, !canShift && s.chevDisabled, pressed && canShift && s.pressed]}
+        accessibilityLabel="Jour précédent"
+        accessibilityRole="button"
+        hitSlop={8}
+      >
+        <Ionicons name="caret-back" size={chevronLeftSize} color={iconColor} />
+      </Pressable>
+      <Text
+        maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+        style={[s.datePillText, s.datePillTextEmphasis]}
+        numberOfLines={1}
+        pointerEvents="none"
+      >
+        {dayLine}
+      </Text>
+      <Pressable
+        onPress={() => onShiftDay?.(1)}
+        disabled={!canShift}
+        style={({ pressed }) => [s.chevronHit, !canShift && s.chevDisabled, pressed && canShift && s.pressed]}
+        accessibilityLabel="Jour suivant"
+        accessibilityRole="button"
+        hitSlop={8}
+      >
+        <Ionicons name="caret-forward" size={chevronRightSize} color={iconColor} />
+      </Pressable>
+    </View>
+  );
+
+  const modeBlock =
+    typeof onOpenModePicker === "function" ? (
+      <Pressable
+        onPress={onOpenModePicker}
+        style={({ pressed }) => [
+          s.modeChip,
+          headerKpiTileShadow,
+          pressableTransitionWeb,
+          pressed && s.pressed,
+          Platform.OS === "web" ? s.modeChipWeb : null,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={`Mode de dispatch. Actuel : ${formatMode(mode)}. ${socketA11y}. Appuyer pour choisir Manuel, Semi-auto ou Auto.`}
+      >
+        <View style={s.socketStatusWell} accessibilityLabel={socketA11y}>
+          <View style={[s.modeStatusDot, { backgroundColor: dotFill }]} />
+        </View>
+        <Text
+          maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+          style={[s.modeChipText, s.modeChipTextEmphasis]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {formatMode(mode)}
+        </Text>
+      </Pressable>
+    ) : (
+      <View
+        style={[s.modeChip, headerKpiTileShadow]}
+        accessibilityLabel={`Mode ${formatMode(mode)}. ${socketA11y}`}
+      >
+        <View style={s.socketStatusWell} accessibilityLabel={socketA11y}>
+          <View style={[s.modeStatusDot, { backgroundColor: dotFill }]} />
+        </View>
+        <Text
+          maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+          style={[s.modeChipText, s.modeChipTextEmphasis]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {formatMode(mode)}
+        </Text>
+      </View>
+    );
+
   return (
-    <View style={s.header}>
-      <View style={s.headerTop}>
-        <View style={s.headerLeft}>
-          <View style={s.headerIconWrap}>
-            <Ionicons name="car-outline" size={20} color={E.BRAND} />
+    <View style={[s.strip, { paddingTop: topSafe }]}>
+      <View
+        style={[
+          s.stripInner,
+          { paddingLeft: stripContentPadLeft, paddingRight: stripContentPadRight },
+        ]}
+      >
+        <View style={s.row}>
+          <View style={s.leftCluster}>
+            {title ? (
+              <View style={s.titleColumn}>
+                <Text
+                  maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
+                  style={s.inlineTitle}
+                  numberOfLines={1}
+                  accessibilityRole="header"
+                  {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
+                >
+                  {title}
+                </Text>
+              </View>
+            ) : null}
+            {dateBlock}
           </View>
-          <View style={s.titleBlock}>
-            <AppText variant="sectionTitle" style={s.headerTitle} accessibilityRole="header">
-              Courses
-            </AppText>
-            <AppText
-              variant="caption"
-              style={s.headerDate}
-              accessibilityLabel={`Jour sélectionné : ${dayLine}`}
-            >
-              {dayLine}
-            </AppText>
+          <View style={s.rightCluster}>
+            {modeBlock}
+            {trailing != null ? trailing : null}
           </View>
         </View>
-        {trailing != null ? <View style={s.headerRight}>{trailing}</View> : null}
+        {metaDetail === "full" ? (
+          <Text maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER} style={s.metaLine} numberOfLines={2}>
+            {fullMetaLine}
+          </Text>
+        ) : null}
       </View>
-      <AppText variant="caption" style={s.meta} numberOfLines={2}>
-        <AppText variant="caption" style={s.metaKey}>
-          Journée{" "}
-        </AppText>
-        <AppText variant="caption" style={s.metaValue}>
-          {date}
-        </AppText>
-        <AppText variant="caption" style={s.metaSep}>
-          {" "}
-          ·{" "}
-        </AppText>
-        <AppText variant="caption" style={s.metaKey}>
-          Mode{" "}
-        </AppText>
-        <AppText variant="caption" style={s.metaValue}>
-          {formatMode(mode)}
-        </AppText>
-        <AppText variant="caption" style={s.metaSep}>
-          {" "}
-          ·{" "}
-        </AppText>
-        <AppText variant="caption" style={s.metaKey}>
-          Réseau{" "}
-        </AppText>
-        <AppText variant="caption" style={s.metaValue}>
-          {formatRealtime(realtimeStatus)}
-        </AppText>
-      </AppText>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  header: {
+  /**
+   * Fond + ombre + bordure en pleine largeur.
+   * `paddingTop` dynamique (safe area) est appliqué en inline : le fond blanc monte sous la barre système.
+   */
+  strip: {
+    alignSelf: "stretch",
+    width: "100%",
     backgroundColor: E.CARD,
-    borderRadius: 16,
-    padding: 14,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: STRIP_BORDER_SLATE,
+    ...stripShadowResolved,
+  },
+  /** Même décalage vertical qu’avant sous la zone encoche (réf. ~14px `paddingTop-5t7p9m`). */
+  stripInner: {
+    width: "100%",
+    paddingTop: 14,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    minHeight: HEADER_ROW_MIN_HEIGHT,
+  },
+  /** Bloc gauche : titre optionnel + pilule date (réf. Courses / justify-between). */
+  leftCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  /** Bloc droit : chip mode + trailing. */
+  rightCluster: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
+  /** Colonne titre : même axe vertical que la pilule date / chip (rétrécit avant la pilule). */
+  titleColumn: {
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  inlineTitle: {
+    color: E.TEXT,
+    fontSize: 16,
+    fontWeight: "600" as const,
+    letterSpacing: 0.15,
+    lineHeight: HEADER_ROW_LINE_HEIGHT,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  /**
+   * Pilule date : même enveloppe que `kpiStat` (fond carte, bordure marque, rayon 16, ombre).
+   */
+  datePillWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 1,
+    minWidth: 0,
+    minHeight: 39,
+    gap: 8,
     borderWidth: 1,
     borderColor: E.BORDER,
-    marginBottom: 0,
-    ...headerCardShadow,
+    borderRadius: 16,
+    backgroundColor: E.CARD,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  headerTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 0 },
-  titleBlock: { flex: 1, minWidth: 0 },
-  headerIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,121,107,0.08)",
+  /** Variante feuille date : hauteur fixe 39px comme le chip mode. */
+  datePillWrapSheet: {
+    minWidth: 162,
+    height: 39,
+    minHeight: 39,
+    maxHeight: 39,
+    flexShrink: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 0,
+    gap: 8,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  /** Texte sur une ligne dans la pilule 39px. */
+  datePillTextSheet: {
+    fontSize: 14,
+    lineHeight: 18,
+    letterSpacing: 0.08,
+  },
+  /** Texte principal : lisible sans extrabold. */
+  datePillTextEmphasis: {
+    color: E.TEXT,
+    fontWeight: "600" as const,
+  },
+  datePillTrailingChevron: { opacity: 0.72 },
+  /** Réf. `kpiIconWrap` : 28×28, rayon 8, fond vert léger. */
+  headerIconWell: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: E.TEXT, letterSpacing: -0.2 },
-  headerDate: {
-    color: E.TEXT_SEC,
-    marginTop: 1,
-    textTransform: "capitalize" as const,
+  /** Emplacement du point WS : même cible 28×28 que l’icône KPI, sans fond. */
+  socketStatusWell: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  meta: { color: E.TEXT_MUTED, marginTop: 8 },
-  metaSep: { color: E.TEXT_MUTED },
-  metaKey: { color: E.TEXT_MUTED, fontWeight: "600" as const },
-  metaValue: { color: E.TEXT_MUTED, fontWeight: "400" as const },
+  /** Chevron cliquable sans zone paddée supplémentaire (hitSlop gère la cible). */
+  chevronHit: {
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 0,
+  },
+  chevDisabled: { opacity: 0.35 },
+  pressed: { opacity: 0.82 },
+  datePillText: {
+    flexShrink: 1,
+    minWidth: 0,
+    fontSize: 15,
+    fontWeight: "600" as const,
+    textTransform: "capitalize" as const,
+    letterSpacing: 0.2,
+    lineHeight: HEADER_ROW_LINE_HEIGHT,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+  },
+  /** Web : curseur bouton sur la pilule date cliquable. */
+  datePillWeb: {
+    cursor: "pointer" as const,
+    ...(Platform.OS === "web" ? ({ WebkitTapHighlightColor: "transparent" } as const) : {}),
+  },
+  modeChipWeb: {
+    cursor: "pointer" as const,
+    ...(Platform.OS === "web" ? ({ WebkitTapHighlightColor: "transparent" } as const) : {}),
+  },
+  /** Chip mode : aligné visuellement sur les tuiles KPI (`kpiStat`). */
+  modeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 39,
+    minHeight: 39,
+    maxHeight: 39,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    backgroundColor: E.CARD,
+    flexShrink: 0,
+    maxWidth: 220,
+    overflow: "hidden",
+  },
+  /** Point WS : seule touche de couleur vive du contrôle. */
+  modeStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modeChipText: {
+    fontSize: 14,
+    fontWeight: "500" as const,
+    flexShrink: 1,
+    minWidth: 0,
+    letterSpacing: 0.06,
+    lineHeight: 17,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+  },
+  modeChipTextEmphasis: {
+    color: E.TEXT,
+    fontWeight: "600" as const,
+  },
+  metaLine: {
+    marginTop: 9,
+    color: HEADER_SLATE_FG,
+    fontSize: 12,
+    fontWeight: "500" as const,
+    letterSpacing: 0.1,
+    lineHeight: 16,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
+  },
 });

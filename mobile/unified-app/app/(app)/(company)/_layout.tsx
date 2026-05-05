@@ -1,6 +1,6 @@
 import { Redirect, Tabs } from "expo-router";
 import { useEffect } from "react";
-import { AppState } from "react-native";
+import { AppState, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
@@ -56,8 +56,10 @@ export default function CompanyLayout() {
     return <Redirect href="/(app)/unauthorized" />;
   }
 
+  /** Fond onglets aligné sur `operations-app` `(enterprise)/_layout` (#F5F7F6). */
   return (
     <CompanyContextGuard>
+      <View style={{ flex: 1, backgroundColor: "#F5F7F6" }}>
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -131,6 +133,7 @@ export default function CompanyLayout() {
         <Tabs.Screen name="fleet-map" options={{ href: null }} />
         <Tabs.Screen name="dispatch" options={{ href: null }} />
       </Tabs>
+      </View>
     </CompanyContextGuard>
   );
 }

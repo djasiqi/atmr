@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   cancelCompanyRide,
+  simulateCompanyPricing,
   getDispatchStatus,
   getCompanyDispatchMessages,
   getCompanyDispatchModes,
@@ -413,6 +414,41 @@ describe("company api normalization", () => {
         target_company_id: 66,
       }),
       { allowWhenDisabled: true }
+    );
+  });
+
+  it("posts pricing simulation payload to pricing endpoint", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: {
+        amount: 48.2,
+        pricing: { amount: 48.2 },
+      },
+    });
+
+    const payload = {
+      pricing_profile_version_id: 10,
+      booking: {
+        pickup_at: "2026-05-05T14:30:00",
+        pickup_lat: 46.2,
+        pickup_lng: 6.1,
+        dropoff_lat: 46.21,
+        dropoff_lng: 6.15,
+      },
+    };
+    const response = await simulateCompanyPricing({
+      contextId: "company:42",
+      payload,
+    });
+
+    expect(response).toEqual(expect.objectContaining({ amount: 48.2 }));
+    expect(mockPost).toHaveBeenCalledWith(
+      "/pricing/simulate",
+      payload,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Active-Context-Id": "company:42",
+        }),
+      })
     );
   });
 });

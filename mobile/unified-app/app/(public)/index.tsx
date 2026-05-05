@@ -5,9 +5,11 @@ import {
   Easing,
   Image,
   ImageBackground,
+  Keyboard,
   Platform,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   Screen,
+  scrollAnchorAboveKeyboard,
   useAppViewport,
   useResponsiveTokens,
 } from "../../src/design/responsive";
@@ -24,19 +27,28 @@ import { AddressAutocompleteSuggestion } from "../../src/features/client/types";
 import { useSession } from "../../src/core/sessionProvider";
 import { resolveInitialRoute } from "../../src/core/navigation/resolveInitialRoute";
 import { ADDRESS_SEARCH_TEXT_PLACEHOLDER } from "../../src/features/public/addressInputPlaceholder";
+import { AppText } from "../../src/design/ui/AppText";
 import {
   PublicAddressSearchBar,
   type AddressSearchRegion,
 } from "../../src/features/public/PublicAddressSearchBar";
 
+/** Recherche d’adresses limitée à la Suisse (sélecteur pays retiré de l’UI). */
+const PUBLIC_ADDRESS_COUNTRY: AddressSearchRegion = "CH";
+/**
+ * Alias stable (sans useState) — évite les ReferenceError si Metro / fast refresh garde
+ * un ancien closure ou une dépendance d’effet nommée `addressSearchRegion`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- export symbol conservé pour anciens bundles
+const addressSearchRegion = PUBLIC_ADDRESS_COUNTRY;
 const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 const UI_DARK_TEXT = "#163A34";
 const UI_MUTED_TEXT = "#5F7369";
 const UI_SURFACE = "#F3F7F5";
 
-/** Aligné sur la barre d’adresse compacte (`PublicAddressSearchBar`). */
-const SUGGESTION_ROW_HEIGHT = 30;
+/** Aligné sur la barre d’adresse (`PublicAddressSearchBar`, minHeight ~50). */
+const SUGGESTION_ROW_HEIGHT = 46;
 
 function splitSuggestionLabel(value: string): { primary: string; secondary: string } {
   const raw = String(value || "").trim();
@@ -89,8 +101,13 @@ export default function PublicHomeScreen() {
   /** Biais lat/lon pour l’API autocomplete après géolocalisation. */
   const pickupGeoBiasRef = useRef<{ lat: number; lon: number } | null>(null);
   const pickupValueRef = useRef(pickupValue);
-  const [addressSearchRegion, setAddressSearchRegion] = useState<AddressSearchRegion>("CH");
-  const addressSearchRegionRef = useRef<AddressSearchRegion>("CH");
+  const landingScrollRef = useRef<ScrollView>(null);
+  const landingScrollOffsetYRef = useRef(0);
+  const pickupInputAnchorRef = useRef<View>(null);
+  const dropoffInputAnchorRef = useRef<View>(null);
+  /** Natif : padding scroll supplémentaire pendant que le clavier est visible (aligné sur `login.tsx`). */
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
   const useNativeDriver = Platform.OS !== "web";
   const accentLayout = useMemo(() => {
     const narrowShortSide = viewport.isTiny || viewport.isCompact;
@@ -145,8 +162,24 @@ export default function PublicHomeScreen() {
   }, [pickupValue]);
 
   useEffect(() => {
-    addressSearchRegionRef.current = addressSearchRegion;
-  }, [addressSearchRegion]);
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const computed = h > 0 ? Math.round(h + 48) : 300;
+      setKeyboardScrollPaddingBottom(Math.max(260, computed));
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardScrollPaddingBottom(0);
+      landingScrollRef.current?.scrollTo({ y: 0, animated: true });
+      landingScrollOffsetYRef.current = 0;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (reduceMotion) {
@@ -273,7 +306,7 @@ export default function PublicHomeScreen() {
       try {
         const results = await autocompleteAddress(trimmed, {
           limit: 4,
-          country: addressSearchRegion,
+          country: PUBLIC_ADDRESS_COUNTRY,
           ...(bias ? { lat: bias.lat, lon: bias.lon } : {}),
         });
         if (cancelled) return;
@@ -301,7 +334,7 @@ export default function PublicHomeScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeAutocomplete, pickupValue, addressSearchRegion]);
+  }, [activeAutocomplete, pickupValue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -317,7 +350,7 @@ export default function PublicHomeScreen() {
       try {
         const results = await autocompleteAddress(trimmed, {
           limit: 4,
-          country: addressSearchRegion,
+          country: PUBLIC_ADDRESS_COUNTRY,
         });
         if (!cancelled) {
           setDropoffSuggestions(results.slice(0, 4));
@@ -333,7 +366,7 @@ export default function PublicHomeScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [activeAutocomplete, dropoffValue, addressSearchRegion]);
+  }, [activeAutocomplete, dropoffValue]);
 
   async function suggestPickupFromCurrentLocation(): Promise<void> {
     if (isResolvingPickupLocation) return;
@@ -363,7 +396,7 @@ export default function PublicHomeScreen() {
             lat,
             lon,
             limit: 1,
-            country: addressSearchRegionRef.current,
+            country: PUBLIC_ADDRESS_COUNTRY,
           });
           if (!nearest[0]) {
             const nearbyQueries = ["Rue", "Avenue", "Chemin"];
@@ -372,7 +405,7 @@ export default function PublicHomeScreen() {
                 lat,
                 lon,
                 limit: 1,
-                country: addressSearchRegionRef.current,
+                country: PUBLIC_ADDRESS_COUNTRY,
               });
               if (around[0]) {
                 nearest = around;
@@ -403,7 +436,7 @@ export default function PublicHomeScreen() {
                 lat,
                 lon,
                 limit: 4,
-                country: addressSearchRegionRef.current,
+                country: PUBLIC_ADDRESS_COUNTRY,
               });
               if (!isMountedRef.current || requestGen !== pickupLocationGenRef.current) return;
               const geoLabel = label.trim().toLowerCase();
@@ -490,7 +523,19 @@ export default function PublicHomeScreen() {
           safeBottom={false}
           withHorizontalPadding={false}
           includeSafeAreaInScrollBottomPadding={false}
-          contentContainerStyle={{ minHeight: viewport.usableHeight }}
+          keyboardVerticalOffset={Platform.OS === "ios" ? viewport.topInset : 0}
+          automaticallyAdjustKeyboardInsets={Platform.OS !== "web"}
+          scrollViewRef={landingScrollRef}
+          onScroll={(e) => {
+            landingScrollOffsetYRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+          contentContainerStyle={[
+            { minHeight: viewport.usableHeight },
+            Platform.OS !== "web" && keyboardVisible
+              ? [styles.scrollContentWithKeyboard, { paddingBottom: keyboardScrollPaddingBottom }]
+              : null,
+          ]}
         >
         <View
           style={[
@@ -503,8 +548,16 @@ export default function PublicHomeScreen() {
           ]}
         >
           <ResponsiveContainer
-            style={[styles.centerColumn, { padding: layout.columnPadding, maxWidth: layout.contentMaxWidth }]}
+            style={[
+              styles.centerColumn,
+              {
+                flex: 1,
+                padding: layout.columnPadding,
+                maxWidth: layout.contentMaxWidth,
+              },
+            ]}
           >
+            <View style={styles.landingTopSpacer} />
             <View style={styles.heroSection}>
               <Animated.View
                 style={[
@@ -532,21 +585,26 @@ export default function PublicHomeScreen() {
                     marginTop: layout.titleMarginTop,
                     opacity: titleOpacity,
                     transform: [{ translateY: titleTranslateY }],
+                    width: "100%",
+                    maxWidth: layout.titleMaxWidth,
                   },
                 ]}
               >
                 <Text
                   maxFontSizeMultiplier={1.28}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.38}
                   style={[
                     styles.title,
                     {
+                      width: "100%",
                       fontSize: layout.titleFontSize,
                       lineHeight: layout.titleLineHeight + 1,
-                      maxWidth: layout.titleMaxWidth,
                     },
                   ]}
                 >
-                  Transport{"\n"}médical
+                  Transport{"\u00A0"}médical
                 </Text>
               </Animated.View>
 
@@ -591,12 +649,16 @@ export default function PublicHomeScreen() {
                         maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
-                          { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
+                          { fontSize: layout.cardLabelSize },
                         ]}
                       >
                         Départ
                       </Text>
-                      <View style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}>
+                      <View
+                        ref={pickupInputAnchorRef}
+                        collapsable={false}
+                        style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}
+                      >
                         <PublicAddressSearchBar
                           value={pickupValue}
                           onChangeText={(value) => {
@@ -607,6 +669,11 @@ export default function PublicHomeScreen() {
                             setPickupValue(value);
                           }}
                           onFocus={() => {
+                            scrollAnchorAboveKeyboard(
+                              landingScrollRef,
+                              landingScrollOffsetYRef,
+                              pickupInputAnchorRef,
+                            );
                             setActiveAutocomplete("pickup");
                             setFocusedField("pickup");
                             if (!pickupValue.trim()) {
@@ -634,8 +701,6 @@ export default function PublicHomeScreen() {
                           accessibilityLabel="Rechercher une adresse de départ"
                           fontSize={layout.cardValueSize}
                           fontWeight={layout.cardValueWeight}
-                          region={addressSearchRegion}
-                          onRegionChange={setAddressSearchRegion}
                         />
                       </View>
                       {isResolvingPickupLocation ? (
@@ -718,18 +783,27 @@ export default function PublicHomeScreen() {
                         maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
-                          { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
+                          { fontSize: layout.cardLabelSize },
                         ]}
                       >
                         Destination
                       </Text>
-                      <View style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}>
+                      <View
+                        ref={dropoffInputAnchorRef}
+                        collapsable={false}
+                        style={[styles.cardInputRow, { marginTop: layout.cardLineGap }]}
+                      >
                         <PublicAddressSearchBar
                           value={dropoffValue}
                           onChangeText={(value) => {
                             setDropoffValue(value);
                           }}
                           onFocus={() => {
+                            scrollAnchorAboveKeyboard(
+                              landingScrollRef,
+                              landingScrollOffsetYRef,
+                              dropoffInputAnchorRef,
+                            );
                             setActiveAutocomplete("dropoff");
                             setFocusedField("dropoff");
                           }}
@@ -749,8 +823,6 @@ export default function PublicHomeScreen() {
                           accessibilityLabel="Rechercher une adresse de destination"
                           fontSize={layout.cardValueSize}
                           fontWeight={layout.cardValueWeight}
-                          region={addressSearchRegion}
-                          onRegionChange={setAddressSearchRegion}
                         />
                       </View>
                       {activeAutocomplete === "dropoff" && dropoffSuggestions.length > 0 ? (
@@ -800,7 +872,7 @@ export default function PublicHomeScreen() {
                         maxFontSizeMultiplier={1.25}
                         style={[
                           styles.cardLabel,
-                          { fontSize: layout.cardLabelSize, opacity: layout.cardLabelOpacity },
+                          { fontSize: layout.cardLabelSize },
                         ]}
                       >
                         Départ prévu
@@ -868,12 +940,9 @@ export default function PublicHomeScreen() {
                     pressed && styles.ctaPressed,
                   ]}
                 >
-                  <Text
-                    maxFontSizeMultiplier={1.28}
-                    style={[styles.ctaText, { fontSize: layout.ctaFontSize }]}
-                  >
+                  <AppText variant="label" style={styles.ctaText}>
                     Réservation rapide
-                  </Text>
+                  </AppText>
                 </Pressable>
               </Animated.View>
 
@@ -946,7 +1015,7 @@ export default function PublicHomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4FAF8",
+    backgroundColor: "#EAF3F1",
     overflow: "hidden",
   },
   staticContainer: {
@@ -954,8 +1023,16 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     overflow: "hidden",
   },
+  /**
+   * iOS / Android : uniquement pendant `keyboardDidShow`.
+   * Sans clavier : seul `minHeight: viewport.usableHeight` s’applique (pas de jeu de scroll artificiel).
+   */
+  scrollContentWithKeyboard: {
+    justifyContent: "flex-start",
+    paddingTop: 28,
+  },
   backgroundImage: {
-    opacity: 0.09,
+    opacity: 0.08,
   },
   accentGlowLarge: {
     position: "absolute",
@@ -984,6 +1061,11 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
   },
+  /** Répartit l’espace vertical avec `flexSpacer` pour rapprocher logo + titre + carte du centre. */
+  landingTopSpacer: {
+    flexGrow: 1,
+    minHeight: 0,
+  },
   flexSpacer: {
     flexGrow: 1,
     minHeight: 18,
@@ -1011,19 +1093,19 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
     ...Platform.select({
-      web: { boxShadow: "0 10px 24px rgba(30,75,67,0.11)" },
+      web: { boxShadow: "0 20px 48px rgba(22,58,52,0.12)" },
       default: {
-        shadowColor: "#1E4B43",
-        shadowOpacity: 0.11,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 2,
+        shadowColor: "#163A34",
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
       },
     }),
   },
   cardInner: {
     borderWidth: 1,
-    borderColor: "rgba(145,165,157,0.34)",
+    borderColor: "rgba(145,165,157,0.45)",
     backgroundColor: "#FFFFFF",
   },
   cardInnerFallback: {
@@ -1039,7 +1121,7 @@ const styles = StyleSheet.create({
   routeDotDeparture: {
     position: "absolute",
     left: 0,
-    top: 9,
+    top: 12,
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -1048,7 +1130,7 @@ const styles = StyleSheet.create({
   routeDotArrival: {
     position: "absolute",
     left: 0,
-    top: 9,
+    top: 12,
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -1067,7 +1149,7 @@ const styles = StyleSheet.create({
   routeLineTrack: {
     position: "absolute",
     left: 4,
-    top: 20,
+    top: 26,
     width: 2,
     bottom: -10,
     backgroundColor: "rgba(22,58,52,0.15)",
@@ -1083,10 +1165,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   cardLabel: {
-    color: UI_MUTED_TEXT,
+    color: "#0A8F7A",
     lineHeight: 16,
-    letterSpacing: 0.25,
-    fontWeight: "600",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    fontWeight: "500",
   },
   cardValue: {
     lineHeight: 21,
@@ -1102,7 +1185,7 @@ const styles = StyleSheet.create({
   },
   suggestionList: {
     marginTop: 8,
-    borderRadius: 8,
+    borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.62)",
@@ -1126,8 +1209,8 @@ const styles = StyleSheet.create({
   },
   suggestionPrimary: {
     color: UI_DARK_TEXT,
-    fontSize: 11,
-    lineHeight: 13,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: "600",
     ...Platform.select({
       android: { includeFontPadding: false },
@@ -1135,10 +1218,10 @@ const styles = StyleSheet.create({
     }),
   },
   suggestionSecondary: {
-    marginTop: 1,
+    marginTop: 2,
     color: UI_MUTED_TEXT,
-    fontSize: 10,
-    lineHeight: 11,
+    fontSize: 12,
+    lineHeight: 15,
     ...Platform.select({
       android: { includeFontPadding: false },
       default: {},
@@ -1154,21 +1237,14 @@ const styles = StyleSheet.create({
   ctaButton: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0B9A84",
-    ...Platform.select({
-      web: { boxShadow: "0 6px 12px rgba(11,94,84,0.24)" },
-      default: {
-        shadowColor: "#0B5E54",
-        shadowOpacity: 0.24,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 5,
-      },
-    }),
+    backgroundColor: "#0A8F7A",
   },
   ctaText: {
     color: "#FFFFFF",
-    fontWeight: "700",
+    letterSpacing: 0.2,
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600",
   },
   ctaPressed: {
     opacity: 0.94,
@@ -1177,7 +1253,7 @@ const styles = StyleSheet.create({
   microProof: {
     textAlign: "center",
     alignSelf: "center",
-    color: "#365B53",
+    color: UI_MUTED_TEXT,
     fontWeight: "600",
     letterSpacing: 0.15,
     paddingHorizontal: 4,
@@ -1197,13 +1273,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   secondaryLinkText: {
-    color: "#163A34",
+    color: "#0A8F7A",
     letterSpacing: 0.2,
-    lineHeight: 20,
+    lineHeight: 16,
     fontWeight: "600",
   },
   secondaryDot: {
-    color: "#163A34",
+    color: UI_MUTED_TEXT,
     marginHorizontal: 8,
   },
   secondaryPressed: {

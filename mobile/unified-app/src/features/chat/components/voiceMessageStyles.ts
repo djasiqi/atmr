@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
+import { CHAT_BUBBLE_OWN } from "../chatPalette";
 
-const C_BUBBLE_OWN = "#0d9488";
+const C_BUBBLE_OWN = CHAT_BUBBLE_OWN;
 
 /** Aligné sur `CHAT_IMAGE_INNER_MAX_W` dans MessageBubble. */
 export const VOICE_GROUP_MAX_W = 320 - 32;

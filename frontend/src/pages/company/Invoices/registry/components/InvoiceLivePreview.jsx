@@ -142,7 +142,7 @@ function lineDetailDateLabel(line, invoice) {
   return null;
 }
 
-/** Facture clinique S2 : nom du patient sous la description (la date est en colonne). */
+/** Facture clinique S2 : nom du client transporté sous la description (la date est en colonne). */
 function rideLinePatientSubline(line, invoice) {
   if (invoice?.billing_strategy !== 's2_clinic_monthly') return null;
   const m = line?.line_meta;
@@ -151,7 +151,7 @@ function rideLinePatientSubline(line, invoice) {
     meta?.patient_name != null && String(meta.patient_name).trim() !== ''
       ? String(meta.patient_name).trim()
       : null;
-  return name ? `Patient : ${name}` : null;
+  return name ? `Client : ${name}` : null;
 }
 
 /**

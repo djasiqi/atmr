@@ -5,11 +5,15 @@ import { Audio } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import {
   C_BRAND,
+  C_FIELD_ICON,
+  C_FIELD_PLACEHOLDER,
+  C_FIELD_TEXT,
+  C_ICON_DISABLED,
   C_MUTED,
   C_RECORDING,
-  C_TEXT,
   styles,
   textInputWebFix,
+  webFieldShellFocusOutline,
 } from "./chatComposerStyles";
 
 type ExpoAudioRecording = InstanceType<typeof Audio.Recording>;
@@ -123,11 +127,6 @@ export function ChatComposer({
     };
   }, []);
 
-  const fieldShadow =
-    Platform.OS === "web"
-      ? { boxShadow: "0 1px 2px 0 rgba(0,0,0,0.04)" as const }
-      : { elevation: 0 };
-
   const sendCircleBg = isRecording ? C_RECORDING : C_BRAND;
   const sendCircleBorder = isRecording ? C_RECORDING : C_BRAND;
 
@@ -143,8 +142,8 @@ export function ChatComposer({
         <View
           style={[
             styles.fieldShell,
-            fieldShadow,
             inputFocused && styles.fieldShellFocused,
+            webFieldShellFocusOutline(inputFocused),
           ]}
         >
           {dialOpen && hasDial ? (
@@ -186,7 +185,7 @@ export function ChatComposer({
             onFocus={() => setInputFocused(true)}
             onBlur={() => setInputFocused(false)}
             placeholder={placeholder}
-            placeholderTextColor={C_MUTED}
+            placeholderTextColor={C_FIELD_PLACEHOLDER}
             returnKeyType="default"
             underlineColorAndroid="transparent"
             style={[
@@ -203,12 +202,11 @@ export function ChatComposer({
               accessibilityRole="button"
               accessibilityLabel={dialOpen ? "Fermer les actions de pièces jointes" : "Ouvrir les actions de pièces jointes"}
               accessibilityState={{ expanded: dialOpen }}
-              hitSlop={6}
             >
               <Ionicons
                 name={dialOpen ? "close" : "attach-outline"}
                 size={dialOpen ? 22 : 24}
-                color={dialOpen ? C_TEXT : C_MUTED}
+                color={dialOpen ? C_FIELD_TEXT : C_FIELD_ICON}
               />
             </Pressable>
           ) : null}
@@ -248,7 +246,7 @@ export function ChatComposer({
             accessibilityLabel="La saisie vocale n’est pas disponible sur le web. Utilisez le clavier."
             pointerEvents="none"
           >
-            <Ionicons name="mic-off-outline" size={22} color="rgba(255,255,255,0.75)" />
+            <Ionicons name="mic-off-outline" size={22} color={C_ICON_DISABLED} />
           </View>
         )}
       </View>

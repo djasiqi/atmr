@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { Platform, View } from "react-native";
-import { borderMuted, surfaceModal } from "../responsive/colors";
+import { borderMuted, surfaceCard } from "../responsive/colors";
 import { useResponsiveTokens } from "../responsive/useResponsiveTokens";
+
+/** Contour pilule entreprise : teinte marque très légère. */
+const COMPANY_BAR_BORDER = "rgba(0, 121, 107, 0.08)";
 
 export type FloatingBarPreset = "client" | "company";
 
@@ -33,8 +36,8 @@ const PRESETS: Record<
     },
   },
   company: {
-    barBg: surfaceModal,
-    border: "rgba(228, 231, 236, 0.9)",
+    barBg: surfaceCard,
+    border: COMPANY_BAR_BORDER,
     webShadow: "0 4px 20px rgba(15, 23, 42, 0.08)",
     nativeShadow: {
       shadowColor: "#0F172A",

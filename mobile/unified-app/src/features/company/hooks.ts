@@ -750,7 +750,13 @@ const companyChatLastReadSubKey = (contextId: string) => [...companyQueryKeys.ro
 
 /**
  * Compteur de messages reçus non lus (onglet + badge) d’après l’horodatage
- * de dernière lecture (AsyncStorage). Les messages de la journée courante uniquement, aligné sur l’écran chat.
+ * de dernière lecture stocké localement (**AsyncStorage** par contexte).
+ *
+ * **Écart produit / backend** : il n’existe pas aujourd’hui d’endpoint dispatch « read receipt »
+ * côté API unifiée ; la « lecture » n’est pas synchronisée entre appareils ni avec le serveur.
+ * `markAsRead` met à jour le cache React Query + AsyncStorage (`company-dispatch-chat-last-read:{contextId}`).
+ * Pour des accusés serveur ou une reprise multi-device, prévoir p.ex. `PATCH …/chat/read` avec
+ * `last_read_message_id` ou équivalent, + invalidation du badge.
  */
 export function useCompanyChatUnread() {
   const contextId = useActiveCompanyContextId();

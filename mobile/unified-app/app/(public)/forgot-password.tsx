@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
+  Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +14,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { apiClient } from "../../src/core/api/client";
-import { AppText, Screen, useAppViewport } from "../../src/design/responsive";
+import { AppText, Screen, scrollAnchorAboveKeyboard, useAppViewport } from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 
@@ -23,6 +25,31 @@ export default function ForgotPasswordScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const forgotScrollRef = useRef<ScrollView | null>(null);
+  const forgotScrollOffsetYRef = useRef(0);
+  const emailFieldAnchorRef = useRef<View | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const computed = h > 0 ? Math.round(h + 48) : 300;
+      setKeyboardScrollPaddingBottom(Math.max(260, computed));
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardScrollPaddingBottom(0);
+      forgotScrollRef.current?.scrollTo({ y: 0, animated: true });
+      forgotScrollOffsetYRef.current = 0;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const submit = async () => {
     setPending(true);
@@ -52,7 +79,19 @@ export default function ForgotPasswordScreen() {
         scroll
         backgroundColor="transparent"
         keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
-        contentContainerStyle={styles.scrollContent}
+        automaticallyAdjustKeyboardInsets={Platform.OS !== "web"}
+        androidKeyboardFallback={Platform.OS === "android"}
+        scrollViewRef={forgotScrollRef}
+        onScroll={(e) => {
+          forgotScrollOffsetYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS !== "web" && keyboardVisible
+            ? [styles.scrollContentWithKeyboard, { paddingBottom: keyboardScrollPaddingBottom }]
+            : null,
+        ]}
       >
         <View style={styles.card}>
           <Pressable
@@ -76,7 +115,7 @@ export default function ForgotPasswordScreen() {
             Saisissez votre adresse email pour recevoir un lien de reinitialisation.
           </Text>
 
-          <View style={styles.fieldBlock}>
+          <View ref={emailFieldAnchorRef} collapsable={false} style={styles.fieldBlock}>
             <TextInput
               value={email}
               onChangeText={(value) => {
@@ -91,7 +130,11 @@ export default function ForgotPasswordScreen() {
               textContentType="emailAddress"
               returnKeyType="done"
               onSubmitEditing={() => void submit()}
+              onFocus={() =>
+                scrollAnchorAboveKeyboard(forgotScrollRef, forgotScrollOffsetYRef, emailFieldAnchorRef)
+              }
               style={styles.fieldInput}
+              {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
             />
           </View>
 
@@ -150,6 +193,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingVertical: 24,
+  },
+  /** Natif, uniquement clavier ouvert : même logique que `login.tsx` (jeu de scroll + padding bas dynamique). */
+  scrollContentWithKeyboard: {
+    justifyContent: "flex-start",
+    paddingTop: 28,
   },
   card: {
     width: "100%",

@@ -45,6 +45,8 @@ const TOKEN_WAIT_MAX = 12;
 const TOKEN_WAIT_MS = 350;
 const TOKEN_WAIT_FIRST_MS = 80;
 
+const CONNECT_ERROR_DEV_LOG_COOLDOWN_MS = 8_000;
+
 class CompanyRealtimeBridge {
   private socket: Socket | null = null;
   private listeners = new Set<CompanyRealtimeListener>();
@@ -52,6 +54,9 @@ class CompanyRealtimeBridge {
   private tokenWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenWaitAttempt = 0;
   private hasConnectedOnce = false;
+  /** Limite le spam `console.warn` en dev lors de reconnexions en boucle. */
+  private lastConnectErrorDevLogAt = 0;
+  private lastConnectErrorDevLogMsg: string | null = null;
   private snapshot: CompanyRealtimeSnapshot = {
     status: "idle",
     connected: false,
@@ -212,8 +217,9 @@ class CompanyRealtimeBridge {
     this.clearTokenWait();
 
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
-      // Polling d’abord = meilleure tenue (proxies, réseau mobile) puis upgrade WS
-      transports: ["polling", "websocket"],
+      // Web : WebSocket en premier (souvent plus fiable que le long-poll XHR cross-origin).
+      // Natif : polling d’abord (proxies / réseau mobile), puis upgrade WS.
+      transports: Platform.OS === "web" ? ["websocket", "polling"] : ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: 25,
       reconnectionDelay: 500,
@@ -233,6 +239,7 @@ class CompanyRealtimeBridge {
     this.socket = socket;
 
     socket.on("connect", () => {
+      this.lastConnectErrorDevLogMsg = null;
       const isReconnect = this.hasConnectedOnce;
       this.hasConnectedOnce = true;
       this.snapshot = {
@@ -263,11 +270,19 @@ class CompanyRealtimeBridge {
     });
 
     socket.on("connect_error", (error) => {
+      const msg = error instanceof Error ? error.message : String(error);
       if (typeof __DEV__ !== "undefined" && __DEV__) {
-        // Aide au diag : mauvaise EXPO_PUBLIC_API_BASE_URL, JWT, capacité, pare-feu, etc.
-        console.warn("[CompanyRealtimeBridge] connect_error:", error?.message || error);
+        const now = Date.now();
+        const cooled =
+          now - this.lastConnectErrorDevLogAt >= CONNECT_ERROR_DEV_LOG_COOLDOWN_MS ||
+          msg !== this.lastConnectErrorDevLogMsg;
+        if (cooled) {
+          console.warn("[CompanyRealtimeBridge] connect_error:", msg);
+          this.lastConnectErrorDevLogAt = now;
+          this.lastConnectErrorDevLogMsg = msg;
+        }
       }
-      this.setStatus("reconnecting", error instanceof Error ? error.message : String(error));
+      this.setStatus("reconnecting", msg);
     });
 
     socket.io.on("reconnect_attempt", () => {

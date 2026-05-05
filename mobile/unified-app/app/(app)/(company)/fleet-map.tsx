@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
@@ -9,7 +9,6 @@ import { AppText, Screen } from "../../../src/design/responsive";
 
 const C = {
   text: "#163A34",
-  textMuted: "#5F7369",
   pageBg: "#EAF3F1",
   brand: "#0A8F7A",
 } as const;
@@ -34,18 +33,10 @@ export default function CompanyFleetMapScreen() {
               Carte flotte
             </AppText>
           </View>
-          {Platform.OS === "web" ? (
-            <View style={styles.webMsg}>
-              <AppText variant="bodyMuted" style={styles.webMsgText}>
-                La carte n’est pas disponible sur le web. Utilisez l’application mobile.
-              </AppText>
-            </View>
-          ) : (
-            /* ScrollView interne : évite d’imbriquer deux <Screen> (double safe area). Le Screen externe fournit déjà les insets. */
-            <ScrollView contentContainerStyle={styles.page} style={styles.scroll}>
-              <EnterpriseDriversMap drivers={live.drivers} showTitleRow />
-            </ScrollView>
-          )}
+          {/* ScrollView interne : évite d’imbriquer deux <Screen> (double safe area). Le Screen externe fournit déjà les insets. */}
+          <ScrollView contentContainerStyle={styles.page} style={styles.scroll}>
+            <EnterpriseDriversMap drivers={live.drivers} showTitleRow />
+          </ScrollView>
         </View>
       </Screen>
     </PermissionGuard>
@@ -65,6 +56,4 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   title: { color: C.text, fontWeight: "800" as const, flex: 1 },
   page: { padding: 12, paddingBottom: 32 },
-  webMsg: { padding: 20 },
-  webMsgText: { lineHeight: 20 },
 });

@@ -12,6 +12,15 @@ import { isDispatchCompleted, isDispatchCancelled } from "../utils/companyDispat
 import { isPickupSentinel } from "../utils/pickupSentinel";
 import { createShadow } from "../../../styles/shadowStyles";
 
+/** Même coque que `operations-app` `EnterpriseCard` + `RideSnippetCard`. */
+const cardSurfaceShadow = createShadow({
+  shadowColor: "#000000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.04,
+  shadowRadius: 8,
+  elevation: 2,
+});
+
 dayjs.locale("fr");
 
 const palette = {
@@ -283,22 +292,14 @@ export function DispatchRideListCard({
   );
 }
 
-const cardShadow = createShadow({
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.04,
-  shadowRadius: 8,
-  elevation: 2,
-});
-
 const styles = StyleSheet.create({
   card: {
     backgroundColor: E.CARD,
     borderRadius: 14,
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
     borderColor: E.BORDER,
-    ...cardShadow,
+    ...cardSurfaceShadow,
   },
   summaryRow: { flexDirection: "row", alignItems: "center", minWidth: 0 },
   /** Heure + client + pastille (repli / dépli) */
@@ -306,14 +307,21 @@ const styles = StyleSheet.create({
   /** Client seul (tap) + pastille CTA « Non assigné » séparée, pour ne pas mélanger tap déplier / assigner */
   summaryMain: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 },
   summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "row", alignItems: "center" },
-  timeContainer: { width: 50, minHeight: 32, marginRight: 6, alignItems: "center", justifyContent: "center" },
-  time: { color: palette.time, fontWeight: "700", letterSpacing: 0.2 },
-  client: { color: palette.client, fontWeight: "600", width: 110, marginRight: 6, flexShrink: 0 },
+  timeContainer: {
+    width: 50,
+    minHeight: 32,
+    marginRight: 10,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  time: { color: palette.time, fontWeight: "700", fontSize: 15, letterSpacing: 0.2 },
+  client: { color: palette.client, fontWeight: "600", fontSize: 14, width: 120, marginRight: 10, flexShrink: 0 },
   chevronContainer: {
-    width: 28,
+    width: 24,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 0,
+    marginLeft: 2,
+    marginRight: 12,
   },
   badgeContainer: { flex: 1, minWidth: 0, alignItems: "flex-end" },
   badge: {
@@ -327,6 +335,7 @@ const styles = StyleSheet.create({
     borderColor: E.BORDER,
   },
   badgeLabel: {
+    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -347,6 +356,7 @@ const styles = StyleSheet.create({
   badgeCtaPressed: { opacity: 0.86 },
   badgeCtaDisabled: { opacity: 0.55 },
   badgeUnassignedCtaLabel: {
+    fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -363,8 +373,9 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     marginLeft: 24,
   },
-  route: { color: palette.routeText, flex: 1, flexShrink: 1 },
+  route: { color: palette.routeText, fontSize: 13, lineHeight: 18, flex: 1, flexShrink: 1 },
   expandedContent: { marginTop: 10 },
   routeColumn: { width: "100%" },
+  /** Aligné `RideSnippetCard` `footerActions`. */
   footerSlot: { marginTop: 10 },
 });

@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { brandPrimary, brandText } from "../../../design/responsive";
 import { AppText } from "../../../design/ui/AppText";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
@@ -12,6 +12,14 @@ import { isDriverPositionStale, resolveDriverStatus } from "../utils/companyDriv
 type Props = {
   drivers: CompanyDriverLiveLocation[];
   showTitleRow?: boolean;
+  /** Titre de l’en-tête (défaut : « Carte live · chauffeurs »). */
+  headingTitle?: string;
+  /** Sous-titre optionnel (ex. note web). */
+  headingHint?: string;
+  /** Hauteur de la zone carte (dp). Défaut : 200. */
+  mapHeight?: number;
+  /** Fusion avec le conteneur racine (coins, bordure…). */
+  containerStyle?: StyleProp<ViewStyle>;
 };
 const BRAND = "#0A8F7A";
 const BORDER = "rgba(145, 165, 157, 0.45)";
@@ -45,6 +53,7 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
   subtitleSpacing: { marginTop: 1 },
+  subtitleAfterHint: { marginTop: 4 },
   subtitleCompactSpacing: { marginBottom: 2 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   chip: {
@@ -55,7 +64,7 @@ const styles = StyleSheet.create({
   },
   chipOn: { borderColor: BRAND, backgroundColor: "rgba(10, 143, 122, 0.1)" },
   chipOff: { borderColor: BORDER, backgroundColor: "#FFFFFF" },
-  map: { height: 200, width: "100%" as const },
+  map: { width: "100%" as const },
 });
 
 type DriverMapFilter = "all" | "available" | "en_mission" | "offline";
@@ -85,7 +94,14 @@ function computeRegion(drivers: CompanyDriverLiveLocation[]) {
   };
 }
 
-export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
+export function EnterpriseDriversMap({
+  drivers,
+  showTitleRow = true,
+  headingTitle = "Carte live · chauffeurs",
+  headingHint,
+  mapHeight = 200,
+  containerStyle,
+}: Props) {
   const [filter, setFilter] = useState<DriverMapFilter>("all");
   const clusteringEnabled = isFeatureEnabled("company_mobile_map_clustering_enabled");
   const filteredDrivers = useMemo(
@@ -93,11 +109,13 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
     [drivers, filter]
   );
   const region = useMemo(() => computeRegion(filteredDrivers), [filteredDrivers]);
+  const mapDims = { height: mapHeight };
   return (
     <View
       style={[
         styles.root,
         !showTitleRow && { borderTopLeftRadius: 0, borderTopRightRadius: 0, borderTopWidth: 0 },
+        containerStyle,
       ]}
       accessibilityLabel="Carte des chauffeurs en direct"
     >
@@ -106,9 +124,14 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
           <>
             <View style={styles.headerRow}>
               <Ionicons name="map-outline" size={15} color={BRAND} />
-              <AppText variant="sectionTitle">Carte live · chauffeurs</AppText>
+              <AppText variant="sectionTitle">{headingTitle}</AppText>
             </View>
-            <AppText variant="caption" style={styles.subtitleSpacing}>
+            {headingHint ? (
+              <AppText variant="caption" style={styles.subtitleSpacing}>
+                {headingHint}
+              </AppText>
+            ) : null}
+            <AppText variant="caption" style={headingHint ? styles.subtitleAfterHint : styles.subtitleSpacing}>
               {filteredDrivers.length} sur {drivers.length} après filtre
             </AppText>
           </>
@@ -147,7 +170,7 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
       {clusteringEnabled ? (
         <ClusteredMapView
           provider={PROVIDER_GOOGLE}
-          style={styles.map}
+          style={[styles.map, mapDims]}
           initialRegion={region}
           region={region}
           radius={45}
@@ -167,7 +190,7 @@ export function EnterpriseDriversMap({ drivers, showTitleRow = true }: Props) {
           })}
         </ClusteredMapView>
       ) : (
-        <MapView provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={region} region={region}>
+        <MapView provider={PROVIDER_GOOGLE} style={[styles.map, mapDims]} initialRegion={region} region={region}>
           {filteredDrivers.map((driver) => {
             const isStale = isDriverPositionStale(driver);
             return (

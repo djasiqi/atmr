@@ -7,6 +7,10 @@ export const E = {
   TEXT_SEC: "#64748B",
   TEXT_MUTED: "#94A3B8",
   BORDER: "rgba(0,121,107,0.08)",
+  /** Fond page aligné sur l’écran dispatch / coquille company. */
+  PAGE_BG: "#EAF3F1",
+  /** Bordure cartes / barres (même teinte que le dashboard dispatch). */
+  SHELL_BORDER: "rgba(145, 165, 157, 0.45)",
   BG: "#f4f7fc",
   CARD: "#FFFFFF",
   DANGER: "#dc3545",

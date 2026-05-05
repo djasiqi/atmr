@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Platform, RefreshControl, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { PermissionGuard } from "../../../src/core/guards";
 import {
   AppButton,
-  AppInput,
   AppSpinner,
   AppText,
   Modal,
@@ -31,14 +40,17 @@ import {
   EnterpriseFooterActionRow,
   EnterpriseRoundIconAction,
 } from "../../../src/features/company/components/EnterpriseActionChip";
-import { CompanyInboxButton } from "../../../src/features/company/components/CompanyInboxButton";
 import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
+import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
+import {
+  DispatchModeSheet,
+  type DispatchModeValue,
+} from "../../../src/features/company/components/DispatchModeSheet";
 import { DispatchRideListCard } from "../../../src/features/company/components/DispatchRideListCard";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { isDispatchCompleted, isDispatchCancelled } from "../../../src/features/company/utils/companyDispatchStatus";
 import { filterMissionsByDispatchListChip } from "../../../src/features/company/utils/rideListStatusFilter";
 import { isPickupSentinel } from "../../../src/features/company/utils/pickupSentinel";
-import { createShadow } from "../../../src/styles/shadowStyles";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
   cancelCompanyRide,
@@ -49,9 +61,19 @@ import {
   runCompanyDispatch,
   runCompanyOptimizer,
   scheduleCompanyRide,
+  switchCompanyDispatchMode,
   transferCompanyRide,
 } from "../../../src/features/company/api/companyApi";
 import type { CompanyDispatchMission } from "../../../src/features/company/api/contracts";
+import { createShadow } from "../../../src/styles/shadowStyles";
+
+const searchBarShadowOps = createShadow({
+  shadowColor: "#000000",
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.03,
+  shadowRadius: 4,
+  elevation: 1,
+});
 
 function resolveMissionIdFromEvent(payload: {
   mission_id?: unknown;
@@ -116,38 +138,41 @@ function extractLabeledRows(
     .filter((value): value is LabeledOption => value !== null);
 }
 
+type RideFilterIconName = ComponentProps<typeof Ionicons>["name"];
+
 /** `key` = paramètre `status` pour GET /company_mobile/dispatch/v1/rides (et fallback client). */
-const RIDE_STATUS_FILTERS: { key: string; label: string; hint?: string }[] = [
-  { key: "all", label: "Tous", hint: "Journée complète" },
+const RIDE_STATUS_FILTERS: {
+  key: string;
+  label: string;
+  hint?: string;
+  icon: RideFilterIconName;
+}[] = [
+  { key: "all", label: "Tous", hint: "Journée complète", icon: "apps-outline" },
   {
     key: "pending",
     label: "En attente",
     hint: "En attente de prise en charge, offre (proposée) ou acceptée",
+    icon: "time-outline",
   },
-  { key: "assigned", label: "Affectés", hint: "Chauffeur connu, pas terminé" },
-  { key: "in_flight", label: "En course", hint: "Uniquement : statut en route ou en mission" },
-  { key: "completed", label: "Terminés", hint: "Terminé ou aller-retour clôturé" },
-  { key: "cancelled", label: "Annulés" },
+  { key: "assigned", label: "Affectés", hint: "Chauffeur connu, pas terminé", icon: "person-outline" },
+  {
+    key: "in_flight",
+    label: "En course",
+    hint: "Uniquement : statut en route ou en mission",
+    icon: "navigate-outline",
+  },
+  {
+    key: "completed",
+    label: "Terminés",
+    hint: "Terminé ou aller-retour clôturé",
+    icon: "checkmark-done-outline",
+  },
+  { key: "cancelled", label: "Annulés", icon: "close-circle-outline" },
 ];
 
-const searchBarShadow = createShadow({
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.03,
-  shadowRadius: 4,
-  elevation: 1,
-});
-
-const tabActiveSurfaceShadow = createShadow({
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.08,
-  shadowRadius: 2,
-  elevation: 1,
-});
-
 const rideStyles = StyleSheet.create({
-  page: { padding: 16, paddingBottom: 32, gap: 10 },
+  /** Réf. `operations-app` `(enterprise)/rides.tsx` : padding 16, espacement vertical ~14. */
+  page: { paddingTop: 16, paddingBottom: 8, gap: 14 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -156,72 +181,167 @@ const rideStyles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: E.BORDER,
-    marginTop: 2,
-    ...searchBarShadow,
+    ...searchBarShadowOps,
   },
+  searchClearHit: { padding: 6 },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 0,
     backgroundColor: "transparent",
     color: E.TEXT,
-    paddingVertical: 10,
+    paddingVertical: Platform.OS === "ios" ? 10 : 8,
     paddingHorizontal: 8,
-    fontSize: 14,
-    minHeight: 40,
+    fontSize: 15,
+    outlineStyle: Platform.OS === "web" ? ("none" as const) : undefined,
   },
-  actionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  /** Carte actions dispatch (réf. blocs `operations-app` : surface blanche + bordure teinte). */
+  dispatchActionsCard: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    backgroundColor: E.CARD,
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    ...searchBarShadowOps,
+  },
   actionBtn: { flexGrow: 1, minWidth: 108 },
-  /** Barre d’onglets (style segment type web CompanyDashboard) */
-  tabsHeader: {
-    width: "100%" as const,
-    flexDirection: "row" as const,
-    alignItems: "stretch" as const,
-    gap: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.04)",
-    borderWidth: 2,
-    borderColor: "rgba(15, 23, 42, 0.1)",
-    borderRadius: 10,
-    padding: 2,
-    marginTop: 2,
+  /** Bandeau filtres : discret (peu d’ombre, pas de gros blocs de couleur). */
+  tabsPanel: {
+    alignSelf: "stretch",
+    ...(Platform.OS === "web" ? ({ minWidth: 0 } as const) : {}),
+    backgroundColor: E.CARD,
+    borderRadius: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: E.BORDER,
+    ...searchBarShadowOps,
   },
+  /** Pas de flexGrow vertical ici (colonne parente) : une seule ligne, largeur = parent. */
+  tabsHeaderScrollView: {
+    alignSelf: "stretch",
+    width: "100%" as const,
+    flexShrink: 0,
+    ...(Platform.OS === "web" ? ({ minWidth: 0 } as const) : {}),
+  },
+  tabsHeaderScrollContent: {
+    flexDirection: "row" as const,
+    flexWrap: "nowrap" as const,
+    alignItems: "center" as const,
+    flexGrow: 1,
+    gap: 5,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  /** Une ligne : icône + compteur, état actif = léger lavis vert (pas de plein vert). */
   tabButton: {
-    flex: 1,
+    flexShrink: 0,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    gap: 4,
-    minWidth: 0,
-    minHeight: 32,
+    gap: 2,
+    minHeight: 34,
     paddingVertical: 5,
-    paddingHorizontal: 4,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    borderRadius: 10,
     backgroundColor: "transparent",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "transparent",
+    ...(Platform.OS === "web"
+      ? ({ userSelect: "none", cursor: "pointer" } as const)
+      : {}),
   },
   tabButtonActive: {
-    backgroundColor: E.CARD,
+    backgroundColor: "rgba(0, 121, 107, 0.09)",
+    borderColor: "rgba(0, 121, 107, 0.22)",
   },
-  tabLabel: { color: E.TEXT_SEC, fontWeight: "600" as const },
-  tabLabelActive: { color: E.BRAND, fontWeight: "800" as const },
-  tabBadge: {
-    backgroundColor: E.TEXT_MUTED,
-    borderRadius: 100,
-    paddingVertical: 1,
-    paddingHorizontal: 5,
-    minWidth: 20,
-    alignItems: "center" as const,
+  tabCount: {
+    fontSize: 11,
+    fontWeight: "600" as const,
+    color: E.TEXT_SEC,
+    fontVariant: ["tabular-nums"] as const,
+    minWidth: 10,
+    textAlign: "left" as const,
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
   },
-  tabBadgeActive: { backgroundColor: E.BRAND },
-  tabBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "700" as const, lineHeight: 12 },
+  tabCountActive: {
+    color: E.BRAND,
+  },
+  tabCountZero: {
+    opacity: 0.38,
+  },
+  tabCountActiveZero: {
+    opacity: 0.55,
+  },
   exceptionsRouteHint: {
     color: E.TEXT_SEC,
     fontSize: 12,
     lineHeight: 17,
-    marginBottom: 4,
+    marginBottom: 0,
+    padding: 12,
+    backgroundColor: E.CARD,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    ...searchBarShadowOps,
   },
   pressed: { opacity: 0.88 },
   rideCardWrapper: { marginBottom: 10 },
-  listTop: { marginTop: 4 },
-  emptyHint: { color: E.TEXT_MUTED, textAlign: "center" as const, paddingVertical: 8 },
+  /** Réf. `ridesListContainer` operations : marge haute portée par `page.gap`. */
+  listTop: { marginTop: 0 },
+  loadingBox: {
+    alignItems: "center",
+    paddingVertical: 48,
+    gap: 10,
+  },
+  loadingText: { color: E.TEXT_MUTED, fontSize: 13 },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+  },
+  emptyIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    color: E.TEXT,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  emptySubtitle: {
+    color: E.TEXT_MUTED,
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 6,
+    lineHeight: 19,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "rgba(220, 53, 69, 0.06)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(220, 53, 69, 0.15)",
+    gap: 8,
+    marginTop: 4,
+  },
+  errorBannerText: {
+    color: E.DANGER,
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
   errorBlock: { color: E.DANGER, lineHeight: 19 },
   mutedText: { color: E.TEXT_SEC },
   modalRow: { borderWidth: 1, borderRadius: 10, padding: 8, marginBottom: 5 },
@@ -251,13 +371,15 @@ export default function CompanyRidesScreen() {
   const [editMissionId, setEditMissionId] = useState<number | null>(null);
   const [missionActionPendingId, setMissionActionPendingId] = useState<number | null>(null);
   const [expandedMissionId, setExpandedMissionId] = useState<number | null>(null);
-  const date = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateSheetOpen, setDateSheetOpen] = useState(false);
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const contextId = useActiveCompanyContextId();
   const rideActions = useCompanyRideActions();
-  const missionsQuery = useCompanyDispatchMissionsQuery({ date, search, status });
+  const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate, search, status });
   const missionsRefetch = missionsQuery.refetch;
   const allMissionsForCountsQuery = useCompanyDispatchMissionsQuery({
-    date,
+    date: selectedDate,
     search,
     status: "all",
   });
@@ -514,23 +636,38 @@ export default function CompanyRidesScreen() {
     if (!contextId) return;
     setActionPending("dispatch");
     try {
-      await runCompanyDispatch({ contextId, date });
+      await runCompanyDispatch({ contextId, date: selectedDate });
       await refresh();
     } finally {
       setActionPending(null);
     }
-  }, [contextId, date, refresh]);
+  }, [contextId, refresh, selectedDate]);
+
+  const applyDispatchModeFromSheet = useCallback(
+    async (mode: DispatchModeValue) => {
+      if (!contextId || !canDispatchManage) return;
+      try {
+        await switchCompanyDispatchMode({ contextId, mode });
+        setActiveMode(mode);
+        setModeSheetOpen(false);
+        await refresh();
+      } catch {
+        // Erreur API : le modal reste ouvert pour réessayer ou fermer manuellement.
+      }
+    },
+    [canDispatchManage, contextId, refresh]
+  );
 
   const runOptimizerNow = useCallback(async () => {
     if (!contextId) return;
     setActionPending("optimizer");
     try {
-      await runCompanyOptimizer({ contextId, date });
+      await runCompanyOptimizer({ contextId, date: selectedDate });
       await refresh();
     } finally {
       setActionPending(null);
     }
-  }, [contextId, date, refresh]);
+  }, [contextId, refresh, selectedDate]);
 
   const markUrgentNow = useCallback(
     async (missionId: number) => {
@@ -634,36 +771,53 @@ export default function CompanyRidesScreen() {
       <Screen
         scroll
         backgroundColor={E.BG}
-        withHorizontalPadding={false}
+        withHorizontalPadding
+        stickyHeader={
+          <EnterpriseHeader
+            metaDetail="networkOnly"
+            date={selectedDate}
+            mode={activeMode}
+            realtimeStatus={realtimeStatus.status}
+            onOpenDatePicker={() => setDateSheetOpen(true)}
+            onOpenModePicker={canDispatchManage ? () => setModeSheetOpen(true) : undefined}
+          />
+        }
+        extraScrollBottomPadding={100}
         contentContainerStyle={rideStyles.page}
         refreshControl={
           <RefreshControl
-            refreshing={missionsQuery.isLoading}
+            refreshing={missionsQuery.isFetching && !missionsQuery.isLoading}
             onRefresh={() => void refresh()}
             tintColor={E.BRAND}
           />
         }
       >
-        <EnterpriseHeader
-          date={date}
-          mode={activeMode}
-          realtimeStatus={realtimeStatus.status}
-          trailing={activeContext?.context_id ? <CompanyInboxButton /> : null}
-        />
-        {missionsQuery.isLoading ? <AppSpinner size="small" /> : null}
         <View style={rideStyles.searchBar}>
           <Ionicons name="search-outline" size={16} color={E.TEXT_MUTED} />
-          <AppInput
+          <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Client, adresse ou chauffeur…"
-            style={rideStyles.searchInput}
             placeholderTextColor={E.TEXT_MUTED}
-            containerStyle={{ flex: 1, minWidth: 0 }}
+            style={rideStyles.searchInput}
+            returnKeyType="search"
+            enterKeyHint="search"
+            autoCorrect={false}
+            autoCapitalize="none"
           />
+          {search.length > 0 ? (
+            <Pressable
+              onPress={() => setSearch("")}
+              style={rideStyles.searchClearHit}
+              accessibilityLabel="Effacer la recherche"
+              hitSlop={8}
+            >
+              <Ionicons name="close-circle" size={18} color={E.TEXT_MUTED} />
+            </Pressable>
+          ) : null}
         </View>
         {activeMode !== "manual" ? (
-          <View style={rideStyles.actionsRow}>
+          <View style={rideStyles.dispatchActionsCard}>
             <AppButton
               title={actionPending === "dispatch" ? "Exécution…" : "Lancer le dispatch"}
               variant="primary"
@@ -686,47 +840,79 @@ export default function CompanyRidesScreen() {
             ci-dessous restent les statuts de mission.
           </AppText>
         ) : null}
-        <View
-          style={rideStyles.tabsHeader}
-          accessible={false}
-          {...(Platform.OS === "web" ? ({ "data-active-tab": status } as object) : {})}
-        >
-          {RIDE_STATUS_FILTERS.map((item) => {
-            const on = status === item.key;
-            const c = filterCountByKey[item.key] ?? 0;
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => setStatus(item.key)}
-                style={({ pressed }) => [
-                  rideStyles.tabButton,
-                  on && rideStyles.tabButtonActive,
-                  on && tabActiveSurfaceShadow,
-                  pressed && rideStyles.pressed,
-                ]}
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`Filtrer : ${item.label} (${c})`}
-                accessibilityHint={item.hint}
-                testID={`ride-filter-tab-${item.key}`}
-                {...(Platform.OS === "web" ? ({ "data-tour-id": `tab-${item.key}` } as object) : {})}
-              >
-                <AppText
-                  variant="caption"
-                  style={on ? rideStyles.tabLabelActive : rideStyles.tabLabel}
-                  numberOfLines={1}
+        <View style={rideStyles.tabsPanel}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            style={rideStyles.tabsHeaderScrollView}
+            contentContainerStyle={rideStyles.tabsHeaderScrollContent}
+            accessible={false}
+            {...(Platform.OS === "web" ? ({ "data-active-tab": status } as object) : {})}
+          >
+            {RIDE_STATUS_FILTERS.map((item) => {
+              const on = status === item.key;
+              const c = filterCountByKey[item.key] ?? 0;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => setStatus(item.key)}
+                  style={({ pressed }) => [
+                    rideStyles.tabButton,
+                    on && rideStyles.tabButtonActive,
+                    pressed && rideStyles.pressed,
+                  ]}
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`Filtrer : ${item.label} (${c})`}
+                  accessibilityHint={item.hint}
+                  testID={`ride-filter-tab-${item.key}`}
+                  {...(Platform.OS === "web" ? ({ "data-tour-id": `tab-${item.key}` } as object) : {})}
                 >
-                  {item.label}
-                </AppText>
-                <View style={[rideStyles.tabBadge, on && rideStyles.tabBadgeActive]}>
-                  <AppText variant="caption" style={rideStyles.tabBadgeText}>
+                  <Ionicons
+                    name={item.icon}
+                    size={17}
+                    color={on ? E.BRAND : E.TEXT_SEC}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                  />
+                  <Text
+                    style={[
+                      rideStyles.tabCount,
+                      on && rideStyles.tabCountActive,
+                      !on && c === 0 && rideStyles.tabCountZero,
+                      on && c === 0 && rideStyles.tabCountActiveZero,
+                    ]}
+                    accessibilityElementsHidden
+                  >
                     {c}
-                  </AppText>
-                </View>
-              </Pressable>
-            );
-          })}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
-        <View style={rideStyles.listTop}>
+
+        {missionsQuery.isLoading ? (
+          <View style={rideStyles.loadingBox} accessibilityRole="progressbar" accessibilityLabel="Chargement">
+            <ActivityIndicator color={E.BRAND} />
+            <AppText variant="bodyMuted" style={rideStyles.loadingText}>
+              Chargement…
+            </AppText>
+          </View>
+        ) : filteredMissions.length === 0 ? (
+          <View style={rideStyles.emptyState} accessibilityRole="text">
+            <View style={rideStyles.emptyIcon} accessibilityElementsHidden>
+              <Ionicons name="car-outline" size={28} color={E.BRAND} />
+            </View>
+            <AppText variant="body" style={rideStyles.emptyTitle}>
+              Aucune course
+            </AppText>
+            <AppText variant="caption" style={rideStyles.emptySubtitle}>
+              Aucune course pour ce filtre ou cette date. Utilisez le bouton + pour en créer une.
+            </AppText>
+          </View>
+        ) : (
+          <View style={rideStyles.listTop}>
           {filteredMissions.map((mission) => {
             const isExpanded = expandedMissionId === mission.mission_id;
             const thisBusy = missionActionPendingId === mission.mission_id;
@@ -816,18 +1002,18 @@ export default function CompanyRidesScreen() {
               </View>
             );
           })}
-        </View>
-        {!missionsQuery.isLoading && filteredMissions.length === 0 ? (
-          <AppText variant="bodyMuted" style={rideStyles.emptyHint}>
-            Aucune course pour ce filtre.
-          </AppText>
-        ) : null}
+          </View>
+        )}
+
         {missionsQuery.error ? (
-          <AppText variant="error" style={rideStyles.errorBlock}>
-            {missionsQuery.error instanceof Error
-              ? missionsQuery.error.message
-              : "Erreur de chargement des courses."}
-          </AppText>
+          <View style={rideStyles.errorBanner} accessibilityRole="alert">
+            <Ionicons name="alert-circle" size={18} color={E.DANGER} />
+            <AppText variant="body" style={rideStyles.errorBannerText}>
+              {missionsQuery.error instanceof Error
+                ? missionsQuery.error.message
+                : "Erreur de chargement des courses."}
+            </AppText>
+          </View>
         ) : null}
       </Screen>
       <Modal
@@ -908,6 +1094,22 @@ export default function CompanyRidesScreen() {
         }
         onClose={() => setEditMissionId(null)}
         onSaved={() => void refresh()}
+      />
+      <DayPickerSheet
+        visible={dateSheetOpen}
+        selectedDate={selectedDate}
+        onClose={() => setDateSheetOpen(false)}
+        onSelectDate={(iso) => {
+          setSelectedDate(iso);
+          setDateSheetOpen(false);
+        }}
+      />
+      <DispatchModeSheet
+        visible={modeSheetOpen}
+        mode={activeMode}
+        onClose={() => setModeSheetOpen(false)}
+        onSelectMode={(mode) => void applyDispatchModeFromSheet(mode)}
+        switchingEnabled={canDispatchManage}
       />
     </PermissionGuard>
   );

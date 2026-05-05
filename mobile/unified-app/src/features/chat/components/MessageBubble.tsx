@@ -5,6 +5,7 @@ import { AppText } from "../../../design/ui/AppText";
 import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveMediaUrl } from "../../../core/api/mediaUrl";
+import { CHAT_BUBBLE_OWN } from "../chatPalette";
 import { SharedChatMessage } from "../types";
 import { VoiceMessageBar } from "./VoiceMessageBar";
 import { VOICE_GROUP_MAX_W } from "./voiceMessageStyles";
@@ -23,10 +24,10 @@ type MessageBubbleProps = {
 const C_HEADING = "#111827";
 const C_BODY = "#6b7280";
 const C_BUBBLE_IN = "#f3f4f6";
-const C_BUBBLE_OWN = "#0d9488";
+const C_BUBBLE_OWN = CHAT_BUBBLE_OWN;
 const C_BORDER = "#e5e7eb";
 const C_FAIL = "#b91c1c";
-const AVATAR_PALETTE = ["#6366f1", "#0d9488", "#d97706", "#7c3aed", "#db2777", "#2563eb"];
+const AVATAR_PALETTE = ["#6366f1", CHAT_BUBBLE_OWN, "#d97706", "#7c3aed", "#db2777", "#2563eb"];
 
 function initialsFromName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

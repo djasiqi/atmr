@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ImageBackground,
+  Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,7 +13,7 @@ import {
 } from "react-native";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Screen, useAppViewport } from "../../src/design/responsive";
+import { Screen, scrollAnchorAboveKeyboard, useAppViewport } from "../../src/design/responsive";
 import {
   fetchGuestBookingStatus,
   fetchPublicBookingStatus,
@@ -53,6 +55,31 @@ export default function BookingStatusScreen() {
     linked_to_account?: boolean;
   } | null>(null);
   const [redirectReason, setRedirectReason] = useState<FallbackReason | null>(null);
+  const bookingScrollRef = useRef<ScrollView | null>(null);
+  const bookingScrollOffsetYRef = useRef(0);
+  const tokenFieldAnchorRef = useRef<View | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const computed = h > 0 ? Math.round(h + 48) : 300;
+      setKeyboardScrollPaddingBottom(Math.max(260, computed));
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardScrollPaddingBottom(0);
+      bookingScrollRef.current?.scrollTo({ y: 0, animated: true });
+      bookingScrollOffsetYRef.current = 0;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const submit = async () => {
     if (!token.trim()) {
@@ -112,7 +139,19 @@ export default function BookingStatusScreen() {
         scroll
         backgroundColor="transparent"
         keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
-        contentContainerStyle={styles.scrollContent}
+        automaticallyAdjustKeyboardInsets={Platform.OS !== "web"}
+        androidKeyboardFallback={Platform.OS === "android"}
+        scrollViewRef={bookingScrollRef}
+        onScroll={(e) => {
+          bookingScrollOffsetYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS !== "web" && keyboardVisible
+            ? [styles.scrollContentWithKeyboard, { paddingBottom: keyboardScrollPaddingBottom }]
+            : null,
+        ]}
       >
         <View style={styles.card}>
             <Pressable
@@ -138,7 +177,7 @@ export default function BookingStatusScreen() {
               Sinon, collez le long code reçu par e-mail.
             </Text>
 
-            <View style={styles.fieldBlock}>
+            <View ref={tokenFieldAnchorRef} collapsable={false} style={styles.fieldBlock}>
               <Text style={styles.fieldLabel}>N° de dossier ou code de suivi</Text>
               <TextInput
                 value={token}
@@ -154,8 +193,16 @@ export default function BookingStatusScreen() {
                 textContentType="none"
                 returnKeyType="go"
                 onSubmitEditing={() => void submit()}
+                onFocus={() =>
+                  scrollAnchorAboveKeyboard(
+                    bookingScrollRef,
+                    bookingScrollOffsetYRef,
+                    tokenFieldAnchorRef,
+                  )
+                }
                 style={styles.fieldInput}
                 editable={!pending}
+                {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
               />
             </View>
 
@@ -273,6 +320,11 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  scrollContentWithKeyboard: {
+    justifyContent: "flex-start",
+    paddingTop: 28,
   },
   card: {
     width: "100%",

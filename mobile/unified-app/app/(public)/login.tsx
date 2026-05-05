@@ -1,13 +1,17 @@
 import {
+  ActivityIndicator,
   Image,
   ImageBackground,
+  Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
-import type { TextInput } from "react-native";
+import type { TextInput as TextInputType } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSession } from "../../src/core/sessionProvider";
@@ -16,19 +20,12 @@ import { useRuntimeUpdateGate } from "../../src/core/version/useRuntimeUpdateGat
 import { getLastDraftId } from "../../src/core/public/preRequestDraft";
 import { queueExternalIntentResume } from "../../src/core/navigation/externalIntent";
 import {
-  AppButton,
-  AppInput,
   AppNotice,
   AppSwitch,
   AppText,
-  brandPrimary,
-  brandText,
-  brandTextMuted,
-  getPublicBackButtonMetrics,
-  ResponsiveContainer,
   Screen,
+  scrollAnchorAboveKeyboard,
   useAppViewport,
-  useResponsiveTokens,
 } from "../../src/design/responsive";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ReactRuntime: any = require("react");
@@ -41,6 +38,13 @@ type LoginApiError = {
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
+
+/** Aligné sur `forgot-password.tsx` (carte, champs, bouton primaire). */
+const UI_BORDER = "#91A59D";
+const UI_TEXT = "#163A34";
+const UI_MUTED = "#5F7369";
+const BRAND = "#0A8F7A";
+const BRAND_DISABLED = "#84B7AE";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -55,29 +59,37 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = ReactRuntime.useState(false);
   const [rememberSession, setRememberSession] = ReactRuntime.useState(true);
   const [submitting, setSubmitting] = ReactRuntime.useState(false);
-  const [localError, setLocalError] = ReactRuntime.useState(
-    null as string | null
-  );
-  const passwordInputRef = ReactRuntime.useRef(null as TextInput | null);
+  const [localError, setLocalError] = ReactRuntime.useState(null as string | null);
+  const passwordInputRef = ReactRuntime.useRef(null as TextInputType | null);
+  const loginScrollRef = ReactRuntime.useRef(null as ScrollView | null);
+  const loginScrollOffsetYRef = ReactRuntime.useRef(0);
+  const emailFieldAnchorRef = ReactRuntime.useRef(null as View | null);
+  const passwordFieldAnchorRef = ReactRuntime.useRef(null as View | null);
   const updateGate = useRuntimeUpdateGate();
-  const viewport = useAppViewport();
-  const { topInset } = viewport;
-  const { landing: layout } = useResponsiveTokens();
+  const { topInset } = useAppViewport();
+  /** Natif : padding scroll supplémentaire + layout « clavier ouvert » uniquement quand le clavier est visible. */
+  const [keyboardVisible, setKeyboardVisible] = ReactRuntime.useState(false);
+  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = ReactRuntime.useState(0);
 
-  const accentLayout = ReactRuntime.useMemo(() => {
-    const narrow = viewport.isTiny || viewport.isCompact;
-    return {
-      largeTop: viewport.isTablet ? -105 : narrow ? -98 : -92,
-      largeRight: viewport.isTablet ? -48 : -32,
-      smallTop: viewport.isTablet ? 95 : narrow ? 72 : 82,
-      smallRight: viewport.isTablet ? 72 : 52,
+  ReactRuntime.useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const computed = h > 0 ? Math.round(h + 48) : 300;
+      setKeyboardScrollPaddingBottom(Math.max(260, computed));
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardScrollPaddingBottom(0);
+      loginScrollRef.current?.scrollTo({ y: 0, animated: true });
+      loginScrollOffsetYRef.current = 0;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
     };
-  }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
-
-  const backBtn = ReactRuntime.useMemo(
-    () => getPublicBackButtonMetrics(viewport),
-    [viewport.isCompact, viewport.isTiny]
-  );
+  }, []);
 
   if (bootstrap?.is_authenticated) {
     return <Redirect href={resolveInitialRoute(bootstrap) as any} />;
@@ -136,6 +148,9 @@ export default function LoginScreen() {
     }
   };
 
+  const submitDisabled =
+    submitting || !email.trim() || !password.trim() || updateGate.requiresUpdate;
+
   return (
     <View style={styles.screen}>
       <ImageBackground
@@ -145,53 +160,27 @@ export default function LoginScreen() {
         imageStyle={styles.backgroundImage}
       />
       <View style={styles.overlay} />
-      <View
-        style={[
-          styles.accentGlowLarge,
-          {
-            top: accentLayout.largeTop,
-            right: accentLayout.largeRight,
-            pointerEvents: "none",
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.accentGlowSmall,
-          {
-            top: accentLayout.smallTop,
-            right: accentLayout.smallRight,
-            pointerEvents: "none",
-          },
-        ]}
-      />
 
       <Screen
         scroll
         withHorizontalPadding={false}
         backgroundColor="transparent"
         keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
-        contentContainerStyle={styles.screenScrollContent}
+        automaticallyAdjustKeyboardInsets={Platform.OS !== "web"}
+        androidKeyboardFallback={Platform.OS === "android"}
+        scrollViewRef={loginScrollRef}
+        onScroll={(e) => {
+          loginScrollOffsetYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS !== "web" && keyboardVisible
+            ? [styles.scrollContentWithKeyboard, { paddingBottom: keyboardScrollPaddingBottom }]
+            : null,
+        ]}
       >
-        <ResponsiveContainer
-          style={{
-            padding: layout.columnPadding,
-            maxWidth: layout.contentMaxWidth,
-          }}
-        >
-          <View
-            style={[
-              styles.card,
-              {
-                maxWidth: layout.cardMaxWidth,
-                paddingHorizontal: layout.cardPadding + 6,
-                paddingTop: layout.cardPadding + 10,
-                paddingBottom: layout.cardPadding + 14,
-                borderRadius: layout.cardRadius,
-              },
-            ]}
-          >
-          <View style={styles.cardBrandAccent} />
+        <View style={styles.card}>
           <Pressable
             onPress={() => {
               if (router.canGoBack()) {
@@ -200,73 +189,31 @@ export default function LoginScreen() {
               }
               router.replace("/(public)" as any);
             }}
-            style={({ pressed }) => [
-              styles.backButtonBase,
-              {
-                paddingVertical: backBtn.paddingVertical,
-                paddingHorizontal: backBtn.paddingHorizontal,
-                marginLeft: backBtn.marginLeft,
-                marginBottom: backBtn.marginBottom,
-                borderRadius: backBtn.borderRadius,
-                backgroundColor: pressed
-                  ? backBtn.backgroundColorPressed
-                  : backBtn.backgroundColorIdle,
-              },
-            ]}
+            style={styles.backButton}
             accessibilityRole="button"
             accessibilityLabel="Retour"
             hitSlop={12}
           >
-            <Ionicons name="arrow-back" size={backBtn.iconSize} color={brandPrimary} />
+            <Ionicons name="arrow-back" size={22} color={BRAND} />
           </Pressable>
 
-          <View style={[styles.logoBlock, { marginBottom: layout.cardLineGap + 6 }]}>
+          <View style={styles.logoBlock}>
             <Image
               source={LIRIE_LOGO}
-              style={{ height: layout.logoHeight, width: layout.logoWidth }}
+              style={styles.logo}
               resizeMode="contain"
               accessibilityRole="image"
               accessibilityLabel="LIRIE"
             />
           </View>
 
-          <Text
-            style={[
-              styles.kicker,
-              {
-                fontSize: layout.secondaryFontSize,
-                marginBottom: layout.cardLineGap,
-                letterSpacing: viewport.isTiny ? 0.8 : 1.2,
-              },
-            ]}
-            maxFontSizeMultiplier={1.22}
-          >
+          <Text style={styles.kicker} maxFontSizeMultiplier={1.22}>
             Espace client
           </Text>
-          <Text
-            style={[
-              styles.title,
-              {
-                fontSize: layout.titleFontSize,
-                lineHeight: layout.titleLineHeight,
-                maxWidth: layout.titleMaxWidth,
-              },
-            ]}
-            maxFontSizeMultiplier={1.28}
-          >
+          <Text style={styles.title} maxFontSizeMultiplier={1.28}>
             Connexion sécurisée
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                fontSize: layout.microProofFontSize,
-                lineHeight: layout.microProofLineHeight,
-                marginTop: layout.cardLineGap + 4,
-              },
-            ]}
-            maxFontSizeMultiplier={1.45}
-          >
+          <Text style={styles.subtitle} maxFontSizeMultiplier={1.45}>
             Suivi en temps réel · Coordination médicale · Transport accompagné.
           </Text>
           {params.next ? (
@@ -274,8 +221,6 @@ export default function LoginScreen() {
               Connectez-vous pour finaliser votre réservation en reprenant vos informations.
             </Text>
           ) : null}
-
-          <View style={[styles.heroDivider, { marginTop: layout.cardBlockGap + 4 }]} />
 
           {updateGate.requiresUpdate ? (
             <AppNotice
@@ -288,9 +233,9 @@ export default function LoginScreen() {
             </AppNotice>
           ) : null}
 
-          <View style={{ marginTop: layout.cardBlockGap + layout.cardLineGap }}>
-            <AppInput
-              label="Email"
+          <View ref={emailFieldAnchorRef} collapsable={false} style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -299,39 +244,53 @@ export default function LoginScreen() {
               textContentType="emailAddress"
               returnKeyType="next"
               onSubmitEditing={() => passwordInputRef.current?.focus()}
+              onFocus={() =>
+                scrollAnchorAboveKeyboard(loginScrollRef, loginScrollOffsetYRef, emailFieldAnchorRef)
+              }
               placeholder="email@exemple.ch"
+              placeholderTextColor="#91A59D"
+              style={styles.fieldInput}
               {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
             />
           </View>
 
-          <View style={{ marginTop: layout.cardBlockGap }}>
-            <AppInput
-              ref={passwordInputRef}
-              label="Mot de passe"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoComplete="current-password"
-              textContentType="password"
-              returnKeyType="done"
-              onSubmitEditing={() => void onSubmit()}
-              placeholder="Mot de passe"
-              {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
-              rightSlot={
-                <Pressable
-                  onPress={() => setShowPassword((v: boolean) => !v)}
-                  style={styles.passwordToggle}
-                  hitSlop={8}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color="#5F7369"
-                    accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-                  />
-                </Pressable>
-              }
-            />
+          <View ref={passwordFieldAnchorRef} collapsable={false} style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>Mot de passe</Text>
+            <View style={styles.passwordShell}>
+              <TextInput
+                ref={passwordInputRef}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete="current-password"
+                textContentType="password"
+                returnKeyType="done"
+                onSubmitEditing={() => void onSubmit()}
+                onFocus={() =>
+                  scrollAnchorAboveKeyboard(
+                    loginScrollRef,
+                    loginScrollOffsetYRef,
+                    passwordFieldAnchorRef,
+                  )
+                }
+                placeholder="Mot de passe"
+                placeholderTextColor="#91A59D"
+                style={styles.passwordInput}
+                {...(Platform.OS === "android" ? { includeFontPadding: false } : {})}
+              />
+              <Pressable
+                onPress={() => setShowPassword((v: boolean) => !v)}
+                style={styles.passwordToggle}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={18}
+                  color="#5F7369"
+                  accessibilityLabel={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                />
+              </Pressable>
+            </View>
           </View>
 
           <AppSwitch
@@ -340,9 +299,9 @@ export default function LoginScreen() {
             accessibilityLabel="Se souvenir de moi"
             style={styles.rememberRow}
             label={
-              <AppText variant="bodyMuted" style={{ fontSize: layout.secondaryFontSize, fontWeight: "500" }}>
+              <Text style={styles.rememberLabel} maxFontSizeMultiplier={1.35}>
                 Se souvenir de moi
-              </AppText>
+              </Text>
             }
           />
 
@@ -363,46 +322,42 @@ export default function LoginScreen() {
             </AppNotice>
           ) : null}
 
-          <AppButton
-            title="Se connecter"
-            variant="primary"
-            loading={submitting}
-            disabled={updateGate.requiresUpdate}
+          <Pressable
             onPress={() => void onSubmit()}
-            style={{ marginTop: layout.spaceCardToCta - 6, alignSelf: "stretch" }}
-          />
+            disabled={submitDisabled}
+            style={[styles.submitButton, submitDisabled ? styles.submitButtonDisabled : null]}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <AppText variant="label" style={styles.submitText}>
+                Se connecter
+              </AppText>
+            )}
+          </Pressable>
 
-          <View style={[styles.linksRow, { marginTop: layout.spaceCtaToProof + 4 }]}>
+          <View style={styles.linksRow}>
             <Pressable
               onPress={() => router.push("/(public)/forgot-password" as any)}
               style={({ pressed }) => [styles.linkHit, pressed && styles.linkHitPressed]}
             >
-              <AppText variant="body" style={styles.primaryLink} maxFontSizeMultiplier={1.28}>
+              <AppText variant="label" style={styles.primaryLink} maxFontSizeMultiplier={1.28}>
                 Mot de passe oublié ?
               </AppText>
             </Pressable>
-            <AppText
-              variant="caption"
-              style={[styles.linksDot, { fontSize: layout.secondaryFontSize }]}
-              accessible={false}
-            >
+            <Text style={styles.linksDot} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
               ·
-            </AppText>
+            </Text>
             <Pressable
               onPress={() => router.push("/(public)/signup" as any)}
               style={({ pressed }) => [styles.linkHit, pressed && styles.linkHitPressed]}
             >
-              <AppText
-                variant="bodyMuted"
-                style={[styles.secondaryLink, { fontSize: layout.secondaryFontSize }]}
-                maxFontSizeMultiplier={1.28}
-              >
+              <AppText variant="label" style={styles.secondaryLink} maxFontSizeMultiplier={1.28}>
                 Créer un compte
               </AppText>
             </Pressable>
           </View>
-          </View>
-        </ResponsiveContainer>
+        </View>
       </Screen>
     </View>
   );
@@ -411,94 +366,88 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4FAF8",
+    backgroundColor: "#EAF3F1",
   },
   backgroundImage: {
-    opacity: 0.1,
+    opacity: 0.08,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(244, 250, 248, 0.88)",
+    backgroundColor: "rgba(234,243,241,0.88)",
   },
-  accentGlowLarge: {
-    position: "absolute",
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    backgroundColor: "rgba(10, 143, 122, 0.11)",
-    zIndex: 0,
-  },
-  accentGlowSmall: {
-    position: "absolute",
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: "rgba(10, 143, 122, 0.08)",
-    zIndex: 0,
-  },
-  /** Contenu formulaire : centré verticalement, scroll si clavier / grande police. */
-  screenScrollContent: {
+  scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
     paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  /**
+   * iOS / Android : appliqué **seulement** pendant que le clavier est ouvert (`keyboardDidShow`).
+   * Le `paddingBottom` est calé sur la hauteur réelle du clavier (+ marge) pour tous formats d’écran.
+   * Sans clavier : `scrollContent` seul (carte centrée, pas de jeu de scroll artificiel).
+   */
+  scrollContentWithKeyboard: {
+    justifyContent: "flex-start",
+    paddingTop: 28,
   },
   card: {
     width: "100%",
+    maxWidth: 420,
     alignSelf: "center",
+    borderRadius: 26,
+    padding: 24,
     borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.42)",
+    borderColor: "rgba(145,165,157,0.45)",
     backgroundColor: "#FFFFFF",
-    overflow: "hidden",
     ...Platform.select({
-      web: { boxShadow: "0 12px 40px rgba(22, 58, 52, 0.14)" },
+      web: { boxShadow: "0 20px 48px rgba(22,58,52,0.12)" },
       default: {
         shadowColor: "#163A34",
-        shadowOpacity: 0.14,
-        shadowRadius: 22,
-        shadowOffset: { width: 0, height: 10 },
-        elevation: 6,
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
       },
     }),
   },
-  cardBrandAccent: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 4,
-    backgroundColor: brandPrimary,
-    opacity: 0.95,
-  },
-  backButtonBase: {
+  backButton: {
     alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    marginBottom: 14,
   },
   logoBlock: {
     alignItems: "center",
+    marginBottom: 12,
+  },
+  logo: {
+    height: 26,
+    width: 168,
   },
   kicker: {
-    color: brandPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-    letterSpacing: 1.2,
+    color: BRAND,
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: 0.5,
     textTransform: "uppercase",
-    marginBottom: 6,
+    marginBottom: 8,
     textAlign: "center",
   },
   title: {
-    fontFamily: "Philosopher_700Bold",
-    color: brandText,
+    color: UI_TEXT,
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: "700",
     textAlign: "center",
-    letterSpacing: -0.3,
+    alignSelf: "center",
+    maxWidth: 320,
   },
   subtitle: {
-    color: brandTextMuted,
+    color: UI_MUTED,
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 10,
     textAlign: "center",
-  },
-  heroDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(145, 165, 157, 0.35)",
-    marginBottom: 2,
-    alignSelf: "stretch",
   },
   resumeHint: {
     marginTop: 14,
@@ -506,6 +455,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
+  },
+  fieldBlock: {
+    marginTop: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: UI_TEXT,
+    marginBottom: 8,
+  },
+  fieldInput: {
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI_BORDER,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    color: UI_TEXT,
+    fontSize: 16,
+  },
+  passwordShell: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI_BORDER,
+    backgroundColor: "#FFFFFF",
+    paddingLeft: 14,
+    paddingRight: 6,
+  },
+  passwordInput: {
+    flex: 1,
+    minHeight: 48,
+    paddingVertical: Platform.OS === "ios" ? 12 : 10,
+    fontSize: 16,
+    color: UI_TEXT,
+    borderWidth: 0,
+    ...Platform.select({
+      web: { outlineStyle: "none" as const },
+      default: {},
+    }),
   },
   passwordToggle: {
     justifyContent: "center",
@@ -515,19 +507,36 @@ const styles = StyleSheet.create({
   rememberRow: {
     marginTop: 18,
   },
-  errorText: {
-    marginTop: 14,
-    color: "#B42318",
-    fontWeight: "600",
+  rememberLabel: {
+    lineHeight: 20,
+    color: UI_MUTED,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  submitButton: {
+    marginTop: 22,
+    minHeight: 54,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: BRAND,
+    alignSelf: "stretch",
+  },
+  submitButtonDisabled: {
+    backgroundColor: BRAND_DISABLED,
+  },
+  submitText: {
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
   linksRow: {
-    marginTop: 22,
+    marginTop: 18,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    rowGap: 12,
+    gap: 8,
+    rowGap: 10,
   },
   linkHit: {
     paddingVertical: 8,
@@ -538,20 +547,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10, 143, 122, 0.06)",
   },
   linksDot: {
-    color: brandTextMuted,
-    fontSize: 14,
+    color: UI_MUTED,
+    fontSize: 13,
     fontWeight: "700",
     opacity: 0.65,
     paddingHorizontal: 2,
   },
   primaryLink: {
-    color: brandPrimary,
-    fontWeight: "700",
-    fontSize: 14,
+    color: BRAND,
+    fontWeight: "600",
   },
   secondaryLink: {
-    color: "#45655D",
+    color: BRAND,
     fontWeight: "600",
-    fontSize: 14,
+    opacity: 0.92,
   },
 });

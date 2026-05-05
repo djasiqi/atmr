@@ -23,6 +23,16 @@ function resolveBaseUrl(): string {
 let failures = 0;
 let suspended = DISABLED_BY_ENV || !__DEV__;
 
+/** `AbortSignal.timeout` n’existe pas sous Hermes / certains navigateurs. */
+function abortAfterMs(ms: number): { signal: AbortSignal; clear: () => void } {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(id),
+  };
+}
+
 export function sendIngestEvent(
   eventName: string,
   payload: Record<string, unknown>
@@ -35,12 +45,15 @@ export function sendIngestEvent(
     ...payload,
   });
 
+  const { signal, clear } = abortAfterMs(3000);
+
   fetch(`${resolveBaseUrl()}/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body,
-    signal: AbortSignal.timeout(3000),
+    signal,
   })
+    .finally(clear)
     .then(() => {
       failures = 0;
     })

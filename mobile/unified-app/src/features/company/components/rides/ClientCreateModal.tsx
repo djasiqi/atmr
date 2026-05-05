@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
-import { AppButton, Modal, brandPrimary, brandText } from "../../../../design/responsive";
+import { Pressable, View } from "react-native";
+import { AppButton, Modal, brandPrimary, brandText, useResponsiveTokens } from "../../../../design/responsive";
+import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { useClientCreate, useCompanyBillingPartiesQuery } from "../../useRideForms";
 import { useSession } from "../../../../core/sessionProvider";
@@ -11,7 +12,13 @@ type ClientCreateModalProps = {
   onCreated?: () => void;
 };
 
+const CTA_STYLE = { minHeight: 54, borderRadius: 14 } as const;
+const SECONDARY_CTA_BORDER = { borderColor: "rgba(10, 143, 122, 0.45)" } as const;
+const ROW_RADIUS = 14;
+const UI_BORDER_SOFT = "rgba(145, 165, 157, 0.38)";
+
 export function ClientCreateModal({ visible, onClose, onCreated }: ClientCreateModalProps) {
+  const t = useResponsiveTokens();
   const { activeContext } = useSession();
   const createClient = useClientCreate();
   const billingParties = useCompanyBillingPartiesQuery();
@@ -51,62 +58,79 @@ export function ClientCreateModal({ visible, onClose, onCreated }: ClientCreateM
       onCreated?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Creation client impossible.");
+      setError(e instanceof Error ? e.message : "Création du client impossible.");
     }
   };
 
   return (
-    <Modal visible={visible} title="Creer un client" onClose={onClose}>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <TextInput
+    <Modal visible={visible} title="Créer un client" onClose={onClose}>
+      <View style={{ flexDirection: "row", gap: t.spacingSm }}>
+        <AppInput
           value={firstName}
           onChangeText={setFirstName}
-          placeholder="Prenom"
-          style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+          placeholder="Prénom"
+          containerStyle={{ flex: 1, minWidth: 0 }}
+          shellStyle={{ borderRadius: ROW_RADIUS }}
         />
-        <TextInput
+        <AppInput
           value={lastName}
           onChangeText={setLastName}
           placeholder="Nom"
-          style={{ flex: 1, borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10 }}
+          containerStyle={{ flex: 1, minWidth: 0 }}
+          shellStyle={{ borderRadius: ROW_RADIUS }}
         />
       </View>
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+      <View style={{ flexDirection: "row", gap: t.spacingSm, marginTop: t.spacingSm }}>
         <AppButton
-          title={gender === "female" ? "Civilite: Femme" : "Femme"}
+          title={gender === "female" ? "Civilité : Femme" : "Femme"}
           onPress={() => setGender("female")}
           variant={gender === "female" ? "primary" : "secondary"}
+          style={
+            gender === "female"
+              ? CTA_STYLE
+              : { ...CTA_STYLE, ...SECONDARY_CTA_BORDER }
+          }
         />
         <AppButton
-          title={gender === "male" ? "Civilite: Homme" : "Homme"}
+          title={gender === "male" ? "Civilité : Homme" : "Homme"}
           onPress={() => setGender("male")}
           variant={gender === "male" ? "primary" : "secondary"}
+          style={
+            gender === "male"
+              ? CTA_STYLE
+              : { ...CTA_STYLE, ...SECONDARY_CTA_BORDER }
+          }
         />
       </View>
-      <TextInput
+      <AppInput
         value={stayStartDate}
         onChangeText={setStayStartDate}
-        placeholder="Date debut stay (YYYY-MM-DD) optionnel"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, marginTop: 8 }}
+        placeholder="Date début séjour (YYYY-MM-DD) optionnel"
+        containerStyle={{ marginTop: t.spacingSm }}
+        shellStyle={{ borderRadius: ROW_RADIUS }}
       />
-      <TextInput
+      <AppInput
         value={phone}
         onChangeText={setPhone}
-        placeholder="Telephone"
+        placeholder="Téléphone"
         keyboardType="phone-pad"
-        style={{ borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 10, marginTop: 8 }}
+        containerStyle={{ marginTop: t.spacingSm }}
+        shellStyle={{ borderRadius: ROW_RADIUS }}
       />
-      <View style={{ marginTop: 8, gap: 6 }}>
-        <AppText variant="label">Billing party par defaut (optionnel)</AppText>
+      <View style={{ marginTop: t.spacingSm, gap: t.fieldGap }}>
+        <AppText variant="label">Billing party par défaut (optionnel)</AppText>
         {billingParties.data?.map((party) => (
           <Pressable
             key={party.id}
             onPress={() => setSelectedBillingPartyId(party.id)}
             style={{
               borderWidth: 1,
-              borderColor: selectedBillingPartyId === party.id ? "#0A8F7A" : "#ddd",
-              borderRadius: 8,
-              padding: 8,
+              borderColor: selectedBillingPartyId === party.id ? brandPrimary : UI_BORDER_SOFT,
+              borderRadius: ROW_RADIUS,
+              paddingVertical: t.spacingSm,
+              paddingHorizontal: t.spacingSm + 2,
+              minHeight: t.minTouchHeight,
+              justifyContent: "center",
             }}
           >
             <AppText
@@ -119,9 +143,10 @@ export function ClientCreateModal({ visible, onClose, onCreated }: ClientCreateM
         ))}
       </View>
       <AppButton
-        title={createClient.isPending ? "Creation..." : "Creer"}
+        title={createClient.isPending ? "Création…" : "Créer"}
         variant="primary"
         onPress={() => void submit()}
+        style={CTA_STYLE}
       />
       {error ? <AppText variant="error">{error}</AppText> : null}
     </Modal>

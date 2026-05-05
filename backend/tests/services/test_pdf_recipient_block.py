@@ -9,6 +9,7 @@ Valide :
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -29,6 +30,11 @@ from services.documents.pdf import (  # noqa: I001
     _sum_positive_billed_lines_excluding_global_discount,
     _wrap_line_by_words,
 )
+
+
+def _plain_text_for_width_check(html_line: str) -> str:
+    """Texte affichable sans balises (stringWidth sur le contenu, pas sur le mini-HTML)."""
+    return re.sub(r"<[^>]+>", "", html_line).strip()
 
 
 class TestNameWithUppercaseLastName:
@@ -170,6 +176,43 @@ class TestBuildRecipientBlockFlowable:
             # Zone fenêtre : pas de label « Facturé à : » dans le bloc destinataire
             assert "Facturé à" not in para.text
 
+    def test_name_second_line_c_o_uses_address_font_size(self):
+        """Ligne c/o (2ᵉ ligne du champ nom) : même taille que l’adresse, pas en gras."""
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+        invoice = MagicMock()
+        normal_style = ParagraphStyle(
+            "Normal",
+            parent=getSampleStyleSheet()["Normal"],
+            fontSize=10,
+            fontName="Helvetica",
+        )
+        with patch(
+            "services.documents.pdf._get_billed_to",
+            return_value=(
+                "Alexandre BANCHET\nc/o OPAD (Office de Protection de L'ADULTE)",
+                "Rte des Jeunes 1c<br/>1227 Genève",
+            ),
+        ):
+            para, lines = _build_recipient_block_flowable(
+                invoice,
+                normal_style,
+                name_font_size=12,
+                addr_font_size=10,
+            )
+            assert para is not None
+            assert "Alexandre BANCHET" in lines
+            assert any("c/o OPAD" in ln for ln in lines)
+            content = para.text
+            # Une seule ligne en 12 pt gras (prénom / nom)
+            assert content.count('size="12"') == 1
+            assert "<b>Alexandre BANCHET</b>" in content
+            # c/o + adresse en 10 pt (pas de gras sur c/o)
+            assert "c/o OPAD" in content
+            # Après le nom en 12 pt, le fragment c/o commence en 10 pt (balise <font size="10">)
+            assert "</b></font><br/><font size=\"10\">c/o OPAD" in content
+            assert "<b>c/o" not in content
+
     def test_recipient_lines_respect_wrapping(self):
         """Les lignes retournées ne dépassent pas maxWidth (après wrap)."""
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -246,10 +289,11 @@ class TestBuildRecipientBlockFlowable:
             # Aucune ligne ne dépasse max_width en points
             max_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
             for line in content.replace("<br/>", "\n").split("\n"):
-                if line.strip():
-                    w = pdfmetrics.stringWidth(line, "Helvetica", 10)
+                plain = _plain_text_for_width_check(line)
+                if plain:
+                    w = pdfmetrics.stringWidth(plain, "Helvetica", 10)
                     assert w <= max_width_pt + 2, (
-                        f"Ligne dépasse maxWidth: {line!r} = {w:.1f}pt > {max_width_pt:.1f}pt"
+                        f"Ligne dépasse maxWidth: {plain!r} = {w:.1f}pt > {max_width_pt:.1f}pt"
                     )
 
     def test_no_line_exceeds_max_width_pt(self):
@@ -273,10 +317,11 @@ class TestBuildRecipientBlockFlowable:
             assert para is not None
             max_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
             for line in para.text.replace("<br/>", "\n").split("\n"):
-                if line.strip():
-                    w = pdfmetrics.stringWidth(line, "Helvetica", 10)
+                plain = _plain_text_for_width_check(line)
+                if plain:
+                    w = pdfmetrics.stringWidth(plain, "Helvetica", 10)
                     assert w <= max_width_pt + 2, (
-                        f"Ligne dépasse: {line[:50]!r}... = {w:.1f}pt > {max_width_pt:.1f}pt"
+                        f"Ligne dépasse: {plain[:50]!r}... = {w:.1f}pt > {max_width_pt:.1f}pt"
                     )
 
 

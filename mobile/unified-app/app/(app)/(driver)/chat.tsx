@@ -298,6 +298,7 @@ export default function DriverChatScreen() {
           scroll={false}
           keyboardAware={Platform.OS !== "web"}
           keyboardVerticalOffset={keyboardOffset}
+          androidKeyboardFallback={Platform.OS === "android"}
           withHorizontalPadding={false}
           safeBottom
         >
@@ -306,7 +307,7 @@ export default function DriverChatScreen() {
               flex: 1,
               paddingTop: t.spacingMd,
               paddingHorizontal: horizontalPadding,
-              paddingBottom: Math.max(t.spacingMd, bottomInset),
+              paddingBottom: Platform.OS === "web" ? Math.max(t.spacingMd, bottomInset) : t.spacingMd,
               gap: t.spacingSm,
               position: "relative",
             }}

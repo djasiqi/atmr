@@ -3,6 +3,18 @@
  */
 import { Platform, ViewStyle } from "react-native";
 
+/** Alignée sur le tableau de bord dispatch (`dashboard.tsx` / cartes KPI). */
+export const companyShellCardShadow = Platform.select<ViewStyle>({
+  web: { boxShadow: "0 2px 10px rgba(22, 58, 52, 0.06)" } as ViewStyle,
+  default: {
+    shadowColor: "#163A34",
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+}) ?? {};
+
 export interface ShadowConfig {
   shadowColor: string;
   shadowOffset: { width: number; height: number };

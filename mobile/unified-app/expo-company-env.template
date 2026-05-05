@@ -17,6 +17,19 @@
 #   - Côté API (Docker) : lire `docker compose logs atmr_api` (token rejeté, rate limit, etc.) ;
 #     en doute, tester GUNICORN_WORKERS=1 dans backend/.env (multi-workers + Socket.IO).
 #   - Metro : le warn [CompanyRealtimeBridge] connect_error affiche la cause côté client.
+#
+# Expo Web (Chrome) + API sur IP LAN (ex. EXPO_PUBLIC_API_BASE_URL=http://192.168.1.x:5000) :
+#   - La page est souvent servie depuis http://localhost:8081 (Metro) : requête « cross-origin »
+#     vers /socket.io sur l’IP LAN. Vérifiez dans DevTools → Réseau l’URL en erreur, l’en-tête
+#     Origin, et si la requête est (failed) / ERR_CONNECTION_* (réseau, pare-feu, mauvaise IP) ou
+#     bloquée par CORS (console affiche souvent une erreur CORS explicite).
+#   - Côté API : Socket.IO n’accepte que les origines listées. Par défaut docker-compose inclut
+#     http://localhost:8081 et http://127.0.0.1:8081. Si vous ouvrez l’UI Expo via
+#     http://<IP-LAN>:8081, ajoutez cette origine exacte dans SOCKETIO_CORS_ORIGINS (variable
+#     d’environnement du service backend / .env, pas d’IP figée dans le dépôt).
+#   - Écoute : en dev Docker, Gunicorn est en général --bind 0.0.0.0:5000 (port publié 5000:5000).
+#     Si vous lancez Flask hors Docker avec « flask run » sans --host=0.0.0.0, l’API n’est joignable
+#     que via 127.0.0.1 — alors une URL http://192.168.x.x:5000 depuis le navigateur peut échouer.
 # Optionnel (chat) — EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CHAT_SOCKET=1
 #   Active l’exigence d’un WebSocket sain sur l’écran chat. Absent/0 = chat en
 #   requêtes périodiques, sans bandeau « connexion directe » lié au bridge.

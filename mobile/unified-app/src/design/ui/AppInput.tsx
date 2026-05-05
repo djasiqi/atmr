@@ -11,12 +11,28 @@ export type AppInputProps = TextInputProps & {
   label?: string;
   error?: string;
   helperText?: string;
+  leftSlot?: ReactNode;
   rightSlot?: ReactNode;
   containerStyle?: ViewStyle;
+  /** Fusionné après les styles par défaut du bandeau, avant la couleur de bord (focus / erreur). */
+  shellStyle?: ViewStyle;
 };
 
 export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
-  { label, error, helperText, rightSlot, containerStyle, style, editable = true, onFocus, onBlur, ...rest },
+  {
+    label,
+    error,
+    helperText,
+    leftSlot,
+    rightSlot,
+    containerStyle,
+    shellStyle,
+    style,
+    editable = true,
+    onFocus,
+    onBlur,
+    ...rest
+  },
   ref
 ) {
   const t = useResponsiveTokens();
@@ -43,6 +59,9 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
   const inputPadV = t.fieldTextInputPaddingV;
 
   const disabled = editable === false;
+  const multiline = Boolean(rest.multiline);
+  const rowAlign = multiline ? ("flex-start" as const) : ("center" as const);
+  const leftPadTop = multiline && leftSlot ? Math.max(0, (t.fieldTextInputPaddingV ?? 0) + 2) : 0;
 
   return (
     <View style={[{ gap: t.fieldGap }, containerStyle]}>
@@ -52,17 +71,23 @@ export const AppInput = forwardRef<TextInput, AppInputProps>(function AppInput(
         </AppText>
       ) : null}
       <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          minHeight: shellMinH,
-          borderWidth: 1,
-          borderColor,
-          borderRadius: t.radiusMd,
-          paddingHorizontal: t.spacingSm + 2,
-          backgroundColor: disabled ? "rgba(241, 245, 244, 0.9)" : "#fff",
-        }}
+        style={[
+          {
+            flexDirection: "row",
+            alignItems: rowAlign,
+            minHeight: shellMinH,
+            borderWidth: 1,
+            borderRadius: t.radiusMd,
+            paddingHorizontal: t.spacingSm + 2,
+            backgroundColor: disabled ? "rgba(241, 245, 244, 0.9)" : "#fff",
+          },
+          shellStyle,
+          { borderColor },
+        ]}
       >
+        {leftSlot ? (
+          <View style={{ marginRight: t.spacingSm, paddingTop: leftPadTop }}>{leftSlot}</View>
+        ) : null}
         <TextInput
           ref={ref}
           editable={editable}

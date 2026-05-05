@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   ImageBackground,
+  Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,23 +20,23 @@ import { apiClient } from "../../src/core/api/client";
 import { autocompleteAddress } from "../../src/features/client/api";
 import { AddressAutocompleteSuggestion } from "../../src/features/client/types";
 import {
-  AppButton,
   AppInput,
   AppText,
-  brandPrimary,
   brandText,
-  brandTextMuted,
-  getPublicBackButtonMetrics,
-  ResponsiveContainer,
   Screen,
+  scrollAnchorAboveKeyboard,
   useAppViewport,
-  useResponsiveTokens,
 } from "../../src/design/responsive";
 
 const LANDING_BACKGROUND = require("../../assets/images/landing-background.png");
 const LIRIE_LOGO = require("../../assets/images/lirie-logo-color.png");
 
+/** Pages légales officielles (site web Lirie), ouvertes dans le navigateur — aligné sur `contact.tsx` (`ExpoLinking.openURL`). */
+const TERMS_URL = "https://www.lirie.ch/conditions";
+const PRIVACY_URL = "https://www.lirie.ch/privacy";
+
 const UI_SURFACE = "#F3F7F5";
+const UI_MUTED = "#5F7369";
 const UI_BORDER_SOFT = "rgba(145, 165, 157, 0.38)";
 
 type Gender = "male" | "female" | "other";
@@ -65,6 +67,34 @@ const MOBILITY_OPTIONS: { value: MobilityOption; label: string }[] = [
   { value: "oxygen", label: "Sous O2" },
   { value: "other", label: "Autre" },
 ];
+
+/** Aligné sur `forgot-password.tsx` (mêmes valeurs numériques que le StyleSheet là-bas). */
+const AUTH_UI = {
+  gapBlock: 12,
+  gapLine: 6,
+  cardPad: 24,
+  cardMax: 420,
+  radiusCard: 26,
+  label: 13,
+  ctaH: 54,
+  ctaR: 14,
+  titleSize: 30,
+  titleLH: 34,
+  subSize: 15,
+  subLH: 21,
+  logoH: 26,
+  logoW: 168,
+  fieldBlockMarginTop: 18,
+  ctaMarginTop: 20,
+} as const;
+
+const INPUT_SHELL = {
+  minHeight: 50,
+  borderRadius: 14,
+  paddingHorizontal: 14,
+} as const;
+
+const INPUT_TEXT = { fontSize: 16, minHeight: 44 } as const;
 
 function normalizeBirthDateInput(value: string): string | null {
   const raw = value.trim();
@@ -186,23 +216,7 @@ function splitSuggestionLabel(value: string): { primary: string; secondary: stri
 
 export default function SignupScreen() {
   const router = useRouter();
-  const viewport = useAppViewport();
-  const { topInset } = viewport;
-  const { landing: layout } = useResponsiveTokens();
-
-  const accentLayout = useMemo(() => {
-    const narrow = viewport.isTiny || viewport.isCompact;
-    return {
-      largeTop: viewport.isTablet ? -105 : narrow ? -98 : -92,
-      largeRight: viewport.isTablet ? -48 : -32,
-      smallTop: viewport.isTablet ? 95 : narrow ? 72 : 82,
-      smallRight: viewport.isTablet ? 72 : 52,
-    };
-  }, [viewport.isCompact, viewport.isTablet, viewport.isTiny]);
-  const backBtn = useMemo(
-    () => getPublicBackButtonMetrics(viewport),
-    [viewport]
-  );
+  const { topInset } = useAppViewport();
   const params = useLocalSearchParams<{ next?: string }>();
   const isWeb = Platform.OS === "web";
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
@@ -246,7 +260,44 @@ export default function SignupScreen() {
   const accessRef = useRef<TextInput | null>(null);
   const passwordRef = useRef<TextInput | null>(null);
   const confirmPasswordRef = useRef<TextInput | null>(null);
+  const signupScrollRef = useRef<ScrollView | null>(null);
+  const signupScrollOffsetYRef = useRef(0);
+  const signupEmailAnchorRef = useRef<View | null>(null);
+  const signupPhoneAnchorRef = useRef<View | null>(null);
+  const signupPasswordAnchorRef = useRef<View | null>(null);
+  const signupConfirmPasswordAnchorRef = useRef<View | null>(null);
+  const signupFirstNameAnchorRef = useRef<View | null>(null);
+  const signupLastNameAnchorRef = useRef<View | null>(null);
+  const signupBirthDateAnchorRef = useRef<View | null>(null);
+  const signupMobilityOtherAnchorRef = useRef<View | null>(null);
+  const signupAddressAnchorRef = useRef<View | null>(null);
+  const signupFloorAnchorRef = useRef<View | null>(null);
+  const signupIntercomAnchorRef = useRef<View | null>(null);
+  const signupAccessAnchorRef = useRef<View | null>(null);
   const addressBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardScrollPaddingBottom, setKeyboardScrollPaddingBottom] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener("keyboardDidShow", (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const computed = h > 0 ? Math.round(h + 48) : 300;
+      setKeyboardScrollPaddingBottom(Math.max(260, computed));
+      setKeyboardVisible(true);
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardVisible(false);
+      setKeyboardScrollPaddingBottom(0);
+      signupScrollRef.current?.scrollTo({ y: 0, animated: true });
+      signupScrollOffsetYRef.current = 0;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   const civilityLabel =
     gender === "male" ? "Homme" : gender === "female" ? "Femme" : gender === "other" ? "Autre" : "Civilité";
   const phonePlaceholder = phoneCountry.code === "CH" ? "76 770 40 41" : "Numéro local";
@@ -272,6 +323,8 @@ export default function SignupScreen() {
     });
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   })();
+
+  const stepOneValid = validateStepOne(email, phone, password, confirmPassword) === null;
 
   const goToStepTwo = () => {
     const validationError = validateStepOne(email, phone, password, confirmPassword);
@@ -441,127 +494,63 @@ export default function SignupScreen() {
         imageStyle={styles.backgroundImage}
       />
       <View style={styles.overlay} />
-      <View
-        style={[
-          styles.accentGlowLarge,
-          {
-            top: accentLayout.largeTop,
-            right: accentLayout.largeRight,
-            pointerEvents: "none",
-          },
-        ]}
-      />
-      <View
-        style={[
-          styles.accentGlowSmall,
-          {
-            top: accentLayout.smallTop,
-            right: accentLayout.smallRight,
-            pointerEvents: "none",
-          },
-        ]}
-      />
 
       <Screen
         scroll
         withHorizontalPadding={false}
         backgroundColor="transparent"
         keyboardVerticalOffset={Platform.OS === "ios" ? topInset : 0}
-        contentContainerStyle={styles.scrollContent}
+        automaticallyAdjustKeyboardInsets={Platform.OS !== "web"}
+        androidKeyboardFallback={Platform.OS === "android"}
+        scrollViewRef={signupScrollRef}
+        onScroll={(e) => {
+          signupScrollOffsetYRef.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS !== "web" && keyboardVisible
+            ? [styles.scrollContentWithKeyboard, { paddingBottom: keyboardScrollPaddingBottom }]
+            : null,
+        ]}
       >
-        <ResponsiveContainer
-          style={{
-            padding: layout.columnPadding,
-            maxWidth: layout.contentMaxWidth,
-          }}
-        >
-          <View
-            style={[
-              styles.card,
-              {
-                maxWidth: layout.cardMaxWidth,
-                paddingHorizontal: layout.cardPadding + 6,
-                paddingTop: layout.cardPadding + 10,
-                paddingBottom: layout.cardPadding + 14,
-                borderRadius: layout.cardRadius,
-              },
-            ]}
-          >
-          <View style={styles.cardBrandAccent} />
+        <View style={styles.card}>
           <Pressable
-            onPress={() => router.replace("/(public)/login" as any)}
-            style={({ pressed }) => [
-              styles.backButtonBase,
-              {
-                paddingVertical: backBtn.paddingVertical,
-                paddingHorizontal: backBtn.paddingHorizontal,
-                marginLeft: backBtn.marginLeft,
-                marginBottom: backBtn.marginBottom,
-                borderRadius: backBtn.borderRadius,
-                backgroundColor: pressed
-                  ? backBtn.backgroundColorPressed
-                  : backBtn.backgroundColorIdle,
-              },
-            ]}
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+                return;
+              }
+              router.replace("/(public)/login" as any);
+            }}
+            style={styles.backButton}
             accessibilityRole="button"
             accessibilityLabel="Retour"
-            hitSlop={12}
           >
-            <Ionicons name="arrow-back" size={backBtn.iconSize} color={brandPrimary} />
+            <Ionicons name="arrow-back" size={22} color="#0A8F7A" />
           </Pressable>
 
-          <View style={[styles.logoBlock, { marginBottom: layout.cardLineGap + 6 }]}>
+          <View style={styles.logoBlock}>
             <Image
               source={LIRIE_LOGO}
-              style={{ height: layout.logoHeight, width: layout.logoWidth }}
+              style={styles.logo}
               resizeMode="contain"
               accessibilityRole="image"
               accessibilityLabel="LIRIE"
             />
           </View>
 
-          <Text
-            style={[
-              styles.kicker,
-              {
-                fontSize: layout.secondaryFontSize,
-                marginBottom: layout.cardLineGap,
-                letterSpacing: viewport.isTiny ? 0.8 : 1.2,
-              },
-            ]}
-            maxFontSizeMultiplier={1.22}
-          >
+          <Text style={styles.kicker} maxFontSizeMultiplier={1.22}>
             Informations
           </Text>
-          <Text
-            style={[
-              styles.title,
-              {
-                fontSize: layout.titleFontSize,
-                lineHeight: layout.titleLineHeight,
-                maxWidth: layout.titleMaxWidth,
-              },
-            ]}
-            maxFontSizeMultiplier={1.28}
-          >
+          <Text style={styles.title} maxFontSizeMultiplier={1.28}>
             Créer un compte
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              {
-                fontSize: layout.microProofFontSize,
-                lineHeight: layout.microProofLineHeight,
-                marginTop: layout.cardLineGap + 4,
-              },
-            ]}
-            maxFontSizeMultiplier={1.45}
-          >
+          <Text style={styles.subtitle} maxFontSizeMultiplier={1.45}>
             Coordonnées utilisées pour les réservations et les confirmations.
           </Text>
-          <View style={[styles.heroDivider, { marginTop: layout.cardBlockGap + 4 }]} />
 
-          <View style={[styles.stepperWrap, { marginTop: layout.cardLineGap + 4 }]}>
+          <View style={styles.stepperWrap}>
             <View style={styles.stepItem}>
               <View
                 style={[
@@ -614,15 +603,7 @@ export default function SignupScreen() {
               <Pressable
                 onPress={() => void submitWithGoogle()}
                 disabled={googlePending}
-                style={[
-                  styles.googleButton,
-                  googlePending ? styles.googleButtonDisabled : null,
-                  {
-                    marginTop: layout.cardBlockGap + 4,
-                    minHeight: layout.ctaHeight + 8,
-                    borderRadius: layout.ctaRadius + 5,
-                  },
-                ]}
+                style={[styles.googleButton, googlePending ? styles.googleButtonDisabled : null]}
                 accessibilityRole="button"
                 accessibilityLabel="S'inscrire avec Google"
               >
@@ -631,10 +612,7 @@ export default function SignupScreen() {
                 ) : (
                   <>
                     <Ionicons name="logo-google" size={16} color="#DB4437" />
-                    <Text
-                      style={[styles.googleButtonText, { fontSize: layout.secondaryFontSize + 1 }]}
-                      maxFontSizeMultiplier={1.28}
-                    >
+                    <Text style={styles.googleButtonText} maxFontSizeMultiplier={1.28}>
                       S&apos;inscrire avec Google
                     </Text>
                   </>
@@ -649,28 +627,38 @@ export default function SignupScreen() {
                 <View style={styles.googleDividerLine} />
               </View>
 
-              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 4 }]}>
+              <View style={[styles.sectionBlock, { marginTop: AUTH_UI.gapBlock + 4 }]}>
                 <Text
-                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  style={[styles.sectionTitle, { fontSize: AUTH_UI.label }]}
                   maxFontSizeMultiplier={1.22}
                 >
                   Contact
                 </Text>
-                <View style={styles.fieldBlock}>
+                <View ref={signupEmailAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <AppInput
                     ref={emailRef}
                     value={email}
                     onChangeText={setEmail}
                     placeholder="Courriel (ou téléphone)"
+                    placeholderTextColor="#91A59D"
                     autoCapitalize="none"
                     keyboardType="email-address"
                     autoComplete="email"
                     textContentType="emailAddress"
                     returnKeyType="next"
                     onSubmitEditing={() => phoneRef.current?.focus()}
+                    onFocus={() =>
+                      scrollAnchorAboveKeyboard(
+                        signupScrollRef,
+                        signupScrollOffsetYRef,
+                        signupEmailAnchorRef,
+                      )
+                    }
+                    shellStyle={INPUT_SHELL}
+                    style={INPUT_TEXT}
                   />
                 </View>
-                <View style={styles.fieldBlock}>
+                <View ref={signupPhoneAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <View style={styles.phoneWrap}>
                     <View style={styles.phoneRow}>
                       <Pressable
@@ -696,7 +684,14 @@ export default function SignupScreen() {
                         ref={phoneRef}
                         value={phone}
                         onChangeText={setPhone}
-                        onFocus={() => setPhoneCountryOpen(false)}
+                        onFocus={() => {
+                          setPhoneCountryOpen(false);
+                          scrollAnchorAboveKeyboard(
+                            signupScrollRef,
+                            signupScrollOffsetYRef,
+                            signupPhoneAnchorRef,
+                          );
+                        }}
                         placeholder={phonePlaceholder}
                         placeholderTextColor="#91A59D"
                         keyboardType="phone-pad"
@@ -746,24 +741,34 @@ export default function SignupScreen() {
                 </View>
               </View>
 
-              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 10 }]}>
+              <View style={[styles.sectionBlock, { marginTop: AUTH_UI.gapBlock + 10 }]}>
                 <Text
-                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  style={[styles.sectionTitle, { fontSize: AUTH_UI.label }]}
                   maxFontSizeMultiplier={1.22}
                 >
                   Sécurité
                 </Text>
-                <View style={styles.fieldBlock}>
+                <View ref={signupPasswordAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <AppInput
                     ref={passwordRef}
                     value={password}
                     onChangeText={setPassword}
                     placeholder="Min. 8 caractères"
+                    placeholderTextColor="#91A59D"
                     secureTextEntry={!showPassword}
                     autoComplete="new-password"
                     textContentType="newPassword"
                     returnKeyType="next"
                     onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                    onFocus={() =>
+                      scrollAnchorAboveKeyboard(
+                        signupScrollRef,
+                        signupScrollOffsetYRef,
+                        signupPasswordAnchorRef,
+                      )
+                    }
+                    shellStyle={INPUT_SHELL}
+                    style={INPUT_TEXT}
                     rightSlot={
                       <Pressable
                         onPress={() => setShowPassword((v) => !v)}
@@ -780,17 +785,27 @@ export default function SignupScreen() {
                     }
                   />
                 </View>
-                <View style={styles.fieldBlock}>
+                <View ref={signupConfirmPasswordAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <AppInput
                     ref={confirmPasswordRef}
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     placeholder="Confirmer le mot de passe"
+                    placeholderTextColor="#91A59D"
                     secureTextEntry={!showConfirmPassword}
                     autoComplete="new-password"
                     textContentType="newPassword"
                     returnKeyType="done"
                     onSubmitEditing={goToStepTwo}
+                    onFocus={() =>
+                      scrollAnchorAboveKeyboard(
+                        signupScrollRef,
+                        signupScrollOffsetYRef,
+                        signupConfirmPasswordAnchorRef,
+                      )
+                    }
+                    shellStyle={INPUT_SHELL}
+                    style={INPUT_TEXT}
                     rightSlot={
                       <Pressable
                         onPress={() => setShowConfirmPassword((v) => !v)}
@@ -815,9 +830,9 @@ export default function SignupScreen() {
             </>
           ) : (
             <>
-              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 8 }]}>
+              <View style={[styles.sectionBlock, { marginTop: AUTH_UI.gapBlock + 8 }]}>
                 <Text
-                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  style={[styles.sectionTitle, { fontSize: AUTH_UI.label }]}
                   maxFontSizeMultiplier={1.22}
                 >
                   Informations personnelles
@@ -878,28 +893,48 @@ export default function SignupScreen() {
                   </View>
                 </View>
 
-                <View style={styles.fieldBlock}>
+                <View ref={signupFirstNameAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <AppInput
                     value={firstName}
                     onChangeText={setFirstName}
                     placeholder="Prénom"
+                    placeholderTextColor="#91A59D"
                     returnKeyType="next"
                     onSubmitEditing={() => lastNameRef.current?.focus()}
+                    onFocus={() =>
+                      scrollAnchorAboveKeyboard(
+                        signupScrollRef,
+                        signupScrollOffsetYRef,
+                        signupFirstNameAnchorRef,
+                      )
+                    }
+                    shellStyle={INPUT_SHELL}
+                    style={INPUT_TEXT}
                   />
                 </View>
 
-                <View style={styles.fieldBlock}>
+                <View ref={signupLastNameAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <AppInput
                     ref={lastNameRef}
                     value={lastName}
                     onChangeText={setLastName}
                     placeholder="Nom"
+                    placeholderTextColor="#91A59D"
                     returnKeyType="next"
                     onSubmitEditing={() => birthDateRef.current?.focus()}
+                    onFocus={() =>
+                      scrollAnchorAboveKeyboard(
+                        signupScrollRef,
+                        signupScrollOffsetYRef,
+                        signupLastNameAnchorRef,
+                      )
+                    }
+                    shellStyle={INPUT_SHELL}
+                    style={INPUT_TEXT}
                   />
                 </View>
 
-                <View style={styles.fieldBlock}>
+                <View ref={signupBirthDateAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <View style={styles.dateWrap}>
                     <TextInput
                       ref={birthDateRef}
@@ -910,6 +945,13 @@ export default function SignupScreen() {
                       keyboardType="numbers-and-punctuation"
                       returnKeyType="next"
                       onSubmitEditing={() => addressRef.current?.focus()}
+                      onFocus={() =>
+                        scrollAnchorAboveKeyboard(
+                          signupScrollRef,
+                          signupScrollOffsetYRef,
+                          signupBirthDateAnchorRef,
+                        )
+                      }
                       style={[styles.fieldInput, !isWeb ? styles.dateInput : null]}
                     />
                     {!isWeb ? (
@@ -992,7 +1034,7 @@ export default function SignupScreen() {
                 ) : null}
 
                 {mobility === "other" ? (
-                  <View style={styles.fieldBlock}>
+                  <View ref={signupMobilityOtherAnchorRef} collapsable={false} style={styles.fieldBlock}>
                     <TextInput
                       value={mobilityOther}
                       onChangeText={setMobilityOther}
@@ -1000,20 +1042,27 @@ export default function SignupScreen() {
                       placeholderTextColor="#91A59D"
                       returnKeyType="next"
                       onSubmitEditing={() => addressRef.current?.focus()}
+                      onFocus={() =>
+                        scrollAnchorAboveKeyboard(
+                          signupScrollRef,
+                          signupScrollOffsetYRef,
+                          signupMobilityOtherAnchorRef,
+                        )
+                      }
                       style={styles.fieldInput}
                     />
                   </View>
                 ) : null}
               </View>
 
-              <View style={[styles.sectionBlock, { marginTop: layout.cardBlockGap + 10 }]}>
+              <View style={[styles.sectionBlock, { marginTop: AUTH_UI.gapBlock + 10 }]}>
                 <Text
-                  style={[styles.sectionTitle, { fontSize: layout.cardLabelSize }]}
+                  style={[styles.sectionTitle, { fontSize: AUTH_UI.label }]}
                   maxFontSizeMultiplier={1.22}
                 >
                   Adresse et accès
                 </Text>
-                <View style={styles.fieldBlock}>
+                <View ref={signupAddressAnchorRef} collapsable={false} style={styles.fieldBlock}>
                   <View style={styles.addressAutocompleteWrap}>
                     <TextInput
                       ref={addressRef}
@@ -1027,6 +1076,11 @@ export default function SignupScreen() {
                           clearTimeout(addressBlurTimeoutRef.current);
                         }
                         setAddressAutocompleteOpen(true);
+                        scrollAnchorAboveKeyboard(
+                          signupScrollRef,
+                          signupScrollOffsetYRef,
+                          signupAddressAnchorRef,
+                        );
                       }}
                       onBlur={() => {
                         addressBlurTimeoutRef.current = setTimeout(() => {
@@ -1108,7 +1162,7 @@ export default function SignupScreen() {
 
                 {showAccessDetails ? (
                   <>
-                    <View style={styles.fieldBlock}>
+                    <View ref={signupFloorAnchorRef} collapsable={false} style={styles.fieldBlock}>
                       <TextInput
                         ref={floorRef}
                         value={floorUnit}
@@ -1117,10 +1171,17 @@ export default function SignupScreen() {
                         placeholderTextColor="#91A59D"
                         returnKeyType="next"
                         onSubmitEditing={() => intercomRef.current?.focus()}
+                        onFocus={() =>
+                          scrollAnchorAboveKeyboard(
+                            signupScrollRef,
+                            signupScrollOffsetYRef,
+                            signupFloorAnchorRef,
+                          )
+                        }
                         style={styles.fieldInput}
                       />
                     </View>
-                    <View style={styles.fieldBlock}>
+                    <View ref={signupIntercomAnchorRef} collapsable={false} style={styles.fieldBlock}>
                       <TextInput
                         ref={intercomRef}
                         value={intercomCode}
@@ -1129,17 +1190,34 @@ export default function SignupScreen() {
                         placeholderTextColor="#91A59D"
                         returnKeyType="next"
                         onSubmitEditing={() => accessRef.current?.focus()}
+                        onFocus={() =>
+                          scrollAnchorAboveKeyboard(
+                            signupScrollRef,
+                            signupScrollOffsetYRef,
+                            signupIntercomAnchorRef,
+                          )
+                        }
                         style={styles.fieldInput}
                       />
                     </View>
-                    <View style={styles.fieldBlock}>
+                    <View ref={signupAccessAnchorRef} collapsable={false} style={styles.fieldBlock}>
                       <AppInput
                         ref={accessRef}
                         value={accessNote}
                         onChangeText={setAccessNote}
                         placeholder="Complément d'accès"
+                        placeholderTextColor="#91A59D"
                         returnKeyType="done"
                         onSubmitEditing={() => void submit()}
+                        onFocus={() =>
+                          scrollAnchorAboveKeyboard(
+                            signupScrollRef,
+                            signupScrollOffsetYRef,
+                            signupAccessAnchorRef,
+                          )
+                        }
+                        shellStyle={INPUT_SHELL}
+                        style={INPUT_TEXT}
                       />
                     </View>
                   </>
@@ -1148,14 +1226,22 @@ export default function SignupScreen() {
             </>
           )}
 
-          {error ? (
-            <AppText variant="error" style={{ marginTop: 12 }} accessibilityRole="alert">
-              {error}
-            </AppText>
-          ) : null}
-
           {currentStep === 1 ? (
-            <AppButton title="Continuer" variant="primary" onPress={goToStepTwo} style={{ alignSelf: "stretch" }} />
+            <Pressable
+              onPress={goToStepTwo}
+              disabled={!stepOneValid}
+              style={[
+                styles.primaryButton,
+                styles.ctaPrimarySpacing,
+                !stepOneValid ? styles.primaryButtonDisabled : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Continuer"
+            >
+              <AppText variant="label" style={styles.primaryButtonText}>
+                Continuer
+              </AppText>
+            </Pressable>
           ) : (
             <>
               <Pressable
@@ -1172,14 +1258,14 @@ export default function SignupScreen() {
                   J&apos;accepte les{" "}
                   <Text
                     style={styles.termsLink}
-                    onPress={() => router.push("/(public)/conditions" as any)}
+                    onPress={() => void ExpoLinking.openURL(TERMS_URL)}
                   >
                     conditions d&apos;utilisation
                   </Text>{" "}
                   et la{" "}
                   <Text
                     style={styles.termsLink}
-                    onPress={() => router.push("/(public)/confidentialite" as any)}
+                    onPress={() => void ExpoLinking.openURL(PRIVACY_URL)}
                   >
                     politique de confidentialité
                   </Text>
@@ -1199,31 +1285,42 @@ export default function SignupScreen() {
                     Retour
                   </Text>
                 </Pressable>
-                <AppButton
-                  title={"Sauvegarder et s'inscrire"}
-                  variant="primary"
-                  loading={pending}
-                  disabled={pending || !acceptedTerms}
+                <Pressable
                   onPress={() => void submit()}
+                  disabled={pending || !acceptedTerms}
                   style={[
                     styles.submitButtonInline,
-                    { minHeight: layout.ctaHeight + 2, borderRadius: layout.ctaRadius },
+                    styles.primaryButton,
+                    pending || !acceptedTerms ? styles.primaryButtonDisabled : null,
                   ]}
-                />
+                >
+                  {pending ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <AppText variant="label" style={styles.primaryButtonText}>
+                      Sauvegarder et s&apos;inscrire
+                    </AppText>
+                  )}
+                </Pressable>
               </View>
             </>
           )}
 
+          {error ? (
+            <AppText variant="error" style={styles.feedbackAfterCta} accessibilityRole="alert">
+              {error}
+            </AppText>
+          ) : null}
+
           <Pressable
             onPress={() => router.replace("/(public)/login" as any)}
-            style={({ pressed }) => [styles.bottomLinkWrap, pressed && styles.bottomLinkPressed]}
+            style={styles.bottomLinkWrap}
           >
-            <Text style={styles.bottomLink} maxFontSizeMultiplier={1.28}>
+            <AppText variant="label" style={styles.bottomLink}>
               Déjà un compte ? Se connecter
-            </Text>
+            </AppText>
           </Pressable>
-          </View>
-        </ResponsiveContainer>
+        </View>
       </Screen>
     </View>
   );
@@ -1232,93 +1329,101 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F4FAF8",
+    backgroundColor: "#EAF3F1",
   },
   backgroundImage: {
-    opacity: 0.1,
+    opacity: 0.08,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(244, 250, 248, 0.88)",
-  },
-  accentGlowLarge: {
-    position: "absolute",
-    width: 230,
-    height: 230,
-    borderRadius: 115,
-    backgroundColor: "rgba(10, 143, 122, 0.11)",
-    zIndex: 0,
-  },
-  accentGlowSmall: {
-    position: "absolute",
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: "rgba(10, 143, 122, 0.08)",
-    zIndex: 0,
+    backgroundColor: "rgba(234,243,241,0.88)",
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingVertical: 18,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  /** Natif, clavier ouvert uniquement — aligné sur `login.tsx` / `forgot-password.tsx`. */
+  scrollContentWithKeyboard: {
+    justifyContent: "flex-start",
+    paddingTop: 28,
   },
   card: {
     width: "100%",
+    maxWidth: AUTH_UI.cardMax,
     alignSelf: "center",
+    borderRadius: AUTH_UI.radiusCard,
+    padding: AUTH_UI.cardPad,
     borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.42)",
+    borderColor: "rgba(145,165,157,0.45)",
     backgroundColor: "#FFFFFF",
-    overflow: "hidden",
     ...Platform.select({
-      web: { boxShadow: "0 8px 28px rgba(22, 58, 52, 0.11)" },
+      web: { boxShadow: "0 20px 48px rgba(22,58,52,0.12)" },
       default: {
         shadowColor: "#163A34",
-        shadowOpacity: 0.11,
-        shadowRadius: 16,
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
         shadowOffset: { width: 0, height: 8 },
         elevation: 4,
       },
     }),
   },
-  cardBrandAccent: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 4,
-    backgroundColor: brandPrimary,
-    opacity: 0.95,
-  },
-  backButtonBase: {
+  backButton: {
     alignSelf: "flex-start",
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+    marginBottom: 14,
   },
   logoBlock: {
     alignItems: "center",
+    marginBottom: 12,
+  },
+  logo: {
+    height: AUTH_UI.logoH,
+    width: AUTH_UI.logoW,
   },
   kicker: {
-    color: brandPrimary,
-    fontWeight: "600",
+    color: "#0A8F7A",
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: 0.5,
     textTransform: "uppercase",
-    textAlign: "center",
+    marginBottom: 8,
   },
   title: {
-    fontFamily: "Philosopher_700Bold",
-    color: brandText,
-    textAlign: "center",
-    letterSpacing: -0.3,
+    color: "#163A34",
+    fontSize: AUTH_UI.titleSize,
+    lineHeight: AUTH_UI.titleLH,
+    fontWeight: "700",
   },
   subtitle: {
-    color: brandTextMuted,
-    textAlign: "center",
+    color: "#5F7369",
+    fontSize: AUTH_UI.subSize,
+    lineHeight: AUTH_UI.subLH,
+    marginTop: 10,
   },
-  heroDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(145, 165, 157, 0.35)",
-    marginBottom: 2,
+  primaryButton: {
+    minHeight: AUTH_UI.ctaH,
+    borderRadius: AUTH_UI.ctaR,
+    alignItems: "center",
+    justifyContent: "center",
     alignSelf: "stretch",
+    backgroundColor: "#0A8F7A",
+  },
+  ctaPrimarySpacing: {
+    marginTop: AUTH_UI.ctaMarginTop,
+  },
+  primaryButtonDisabled: {
+    backgroundColor: "#84B7AE",
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
   stepperWrap: {
-    minHeight: 48,
+    marginTop: 14,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1357,7 +1462,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0A8F7A",
   },
   stepDotText: {
-    color: "#6F857E",
+    color: "#5F7369",
     fontSize: 11,
     fontWeight: "700",
   },
@@ -1365,22 +1470,26 @@ const styles = StyleSheet.create({
     color: "#0A8F7A",
   },
   stepLabel: {
-    color: "#6F857E",
-    fontSize: 12.5,
+    color: "#5F7369",
+    fontSize: 12,
     fontWeight: "600",
   },
   stepLabelActive: {
-    color: "#0A8F7A",
+    color: "#163A34",
     fontWeight: "700",
   },
   googleButton: {
+    marginTop: AUTH_UI.fieldBlockMarginTop,
+    minHeight: 54,
+    borderRadius: 14,
+    alignSelf: "stretch",
     borderWidth: 1,
-    borderColor: UI_BORDER_SOFT,
+    borderColor: "rgba(145,165,157,0.45)",
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     ...Platform.select({
       web: { boxShadow: "0 1px 8px rgba(22, 58, 52, 0.06)" },
       default: {
@@ -1397,7 +1506,8 @@ const styles = StyleSheet.create({
   },
   googleButtonText: {
     color: "#163A34",
-    fontWeight: "700",
+    fontWeight: "600",
+    fontSize: 14,
     letterSpacing: 0.15,
   },
   googleDivider: {
@@ -1419,9 +1529,12 @@ const styles = StyleSheet.create({
   },
   sectionBlock: {
     gap: 2,
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   sectionTitle: {
-    color: brandText,
+    color: "#163A34",
     fontWeight: "700",
     marginBottom: 2,
   },
@@ -1486,11 +1599,14 @@ const styles = StyleSheet.create({
   whyLink: {
     marginTop: 10,
     color: "#0A8F7A",
-    fontWeight: "700",
+    fontWeight: "600",
   },
   fieldBlock: {
     marginTop: 12,
     gap: 6,
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   fieldLabel: {
     color: "#5F7369",
@@ -1499,12 +1615,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   fieldInput: {
-    minHeight: 52,
+    minHeight: 50,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: UI_BORDER_SOFT,
-    backgroundColor: UI_SURFACE,
-    paddingHorizontal: 16,
+    borderColor: "#91A59D",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
     color: brandText,
     fontSize: 16,
   },
@@ -1583,12 +1699,12 @@ const styles = StyleSheet.create({
   },
   optionalToggleRow: {
     marginTop: 12,
-    minHeight: 36,
-    borderRadius: 10,
+    minHeight: 44,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "rgba(145,165,157,0.45)",
-    backgroundColor: "#F8FBFA",
-    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1600,26 +1716,35 @@ const styles = StyleSheet.create({
   },
   phoneWrap: {
     position: "relative",
+    width: "100%",
+    maxWidth: "100%",
+    alignSelf: "stretch",
   },
   phoneRow: {
-    minHeight: Platform.OS === "web" ? 32 : 48,
+    width: "100%",
+    maxWidth: "100%",
+    minHeight: 50,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: UI_BORDER_SOFT,
-    backgroundColor: UI_SURFACE,
+    borderColor: "#91A59D",
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     overflow: "hidden",
   },
   phoneCountryButton: {
-    minHeight: "100%",
+    flexShrink: 0,
+    alignSelf: "stretch",
+    justifyContent: "center",
     borderRightWidth: 1,
     borderRightColor: "rgba(145,165,157,0.35)",
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     backgroundColor: "rgba(10, 143, 122, 0.05)",
+    minWidth: 96,
+    maxWidth: 120,
   },
   phoneCountryCode: {
     color: brandText,
@@ -1633,12 +1758,14 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    minHeight: Platform.OS === "web" ? 30 : 44,
-    paddingVertical: Platform.OS === "web" ? 5 : 10,
-    paddingHorizontal: 12,
+    minWidth: 0,
+    alignSelf: "stretch",
+    minHeight: Platform.OS === "web" ? 44 : 46,
+    paddingVertical: Platform.OS === "web" ? 10 : 12,
+    paddingHorizontal: 10,
+    fontSize: 16,
     color: brandText,
-    fontSize: 15,
-    backgroundColor: UI_SURFACE,
+    backgroundColor: "#FFFFFF",
   },
   phoneCountryList: {
     marginTop: 8,
@@ -1693,16 +1820,16 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   civilityWrap: {
-    marginTop: 2,
     position: "relative",
   },
+  /** Même gabarit que `mobilityTrigger` et les champs `fieldInput` (login / étape 1). */
   civilityTrigger: {
-    minHeight: 30,
-    borderRadius: 13,
+    minHeight: 52,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: UI_BORDER_SOFT,
     backgroundColor: UI_SURFACE,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1791,39 +1918,38 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   stepActions: {
-    marginTop: 14,
+    marginTop: AUTH_UI.ctaMarginTop,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: 10,
   },
+  /** Aligné sur `contact.tsx` (`secondaryButton`). */
   secondaryAction: {
-    minHeight: 30,
-    borderRadius: 13,
+    minHeight: AUTH_UI.ctaH,
+    borderRadius: AUTH_UI.ctaR,
     borderWidth: 1,
-    borderColor: "rgba(10,143,122,0.35)",
-    backgroundColor: "#F4FAF8",
+    borderColor: "rgba(10,143,122,0.45)",
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   secondaryActionText: {
     color: "#0A8F7A",
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 14,
+    letterSpacing: 0.15,
+  },
+  feedbackAfterCta: {
+    marginTop: 12,
+    fontWeight: "600",
   },
   bottomLinkWrap: {
     marginTop: 14,
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: 8,
-  },
-  bottomLinkPressed: {
-    backgroundColor: "rgba(10, 143, 122, 0.06)",
   },
   bottomLink: {
-    color: brandPrimary,
-    fontWeight: "700",
-    fontSize: 13,
+    color: "#0A8F7A",
+    fontWeight: "600",
   },
 });

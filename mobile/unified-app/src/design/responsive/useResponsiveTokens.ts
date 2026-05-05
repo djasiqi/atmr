@@ -4,8 +4,9 @@ import { useAccessibilityScale } from "./useAccessibilityScale";
 import type { AppViewport } from "./useAppViewport";
 import { useAppViewport } from "./useAppViewport";
 
-const CTA_BUTTON_HEIGHT = 30;
-const SUGGESTION_ROW_HEIGHT = 30;
+const CTA_BUTTON_MIN_LANDING = 54;
+/** Aligné sur les lignes d’autosuggestion après hausse de la barre d’adresse (~50px). */
+const SUGGESTION_ROW_HEIGHT = 46;
 
 /** Web : ligne champ compacte (optique ~30px zone utile + bordure) vs ~38px avant. */
 const FIELD_SHELL_MIN_WEB = 32;
@@ -209,22 +210,22 @@ export function computePublicLanding(
     titleMarginTop: isShortViewport ? 12 : isCompact ? 16 : isTablet ? 28 : 24,
     cardMarginTop: isShortViewport ? 14 : isCompact ? 18 : isTablet ? 32 : 26,
     cardMaxWidth: contentMaxWidth,
-    cardPadding: isTablet ? 26 : isTiny ? 12 : isCompact ? 14 : 18,
-    cardRadius: isTablet ? 26 : isTiny ? 18 : 22,
+    cardPadding: isTablet ? 24 : isTiny ? 14 : isCompact ? 20 : 24,
+    cardRadius: isTablet ? 26 : isTiny ? 20 : 26,
     cardLabelSize: isTiny ? 12 : isCompact ? 12.5 : 13,
-    cardLabelOpacity: 0.6,
+    cardLabelOpacity: 1,
     cardValueSize: isTiny ? 15 : isCompact ? 16 : isComfortableWeb ? 17 : 16,
     cardValueWeight: "500",
     cardLineGap: isTiny ? 5 : 6,
     cardBlockGap: isTiny ? 10 : isCompact ? 11 : 12,
-    ctaHeight: Math.max(CTA_BUTTON_HEIGHT, Math.round(36 * Math.min(fontScale, 1.35))),
-    ctaRadius: isTiny ? 7 : 8,
+    ctaHeight: Math.max(CTA_BUTTON_MIN_LANDING, Math.round(54 * Math.min(fontScale, 1.35))),
+    ctaRadius: 14,
     ctaFontSize: isTiny ? 12 : isCompact ? 12.5 : isTablet ? 14 : 13,
-    microProofFontSize: isTiny ? 11 : isCompact ? 12 : isTablet ? 15 : 13,
-    microProofLineHeight: isTiny ? 17 : 18,
-    secondaryFontSize: isTiny ? 11 : isCompact ? 12 : isTablet ? 15 : 13,
-    hintFontSize: isTiny ? 11 : 12,
-    hintLineHeight: isTiny ? 15 : 16,
+    microProofFontSize: isTiny ? 12 : isCompact ? 12.5 : isTablet ? 14 : 13,
+    microProofLineHeight: isTiny ? 16 : 16,
+    secondaryFontSize: isTiny ? 12 : isCompact ? 12.5 : isTablet ? 14 : 13,
+    hintFontSize: isTiny ? 12 : 13,
+    hintLineHeight: 16,
     spaceCardToCta: isShortViewport
       ? 16
       : isCompact

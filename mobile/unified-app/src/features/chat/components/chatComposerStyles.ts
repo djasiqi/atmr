@@ -1,17 +1,34 @@
-import { Platform, type TextStyle, StyleSheet } from "react-native";
+import { Platform, type TextStyle, type ViewStyle, StyleSheet } from "react-native";
+import {
+  borderDefault,
+  borderStrong,
+  brandPrimary,
+  brandSurfaceSoft,
+  brandText,
+  brandTextMuted,
+  surfaceCard,
+} from "../../../design/responsive/colors";
+import { CHAT_BUBBLE_OWN, CHAT_BUBBLE_OWN_STRONG } from "../chatPalette";
 
 const MAX_W_FORM = 512;
 const ACTION_SIZE = 50;
-const MENU_FLOAT_TOP = 112;
+const MENU_FLOAT_TOP = 120;
 /** Bouton envoi / micro : 44pt (guidelines accessibilité, zone de touche). */
 const SEND_DIAM = 44;
 
-const C_FIELD_BG = "#f3f4f6";
-const C_FIELD_BORDER = "#e5e7eb";
-const C_TEXT = "#111827";
-const C_MUTED = "#6b7280";
-export const C_BRAND = "#0d9488";
-const C_BRAND_STRONG = "#0f766e";
+/** Champ saisie : coquille claire alignée `AppInput` / tokens shell. */
+const C_FIELD_BG = surfaceCard;
+const C_FIELD_BORDER = borderDefault;
+export const C_FIELD_TEXT = brandText;
+export const C_FIELD_PLACEHOLDER = brandTextMuted;
+/** Icône pièce jointe — ardoise pour contraste sur fond blanc. */
+export const C_FIELD_ICON = "#64748B";
+/** Chips menu pièces jointes (fond blanc). */
+const C_MUTED = "#94A3B8";
+export const C_BRAND = CHAT_BUBBLE_OWN;
+const C_BRAND_STRONG = CHAT_BUBBLE_OWN_STRONG;
+/** Micro désactivé (cercle gris clair) — contraste renforcé. */
+export const C_ICON_DISABLED = "#64748B";
 
 const cardShadow =
   Platform.OS === "web"
@@ -27,7 +44,21 @@ const cardShadow =
 /** Hors StyleSheet : évite que les props web-only polluent l’inférence des autres styles. */
 export const textInputWebFix = { outlineStyle: "none" as const, outlineWidth: 0 } as unknown as TextStyle;
 
-export { C_TEXT, C_MUTED, cardShadow, MENU_FLOAT_TOP };
+/** Anneau de focus discret sur le champ (web). */
+export function webFieldShellFocusOutline(focused: boolean): ViewStyle {
+  if (Platform.OS !== "web") return {};
+  if (!focused) {
+    return { outlineWidth: 0, outlineStyle: "none" as const };
+  }
+  return {
+    outlineWidth: 2,
+    outlineColor: `${brandPrimary}73`,
+    outlineStyle: "solid",
+    outlineOffset: 2,
+  };
+}
+
+export { C_MUTED, cardShadow, MENU_FLOAT_TOP };
 
 export const styles = StyleSheet.create({
   root: {
@@ -39,27 +70,41 @@ export const styles = StyleSheet.create({
   mainRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
     overflow: "visible",
   },
   fieldShell: {
     flex: 1,
     minWidth: 0,
-    minHeight: 44,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: C_FIELD_BG,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: C_FIELD_BORDER,
-    paddingLeft: 12,
-    paddingRight: 2,
+    paddingLeft: 14,
+    paddingRight: 4,
     overflow: "visible",
     zIndex: 2,
+    ...Platform.select({
+      web: {
+        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 14px rgba(15, 23, 42, 0.05)",
+      },
+      ios: {
+        shadowColor: "#0f172a",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.07,
+        shadowRadius: 6,
+      },
+      default: {
+        elevation: 2,
+      },
+    }),
   },
   fieldShellFocused: {
-    backgroundColor: "#e8eaed",
-    borderColor: "rgba(0,0,0,0.06)",
+    backgroundColor: brandSurfaceSoft,
+    borderColor: borderStrong,
   },
   dialMenu: {
     position: "absolute",
@@ -73,27 +118,28 @@ export const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     minWidth: 0,
-    minHeight: 40,
+    minHeight: 44,
     paddingVertical: 10,
     paddingLeft: 0,
     paddingRight: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    color: C_TEXT,
+    fontSize: 15,
+    lineHeight: 22,
+    color: C_FIELD_TEXT,
   },
   textInputWithAttach: {
     paddingRight: 2,
   },
   attachBtn: {
-    minWidth: 40,
-    minHeight: 40,
-    paddingHorizontal: 6,
+    width: 44,
+    height: 44,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 6,
+    borderRadius: 10,
   },
   attachBtnPressed: {
-    backgroundColor: "rgba(0,0,0,0.05)",
+    backgroundColor: "rgba(22, 58, 52, 0.08)",
   },
   actionChip: {
     width: ACTION_SIZE,
@@ -141,9 +187,22 @@ export const styles = StyleSheet.create({
     borderColor: C_BRAND_STRONG,
   },
   sendCircleDisabled: {
-    backgroundColor: C_MUTED,
-    borderColor: C_MUTED,
-    opacity: 0.9,
+    backgroundColor: "#f1f5f9",
+    borderColor: "rgba(148, 163, 184, 0.55)",
+    opacity: 1,
+    ...Platform.select({
+      web: {
+        boxShadow: "none",
+      },
+      ios: {
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        shadowOffset: { width: 0, height: 0 },
+      },
+      default: {
+        elevation: 0,
+      },
+    }),
   },
 });
 

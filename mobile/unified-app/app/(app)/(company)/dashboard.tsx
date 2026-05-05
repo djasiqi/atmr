@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { AppState, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import "dayjs/locale/fr";
 import { PermissionGuard } from "../../../src/core/guards";
 import { isFeatureEnabled } from "../../../src/core/featureFlags/registry";
 import { useSession } from "../../../src/core/sessionProvider";
 import {
+  useActiveCompanyContextId,
   useCompanyFallbackPolling,
   useCompanyDashboardQuery,
   useCompanyDispatchMissionsQuery,
@@ -19,11 +17,11 @@ import {
   useCompanyOptimizerStatusQuery,
 } from "../../../src/features/company/hooks";
 import { emitCompanyDispatchTelemetry } from "../../../src/features/company/telemetry/companyTelemetry";
-import { companyRealtimeBridge } from "../../../src/features/company/realtime/companyRealtimeBridge";
 import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtimeRouter";
 import { useCompanyDriverLiveTracking } from "../../../src/features/company/realtime/useCompanyDriverLiveTracking";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
 import type { CompanyDispatchMissionStatus } from "../../../src/features/company/api/contracts";
+import { switchCompanyDispatchMode } from "../../../src/features/company/api/companyApi";
 import { resolveDriverStatus } from "../../../src/features/company/utils/companyDriverMapStatus";
 import {
   buildDashboardPresentation,
@@ -33,9 +31,13 @@ import {
   type DashboardRuntimeMetrics,
 } from "../../../src/features/company/dashboard/dispatchDashboardPresentation";
 import { AppText, Screen } from "../../../src/design/responsive";
-
-dayjs.extend(relativeTime);
-dayjs.locale("fr");
+import { semanticDanger, semanticWarning } from "../../../src/design/responsive/colors";
+import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
+import { createShadow } from "../../../src/styles/shadowStyles";
+import { EnterpriseDriversMap } from "../../../src/features/company/components/EnterpriseDriversMap";
+import { EnterpriseHeader } from "../../../src/features/company/components/EnterpriseHeader";
+import { DayPickerSheet } from "../../../src/features/company/components/DayPickerSheet";
+import { DispatchModeSheet, type DispatchModeValue } from "../../../src/features/company/components/DispatchModeSheet";
 
 function getTodayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
@@ -49,21 +51,44 @@ function toEpoch(value: string | null | undefined): number {
 
 const HEALTHY_FRESHNESS_WINDOW_MS = 30_000;
 
+/** Web : masquer le lien « plein écran » si aucune clé Maps (même logique que `GoogleMapsFleetCanvas`). */
+function showFleetMapFullscreenCta(): boolean {
+  if (Platform.OS !== "web") return true;
+  const k =
+    typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string"
+      ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim()
+      : "";
+  return k.length > 0;
+}
+
 /** Même découpe que la pastille En course (listes) : seulement trajet actif. */
 const IN_FLIGHT: CompanyDispatchMissionStatus[] = ["en_route", "in_progress"];
 
+/**
+ * Référence UX/UI : `operations-app/app/(enterprise)/dashboard.tsx` + `_layout.tsx`.
+ * - Fond scroll : `enterprisePalette.background` → même valeur que `E.BG` (#f4f7fc).
+ * - Bordures cartes / sections : `rgba(0,121,107,0.08)` → `E.BORDER`.
+ * - Ombres sections : même `createShadow` que les `<Section>` operations-app (opacité 0.04).
+ */
+const dashboardSurfaceShadow = createShadow({
+  shadowColor: "#000000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.04,
+  shadowRadius: 8,
+  elevation: 2,
+});
+
+/** Couleurs locales (alertes / hero carte) : palette alignée operations-app / enterpriseOpsTheme. */
 const C = {
-  pageBg: "#EAF3F1",
-  cardBg: "#FFFFFF",
-  text: "#163A34",
-  textMuted: "#5F7369",
-  textSub: "#6B7A72",
-  border: "rgba(145, 165, 157, 0.45)",
-  brand: "#0A8F7A",
-  brandSoft: "rgba(10, 143, 122, 0.12)",
-  warnBg: "rgba(234, 179, 8, 0.12)",
-  warnText: "#92400e",
-  err: "#B42318",
+  pageBg: E.BG,
+  cardBg: E.CARD,
+  text: E.TEXT,
+  textMuted: E.TEXT_MUTED,
+  textSub: E.TEXT_SEC,
+  border: E.BORDER,
+  brand: E.BRAND,
+  brandSoft: "rgba(0, 121, 107, 0.1)",
+  err: E.DANGER,
   mapHeroBg: "#0F172A",
   mapHeroMuted: "rgba(226, 232, 240, 0.85)",
   mapHeroAccent: "#2DD4BF",
@@ -97,39 +122,6 @@ function conciseAddressSegment(s: string | null | undefined, maxLen = 48): strin
   const head = t.split(",")[0]?.trim() || t;
   if (head.length <= maxLen) return head;
   return `${head.slice(0, Math.max(0, maxLen - 1))}…`;
-}
-
-function mapSocketFr(
-  status: string,
-  connected: boolean,
-  companyRealtimeEnabled: boolean
-): string {
-  if (!companyRealtimeEnabled) {
-    return "Désactivé (repli HTTP)";
-  }
-  if (status === "connecting" || status === "reconnecting") {
-    return "Connexion…";
-  }
-  if (status === "degraded") {
-    return "Dégradé";
-  }
-  if (status === "failed") {
-    return "Indisponible (vérif. session / réseau)";
-  }
-  if (status === "healthy" && connected) {
-    return "Connecté";
-  }
-  if (!connected) {
-    return "Hors ligne";
-  }
-  switch (status) {
-    case "healthy":
-      return "Connecté";
-    case "idle":
-      return "Déconnecté";
-    default:
-      return status;
-  }
 }
 
 function resolveMissionIdFromEvent(payload: {
@@ -187,19 +179,59 @@ function KpiTile({
   );
 }
 
+function AlertNotificationRow({
+  severity,
+  text,
+}: {
+  severity: "error" | "warning";
+  text: string;
+}) {
+  const isErr = severity === "error";
+  return (
+    <View
+      style={[styles.alertNotifRow, isErr ? styles.alertNotifRowErr : styles.alertNotifRowWarn]}
+      accessibilityRole="text"
+    >
+      <View style={styles.alertNotifIconSlot} accessibilityElementsHidden>
+        <Ionicons
+          name={isErr ? "alert-circle" : "warning-outline"}
+          size={17}
+          color={isErr ? semanticDanger.fgStrong : semanticWarning.fg}
+        />
+      </View>
+      <AppText
+        variant="caption"
+        style={[styles.alertNotifText, isErr ? styles.alertNotifTextErr : styles.alertNotifTextWarn]}
+        numberOfLines={5}
+      >
+        {text}
+      </AppText>
+    </View>
+  );
+}
+
 export default function CompanyDashboardScreen() {
-  const { activeContext } = useSession();
+  const { activeContext, can } = useSession();
   const activeContextId = activeContext?.context_id ?? null;
-  const [tick, setTick] = useState(0);
-  const date = useMemo(() => getTodayIsoDate(), []);
-  const missionsQuery = useCompanyDispatchMissionsQuery({ date });
-  const dashboardQuery = useCompanyDashboardQuery(date);
-  const dispatchStatusQuery = useCompanyDispatchStatusQuery(date);
+  const contextId = useActiveCompanyContextId();
+  const roleGuardsEnabled = isFeatureEnabled("company_mobile_role_guards_enabled");
+  const contextPermissions = activeContext?.permissions ?? [];
+  const canRunSensitiveAction = (permission: string, fallbackPermission: string) => {
+    if (!roleGuardsEnabled) return true;
+    if (contextPermissions.includes(permission)) return can(permission);
+    return can(fallbackPermission);
+  };
+  const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:dashboard:read");
+  const [selectedDate, setSelectedDate] = useState(() => getTodayIsoDate());
+  const [dateSheetOpen, setDateSheetOpen] = useState(false);
+  const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate });
+  const dashboardQuery = useCompanyDashboardQuery(selectedDate);
+  const dispatchStatusQuery = useCompanyDispatchStatusQuery(selectedDate);
   const optimizerQuery = useCompanyOptimizerStatusQuery();
   const liveDrivers = useCompanyDriverLiveTracking();
   const liveDriversRefetch = liveDrivers.refetch;
   const realtime = useCompanyRealtimeStatus();
-  const companyRealtimeEnabled = isFeatureEnabled("company_realtime_enabled");
   const previousRealtimeStatus = useRef<string | null>(null);
   const lastOptimizerStatusTelemetryAtRef = useRef(0);
   const { invalidate } = useCompanyRealtimeInvalidation();
@@ -209,12 +241,19 @@ export default function CompanyDashboardScreen() {
   const optimizerRefetch = optimizerQuery.refetch;
   const router = useRouter();
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      setTick((x) => x + 1);
-    }, 12_000);
-    return () => clearInterval(t);
-  }, []);
+  const applyDispatchModeFromSheet = useCallback(
+    async (mode: DispatchModeValue) => {
+      if (!contextId || !canDispatchManage) return;
+      try {
+        await switchCompanyDispatchMode({ contextId, mode });
+        setModeSheetOpen(false);
+        await Promise.all([dispatchStatusRefetch(), dashboardRefetch(), missionsRefetch()]);
+      } catch {
+        // Garder la feuille ouverte pour réessayer.
+      }
+    },
+    [canDispatchManage, contextId, dashboardRefetch, dispatchStatusRefetch, missionsRefetch]
+  );
 
   const refreshAll = useCallback(async () => {
     const now = Date.now();
@@ -429,13 +468,6 @@ export default function CompanyDashboardScreen() {
     return a;
   }, [liveDrivers.drivers]);
 
-  // tick : rafraîchit le relatif toutes ~12s sans relancer fetch
-  const lastSyncLabel = useMemo(() => {
-    if (!lastKnownSyncAt) return "—";
-    return dayjs(lastKnownSyncAt).fromNow();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `tick` force le recalcul
-  }, [lastKnownSyncAt, tick]);
-
   const dataHealthLabel: "Temps réel" | "Repli" = useMemo(
     () =>
       !isPotentiallyStale && realtime.status === "healthy" && !error
@@ -449,6 +481,11 @@ export default function CompanyDashboardScreen() {
     if (m === "manual" || m === "semi_auto" || m === "fully_auto") return m;
     return "unknown";
   }, [dispatchStatusQuery.data?.dispatch_mode]);
+
+  const headerMode =
+    dispatchMode === "manual" || dispatchMode === "semi_auto" || dispatchMode === "fully_auto"
+      ? dispatchMode
+      : null;
 
   const dispatchState = dispatchStatusQuery.data?.dispatch_state ?? "unknown";
   const optimizer: CompanyOptimizerRuntime = useMemo(() => {
@@ -565,25 +602,7 @@ export default function CompanyDashboardScreen() {
     return () => subscription.remove();
   }, [lastKnownSyncAt, realtime.status, refreshAll]);
 
-  /** Bandeau coloré seulement si le repli HTTP ne suffit pas (données vieilles) ou flux vraiment dégradé. */
-  const bandStrongAlert =
-    companyRealtimeEnabled &&
-    (isPotentiallyStale ||
-      realtime.status === "degraded" ||
-      (!realtime.connected && realtime.status !== "failed") ||
-      (realtime.status === "failed" && isPotentiallyStale));
-
-  const onPrimaryCta = useCallback(() => {
-    const p = view.primaryCta;
-    if (p.params && p.params.filter) {
-      router.push({ pathname: p.path as Href, params: p.params } as Href);
-    } else {
-      router.push(p.path as Href);
-    }
-  }, [router, view.primaryCta]);
-
   const onFleetMap = useCallback(() => {
-    if (Platform.OS === "web") return;
     router.push("/(app)/(company)/fleet-map");
   }, [router]);
 
@@ -596,91 +615,47 @@ export default function CompanyDashboardScreen() {
       <Screen
         scroll
         backgroundColor={C.pageBg}
-        withHorizontalPadding={false}
-        contentContainerStyle={styles.page}
+        withHorizontalPadding
+        stickyHeader={
+          <EnterpriseHeader
+            metaDetail="networkOnly"
+            date={selectedDate}
+            mode={headerMode}
+            realtimeStatus={realtime.status}
+            onOpenDatePicker={() => setDateSheetOpen(true)}
+            onOpenModePicker={canDispatchManage ? () => setModeSheetOpen(true) : undefined}
+          />
+        }
+        extraScrollBottomPadding={80}
+        contentContainerStyle={[styles.page, { backgroundColor: C.pageBg }]}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={() => void refreshAll()} tintColor={C.brand} />
         }
       >
-        <View
-          style={[styles.statusStrip, bandStrongAlert && styles.statusStripAlert]}
-          accessibilityLabel="Statut flux temps réel"
-        >
-          <View style={styles.statusRow}>
-            <AppText variant="caption" style={styles.statusStripLabel}>
-              Flux
-            </AppText>
-            <AppText variant="caption" style={styles.statusStripValue}>
-              {mapSocketFr(realtime.status, realtime.connected, companyRealtimeEnabled)}
-            </AppText>
-          </View>
-          <View style={styles.statusRow}>
-            <AppText variant="caption" style={styles.statusStripLabel}>
-              Chauffeurs en ligne
-            </AppText>
-            <AppText variant="caption" style={styles.statusStripValue} accessibilityLabel={`Chauffeurs en ligne`}>
-              {onlineCount} / {liveDrivers.drivers.length}
-            </AppText>
-          </View>
-          <View style={styles.statusRow}>
-            <AppText variant="caption" style={styles.statusStripLabel}>
-              Dernière synchro
-            </AppText>
-            <AppText variant="caption" style={styles.statusStripValue} accessibilityLiveRegion="polite">
-              {lastSyncLabel}
-            </AppText>
-          </View>
-          <Pressable
-            onPress={() => {
-              if (companyRealtimeEnabled) companyRealtimeBridge.reconnect();
-            }}
-            disabled={!companyRealtimeEnabled}
-            style={({ pressed }) => [
-              styles.reconnectIconBtn,
-              !companyRealtimeEnabled && { opacity: 0.35 },
-              pressed && companyRealtimeEnabled && { opacity: 0.8 },
-            ]}
-            hitSlop={8}
-            accessibilityLabel="Reconnecter le flux"
-            accessibilityState={{ disabled: !companyRealtimeEnabled }}
-          >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color={!companyRealtimeEnabled ? C.textMuted : bandStrongAlert ? C.err : C.brand}
-            />
-          </Pressable>
-        </View>
-
-        <View style={styles.contextCard}>
-          {view.showAutomationCaution ? (
-            <View style={styles.cautionChip}>
-              <Ionicons name="warning-outline" size={16} color={C.warnText} />
-              <AppText variant="caption" style={styles.cautionChipText}>
-                Vérification recommandée
+        <View style={styles.mapHeroShell}>
+          <EnterpriseDriversMap
+            drivers={liveDrivers.drivers}
+            showTitleRow
+            headingTitle="Carte chauffeurs"
+            headingHint={
+              Platform.OS === "web" ? "Aperçu interactif (clé Google Maps)" : undefined
+            }
+            mapHeight={236}
+            containerStyle={styles.mapHeroInner}
+          />
+          {showFleetMapFullscreenCta() ? (
+            <Pressable
+              onPress={onFleetMap}
+              style={({ pressed }) => [styles.mapHeroFooterLink, pressed && styles.linkCtaRowPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Ouvrir la carte flotte en plein écran"
+            >
+              <AppText variant="label" style={styles.fleetCtaText}>
+                Voir la carte en plein écran
               </AppText>
-            </View>
+              <Ionicons name="chevron-forward" size={18} color={C.brand} />
+            </Pressable>
           ) : null}
-          <AppText variant="caption" style={styles.contextQ}>
-            {view.operationalQuestion}
-          </AppText>
-          <AppText variant="sectionTitle" style={styles.contextTitle}>
-            {view.contextTitle}
-          </AppText>
-          <AppText variant="bodyMuted" style={styles.contextMessage}>
-            {view.contextMessage}
-          </AppText>
-          <Pressable
-            onPress={onPrimaryCta}
-            style={({ pressed }) => [styles.primaryCta, pressed && { opacity: 0.92 }]}
-            accessibilityRole="button"
-            accessibilityLabel={view.primaryCta.label}
-          >
-            <AppText variant="label" style={styles.primaryCtaText}>
-              {view.primaryCta.label}
-            </AppText>
-            <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-          </Pressable>
         </View>
 
         <View style={styles.kpiRow} accessibilityLabel="Indicateurs clés">
@@ -706,231 +681,143 @@ export default function CompanyDashboardScreen() {
 
         {missions.length === 0 && !loading ? (
           <View style={styles.emptyState} accessibilityRole="text">
-            <View style={styles.emptyIconRing}>
-              <Ionicons name="car-outline" size={30} color="#94A3B8" />
+            <View style={styles.emptyStateIcon} accessibilityElementsHidden>
+              <Ionicons name="car-outline" size={22} color={C.brand} />
             </View>
-            <AppText variant="sectionTitle" style={styles.emptyTitle}>
+            <AppText variant="body" style={styles.emptyStateTitle}>
               Aucune course planifiée
             </AppText>
-            <AppText variant="caption" style={styles.emptySub}>
+            <AppText variant="caption" style={styles.emptyStateSubtitle}>
               Les courses apparaîtront ici dès qu’elles seront créées.
             </AppText>
           </View>
         ) : null}
 
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeaderRow}>
-            <Ionicons name="people-outline" size={15} color={C.brand} />
-            <AppText variant="label" style={styles.summaryTitle}>
-              Aperçu flotte
-            </AppText>
-          </View>
-          <View style={styles.fleetLine}>
-            <AppText variant="caption" style={styles.fleetText}>
-              En mission {fleet.enMission}
-            </AppText>
-            <AppText variant="caption" style={styles.fleetText}>
-              ·
-            </AppText>
-            <AppText variant="caption" style={styles.fleetText}>
-              Disponibles {fleet.dispo}
-            </AppText>
-            <AppText variant="caption" style={styles.fleetText}>
-              ·
-            </AppText>
-            <AppText variant="caption" style={styles.fleetText}>
-              Hors ligne {fleet.off}
-            </AppText>
-          </View>
-          {Platform.OS === "web" ? (
-            <AppText variant="caption" style={styles.fleetWebHint}>
-              La carte n’est pas disponible sur le web. Utilisez l’app mobile.
-            </AppText>
-          ) : (
-            <Pressable onPress={onFleetMap} style={({ pressed }) => [styles.fleetCta, pressed && { opacity: 0.9 }]}>
-              <AppText variant="label" style={styles.fleetCtaText}>
-                Voir la carte
-              </AppText>
-              <Ionicons name="chevron-forward" size={16} color={C.brand} />
-            </Pressable>
-          )}
-        </View>
-
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeaderRow}>
-            <Ionicons name="options-outline" size={15} color={C.brand} />
-            <AppText variant="label" style={styles.summaryTitle}>
-              Lecture moteur dispatch
-            </AppText>
-          </View>
-          {view.technicalLines.map((r, i) => (
-            <View
-              key={r.label}
-              style={[
-                styles.kvDenseRow,
-                i < view.technicalLines.length - 1 && styles.kvDenseRowBorder,
-              ]}
-            >
-              <AppText variant="caption" style={styles.kvDenseKey}>
-                {r.label}
-              </AppText>
-              <AppText variant="caption" style={styles.kvDenseVal} numberOfLines={2}>
-                {r.value}
-              </AppText>
-            </View>
-          ))}
-        </View>
-
         {nextMissions.length > 0 ? (
-          <View style={styles.summaryCard}>
+          <View style={styles.dashboardSection}>
             <View style={styles.summaryHeaderRow}>
-              <Ionicons name="time-outline" size={15} color={C.brand} />
-              <AppText variant="label" style={styles.summaryTitle}>
+              <View style={styles.sectionIconWrap} accessibilityElementsHidden>
+                <Ionicons name="time-outline" size={16} color={C.brand} />
+              </View>
+              <AppText variant="sectionTitle" style={styles.summaryTitle}>
                 Prochaines courses
               </AppText>
             </View>
-            {nextMissions.map((m) => (
-              <View key={m.mission_id} style={styles.missionBlock} accessibilityLabel={`Prochaine course ${m.mission_id}`}>
-                <AppText variant="label" style={styles.missionWhen} numberOfLines={1}>
-                  {formatNextCourseWhen(m.scheduled_at)}
-                </AppText>
-                <AppText variant="label" style={styles.missionClientName} numberOfLines={1}>
-                  {m.client_name?.trim() ? m.client_name.trim() : "Invité"}
-                </AppText>
-                <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
-                  <AppText variant="caption" style={styles.missionAddressKey}>
-                    Départ :{" "}
+            <View style={styles.sectionBody}>
+              {nextMissions.map((m, index) => (
+                <View
+                  key={m.mission_id}
+                  style={[
+                    styles.missionBlock,
+                    index < nextMissions.length - 1 && styles.missionBlockSep,
+                  ]}
+                  accessibilityLabel={`Prochaine course ${m.mission_id}`}
+                >
+                  <AppText variant="label" style={styles.missionWhen} numberOfLines={1}>
+                    {formatNextCourseWhen(m.scheduled_at)}
                   </AppText>
-                  {conciseAddressSegment(m.pickup_label)}
-                </AppText>
-                <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
-                  <AppText variant="caption" style={styles.missionAddressKey}>
-                    Arrivée :{" "}
+                  <AppText variant="label" style={styles.missionClientName} numberOfLines={1}>
+                    {m.client_name?.trim() ? m.client_name.trim() : "Invité"}
                   </AppText>
-                  {conciseAddressSegment(m.dropoff_label)}
+                  <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
+                    <AppText variant="caption" style={styles.missionAddressKey}>
+                      Départ :{" "}
+                    </AppText>
+                    {conciseAddressSegment(m.pickup_label)}
+                  </AppText>
+                  <AppText variant="caption" style={styles.missionAddressLine} numberOfLines={2}>
+                    <AppText variant="caption" style={styles.missionAddressKey}>
+                      Arrivée :{" "}
+                    </AppText>
+                    {conciseAddressSegment(m.dropoff_label)}
+                  </AppText>
+                </View>
+              ))}
+              <Pressable onPress={onAllRides} style={({ pressed }) => [styles.linkCtaRow, styles.linkCtaRowFirst, pressed && styles.linkCtaRowPressed]}>
+                <AppText variant="label" style={styles.fleetCtaText}>
+                  Voir toutes les courses
                 </AppText>
-              </View>
-            ))}
-            <Pressable onPress={onAllRides} style={({ pressed }) => [styles.fleetCta, pressed && { opacity: 0.9 }]}>
-              <AppText variant="label" style={styles.fleetCtaText}>
-                Voir toutes les courses
-              </AppText>
-              <Ionicons name="chevron-forward" size={16} color={C.brand} />
-            </Pressable>
+                <Ionicons name="chevron-forward" size={18} color={C.brand} />
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
         {view.alertLines.length > 0 || (error && !isLikelyNetworkError) ? (
-          <View style={styles.alertsBlock}>
-            <View style={styles.alertsHeader}>
-              <Ionicons name="alert-circle" size={18} color={C.err} />
-              <AppText variant="sectionTitle" style={styles.alertsTitle}>
+          <View style={styles.alertsBlock} accessibilityLabel="Alertes">
+            <View style={styles.alertsHeaderCompact}>
+              <View style={styles.alertsHeaderIconBox} accessibilityElementsHidden>
+                <Ionicons name="notifications-outline" size={15} color={semanticDanger.fgStrong} />
+              </View>
+              <AppText variant="caption" style={styles.alertsHeaderTitle}>
                 Alertes
               </AppText>
             </View>
-            {view.alertLines.map((a) => (
-              <View
-                key={a.id}
-                style={[styles.alertItem, a.severity === "error" ? styles.alertItemErr : styles.alertItemWarn]}
-              >
-                <AppText variant="body" style={styles.alertText}>
-                  {a.text}
-                </AppText>
-              </View>
-            ))}
-            {error && !isLikelyNetworkError && errMsg ? (
-              <View style={[styles.alertItem, styles.alertItemErr]}>
-                <AppText variant="body" style={styles.alertText}>
-                  {errMsg}
-                </AppText>
-              </View>
-            ) : null}
+            <View style={styles.alertsNotifStack}>
+              {view.alertLines.map((a) => (
+                <AlertNotificationRow key={a.id} severity={a.severity} text={a.text} />
+              ))}
+              {error && !isLikelyNetworkError && errMsg ? (
+                <AlertNotificationRow severity="error" text={errMsg} />
+              ) : null}
+            </View>
           </View>
         ) : null}
       </Screen>
+      <DayPickerSheet
+        visible={dateSheetOpen}
+        selectedDate={selectedDate}
+        onClose={() => setDateSheetOpen(false)}
+        onSelectDate={(iso) => {
+          setSelectedDate(iso);
+          setDateSheetOpen(false);
+        }}
+      />
+      <DispatchModeSheet
+        visible={modeSheetOpen}
+        mode={headerMode}
+        onClose={() => setModeSheetOpen(false)}
+        onSelectMode={(mode) => void applyDispatchModeFromSheet(mode)}
+        switchingEnabled={canDispatchManage}
+      />
     </PermissionGuard>
   );
 }
 
-const kpiCardShadow = Platform.select({
-  web: { boxShadow: "0 2px 10px rgba(22, 58, 52, 0.06)" },
-  default: {
-    shadowColor: "#163A34",
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-});
-
 const styles = StyleSheet.create({
+  /** Réf. operations-app `styles.content` : padding 16, espacement vertical entre blocs ~14. */
   page: {
-    padding: 20,
-    paddingBottom: 100,
-    gap: 12,
+    flexGrow: 1,
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 14,
   },
-  statusStrip: {
-    backgroundColor: C.cardBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    gap: 4,
-    ...kpiCardShadow,
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    alignItems: "center" as const,
-  },
-  statusStripAlert: {
-    borderColor: "rgba(180, 35, 24, 0.35)",
-    backgroundColor: "rgba(194, 65, 12, 0.08)",
-  },
-  statusRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    marginRight: 12,
-    minWidth: "30%",
-  },
-  statusStripLabel: { color: C.textMuted, fontWeight: "600", textTransform: "uppercase" as const },
-  statusStripValue: { color: C.text, fontWeight: "800" },
-  reconnectIconBtn: { marginLeft: "auto", padding: 4 },
-  contextCard: {
-    backgroundColor: C.cardBg,
+  mapHeroShell: {
     borderRadius: 16,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: C.border,
-    padding: 14,
-    gap: 6,
-    ...kpiCardShadow,
+    backgroundColor: C.cardBg,
+    ...dashboardSurfaceShadow,
   },
-  contextQ: { color: C.textSub, fontWeight: "600" },
-  contextTitle: { color: C.text, fontWeight: "800" },
-  contextMessage: { color: C.textMuted, lineHeight: 18 },
-  primaryCta: {
-    marginTop: 4,
+  mapHeroInner: {
+    borderWidth: 0,
+    borderRadius: 0,
+    ...(Platform.OS === "web"
+      ? ({ boxShadow: "none" } as const)
+      : { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }),
+  },
+  mapHeroFooterLink: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 44,
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    justifyContent: "center" as const,
-    gap: 6,
-    backgroundColor: C.brand,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    justifyContent: "space-between" as const,
+    backgroundColor: C.cardBg,
   },
-  primaryCtaText: { color: "#FFFFFF", fontWeight: "800" },
-  cautionChip: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    alignSelf: "flex-start" as const,
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: C.warnBg,
-    borderRadius: 8,
-  },
-  cautionChipText: { color: C.warnText, fontWeight: "800" },
   kpiRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
   kpiStat: {
     flexGrow: 1,
@@ -939,17 +826,19 @@ const styles = StyleSheet.create({
     backgroundColor: C.cardBg,
     borderWidth: 1,
     borderColor: C.border,
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    ...kpiCardShadow,
+    /** Réf. operations-app `statusCard` : rayon 16. */
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    ...dashboardSurfaceShadow,
   },
   kpiTopRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
   kpiIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: C.brandSoft,
+    /** Réf. operations-app `sectionIconWrap`. */
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
@@ -957,8 +846,9 @@ const styles = StyleSheet.create({
   kpiLabel: {
     color: C.textSub,
     fontWeight: "700" as const,
-    letterSpacing: 0.25,
+    letterSpacing: 0.5,
     textTransform: "uppercase" as const,
+    fontSize: 12,
   },
   kpiValue: {
     marginTop: 1,
@@ -967,52 +857,89 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   kpiSubUnavailable: { color: C.textMuted, fontWeight: "600", marginTop: 1 },
-  emptyState: { alignItems: "center" as const, marginVertical: 4, gap: 4, paddingVertical: 8 },
-  emptyIconRing: {
-    width: 56,
-    height: 56,
+  /** Réf. operations-app `emptyState` / `emptyStateIcon` / titres. */
+  emptyState: {
+    alignItems: "center" as const,
+    paddingVertical: 28,
+    gap: 6,
+  },
+  emptyStateIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0, 121, 107, 0.06)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginBottom: 4,
+  },
+  emptyStateTitle: {
+    color: C.text,
+    fontSize: 14,
+    fontWeight: "600" as const,
+    textAlign: "center" as const,
+  },
+  emptyStateSubtitle: {
+    color: C.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center" as const,
+    maxWidth: 300,
+  },
+  /** Réf. operations-app `styles.section` (surface blanche, padding 16, pas de fond soft AppCard). */
+  dashboardSection: {
+    backgroundColor: C.cardBg,
     borderRadius: 16,
-    backgroundColor: "rgba(148, 163, 184, 0.2)",
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 16,
+    ...dashboardSurfaceShadow,
+  },
+  /** Sans filet : même flux que operations-app après `sectionTitleRow` (marge 12 uniquement). */
+  sectionBody: {
+    gap: 2,
+    paddingTop: 0,
+    paddingBottom: 2,
+  },
+  /** Réf. `sectionTitleRow` : gap 8, marge sous le titre 12. */
+  summaryHeaderRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    marginBottom: 12,
+  },
+  sectionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
-  emptyTitle: { color: C.text, fontSize: 16, fontWeight: "800", textAlign: "center" as const },
-  emptySub: { color: C.textMuted, fontSize: 12, lineHeight: 17, textAlign: "center" as const, maxWidth: 300 },
-  summaryCard: {
-    backgroundColor: C.cardBg,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    ...kpiCardShadow,
+  summaryTitle: {
+    color: C.text,
+    fontSize: 16,
+    fontWeight: "700" as const,
+    flex: 1,
+    minWidth: 0,
   },
-  summaryHeaderRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginBottom: 8 },
-  summaryTitle: { color: C.text, fontWeight: "700" as const },
-  fleetLine: { flexDirection: "row" as const, flexWrap: "wrap" as const, alignItems: "center" as const, gap: 4 },
-  fleetText: { color: C.textMuted, fontWeight: "600" as const },
-  fleetWebHint: { color: C.mapHeroMuted, lineHeight: 16, marginTop: 4 },
-  fleetCta: {
+  linkCtaRow: {
     marginTop: 8,
+    minHeight: 44,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
   },
-  fleetCtaText: { color: C.brand, fontSize: 13, fontWeight: "800" as const },
-  kvDenseRow: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "flex-start" as const,
-    gap: 8,
-    paddingVertical: 5,
-  },
-  kvDenseRowBorder: {
+  linkCtaRowFirst: { marginTop: 10 },
+  linkCtaRowPressed: { opacity: 0.88 },
+  fleetCtaText: { color: C.brand, fontSize: 14, fontWeight: "800" as const },
+  missionBlock: { gap: 3, paddingBottom: 10 },
+  missionBlockSep: {
+    marginBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.border,
   },
-  kvDenseKey: { flex: 1, minWidth: 0, color: C.textMuted, fontWeight: "600" as const },
-  kvDenseVal: { maxWidth: "58%", color: C.text, fontWeight: "700" as const, textAlign: "right" as const },
-  missionBlock: { gap: 3, marginBottom: 8 },
   missionWhen: {
     color: C.brand,
     fontWeight: "800" as const,
@@ -1021,16 +948,64 @@ const styles = StyleSheet.create({
   missionAddressLine: { color: C.textSub, lineHeight: 16, fontWeight: "500" as const, marginTop: 2 },
   missionAddressKey: { color: C.textMuted, fontWeight: "700" as const },
   alertsBlock: {
-    backgroundColor: "rgba(180, 35, 24, 0.06)",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(180, 35, 24, 0.2)",
-    padding: 10,
+    backgroundColor: C.cardBg,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: C.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    ...dashboardSurfaceShadow,
   },
-  alertsHeader: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, marginBottom: 4 },
-  alertsTitle: { color: C.err, fontWeight: "800" as const },
-  alertItem: { borderRadius: 8, padding: 8, marginTop: 4 },
-  alertItemErr: { backgroundColor: "rgba(180, 35, 24, 0.1)" },
-  alertItemWarn: { backgroundColor: C.warnBg },
-  alertText: { color: C.text, lineHeight: 16, fontWeight: "600" as const },
+  alertsHeaderCompact: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+  },
+  alertsHeaderIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: "rgba(180, 35, 24, 0.08)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  alertsHeaderTitle: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    letterSpacing: 0.9,
+    textTransform: "uppercase" as const,
+    color: C.textMuted,
+  },
+  alertsNotifStack: { gap: 6 },
+  alertNotifRow: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  alertNotifRowErr: {
+    borderLeftWidth: 3,
+    borderLeftColor: semanticDanger.border,
+    backgroundColor: "rgba(217, 45, 32, 0.05)",
+    borderColor: "rgba(217, 45, 32, 0.14)",
+  },
+  alertNotifRowWarn: {
+    borderLeftWidth: 3,
+    borderLeftColor: semanticWarning.border,
+    backgroundColor: semanticWarning.bg,
+    borderColor: "rgba(224, 184, 108, 0.45)",
+  },
+  alertNotifIconSlot: { paddingTop: 1 },
+  alertNotifText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600" as const,
+  },
+  alertNotifTextErr: { color: semanticDanger.fg },
+  alertNotifTextWarn: { color: semanticWarning.fg },
 });

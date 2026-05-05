@@ -470,19 +470,43 @@ function withContextHeaders(options: CompanyRequestOptions) {
 }
 
 export async function runCompanyDispatch(options: CompanyRequestOptions & { date?: string }) {
-  const response = await apiClient.post(
-    "/dispatch/v1/run",
-    { date: options.date ?? undefined },
-    withContextHeaders(options)
+  const response = await requestWithFallback<CompanyAnyPayload>(
+    [
+      () =>
+        apiClient.post(
+          "/company_mobile/dispatch/v1/run",
+          { date: options.date ?? undefined },
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
+          "/company_dispatch/run",
+          { date: options.date ?? undefined },
+          withContextHeaders(options)
+        ),
+    ],
+    { domain: "dispatch_run_post", contextId: options.contextId }
   );
   return response.data as CompanyAnyPayload;
 }
 
 export async function runCompanyOptimizer(options: CompanyRequestOptions & { date?: string }) {
-  const response = await apiClient.post(
-    "/dispatch/v1/optimizer/run",
-    { date: options.date ?? undefined },
-    withContextHeaders(options)
+  const response = await requestWithFallback<CompanyAnyPayload>(
+    [
+      () =>
+        apiClient.post(
+          "/company_mobile/dispatch/v1/optimizer/run",
+          { date: options.date ?? undefined },
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
+          "/company_dispatch/optimizer/start",
+          { date: options.date ?? undefined },
+          withContextHeaders(options)
+        ),
+    ],
+    { domain: "dispatch_optimizer_run_post", contextId: options.contextId }
   );
   return response.data as CompanyAnyPayload;
 }
@@ -836,30 +860,54 @@ export async function resetCompanyAssignments(options: CompanyRequestOptions & {
 }
 
 export async function searchCompanyAddresses(options: CompanyRequestOptions & { q: string }) {
-  const response = await requestWithFallback<CompanyAnyPayload>([
-    () =>
-      apiClient.get("/dispatch/v1/places/autocomplete", {
-        ...withContextHeaders(options),
-        params: { q: options.q },
-      }),
-    () =>
-      apiClient.get("/dispatch/v1/addresses/search", {
-        ...withContextHeaders(options),
-        params: { q: options.q },
-      }),
-  ], { domain: "dispatch_address_search", contextId: options.contextId });
-  return response.data as CompanyAnyPayload;
+  try {
+    const response = await requestWithFallback<CompanyAnyPayload>(
+      [
+        () =>
+          apiClient.get("/company_mobile/dispatch/v1/addresses/search", {
+            ...withContextHeaders(options),
+            params: { q: options.q },
+          }),
+        () =>
+          apiClient.get("/geocode/autocomplete", {
+            ...withContextHeaders(options),
+            params: { q: options.q, limit: 8 },
+          }),
+        () =>
+          apiClient.get("/dispatch/v1/places/autocomplete", {
+            ...withContextHeaders(options),
+            params: { q: options.q },
+          }),
+        () =>
+          apiClient.get("/dispatch/v1/addresses/search", {
+            ...withContextHeaders(options),
+            params: { q: options.q },
+          }),
+      ],
+      { domain: "dispatch_address_search", contextId: options.contextId }
+    );
+    return response.data as CompanyAnyPayload;
+  } catch (error) {
+    const status = (error as AxiosError | undefined)?.response?.status;
+    if (status === 404) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function searchCompanyClients(options: CompanyRequestOptions & { q?: string }) {
   const response = await requestWithFallback<CompanyAnyPayload>([
     () =>
-      apiClient.get("/dispatch/v1/clients", {
+      apiClient.get("/companies/me/clients", {
         ...withContextHeaders(options),
-        params: { q: options.q ?? undefined },
+        params: {
+          q: options.q ?? undefined,
+          search: options.q ?? undefined,
+        },
       }),
     () =>
-      apiClient.get("/dispatch/v1/clients/search", {
+      apiClient.get("/company_mobile/dispatch/v1/clients/search", {
         ...withContextHeaders(options),
         params: { q: options.q ?? undefined },
       }),
@@ -962,6 +1010,13 @@ export async function transferCompanyRide(
 
 export async function getCompanyBillingSettings(options: CompanyRequestOptions) {
   const response = await apiClient.get("/company-settings/billing", withContextHeaders(options));
+  return response.data as CompanyAnyPayload;
+}
+
+export async function simulateCompanyPricing(
+  options: CompanyRequestOptions & { payload: CompanyAnyPayload }
+) {
+  const response = await apiClient.post("/pricing/simulate", options.payload, withContextHeaders(options));
   return response.data as CompanyAnyPayload;
 }
 

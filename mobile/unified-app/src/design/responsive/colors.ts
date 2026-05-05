@@ -5,6 +5,11 @@
 
 /** Marque */
 export const brandPrimary = "#0A8F7A";
+/**
+ * Fond bulle chat « envoyé » (MessageBubble) / surfaces pleines alignées (ex. pilule barre onglets entreprise).
+ * Équivalent Flowbite / Tailwind `teal-600`.
+ */
+export const chatOutgoingBubbleFill = "#0d9488";
 export const brandPrimaryDisabled = "#84B7AE";
 export const brandSurfacePage = "#EAF3F1";
 export const brandSurfaceSoft = "#F7FBFA";
