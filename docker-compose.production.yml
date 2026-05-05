@@ -1,5 +1,12 @@
 # docker-compose.yml
 # Configuration Docker Compose optimisée pour la production ATMR
+#
+# Kafka en prod sans broker inclus : défaut KAFKA_ENABLED=false. Les services
+# tracking-kafka-consumer, tracking-processed-fanout et kafka-dlq-consumer
+# utilisent le profile Compose « kafka » et ne sont pas démarrés avec un simple
+# `docker compose up`. Pour broker(s) joignables : --profile kafka, cluster sur
+# atmr-network ou KAFKA_BOOTSTRAP_SERVERS vers un Kafka managé, et surcharge
+# KAFKA_ENABLED=true / TRACKING_INGEST_ASYNC_ENABLED=true dans .env.
 
 services:
   # Base de données PostgreSQL (PostGIS requis pour geo_unit.geom)
@@ -255,8 +262,8 @@ services:
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
       DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-1800}
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
-      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       REALTIME_GATEWAY_CANARY_ENABLED: ${REALTIME_GATEWAY_CANARY_ENABLED:-false}
 
@@ -265,6 +272,10 @@ services:
 
       # Lifecycle DeviceToken après envoi FCM (métriques + désactivation si token_invalid)
       PUSH_DEVICE_TOKEN_LIFECYCLE_ENABLED: "1"
+
+      # Migrations Alembic : désactivées au démarrage du conteneur (voir migration_exec /
+      # DATABASE_URL_DIRECT dans scripts/deploy-production.sh). DATABASE_URL passe par PgBouncer.
+      RUN_ENTRYPOINT_MIGRATIONS: "0"
 
     volumes:
       - backend_logs:/app/logs
@@ -503,6 +514,8 @@ services:
           cpus: "0.5"
 
   tracking-kafka-consumer:
+    profiles:
+      - kafka
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     # Pas de container_name : requis pour `docker compose up --scale tracking-kafka-consumer=3` (Compose classique, 3 processus / partitions).
     restart: unless-stopped
@@ -512,8 +525,8 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
-      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       KAFKA_TRACKING_CONSUMER_GROUP: ${KAFKA_TRACKING_CONSUMER_GROUP:-tracking-ingest-consumer-group}
       KAFKA_TOPIC_DRIVER_LOCATION_RAW: ${KAFKA_TOPIC_DRIVER_LOCATION_RAW:-driver.location.raw}
@@ -537,8 +550,8 @@ services:
         condition: service_healthy
     networks:
       - atmr-network
-    # `deploy.replicas` ne s’applique qu’en mode Swarm. En Compose classique, le parallélisme = --scale, ex. :
-    #   docker compose -f docker-compose.production.yml up -d --scale tracking-kafka-consumer=3 tracking-kafka-consumer
+    # `deploy.replicas` ne s’applique qu’en mode Swarm. En Compose classique : --profile kafka + --scale, ex. :
+    #   docker compose -f docker-compose.production.yml --profile kafka up -d --scale tracking-kafka-consumer=3 tracking-kafka-consumer
     deploy:
       replicas: 1
       resources:
@@ -550,6 +563,8 @@ services:
           cpus: "0.5"
 
   tracking-processed-fanout:
+    profiles:
+      - kafka
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     # Pas de container_name : incompatible avec deploy.replicas > 1 (noms de conteneurs uniques par instance).
     restart: unless-stopped
@@ -559,9 +574,9 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
-      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-true}
-      TRACKING_PROCESSED_FANOUT_ENABLED: ${TRACKING_PROCESSED_FANOUT_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      TRACKING_INGEST_ASYNC_ENABLED: ${TRACKING_INGEST_ASYNC_ENABLED:-false}
+      TRACKING_PROCESSED_FANOUT_ENABLED: ${TRACKING_PROCESSED_FANOUT_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       KAFKA_PROCESSED_FANOUT_GROUP: ${KAFKA_PROCESSED_FANOUT_GROUP:-tracking-processed-fanout-group}
       KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED: ${KAFKA_TOPIC_DRIVER_LOCATION_PROCESSED:-driver.location.processed}
@@ -591,6 +606,8 @@ services:
           cpus: "0.25"
 
   kafka-dlq-consumer:
+    profiles:
+      - kafka
     image: ${DOCKER_IMAGE:-docker.io/djasiqi/atmr-backend}:${DOCKER_TAG:-latest}
     container_name: atmr-kafka-dlq-consumer
     restart: unless-stopped
@@ -600,7 +617,7 @@ services:
     environment:
       FLASK_ENV: production
       FLASK_CONFIG: production
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
       KAFKA_DLQ_CONSUMER_GROUP: ${KAFKA_DLQ_CONSUMER_GROUP:-kafka-dlq-consumer-group}
       KAFKA_TOPIC_NOTIFICATIONS_DLQ: ${KAFKA_TOPIC_NOTIFICATIONS_DLQ:-notifications.dlq}

@@ -5,6 +5,11 @@ Fallback comportement:
   - Si Kafka est indisponible → retourne queued=False, l'appelant
     (routes/driver.py) bascule sur l'insertion synchrone en DB.
 
+Initialisation lazy par défaut (pas de connexion broker à l’import) :
+Alembic, healthcheck et démarrage Gunicorn restent fonctionnels même si
+Kafka est absent (variable TRACKING_INGEST_EAGER_INIT=true pour l’ancien
+comportement).
+
 Aucune exception ne doit se propager hors de ce module : toutes les
 erreurs Kafka sont absorbées et tracées via le logger, ce qui garantit
 qu'un broker KO ne casse pas l'endpoint HTTP chauffeur.
@@ -51,6 +56,13 @@ KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
 # bloquer l'endpoint HTTP chauffeur en production.
 KAFKA_PRODUCE_TIMEOUT_S = float(os.getenv("KAFKA_PRODUCE_TIMEOUT_S", "0.5"))
 
+# Initialisation lazy : `flask db upgrade`, healthcheck et import de l’app ne tentent
+# plus de joindre Kafka tant qu’aucune position n’est mise en file.
+TRACKING_INGEST_EAGER_INIT = (
+    os.getenv("TRACKING_INGEST_EAGER_INIT", "false").lower() == "true"
+)
+KAFKA_PRODUCER_INIT_BACKOFF_S = float(os.getenv("KAFKA_PRODUCER_INIT_BACKOFF_S", "30"))
+
 
 def _kafka_security_config() -> dict[str, Any]:
     cfg: dict[str, Any] = {"security_protocol": KAFKA_SECURITY_PROTOCOL}
@@ -74,10 +86,27 @@ class TrackingIngestProducer:
         super().__init__()
         self._producer = None
         self._initialized = False
-        if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
-            self._init_producer()
+        self._next_init_attempt_mono = 0.0
+        if TRACKING_INGEST_EAGER_INIT and KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
+            self._init_producer(reset_backoff=True)
 
-    def _init_producer(self) -> None:
+    def _maybe_init_producer(self, *, reset_backoff: bool = False) -> None:
+        if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
+            return
+        if self._initialized and self._producer is not None:
+            return
+        now = time.monotonic()
+        if reset_backoff:
+            self._next_init_attempt_mono = 0.0
+        elif now < self._next_init_attempt_mono:
+            return
+        self._init_producer(reset_backoff=reset_backoff)
+
+    def _init_producer(self, *, reset_backoff: bool = False) -> None:
+        if reset_backoff:
+            self._next_init_attempt_mono = 0.0
+        self._producer = None
+        self._initialized = False
         try:
             from kafka import KafkaProducer as KP
 
@@ -94,13 +123,25 @@ class TrackingIngestProducer:
                 **_kafka_security_config(),
             )
             self._initialized = True
+            self._next_init_attempt_mono = 0.0
             logger.info("[tracking_ingest] Kafka producer initialized")
         except ImportError:
             logger.error(
                 "[tracking_ingest] kafka-python missing, install dependency to enable async tracking ingest"
             )
-        except Exception:
-            logger.exception("[tracking_ingest] Kafka producer init failed")
+            self._next_init_attempt_mono = (
+                time.monotonic() + max(KAFKA_PRODUCER_INIT_BACKOFF_S, 60.0)
+            )
+        except Exception as exc:
+            # Ne jamais faire échouer l’import Flask / Alembic / Gunicorn pour un broker KO
+            logger.warning(
+                "[tracking_ingest] Kafka indisponible — ingest async désactivé (%s: %s)",
+                type(exc).__name__,
+                exc,
+            )
+            self._next_init_attempt_mono = (
+                time.monotonic() + KAFKA_PRODUCER_INIT_BACKOFF_S
+            )
 
     @property
     def enabled(self) -> bool:
@@ -199,11 +240,10 @@ class TrackingIngestProducer:
                     "[tracking_ingest] publish error metric unavailable", exc_info=True
                 )
             # Tenter de réinitialiser le producer pour le prochain appel.
-            # Si le broker est toujours down, _init_producer échouera silencieusement.
             try:
                 self._initialized = False
                 self._producer = None
-                self._init_producer()
+                self._maybe_init_producer(reset_backoff=True)
             except Exception:
                 pass
             return {"queued": False, "trace_id": trace_id, "reason": "kafka_error"}

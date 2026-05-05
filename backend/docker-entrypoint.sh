@@ -479,18 +479,71 @@ check_database
 check_redis
 warmup_models
 
-# Migrations Alembic (automatique via Docker)
+# Migrations Alembic dans le conteneur
+# En production avec PgBouncer : appliquer les migrations hors entrypoint avec une URI
+# directe Postgres (voir deploy-production.sh migration_exec — DATABASE_URL_DIRECT).
+# Sinon Alembic peut échouer (session / pool transactionnel / locks) alors que deploy
+# relance ensuite un upgrade avec la bonne cible → double passe et logs trompeurs.
 run_migrations() {
-    echo "🔄 Migrations Alembic..."
-    if [ -n "${DATABASE_URL:-}" ]; then
-        if flask db upgrade heads 2>/dev/null; then
-            echo "✅ Migrations appliquées"
-        else
-            echo "⚠️  Migrations échouées ou déjà à jour (non-critique)"
-        fi
-    else
+    echo "🔄 Migrations Alembic (entrypoint)..."
+
+    if [ -z "${DATABASE_URL:-}" ]; then
         echo "ℹ️  DATABASE_URL non configurée, migrations ignorées"
+        return 0
     fi
+
+    if [ "${RUN_ENTRYPOINT_MIGRATIONS:-}" = "0" ] ||
+        [ "${RUN_ENTRYPOINT_MIGRATIONS:-}" = "false" ] ||
+        [ "${RUN_ENTRYPOINT_MIGRATIONS:-}" = "no" ]; then
+        echo "ℹ️  RUN_ENTRYPOINT_MIGRATIONS désactivé — migrations déléguées au déploiement (prod recommandé)"
+        return 0
+    fi
+
+    # Détection défensive même si DATABASE_URL était surchargée manuellement
+    if [[ -z "${MIGRATE_DATABASE_URL:-}" ]]; then
+        case "${DATABASE_URL}" in
+            *@pgbouncer:* | *://*@pgbouncer/* | *@pgbouncer/*)
+                echo "ℹ️  PgBouncer détecté dans DATABASE_URL — pas d'upgrade Alembic ici (utiliser Postgres direct ou MIGRATE_DATABASE_URL)"
+                return 0
+                ;;
+            *:6432/*)
+                echo "ℹ️  Port 6432 (souvent PgBouncer) dans DATABASE_URL — migrations entrypoint ignorées"
+                return 0
+                ;;
+        esac
+    fi
+
+    local saved_db_url saved_sqlalchemy saved_primary
+    saved_db_url="${DATABASE_URL:-}"
+    saved_sqlalchemy="${SQLALCHEMY_DATABASE_URI:-}"
+    saved_primary="${PRIMARY_DATABASE_URL:-}"
+
+    if [ -n "${MIGRATE_DATABASE_URL:-}" ]; then
+        echo "  Utilisation de MIGRATE_DATABASE_URL pour Alembic (connexion directe dédiée)"
+        export DATABASE_URL="$MIGRATE_DATABASE_URL"
+        export SQLALCHEMY_DATABASE_URI="$MIGRATE_DATABASE_URL"
+        export PRIMARY_DATABASE_URL="$MIGRATE_DATABASE_URL"
+    fi
+
+    # eventlet doit rester désactivé pour les transactions Alembic (voir manage.py)
+    export DISABLE_EVENTLET=1
+    if flask db upgrade heads; then
+        echo "✅ Migrations appliquées (entrypoint)"
+    else
+        echo "❌ Échec: flask db upgrade heads (entrypoint)"
+        if [ "$FLASK_ENV" = "production" ]; then
+            exit 1
+        fi
+        echo "⚠️  Mode non-production: poursuite du démarrage malgré l'échec des migrations"
+    fi
+
+    if [ -n "${MIGRATE_DATABASE_URL:-}" ]; then
+        export DATABASE_URL="$saved_db_url"
+        [ -n "$saved_sqlalchemy" ] && export SQLALCHEMY_DATABASE_URI="$saved_sqlalchemy" || unset SQLALCHEMY_DATABASE_URI
+        [ -n "$saved_primary" ] && export PRIMARY_DATABASE_URL="$saved_primary" || unset PRIMARY_DATABASE_URL
+    fi
+
+    return 0
 }
 run_migrations
 

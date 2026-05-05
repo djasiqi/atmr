@@ -3,11 +3,12 @@ set -o errexit -o nounset -o pipefail
 
 cd /srv/atmr
 
-# Fonction helper pour docker compose exec
-docker_exec() {
+# Alembic / flask db upgrade : connexion directe Postgres (pas PgBouncer) pour éviter les effets du pool transactionnel.
+migration_exec() {
   docker compose -f docker-compose.production.yml exec -T \
-    -e SQLALCHEMY_DATABASE_URI="${SQLALCHEMY_DATABASE_URI}" \
-    -e DATABASE_URL="${DATABASE_URL}" \
+    -e SQLALCHEMY_DATABASE_URI="${DATABASE_URL_DIRECT}" \
+    -e DATABASE_URL="${DATABASE_URL_DIRECT}" \
+    -e PRIMARY_DATABASE_URL="${DATABASE_URL_DIRECT}" \
     -e POSTGRES_USER="${POSTGRES_USER}" \
     -e POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
     -e POSTGRES_DB="${POSTGRES_DB}" \
@@ -17,6 +18,70 @@ docker_exec() {
     -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
     -e MAIL_PASSWORD="${MAIL_PASSWORD}" \
     backend "$@"
+}
+
+# Diagnostic migrations (CI / journal deploy) — ne logue pas le mot de passe
+migration_failure_diag() {
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "❌ Diagnostic échec migrations Alembic"
+  echo "   Cible Alembic (exec): postgres:5432 / base ${POSTGRES_DB} — pas PgBouncer (voir migration_exec)."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "📋 flask db current:"
+  migration_exec flask db current 2>&1 || true
+  echo ""
+  echo "📋 flask db heads:"
+  migration_exec flask db heads 2>&1 || true
+  echo ""
+  echo "📋 Dernières lignes logs backend:"
+  docker compose -f docker-compose.production.yml logs backend --tail=50 2>&1 || true
+  echo ""
+  echo "📋 Dernières lignes logs postgres:"
+  docker compose -f docker-compose.production.yml logs postgres --tail=50 2>&1 || true
+  echo ""
+  echo "📋 Dernières lignes logs pgbouncer:"
+  docker compose -f docker-compose.production.yml logs pgbouncer --tail=50 2>&1 || true
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Attente Postgres prêt (pg_isready + healthcheck) — même logique partagée après up / restart
+wait_postgres_ready() {
+  local label="${1:-PostgreSQL}"
+  local max="${2:-60}"
+  local i
+  for i in $(seq 1 "$max"); do
+    POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    if [ "$POSTGRES_STATUS" = "running" ]; then
+      HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
+      if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
+        echo "✅ ${label} prêt (healthy + pg_isready)"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  echo "❌ Timeout attente ${label}"
+  docker compose -f docker-compose.production.yml logs postgres --tail=100 || true
+  return 1
+}
+
+wait_pgbouncer_ready() {
+  local max="${1:-40}"
+  local i
+  for i in $(seq 1 "$max"); do
+    PB_STATUS=$(docker compose -f docker-compose.production.yml ps pgbouncer --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+    if [ "$PB_STATUS" = "running" ]; then
+      PB_HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-pgbouncer 2>/dev/null || echo "none")
+      if [ "$PB_HEALTH" = "healthy" ]; then
+        echo "✅ PgBouncer prêt (healthcheck)"
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  echo "⚠️  PgBouncer pas healthy dans le délai (les migrations utilisent Postgres direct)"
+  docker compose -f docker-compose.production.yml logs pgbouncer --tail=50 || true
+  return 1
 }
 
 # Fonction de rollback
@@ -107,6 +172,8 @@ MISSING_SECRETS=()
 ESCAPED_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${POSTGRES_PASSWORD}")
 export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${ESCAPED_PASSWORD}@postgres:5432/${POSTGRES_DB}"
 export SQLALCHEMY_DATABASE_URI="${DATABASE_URL}"
+# URL explicite pour Alembic (exec) si l’app lit PRIMARY_DATABASE_URL / REPLICA en prod
+export DATABASE_URL_DIRECT="${DATABASE_URL}"
 ESCAPED_REDIS_PASSWORD=$(python3 -c "from urllib.parse import quote_plus; import sys; print(quote_plus(sys.argv[1]))" "${REDIS_PASSWORD}")
 export REDIS_URL="redis://:${ESCAPED_REDIS_PASSWORD}@redis:6379/0"
 
@@ -325,6 +392,11 @@ docker compose -f docker-compose.production.yml up -d
 echo "⏳ Stabilisation des conteneurs (5 secondes)..."
 sleep 5
 
+# Postgres + PgBouncer avant de solliciter le backend (évite bruit dans les logs et clarifie les échecs Alembic)
+echo "⏳ Vérification Postgres / PgBouncer après démarrage de la stack..."
+wait_postgres_ready "PostgreSQL (post up -d)" 60
+wait_pgbouncer_ready 40 || true
+
 echo "⏳ Attente du démarrage du backend..."
 for i in $(seq 1 30); do
   BACKEND_STATUS=$(docker compose -f docker-compose.production.yml ps backend --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
@@ -332,47 +404,36 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-echo "🔐 Correction des permissions ML..."
-docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data" || true
-
-echo "🔄 Redémarrage du backend..."
-docker compose -f docker-compose.production.yml restart backend || true
-sleep 5
-
-# Attendre PostgreSQL
-POSTGRES_READY=false
-for i in $(seq 1 60); do
-  POSTGRES_STATUS=$(docker compose -f docker-compose.production.yml ps postgres --format json 2>/dev/null | grep -o '"State":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
-  if [ "$POSTGRES_STATUS" = "running" ]; then
-    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' atmr-postgres 2>/dev/null || echo "none")
-    if [ "$HEALTH" = "healthy" ] && docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" > /dev/null 2>&1; then
-      echo "✅ PostgreSQL prêt"
-      POSTGRES_READY=true
-      break
+# Migrations Alembic avant redémarrage backend : évite fenêtre où l'API tourne contre un schéma
+# non à jour alors que RUN_ENTRYPOINT_MIGRATIONS=0 (sans double-upgrade au boot).
+echo "🔄 Migrations Alembic (cycle safe prod)..."
+echo "   Connexion Alembic: hôte postgres:5432 (direct), pas pgbouncer — voir migration_exec."
+echo "📋 État avant upgrade:"
+migration_exec flask db current || true
+migration_exec flask db heads || true
+echo "⬆️  Application des migrations..."
+if migration_exec flask db upgrade heads; then
+  :
+else
+  echo "⚠️  Tentative 1 échouée, nouvel essai après 5s..."
+  sleep 5
+  if migration_exec flask db upgrade heads; then
+    :
+  else
+    echo "⚠️  Tentative 2 échouée, dernière tentative après 10s..."
+    sleep 10
+    if migration_exec flask db upgrade heads; then
+      :
+    else
+      echo "❌ Migrations échouées après 3 tentatives"
+      migration_failure_diag
+      exit 1
     fi
   fi
-  sleep 2
-done
-[ "$POSTGRES_READY" = "false" ] && { docker compose -f docker-compose.production.yml logs postgres | tail -100; exit 1; }
-
-# Migrations Alembic – cycle "safe prod" (current → heads → upgrade → current)
-echo "🔄 Migrations Alembic (cycle safe prod)..."
-echo "📋 État avant upgrade:"
-docker_exec flask db current || true
-docker_exec flask db heads || true
-echo "⬆️  Application des migrations..."
-docker_exec flask db upgrade heads || {
-  echo "⚠️  Première tentative échouée, retry..."
-  docker_exec flask db upgrade heads || {
-    echo "❌ Migrations échouées"
-    docker_exec flask db current || true
-    docker_exec flask db heads || true
-    exit 1
-  }
-}
+fi
 echo "📋 État après upgrade (validation current == head):"
-CURRENT_AFTER=$(docker_exec flask db current 2>&1) || true
-HEADS_AFTER=$(docker_exec flask db heads 2>&1) || true
+CURRENT_AFTER=$(migration_exec flask db current 2>&1) || true
+HEADS_AFTER=$(migration_exec flask db heads 2>&1) || true
 echo "  current: ${CURRENT_AFTER:- (vide)}"
 echo "  heads:   ${HEADS_AFTER:- (vide)}"
 if [ -z "$CURRENT_AFTER" ] || [ -z "$HEADS_AFTER" ]; then
@@ -383,6 +444,15 @@ else
   echo "✅ current cohérent avec head"
 fi
 echo "✅ Migrations appliquées"
+
+echo "🔐 Correction des permissions ML..."
+docker compose -f docker-compose.production.yml exec -T --user root backend bash -c "mkdir -p /app/data /app/data/ml /app/data/ml/models && chmod -R 755 /app/data && chown -R 999:999 /app/data" || true
+
+echo "🔄 Redémarrage du backend..."
+docker compose -f docker-compose.production.yml restart backend || true
+sleep 5
+
+wait_postgres_ready "PostgreSQL (après redémarrage backend)" 60
 
 # Attendre que le backend soit vraiment prêt (healthcheck Docker)
 echo "⏳ Attente du healthcheck backend (jusqu'à 2 minutes)..."
