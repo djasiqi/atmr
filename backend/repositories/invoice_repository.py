@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Protocol, cast
 
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import defer, joinedload
 
 from domain.invoice_dto import InvoiceDTO, InvoiceLineDTO
 from models import Invoice, InvoiceLine, InvoiceStatus
@@ -521,7 +521,9 @@ class InvoiceRepository:
             Invoice.query.filter_by(id=invoice_id, company_id=company_id)
             .options(
                 joinedload(Invoice.client),
-                joinedload(Invoice.lines),
+                # Ne pas charger line_meta ici : l'annulation n'en a pas besoin et
+                # une base non migrée (sans colonne line_meta) provoquerait une 500.
+                joinedload(Invoice.lines).defer(InvoiceLine.line_meta),
             )
             .first()
         )
