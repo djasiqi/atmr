@@ -526,6 +526,4 @@ jobs:
               "${{ secrets.SAFERPAY_CUSTOMER_ID }}" \
               "${{ secrets.SAFERPAY_TERMINAL_ID }}" \
               "${{ secrets.SAFERPAY_API_USERNAME }}" \
-              "${{ secrets.SAFERPAY_API_PASSWORD }}" \
-              "${{ secrets.SAFERPAY_API_BASE_URL }}" \
-              "${{ secrets.SAFERPAY_ALLOW_TEST_API_IN_PRODUCTION }}"
+              "${{ secrets.SAFERPAY_API_PASSWORD }}"
