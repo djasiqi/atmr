@@ -14,13 +14,16 @@ Create Date: 2026-04-19
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
+from sqlalchemy import inspect
 
 revision = "p2_timescaledb_tracking"
 down_revision = "p1_assignment_indexes"
 branch_labels = None
-depends_on = None
+# Obligatoire : trip_tracking est créée sur une autre branche (930de→311 / f6e0dfb9f5da…).
+# Sans cela Alembic peut appliquer p2 juste après p1 alors que la table n'existe pas encore.
+depends_on = ("f6e0dfb9f5da",)
 
 
 def _timescaledb_available(conn) -> bool:
@@ -44,6 +47,14 @@ def upgrade() -> None:
         )
         return
 
+    # Garde défensive même avec depends_on (évite échecs sur clone partiel ou ordre invalide).
+    if not inspect(conn).has_table("trip_tracking"):
+        print(
+            "[p2_timescaledb_tracking] SKIP: table trip_tracking introuvable — "
+            "appliquer d'abord les migrations qui la créent (f6e0dfb9f5da)."
+        )
+        return
+
     # 1. Drop existing indexes that conflict with hypertable chunk constraints.
     #    TimescaleDB requires the partitioning column (timestamp) to be part of
     #    any unique index. These are plain non-unique indexes — safe to drop and
@@ -55,19 +66,21 @@ def upgrade() -> None:
     #    chunk_time_interval = 1 day: each chunk covers one day of tracking
     #    data, giving predictable chunk sizes (~10 GB/day at 100k drivers).
     #    migrate_data = TRUE: moves existing rows into the first chunk.
-    conn.execute(
-        sa.text(
-            """
-            SELECT create_hypertable(
-                'trip_tracking',
-                'timestamp',
-                chunk_time_interval => INTERVAL '1 day',
-                migrate_data => TRUE,
-                if_not_exists => TRUE
+    #    TimescaleDB exige souvent hors transaction imbriquée (voir 20260419_scale_idx).
+    with op.get_context().autocommit_block():
+        op.execute(
+            sa.text(
+                """
+                SELECT create_hypertable(
+                    'trip_tracking',
+                    'timestamp',
+                    chunk_time_interval => INTERVAL '1 day',
+                    migrate_data => TRUE,
+                    if_not_exists => TRUE
+                )
+                """
             )
-            """
         )
-    )
 
     # 3. Recreate indexes as chunk-aware indexes (TimescaleDB handles fanout).
     #    Include timestamp in the composite index so chunk pruning applies.
@@ -85,44 +98,40 @@ def upgrade() -> None:
     # 4. Compression policy: compress chunks older than 7 days.
     #    Segment by driver_id so queries for a single driver decompress only
     #    their own segments (columnar storage per driver).
-    conn.execute(
-        sa.text(
-            """
-            ALTER TABLE trip_tracking SET (
-                timescaledb.compress,
-                timescaledb.compress_segmentby = 'driver_id',
-                timescaledb.compress_orderby = 'timestamp DESC'
+    with op.get_context().autocommit_block():
+        op.execute(
+            sa.text(
+                """
+                ALTER TABLE trip_tracking SET (
+                    timescaledb.compress,
+                    timescaledb.compress_segmentby = 'driver_id',
+                    timescaledb.compress_orderby = 'timestamp DESC'
+                )
+                """
             )
-            """
         )
-    )
-    conn.execute(
-        sa.text(
-            """
-            SELECT add_compression_policy(
-                'trip_tracking',
-                INTERVAL '7 days',
-                if_not_exists => TRUE
+        op.execute(
+            sa.text(
+                """
+                SELECT add_compression_policy(
+                    'trip_tracking',
+                    INTERVAL '7 days',
+                    if_not_exists => TRUE
+                )
+                """
             )
-            """
         )
-    )
-
-    # 5. Retention policy: drop chunks older than 90 days.
-    #    Before production, confirm with the product team that 90 days covers
-    #    all regulatory and analytics requirements. Extend to 365 days if
-    #    billing or dispute resolution requires longer history.
-    conn.execute(
-        sa.text(
-            """
-            SELECT add_retention_policy(
-                'trip_tracking',
-                INTERVAL '90 days',
-                if_not_exists => TRUE
+        op.execute(
+            sa.text(
+                """
+                SELECT add_retention_policy(
+                    'trip_tracking',
+                    INTERVAL '90 days',
+                    if_not_exists => TRUE
+                )
+                """
             )
-            """
         )
-    )
 
 
 def downgrade() -> None:
