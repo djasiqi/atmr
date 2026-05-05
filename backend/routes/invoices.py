@@ -5572,13 +5572,17 @@ class BillablePartners(Resource):
                     sched: str | None = None
                     if b is not None and b.scheduled_time is not None:
                         st = b.scheduled_time
-                        sched = (
-                            st.isoformat()
-                            if hasattr(st, "isoformat")
-                            else str(st)
-                        )
-                    pu = str(getattr(b, "pickup_location", "") or "").strip() if b else ""
-                    do = str(getattr(b, "dropoff_location", "") or "").strip() if b else ""
+                        sched = st.isoformat() if hasattr(st, "isoformat") else str(st)
+                    pu = (
+                        str(getattr(b, "pickup_location", "") or "").strip()
+                        if b
+                        else ""
+                    )
+                    do = (
+                        str(getattr(b, "dropoff_location", "") or "").strip()
+                        if b
+                        else ""
+                    )
                     if pu or do:
                         desc = f"Transfert partenaire — {pu} → {do}"
                     else:

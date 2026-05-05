@@ -87,7 +87,11 @@ class TrackingIngestProducer:
         self._producer = None
         self._initialized = False
         self._next_init_attempt_mono = 0.0
-        if TRACKING_INGEST_EAGER_INIT and KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
+        if (
+            TRACKING_INGEST_EAGER_INIT
+            and KAFKA_ENABLED
+            and TRACKING_INGEST_ASYNC_ENABLED
+        ):
             self._init_producer(reset_backoff=True)
 
     def _maybe_init_producer(self, *, reset_backoff: bool = False) -> None:
@@ -129,8 +133,8 @@ class TrackingIngestProducer:
             logger.error(
                 "[tracking_ingest] kafka-python missing, install dependency to enable async tracking ingest"
             )
-            self._next_init_attempt_mono = (
-                time.monotonic() + max(KAFKA_PRODUCER_INIT_BACKOFF_S, 60.0)
+            self._next_init_attempt_mono = time.monotonic() + max(
+                KAFKA_PRODUCER_INIT_BACKOFF_S, 60.0
             )
         except Exception as exc:
             # Ne jamais faire échouer l’import Flask / Alembic / Gunicorn pour un broker KO

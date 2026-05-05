@@ -337,10 +337,7 @@ def generate_partner_invoice_pdf_content(
             vat_status_text = f"TVA {billing_settings.vat_rate or 7.7}% incluse"
 
     _addr_emit = _escape_multiline_address_html(company_address)
-    company_info_html = (
-        f"{_xml_escape_for_paragraph(company_name)}<br/>"
-        f"{_addr_emit}"
-    )
+    company_info_html = f"{_xml_escape_for_paragraph(company_name)}<br/>{_addr_emit}"
     if vat_status_text:
         company_info_html += f"<br/>{_xml_escape_for_paragraph(vat_status_text)}"
     company_para = Paragraph(company_info_html, normal_style)

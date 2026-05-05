@@ -210,7 +210,7 @@ class TestBuildRecipientBlockFlowable:
             # c/o + adresse en 10 pt (pas de gras sur c/o)
             assert "c/o OPAD" in content
             # Après le nom en 12 pt, le fragment c/o commence en 10 pt (balise <font size="10">)
-            assert "</b></font><br/><font size=\"10\">c/o OPAD" in content
+            assert '</b></font><br/><font size="10">c/o OPAD' in content
             assert "<b>c/o" not in content
 
     def test_recipient_lines_respect_wrapping(self):

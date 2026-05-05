@@ -555,10 +555,14 @@ def _enrich_invoice_line_payloads_booking_dates(
 
     targets: list[tuple[int, dict[str, Any]]] = []
     for ln, d in zip(invoice_lines, line_dicts, strict=True):
-        if ln.type not in (
-            InvoiceLineType.RIDE,
-            InvoiceLineType.MATERIAL_DELIVERY,
-        ) or not ln.reservation_id:
+        if (
+            ln.type
+            not in (
+                InvoiceLineType.RIDE,
+                InvoiceLineType.MATERIAL_DELIVERY,
+            )
+            or not ln.reservation_id
+        ):
             continue
         meta = d.get("line_meta")
         if isinstance(meta, dict) and meta.get("service_date"):

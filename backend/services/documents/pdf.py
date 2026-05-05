@@ -10,8 +10,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, cast
 
+from html import escape as _html_escape_minimal
 from typing_extensions import override
-from xml.sax.saxutils import escape as _xml_escape
 
 from flask import current_app
 from reportlab.platypus import Flowable
@@ -2028,7 +2028,8 @@ def _build_recipient_block_flowable(
 
 def _xml_escape_for_paragraph(text: str) -> str:
     """Échappe & < > pour du contenu dans un ReportLab Paragraph (mini HTML)."""
-    return _xml_escape(text or "", {"'": "&apos;", '"': "&quot;"})
+    s = _html_escape_minimal(text or "", quote=False)
+    return s.replace("'", "&apos;").replace('"', "&quot;")
 
 
 def _reportlab_safe_footer_html(text: str) -> str:
@@ -2376,11 +2377,17 @@ def _consolidated_item_is_material_delivery(item: dict[str, Any]) -> bool:
     if item.get("is_round_trip"):
         for key in ("line1", "line2"):
             ln = item.get(key)
-            if ln is not None and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY:
+            if (
+                ln is not None
+                and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY
+            ):
                 return True
         return False
     ln = item.get("line")
-    return ln is not None and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY
+    return (
+        ln is not None
+        and getattr(ln, "type", None) == InvoiceLineType.MATERIAL_DELIVERY
+    )
 
 
 def _pdf_escape_wrapped_plain(
@@ -2747,9 +2754,8 @@ def _build_s2_table(
         line_desc_opt = _line_description_from_consolidated_item(item)
         if is_ar:
             if line_desc_opt:
-                if (
-                    max_simple_description_lines == 2
-                    and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+                if max_simple_description_lines == 2 and (
+                    " → " in line_desc_opt or " ↔ " in line_desc_opt
                 ):
                     esc_desc = _pdf_format_transport_detail_inner_wrapped(
                         line_desc_opt,
@@ -2766,7 +2772,9 @@ def _build_s2_table(
                 esc_desc = _pdf_limit_html_br_lines(
                     esc_desc, max_simple_description_lines
                 )
-                inner_html = f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
+                inner_html = (
+                    f"{esc_desc} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
+                )
             else:
                 body_tr = _pdf_format_transport_detail_inner_wrapped(
                     item.get("transport_display", ""),
@@ -2776,8 +2784,12 @@ def _build_s2_table(
                     is_material_delivery=is_material_td,
                     force_balanced_two_lines=max_simple_description_lines == 2,
                 )
-                body_tr = _pdf_limit_html_br_lines(body_tr, max_simple_description_lines)
-                inner_html = f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
+                body_tr = _pdf_limit_html_br_lines(
+                    body_tr, max_simple_description_lines
+                )
+                inner_html = (
+                    f"{body_tr} {_pdf_s2_ar_tag_markup()}{disc_suffix}{note_suffix}"
+                )
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
                 s2_main_style,
@@ -2786,9 +2798,8 @@ def _build_s2_table(
             )
         else:
             if line_desc_opt:
-                if (
-                    max_simple_description_lines == 2
-                    and (" → " in line_desc_opt or " ↔ " in line_desc_opt)
+                if max_simple_description_lines == 2 and (
+                    " → " in line_desc_opt or " ↔ " in line_desc_opt
                 ):
                     line_desc_html = _pdf_format_transport_detail_inner_wrapped(
                         line_desc_opt,
@@ -2816,7 +2827,9 @@ def _build_s2_table(
                     is_material_delivery=is_material_td,
                     force_balanced_two_lines=max_simple_description_lines == 2,
                 )
-                body_tr = _pdf_limit_html_br_lines(body_tr, max_simple_description_lines)
+                body_tr = _pdf_limit_html_br_lines(
+                    body_tr, max_simple_description_lines
+                )
                 inner_html = f"{body_tr}{disc_suffix}{note_suffix}"
             amount_cell = _pdf_s2_amount_only_paragraph(
                 net_disp,
@@ -2842,9 +2855,7 @@ def _build_s2_table(
                 f'<font size="{int(FONT_SECONDARY)}" color="#475569">Client : '
                 f"{_xml_escape_for_paragraph(pn_raw)}</font><br/>"
             )
-        desc_cell = Paragraph(
-            f"{patient_prefix_html}{inner_html}", s2_main_style
-        )
+        desc_cell = Paragraph(f"{patient_prefix_html}{inner_html}", s2_main_style)
         if show_date_column:
             table_data.append(
                 [
@@ -2888,9 +2899,7 @@ def _build_s2_table(
                 sub = _custom_prestation_subline_for_pdf(line)
                 if sub:
                     esc_s = _xml_escape_for_paragraph(sub)
-                    desc_html = (
-                        f'{esc_d}<br/><font size="{FONT_SECONDARY}" color="#64748b">{esc_s}</font>'
-                    )
+                    desc_html = f'{esc_d}<br/><font size="{FONT_SECONDARY}" color="#64748b">{esc_s}</font>'
                 else:
                     desc_html = esc_d
                 desc_html = f"{desc_html}{disc_o}"
@@ -2905,7 +2914,9 @@ def _build_s2_table(
                     ht_column_plain=True,
                 )
                 svc_date_o = _pdf_line_detail_date_str(line, invoice)
-                _date_cell_o = _compact_private_date_paragraph(svc_date_o or "", font_name)
+                _date_cell_o = _compact_private_date_paragraph(
+                    svc_date_o or "", font_name
+                )
                 if show_date_column:
                     table_data.append([_date_cell_o, desc_cell, amt_cell_o])
                 else:
@@ -2938,7 +2949,10 @@ def _build_s2_table(
                     cat_or, net_or, compact_private_sub=True
                 )
             raw_desc_orphan = (line.description or "")[:500]
-            if line.type == InvoiceLineType.MATERIAL_DELIVERY and raw_desc_orphan.strip():
+            if (
+                line.type == InvoiceLineType.MATERIAL_DELIVERY
+                and raw_desc_orphan.strip()
+            ):
                 esc_d = _pdf_format_transport_detail_inner_wrapped(
                     raw_desc_orphan,
                     font_name=font_name,
@@ -3469,8 +3483,7 @@ def _pdf_s2_per_line_discount_suffix_html(
 
 
 def _compact_private_date_paragraph(date_str: str, font_name: str) -> Any:
-    """Colonne Date client privé — police compacte pour tenir sur une ligne dans la colonne étroite.
-    """
+    """Colonne Date client privé — police compacte pour tenir sur une ligne dans la colonne étroite."""
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.platypus import Paragraph
@@ -3567,9 +3580,7 @@ def _minimal_custom_detail_paragraph(
     sub = _custom_prestation_subline_for_pdf(line)
     if sub:
         esc_s = _xml_escape_for_paragraph(sub)
-        body = (
-            f'{esc_d}<br/><font size="9" color="#64748b">{esc_s}</font>{extra_html_suffix}'
-        )
+        body = f'{esc_d}<br/><font size="9" color="#64748b">{esc_s}</font>{extra_html_suffix}'
         return Paragraph(body, normal_style)
     return Paragraph(f"{esc_d}{extra_html_suffix}", normal_style)
 
@@ -6781,14 +6792,14 @@ class PDFService:
         # Informations créancier
         left_section.append(Paragraph("Konto / Zahlbar an", label_style))
         left_section.append(
-            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+            Paragraph(
+                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
+            )
         )
         company = invoice.company
         left_section.append(
             Paragraph(
-                _xml_escape_for_paragraph(
-                    company.name or "[Nom non configuré]"
-                ),
+                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
                 normal_style,
             )
         )
@@ -6826,12 +6837,9 @@ class PDFService:
             )
         )
         _zbd_pc = (
-            f"{invoice.client.domicile_zip or ''} "
-            f"{invoice.client.domicile_city or ''}"
+            f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}"
         ).strip()
-        left_section.append(
-            Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style)
-        )
+        left_section.append(Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style))
         left_section.append(Spacer(1, 8))
 
         # Référence
@@ -6866,13 +6874,13 @@ class PDFService:
         # Informations créancier
         right_section.append(Paragraph("Konto / Zahlbar an", label_style))
         right_section.append(
-            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+            Paragraph(
+                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
+            )
         )
         right_section.append(
             Paragraph(
-                _xml_escape_for_paragraph(
-                    company.name or "[Nom non configuré]"
-                ),
+                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
                 normal_style,
             )
         )
@@ -7004,14 +7012,14 @@ class PDFService:
         # Konto / Zahlbar an
         left_content.append(Paragraph("Konto / Zahlbar an", label_style))
         left_content.append(
-            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+            Paragraph(
+                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
+            )
         )
         company = invoice.company
         left_content.append(
             Paragraph(
-                _xml_escape_for_paragraph(
-                    company.name or "[Nom non configuré]"
-                ),
+                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
                 normal_text_style,
             )
         )
@@ -7020,7 +7028,9 @@ class PDFService:
             or company.address
             or "[Adresse non configurée]"
         )
-        left_content.append(Paragraph(_xml_escape_for_paragraph(street), normal_text_style))
+        left_content.append(
+            Paragraph(_xml_escape_for_paragraph(street), normal_text_style)
+        )
         postal_city = (
             f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
             or "[Code postal/ville non configuré]"
@@ -7048,8 +7058,7 @@ class PDFService:
             )
         )
         _ofl_zpc = (
-            f"{invoice.client.domicile_zip or ''} "
-            f"{invoice.client.domicile_city or ''}"
+            f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}"
         ).strip()
         left_content.append(
             Paragraph(_xml_escape_for_paragraph(_ofl_zpc), normal_text_style)
@@ -7087,17 +7096,19 @@ class PDFService:
         # Konto / Zahlbar an
         right_content.append(Paragraph("Konto / Zahlbar an", label_style))
         right_content.append(
-            Paragraph(_xml_escape_for_paragraph(billing_settings.iban or ""), value_style)
+            Paragraph(
+                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
+            )
         )
         right_content.append(
             Paragraph(
-                _xml_escape_for_paragraph(
-                    company.name or "[Nom non configuré]"
-                ),
+                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
                 normal_text_style,
             )
         )
-        right_content.append(Paragraph(_xml_escape_for_paragraph(street), normal_text_style))
+        right_content.append(
+            Paragraph(_xml_escape_for_paragraph(street), normal_text_style)
+        )
         right_content.append(
             Paragraph(_xml_escape_for_paragraph(postal_city), normal_text_style)
         )

@@ -459,7 +459,8 @@ def update_draft_invoice_line(
     if original_line_total is not _ORIGINAL_LINE_TOTAL_ARG_UNSET:
         meta_olt = dict(line.line_meta) if isinstance(line.line_meta, dict) else {}
         if original_line_total is None or (
-            isinstance(original_line_total, str) and not str(original_line_total).strip()
+            isinstance(original_line_total, str)
+            and not str(original_line_total).strip()
         ):
             meta_olt.pop(_META_ORIGINAL_LINE_TOTAL, None)
         else:
@@ -1249,11 +1250,7 @@ def add_draft_custom_line(
         if custom_mode in ("time", "quantity"):
             entry: dict[str, Any] = {"mode": str(custom_mode)}
             if custom_mode == "time":
-                tu = (
-                    str(time_unit)
-                    if time_unit in ("min", "h", "d", "mois")
-                    else "h"
-                )
+                tu = str(time_unit) if time_unit in ("min", "h", "d", "mois") else "h"
                 entry["time_unit"] = tu
             line_meta = {"custom_prestation": entry}
 
