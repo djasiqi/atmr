@@ -35,16 +35,21 @@ services:
       context: ./backend
       dockerfile: Dockerfile.production
       target: runtime
-    command: >
-      gunicorn wsgi:app
-      --bind 0.0.0.0:5000
-      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
-      --workers ${GUNICORN_WORKERS:-1}
-      --timeout 120
-      --access-logfile -
-      --error-logfile -
-      --log-level info
-      --no-sendfile
+    # gevent : Gunicorn 26+ n'inclut plus le worker eventlet. Pas d'interpolation
+    # ${...} ici (évaluée sur l'hôte et peut réinjecter eventlet depuis l'env système).
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec gunicorn wsgi:app \
+          --bind 0.0.0.0:5000 \
+          --worker-class $${GUNICORN_WORKER_CLASS:-gevent} \
+          --workers $${GUNICORN_WORKERS:-1} \
+          --timeout 120 \
+          --access-logfile - \
+          --error-logfile - \
+          --log-level info \
+          --no-sendfile
     env_file:
       - backend/.env
     environment:
@@ -69,6 +74,7 @@ services:
       - API_DOCS=off
       - PDF_BASE_URL=https://demo.lirie.ch
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5100,http://127.0.0.1:5100
+      - SOCKETIO_ASYNC_MODE=gevent
       - SOCKETIO_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5100,http://127.0.0.1:5100
       - PYTHONPATH=/app
       - TZ=Europe/Zurich

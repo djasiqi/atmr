@@ -83,5 +83,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     r=urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3); \
     sys.exit(0 if getattr(r,'status',200)==200 else 1)"
 
-# Gunicorn en eventlet
-CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:5000", "--worker-class", "eventlet", "--workers", "1", "--timeout", "120"]
+# Gunicorn en gevent (Gunicorn 26+ : worker eventlet retiré)
+CMD ["gunicorn", "wsgi:app", "--bind", "0.0.0.0:5000", "--worker-class", "gevent", "--workers", "1", "--timeout", "120"]

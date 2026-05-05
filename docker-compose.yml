@@ -112,7 +112,7 @@ services:
       - |
         exec gunicorn wsgi:app \
           --bind 0.0.0.0:5000 \
-          --worker-class $${GUNICORN_WORKER_CLASS:-eventlet} \
+          --worker-class $${GUNICORN_WORKER_CLASS:-gevent} \
           --workers $${GUNICORN_WORKERS:-2} \
           --timeout 120 \
           --access-logfile - \
@@ -131,8 +131,8 @@ services:
       - DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-atmr}:${POSTGRES_PASSWORD:-atmr}@pgbouncer:6432/${POSTGRES_DB:-atmr}
       # GOOGLE_MAPS_API_KEY : défini dans backend/.env (env_file ci-dessus). Ne pas réinjecter ${GOOGLE_MAPS_API_KEY}
       # depuis l’hôte ici : une variable vide écraserait la valeur du fichier.
-      - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-eventlet}
-      - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-eventlet}
+      - SOCKETIO_ASYNC_MODE=${SOCKETIO_ASYNC_MODE:-gevent}
+      - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-gevent}
       - SIO_DISABLE_UPGRADES=false
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}

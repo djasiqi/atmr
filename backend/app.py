@@ -769,9 +769,9 @@ def create_app(config_name: str | None = None):
             env_mode = "threading"
             app.logger.info("[Socket.IO] Mode threading forcé (DISABLE_EVENTLET=1)")
         else:
-            env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "eventlet")
+            env_mode = os.getenv("SOCKETIO_ASYNC_MODE", "gevent")
         async_mode: AsyncMode = cast(
-            "AsyncMode", env_mode if env_mode in allowed_modes else "eventlet"
+            "AsyncMode", env_mode if env_mode in allowed_modes else "gevent"
         )
 
         sio_logger = config_name == "development"

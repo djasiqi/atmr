@@ -39,7 +39,7 @@ if hasattr(sys.stderr, "reconfigure"):
 # ✅ FIX: Permettre de désactiver eventlet pour les migrations
 # eventlet.monkey_patch() interfère avec les transactions Alembic/psycopg
 _disable_eventlet = os.getenv("DISABLE_EVENTLET", "0") == "1"
-_async_mode = (os.getenv("SOCKETIO_ASYNC_MODE") or "eventlet").strip().lower()
+_async_mode = (os.getenv("SOCKETIO_ASYNC_MODE") or "gevent").strip().lower()
 
 if _disable_eventlet:
     print("⚠️ [WSGI] eventlet désactivé (DISABLE_EVENTLET=1)", flush=True)

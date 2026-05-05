@@ -9,16 +9,19 @@ services:
       context: ./backend
       dockerfile: Dockerfile.production
       target: runtime
-    command: >
-      gunicorn wsgi:app
-      --bind 0.0.0.0:5000
-      --worker-class ${GUNICORN_WORKER_CLASS:-eventlet}
-      --workers 1
-      --timeout 120
-      --access-logfile -
-      --error-logfile -
-      --log-level info
-      --no-sendfile
+    command:
+      - /bin/sh
+      - -c
+      - |
+        exec gunicorn wsgi:app \
+          --bind 0.0.0.0:5000 \
+          --worker-class $${GUNICORN_WORKER_CLASS:-gevent} \
+          --workers 1 \
+          --timeout 120 \
+          --access-logfile - \
+          --error-logfile - \
+          --log-level info \
+          --no-sendfile
     env_file:
       - backend/.env
     environment:
@@ -38,6 +41,7 @@ services:
       - EMAIL_NOTIFICATIONS_ENABLED=${EMAIL_NOTIFICATIONS_ENABLED:-false}
       - API_LEGACY_ENABLED=false
       - API_DOCS=off
+      - SOCKETIO_ASYNC_MODE=gevent
       - PYTHONPATH=/app
       - TZ=Europe/Zurich
     ports:

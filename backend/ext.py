@@ -86,11 +86,11 @@ if _disable_eventlet:
     _env_async = "threading"
     app_logger.info("[Socket.IO] Mode threading forcé (DISABLE_EVENTLET=1)")
 else:
-    _env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="eventlet").strip().lower()
+    # Défaut gevent : compatible Gunicorn 26+ (worker eventlet retiré du paquet gunicorn).
+    _env_async = os.getenv("SOCKETIO_ASYNC_MODE", default="gevent").strip().lower()
     _allowed_modes = {"threading", "eventlet", "gevent", "gevent_uwsgi"}
     if _env_async not in _allowed_modes:
-        # fallback sûr si une valeur inconnue est fournie
-        _env_async = "eventlet"
+        _env_async = "gevent"
 ASYNC_MODE: AsyncMode = cast("AsyncMode", _env_async)
 
 # ✅ FIX: Utiliser REDIS_URL directement si disponible (même si redis_client est None)

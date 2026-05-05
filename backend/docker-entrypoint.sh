@@ -445,9 +445,11 @@ start_application() {
         if [ "$WORKERS" = "1" ]; then
             echo "  ⚠️  Mode single-worker (diagnostic Socket.IO multi-workers)"
         fi
+        # Gunicorn 26+ ne fournit plus le worker eventlet ; défaut gevent.
+        _gw="${GUNICORN_WORKER_CLASS:-gevent}"
         exec gunicorn wsgi:app \
             --bind 0.0.0.0:5000 \
-            --worker-class eventlet \
+            --worker-class "$_gw" \
             --workers "$WORKERS" \
             --timeout 120 \
             --keep-alive 2 \
