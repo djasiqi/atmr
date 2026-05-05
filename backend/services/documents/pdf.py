@@ -74,10 +74,11 @@ QR_BILL_LEFT_PADDING_MM = -5.0
 QR_BILL_PAGE_BOTTOM_MARGIN_CM = 0.5
 
 # Pied « totaux » : deux colonnes (libellé | montant), alignées à droite sous le détail.
-# Libellé élargi vs l’aperçu HTML (~280px) pour éviter que « TOTAL À FACTURER : » (12 pt gras)
-# ne chevauche le montant ; la colonne montant reste assez large pour « 12345678.90 CHF ».
-INVOICE_PREVIEW_TOTALS_LABEL_CM = 5.95
-INVOICE_PREVIEW_TOTALS_AMOUNT_CM = 3.55
+# Colonne libellé large pour « TOTAL À FACTURER : » (gras ~11 pt) sans chevaucher le montant ;
+# léger RIGHTPADDING sur la colonne 0 pour l’air entre libellé et montants.
+INVOICE_PREVIEW_TOTALS_LABEL_CM = 6.15
+INVOICE_PREVIEW_TOTALS_AMOUNT_CM = 3.35
+INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT = 5
 
 # --- Grille typo facture PDF (miroir InvoiceLivePreview.module.css, valeurs pt) ---
 FONT_HEADER_COMPANY = 14
@@ -2344,6 +2345,9 @@ def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None
 
     Pour un aller-retour consolidé, prend la première description non vide parmi les deux lignes.
     """
+    from shared.utils.transport_description_normalize import (
+        normalize_transport_line_description,
+    )
 
     def _one(ln: Any) -> str | None:
         if not ln:
@@ -2352,6 +2356,13 @@ def _line_description_from_consolidated_item(item: dict[str, Any]) -> str | None
         if raw is None:
             return None
         s = str(raw).strip()
+        if not s:
+            return None
+        lt = getattr(ln, "type", None)
+        if lt == InvoiceLineType.RIDE:
+            s = normalize_transport_line_description(s, kind="ride")
+        elif lt == InvoiceLineType.MATERIAL_DELIVERY:
+            s = normalize_transport_line_description(s, kind="material_delivery")
         return s or None
 
     if item.get("is_round_trip"):
@@ -2462,8 +2473,19 @@ def _pdf_format_transport_detail_inner_wrapped(
     force_balanced_two_lines: bool = False,
 ) -> str:
     """Trajet / Livraison / libellé : préfixes métier + wrap largeur colonne (adresse complète, pas ville seule)."""
-    s = (raw or "").strip()
-    if s.lower().startswith("trajet :"):
+    from shared.utils.transport_description_normalize import (
+        normalize_transport_line_description,
+    )
+
+    raw_s = (raw or "").strip()
+    if is_ride_line:
+        s = normalize_transport_line_description(raw_s, kind="ride")
+    elif is_material_delivery:
+        s = normalize_transport_line_description(raw_s, kind="material_delivery")
+    else:
+        s = raw_s
+    # Ne pas retirer « Trajet : » sur une livraison matériel (pas de vocabulaire trajet).
+    if is_ride_line and s.lower().startswith("trajet :"):
         s = s[8:].strip()
     fs = float(FONT_BODY)
     if is_material_delivery and s:
@@ -3949,7 +3971,12 @@ def _build_totals_table(
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (0, -1), 8),
+        (
+            "RIGHTPADDING",
+            (0, 0),
+            (0, -1),
+            INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
+        ),
         ("RIGHTPADDING", (1, 0), (1, -1), 0),
         ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
         ("FONTSIZE", (0, 0), (-1, -1), FONT_BODY),
@@ -5969,7 +5996,12 @@ class PDFService:
             ("ALIGN", (1, 0), (1, -1), "RIGHT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (0, -1), 8),
+            (
+                "RIGHTPADDING",
+                (0, 0),
+                (0, -1),
+                INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
+            ),
             ("RIGHTPADDING", (1, 0), (1, -1), 0),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),

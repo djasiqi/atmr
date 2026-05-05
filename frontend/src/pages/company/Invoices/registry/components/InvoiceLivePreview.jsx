@@ -60,12 +60,46 @@ function safeText(value, fallback = '—') {
   return fallback;
 }
 
+/** Parité backend `normalize_transport_line_description` : RIDE = motifs Trajet uniquement ; livraison = Livraison uniquement. */
+function normalizeTransportLineDescription(text, lineKind) {
+  if (text == null || text === '') return text;
+  let t = String(text)
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#160;/g, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\u202f/g, ' ')
+    .replace(/[\u200b\u200c\u200d\ufeff\u2060]/g, '');
+  const trajetRe =
+    /Trajet\s*[:：\uFF1A]\s*(?:Trajet\s*[:：\uFF1A]\s*)*Trajet(?:\s+|(?=[A-Za-zÀ-ÿ0-9])|$)/gi;
+  const livDashRe =
+    /Livraison\s*[-–—]\s*(?:Livraison\s*[-–—]\s*)*Livraison(?:\s+|(?=[A-Za-zÀ-ÿ0-9])|$)/gi;
+  const livColonRe =
+    /Livraison\s*[:：\uFF1A]\s*(?:Livraison\s*[:：\uFF1A]\s*)*Livraison(?:\s+|(?=[A-Za-zÀ-ÿ0-9])|$)/gi;
+  let prev;
+  do {
+    prev = t;
+    if (lineKind === 'RIDE') {
+      t = t.replace(trajetRe, 'Trajet : ');
+    } else if (lineKind === 'MATERIAL_DELIVERY') {
+      t = t.replace(livDashRe, 'Livraison – ');
+      t = t.replace(livColonRe, 'Livraison : ');
+    }
+  } while (prev !== t);
+  return t.trim();
+}
+
 /** Parité PDF : préfixe livraison matériel (pas « Trajet : »). */
 function lineDescriptionWithPrefix(line) {
   const kind = String(line?.type ?? line?.line_type ?? '')
     .trim()
     .toUpperCase();
-  const raw = safeText(line.description);
+  let raw = safeText(line.description);
+  if (kind === 'RIDE' && raw && raw !== '—') {
+    raw = normalizeTransportLineDescription(raw, 'RIDE');
+  }
+  if (kind === 'MATERIAL_DELIVERY' && raw && raw !== '—') {
+    raw = normalizeTransportLineDescription(raw, 'MATERIAL_DELIVERY');
+  }
   if (kind === 'MATERIAL_DELIVERY' && raw && raw !== '—') {
     if (/^livraison\s*:/i.test(String(raw).trim())) return raw;
     return `Livraison : ${raw}`;
@@ -435,12 +469,29 @@ export default function InvoiceLivePreview({
                 const mergePartner =
                   partnerRid != null ? rideLinesByReservationId.get(Number(partnerRid)) : null;
                 const isAr = lineIsRoundTrip(line);
-                const partnerDesc =
+                const partnerKind = mergePartner
+                  ? String(mergePartner.type ?? mergePartner.line_type ?? '')
+                      .trim()
+                      .toUpperCase()
+                  : '';
+                let partnerDesc =
                   mergePartner &&
                   mergePartner.description != null &&
                   String(mergePartner.description).trim() !== ''
                     ? String(mergePartner.description).trim()
                     : null;
+                if (partnerDesc && partnerKind === 'RIDE') {
+                  partnerDesc = normalizeTransportLineDescription(
+                    partnerDesc,
+                    'RIDE',
+                  );
+                }
+                if (partnerDesc && partnerKind === 'MATERIAL_DELIVERY') {
+                  partnerDesc = normalizeTransportLineDescription(
+                    partnerDesc,
+                    'MATERIAL_DELIVERY',
+                  );
+                }
                 const adjNote =
                   line.adjustment_note != null && line.adjustment_note !== ''
                     ? safeText(line.adjustment_note, '')

@@ -526,11 +526,25 @@ class InvoiceLine(db.Model):
 
     def to_dict(self):
         """Sérialise la ligne de facture en dictionnaire."""
+        desc_out = self.description
+        if self.type in (InvoiceLineType.RIDE, InvoiceLineType.MATERIAL_DELIVERY):
+            from shared.utils.transport_description_normalize import (
+                normalize_transport_line_description,
+            )
+
+            if self.type == InvoiceLineType.RIDE:
+                desc_out = normalize_transport_line_description(
+                    desc_out, kind="ride"
+                )
+            else:
+                desc_out = normalize_transport_line_description(
+                    desc_out, kind="material_delivery"
+                )
         d = {
             "id": self.id,
             "invoice_id": self.invoice_id,
             "type": self.type.value,
-            "description": self.description,
+            "description": desc_out,
             "qty": float(self.qty),
             "unit_price": float(self.unit_price),
             "line_total": float(self.line_total),
