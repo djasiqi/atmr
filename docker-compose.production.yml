@@ -7,6 +7,12 @@
 # `docker compose up`. Pour broker(s) joignables : --profile kafka, cluster sur
 # atmr-network ou KAFKA_BOOTSTRAP_SERVERS vers un Kafka managé, et surcharge
 # KAFKA_ENABLED=true / TRACKING_INGEST_ASYNC_ENABLED=true dans .env.
+#
+# Stack Kafka (docker-compose.kafka.yml) utilise le réseau default atmr-stack ;
+# la prod utilise atmr-network (externe). Pour joindre kafka-broker-* depuis le
+# backend / ws-service, merger aussi docker-compose.kafka.atmr-network.yml :
+#   docker compose -f docker-compose.production.yml -f docker-compose.kafka.yml \
+#     -f docker-compose.kafka.atmr-network.yml --profile kafka up -d
 
 services:
   # Base de données PostgreSQL (PostGIS requis pour geo_unit.geom)
@@ -382,6 +388,8 @@ services:
       WS_CANARY_PERCENT: ${WS_CANARY_PERCENT:-1}
       WS_CANARY_HEADER_VALUE: ${WS_CANARY_HEADER_VALUE:-1}
       WS_CANARY_COOKIE_VALUE: ${WS_CANARY_COOKIE_VALUE:-1}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092}
+      WS_KAFKA_CONSUMER_ENABLED: ${WS_KAFKA_CONSUMER_ENABLED:-false}
       WS_KAFKA_GROUP_ID: ${WS_KAFKA_GROUP_ID:-ws-service-shared}
       WS_KAFKA_AUTO_OFFSET_RESET: ${WS_KAFKA_AUTO_OFFSET_RESET:-latest}
       WS_KAFKA_SESSION_TIMEOUT_MS: ${WS_KAFKA_SESSION_TIMEOUT_MS:-30000}

@@ -60,7 +60,7 @@ ALLOW_IF_REDIS_PRESENCE_DOWN = (
 ALLOW_IF_REDIS_AUTH_DOWN = (
     os.getenv("WS_ALLOW_IF_REDIS_AUTH_DOWN", "false").lower() == "true"
 )
-KAFKA_CONSUMER_ENABLED = os.getenv("WS_KAFKA_CONSUMER_ENABLED", "true").lower() == "true"
+KAFKA_CONSUMER_ENABLED = os.getenv("WS_KAFKA_CONSUMER_ENABLED", "false").lower() == "true"
 KAFKA_BOOTSTRAP_SERVERS = os.getenv(
     "KAFKA_BOOTSTRAP_SERVERS",
     "kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092",
@@ -227,6 +227,33 @@ async def _relay_event_if_needed(event: dict[str, Any], room: str) -> str:
     return "redis"
 
 
+def _kafka_bootstrap_env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _kafka_bootstrap_env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+async def _aiokafka_safe_stop(consumer: Any) -> None:
+    if consumer is None:
+        return
+    with suppress(Exception):
+        await consumer.stop()
+
+
 async def _consume_kafka_events() -> None:
     if not KAFKA_CONSUMER_ENABLED:
         logger.info("kafka consumer disabled by env")
@@ -266,9 +293,43 @@ async def _consume_kafka_events() -> None:
     if WS_KAFKA_SSL_KEYFILE:
         consumer_kwargs["ssl_keyfile"] = WS_KAFKA_SSL_KEYFILE
 
-    consumer = AIOKafkaConsumer(*topics, **consumer_kwargs)
+    max_attempts = max(1, _kafka_bootstrap_env_int("KAFKA_BOOTSTRAP_MAX_ATTEMPTS", 60))
+    base_sleep = max(0.05, _kafka_bootstrap_env_float("KAFKA_BOOTSTRAP_INITIAL_BACKOFF_SEC", 1.0))
+    max_sleep = max(base_sleep, _kafka_bootstrap_env_float("KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC", 30.0))
+
+    consumer: Any = None
+    for attempt in range(1, max_attempts + 1):
+        c = AIOKafkaConsumer(*topics, **consumer_kwargs)
+        try:
+            await c.start()
+            consumer = c
+            break
+        except asyncio.CancelledError:
+            await _aiokafka_safe_stop(c)
+            raise
+        except Exception as exc:
+            await _aiokafka_safe_stop(c)
+            if attempt >= max_attempts:
+                logger.error(
+                    "ws-service kafka bootstrap failed after %s attempts",
+                    max_attempts,
+                    exc_info=exc,
+                )
+                return
+            sleep_s = min(max_sleep, base_sleep * (2 ** (attempt - 1)))
+            logger.warning(
+                "ws-service kafka bootstrap attempt %s/%s failed: %s; retry in %.2fs",
+                attempt,
+                max_attempts,
+                exc,
+                sleep_s,
+            )
+            await asyncio.sleep(sleep_s)
+
+    if consumer is None:
+        return
+
     try:
-        await consumer.start()
         logger.info("kafka consumer started topics=%s group_id=%s pod=%s", topics, WS_KAFKA_GROUP_ID, POD_ID)
         if WS_KAFKA_SEEK_TO_END_ON_START:
             await consumer.seek_to_end()
@@ -342,7 +403,7 @@ async def _consume_kafka_events() -> None:
     except Exception:
         logger.exception("kafka consumer loop failed")
     finally:
-        await consumer.stop()
+        await _aiokafka_safe_stop(consumer)
 
 
 async def _listen_relay_events() -> None:

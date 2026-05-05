@@ -115,30 +115,43 @@ class KafkaConsumer:
         if KAFKA_ENABLED:
             self._init_consumer()
 
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
     def _init_consumer(self) -> None:
         """Initialise le consumer Kafka."""
         try:
             from kafka import KafkaConsumer as KC
+
+            from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
 
             logger.info(
                 "[kafka_consumer] Initializing Kafka consumer: %s",
                 KAFKA_BOOTSTRAP_SERVERS,
             )
 
-            self._consumer = KC(
-                KAFKA_TOPIC_NOTIFICATIONS,
-                KAFKA_TOPIC_SMS,
-                KAFKA_TOPIC_EMAIL,
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-                group_id=KAFKA_CONSUMER_GROUP,
-                value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-                key_deserializer=lambda k: k.decode("utf-8") if k else None,
-                max_poll_records=KAFKA_MAX_POLL_RECORDS,
-                session_timeout_ms=KAFKA_SESSION_TIMEOUT_MS,
-                heartbeat_interval_ms=KAFKA_HEARTBEAT_INTERVAL_MS,
-                enable_auto_commit=False,
-                auto_offset_reset="earliest",
-                **_kafka_security_config(),
+            def _connect():
+                return KC(
+                    KAFKA_TOPIC_NOTIFICATIONS,
+                    KAFKA_TOPIC_SMS,
+                    KAFKA_TOPIC_EMAIL,
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    group_id=KAFKA_CONSUMER_GROUP,
+                    value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+                    key_deserializer=lambda k: k.decode("utf-8") if k else None,
+                    max_poll_records=KAFKA_MAX_POLL_RECORDS,
+                    session_timeout_ms=KAFKA_SESSION_TIMEOUT_MS,
+                    heartbeat_interval_ms=KAFKA_HEARTBEAT_INTERVAL_MS,
+                    enable_auto_commit=False,
+                    auto_offset_reset="earliest",
+                    **_kafka_security_config(),
+                )
+
+            self._consumer = run_with_kafka_bootstrap_retry(
+                operation_label="[kafka_consumer]",
+                logger=logger,
+                fn=_connect,
             )
 
             self._initialized = True
@@ -479,6 +492,9 @@ def run_kafka_consumer() -> None:
         sys.exit(1)
 
     consumer = KafkaConsumer()
+    if not consumer.initialized:
+        logger.error("[kafka_consumer] exiting (consumer not initialized)")
+        sys.exit(1)
     consumer.start()
 
 

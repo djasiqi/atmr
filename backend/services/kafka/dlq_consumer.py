@@ -74,20 +74,33 @@ class KafkaDlqConsumer:
         if KAFKA_ENABLED:
             self._init_consumer()
 
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
     def _init_consumer(self) -> None:
         try:
             from kafka import KafkaConsumer as KC
 
-            self._consumer = KC(
-                KAFKA_TOPIC_NOTIFICATIONS_DLQ,
-                KAFKA_TOPIC_DRIVER_LOCATION_DLQ,
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-                group_id=KAFKA_DLQ_CONSUMER_GROUP,
-                enable_auto_commit=False,
-                auto_offset_reset="earliest",
-                value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-                key_deserializer=lambda k: k.decode("utf-8") if k else None,
-                **_kafka_security_config(),
+            from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
+
+            def _connect():
+                return KC(
+                    KAFKA_TOPIC_NOTIFICATIONS_DLQ,
+                    KAFKA_TOPIC_DRIVER_LOCATION_DLQ,
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    group_id=KAFKA_DLQ_CONSUMER_GROUP,
+                    enable_auto_commit=False,
+                    auto_offset_reset="earliest",
+                    value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+                    key_deserializer=lambda k: k.decode("utf-8") if k else None,
+                    **_kafka_security_config(),
+                )
+
+            self._consumer = run_with_kafka_bootstrap_retry(
+                operation_label="[kafka_dlq]",
+                logger=logger,
+                fn=_connect,
             )
             self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             self._initialized = True
@@ -171,6 +184,9 @@ def run_kafka_dlq_consumer() -> None:
         logger.error("[kafka_dlq] disabled (KAFKA_ENABLED=false)")
         sys.exit(1)
     consumer = KafkaDlqConsumer()
+    if not consumer.initialized:
+        logger.error("[kafka_dlq] exiting (kafka consumer not initialized)")
+        sys.exit(1)
     consumer.start()
 
 

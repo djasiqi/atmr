@@ -256,17 +256,27 @@ class ProcessedLocationFanoutConsumer:
         try:
             from kafka import KafkaConsumer as KC
 
-            self._consumer = KC(
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-                group_id=KAFKA_PROCESSED_FANOUT_GROUP,
-                enable_auto_commit=True,
-                auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
-                value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-                key_deserializer=lambda k: k.decode("utf-8") if k else None,
-                consumer_timeout_ms=1000,
-                **_kafka_security_config(),
+            from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
+
+            def _connect():
+                consumer = KC(
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    group_id=KAFKA_PROCESSED_FANOUT_GROUP,
+                    enable_auto_commit=True,
+                    auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
+                    value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+                    key_deserializer=lambda k: k.decode("utf-8") if k else None,
+                    consumer_timeout_ms=1000,
+                    **_kafka_security_config(),
+                )
+                consumer.subscribe([TOPIC_DRIVER_LOCATION_PROCESSED])
+                return consumer
+
+            self._consumer = run_with_kafka_bootstrap_retry(
+                operation_label="[processed_fanout]",
+                logger=logger,
+                fn=_connect,
             )
-            self._consumer.subscribe([TOPIC_DRIVER_LOCATION_PROCESSED])
             self._initialized = True
             logger.info(
                 "[processed_fanout] subscribed topic=%s group=%s",

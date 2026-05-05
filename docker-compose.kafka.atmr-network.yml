@@ -1,0 +1,44 @@
+# Rattache les brokers Kafka au réseau externe de production (atmr-network) tout en
+# les gardant sur default (atmr-stack) pour ZooKeeper et le maillage interne du compose Kafka.
+#
+# Merger avec la prod + stack Kafka, ex. :
+#   docker compose -f docker-compose.production.yml -f docker-compose.kafka.yml \
+#     -f docker-compose.kafka.atmr-network.yml --profile kafka up -d
+#
+# Prérequis : réseau `atmr-network` (docker network create atmr-network).
+
+networks:
+  atmr-network:
+    external: true
+    name: atmr-network
+
+services:
+  kafka-broker-1:
+    networks:
+      - default
+      - atmr-network
+
+  kafka-broker-2:
+    networks:
+      - default
+      - atmr-network
+
+  kafka-broker-3:
+    networks:
+      - default
+      - atmr-network
+
+  tracking-kafka-consumer:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+
+  tracking-processed-fanout:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy
+
+  kafka-dlq-consumer:
+    depends_on:
+      kafka-broker-1:
+        condition: service_healthy

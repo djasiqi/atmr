@@ -134,11 +134,17 @@ class TrackingIngestConsumer:
         if KAFKA_ENABLED and TRACKING_INGEST_ASYNC_ENABLED:
             self._init_clients()
 
+    @property
+    def initialized(self) -> bool:
+        return self._initialized
+
     def _init_clients(self) -> None:
         try:
             from kafka import ConsumerRebalanceListener
             from kafka import KafkaConsumer as KC
             from kafka import KafkaProducer as KP
+
+            from services.kafka.bootstrap_retry import run_with_kafka_bootstrap_retry
 
             class _RebalanceListener(ConsumerRebalanceListener):
                 def on_partitions_revoked(self, revoked):
@@ -161,28 +167,36 @@ class TrackingIngestConsumer:
                         )
                     logger.info("[tracking_consumer] partitions assigned=%s", assigned)
 
-            self._consumer = KC(
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-                group_id=KAFKA_CONSUMER_GROUP,
-                enable_auto_commit=False,
-                auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
-                value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-                key_deserializer=lambda k: k.decode("utf-8") if k else None,
-                **_kafka_security_config(),
-            )
-            self._consumer.subscribe(
-                [TOPIC_DRIVER_LOCATION_RAW], listener=_RebalanceListener()
-            )
-            self._producer = KP(
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
-                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
-                key_serializer=lambda k: k.encode("utf-8") if k else None,
-                acks=KAFKA_ACKS,
-                compression_type=KAFKA_COMPRESSION_TYPE,
-                enable_idempotence=True,
-                retries=3,
-                max_block_ms=KAFKA_MAX_BLOCK_MS,
-                **_kafka_security_config(),
+            listener = _RebalanceListener()
+
+            def _connect():
+                consumer = KC(
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    group_id=KAFKA_CONSUMER_GROUP,
+                    enable_auto_commit=False,
+                    auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
+                    value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+                    key_deserializer=lambda k: k.decode("utf-8") if k else None,
+                    **_kafka_security_config(),
+                )
+                consumer.subscribe([TOPIC_DRIVER_LOCATION_RAW], listener=listener)
+                producer = KP(
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
+                    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                    key_serializer=lambda k: k.encode("utf-8") if k else None,
+                    acks=KAFKA_ACKS,
+                    compression_type=KAFKA_COMPRESSION_TYPE,
+                    enable_idempotence=True,
+                    retries=3,
+                    max_block_ms=KAFKA_MAX_BLOCK_MS,
+                    **_kafka_security_config(),
+                )
+                return consumer, producer
+
+            self._consumer, self._producer = run_with_kafka_bootstrap_retry(
+                operation_label="[tracking_consumer]",
+                logger=logger,
+                fn=_connect,
             )
             self._initialized = True
             logger.info("[tracking_consumer] initialized")
@@ -419,6 +433,9 @@ def run_tracking_ingest_consumer() -> None:
         )
         sys.exit(1)
     consumer = TrackingIngestConsumer()
+    if not consumer.initialized:
+        logger.error("[tracking_consumer] exiting (kafka clients not initialized)")
+        sys.exit(1)
     consumer.start()
 
 
