@@ -21,6 +21,7 @@ import { RecurrenceSelector } from "./RecurrenceSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientCreateModal } from "./ClientCreateModal";
 import {
+  backendWeekdayFromScheduledIso,
   buildRideCreatePayload,
   parseMedicalHintsFromAddress,
   parseSimulationAmount,
@@ -33,7 +34,18 @@ type RideCreateModalProps = {
 };
 
 const NOTES_MAX = 500;
+/** Jours backend 0 = lun … 6 = dim. */
+const WEEKDAY_SHORT = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"] as const;
 const ROW_RADIUS = 12;
+const COMPACT_CONTROL_RADIUS = 11;
+const COMPACT_CHIP_HEIGHT = 42;
+const COMPACT_CHIP_SMALL_HEIGHT = 40;
+const COMPACT_ACTION_HEIGHT = 46;
+const COMPACT_MULTILINE_MEDIUM_HEIGHT = 72;
+const COMPACT_MULTILINE_LARGE_HEIGHT = 88;
+const COMPACT_MULTILINE_MEDIUM_INPUT_HEIGHT = 56;
+const COMPACT_MULTILINE_LARGE_INPUT_HEIGHT = 72;
+const FIELD_ICON_SIZE = 18;
 const BACK_BOX = {
   width: 40,
   height: 40,
@@ -44,13 +56,13 @@ const BACK_BOX = {
 };
 
 const s = StyleSheet.create({
-  form: { gap: 16 },
+  form: { gap: 12 },
   sectionBlock: { gap: 6 },
   sectionLabel: {
     fontSize: 13,
     fontWeight: "600" as const,
     color: E.TEXT,
-    marginBottom: 0,
+    marginBottom: 2,
   },
   sectionHelper: {
     fontSize: 12,
@@ -60,7 +72,7 @@ const s = StyleSheet.create({
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: "rgba(148, 163, 184, 0.24)",
-    marginVertical: 2,
+    marginVertical: 0,
   },
   headerRow: {
     flexDirection: "row" as const,
@@ -78,27 +90,21 @@ const s = StyleSheet.create({
     color: E.TEXT,
     letterSpacing: 0.15,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: E.TEXT_SEC,
-    lineHeight: 18,
-    fontWeight: "500" as const,
-  },
   toggleRow: {
     flexDirection: "row" as const,
     flexWrap: "wrap" as const,
-    gap: 8,
+    gap: 5,
     alignItems: "center" as const,
   },
   chip: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: COMPACT_CONTROL_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 46,
+    minHeight: COMPACT_CHIP_HEIGHT,
   },
   chipOn: {
     backgroundColor: "rgba(0, 121, 107, 0.14)",
@@ -108,16 +114,16 @@ const s = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderColor: "rgba(0, 121, 107, 0.28)",
   },
-  chipLabelOn: { color: E.BRAND, fontWeight: "700" as const, fontSize: 14 },
-  chipLabelOff: { color: E.TEXT_SEC, fontWeight: "600" as const, fontSize: 14 },
+  chipLabelOn: { color: E.BRAND, fontWeight: "700" as const, fontSize: 13, lineHeight: 16 },
+  chipLabelOff: { color: E.TEXT_SEC, fontWeight: "600" as const, fontSize: 13, lineHeight: 16 },
   card: {
     borderRadius: ROW_RADIUS,
     borderWidth: 1,
     borderColor: "rgba(145, 165, 157, 0.35)",
     backgroundColor: "#FAFBFA",
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
+    paddingVertical: 8,
+    gap: 6,
   },
   cardRow: {
     flexDirection: "row" as const,
@@ -131,10 +137,155 @@ const s = StyleSheet.create({
     color: E.TEXT,
     fontWeight: "600" as const,
   },
+  recurrenceHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    marginBottom: 0,
+  },
+  recurrenceSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+    letterSpacing: 0.15,
+  },
+  recurrenceMetaSheet: {
+    borderRadius: ROW_RADIUS,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.35)",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden" as const,
+  },
+  recurrenceMetaRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    gap: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  recurrenceMetaLeft: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 6,
+    flexShrink: 1,
+  },
+  recurrenceMetaIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  recurrenceMetaLabel: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: E.TEXT,
+    lineHeight: 16,
+  },
+  recurrenceMetaValue: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: E.BRAND,
+    lineHeight: 16,
+  },
+  recurrenceMetaValueMuted: {
+    fontSize: 13,
+    fontWeight: "600" as const,
+    color: E.TEXT_MUTED,
+    fontStyle: "italic" as const,
+    lineHeight: 16,
+  },
+  recurrenceMetaDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(148, 163, 184, 0.35)",
+    marginLeft: 52,
+  },
+  recurrenceHint: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: ROW_RADIUS,
+    backgroundColor: "rgba(0, 121, 107, 0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.18)",
+  },
+  recurrenceHintText: {
+    flex: 1,
+    fontSize: 12,
+    color: E.TEXT_SEC,
+    lineHeight: 17,
+    fontWeight: "500" as const,
+  },
+  recurrenceSubLabel: {
+    fontSize: 13,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+    marginTop: 2,
+    marginBottom: 0,
+  },
+  recurrenceLimitRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+    alignItems: "center" as const,
+  },
+  recurrenceLimitChip: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: COMPACT_CONTROL_RADIUS,
+    borderWidth: 1,
+    minHeight: COMPACT_CHIP_SMALL_HEIGHT,
+  },
+  recurrenceLimitChipOn: {
+    backgroundColor: "rgba(0, 121, 107, 0.14)",
+    borderColor: E.BRAND,
+  },
+  recurrenceLimitChipOff: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(148, 163, 184, 0.45)",
+  },
+  recurrenceLimitChipLabelOn: { color: E.BRAND, fontWeight: "700" as const, fontSize: 12, lineHeight: 15 },
+  recurrenceLimitChipLabelOff: { color: E.TEXT_SEC, fontWeight: "600" as const, fontSize: 12, lineHeight: 15 },
+  recurrenceWeekdayRow: {
+    flexDirection: "row" as const,
+    flexWrap: "nowrap" as const,
+    gap: 6,
+    justifyContent: "space-between" as const,
+  },
+  recurrenceWeekdayChip: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: COMPACT_CHIP_SMALL_HEIGHT,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: COMPACT_CONTROL_RADIUS,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  recurrenceWeekdayChipOn: {
+    backgroundColor: E.BRAND,
+    borderColor: E.BRAND,
+  },
+  recurrenceWeekdayChipOff: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(0, 121, 107, 0.35)",
+  },
+  recurrenceWeekdayChipTextOn: { color: "#FFFFFF", fontWeight: "700" as const, fontSize: 12, lineHeight: 15 },
+  recurrenceWeekdayChipTextOff: { color: E.BRAND, fontWeight: "600" as const, fontSize: 12, lineHeight: 15 },
   swapBtn: {
     alignSelf: "flex-end" as const,
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(0, 121, 107, 0.22)",
@@ -142,20 +293,20 @@ const s = StyleSheet.create({
     alignItems: "center" as const,
     justifyContent: "center" as const,
   },
-  addressBlock: { gap: 8 },
+  addressBlock: { gap: 6 },
   pickupDropoffRow: {
     flexDirection: "row" as const,
     alignItems: "flex-start" as const,
     flexWrap: "wrap" as const,
-    columnGap: 10,
-    rowGap: 8,
+    columnGap: 8,
+    rowGap: 6,
   },
   addressFieldsColumn: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 280,
     minWidth: 220,
-    gap: 8,
+    gap: 6,
   },
   swapColumn: {
     minWidth: 44,
@@ -163,22 +314,22 @@ const s = StyleSheet.create({
     alignItems: "flex-end" as const,
     justifyContent: "center" as const,
   },
-  compactSectionBlock: { gap: 4 },
-  compactAddressContainer: { gap: 4 },
+  compactSectionBlock: { gap: 3 },
+  compactAddressContainer: { gap: 3 },
   compactAddressShell: {
-    minHeight: 44,
+    minHeight: 42,
     paddingHorizontal: 10,
   },
   compactAddressInput: {
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
-  medicalFields: { gap: 12, paddingTop: 4 },
+  medicalFields: { gap: 8, paddingTop: 2 },
   wheelchairRow: {
     flexDirection: "row" as const,
-    gap: 8,
+    gap: 6,
     flexWrap: "wrap" as const,
   },
-  returnBlock: { gap: 8 },
+  returnBlock: { gap: 6 },
   returnLabel: {
     fontSize: 13,
     fontWeight: "600" as const,
@@ -189,7 +340,7 @@ const s = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "space-between" as const,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: ROW_RADIUS,
     borderWidth: 1,
@@ -201,12 +352,10 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(145, 165, 157, 0.35)",
     backgroundColor: "#FAFBFA",
-    padding: 10,
-    gap: 10,
-  },
-  footerRow: {
+    padding: 8,
     gap: 8,
   },
+  footerRow: { gap: 6 },
   footerSummary: {
     fontSize: 13,
     color: E.TEXT,
@@ -219,10 +368,10 @@ const s = StyleSheet.create({
   },
   footerButtons: {
     flexDirection: "row" as const,
-    gap: 12,
+    gap: 8,
     alignItems: "stretch" as const,
   },
-  footerBtn: { flex: 1, minHeight: 48, borderRadius: 12 },
+  footerBtn: { flex: 1, minHeight: COMPACT_ACTION_HEIGHT, borderRadius: COMPACT_CONTROL_RADIUS },
   linkNewClient: {
     marginTop: 4,
     alignSelf: "flex-start" as const,
@@ -238,8 +387,8 @@ const s = StyleSheet.create({
 });
 
 const OUTLINE_SECONDARY = {
-  minHeight: 48,
-  borderRadius: 12,
+  minHeight: COMPACT_ACTION_HEIGHT,
+  borderRadius: COMPACT_CONTROL_RADIUS,
   borderColor: "rgba(0, 121, 107, 0.32)",
 } as const;
 
@@ -262,6 +411,31 @@ function formatSwissDateTime(iso: string): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatSwissTimeOnly(iso: string): string {
+  const n = normalizeScheduledTimeIso(iso);
+  if (!n) return "";
+  const d = new Date(n);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("fr-CH", {
+    timeZone: "Europe/Zurich",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatIsoDateDisplayFr(yyyyMmDd: string): string {
+  const t = yyyyMmDd.trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!m) return t;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(d.getTime())) return t;
+  return d.toLocaleDateString("fr-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 }
 
@@ -308,19 +482,67 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     setWheelchairClient,
     setWheelchairProvide,
     setAmountInput,
+    recurrenceDays,
+    setRecurrenceDays,
+    recurrenceOccurrences,
+    setRecurrenceOccurrences,
+    recurrenceEndDate,
+    setRecurrenceEndDate,
   } = form;
-
-  const recurringOn = form.recurrence !== "none";
-  const recurrenceSummary = recurringOn
-    ? form.recurrence === "daily"
-      ? "Trajet répété chaque jour à l’horaire de départ."
-      : "Trajet répété chaque semaine à l’horaire de départ."
-    : "";
 
   const scheduledOk = useMemo(() => {
     const n = normalizeScheduledTimeIso(form.scheduledAt);
     return Boolean(n && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(n));
   }, [form.scheduledAt]);
+
+  const recurringOn = form.recurrence !== "none";
+
+  useEffect(() => {
+    if (form.recurrence !== "custom") return;
+    setRecurrenceDays((prev) => {
+      if (prev.length > 0) return prev;
+      const wd = backendWeekdayFromScheduledIso(form.scheduledAt);
+      return wd != null ? [wd] : prev;
+    });
+  }, [form.recurrence, form.scheduledAt, setRecurrenceDays]);
+
+  useEffect(() => {
+    setRecurrenceOccurrences((prev) => Math.min(52, Math.max(1, Math.floor(Number(prev)) || 1)));
+  }, [setRecurrenceOccurrences]);
+
+  const recurrenceEndValid = /^\d{4}-\d{2}-\d{2}$/.test(recurrenceEndDate.trim());
+  const recurrenceApiLimitMode = recurrenceEndDate.trim().length > 0 ? "until" : "count";
+  const recurrenceSelectedDaysCount = recurrenceDays.length;
+
+  const recurrenceSummary = useMemo(() => {
+    if (!recurringOn) return "";
+    const timePart = scheduledOk ? formatSwissTimeOnly(form.scheduledAt) : "";
+    const head = timePart ? `Horaire: ${timePart}. ` : "";
+    if (form.recurrence === "daily") {
+      return `${head}Trajet répété tous les jours.`;
+    }
+    if (form.recurrence === "weekly") {
+      return `${head}Trajet répété chaque semaine.`;
+    }
+    const days = form.recurrenceDays.map((d) => WEEKDAY_SHORT[d] ?? "?").join(", ");
+    return `${head}${days ? `Jours actifs: ${days}.` : "Sélectionnez au moins un jour."}`;
+  }, [recurringOn, form.recurrence, form.recurrenceDays, form.scheduledAt, scheduledOk]);
+
+  const recurrenceValid = useMemo(() => {
+    if (!recurringOn) return true;
+    if (form.recurrence === "custom" && recurrenceSelectedDaysCount === 0) return false;
+    if (recurrenceEndDate.trim().length > 0) return recurrenceEndValid;
+    const n = Math.floor(Number(recurrenceOccurrences));
+    if (!Number.isFinite(n) || n < 1 || n > 52) return false;
+    return true;
+  }, [recurringOn, form.recurrence, recurrenceSelectedDaysCount, recurrenceOccurrences, recurrenceEndDate, recurrenceEndValid]);
+
+  const toggleRecurrenceWeekday = (day: number) => {
+    const set = new Set(recurrenceDays);
+    if (set.has(day)) set.delete(day);
+    else set.add(day);
+    setRecurrenceDays(Array.from(set).sort((a, b) => a - b));
+  };
 
   const amountValue = parseOptionalAmount(form.amountInput);
   const amountValid = amountValue != null && amountValue > 0;
@@ -332,7 +554,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     scheduledOk &&
     (form.isMaterialDelivery || amountValid) &&
     form.internalNotes.length <= NOTES_MAX &&
-    (!form.isMaterialDelivery || form.deliveryDescription.trim().length > 0);
+    (!form.isMaterialDelivery || form.deliveryDescription.trim().length > 0) &&
+    recurrenceValid;
 
   const handleClientSelected = (client: RideClientOption) => {
     form.setClientId(client.id);
@@ -517,7 +740,13 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
   const submit = async () => {
     if (!canSubmit) {
-      setError("Renseignez le client, les lieux, la date/heure et respectez la limite des notes.");
+      if (!recurrenceValid && recurringOn) {
+        setError(
+          "Vérifiez la récurrence : au moins un jour en mode « Perso », nombre de répétitions entre 1 et 52, et date de fin au format AAAA-MM-JJ si renseignée.",
+        );
+      } else {
+        setError("Renseignez le client, les lieux, la date/heure et respectez la limite des notes.");
+      }
       return;
     }
     try {
@@ -553,6 +782,10 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         billToPatient,
         hasActiveStay: Boolean(clientDetailQuery.data?.hasActiveStay),
         clinicBillingPartyId: clientDetailQuery.data?.clinicBillingPartyId ?? null,
+        recurrenceLimitMode: recurrenceApiLimitMode,
+        recurrenceOccurrences,
+        recurrenceEndDate,
+        recurrenceDays,
       });
 
       await createRide.mutateAsync(payload);
@@ -617,9 +850,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       </Pressable>
       <View style={s.headerCenter}>
         <AppText style={s.headerTitle}>Créer une réservation</AppText>
-        <AppText style={s.headerSubtitle}>
-          Renseignez le trajet, puis ajoutez les détails.
-        </AppText>
       </View>
     </View>
   );
@@ -676,7 +906,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               onChange={form.setClientId}
               onSelectClient={handleClientSelected}
               onCreateClient={() => setCreateClientVisible(true)}
-              leftSlot={<Ionicons name="search-outline" size={20} color={E.TEXT_SEC} />}
+              leftSlot={<Ionicons name="search-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
             />
             {clientDetailQuery.data?.hasActiveStay ? (
               <View style={s.card}>
@@ -710,7 +940,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   onChange={form.setPickup}
                   onSelectAddress={form.selectPickupAddress}
                   placeholder="Rechercher une adresse ou un lieu…"
-                  leftSlot={<Ionicons name="navigate-outline" size={20} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="navigate-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
                   inputStyle={s.compactAddressInput}
@@ -743,7 +973,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                     }
                   }}
                   placeholder="Rechercher une adresse ou un lieu…"
-                  leftSlot={<Ionicons name="location-outline" size={20} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="location-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
                   shellStyle={s.compactAddressShell}
                   inputStyle={s.compactAddressInput}
@@ -813,40 +1043,97 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
 
           {form.isRoundTrip ? (
             <View style={s.card}>
-              <View style={s.cardRow}>
-                <AppText style={s.cardLabel}>Date retour</AppText>
-                <AppText style={s.cardValue}>
-                  {form.returnScheduledAt
-                    ? formatSwissDateTime(form.returnScheduledAt)
-                    : "Même jour (à confirmer)"}
-                </AppText>
-              </View>
-              <AppInput
+              <TimeDatePicker
                 value={form.returnScheduledAt}
-                onChangeText={form.setReturnScheduledAt}
-                placeholder="AAAA-MM-JJThh:mm:ss (optionnel)"
-                leftSlot={<Ionicons name="arrow-undo-outline" size={18} color={E.TEXT_SEC} />}
-                shellStyle={{
-                  borderRadius: ROW_RADIUS,
-                  minHeight: Math.max(t.fieldShellMinHeight, 48),
-                  backgroundColor: "#FFFFFF",
-                }}
+                onChange={form.setReturnScheduledAt}
+                label="Date retour (optionnel)"
+                emptyLabel="À définir"
+                emptyPreviewReferenceIso={form.scheduledAt}
+                modalTitle="Date retour"
+                accessibilityLabel="Choisir la date et l’heure de retour"
               />
             </View>
           ) : null}
 
           {recurringOn ? (
             <View style={s.card}>
-              <RecurrenceSelector showLabel={false} value={form.recurrence} onChange={form.setRecurrence} />
-              <View style={s.cardRow}>
-                <AppText style={s.cardLabel}>Répétitions</AppText>
-                <AppText style={s.cardValue}>Sans limite</AppText>
+              <View style={s.recurrenceHeader}>
+                <Ionicons name="repeat-outline" size={20} color={E.BRAND} />
+                <AppText style={s.recurrenceSectionTitle}>Récurrence</AppText>
               </View>
-              <View style={s.cardRow}>
-                <AppText style={s.cardLabel}>Jusqu’au</AppText>
-                <AppText style={s.cardValue}>Non défini</AppText>
+              <RecurrenceSelector
+                showLabel={false}
+                value={
+                  form.recurrence === "daily" ||
+                  form.recurrence === "weekly" ||
+                  form.recurrence === "custom"
+                    ? form.recurrence
+                    : "daily"
+                }
+                onChange={(v) => {
+                  form.setRecurrence(v);
+                  if (v !== "custom") setRecurrenceDays([]);
+                }}
+              />
+              {form.recurrence === "custom" ? (
+                <View style={{ gap: 8 }}>
+                  <AppText style={s.recurrenceSubLabel}>
+                    Sélectionner les jours ({recurrenceSelectedDaysCount} sélectionné{recurrenceSelectedDaysCount > 1 ? "s" : ""})
+                  </AppText>
+                  <View style={s.recurrenceWeekdayRow}>
+                    {WEEKDAY_SHORT.map((label, day) => {
+                      const on = recurrenceDays.includes(day);
+                      return (
+                        <Pressable
+                          key={label}
+                          onPress={() => toggleRecurrenceWeekday(day)}
+                          style={[
+                            s.recurrenceWeekdayChip,
+                            on ? s.recurrenceWeekdayChipOn : s.recurrenceWeekdayChipOff,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={`${label}${on ? ", sélectionné" : ""}`}
+                        >
+                          <AppText style={on ? s.recurrenceWeekdayChipTextOn : s.recurrenceWeekdayChipTextOff}>
+                            {label}
+                          </AppText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {recurrenceSelectedDaysCount === 0 ? (
+                    <AppText style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600" }}>
+                      ⚠️ Veuillez sélectionner au moins un jour
+                    </AppText>
+                  ) : null}
+                </View>
+              ) : null}
+              <TimeDatePicker
+                value={recurrenceEndDate ? `${recurrenceEndDate}T12:00:00` : ""}
+                onChange={(v) => {
+                  const n = normalizeScheduledTimeIso(v);
+                  const [d] = n.split("T");
+                  if (d) setRecurrenceEndDate(d);
+                }}
+                dateOnly
+                label="Jusqu’au (optionnel)"
+                emptyLabel="AAAA-MM-JJ"
+                modalTitle="Date de fin"
+                accessibilityLabel="Choisir la date de fin de récurrence"
+              />
+              <AppText style={s.sectionHelper}>
+                ℹ️ Sans date de fin, la série utilise une fenêtre par défaut côté serveur.
+              </AppText>
+              {recurrenceEndDate.trim().length > 0 && !recurrenceEndValid ? (
+                <AppText style={{ color: "#B91C1C", fontSize: 12, fontWeight: "600" }}>
+                  ⚠️ Format attendu: AAAA-MM-JJ
+                </AppText>
+              ) : null}
+              <View style={s.recurrenceHint}>
+                <Ionicons name="information-circle-outline" size={20} color={E.BRAND} />
+                <AppText style={s.recurrenceHintText}>{recurrenceSummary}</AppText>
               </View>
-              <AppText style={s.sectionHelper}>{recurrenceSummary}</AppText>
             </View>
           ) : null}
 
@@ -857,7 +1144,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               value={form.deliveryDescription}
               onChangeText={form.setDeliveryDescription}
               placeholder="Ex : dossiers médicaux, matériel orthopédique…"
-              leftSlot={<Ionicons name="cube-outline" size={20} color={E.TEXT_SEC} />}
+              leftSlot={<Ionicons name="cube-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
               shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FAFBFA" }}
             />
           ) : (
@@ -872,7 +1159,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 }}
                 placeholder="Ex : 45.00"
                 keyboardType="decimal-pad"
-                leftSlot={<Ionicons name="cash-outline" size={20} color={E.TEXT_SEC} />}
+                leftSlot={<Ionicons name="cash-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                 shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FAFBFA" }}
               />
               {amountSource ? (
@@ -924,21 +1211,21 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   value={form.establishment}
                   onChangeText={form.setEstablishment}
                   placeholder="Établissement (optionnel)"
-                  leftSlot={<Ionicons name="business-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="business-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
                 />
                 <AppInput
                   value={form.hospitalService}
                   onChangeText={form.setHospitalService}
                   placeholder="Service hospitalier (optionnel)"
-                  leftSlot={<Ionicons name="medkit-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="medkit-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
                 />
                 <AppInput
                   value={form.doctorName}
                   onChangeText={form.setDoctorName}
                   placeholder="Médecin référent (optionnel)"
-                  leftSlot={<Ionicons name="person-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="person-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
                 />
                 <AppInput
@@ -949,18 +1236,18 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   textAlignVertical="top"
                   shellStyle={{
                     borderRadius: ROW_RADIUS,
-                    minHeight: 80,
+                    minHeight: COMPACT_MULTILINE_MEDIUM_HEIGHT,
                     alignItems: "flex-start",
                     backgroundColor: "#FFFFFF",
                   }}
-                  style={{ minHeight: 64 }}
+                  style={{ minHeight: COMPACT_MULTILINE_MEDIUM_INPUT_HEIGHT }}
                 />
                 <AppInput
                   label="Accès pickup"
                   value={form.pickupAccessNotes}
                   onChangeText={form.setPickupAccessNotes}
                   placeholder="Ex: entrée arrière, sonner à…, appeler avant…"
-                  leftSlot={<Ionicons name="navigate-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="navigate-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
                 />
                 <AppInput
@@ -968,7 +1255,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   value={form.dropoffAccessNotes}
                   onChangeText={form.setDropoffAccessNotes}
                   placeholder="Ex: entrée B, étage 2, service…, appeler secrétariat…"
-                  leftSlot={<Ionicons name="location-outline" size={18} color={E.TEXT_SEC} />}
+                  leftSlot={<Ionicons name="location-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FFFFFF" }}
                 />
                 <AppText style={s.sectionLabel}>Chaise roulante</AppText>
@@ -1011,15 +1298,15 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
               placeholder="Ajouter des notes…"
               multiline
               maxLength={NOTES_MAX}
-              leftSlot={<Ionicons name="create-outline" size={20} color={E.TEXT_SEC} />}
+              leftSlot={<Ionicons name="create-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
               textAlignVertical="top"
               shellStyle={{
                 borderRadius: ROW_RADIUS,
-                minHeight: 96,
+                minHeight: COMPACT_MULTILINE_LARGE_HEIGHT,
                 alignItems: "flex-start",
                 backgroundColor: "#FAFBFA",
               }}
-              style={{ minHeight: 80 }}
+              style={{ minHeight: COMPACT_MULTILINE_LARGE_INPUT_HEIGHT }}
             />
           </View>
 

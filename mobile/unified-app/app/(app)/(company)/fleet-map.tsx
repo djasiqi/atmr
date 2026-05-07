@@ -35,7 +35,7 @@ export default function CompanyFleetMapScreen() {
           </View>
           {/* ScrollView interne : évite d’imbriquer deux <Screen> (double safe area). Le Screen externe fournit déjà les insets. */}
           <ScrollView contentContainerStyle={styles.page} style={styles.scroll}>
-            <EnterpriseDriversMap drivers={live.drivers} showTitleRow />
+            <EnterpriseDriversMap drivers={live.drivers} />
           </ScrollView>
         </View>
       </Screen>

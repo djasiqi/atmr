@@ -1,3 +1,14 @@
+import { normalizeScheduledTimeIso } from "../../useRideForms";
+
+/** Jour ISO 8601 côté backend : 0 = lundi … 6 = dimanche. */
+export function backendWeekdayFromScheduledIso(raw: string): number | null {
+  const n = normalizeScheduledTimeIso(raw);
+  if (!n) return null;
+  const d = new Date(n);
+  if (Number.isNaN(d.getTime())) return null;
+  return (d.getDay() + 6) % 7;
+}
+
 export function parseSimulationAmount(payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null;
   const raw = payload as Record<string, unknown>;
@@ -53,6 +64,8 @@ type AddressLike = {
   longitude: number | null;
 };
 
+export type RecurrenceLimitMode = "count" | "until" | "open";
+
 type BuildRidePayloadInput = {
   structuredPayloadEnabled: boolean;
   clientId: number | null;
@@ -62,7 +75,14 @@ type BuildRidePayloadInput = {
   dropoffAddress: AddressLike | null;
   scheduledTime: string;
   isRoundTrip: boolean;
-  recurrence: "none" | "daily" | "weekly";
+  recurrence: "none" | "daily" | "weekly" | "custom";
+  recurrenceLimitMode?: RecurrenceLimitMode;
+  /** Nombre total de trajets (mode « nombre »). */
+  recurrenceOccurrences?: number;
+  /** Date de fin YYYY-MM-DD (mode « jusqu’au »). */
+  recurrenceEndDate?: string;
+  /** Jours 0–6 (lun–dim), utilisé si recurrence === custom. */
+  recurrenceDays?: number[];
   notesMedical: string;
   establishment: string;
   hospitalService: string;
@@ -90,6 +110,43 @@ function parseOptionalAmount(raw: string): number | null {
   if (!t) return null;
   const n = Number.parseFloat(t);
   return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+const RECURRENCE_MAX_LOOP = 999;
+const RECURRENCE_OPEN_DAILY = 365;
+const RECURRENCE_OPEN_WEEKLY = 104;
+
+/** Champs API alignés sur `ManualBookingCreateSchema` / `create_manual_booking`. */
+export function buildRecurrenceApiFields(
+  recurrence: "daily" | "weekly" | "custom",
+  limitMode: RecurrenceLimitMode,
+  occurrencesInput: number,
+  endDate: string,
+  recurrenceDays: number[],
+): { occurrences: number; recurrence_end_date?: string; recurrence_days?: number[] } {
+  let occ = Math.max(1, Math.min(RECURRENCE_MAX_LOOP, Math.floor(Number(occurrencesInput)) || 1));
+  let recurrence_end_date: string | undefined;
+
+  if (limitMode === "until") {
+    const d = endDate.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      recurrence_end_date = d;
+      occ = RECURRENCE_MAX_LOOP;
+    }
+  } else if (limitMode === "open") {
+    if (recurrence === "weekly") occ = RECURRENCE_OPEN_WEEKLY;
+    else if (recurrence === "daily") occ = RECURRENCE_OPEN_DAILY;
+    else occ = RECURRENCE_MAX_LOOP;
+  }
+
+  const recurrence_days =
+    recurrence === "custom" && recurrenceDays.length > 0
+      ? Array.from(new Set(recurrenceDays.map((x) => Math.max(0, Math.min(6, Math.floor(x)))))).sort(
+          (a, b) => a - b,
+        )
+      : undefined;
+
+  return { occurrences: occ, recurrence_end_date, recurrence_days };
 }
 
 export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<string, unknown> {
@@ -154,6 +211,16 @@ export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<str
   if (input.recurrence !== "none") {
     payload.is_recurring = true;
     payload.recurrence_type = input.recurrence;
+    const rb = buildRecurrenceApiFields(
+      input.recurrence,
+      input.recurrenceLimitMode ?? "count",
+      input.recurrenceOccurrences ?? 10,
+      input.recurrenceEndDate ?? "",
+      input.recurrenceDays ?? [],
+    );
+    payload.occurrences = rb.occurrences;
+    if (rb.recurrence_end_date) payload.recurrence_end_date = rb.recurrence_end_date;
+    if (rb.recurrence_days?.length) payload.recurrence_days = rb.recurrence_days;
   }
 
   if (input.billToPatient) {

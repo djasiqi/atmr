@@ -63,13 +63,35 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
+/** URL de base résolue (correction LAN IP Metro incluse en dev). Utilisée par les bridges Socket.IO. */
+export function getResolvedApiBaseUrl(): string {
+  return baseURL;
+}
+
 let csrfTokenCache: string | null = null;
 let csrfFetchInFlight: Promise<string | null> | null = null;
 let refreshTokenInFlight: Promise<string | null> | null = null;
+let lastRefreshFailureAtMs = 0;
+let lastRefreshFailureSignature: string | null = null;
 let resumeAttemptId: string | null = null;
 /** Toutes les requêtes (driver, company, …) reçoivent le contexte actif pour l’autorisation multi-rôles. */
 let activeContextIdForApi: string | null = null;
 const REFRESH_TOKEN_STORAGE_KEY = "auth_refresh_token";
+const REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS = 10000;
+
+function shouldEmitRefreshFailure(status: number | null, reason: string): boolean {
+  const signature = `${status ?? "null"}|${reason}`;
+  const now = Date.now();
+  if (
+    signature === lastRefreshFailureSignature &&
+    now - lastRefreshFailureAtMs < REFRESH_FAILURE_TELEMETRY_COOLDOWN_MS
+  ) {
+    return false;
+  }
+  lastRefreshFailureSignature = signature;
+  lastRefreshFailureAtMs = now;
+  return true;
+}
 
 export function setActiveContextIdForApi(contextId: string | null) {
   activeContextIdForApi = contextId && contextId.trim().length > 0 ? contextId.trim() : null;
@@ -234,11 +256,15 @@ async function ensureRefreshToken(): Promise<string | null> {
     refreshTokenInFlight = refreshAuthToken()
       .catch((error) => {
         const err = error as AxiosError;
-        emitDriverTelemetry("auth.refresh.failure", {
-          source: "core.api.client",
-          reason: err.message,
-          status: err.response?.status ?? null,
-        });
+        const status = err.response?.status ?? null;
+        const reason = err.message;
+        if (shouldEmitRefreshFailure(status, reason)) {
+          emitDriverTelemetry("auth.refresh.failure", {
+            source: "core.api.client",
+            reason,
+            status,
+          });
+        }
         throw error;
       })
       .finally(() => {

@@ -69,16 +69,17 @@ export default function PublicHomeScreen() {
   const viewport = useAppViewport();
   const { landing: layout } = useResponsiveTokens();
   const [reduceMotion, setReduceMotion] = useState(false);
+  const screenOpacity = useRef(new Animated.Value(0)).current;
 
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.98)).current;
-  const logoTranslateY = useRef(new Animated.Value(6)).current;
+  const logoScale = useRef(new Animated.Value(0.99)).current;
+  const logoTranslateY = useRef(new Animated.Value(0)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
-  const titleTranslateY = useRef(new Animated.Value(10)).current;
+  const titleTranslateY = useRef(new Animated.Value(0)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
-  const cardTranslateY = useRef(new Animated.Value(16)).current;
+  const cardTranslateY = useRef(new Animated.Value(0)).current;
   const ctaOpacity = useRef(new Animated.Value(0)).current;
-  const ctaScale = useRef(new Animated.Value(0.98)).current;
+  const ctaScale = useRef(new Animated.Value(0.99)).current;
   const [pickupValue, setPickupValue] = useState("");
   const [dropoffValue, setDropoffValue] = useState("");
   /**
@@ -183,6 +184,7 @@ export default function PublicHomeScreen() {
 
   useEffect(() => {
     if (reduceMotion) {
+      screenOpacity.setValue(1);
       logoOpacity.setValue(1);
       logoScale.setValue(1);
       logoTranslateY.setValue(0);
@@ -196,19 +198,26 @@ export default function PublicHomeScreen() {
     }
 
     logoOpacity.setValue(0);
-    logoScale.setValue(0.98);
-    logoTranslateY.setValue(6);
+    logoScale.setValue(0.99);
+    logoTranslateY.setValue(0);
     titleOpacity.setValue(0);
-    titleTranslateY.setValue(10);
+    titleTranslateY.setValue(0);
     cardOpacity.setValue(0);
-    cardTranslateY.setValue(16);
+    cardTranslateY.setValue(0);
     ctaOpacity.setValue(0);
-    ctaScale.setValue(0.98);
+    ctaScale.setValue(0.99);
+    screenOpacity.setValue(0);
 
     Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver,
+      }),
       Animated.timing(logoOpacity, {
         toValue: 1,
-        duration: 240,
+        duration: 220,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
@@ -226,43 +235,43 @@ export default function PublicHomeScreen() {
       }),
       Animated.timing(titleOpacity, {
         toValue: 1,
-        duration: 220,
-        delay: 200,
+        duration: 180,
+        delay: 20,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(titleTranslateY, {
         toValue: 0,
-        duration: 220,
-        delay: 200,
+        duration: 200,
+        delay: 80,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(cardOpacity, {
         toValue: 1,
-        duration: 240,
-        delay: 400,
+        duration: 200,
+        delay: 40,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(cardTranslateY, {
         toValue: 0,
-        duration: 240,
-        delay: 400,
+        duration: 220,
+        delay: 130,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(ctaOpacity, {
         toValue: 1,
-        duration: 220,
-        delay: 650,
+        duration: 180,
+        delay: 60,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
       Animated.timing(ctaScale, {
         toValue: 1,
-        duration: 220,
-        delay: 650,
+        duration: 180,
+        delay: 60,
         easing: Easing.out(Easing.cubic),
         useNativeDriver,
       }),
@@ -279,6 +288,7 @@ export default function PublicHomeScreen() {
     titleOpacity,
     titleTranslateY,
     useNativeDriver,
+    screenOpacity,
   ]);
 
   useEffect(() => {
@@ -516,7 +526,7 @@ export default function PublicHomeScreen() {
         ]}
       />
 
-      <View style={styles.staticContainer}>
+      <Animated.View style={[styles.staticContainer, { opacity: screenOpacity }]}>
         <Screen
           scroll
           safeTop={false}
@@ -1007,7 +1017,7 @@ export default function PublicHomeScreen() {
           </ResponsiveContainer>
         </View>
         </Screen>
-      </View>
+      </Animated.View>
     </View>
   );
 }

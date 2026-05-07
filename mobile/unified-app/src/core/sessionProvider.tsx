@@ -78,6 +78,20 @@ function assertContextRuntimeInvariants(context: AuthContext | null) {
 }
 
 function toUiErrorMessage(error: unknown, fallback: string): string {
+  const axiosLikeStatus =
+    error && typeof error === "object"
+      ? typeof (error as { response?: { status?: unknown } }).response?.status === "number"
+        ? ((error as { response?: { status?: number } }).response?.status ?? null)
+        : null
+      : null;
+  const statusFromShape =
+    error && typeof error === "object" && typeof (error as { status?: unknown }).status === "number"
+      ? ((error as { status?: number }).status ?? null)
+      : null;
+  const effectiveStatus = axiosLikeStatus ?? statusFromShape;
+  if (effectiveStatus === 401 || effectiveStatus === 403) {
+    return "Session expirée ou invalide. Reconnectez-vous pour continuer.";
+  }
   if (error instanceof Error) return error.message;
   if (error && typeof error === "object") {
     const candidate = error as { message?: unknown; code?: unknown; status?: unknown };

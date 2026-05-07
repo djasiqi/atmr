@@ -181,8 +181,8 @@ class KafkaDlqConsumer:
 
 def run_kafka_dlq_consumer() -> None:
     if not KAFKA_ENABLED:
-        logger.error("[kafka_dlq] disabled (KAFKA_ENABLED=false)")
-        sys.exit(1)
+        logger.info("[kafka_dlq] disabled (KAFKA_ENABLED=false), exiting cleanly")
+        sys.exit(0)
     consumer = KafkaDlqConsumer()
     if not consumer.initialized:
         logger.error("[kafka_dlq] exiting (kafka consumer not initialized)")

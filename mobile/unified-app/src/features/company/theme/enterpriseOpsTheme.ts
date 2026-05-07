@@ -3,6 +3,8 @@
  */
 export const E = {
   BRAND: "#00796B",
+  /** Teinte plus sombre pour texte sur fond clair (tabs, chips actifs). */
+  BRAND_DARK: "#005A4F",
   TEXT: "#1E293B",
   TEXT_SEC: "#64748B",
   TEXT_MUTED: "#94A3B8",

@@ -188,7 +188,7 @@ export const featureFlags = {
     source: "env",
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_REALTIME"),
     description:
-      "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL / DRIVER) ou repli: origine de EXPO_PUBLIC_API_BASE_URL. Voir expo-company-env.template.",
+      "Kill-switch for the company socket bridge. EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1 + URL (EXPO_PUBLIC_COMPANY_SOCKET_URL ou origine EXPO_PUBLIC_API_BASE_URL ; pas de repli DRIVER). Voir expo-company-env.template.",
   } satisfies FeatureFlagDefinition,
   company_dispatch_screen_enabled: {
     key: "company_dispatch_screen_enabled",

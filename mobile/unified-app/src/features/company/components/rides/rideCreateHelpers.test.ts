@@ -223,6 +223,7 @@ describe("rideCreateHelpers", () => {
   "medical_facility": "HUG",
   "notes": "Retour domicile",
   "notes_medical": null,
+  "occurrences": 10,
   "pickup_address": {
     "label": "HUG, Genève",
     "lat": 46.24,

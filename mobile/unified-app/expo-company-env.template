@@ -6,17 +6,22 @@
 #   définir). Peut être surchargé à la connexion (feature_flags / MOBILE_FEATURE_FLAGS).
 # Blocage 2 — company_realtime_enabled
 #   Active le bridge côté app ; EXPO_PUBLIC_ENABLE_COMPANY_REALTIME=1
-# Blocage 3 — URL Socket.IO
-#   EXPO_PUBLIC_COMPANY_SOCKET_URL (sinon repli sur EXPO_PUBLIC_DRIVER_SOCKET_URL).
-#   Repli : si ni COMPANY ni DRIVER n’est définie, l’appli utilise l’origine de
-#   EXPO_PUBLIC_API_BASE_URL (même hôte:port que l’API, ex. http://IP:5000).
+# Blocage 3 — URL Socket.IO (flux company uniquement ; pas de repli sur DRIVER_SOCKET_URL)
+#   EXPO_PUBLIC_COMPANY_SOCKET_URL en priorité ; sinon origine de EXPO_PUBLIC_API_BASE_URL
+#   (même hôte:port que l’API, ex. http://IP:5000). Le realtime driver utilise DRIVER_SOCKET_URL séparément.
 # Si le bandeau reste indéfiniment sur « Connexion… » (HTTP et synchro OK) :
 #   - Téléphone / tablette : EXPO_PUBLIC_API_BASE_URL doit viser l’IP LAN du PC
 #     (ex. http://192.168.0.12:5000), jamais localhost/127.0.0.1.
 #   - Émulateur Android : plutôt http://10.0.2.2:5000 que localhost.
 #   - Côté API (Docker) : lire `docker compose logs atmr_api` (token rejeté, rate limit, etc.) ;
 #     en doute, tester GUNICORN_WORKERS=1 dans backend/.env (multi-workers + Socket.IO).
+#   - Depuis le PC (même IP que dans EXPO_PUBLIC_API_BASE_URL), tester la poignée polling :
+#     curl -sS -o /dev/null -w "%{http_code}" "http://<IP-LAN>:5000/socket.io/?EIO=4&transport=polling"
+#     Attendu : 200 (ou réponse Engine.IO). Si 404/502/timeout → proxy / SKIP_SOCKETIO / mauvais port.
 #   - Metro : le warn [CompanyRealtimeBridge] connect_error affiche la cause côté client.
+#   - « websocket error » en boucle après bascule polling : Engine.IO tente par défaut d’upgrader le
+#     polling vers le WS ; le bridge force `upgrade: false` sur le palier polling pour éviter ça.
+#     Backend : éviter SIO_DISABLE_UPGRADES=true en dev sinon le WS peut échouer (voir docker-compose).
 #
 # Expo Web (Chrome) + API sur IP LAN (ex. EXPO_PUBLIC_API_BASE_URL=http://192.168.1.x:5000) :
 #   - La page est souvent servie depuis http://localhost:8081 (Metro) : requête « cross-origin »

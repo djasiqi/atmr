@@ -13,6 +13,8 @@
 # backend / ws-service, merger aussi docker-compose.kafka.atmr-network.yml :
 #   docker compose -f docker-compose.production.yml -f docker-compose.kafka.yml \
 #     -f docker-compose.kafka.atmr-network.yml --profile kafka up -d
+# Automatisation + init topics (broker-1) : scripts/deploy-kafka-production.sh,
+# scripts/kafka-init-topics-compose.sh ; variables .env : env.kafka.production.example
 
 services:
   # Base de données PostgreSQL (PostGIS requis pour geo_unit.geom)

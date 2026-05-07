@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
-  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewStyle,
 } from "react-native";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useResponsiveTokens } from "../../../../design/responsive";
 import { AppText } from "../../../../design/ui/AppText";
 import { E } from "../../theme/enterpriseOpsTheme";
@@ -19,7 +21,44 @@ const SWISS_TZ = "Europe/Zurich";
 const ROW_RADIUS = 12;
 const ICON_COLOR = E.TEXT_SEC;
 const WEEKDAY_LABELS = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"] as const;
-const TIME_PRESETS = [6, 8, 10, 12, 14, 16, 18] as const;
+/** Abréviations mois (fr), 3 caractères max — en-tête date compacte. */
+const FR_MONTH_ABBR_3 = [
+  "jan",
+  "fév",
+  "mar",
+  "avr",
+  "mai",
+  "jun",
+  "jul",
+  "aoû",
+  "sep",
+  "oct",
+  "nov",
+  "déc",
+] as const;
+/** Bande horizontale continue : jours consécutifs ; largeur fixe par cellule. */
+const DAY_STRIP_LEADING_WEEKS = 14;
+const DAY_STRIP_TOTAL_DAYS = 224;
+const DAY_CELL_WIDTH = 48;
+const DAY_STRIP_PAST_VISIBLE_DAYS = 3;
+/** Fenêtre de mois défilants (clic sur le mois dans l’en-tête). */
+const MONTH_STRIP_LEADING = 18;
+const MONTH_STRIP_TOTAL = 48;
+const MONTH_CELL_WIDTH = 76;
+const YEAR_STRIP_SPAN = 16;
+const YEAR_CELL_WIDTH = 72;
+/** Bandes défilantes heure / minute (onglet Heure mobile). */
+const TIME_HOUR_CELL_WIDTH = YEAR_CELL_WIDTH;
+const TIME_MINUTE_CELL_WIDTH = YEAR_CELL_WIDTH;
+const TIME_MINUTE_STEP = 5;
+const TIME_MINUTE_SLOTS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55] as const;
+/** Même gabarit pour les carrousels jour / mois / année (évite les sauts au changement de mode). */
+const PICKER_CAROUSEL_CARD_PADDING_V = 10;
+const PICKER_CAROUSEL_CELL_MIN_HEIGHT = 56;
+const PICKER_CAROUSEL_CARD_CONTENT_HEIGHT =
+  PICKER_CAROUSEL_CARD_PADDING_V * 2 + PICKER_CAROUSEL_CELL_MIN_HEIGHT;
+const PICKER_TAB_HEIGHT = 40;
+const PICKER_ACTION_HEIGHT = 36;
 
 const styles = StyleSheet.create({
   label: {
@@ -31,11 +70,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row" as const,
     alignItems: "center" as const,
-    minHeight: 50,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: "rgba(145, 165, 157, 0.38)",
     borderRadius: ROW_RADIUS,
-    paddingHorizontal: 14,
+    paddingHorizontal: 11,
     backgroundColor: "#fff",
   },
   rowIdle: {
@@ -64,16 +103,16 @@ const styles = StyleSheet.create({
     width: 24,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    marginRight: 10,
+    marginRight: 7,
   },
   rowMuted: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 7,
   },
   rowValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600" as const,
-    lineHeight: 20,
+    lineHeight: 17,
   },
   rowValueDefined: {
     color: E.TEXT,
@@ -83,192 +122,19 @@ const styles = StyleSheet.create({
     fontWeight: "500" as const,
   },
   trailingIconWrap: {
-    width: 20,
+    width: 18,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-  },
-  chipRow: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 8,
-    marginTop: 10,
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    minHeight: 44,
-    justifyContent: "center" as const,
-    backgroundColor: "rgba(0, 121, 107, 0.06)",
-    borderColor: "rgba(0, 121, 107, 0.2)",
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: "600" as const,
-    color: E.BRAND,
-  },
-  webEditorCard: {
-    marginTop: 10,
-    padding: 12,
-    borderRadius: ROW_RADIUS,
-    borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.42)",
-    backgroundColor: "#FBFDFC",
-    gap: 10,
-  },
-  webInlineGrid: {
-    flexDirection: "row" as const,
-    gap: 8,
-    flexWrap: "wrap" as const,
-  },
-  webPanel: {
-    flex: 1,
-    minWidth: 244,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.3)",
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    gap: 8,
-  },
-  webPanelHeaderRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-  },
-  webPanelTitle: {
-    fontSize: 13,
-    fontWeight: "700" as const,
-    color: E.TEXT,
-    textTransform: "capitalize" as const,
-  },
-  webPanelNavButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.24)",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "#F9FAFB",
-  },
-  webWeekdayRow: {
-    flexDirection: "row" as const,
-    gap: 3,
-  },
-  webWeekdayCell: {
-    flex: 1,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    paddingVertical: 4,
-  },
-  webWeekdayText: {
-    fontSize: 11,
-    fontWeight: "700" as const,
-    color: E.TEXT_SEC,
-  },
-  webDaysGrid: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 3,
-  },
-  webDayCell: {
-    width: "13.2%",
-    minHeight: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "transparent",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  webDayCellOutsideMonth: {
-    opacity: 0.42,
-  },
-  webDayCellToday: {
-    borderColor: "rgba(0, 121, 107, 0.36)",
-    backgroundColor: "rgba(0, 121, 107, 0.08)",
-  },
-  webDayCellSelected: {
-    borderColor: E.BRAND,
-    backgroundColor: "rgba(0, 121, 107, 0.18)",
-  },
-  webDayText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: E.TEXT,
-  },
-  webDayTextSelected: {
-    color: E.BRAND_DARK,
-    fontWeight: "700" as const,
-  },
-  webTimeSelectorsRow: {
-    flexDirection: "row" as const,
-    gap: 8,
-  },
-  webTimeSelector: {
-    flex: 1,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(145, 165, 157, 0.35)",
-    padding: 6,
-    gap: 4,
-    backgroundColor: "#FCFDFC",
-  },
-  webTimeSelectorLabel: {
-    fontSize: 11,
-    color: E.TEXT_SEC,
-    fontWeight: "600" as const,
-  },
-  webStepperRow: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-  },
-  webStepperButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: "rgba(100, 116, 139, 0.26)",
-    backgroundColor: "#FFFFFF",
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  webStepperValue: {
-    fontSize: 16,
-    minWidth: 34,
-    textAlign: "center" as const,
-    fontWeight: "700" as const,
-    color: E.TEXT,
-  },
-  webPresetRow: {
-    flexDirection: "row" as const,
-    flexWrap: "wrap" as const,
-    gap: 6,
-  },
-  webPresetChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(0, 121, 107, 0.24)",
-    backgroundColor: "rgba(0, 121, 107, 0.08)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  webPresetChipText: {
-    fontSize: 11,
-    color: E.BRAND,
-    fontWeight: "700" as const,
   },
   webActionsRow: {
     flexDirection: "row" as const,
-    gap: 8,
+    gap: 6,
     marginTop: 2,
   },
   webActionButton: {
     flex: 1,
-    minHeight: 38,
-    borderRadius: 8,
+    minHeight: 36,
+    borderRadius: 9,
     borderWidth: 1,
     alignItems: "center" as const,
     justifyContent: "center" as const,
@@ -279,14 +145,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(100, 116, 139, 0.22)",
   },
   webActionButtonPrimary: {
-    backgroundColor: "rgba(0, 121, 107, 0.08)",
-    borderColor: "rgba(0, 121, 107, 0.34)",
+    backgroundColor: "rgba(0, 121, 107, 0.06)",
+    borderColor: "rgba(0, 121, 107, 0.24)",
   },
   webActionButtonPressed: {
     opacity: 0.9,
   },
   webActionText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700" as const,
   },
   webActionTextSecondary: {
@@ -295,9 +161,410 @@ const styles = StyleSheet.create({
   webActionTextPrimary: {
     color: E.BRAND,
   },
-  webInlineHint: {
+  iosSheetHeader: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(145, 165, 157, 0.24)",
+    gap: 8,
+  },
+  iosSheetTopRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+  },
+  iosSheetTitle: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+  },
+  iosSheetClose: {
+    minHeight: 34,
+    minWidth: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(100, 116, 139, 0.2)",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 10,
+    backgroundColor: "#F8FAFC",
+  },
+  iosSheetCloseText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: E.TEXT_SEC,
+  },
+  iosPreview: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: E.TEXT_SEC,
+  },
+  iosQuickRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  iosQuickChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.24)",
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  iosQuickChipText: {
     fontSize: 11,
-    lineHeight: 15,
+    fontWeight: "700" as const,
+    color: E.BRAND,
+  },
+  mobileModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.32)",
+    justifyContent: "flex-end" as const,
+  },
+  mobileModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 10,
+    maxHeight: "84%",
+  },
+  mobileModalHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "space-between" as const,
+    marginBottom: 8,
+  },
+  mobileModalTitle: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+  },
+  mobileModalClose: {
+    minHeight: 34,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(100, 116, 139, 0.2)",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 12,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  mobileModalPreview: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: E.TEXT_SEC,
+    marginBottom: 8,
+  },
+  mobileStepTabs: {
+    flexDirection: "row" as const,
+    gap: 6,
+    marginBottom: 6,
+  },
+  mobileStepTab: {
+    flex: 1,
+    minHeight: PICKER_TAB_HEIGHT,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "rgba(145, 165, 157, 0.28)",
+    backgroundColor: "#F9FBFA",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  mobileStepTabActive: {
+    borderColor: "rgba(0, 121, 107, 0.4)",
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+  },
+  mobileStepTabText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+    color: E.TEXT_SEC,
+  },
+  mobileStepTabTextActive: {
+    color: E.BRAND_DARK,
+  },
+  mobileDateStepColumn: {
+    gap: 6,
+  },
+  mobileDateShell: {
+    borderRadius: 18,
+    backgroundColor: "rgba(148, 163, 184, 0.2)",
+    padding: 12,
+    gap: 10,
+  },
+  mobileDateHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 2,
+    gap: 8,
+    flexWrap: "nowrap" as const,
+  },
+  mobileDateSeg: {
+    minWidth: 56,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  mobileDateSegActive: {
+    backgroundColor: "rgba(0, 121, 107, 0.14)",
+  },
+  mobileDateSegText: {
+    fontSize: 24,
+    fontWeight: "800" as const,
+    color: E.TEXT,
+    letterSpacing: -0.35,
+    fontVariant: ["tabular-nums"],
+  },
+  mobileMonthStripOuter: {
+    marginBottom: 4,
+    marginTop: -4,
+    minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT,
+    position: "relative" as const,
+  },
+  mobileCarouselFadeLeft: {
+    position: "absolute" as const,
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 14,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+    zIndex: 2,
+    pointerEvents: "none" as const,
+  },
+  mobileCarouselFadeRight: {
+    position: "absolute" as const,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 14,
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+    zIndex: 2,
+    pointerEvents: "none" as const,
+  },
+  mobilePickerCarouselCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(241,245,249,0.95)",
+    paddingVertical: PICKER_CAROUSEL_CARD_PADDING_V,
+    paddingHorizontal: 6,
+    overflow: "hidden" as const,
+  },
+  mobileMonthStripRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+  },
+  mobileMonthStripCell: {
+    width: MONTH_CELL_WIDTH,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    minHeight: PICKER_CAROUSEL_CELL_MIN_HEIGHT,
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  mobileMonthStripCellActive: {
+    backgroundColor: "rgba(0, 121, 107, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.35)",
+  },
+  mobileMonthStripLabel: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: E.TEXT_MUTED,
+    letterSpacing: 0.2,
+    textTransform: "capitalize" as const,
+  },
+  mobileMonthStripLabelActive: {
+    color: E.TEXT,
+  },
+  mobileMonthStripYear: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT_MUTED,
+    fontVariant: ["tabular-nums"],
+  },
+  mobileMonthStripYearActive: {
+    color: E.TEXT,
+  },
+  mobileYearStripRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+  },
+  mobileYearStripCell: {
+    width: YEAR_CELL_WIDTH,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    minHeight: PICKER_CAROUSEL_CELL_MIN_HEIGHT,
+    borderRadius: 10,
+    paddingVertical: 6,
+  },
+  mobileYearStripCellActive: {
+    backgroundColor: "rgba(0, 121, 107, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.35)",
+  },
+  mobileYearStripLabel: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT_MUTED,
+    fontVariant: ["tabular-nums"],
+  },
+  mobileYearStripLabelActive: {
+    color: E.TEXT,
+  },
+  mobileWeekNavigator: {
+    width: "100%" as const,
+  },
+  mobileDayStripRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+  },
+  mobileDayStripCell: {
+    width: DAY_CELL_WIDTH,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    minHeight: PICKER_CAROUSEL_CELL_MIN_HEIGHT,
+    borderRadius: 10,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  mobileDayStripCellSelected: {
+    backgroundColor: E.BRAND,
+  },
+  mobileDayStripWeekday: {
+    fontSize: 10,
+    fontWeight: "700" as const,
+    color: E.TEXT_MUTED,
+    letterSpacing: 0.2,
+  },
+  mobileDayStripWeekdaySelected: {
+    color: "rgba(255,255,255,0.92)",
+  },
+  mobileDayStripNumber: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT,
+  },
+  mobileDayStripNumberOutside: {
+    color: E.TEXT_MUTED,
+    fontWeight: "600" as const,
+  },
+  mobileDayStripNumberSelected: {
+    color: "#FFFFFF",
+  },
+  mobileTimeHeaderColon: {
+    fontSize: 24,
+    fontWeight: "800" as const,
+    color: E.TEXT_SEC,
+    letterSpacing: -0.35,
+    paddingHorizontal: 2,
+    lineHeight: 28,
+    textAlignVertical: "center" as const,
+  },
+  mobileTimeHeaderColonWrap: {
+    minHeight: 40,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+  },
+  mobileTimeStripOuter: {
+    marginBottom: 4,
+    marginTop: -4,
+    minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT,
+    position: "relative" as const,
+  },
+  mobileTimeHourStripRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+  },
+  mobileTimeMinuteStripRow: {
+    flexDirection: "row" as const,
+    alignItems: "stretch" as const,
+  },
+  mobileTimeStripCell: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    minHeight: PICKER_CAROUSEL_CELL_MIN_HEIGHT,
+    borderRadius: 10,
+    paddingVertical: 6,
+  },
+  mobileTimeHourStripCell: {
+    width: TIME_HOUR_CELL_WIDTH,
+  },
+  mobileTimeMinuteStripCell: {
+    width: TIME_MINUTE_CELL_WIDTH,
+  },
+  mobileTimeStripCellActive: {
+    backgroundColor: "rgba(0, 121, 107, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.35)",
+  },
+  mobileTimeStripValue: {
+    fontSize: 14,
+    fontWeight: "700" as const,
+    color: E.TEXT_MUTED,
+    fontVariant: ["tabular-nums"],
+  },
+  mobileTimeStripValueActive: {
+    color: E.TEXT,
+  },
+  mobileActionsDock: {
+    flexDirection: "row" as const,
+    gap: 6,
+    marginTop: 6,
+  },
+  mobileActionDockButton: {
+    flex: 1,
+    minHeight: PICKER_ACTION_HEIGHT,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 8,
+  },
+  mobileActionDockPrimary: {
+    backgroundColor: "rgba(0, 121, 107, 0.08)",
+    borderColor: "rgba(0, 121, 107, 0.32)",
+  },
+  mobileActionDockSecondary: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "rgba(100, 116, 139, 0.2)",
+  },
+  mobileActionDockDanger: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "rgba(148, 163, 184, 0.28)",
+  },
+  mobileActionDockText: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+  },
+  mobileActionDockTextPrimary: {
+    color: E.BRAND,
+  },
+  mobileActionDockTextSecondary: {
+    color: E.TEXT_SEC,
+  },
+  mobileNextButton: {
+    backgroundColor: "rgba(0, 121, 107, 0.06)",
+    borderColor: "rgba(0, 121, 107, 0.24)",
+  },
+  mobileNextButtonText: {
+    color: E.BRAND,
+  },
+  mobileClearButton: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "rgba(148, 163, 184, 0.25)",
+  },
+  mobileModalCloseText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
     color: E.TEXT_SEC,
   },
 });
@@ -322,6 +589,10 @@ function getMonthTitle(d: Date): string {
   });
 }
 
+function getMonthAbbr3Fr(d: Date): string {
+  return FR_MONTH_ABBR_3[d.getMonth()];
+}
+
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 }
@@ -334,29 +605,97 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
-function shiftMinutes(current: number, delta: number): number {
-  const total = current + delta;
-  const normalized = ((total % 60) + 60) % 60;
-  return normalized;
+function startOfWeekMonday(d: Date): Date {
+  const day = d.getDay();
+  const mondayOffset = (day + 6) % 7;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - mondayOffset, 0, 0, 0, 0);
 }
 
-function shiftHours(current: number, delta: number): number {
-  const total = current + delta;
-  const normalized = ((total % 24) + 24) % 24;
-  return normalized;
+function stripAnchorMonday(selected: Date): Date {
+  const mon = startOfWeekMonday(selected);
+  mon.setDate(mon.getDate() - DAY_STRIP_LEADING_WEEKS * 7);
+  return mon;
 }
 
-function buildCalendarGrid(monthDate: Date) {
-  const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const firstWeekdayMondayBased = (firstOfMonth.getDay() + 6) % 7;
-  const firstVisibleDay = new Date(firstOfMonth);
-  firstVisibleDay.setDate(firstOfMonth.getDate() - firstWeekdayMondayBased);
+/** Premier jour du mois dans la fenêtre défilante « mois » (centrée ~sur la date affichée). */
+function monthStripWindowStartFor(selected: Date): Date {
+  return new Date(selected.getFullYear(), selected.getMonth() - MONTH_STRIP_LEADING, 1);
+}
 
-  return Array.from({ length: 42 }, (_, idx) => {
-    const day = new Date(firstVisibleDay);
-    day.setDate(firstVisibleDay.getDate() + idx);
-    return day;
-  });
+/** Bande jours : ne commence pas avant aujourd’hui (pas de passé). */
+function computeStripFirstDay(selected: Date, todayStart: Date): Date {
+  const mon = stripAnchorMonday(selected);
+  mon.setDate(mon.getDate() - DAY_STRIP_LEADING_WEEKS * 7);
+  const candidate = startOfDay(mon);
+  const t = startOfDay(todayStart);
+  const minVisible = new Date(t);
+  minVisible.setDate(minVisible.getDate() - DAY_STRIP_PAST_VISIBLE_DAYS);
+  return candidate < minVisible ? minVisible : candidate;
+}
+
+function clampDayToToday(d: Date, todayStart: Date): Date {
+  const sd = startOfDay(d);
+  const t = startOfDay(todayStart);
+  return sd < t ? new Date(t) : sd;
+}
+
+/** Le mois contient au moins un jour ≥ aujourd’hui. */
+function monthHasSelectableDay(monthFirst: Date, todayStart: Date): boolean {
+  const end = new Date(monthFirst.getFullYear(), monthFirst.getMonth() + 1, 0);
+  return end >= startOfDay(todayStart);
+}
+
+function capitalizeFrShortMonth(label: string): string {
+  if (!label.length) return label;
+  const first = label.charAt(0).toUpperCase();
+  if (label.length === 1) return first;
+  return first + label.slice(1);
+}
+
+/** Minute affichée dans la bande : pas de 5 min ; valeur ISO peut être quelconque. */
+function nearestFiveMinute(minute: number): number {
+  const r = Math.round(minute / TIME_MINUTE_STEP) * TIME_MINUTE_STEP;
+  if (r >= 60) return 55;
+  return Math.max(0, r);
+}
+
+/** Délai minimum par rapport à « maintenant » pour une date/heure planifiable (évite passé / trop tôt). */
+const SCHEDULE_MIN_LEAD_MS = 15 * 60 * 1000;
+
+/**
+ * Si la date est dans le passé ou le même jour mais trop tôt : jour courant (aujourd’hui) et
+ * au moins maintenant + 15 minutes, aligné sur les créneaux de 5 minutes du picker.
+ */
+function enforceMinSchedule(candidate: Date, todayStart: Date): Date {
+  const minInstant = Date.now() + SCHEDULE_MIN_LEAD_MS;
+  const candDay = startOfDay(candidate);
+  const todayDay = startOfDay(todayStart);
+
+  let result = new Date(candidate);
+  let adjusted = false;
+
+  if (candDay < todayDay) {
+    result = new Date(minInstant);
+    adjusted = true;
+  } else if (isSameDay(candidate, todayStart) && result.getTime() < minInstant) {
+    result = new Date(minInstant);
+    adjusted = true;
+  }
+
+  if (adjusted || (isSameDay(result, todayStart) && result.getTime() < minInstant)) {
+    let m = nearestFiveMinute(result.getMinutes());
+    result.setMinutes(m, 0, 0);
+    while (result.getTime() < minInstant) {
+      const nm = result.getMinutes() + TIME_MINUTE_STEP;
+      if (nm >= 60) {
+        result.setHours(result.getHours() + 1, nm - 60, 0, 0);
+      } else {
+        result.setMinutes(nm, 0, 0);
+      }
+    }
+  }
+
+  return result;
 }
 
 function formatSwissDisplay(iso: string): string {
@@ -366,7 +705,6 @@ function formatSwissDisplay(iso: string): string {
   if (!d) return "";
   return d.toLocaleString("fr-CH", {
     timeZone: SWISS_TZ,
-    weekday: "short",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -375,73 +713,157 @@ function formatSwissDisplay(iso: string): string {
   });
 }
 
+function formatSwissDateOnlyDisplay(iso: string): string {
+  const n = normalizeScheduledTimeIso(iso);
+  if (!n) return "";
+  const d = parseToDate(n);
+  if (!d) return "";
+  return d.toLocaleDateString("fr-CH", {
+    timeZone: SWISS_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 type TimeDatePickerProps = {
   value: string;
   onChange: (value: string) => void;
+  /** True: sélection date uniquement (pas d'étape heure). */
+  dateOnly?: boolean;
+  /** Libellé au-dessus du champ. */
+  label?: string;
+  /** Texte affiché lorsque la valeur est vide. */
+  emptyLabel?: string;
+  /**
+   * Si la valeur est vide, prévisualisation « date · … » à partir de cette ISO (ex. date/heure aller).
+   * L’heure affichée vient du suffixe `emptyPreviewSuffix`, pas de cette ISO.
+   */
+  emptyPreviewReferenceIso?: string;
+  /** Suffixe après la date lorsque la valeur est vide et qu’une référence est fournie (défaut : heure à définir). */
+  emptyPreviewSuffix?: string;
+  /** Titre de la feuille mobile (par défaut : le label sans astérisque final). */
+  modalTitle?: string;
+  accessibilityLabel?: string;
 };
 
-export function TimeDatePicker({ value, onChange }: TimeDatePickerProps) {
+export function TimeDatePicker({
+  value,
+  onChange,
+  dateOnly = false,
+  label = "Date & heure de départ *",
+  emptyLabel = "Non défini",
+  emptyPreviewReferenceIso,
+  emptyPreviewSuffix = " · heure à définir",
+  modalTitle: modalTitleProp,
+  accessibilityLabel = "Choisir la date et l’heure de départ",
+}: TimeDatePickerProps) {
+  const modalTitle =
+    modalTitleProp ?? label.replace(/\s*\*\s*$/, "").trim();
   const t = useResponsiveTokens();
-  const preview = useMemo(() => formatSwissDisplay(value), [value]);
-  const [iosOpen, setIosOpen] = useState(false);
-  const [androidStep, setAndroidStep] = useState<null | "date" | "time">(null);
-  const [webEditorOpen, setWebEditorOpen] = useState(false);
-  const baseDate = parseToDate(value) ?? new Date(Date.now() + 30 * 60 * 1000);
-  const [webVisibleMonth, setWebVisibleMonth] = useState(baseDate);
+  const preview = useMemo(() => {
+    const main = dateOnly ? formatSwissDateOnlyDisplay(value) : formatSwissDisplay(value);
+    if (main) return main;
+    const refIso = emptyPreviewReferenceIso?.trim();
+    if (refIso) {
+      const dateOnly = formatSwissDateOnlyDisplay(refIso);
+      if (dateOnly) return `${dateOnly}${emptyPreviewSuffix}`;
+    }
+    return "";
+  }, [value, emptyPreviewReferenceIso, emptyPreviewSuffix, dateOnly]);
+  const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
+  const [mobileStep, setMobileStep] = useState<"date" | "time">("date");
+  const baseDate = useMemo(() => {
+    const parsed = parseToDate(value);
+    if (parsed) return parsed;
+    const refRaw = emptyPreviewReferenceIso?.trim();
+    if (refRaw) {
+      const n = normalizeScheduledTimeIso(refRaw) || refRaw;
+      const refD = parseToDate(n);
+      if (refD) {
+        return new Date(refD.getFullYear(), refD.getMonth(), refD.getDate(), 12, 0, 0, 0);
+      }
+    }
+    return new Date(Date.now() + 30 * 60 * 1000);
+  }, [value, emptyPreviewReferenceIso]);
+  const [stripFirstDay, setStripFirstDay] = useState(() =>
+    computeStripFirstDay(new Date(), startOfDay(new Date())),
+  );
+  const [stripViewportFocus, setStripViewportFocus] = useState(() => startOfDay(new Date()));
+  const weekStripRef = useRef<ScrollView | null>(null);
+  const stripScrollDoneRef = useRef(false);
+  const [dateCarousel, setDateCarousel] = useState<"day" | "month" | "year" | null>("day");
+  const [monthStripWindowStart, setMonthStripWindowStart] = useState(() =>
+    monthStripWindowStartFor(new Date()),
+  );
+  const [carouselRailWidth, setCarouselRailWidth] = useState(0);
+  const monthStripRef = useRef<ScrollView | null>(null);
+  const yearStripRef = useRef<ScrollView | null>(null);
+  const hourStripRef = useRef<ScrollView | null>(null);
+  const minuteStripRef = useRef<ScrollView | null>(null);
+  const [timeCarousel, setTimeCarousel] = useState<"hour" | "minute" | null>("hour");
+  const [timeCarouselRailWidth, setTimeCarouselRailWidth] = useState(0);
+  const stripViewportFocusRef = useRef(stripViewportFocus);
+  stripViewportFocusRef.current = stripViewportFocus;
   const today = startOfDay(new Date());
-  const calendarDays = useMemo(() => buildCalendarGrid(webVisibleMonth), [webVisibleMonth]);
+  const commitSchedule = useCallback(
+    (next: Date) => {
+      onChange(toLocalIsoMinute(enforceMinSchedule(next, today)));
+    },
+    [onChange, today],
+  );
+  const stripDays = useMemo(
+    () =>
+      Array.from({ length: DAY_STRIP_TOTAL_DAYS }, (_, i) => {
+        const d = new Date(stripFirstDay);
+        d.setDate(stripFirstDay.getDate() + i);
+        return startOfDay(d);
+      }),
+    [stripFirstDay],
+  );
 
-  const applyOffsetMinutes = (mins: number) => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + mins);
-    onChange(toLocalIsoMinute(d));
-  };
+  const monthStripMonths = useMemo(() => {
+    const raw = Array.from({ length: MONTH_STRIP_TOTAL }, (_, i) => {
+      const d = new Date(monthStripWindowStart);
+      d.setMonth(monthStripWindowStart.getMonth() + i);
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+    });
+    return raw.filter((m) => monthHasSelectableDay(m, today));
+  }, [monthStripWindowStart, today]);
 
-  const applyTomorrowNine = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(9, 0, 0, 0);
-    onChange(toLocalIsoMinute(d));
-  };
-
-  const onAndroidChange = (event: DateTimePickerEvent, selected?: Date) => {
-    if (event.type === "dismissed") {
-      setAndroidStep(null);
-      return;
-    }
-    if (!selected) return;
-    if (androidStep === "date") {
-      const prev = parseToDate(value) ?? selected;
-      const merged = new Date(selected);
-      merged.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-      onChange(toLocalIsoMinute(merged));
-      setAndroidStep("time");
-      return;
-    }
-    if (androidStep === "time") {
-      const prev = parseToDate(value) ?? new Date();
-      const merged = new Date(prev.getFullYear(), prev.getMonth(), prev.getDate());
-      merged.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-      onChange(toLocalIsoMinute(merged));
-      setAndroidStep(null);
-    }
-  };
-
-  const onIosChange = (event: DateTimePickerEvent, selected?: Date) => {
-    if (event.type === "dismissed" || !selected) return;
-    onChange(toLocalIsoMinute(selected));
-  };
+  const yearStripYears = useMemo(() => {
+    const y0 = today.getFullYear();
+    return Array.from({ length: YEAR_STRIP_SPAN }, (_, i) => y0 + i);
+  }, [today]);
 
   const openPicker = () => {
-    if (Platform.OS === "web") {
-      const selected = parseToDate(value) ?? baseDate;
-      setWebVisibleMonth(new Date(selected.getFullYear(), selected.getMonth(), 1));
-      setWebEditorOpen((prev) => !prev);
-      return;
+    const parsed = parseToDate(value);
+    const raw = parsed ?? baseDate;
+    const fixed = enforceMinSchedule(raw, today);
+    if (parsed && fixed.getTime() !== raw.getTime()) {
+      onChange(toLocalIsoMinute(fixed));
     }
-    if (Platform.OS === "ios") setIosOpen(true);
-    else setAndroidStep("date");
+    const selected = clampDayToToday(fixed, today);
+    setMobileStep("date");
+    setStripFirstDay(computeStripFirstDay(selected, today));
+    setStripViewportFocus(startOfDay(fixed));
+    setMonthStripWindowStart(monthStripWindowStartFor(fixed));
+    setDateCarousel("day");
+    stripScrollDoneRef.current = false;
+    setMobileEditorOpen(true);
   };
+
+  useEffect(() => {
+    if (!mobileEditorOpen) {
+      stripScrollDoneRef.current = false;
+    }
+  }, [mobileEditorOpen]);
+
+  const goToTimeStep = useCallback(() => {
+    if (dateOnly) return;
+    setMobileStep("time");
+    setTimeCarousel("hour");
+  }, [dateOnly]);
 
   const rowStyle: ViewStyle = {
     ...styles.row,
@@ -450,43 +872,154 @@ export function TimeDatePicker({ value, onChange }: TimeDatePickerProps) {
 
   const selectedWebDate = parseToDate(value) ?? baseDate;
   const setWebDateTime = (nextDate: Date) => {
-    onChange(toLocalIsoMinute(nextDate));
+    commitSchedule(nextDate);
   };
 
   const setWebDay = (pickedDay: Date) => {
     const current = parseToDate(value) ?? baseDate;
-    const merged = new Date(pickedDay);
+    const dayClamped = clampDayToToday(pickedDay, today);
+    const merged = new Date(dayClamped);
     merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
     setWebDateTime(merged);
-    setWebVisibleMonth(new Date(pickedDay.getFullYear(), pickedDay.getMonth(), 1));
+    if (mobileEditorOpen) {
+      if (dateOnly) setMobileEditorOpen(false);
+      else goToTimeStep();
+    }
   };
 
-  const setWebHour = (hour: number) => {
+  useEffect(() => {
+    if (!mobileEditorOpen || carouselRailWidth <= 0 || stripScrollDoneRef.current) return;
+    const selRaw = startOfDay(selectedWebDate);
+    const sel = selRaw < today ? today : selRaw;
+    const idx = stripDays.findIndex((d) => isSameDay(d, sel));
+    if (idx < 0) return;
+    const targetX = Math.max(
+      idx * DAY_CELL_WIDTH + DAY_CELL_WIDTH / 2 - carouselRailWidth / 2,
+    );
+    requestAnimationFrame(() => {
+      weekStripRef.current?.scrollTo({ x: Math.max(0, targetX), animated: false });
+    });
+    stripScrollDoneRef.current = true;
+    setStripViewportFocus(startOfDay(sel));
+  }, [
+    mobileEditorOpen,
+    carouselRailWidth,
+    stripFirstDay,
+    stripDays,
+    selectedWebDate,
+    today,
+  ]);
+
+  const handleDayStripScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const x = e.nativeEvent.contentOffset.x;
+      const w = carouselRailWidth;
+      if (!w || DAY_CELL_WIDTH <= 0) return;
+      const centerX = x + w / 2;
+      let idx = Math.floor(centerX / DAY_CELL_WIDTH);
+      idx = Math.max(0, Math.min(stripDays.length - 1, idx));
+      const d = stripDays[idx];
+      setStripViewportFocus((prev) => (prev && isSameDay(prev, d) ? prev : d));
+    },
+    [carouselRailWidth, stripDays],
+  );
+
+  const handleDayStripMomentumEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      handleDayStripScroll(e);
+    },
+    [handleDayStripScroll],
+  );
+
+  const jumpToMonthFirst = useCallback(
+    (monthFirst: Date) => {
+      if (!monthHasSelectableDay(monthFirst, today)) return;
+      let target = startOfDay(monthFirst);
+      if (target < today) target = new Date(today);
+      const current = parseToDate(value) ?? baseDate;
+      const merged = new Date(target);
+      merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
+      commitSchedule(merged);
+      setStripFirstDay(computeStripFirstDay(target, today));
+      setStripViewportFocus(target);
+      setMonthStripWindowStart(monthStripWindowStartFor(target));
+      stripScrollDoneRef.current = false;
+      setDateCarousel("day");
+    },
+    [today, value, baseDate, commitSchedule],
+  );
+
+  const jumpToYear = useCallback(
+    (year: number) => {
+      const yStart = new Date(year, 0, 1);
+      let target = startOfDay(yStart);
+      if (target < today) target = new Date(today);
+      const current = parseToDate(value) ?? baseDate;
+      const merged = new Date(target);
+      merged.setHours(current.getHours(), current.getMinutes(), 0, 0);
+      commitSchedule(merged);
+      setStripFirstDay(computeStripFirstDay(target, today));
+      setStripViewportFocus(target);
+      setMonthStripWindowStart(monthStripWindowStartFor(target));
+      stripScrollDoneRef.current = false;
+      setDateCarousel("month");
+    },
+    [today, value, baseDate, commitSchedule],
+  );
+
+  useEffect(() => {
+    if (dateCarousel !== "month" || carouselRailWidth <= 0) return;
+    const focus = stripViewportFocusRef.current;
+    const ix = monthStripMonths.findIndex(
+      (d) => d.getMonth() === focus.getMonth() && d.getFullYear() === focus.getFullYear(),
+    );
+    if (ix < 0) return;
+    const targetX = ix * MONTH_CELL_WIDTH + MONTH_CELL_WIDTH / 2 - carouselRailWidth / 2;
+    requestAnimationFrame(() => {
+      monthStripRef.current?.scrollTo({ x: Math.max(0, targetX), animated: false });
+    });
+  }, [dateCarousel, carouselRailWidth, monthStripMonths]);
+
+  useEffect(() => {
+    if (dateCarousel !== "year" || carouselRailWidth <= 0) return;
+    const y = stripViewportFocusRef.current.getFullYear();
+    const ix = yearStripYears.indexOf(y);
+    if (ix < 0) return;
+    const targetX = ix * YEAR_CELL_WIDTH + YEAR_CELL_WIDTH / 2 - carouselRailWidth / 2;
+    requestAnimationFrame(() => {
+      yearStripRef.current?.scrollTo({ x: Math.max(0, targetX), animated: false });
+    });
+  }, [dateCarousel, carouselRailWidth, yearStripYears]);
+
+  useEffect(() => {
+    if (mobileStep !== "time" || timeCarouselRailWidth <= 0) return;
+    const sel = parseToDate(value);
+    const d = sel ?? new Date(Date.now() + 30 * 60 * 1000);
+    const h = d.getHours();
+    const slotMin = nearestFiveMinute(d.getMinutes());
+    const minuteIdx = slotMin / TIME_MINUTE_STEP;
+    const targetHX = h * TIME_HOUR_CELL_WIDTH + TIME_HOUR_CELL_WIDTH / 2 - timeCarouselRailWidth / 2;
+    const targetMX =
+      minuteIdx * TIME_MINUTE_CELL_WIDTH +
+      TIME_MINUTE_CELL_WIDTH / 2 -
+      timeCarouselRailWidth / 2;
+    requestAnimationFrame(() => {
+      hourStripRef.current?.scrollTo({ x: Math.max(0, targetHX), animated: false });
+      minuteStripRef.current?.scrollTo({ x: Math.max(0, targetMX), animated: false });
+    });
+  }, [mobileStep, timeCarouselRailWidth, value, timeCarousel]);
+
+  const setWebTime = (hour: number, minute: number) => {
     const current = parseToDate(value) ?? baseDate;
     const merged = new Date(current);
-    merged.setHours(hour, current.getMinutes(), 0, 0);
+    merged.setHours(hour, minute, 0, 0);
     setWebDateTime(merged);
-  };
-
-  const setWebMinute = (minute: number) => {
-    const current = parseToDate(value) ?? baseDate;
-    const merged = new Date(current);
-    merged.setHours(current.getHours(), minute, 0, 0);
-    setWebDateTime(merged);
-  };
-
-  const applyToday = () => {
-    const current = parseToDate(value) ?? baseDate;
-    const next = new Date();
-    next.setHours(current.getHours(), current.getMinutes(), 0, 0);
-    setWebDateTime(next);
-    setWebVisibleMonth(new Date(next.getFullYear(), next.getMonth(), 1));
   };
 
   return (
     <View style={{ marginBottom: 4 }}>
       <AppText variant="label" style={styles.label}>
-        Date & heure de départ *
+        {label}
       </AppText>
       <Pressable
         onPress={openPicker}
@@ -498,267 +1031,583 @@ export function TimeDatePicker({ value, onChange }: TimeDatePickerProps) {
           pressed && styles.rowPressed,
         ]}
         accessibilityRole="button"
-        accessibilityLabel="Choisir la date et l’heure de départ"
+        accessibilityLabel={accessibilityLabel}
       >
         <View style={styles.leadingIconWrap}>
-          <Ionicons name="calendar-outline" size={21} color={ICON_COLOR} />
+          <Ionicons name="calendar-outline" size={20} color={ICON_COLOR} />
         </View>
         <View style={styles.rowMuted}>
           <AppText style={[styles.rowValue, preview ? styles.rowValueDefined : styles.rowValueUndefined]}>
-            {preview || "Non défini"}
+            {preview || emptyLabel}
           </AppText>
         </View>
         <View style={styles.trailingIconWrap}>
-          <Ionicons name={webEditorOpen && Platform.OS === "web" ? "chevron-up" : "chevron-forward"} size={18} color={E.TEXT_MUTED} />
+          <Ionicons name="chevron-forward" size={17} color={E.TEXT_MUTED} />
         </View>
       </Pressable>
 
-      <View style={styles.chipRow}>
-        <Pressable
-          onPress={() => applyOffsetMinutes(30)}
-          style={styles.chip}
-          accessibilityRole="button"
-          accessibilityLabel="Dans trente minutes"
+      <Modal
+          transparent
+          animationType="slide"
+          visible={mobileEditorOpen}
+          onRequestClose={() => setMobileEditorOpen(false)}
         >
-          <AppText style={styles.chipText}>Dans 30 min</AppText>
-        </Pressable>
-        <Pressable
-          onPress={() => applyOffsetMinutes(60)}
-          style={styles.chip}
-          accessibilityRole="button"
-          accessibilityLabel="Dans une heure"
-        >
-          <AppText style={styles.chipText}>Dans 1 h</AppText>
-        </Pressable>
-        <Pressable
-          onPress={applyTomorrowNine}
-          style={styles.chip}
-          accessibilityRole="button"
-          accessibilityLabel="Demain à neuf heures"
-        >
-          <AppText style={styles.chipText}>Demain 9 h</AppText>
-        </Pressable>
-      </View>
-
-      {Platform.OS === "ios" && iosOpen ? (
-        <Modal transparent animationType="slide" visible={iosOpen} onRequestClose={() => setIosOpen(false)}>
-          <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <View style={styles.mobileModalBackdrop}>
             <Pressable
-              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" }}
-              onPress={() => setIosOpen(false)}
-              accessibilityLabel="Fermer le sélecteur"
+              style={{ flex: 1 }}
+              onPress={() => setMobileEditorOpen(false)}
+              accessibilityLabel="Fermer l’éditeur date et heure"
             />
-            <View
-              style={{
-                backgroundColor: "#fff",
-                paddingBottom: 24,
-                borderTopLeftRadius: 16,
-                borderTopRightRadius: 16,
-              }}
-            >
-              <View style={{ alignItems: "flex-end", padding: 12 }}>
-                <Pressable onPress={() => setIosOpen(false)} hitSlop={12}>
-                  <AppText variant="body" style={{ color: E.BRAND, fontWeight: "700" }}>
-                    OK
+            <View style={styles.mobileModalCard}>
+              <View style={styles.mobileModalHeader}>
+                <AppText style={styles.mobileModalTitle}>{modalTitle}</AppText>
+                <Pressable style={styles.mobileModalClose} onPress={() => setMobileEditorOpen(false)}>
+                  <AppText style={styles.mobileModalCloseText}>Valider</AppText>
+                </Pressable>
+              </View>
+              <AppText style={styles.mobileModalPreview}>{preview || emptyLabel}</AppText>
+              {!dateOnly ? (
+              <View style={styles.mobileStepTabs}>
+                <Pressable
+                  onPress={() => setMobileStep("date")}
+                  style={({ pressed }) => [
+                    styles.mobileStepTab,
+                    mobileStep === "date" ? styles.mobileStepTabActive : null,
+                    pressed ? styles.webActionButtonPressed : null,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Onglet date"
+                >
+                  <AppText
+                    style={[
+                      styles.mobileStepTabText,
+                      mobileStep === "date" ? styles.mobileStepTabTextActive : null,
+                    ]}
+                  >
+                    Date
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  onPress={goToTimeStep}
+                  style={({ pressed }) => [
+                    styles.mobileStepTab,
+                    mobileStep === "time" ? styles.mobileStepTabActive : null,
+                    pressed ? styles.webActionButtonPressed : null,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Onglet heure"
+                >
+                  <AppText
+                    style={[
+                      styles.mobileStepTabText,
+                      mobileStep === "time" ? styles.mobileStepTabTextActive : null,
+                    ]}
+                  >
+                    Heure
                   </AppText>
                 </Pressable>
               </View>
-              <DateTimePicker value={baseDate} mode="datetime" display="spinner" onChange={onIosChange} />
+              ) : null}
+              <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                <View>
+                  {mobileStep === "date" || dateOnly ? (
+                    <>
+                    <View style={styles.mobileDateStepColumn}>
+                        <View style={styles.mobileDateShell}>
+                          <View style={styles.mobileDateHeader}>
+                            <Pressable
+                              style={[
+                                styles.mobileDateSeg,
+                                dateCarousel === "day" ? styles.mobileDateSegActive : null,
+                              ]}
+                              onPress={() =>
+                                setDateCarousel((c) => (c === "day" ? null : "day"))
+                              }
+                              accessibilityRole="button"
+                              accessibilityLabel="Choisir le jour : liste défilante"
+                              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            >
+                              <AppText style={styles.mobileDateSegText}>
+                                {String(stripViewportFocus.getDate()).padStart(2, "0")}
+                              </AppText>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.mobileDateSeg,
+                                dateCarousel === "month" ? styles.mobileDateSegActive : null,
+                              ]}
+                              onPress={() =>
+                                setDateCarousel((c) => (c === "month" ? null : "month"))
+                              }
+                              accessibilityRole="button"
+                              accessibilityLabel="Choisir le mois : liste défilante"
+                              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            >
+                              <AppText style={styles.mobileDateSegText}>
+                                {getMonthAbbr3Fr(stripViewportFocus)}
+                              </AppText>
+                            </Pressable>
+                            <Pressable
+                              style={[
+                                styles.mobileDateSeg,
+                                dateCarousel === "year" ? styles.mobileDateSegActive : null,
+                              ]}
+                              onPress={() =>
+                                setDateCarousel((c) => (c === "year" ? null : "year"))
+                              }
+                              accessibilityRole="button"
+                              accessibilityLabel="Choisir l’année : liste défilante"
+                              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                            >
+                              <AppText style={styles.mobileDateSegText}>
+                                {String(stripViewportFocus.getFullYear())}
+                              </AppText>
+                            </Pressable>
+                          </View>
+                          <View
+                            style={styles.mobileMonthStripOuter}
+                            onLayout={(e) => setCarouselRailWidth(e.nativeEvent.layout.width)}
+                          >
+                            {carouselRailWidth > 0 && dateCarousel === "month" ? (
+                              <ScrollView
+                                ref={monthStripRef}
+                                horizontal
+                                snapToInterval={MONTH_CELL_WIDTH}
+                                snapToAlignment="start"
+                                decelerationRate="fast"
+                                disableIntervalMomentum
+                                nestedScrollEnabled
+                                keyboardShouldPersistTaps="handled"
+                                showsHorizontalScrollIndicator={false}
+                                scrollEventThrottle={16}
+                                style={{ width: carouselRailWidth }}
+                              >
+                                <View style={styles.mobilePickerCarouselCard}>
+                                  <View style={styles.mobileMonthStripRow}>
+                                    {monthStripMonths.map((monthStart) => {
+                                      const active =
+                                        monthStart.getMonth() === stripViewportFocus.getMonth() &&
+                                        monthStart.getFullYear() === stripViewportFocus.getFullYear();
+                                      const shortMonth = capitalizeFrShortMonth(
+                                        monthStart.toLocaleDateString("fr-CH", { month: "short" }),
+                                      );
+                                      return (
+                                        <Pressable
+                                          key={`month-strip-${monthStart.getFullYear()}-${monthStart.getMonth()}`}
+                                          onPress={() => jumpToMonthFirst(monthStart)}
+                                          style={({ pressed }) => [
+                                            styles.mobileMonthStripCell,
+                                            active ? styles.mobileMonthStripCellActive : null,
+                                            pressed ? styles.webActionButtonPressed : null,
+                                          ]}
+                                          accessibilityRole="button"
+                                          accessibilityLabel={`Aller à ${getMonthTitle(monthStart)}`}
+                                        >
+                                          <AppText
+                                            style={[
+                                              styles.mobileMonthStripLabel,
+                                              active ? styles.mobileMonthStripLabelActive : null,
+                                            ]}
+                                          >
+                                            {shortMonth}
+                                          </AppText>
+                                          <AppText
+                                            style={[
+                                              styles.mobileMonthStripYear,
+                                              active ? styles.mobileMonthStripYearActive : null,
+                                            ]}
+                                          >
+                                            {monthStart.getFullYear()}
+                                          </AppText>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              </ScrollView>
+                            ) : null}
+                            {carouselRailWidth > 0 && dateCarousel === "year" ? (
+                              <ScrollView
+                                ref={yearStripRef}
+                                horizontal
+                                snapToInterval={YEAR_CELL_WIDTH}
+                                snapToAlignment="start"
+                                decelerationRate="fast"
+                                disableIntervalMomentum
+                                nestedScrollEnabled
+                                keyboardShouldPersistTaps="handled"
+                                showsHorizontalScrollIndicator={false}
+                                scrollEventThrottle={16}
+                                style={{ width: carouselRailWidth }}
+                              >
+                                <View style={styles.mobilePickerCarouselCard}>
+                                  <View style={styles.mobileYearStripRow}>
+                                    {yearStripYears.map((y) => {
+                                      const active =
+                                        stripViewportFocus.getFullYear() === y;
+                                      return (
+                                        <Pressable
+                                          key={`year-strip-${y}`}
+                                          onPress={() => jumpToYear(y)}
+                                          style={({ pressed }) => [
+                                            styles.mobileYearStripCell,
+                                            active ? styles.mobileYearStripCellActive : null,
+                                            pressed ? styles.webActionButtonPressed : null,
+                                          ]}
+                                          accessibilityRole="button"
+                                          accessibilityLabel={`Année ${y}`}
+                                        >
+                                          <AppText
+                                            style={[
+                                              styles.mobileYearStripLabel,
+                                              active ? styles.mobileYearStripLabelActive : null,
+                                            ]}
+                                          >
+                                            {y}
+                                          </AppText>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              </ScrollView>
+                            ) : null}
+                            {carouselRailWidth > 0 && dateCarousel === "day" ? (
+                              <ScrollView
+                                ref={weekStripRef}
+                                horizontal
+                                snapToInterval={DAY_CELL_WIDTH}
+                                snapToAlignment="start"
+                                decelerationRate="fast"
+                                disableIntervalMomentum
+                                nestedScrollEnabled
+                                keyboardShouldPersistTaps="handled"
+                                showsHorizontalScrollIndicator={false}
+                                scrollEventThrottle={16}
+                                style={{ width: carouselRailWidth }}
+                                onScroll={handleDayStripScroll}
+                                onMomentumScrollEnd={handleDayStripMomentumEnd}
+                              >
+                                <View style={styles.mobilePickerCarouselCard}>
+                                  <View style={styles.mobileDayStripRow}>
+                                    {stripDays.map((day) => {
+                                      const selected = isSameDay(day, selectedWebDate);
+                                      const wd = WEEKDAY_LABELS[(day.getDay() + 6) % 7];
+                                      const outsideFocus =
+                                        day.getMonth() !== stripViewportFocus.getMonth() ||
+                                        day.getFullYear() !== stripViewportFocus.getFullYear();
+                                      const isPastDay = startOfDay(day) < today;
+                                      return (
+                                        <Pressable
+                                          key={`day-strip-${day.toISOString()}`}
+                                          disabled={isPastDay}
+                                          onPress={() => setWebDay(day)}
+                                          style={({ pressed }) => [
+                                            styles.mobileDayStripCell,
+                                            selected ? styles.mobileDayStripCellSelected : null,
+                                            isPastDay && { opacity: 0.35 },
+                                            pressed ? styles.webActionButtonPressed : null,
+                                          ]}
+                                          accessibilityRole="button"
+                                          accessibilityLabel={`Choisir le ${day.toLocaleDateString("fr-CH")}`}
+                                        >
+                                          <AppText
+                                            style={[
+                                              styles.mobileDayStripWeekday,
+                                              selected ? styles.mobileDayStripWeekdaySelected : null,
+                                            ]}
+                                          >
+                                            {wd}
+                                          </AppText>
+                                          <Text
+                                            style={[
+                                              styles.mobileDayStripNumber,
+                                              outsideFocus && !selected
+                                                ? styles.mobileDayStripNumberOutside
+                                                : null,
+                                              selected ? styles.mobileDayStripNumberSelected : null,
+                                            ]}
+                                          >
+                                            {String(day.getDate()).padStart(2, "0")}
+                                          </Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              </ScrollView>
+                            ) : carouselRailWidth > 0 && dateCarousel == null ? (
+                              <View style={{ height: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
+                            ) : carouselRailWidth === 0 ? (
+                              <View style={{ minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
+                            ) : null}
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={["rgba(248, 250, 252, 0.82)", "rgba(248, 250, 252, 0)"]}
+                              start={{ x: 0, y: 0.5 }}
+                              end={{ x: 1, y: 0.5 }}
+                              style={styles.mobileCarouselFadeLeft}
+                            />
+                            <LinearGradient
+                              pointerEvents="none"
+                              colors={["rgba(248, 250, 252, 0)", "rgba(248, 250, 252, 0.82)"]}
+                              start={{ x: 0, y: 0.5 }}
+                              end={{ x: 1, y: 0.5 }}
+                              style={styles.mobileCarouselFadeRight}
+                            />
+                          </View>
+                        <View style={styles.mobileActionsDock}>
+                        <Pressable
+                          onPress={() => setWebDay(today)}
+                          style={({ pressed }) => [
+                            styles.mobileActionDockButton,
+                            styles.mobileActionDockPrimary,
+                            pressed && styles.webActionButtonPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Aller à aujourd’hui"
+                        >
+                          <AppText style={[styles.mobileActionDockText, styles.mobileActionDockTextPrimary]}>
+                            Aujourd&apos;hui
+                          </AppText>
+                        </Pressable>
+                        <Pressable
+                          onPress={dateOnly ? () => setMobileEditorOpen(false) : goToTimeStep}
+                          style={({ pressed }) => [
+                            styles.mobileActionDockButton,
+                            styles.mobileActionDockPrimary,
+                            pressed && styles.webActionButtonPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={dateOnly ? "Valider la date" : "Passer à la sélection de l’heure"}
+                        >
+                          <AppText style={[styles.mobileActionDockText, styles.mobileActionDockTextPrimary]}>
+                            {dateOnly ? "Valider" : "Continuer"}
+                          </AppText>
+                        </Pressable>
+                        </View>
+                    </View>
+                    </View>
+                    </>
+                  ) : (
+                    <View style={styles.mobileDateStepColumn}>
+                    <View style={styles.mobileDateShell}>
+                      <View style={styles.mobileDateHeader}>
+                        <Pressable
+                          style={[
+                            styles.mobileDateSeg,
+                            timeCarousel === "hour" ? styles.mobileDateSegActive : null,
+                          ]}
+                          onPress={() =>
+                            setTimeCarousel((c) => (c === "hour" ? null : "hour"))
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel="Choisir les heures : liste défilante"
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <AppText style={styles.mobileDateSegText}>
+                            {String(selectedWebDate.getHours()).padStart(2, "0")}
+                          </AppText>
+                        </Pressable>
+                        <View style={styles.mobileTimeHeaderColonWrap}>
+                          <AppText style={styles.mobileTimeHeaderColon}>:</AppText>
+                        </View>
+                        <Pressable
+                          style={[
+                            styles.mobileDateSeg,
+                            timeCarousel === "minute" ? styles.mobileDateSegActive : null,
+                          ]}
+                          onPress={() =>
+                            setTimeCarousel((c) => (c === "minute" ? null : "minute"))
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel="Choisir les minutes : liste défilante"
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <AppText style={styles.mobileDateSegText}>
+                            {String(selectedWebDate.getMinutes()).padStart(2, "0")}
+                          </AppText>
+                        </Pressable>
+                      </View>
+                      <View
+                        style={styles.mobileTimeStripOuter}
+                        onLayout={(e) => setTimeCarouselRailWidth(e.nativeEvent.layout.width)}
+                      >
+                        {timeCarouselRailWidth > 0 && timeCarousel === "hour" ? (
+                          <ScrollView
+                            ref={hourStripRef}
+                            horizontal
+                            snapToInterval={TIME_HOUR_CELL_WIDTH}
+                            snapToAlignment="start"
+                            decelerationRate="fast"
+                            disableIntervalMomentum
+                            nestedScrollEnabled
+                            keyboardShouldPersistTaps="handled"
+                            showsHorizontalScrollIndicator={false}
+                            scrollEventThrottle={16}
+                            style={{ width: timeCarouselRailWidth }}
+                          >
+                            <View style={styles.mobilePickerCarouselCard}>
+                              <View style={styles.mobileTimeHourStripRow}>
+                                {Array.from({ length: 24 }, (_, hour) => {
+                                  const active = selectedWebDate.getHours() === hour;
+                                  return (
+                                    <Pressable
+                                      key={`hour-strip-${hour}`}
+                                      onPress={() => {
+                                        setWebTime(hour, selectedWebDate.getMinutes());
+                                        setTimeCarousel("minute");
+                                      }}
+                                      style={({ pressed }) => [
+                                        styles.mobileTimeStripCell,
+                                        styles.mobileTimeHourStripCell,
+                                        active ? styles.mobileTimeStripCellActive : null,
+                                        pressed ? styles.webActionButtonPressed : null,
+                                      ]}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Choisir ${String(hour).padStart(2, "0")} heures`}
+                                    >
+                                      <AppText
+                                        style={[
+                                          styles.mobileTimeStripValue,
+                                          active ? styles.mobileTimeStripValueActive : null,
+                                        ]}
+                                      >
+                                        {String(hour).padStart(2, "0")}
+                                      </AppText>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          </ScrollView>
+                        ) : null}
+                        {timeCarouselRailWidth > 0 && timeCarousel === "minute" ? (
+                          <ScrollView
+                            ref={minuteStripRef}
+                            horizontal
+                            snapToInterval={TIME_MINUTE_CELL_WIDTH}
+                            snapToAlignment="start"
+                            decelerationRate="fast"
+                            disableIntervalMomentum
+                            nestedScrollEnabled
+                            keyboardShouldPersistTaps="handled"
+                            showsHorizontalScrollIndicator={false}
+                            scrollEventThrottle={16}
+                            style={{ width: timeCarouselRailWidth }}
+                          >
+                            <View style={styles.mobilePickerCarouselCard}>
+                              <View style={styles.mobileTimeMinuteStripRow}>
+                                {TIME_MINUTE_SLOTS.map((minute) => {
+                                  const active =
+                                    nearestFiveMinute(selectedWebDate.getMinutes()) === minute;
+                                  return (
+                                    <Pressable
+                                      key={`minute-strip-${minute}`}
+                                      onPress={() => setWebTime(selectedWebDate.getHours(), minute)}
+                                      style={({ pressed }) => [
+                                        styles.mobileTimeStripCell,
+                                        styles.mobileTimeMinuteStripCell,
+                                        active ? styles.mobileTimeStripCellActive : null,
+                                        pressed ? styles.webActionButtonPressed : null,
+                                      ]}
+                                      accessibilityRole="button"
+                                      accessibilityLabel={`Choisir la minute ${String(minute).padStart(2, "0")}`}
+                                    >
+                                      <AppText
+                                        style={[
+                                          styles.mobileTimeStripValue,
+                                          active ? styles.mobileTimeStripValueActive : null,
+                                        ]}
+                                      >
+                                        {String(minute).padStart(2, "0")}
+                                      </AppText>
+                                    </Pressable>
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          </ScrollView>
+                        ) : null}
+                        {timeCarouselRailWidth > 0 && timeCarousel == null ? (
+                          <View style={{ height: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
+                        ) : null}
+                        {timeCarouselRailWidth === 0 ? (
+                          <View style={{ minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
+                        ) : null}
+                        <LinearGradient
+                          pointerEvents="none"
+                          colors={["rgba(248, 250, 252, 0.82)", "rgba(248, 250, 252, 0)"]}
+                          start={{ x: 0, y: 0.5 }}
+                          end={{ x: 1, y: 0.5 }}
+                          style={styles.mobileCarouselFadeLeft}
+                        />
+                        <LinearGradient
+                          pointerEvents="none"
+                          colors={["rgba(248, 250, 252, 0)", "rgba(248, 250, 252, 0.82)"]}
+                          start={{ x: 0, y: 0.5 }}
+                          end={{ x: 1, y: 0.5 }}
+                          style={styles.mobileCarouselFadeRight}
+                        />
+                      </View>
+                      <View style={styles.mobileActionsDock}>
+                        <Pressable
+                          onPress={() => setMobileStep("date")}
+                          style={({ pressed }) => [
+                            styles.mobileActionDockButton,
+                            styles.mobileActionDockSecondary,
+                            pressed && styles.webActionButtonPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Retour à la sélection de date"
+                        >
+                          <AppText
+                            style={[styles.mobileActionDockText, styles.mobileActionDockTextSecondary]}
+                          >
+                            Retour date
+                          </AppText>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => commitSchedule(new Date())}
+                          style={({ pressed }) => [
+                            styles.mobileActionDockButton,
+                            styles.mobileActionDockPrimary,
+                            pressed && styles.webActionButtonPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Définir sur maintenant"
+                        >
+                          <AppText
+                            style={[styles.mobileActionDockText, styles.mobileActionDockTextPrimary]}
+                          >
+                            Maintenant
+                          </AppText>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => onChange("")}
+                          style={({ pressed }) => [
+                            styles.mobileActionDockButton,
+                            styles.mobileClearButton,
+                            pressed && styles.webActionButtonPressed,
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="Aucune date définie"
+                        >
+                          <AppText
+                            style={[styles.mobileActionDockText, styles.mobileActionDockTextSecondary]}
+                          >
+                            À définir
+                          </AppText>
+                        </Pressable>
+                      </View>
+                    </View>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
-      ) : null}
-
-      {Platform.OS === "android" && androidStep ? (
-        <DateTimePicker
-          value={baseDate}
-          mode={androidStep}
-          display="default"
-          onChange={onAndroidChange}
-        />
-      ) : null}
-
-      {Platform.OS === "web" && webEditorOpen ? (
-        <View style={styles.webEditorCard}>
-          <View style={styles.webInlineGrid}>
-            <View style={styles.webPanel}>
-              <View style={styles.webPanelHeaderRow}>
-                <Pressable
-                  onPress={() =>
-                    setWebVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
-                    )
-                  }
-                  style={({ pressed }) => [styles.webPanelNavButton, pressed && styles.webActionButtonPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mois précédent"
-                >
-                  <Ionicons name="chevron-back" size={16} color={E.TEXT_SEC} />
-                </Pressable>
-                <AppText style={styles.webPanelTitle}>{getMonthTitle(webVisibleMonth)}</AppText>
-                <Pressable
-                  onPress={() =>
-                    setWebVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
-                    )
-                  }
-                  style={({ pressed }) => [styles.webPanelNavButton, pressed && styles.webActionButtonPressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mois suivant"
-                >
-                  <Ionicons name="chevron-forward" size={16} color={E.TEXT_SEC} />
-                </Pressable>
-              </View>
-
-              <View style={styles.webWeekdayRow}>
-                {WEEKDAY_LABELS.map((label) => (
-                  <View key={label} style={styles.webWeekdayCell}>
-                    <AppText style={styles.webWeekdayText}>{label}</AppText>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.webDaysGrid}>
-                {calendarDays.map((day) => {
-                  const inMonth = day.getMonth() === webVisibleMonth.getMonth();
-                  const selected = isSameDay(day, selectedWebDate);
-                  const isToday = isSameDay(day, today);
-                  return (
-                    <Pressable
-                      key={day.toISOString()}
-                      onPress={() => setWebDay(day)}
-                      style={({ pressed }) => [
-                        styles.webDayCell,
-                        !inMonth && styles.webDayCellOutsideMonth,
-                        isToday && styles.webDayCellToday,
-                        selected && styles.webDayCellSelected,
-                        pressed && styles.webActionButtonPressed,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Choisir le ${day.toLocaleDateString("fr-CH")}`}
-                    >
-                      <Text style={[styles.webDayText, selected && styles.webDayTextSelected]}>{day.getDate()}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View style={styles.webActionsRow}>
-                <Pressable
-                  onPress={applyToday}
-                  style={({ pressed }) => [
-                    styles.webActionButton,
-                    styles.webActionButtonPrimary,
-                    pressed && styles.webActionButtonPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Aller à aujourd’hui"
-                >
-                  <AppText style={[styles.webActionText, styles.webActionTextPrimary]}>Aujourd&apos;hui</AppText>
-                </Pressable>
-              </View>
-            </View>
-
-            <View style={styles.webPanel}>
-              <View style={styles.webTimeSelectorsRow}>
-                <View style={styles.webTimeSelector}>
-                  <AppText style={styles.webTimeSelectorLabel}>Heure</AppText>
-                  <View style={styles.webStepperRow}>
-                    <Pressable
-                      onPress={() => setWebHour(shiftHours(selectedWebDate.getHours(), -1))}
-                      style={({ pressed }) => [styles.webStepperButton, pressed && styles.webActionButtonPressed]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Diminuer l’heure"
-                    >
-                      <Ionicons name="remove" size={16} color={E.TEXT_SEC} />
-                    </Pressable>
-                    <Text style={styles.webStepperValue}>{String(selectedWebDate.getHours()).padStart(2, "0")}</Text>
-                    <Pressable
-                      onPress={() => setWebHour(shiftHours(selectedWebDate.getHours(), 1))}
-                      style={({ pressed }) => [styles.webStepperButton, pressed && styles.webActionButtonPressed]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Augmenter l’heure"
-                    >
-                      <Ionicons name="add" size={16} color={E.TEXT_SEC} />
-                    </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.webTimeSelector}>
-                  <AppText style={styles.webTimeSelectorLabel}>Minutes</AppText>
-                  <View style={styles.webStepperRow}>
-                    <Pressable
-                      onPress={() => setWebMinute(shiftMinutes(selectedWebDate.getMinutes(), -5))}
-                      style={({ pressed }) => [styles.webStepperButton, pressed && styles.webActionButtonPressed]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Diminuer les minutes"
-                    >
-                      <Ionicons name="remove" size={16} color={E.TEXT_SEC} />
-                    </Pressable>
-                    <Text style={styles.webStepperValue}>{String(selectedWebDate.getMinutes()).padStart(2, "0")}</Text>
-                    <Pressable
-                      onPress={() => setWebMinute(shiftMinutes(selectedWebDate.getMinutes(), 5))}
-                      style={({ pressed }) => [styles.webStepperButton, pressed && styles.webActionButtonPressed]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Augmenter les minutes"
-                    >
-                      <Ionicons name="add" size={16} color={E.TEXT_SEC} />
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.webPresetRow}>
-                {TIME_PRESETS.map((hour) => (
-                  <Pressable
-                    key={`preset-${hour}`}
-                    onPress={() => {
-                      const next = new Date(selectedWebDate);
-                      next.setHours(hour, 0, 0, 0);
-                      setWebDateTime(next);
-                    }}
-                    style={({ pressed }) => [styles.webPresetChip, pressed && styles.webActionButtonPressed]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Régler l’heure sur ${hour} heures`}
-                  >
-                    <AppText style={styles.webPresetChipText}>{`${String(hour).padStart(2, "0")}:00`}</AppText>
-                  </Pressable>
-                ))}
-              </View>
-
-              <View style={styles.webActionsRow}>
-                <Pressable
-                  onPress={() => setWebDateTime(new Date())}
-                  style={({ pressed }) => [
-                    styles.webActionButton,
-                    styles.webActionButtonPrimary,
-                    pressed && styles.webActionButtonPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Définir sur maintenant"
-                >
-                  <AppText style={[styles.webActionText, styles.webActionTextPrimary]}>Maintenant</AppText>
-                </Pressable>
-                <Pressable
-                  onPress={() => onChange("")}
-                  style={({ pressed }) => [
-                    styles.webActionButton,
-                    styles.webActionButtonSecondary,
-                    pressed && styles.webActionButtonPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Aucune date définie"
-                >
-                  <AppText style={[styles.webActionText, styles.webActionTextSecondary]}>À définir</AppText>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-          <AppText style={styles.webInlineHint}>
-            Sélectionnez la date et l&apos;heure directement, sans saisie ISO manuelle.
-          </AppText>
-        </View>
-      ) : null}
     </View>
   );
 }

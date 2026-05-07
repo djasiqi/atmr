@@ -11,6 +11,12 @@ type IntroState = "loading" | "play" | "skip";
 
 /** Durée du fondu entre la fin du splash et la première page (ms). */
 export const SPLASH_FADE_OUT_MS = 420;
+/** Petit délai pour laisser la landing publique se peindre avant le fade-out. */
+export const SPLASH_EXIT_HOLD_MS = 60;
+/** Fondu du calque Lottie pour une sortie plus douce. */
+export const SPLASH_LOTTIE_FADE_OUT_MS = 260;
+/** Fond aligné avec les écrans publics pour éviter l'effet de flash. */
+export const SPLASH_BACKGROUND_COLOR = "#EAF3F1";
 
 /**
  * Sur web il n’y a pas de Lottie natif (sans dépendance dotlottie) : durée de simulation
@@ -23,6 +29,7 @@ const shouldUseNativeDriver = Platform.OS !== "web";
 export function useBootSplashGate(): {
   overlayMounted: boolean;
   fadeOpacity: Animated.Value;
+  lottieOpacity: Animated.Value;
   showOverlay: boolean;
   pointerEvents: "auto" | "none";
   showLottieLayer: boolean;
@@ -40,6 +47,7 @@ export function useBootSplashGate(): {
   const { status } = useSession();
   const prevStatusRef = useRef(status);
   const fadeOpacity = useRef(new Animated.Value(1)).current;
+  const lottieOpacity = useRef(new Animated.Value(1)).current;
 
   const source = useMemo(() => resolveBootLottieSource(width, height), [width, height]);
 
@@ -90,10 +98,12 @@ export function useBootSplashGate(): {
   useEffect(() => {
     if (showOverlay) {
       fadeOpacity.stopAnimation(() => undefined);
+      lottieOpacity.stopAnimation(() => undefined);
       fadeOpacity.setValue(1);
+      lottieOpacity.setValue(1);
       setOverlayMounted(true);
     }
-  }, [showOverlay, fadeOpacity]);
+  }, [showOverlay, fadeOpacity, lottieOpacity]);
 
   const isExiting = overlayMounted && !showOverlay;
 
@@ -102,24 +112,35 @@ export function useBootSplashGate(): {
       return;
     }
 
-    const anim = Animated.timing(fadeOpacity, {
-      toValue: 0,
-      duration: SPLASH_FADE_OUT_MS,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: shouldUseNativeDriver,
-    });
-
-    anim.start(({ finished }) => {
-      if (finished) {
-        setOverlayMounted(false);
-        fadeOpacity.setValue(1);
-      }
-    });
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(fadeOpacity, {
+          toValue: 0,
+          duration: SPLASH_FADE_OUT_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: shouldUseNativeDriver,
+        }),
+        Animated.timing(lottieOpacity, {
+          toValue: 0,
+          duration: SPLASH_LOTTIE_FADE_OUT_MS,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: shouldUseNativeDriver,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setOverlayMounted(false);
+          fadeOpacity.setValue(1);
+          lottieOpacity.setValue(1);
+        }
+      });
+    }, SPLASH_EXIT_HOLD_MS);
 
     return () => {
-      anim.stop();
+      clearTimeout(timer);
+      fadeOpacity.stopAnimation(() => undefined);
+      lottieOpacity.stopAnimation(() => undefined);
     };
-  }, [showOverlay, overlayMounted, fadeOpacity]);
+  }, [showOverlay, overlayMounted, fadeOpacity, lottieOpacity]);
 
   const lottieBaseAllowed =
     !waitingIntroStorage && (introState === "play" || !BOOT_LOTTIE_FIRST_LAUNCH_ONLY);
@@ -156,6 +177,7 @@ export function useBootSplashGate(): {
   return {
     overlayMounted,
     fadeOpacity,
+    lottieOpacity,
     showOverlay,
     pointerEvents: showOverlay ? "auto" : "none",
     showLottieLayer,
@@ -171,11 +193,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 100000,
     elevation: 100000,
-    backgroundColor: "#ffffff",
+    backgroundColor: SPLASH_BACKGROUND_COLOR,
     justifyContent: "center",
     alignItems: "center",
   },
   lottie: {
+    width: "100%",
+    height: "100%",
+  },
+  lottieLayer: {
     width: "100%",
     height: "100%",
   },

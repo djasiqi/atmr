@@ -777,10 +777,13 @@ def create_app(config_name: str | None = None):
         sio_logger = config_name == "development"
         sio_engineio_logger = config_name == "development"
 
+        # Par défaut : autoriser le WebSocket (aligné avec docker-compose : SIO_DISABLE_UPGRADES=false).
+        # Sinon les clients RN qui tentent le WS en premier reçoivent « websocket error » alors que REST marche.
+        # Pour désactiver en dev ponctuel : SIO_DISABLE_UPGRADES=true
         allow_ws_upgrades = True
         if (
             config_name == "development"
-            and os.getenv("SIO_DISABLE_UPGRADES", "true").lower() == "true"
+            and os.getenv("SIO_DISABLE_UPGRADES", "false").lower() == "true"
         ):
             allow_ws_upgrades = False
 

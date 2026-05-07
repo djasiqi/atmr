@@ -244,7 +244,10 @@ const styles = StyleSheet.create({
   tabIconShell: {
     paddingHorizontal: 13,
     paddingVertical: 9,
-    borderRadius: 22,
+    /** Pilule complète (web + natif) — évite un fond « carré » sur Android quand le rayon fixe ne suit pas la boîte. */
+    borderRadius: 999,
+    alignSelf: "center",
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     minWidth: 44,

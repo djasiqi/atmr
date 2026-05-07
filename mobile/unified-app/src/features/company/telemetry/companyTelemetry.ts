@@ -12,6 +12,7 @@ export type CompanyDispatchTelemetryEvent =
   | "company.dispatch.socket_state_changed"
   | "company.dispatch.contract_fallback"
   | "company.dispatch.contract_failure"
+  | "company.dispatch.auth_failure"
   | "company.dispatch.transfer_conflict";
 
 type EmitCompanyTelemetryOptions = {

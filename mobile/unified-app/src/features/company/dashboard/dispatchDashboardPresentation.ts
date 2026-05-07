@@ -219,6 +219,8 @@ export type DashboardRuntimeMetrics = {
   errMsg: string;
   dataHealthLabel: "Temps réel" | "Repli";
   realtimeHealthyData: boolean;
+  /** Erreur HTTP 401/403 : une seule alerte explicite, sans « données obsolètes » ni doublon réseau. */
+  isAuthFailure: boolean;
 };
 
 export type CompanyOptimizerRuntime = {
@@ -377,7 +379,12 @@ export function buildDashboardPresentation(
     }
   }
 
-  if (metrics.isLikelyNetworkError && metrics.errMsg && !alertLines.some((a) => a.id === "network")) {
+  if (
+    !metrics.isAuthFailure &&
+    metrics.isLikelyNetworkError &&
+    metrics.errMsg &&
+    !alertLines.some((a) => a.id === "network")
+  ) {
     alertLines.push({ id: "network", severity: "error", text: metrics.errMsg });
   }
 

@@ -96,6 +96,10 @@ COLOR_MUTED_PDF = "#64748b"
 # Marges horizontales page facture A4 (contenu = frames ReportLab)
 INVOICE_PAGE_LEFT_MARGIN_CM = 1.9
 INVOICE_PAGE_RIGHT_MARGIN_CM = 1.9
+# Marges verticales : page 1 réserve le pied légal ; pages suivantes marge bas réduite (pas de reprise du pied).
+INVOICE_PAGE_TOP_MARGIN_CM = 2.0
+INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM = 2.5
+INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM = 1.1
 
 # Pied de page : mention plateforme (sous le trait, au bas de la marge)
 FOOTER_PLATFORM_TAGLINE = (
@@ -112,10 +116,14 @@ def _make_invoice_doc_with_qrbill_page(
     right_margin_cm: float,
     on_first_page: Any,
     on_later_pages: Any = None,
+    *,
+    bottom_margin_later_cm: float | None = None,
 ) -> Any:
     """Crée un DocTemplate avec une page QR-Bill dédiée (marge bas 0.5 cm, pas de pied légal).
 
-    Les pages de contenu gardent bottom_margin_cm (ex: 2.5 cm pour pied de page).
+    Les pages de contenu : ``bottom_margin_cm`` sur la première page (réserve pied légal).
+    Si ``bottom_margin_later_cm`` est fourni, les pages suivantes utilisent cette marge bas
+    (plus de place utile, le pied n’est pas répété).
     La page QR-Bill utilise QR_BILL_PAGE_BOTTOM_MARGIN_CM (0.5 cm).
     """
     from reportlab.lib.pagesizes import A4
@@ -136,14 +144,24 @@ def _make_invoice_doc_with_qrbill_page(
     )
     doc._calc()
 
-    # Frame pages contenu (marge bas standard)
-    frame_content = Frame(
+    # Frames pages contenu (page 1 vs suivantes si marge bas réduite sur les suivantes)
+    frame_first = Frame(
         doc.leftMargin,
         bottom_margin_cm * cm,
         doc.width,
         A4[1] - doc.topMargin - bottom_margin_cm * cm,
-        id="normal",
+        id="content_first",
     )
+    if bottom_margin_later_cm is None:
+        frame_later = frame_first
+    else:
+        frame_later = Frame(
+            doc.leftMargin,
+            bottom_margin_later_cm * cm,
+            doc.width,
+            A4[1] - doc.topMargin - bottom_margin_later_cm * cm,
+            id="content_later",
+        )
     # Frame page QR-Bill (marge bas 0.5 cm, pas de pied légal)
     qrbill_bottom = QR_BILL_PAGE_BOTTOM_MARGIN_CM * cm
     frame_qrbill = Frame(
@@ -156,8 +174,8 @@ def _make_invoice_doc_with_qrbill_page(
 
     doc.addPageTemplates(
         [
-            PageTemplate(id="First", frames=frame_content, onPage=on_first_page),
-            PageTemplate(id="Later", frames=frame_content, onPage=on_later_pages),
+            PageTemplate(id="First", frames=frame_first, onPage=on_first_page),
+            PageTemplate(id="Later", frames=frame_later, onPage=on_later_pages),
             PageTemplate(id="QRBill", frames=frame_qrbill),
         ]
     )
@@ -313,6 +331,11 @@ def _make_legal_footer_page_callback(
         left_x = doc.leftMargin
         right_x = page_w - doc.rightMargin
         avail_width = right_x - left_x
+
+        def _cx_left(w_used: float) -> float:
+            """Centre un flowable de largeur rendue ``w_used`` dans la zone utile [left_x, right_x]."""
+            return left_x + max(0.0, (avail_width - w_used) / 2.0)
+
         # Même typo (8 pt, gris) : bloc légal + barre identité + LIRIE, tout **centré** sur la largeur utile.
         # Pas de spaceAfter du parent (centered_style).
         muted_footer_tagline_style = ParagraphStyle(
@@ -346,7 +369,7 @@ def _make_legal_footer_page_callback(
                 muted_footer_tagline_style,
             )
             w_t, h_t = p_tag.wrap(avail_width, 100)
-            p_tag.drawOn(canvas, left_x, y_pos)
+            p_tag.drawOn(canvas, _cx_left(w_t), y_pos)
             y_pos += h_t + 1.5 * mm
 
         if tag and upper_after_tag:
@@ -372,7 +395,7 @@ def _make_legal_footer_page_callback(
         if combined_legal_identity:
             p_body = Paragraph(combined_legal_identity, muted_footer_tagline_style)
             w_b, h_b = p_body.wrap(avail_width, 260)
-            p_body.drawOn(canvas, left_x, y_pos)
+            p_body.drawOn(canvas, _cx_left(w_b), y_pos)
             y_pos += h_b + 4
 
         if mention:
@@ -382,7 +405,7 @@ def _make_legal_footer_page_callback(
                 centered_style,
             )
             w2, _ = p2.wrap(avail_width, 50)
-            p2.drawOn(canvas, (page_w - w2) / 2, y_pos)
+            p2.drawOn(canvas, _cx_left(w2), y_pos)
 
         canvas.restoreState()
 
@@ -5280,11 +5303,12 @@ class PDFService:
         # Doc avec page QR-Bill dédiée (marge bas 2 cm, pas de pied légal)
         doc = _make_invoice_doc_with_qrbill_page(
             buffer,
-            top_margin_cm=2,
-            bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
+            top_margin_cm=INVOICE_PAGE_TOP_MARGIN_CM,
+            bottom_margin_cm=INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
             left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
             right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
             on_first_page=_on_first_page,
+            bottom_margin_later_cm=INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM,
         )
 
         # === QR-BILL SUISSE OFFICIEL SUR PAGE SÉPARÉE ===
@@ -6145,9 +6169,9 @@ class PDFService:
         )
         from reportlab.lib.units import cm, mm
         from reportlab.platypus import (
+            NextPageTemplate,
             PageBreak,
             Paragraph,
-            SimpleDocTemplate,
             Spacer,
             Table,
             TableStyle,
@@ -6156,14 +6180,6 @@ class PDFService:
         font_name, font_name_bold = _ensure_dejavu_pdf_fonts()
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            topMargin=2 * cm,
-            bottomMargin=2.5 * cm,  # Réserve espace pour pied de page légal
-            leftMargin=INVOICE_PAGE_LEFT_MARGIN_CM * cm,
-            rightMargin=INVOICE_PAGE_RIGHT_MARGIN_CM * cm,
-        )
 
         styles = getSampleStyleSheet()
         _det_lead = int(round(FONT_BODY * 1.3))
@@ -6211,6 +6227,11 @@ class PDFService:
             fontName=font_name,
         )
 
+        usable_width_pt = float(
+            A4[0]
+            - (INVOICE_PAGE_LEFT_MARGIN_CM + INVOICE_PAGE_RIGHT_MARGIN_CM) * cm
+        )
+
         story = []
         company = invoice.company
 
@@ -6254,7 +6275,6 @@ class PDFService:
             15.0  # déplace destinataire à droite (pas d'espace volé à l'expéditeur)
         )
         dest_width_pt = DEST_ADDR_MAX_WIDTH_MM * mm
-        usable_width_pt = doc.pagesize[0] - doc.leftMargin - doc.rightMargin
         company_width_pt = usable_width_pt - dest_width_pt
 
         company_name = company.name or "[Nom entreprise non configuré]"
@@ -6534,7 +6554,7 @@ class PDFService:
             s2_main_style,
             bookings_by_id,
             include_non_ride=True,
-            available_width_pt=doc.width,
+            available_width_pt=usable_width_pt,
             max_simple_description_lines=None,
         )
         app_logger.info(
@@ -6605,7 +6625,7 @@ class PDFService:
             story.append(note_para)
             story.append(Spacer(1, 6))
         _gd_hint_d = _global_discount_hint_flowable(
-            invoice, styles, font_name, content_width_pt=doc.width
+            invoice, styles, font_name, content_width_pt=usable_width_pt
         )
         if _gd_hint_d is not None:
             story.append(Spacer(1, 10))
@@ -6719,6 +6739,7 @@ class PDFService:
             _on_first_page_debug_envelope(canvas, doc)
 
         # === QR-BILL ===
+        story.append(NextPageTemplate("QRBill"))
         story.append(PageBreak())
         story.append(Spacer(1, QR_BILL_SPACER_PT))
 
@@ -6745,8 +6766,18 @@ class PDFService:
             getattr(invoice, "id", None),
         )
 
+        doc = _make_invoice_doc_with_qrbill_page(
+            buffer,
+            top_margin_cm=INVOICE_PAGE_TOP_MARGIN_CM,
+            bottom_margin_cm=INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
+            left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
+            right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
+            on_first_page=_on_first_page_det,
+            bottom_margin_later_cm=INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM,
+        )
+
         _perf_build_d_start = perf_counter()
-        doc.build(story, onFirstPage=_on_first_page_det)
+        doc.build(story)
         app_logger.info(
             "[PDF_PERF] doc_build_ms=%s invoice_id=%s",
             int((perf_counter() - _perf_build_d_start) * 1000),
@@ -6756,463 +6787,6 @@ class PDFService:
         # ✅ Calculer nb_rows depuis consolidated_lines (après regroupement aller/retour)
         nb_rows = len(consolidated_lines) if consolidated_lines else 0
         return (buffer.getvalue(), nb_rows)
-
-    def _create_swiss_qr_bill_layout(self, invoice, billing_settings, qr_image):
-        """Crée le layout authentique du QR-Bill suisse."""
-        # ruff: noqa: I001
-        from reportlab.lib import colors
-        from reportlab.lib.enums import (
-            TA_CENTER,
-            TA_LEFT,
-        )
-        from reportlab.lib.styles import (
-            ParagraphStyle,
-            getSampleStyleSheet,
-        )
-        from reportlab.platypus import (
-            Paragraph,
-            Spacer,
-        )
-
-        font_name, font_name_bold = _ensure_dejavu_pdf_fonts()
-
-        styles = getSampleStyleSheet()
-
-        # Style pour le texte normal
-        normal_style = ParagraphStyle(
-            "Normal",
-            parent=styles["Normal"],
-            fontSize=8,
-            textColor=colors.black,
-            alignment=TA_LEFT,
-            spaceAfter=2,
-            fontName=font_name,
-        )
-
-        # Style pour les titres de section
-        section_title_style = ParagraphStyle(
-            "SectionTitle",
-            parent=styles["Normal"],
-            fontSize=12,
-            fontName=font_name_bold,
-            alignment=TA_LEFT,
-            spaceAfter=8,
-            textColor=colors.black,
-        )
-
-        # Style pour les labels
-        label_style = ParagraphStyle(
-            "Label",
-            parent=styles["Normal"],
-            fontSize=8,
-            fontName=font_name,
-            alignment=TA_LEFT,
-            spaceAfter=2,
-            textColor=colors.black,
-        )
-
-        # Style pour les valeurs
-        value_style = ParagraphStyle(
-            "Value",
-            parent=styles["Normal"],
-            fontSize=8,
-            fontName=font_name_bold,
-            alignment=TA_LEFT,
-            spaceAfter=4,
-            textColor=colors.black,
-        )
-
-        # === SECTION GAUCHE: EMPFANGSSCHEIN (Reçu) ===
-        left_section = []
-
-        # Titre
-        left_section.append(Paragraph("Empfangsschein", section_title_style))
-
-        # Informations créancier
-        left_section.append(Paragraph("Konto / Zahlbar an", label_style))
-        left_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
-            )
-        )
-        company = invoice.company
-        left_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
-                normal_style,
-            )
-        )
-        # Utiliser l'adresse de domiciliation
-        street = (
-            company.domicile_address_line1
-            or company.address
-            or "[Adresse non configurée]"
-        )
-        left_section.append(Paragraph(_xml_escape_for_paragraph(street), normal_style))
-        postal_city = (
-            f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
-            or "[Code postal/ville non configuré]"
-        )
-        left_section.append(
-            Paragraph(_xml_escape_for_paragraph(postal_city), normal_style)
-        )
-        left_section.append(Spacer(1, 8))
-
-        # Informations débiteur
-        left_section.append(Paragraph("Zahlbar durch", label_style))
-        _zbd_name = (
-            f"{invoice.client.user.first_name or ''} "
-            f"{invoice.client.user.last_name or ''}"
-        ).strip()
-        left_section.append(
-            Paragraph(_xml_escape_for_paragraph(_zbd_name), normal_style)
-        )
-        left_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(
-                    invoice.client.domicile_address or "Adresse non renseignée"
-                ),
-                normal_style,
-            )
-        )
-        _zbd_pc = (
-            f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}"
-        ).strip()
-        left_section.append(Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style))
-        left_section.append(Spacer(1, 8))
-
-        # Référence
-        left_section.append(Paragraph("Referenz", label_style))
-        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        left_section.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
-        left_section.append(Spacer(1, 8))
-
-        # Montant
-        left_section.append(Paragraph("Währung", label_style))
-        left_section.append(Paragraph("CHF", value_style))
-        left_section.append(Paragraph("Betrag", label_style))
-        left_section.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
-        left_section.append(Spacer(1, 20))
-
-        # Annahmestelle
-        left_section.append(
-            Paragraph(
-                "Annahmestelle",
-                ParagraphStyle(
-                    "Center", parent=styles["Normal"], fontSize=8, alignment=TA_CENTER
-                ),
-            )
-        )
-
-        # === SECTION DROITE: ZAHLTEIL (Partie paiement) ===
-        right_section = []
-
-        # Titre
-        right_section.append(Paragraph("Zahlteil", section_title_style))
-
-        # Informations créancier
-        right_section.append(Paragraph("Konto / Zahlbar an", label_style))
-        right_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
-            )
-        )
-        right_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
-                normal_style,
-            )
-        )
-        right_section.append(Paragraph(_xml_escape_for_paragraph(street), normal_style))
-        right_section.append(
-            Paragraph(_xml_escape_for_paragraph(postal_city), normal_style)
-        )
-        right_section.append(Spacer(1, 8))
-
-        # QR Code
-        right_section.append(qr_image)
-        right_section.append(Spacer(1, 8))
-
-        # Informations débiteur
-        right_section.append(Paragraph("Zahlbar durch", label_style))
-        right_section.append(
-            Paragraph(_xml_escape_for_paragraph(_zbd_name), normal_style)
-        )
-        right_section.append(
-            Paragraph(
-                _xml_escape_for_paragraph(
-                    invoice.client.domicile_address or "Adresse non renseignée"
-                ),
-                normal_style,
-            )
-        )
-        right_section.append(
-            Paragraph(_xml_escape_for_paragraph(_zbd_pc), normal_style)
-        )
-        right_section.append(Spacer(1, 8))
-
-        # Référence
-        right_section.append(Paragraph("Referenz", label_style))
-        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        right_section.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
-        right_section.append(Spacer(1, 8))
-
-        # Montant
-        right_section.append(Paragraph("Währung", label_style))
-        right_section.append(Paragraph("CHF", value_style))
-        right_section.append(Paragraph("Betrag", label_style))
-        right_section.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
-
-        # === LIGNE DE COUPE ===
-        cut_line = [
-            Paragraph(
-                "✂",
-                ParagraphStyle(
-                    "CutLine", parent=styles["Normal"], fontSize=12, alignment=TA_CENTER
-                ),
-            )
-        ]
-
-        # Retourner les données du tableau
-        return [[left_section, cut_line, right_section]]
-
-    def _create_official_swiss_qr_bill(self, invoice, billing_settings, qr_image):
-        """Crée un QR-Bill suisse officiel avec le format exact."""
-        # ruff: noqa: I001
-        from reportlab.lib import colors
-        from reportlab.lib.enums import (
-            TA_CENTER,
-            TA_LEFT,
-        )
-        from reportlab.lib.styles import (
-            ParagraphStyle,
-            getSampleStyleSheet,
-        )
-        from reportlab.lib.units import cm
-        from reportlab.platypus import (
-            Paragraph,
-            Spacer,
-            Table,
-            TableStyle,
-        )
-
-        font_name, font_name_bold = _ensure_dejavu_pdf_fonts()
-
-        styles = getSampleStyleSheet()
-
-        # Styles spécifiques pour le QR-Bill suisse
-        title_style = ParagraphStyle(
-            "QRTitle",
-            parent=styles["Normal"],
-            fontSize=11,
-            fontName=font_name_bold,
-            alignment=TA_LEFT,
-            spaceAfter=6,
-            textColor=colors.black,
-        )
-
-        label_style = ParagraphStyle(
-            "QRLabel",
-            parent=styles["Normal"],
-            fontSize=7,
-            fontName=font_name,
-            alignment=TA_LEFT,
-            spaceAfter=1,
-            textColor=colors.black,
-        )
-
-        value_style = ParagraphStyle(
-            "QRValue",
-            parent=styles["Normal"],
-            fontSize=7,
-            fontName=font_name_bold,
-            alignment=TA_LEFT,
-            spaceAfter=3,
-            textColor=colors.black,
-        )
-
-        normal_text_style = ParagraphStyle(
-            "QRNormal",
-            parent=styles["Normal"],
-            fontSize=7,
-            fontName=font_name,
-            alignment=TA_LEFT,
-            spaceAfter=1,
-            textColor=colors.black,
-        )
-
-        # === CONSTRUCTION DU QR-BILL ===
-
-        # Section gauche - Empfangsschein
-        left_content = []
-        left_content.append(Paragraph("Empfangsschein", title_style))
-        left_content.append(Spacer(1, 4))
-
-        # Konto / Zahlbar an
-        left_content.append(Paragraph("Konto / Zahlbar an", label_style))
-        left_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
-            )
-        )
-        company = invoice.company
-        left_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
-                normal_text_style,
-            )
-        )
-        street = (
-            company.domicile_address_line1
-            or company.address
-            or "[Adresse non configurée]"
-        )
-        left_content.append(
-            Paragraph(_xml_escape_for_paragraph(street), normal_text_style)
-        )
-        postal_city = (
-            f"{company.domicile_zip or ''} {company.domicile_city or ''}".strip()
-            or "[Code postal/ville non configuré]"
-        )
-        left_content.append(
-            Paragraph(_xml_escape_for_paragraph(postal_city), normal_text_style)
-        )
-        left_content.append(Spacer(1, 6))
-
-        # Zahlbar durch
-        left_content.append(Paragraph("Zahlbar durch", label_style))
-        _ofl_zbd = (
-            f"{invoice.client.user.first_name or ''} "
-            f"{invoice.client.user.last_name or ''}"
-        ).strip()
-        left_content.append(
-            Paragraph(_xml_escape_for_paragraph(_ofl_zbd), normal_text_style)
-        )
-        left_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(
-                    invoice.client.domicile_address or "Adresse non renseignée"
-                ),
-                normal_text_style,
-            )
-        )
-        _ofl_zpc = (
-            f"{invoice.client.domicile_zip or ''} {invoice.client.domicile_city or ''}"
-        ).strip()
-        left_content.append(
-            Paragraph(_xml_escape_for_paragraph(_ofl_zpc), normal_text_style)
-        )
-        left_content.append(Spacer(1, 6))
-
-        # Referenz
-        left_content.append(Paragraph("Referenz", label_style))
-        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        left_content.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
-        left_content.append(Spacer(1, 6))
-
-        # Währung et Betrag
-        left_content.append(Paragraph("Währung", label_style))
-        left_content.append(Paragraph("CHF", value_style))
-        left_content.append(Paragraph("Betrag", label_style))
-        left_content.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
-        left_content.append(Spacer(1, 20))
-
-        # Annahmestelle
-        left_content.append(
-            Paragraph(
-                "Annahmestelle",
-                ParagraphStyle(
-                    "Center", parent=styles["Normal"], fontSize=7, alignment=TA_CENTER
-                ),
-            )
-        )
-
-        # Section droite - Zahlteil
-        right_content = []
-        right_content.append(Paragraph("Zahlteil", title_style))
-        right_content.append(Spacer(1, 4))
-
-        # Konto / Zahlbar an
-        right_content.append(Paragraph("Konto / Zahlbar an", label_style))
-        right_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(billing_settings.iban or ""), value_style
-            )
-        )
-        right_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(company.name or "[Nom non configuré]"),
-                normal_text_style,
-            )
-        )
-        right_content.append(
-            Paragraph(_xml_escape_for_paragraph(street), normal_text_style)
-        )
-        right_content.append(
-            Paragraph(_xml_escape_for_paragraph(postal_city), normal_text_style)
-        )
-        right_content.append(Spacer(1, 6))
-
-        # QR Code
-        right_content.append(qr_image)
-        right_content.append(Spacer(1, 6))
-
-        # Zahlbar durch
-        right_content.append(Paragraph("Zahlbar durch", label_style))
-        right_content.append(
-            Paragraph(_xml_escape_for_paragraph(_ofl_zbd), normal_text_style)
-        )
-        right_content.append(
-            Paragraph(
-                _xml_escape_for_paragraph(
-                    invoice.client.domicile_address or "Adresse non renseignée"
-                ),
-                normal_text_style,
-            )
-        )
-        right_content.append(
-            Paragraph(_xml_escape_for_paragraph(_ofl_zpc), normal_text_style)
-        )
-        right_content.append(Spacer(1, 6))
-
-        # Referenz
-        right_content.append(Paragraph("Referenz", label_style))
-        qr_ref = self.qrbill_service.generate_qr_reference(invoice) or ""
-        right_content.append(Paragraph(_xml_escape_for_paragraph(qr_ref), value_style))
-        right_content.append(Spacer(1, 6))
-
-        # Währung et Betrag
-        right_content.append(Paragraph("Währung", label_style))
-        right_content.append(Paragraph("CHF", value_style))
-        right_content.append(Paragraph("Betrag", label_style))
-        right_content.append(Paragraph(f"{invoice.total_amount:.2f}", value_style))
-
-        # Créer le tableau avec ligne de coupe
-        qr_bill_data = [[left_content, "", right_content]]
-
-        # Tableau QR-Bill avec ligne de coupe
-        qr_bill_table = Table(qr_bill_data, colWidths=[8.5 * cm, 0.3 * cm, 8.5 * cm])
-        qr_bill_table.setStyle(
-            TableStyle(
-                [
-                    # Bordures extérieures
-                    ("BOX", (0, 0), (-1, -1), 1, colors.black),
-                    # Ligne de coupe verticale
-                    ("LINEBEFORE", (1, 0), (1, -1), 1, colors.black),
-                    # Alignement
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    # Padding
-                    ("PADDING", (0, 0), (0, -1), 8),  # Section gauche
-                    ("PADDING", (2, 0), (2, -1), 8),  # Section droite
-                    ("PADDING", (1, 0), (1, -1), 0),  # Ligne de coupe
-                    # Fond blanc
-                    ("BACKGROUND", (0, 0), (-1, -1), colors.white),
-                ]
-            )
-        )
-
-        return qr_bill_table
 
     def _create_reminder_pdf_content(self, invoice, level, reminder=None):
         """⚠️ DÉPRÉCIÉ: Cette fonction n'est plus utilisée.

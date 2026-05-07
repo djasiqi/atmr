@@ -828,7 +828,11 @@ export function useRideFormState() {
   const [pickupAddress, setPickupAddress] = useState<RideAddressOption | null>(null);
   const [dropoffAddress, setDropoffAddress] = useState<RideAddressOption | null>(null);
   const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
-  const [recurrence, setRecurrence] = useState<"none" | "daily" | "weekly">("none");
+  const [recurrence, setRecurrence] = useState<"none" | "daily" | "weekly" | "custom">("none");
+  const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
+  const [recurrenceOccurrences, setRecurrenceOccurrences] = useState(10);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
+  const [recurrenceLimitMode, setRecurrenceLimitMode] = useState<"count" | "until" | "open">("count");
   const [internalNotes, setInternalNotes] = useState("");
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [amountInput, setAmountInput] = useState("");
@@ -883,6 +887,10 @@ export function useRideFormState() {
     setDropoffAddress(null);
     setScheduledAt(defaultScheduledAt);
     setRecurrence("none");
+    setRecurrenceDays([]);
+    setRecurrenceOccurrences(10);
+    setRecurrenceEndDate("");
+    setRecurrenceLimitMode("count");
     setInternalNotes("");
     setIsRoundTrip(false);
     setAmountInput("");
@@ -917,6 +925,14 @@ export function useRideFormState() {
     setScheduledAt,
     recurrence,
     setRecurrence,
+    recurrenceDays,
+    setRecurrenceDays,
+    recurrenceOccurrences,
+    setRecurrenceOccurrences,
+    recurrenceEndDate,
+    setRecurrenceEndDate,
+    recurrenceLimitMode,
+    setRecurrenceLimitMode,
     internalNotes,
     setInternalNotes,
     isRoundTrip,

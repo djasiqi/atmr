@@ -34,6 +34,12 @@ export function getDispatchApiErrorMessage(error: unknown, fallback: string): st
   }
   const ax = error as AxiosError<unknown>;
   const st = ax.response?.status;
+  if (st === 401) {
+    return "Session expirée ou non autorisée. Reconnectez-vous.";
+  }
+  if (st === 403) {
+    return "Accès refusé pour cette ressource ou cette action.";
+  }
   const d = ax.response?.data;
   if (d && typeof d === "object") {
     const msg = (d as Record<string, unknown>).message;
@@ -83,17 +89,31 @@ async function requestWithFallback<T>(
       return await requests[index]();
     } catch (error) {
       lastError = error;
+      const status =
+        typeof (error as AxiosError)?.response?.status === "number"
+          ? (error as AxiosError).response?.status
+          : null;
       if (index === requests.length - 1 || !shouldTryFallback(error)) {
+        if (status === 401 || status === 403) {
+          emitCompanyDispatchTelemetry(
+            "company.dispatch.auth_failure",
+            {
+              source: "companyApi.requestWithFallback",
+              domain: trace?.domain ?? "unknown",
+              context_id: trace?.contextId ?? null,
+              status,
+            },
+            { allowWhenDisabled: true }
+          );
+          throw error;
+        }
         emitCompanyDispatchTelemetry(
           "company.dispatch.contract_failure",
           {
             source: "companyApi.requestWithFallback",
             domain: trace?.domain ?? "unknown",
             context_id: trace?.contextId ?? null,
-            status:
-              typeof (error as AxiosError)?.response?.status === "number"
-                ? (error as AxiosError).response?.status
-                : null,
+            status,
           },
           { allowWhenDisabled: true }
         );

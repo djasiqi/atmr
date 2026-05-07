@@ -21,13 +21,22 @@ export function BootSplashGate({ children }: Props) {
             g.styles.layer,
             {
               opacity: g.fadeOpacity,
-              paddingTop: g.insets.top,
-              paddingBottom: g.insets.bottom,
             },
           ]}
           pointerEvents={g.pointerEvents}
         >
-          {g.showLottieLayer ? <View style={g.styles.lottie} /> : null}
+          {g.showLottieLayer ? (
+            <Animated.View
+              style={[
+                g.styles.lottieLayer,
+                {
+                  opacity: g.lottieOpacity,
+                },
+              ]}
+            >
+              <View style={g.styles.lottie} />
+            </Animated.View>
+          ) : null}
         </Animated.View>
       ) : null}
     </>

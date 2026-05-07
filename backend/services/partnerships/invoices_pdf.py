@@ -39,8 +39,11 @@ from models import CompanyBillingSettings
 from models.booking_transfer import BookingTransfer
 from models.partner_invoice import PartnerInvoice
 from services.documents.pdf import (
+    INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
+    INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM,
     INVOICE_PAGE_LEFT_MARGIN_CM,
     INVOICE_PAGE_RIGHT_MARGIN_CM,
+    INVOICE_PAGE_TOP_MARGIN_CM,
     INVOICE_PREVIEW_TOTALS_AMOUNT_CM,
     INVOICE_PREVIEW_TOTALS_LABEL_CM,
     INVOICE_PREVIEW_TOTALS_LABEL_RIGHT_PADDING_PT,
@@ -309,11 +312,12 @@ def generate_partner_invoice_pdf_content(
     # === CRÉER LE DOCUMENT avec PageTemplates (IDENTIQUE à pdf.py) ===
     doc = _make_invoice_doc_with_qrbill_page(
         buffer,
-        top_margin_cm=2,
-        bottom_margin_cm=2.5,  # Réserve espace pour pied de page légal
+        top_margin_cm=INVOICE_PAGE_TOP_MARGIN_CM,
+        bottom_margin_cm=INVOICE_PAGE_BOTTOM_MARGIN_FIRST_CM,
         left_margin_cm=INVOICE_PAGE_LEFT_MARGIN_CM,
         right_margin_cm=INVOICE_PAGE_RIGHT_MARGIN_CM,
         on_first_page=_on_first_page,
+        bottom_margin_later_cm=INVOICE_PAGE_BOTTOM_MARGIN_LATER_CM,
     )
 
     story: list[Any] = []

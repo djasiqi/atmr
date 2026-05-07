@@ -1,6 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { Platform } from "react-native";
 import { isFeatureEnabled } from "../../../core/featureFlags/registry";
+import { getResolvedApiBaseUrl } from "../../../core/api/client";
 import { contextRealtimeRouter } from "../../../core/realtime/contextRealtimeRouter";
 import { getRealtimeChannelsForSurface } from "../../../core/realtime/contextRegistry";
 import { normalizeCompanyEventType } from "../../../core/realtime/eventContracts";
@@ -15,27 +16,59 @@ type CompanyRealtimeListener = (snapshot: CompanyRealtimeSnapshot) => void;
 const SOCKET_EVENTS = getRealtimeChannelsForSurface("company");
 
 /**
- * Résout l'URL Socket.IO. Priorité : URL explicite company/driver, sinon
- * l'origine de `EXPO_PUBLIC_API_BASE_URL` (même hôte:port que l’API Flask).
+ * Natif : (0) WebSocket seul comme le flux driver ; (1) long-poll seul.
+ * Important : avec `upgrade: false` au palier polling, Engine.IO n’essaie pas d’upgrader vers le WS
+ * (sinon même « websocket error » en boucle alors qu’on a basculé sur le polling).
+ */
+const NATIVE_SOCKET_TRANSPORT_STEPS = [
+  ["websocket"],
+  ["polling"],
+] as const;
+
+/**
+ * Résout l'URL Socket.IO pour le flux **company** uniquement.
+ * Priorité : `EXPO_PUBLIC_COMPANY_SOCKET_URL`, puis l’origine de `EXPO_PUBLIC_API_BASE_URL`
+ * (même hôte:port que l’API Flask). Pas de repli sur `EXPO_PUBLIC_DRIVER_SOCKET_URL` :
+ * le realtime driver et le bridge company sont indépendants.
  * Exporté pour l’écran de diagnostic (paramètres entreprise).
  */
 export function getResolvedCompanySocketUrl(): string {
-  const a =
-    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL?.trim() ||
-    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL?.trim() ||
-    "";
-  if (a) {
-    return a;
+  const company = process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL?.trim();
+  if (company) {
+    return company;
   }
-  const base = process.env.EXPO_PUBLIC_API_BASE_URL;
-  if (base) {
+  // Utiliser l'URL résolue (correction LAN IP Metro incluse en dev) plutôt que la variable d'env brute.
+  // Sans ça, si l'IP LAN du PC change, l'API fonctionne (resolveBaseUrl la corrige) mais Socket.IO
+  // pointe sur l'ancienne IP → ECONNREFUSED → description: 0.
+  const resolved = getResolvedApiBaseUrl();
+  if (resolved) {
     try {
-      return new URL(base).origin;
+      return new URL(resolved).origin;
     } catch {
       return "";
     }
   }
   return "";
+}
+
+/** Quelle env a résolu `getResolvedCompanySocketUrl()` (sans exposer les secrets — pour logs / diagnostics). */
+export function getResolvedCompanySocketEnvSource():
+  | "EXPO_PUBLIC_COMPANY_SOCKET_URL"
+  | "EXPO_PUBLIC_API_BASE_URL"
+  | "none" {
+  if (process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL?.trim()) {
+    return "EXPO_PUBLIC_COMPANY_SOCKET_URL";
+  }
+  if (process.env.EXPO_PUBLIC_API_BASE_URL?.trim()) {
+    return "EXPO_PUBLIC_API_BASE_URL";
+  }
+  return "none";
+}
+
+/** Identifiant entreprise nu (`"1"`) depuis `company:1` — query Socket.IO si le backend le lit à part `context_id`. */
+export function getCompanyNumericIdFromContextId(contextId: string): string {
+  const m = /^company:(.+)$/.exec(contextId.trim());
+  return m?.[1]?.trim() ?? "";
 }
 
 const MAP_SILENCE_RESYNC_MS = 120_000;
@@ -47,6 +80,42 @@ const TOKEN_WAIT_FIRST_MS = 80;
 
 const CONNECT_ERROR_DEV_LOG_COOLDOWN_MS = 8_000;
 
+/** Champs utiles pour Metro / DevTools (sans jeton). Engine.IO renvoie souvent un message générique seul. */
+function describeConnectErrorForDev(error: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (error instanceof Error) {
+    out.name = error.name;
+    out.message = error.message;
+    const c = (error as Error & { cause?: unknown }).cause;
+    if (c !== undefined) {
+      out.cause = c instanceof Error ? c.message : String(c);
+    }
+  }
+  if (typeof error === "object" && error !== null) {
+    const e = error as Record<string, unknown>;
+    for (const key of ["description", "type", "context"] as const) {
+      const v = e[key];
+      if (
+        v !== undefined &&
+        (typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+      ) {
+        out[key] = v;
+      }
+    }
+    const data = e.data;
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const d = data as Record<string, unknown>;
+      if (typeof d.code === "string" || typeof d.code === "number") {
+        out.data_code = d.code;
+      }
+      if (typeof d.message === "string") {
+        out.data_message = d.message;
+      }
+    }
+  }
+  return out;
+}
+
 class CompanyRealtimeBridge {
   private socket: Socket | null = null;
   private listeners = new Set<CompanyRealtimeListener>();
@@ -54,6 +123,15 @@ class CompanyRealtimeBridge {
   private tokenWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenWaitAttempt = 0;
   private hasConnectedOnce = false;
+  /** iOS/Android : index dans `NATIVE_SOCKET_TRANSPORT_STEPS`. */
+  private nativeTransportEscalation = 0;
+
+  private lastNativeTransportStep(): number {
+    return Math.min(
+      this.nativeTransportEscalation,
+      NATIVE_SOCKET_TRANSPORT_STEPS.length - 1,
+    );
+  }
   /** Limite le spam `console.warn` en dev lors de reconnexions en boucle. */
   private lastConnectErrorDevLogAt = 0;
   private lastConnectErrorDevLogMsg: string | null = null;
@@ -76,6 +154,20 @@ class CompanyRealtimeBridge {
       this.tokenWaitTimer = null;
     }
     this.tokenWaitAttempt = 0;
+  }
+
+  /** Coupe la socket sans remettre le bridge en « idle » (évite d’annuler une escalade transport en cours). */
+  private softDisconnectSocket() {
+    this.clearTokenWait();
+    if (this.silenceTimer) {
+      clearInterval(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
   }
 
   /** Attend le Bearer (quelques centaines de ms) avant d’abandonner. */
@@ -180,7 +272,12 @@ class CompanyRealtimeBridge {
       return;
     }
 
-    this.disconnect();
+    const prevCtx = this.snapshot.contextId;
+    if (prevCtx !== null && prevCtx !== contextId) {
+      this.nativeTransportEscalation = 0;
+    }
+
+    this.softDisconnectSocket();
     this.snapshot = {
       ...this.snapshot,
       contextId,
@@ -194,7 +291,7 @@ class CompanyRealtimeBridge {
     if (!socketUrl) {
       this.setStatus(
         "failed",
-        "Aucune URL socket : EXPO_PUBLIC_COMPANY_SOCKET_URL (ou EXPO_PUBLIC_DRIVER_SOCKET_URL) ou EXPO_PUBLIC_API_BASE_URL (origine HTTP)"
+        "Aucune URL socket : définir EXPO_PUBLIC_COMPANY_SOCKET_URL ou EXPO_PUBLIC_API_BASE_URL (origine utilisée pour /socket.io)"
       );
       return;
     }
@@ -216,10 +313,27 @@ class CompanyRealtimeBridge {
     }
     this.clearTokenWait();
 
+    const nativeStep =
+      Platform.OS !== "web" ? this.lastNativeTransportStep() : 0;
+
+    const transports: ("websocket" | "polling")[] =
+      Platform.OS === "web"
+        ? ["websocket", "polling"]
+        : [...NATIVE_SOCKET_TRANSPORT_STEPS[nativeStep]];
+
+    /** Palier polling : empêcher l’upgrade WS (cause typique du spam « websocket error » sur Android). */
+    const disablePollingUpgrade =
+      Platform.OS !== "web" && nativeStep === 1 && transports[0] === "polling";
+
+    const companyNumericId = getCompanyNumericIdFromContextId(contextId);
+    const socketQuery: Record<string, string> = {
+      context_id: contextId,
+      surface: "company",
+      ...(companyNumericId.length > 0 ? { company_id: companyNumericId } : {}),
+    };
+
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
-      // Web : WebSocket en premier (souvent plus fiable que le long-poll XHR cross-origin).
-      // Natif : polling d’abord (proxies / réseau mobile), puis upgrade WS.
-      transports: Platform.OS === "web" ? ["websocket", "polling"] : ["polling", "websocket"],
+      transports,
       reconnection: true,
       reconnectionAttempts: 25,
       reconnectionDelay: 500,
@@ -227,19 +341,40 @@ class CompanyRealtimeBridge {
       randomizationFactor: 0.5,
       timeout: 20_000,
       path: "/socket.io",
-      query: { context_id: contextId, surface: "company" },
+      query: socketQuery,
       // `_extract_token` côté Flask : auth (token) et/ou header Bearer (natif en complément)
       auth: { token },
+      ...(disablePollingUpgrade ? { upgrade: false as const } : {}),
       ...(Platform.OS !== "web"
         ? { extraHeaders: { Authorization: `Bearer ${token}` } as Record<string, string> }
         : {}),
     };
+
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      const upgradeOpt = socketOptions.upgrade;
+      console.log("[CompanySocket]", {
+        socketUrl,
+        urlEnvSource: getResolvedCompanySocketEnvSource(),
+        transports,
+        nativeTransportEscalation:
+          Platform.OS !== "web" ? this.nativeTransportEscalation : undefined,
+        disablePollingUpgrade,
+        upgrade:
+          upgradeOpt === false ? false : upgradeOpt === true ? true : "default",
+        path: socketOptions.path,
+        contextId,
+        company_id: companyNumericId || undefined,
+        surface: "company",
+        hasToken: Boolean(token),
+      });
+    }
 
     const socket = io(socketUrl, socketOptions);
     this.socket = socket;
 
     socket.on("connect", () => {
       this.lastConnectErrorDevLogMsg = null;
+      this.nativeTransportEscalation = 0;
       const isReconnect = this.hasConnectedOnce;
       this.hasConnectedOnce = true;
       this.snapshot = {
@@ -270,7 +405,42 @@ class CompanyRealtimeBridge {
     });
 
     socket.on("connect_error", (error) => {
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" &&
+              error !== null &&
+              "message" in error &&
+              (error as { message: unknown }).message != null
+            ? String((error as { message: unknown }).message)
+            : String(error);
+      const lower = msg.toLowerCase();
+      const looksLikeTransportLayerIssue =
+        lower.includes("xhr poll") ||
+        lower.includes("xhr post") ||
+        lower.includes("websocket");
+      const fatalAuth = /\b401\b|\b403\b|unauthorized|forbidden/i.test(lower);
+
+      if (
+        Platform.OS !== "web" &&
+        looksLikeTransportLayerIssue &&
+        !fatalAuth &&
+        this.nativeTransportEscalation < NATIVE_SOCKET_TRANSPORT_STEPS.length - 1
+      ) {
+        this.nativeTransportEscalation += 1;
+        this.softDisconnectSocket();
+        this.snapshot = {
+          ...this.snapshot,
+          contextId,
+          status: "connecting",
+          connected: false,
+          lastError: null,
+        };
+        this.notify();
+        setTimeout(() => this.connect(contextId), 0);
+        return;
+      }
+
       if (typeof __DEV__ !== "undefined" && __DEV__) {
         const now = Date.now();
         const cooled =
@@ -278,6 +448,10 @@ class CompanyRealtimeBridge {
           msg !== this.lastConnectErrorDevLogMsg;
         if (cooled) {
           console.warn("[CompanyRealtimeBridge] connect_error:", msg);
+          const detail = describeConnectErrorForDev(error);
+          if (Object.keys(detail).length > 0) {
+            console.warn("[CompanySocket] connect_error detail", detail);
+          }
           this.lastConnectErrorDevLogAt = now;
           this.lastConnectErrorDevLogMsg = msg;
         }
@@ -298,20 +472,13 @@ class CompanyRealtimeBridge {
 
   reconnect() {
     if (!this.snapshot.contextId) return;
+    this.nativeTransportEscalation = 0;
     this.connect(this.snapshot.contextId);
   }
 
   disconnect() {
-    this.clearTokenWait();
-    if (this.silenceTimer) {
-      clearInterval(this.silenceTimer);
-      this.silenceTimer = null;
-    }
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.disconnect();
-      this.socket = null;
-    }
+    this.nativeTransportEscalation = 0;
+    this.softDisconnectSocket();
     this.snapshot = {
       ...this.snapshot,
       status: "idle",

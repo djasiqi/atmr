@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { isAxiosError } from "axios";
 import { AppState, Platform, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -21,7 +22,7 @@ import { contextRealtimeRouter } from "../../../src/core/realtime/contextRealtim
 import { useCompanyDriverLiveTracking } from "../../../src/features/company/realtime/useCompanyDriverLiveTracking";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
 import type { CompanyDispatchMissionStatus } from "../../../src/features/company/api/contracts";
-import { switchCompanyDispatchMode } from "../../../src/features/company/api/companyApi";
+import { getDispatchApiErrorMessage, switchCompanyDispatchMode } from "../../../src/features/company/api/companyApi";
 import { resolveDriverStatus } from "../../../src/features/company/utils/companyDriverMapStatus";
 import {
   buildDashboardPresentation,
@@ -50,16 +51,6 @@ function toEpoch(value: string | null | undefined): number {
 }
 
 const HEALTHY_FRESHNESS_WINDOW_MS = 30_000;
-
-/** Web : masquer le lien « plein écran » si aucune clé Maps (même logique que `GoogleMapsFleetCanvas`). */
-function showFleetMapFullscreenCta(): boolean {
-  if (Platform.OS !== "web") return true;
-  const k =
-    typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string"
-      ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim()
-      : "";
-  return k.length > 0;
-}
 
 /** Même découpe que la pastille En course (listes) : seulement trajet actif. */
 const IN_FLIGHT: CompanyDispatchMissionStatus[] = ["en_route", "in_progress"];
@@ -391,11 +382,17 @@ export default function CompanyDashboardScreen() {
       : typeof error === "string"
         ? error
         : "Erreur inconnue";
+  const axiosStatus = isAxiosError(error) ? error.response?.status : undefined;
+  const isAuthFailure = axiosStatus === 401 || axiosStatus === 403;
+  const displayErrMsg = !error ? "" : getDispatchApiErrorMessage(error, errMsg || "Erreur inconnue");
   const isLikelyNetworkError = Boolean(
-    errMsg && /network|Network|fetch|Failed to fetch|connexion|Connexion|internet|Internet/i.test(errMsg)
+    errMsg &&
+      !isAuthFailure &&
+      /network|Network|fetch|Failed to fetch|connexion|Connexion|internet|Internet/i.test(errMsg)
   );
 
   const isPotentiallyStale =
+    !isAuthFailure &&
     realtime.status !== "healthy" &&
     (!!error || (lastKnownSyncAt ? Date.now() - toEpoch(lastKnownSyncAt) > HEALTHY_FRESHNESS_WINDOW_MS : true));
 
@@ -539,7 +536,8 @@ export default function CompanyDashboardScreen() {
       isPotentiallyStale,
       hasPendingOverdue,
       isLikelyNetworkError,
-      errMsg,
+      errMsg: displayErrMsg,
+      isAuthFailure,
       dataHealthLabel,
       realtimeHealthyData,
     };
@@ -549,11 +547,12 @@ export default function CompanyDashboardScreen() {
     dashboardQuery.data,
     dataHealthLabel,
     dispatchMode,
+    displayErrMsg,
     driversAvailableCount,
-    errMsg,
     fleet.enMission,
     fleet.off,
     hasPendingOverdue,
+    isAuthFailure,
     isLikelyNetworkError,
     isPotentiallyStale,
     liveDrivers.drivers.length,
@@ -602,10 +601,6 @@ export default function CompanyDashboardScreen() {
     return () => subscription.remove();
   }, [lastKnownSyncAt, realtime.status, refreshAll]);
 
-  const onFleetMap = useCallback(() => {
-    router.push("/(app)/(company)/fleet-map");
-  }, [router]);
-
   const onAllRides = useCallback(() => {
     router.push("/(app)/(company)/rides");
   }, [router]);
@@ -635,27 +630,9 @@ export default function CompanyDashboardScreen() {
         <View style={styles.mapHeroShell}>
           <EnterpriseDriversMap
             drivers={liveDrivers.drivers}
-            showTitleRow
-            headingTitle="Carte chauffeurs"
-            headingHint={
-              Platform.OS === "web" ? "Aperçu interactif (clé Google Maps)" : undefined
-            }
             mapHeight={236}
             containerStyle={styles.mapHeroInner}
           />
-          {showFleetMapFullscreenCta() ? (
-            <Pressable
-              onPress={onFleetMap}
-              style={({ pressed }) => [styles.mapHeroFooterLink, pressed && styles.linkCtaRowPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Ouvrir la carte flotte en plein écran"
-            >
-              <AppText variant="label" style={styles.fleetCtaText}>
-                Voir la carte en plein écran
-              </AppText>
-              <Ionicons name="chevron-forward" size={18} color={C.brand} />
-            </Pressable>
-          ) : null}
         </View>
 
         <View style={styles.kpiRow} accessibilityLabel="Indicateurs clés">
@@ -743,7 +720,7 @@ export default function CompanyDashboardScreen() {
           </View>
         ) : null}
 
-        {view.alertLines.length > 0 || (error && !isLikelyNetworkError) ? (
+        {view.alertLines.length > 0 || (error && !isLikelyNetworkError && !isAuthFailure) ? (
           <View style={styles.alertsBlock} accessibilityLabel="Alertes">
             <View style={styles.alertsHeaderCompact}>
               <View style={styles.alertsHeaderIconBox} accessibilityElementsHidden>
@@ -757,8 +734,8 @@ export default function CompanyDashboardScreen() {
               {view.alertLines.map((a) => (
                 <AlertNotificationRow key={a.id} severity={a.severity} text={a.text} />
               ))}
-              {error && !isLikelyNetworkError && errMsg ? (
-                <AlertNotificationRow severity="error" text={errMsg} />
+              {error && !isLikelyNetworkError && !isAuthFailure && displayErrMsg ? (
+                <AlertNotificationRow severity="error" text={displayErrMsg} />
               ) : null}
             </View>
           </View>
@@ -806,17 +783,6 @@ const styles = StyleSheet.create({
     ...(Platform.OS === "web"
       ? ({ boxShadow: "none" } as const)
       : { elevation: 0, shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } }),
-  },
-  mapHeroFooterLink: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minHeight: 44,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    backgroundColor: C.cardBg,
   },
   kpiRow: { flexDirection: "row" as const, flexWrap: "wrap" as const, gap: 6 },
   kpiStat: {

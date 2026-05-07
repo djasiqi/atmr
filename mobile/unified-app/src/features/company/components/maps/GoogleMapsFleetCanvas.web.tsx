@@ -6,6 +6,24 @@ import { isDriverPositionStale } from "../../utils/companyDriverMapStatus";
 
 const SCRIPT_ID = "google-maps-js-sdk-lirie-fleet";
 
+/**
+ * Refuse les placeholders courants (ex. `ta_clef_google_maps_js` copié depuis un exemple de doc)
+ * pour ne pas charger le SDK avec une clé invalide → InvalidKey / InvalidKeyMapError en console.
+ */
+function isPlausibleGoogleMapsBrowserKey(k: string): boolean {
+  const t = k.trim();
+  if (t.length < 20) return false;
+  const lower = t.toLowerCase();
+  if (lower.includes("ta_clef")) return false;
+  if (lower.includes("google_maps_js")) return false;
+  if (lower.includes("your_api")) return false;
+  if (lower.includes("replace_me")) return false;
+  if (lower.includes("changeme")) return false;
+  if (lower.includes("example_key")) return false;
+  if (lower.includes("placeholder")) return false;
+  return true;
+}
+
 function getGoogleMaps(): Record<string, unknown> | undefined {
   if (typeof window === "undefined") return undefined;
   const g = (window as unknown as { google?: { maps: Record<string, unknown> } }).google?.maps;
@@ -86,10 +104,15 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
     null
   );
   const markersRef = useRef<{ setMap: (v: null) => void }[]>([]);
-  const apiKey = useMemo(
+  const rawMapsKey = useMemo(
     () => (typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string" ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim() : ""),
     []
   );
+  const apiKey = useMemo(
+    () => (rawMapsKey && isPlausibleGoogleMapsBrowserKey(rawMapsKey) ? rawMapsKey : ""),
+    [rawMapsKey]
+  );
+  const mapsKeyRejected = rawMapsKey.length > 0 && !apiKey;
 
   const region = useMemo(() => computeRegion(drivers), [drivers]);
 
@@ -191,7 +214,9 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
     return (
       <View style={[styles.fallback, { height }]} accessibilityLabel="Carte flotte indisponible">
         <AppText variant="caption" style={styles.fallbackText}>
-          Définissez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY pour afficher la carte sur le web.
+          {mapsKeyRejected
+            ? "Clé Google Maps invalide ou texte d’exemple — créez une clé Maps JavaScript API dans Google Cloud et mettez-la dans EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, puis redémarrez le bundler."
+            : "Définissez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY pour afficher la carte sur le web."}
         </AppText>
       </View>
     );

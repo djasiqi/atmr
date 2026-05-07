@@ -52,6 +52,7 @@ jest.mock("../../../core/featureFlags/registry", () => ({
 const mockGetAccessToken = jest.fn<() => string | null>(() => "test-jwt");
 jest.mock("../../../core/api/client", () => ({
   getAuthAccessToken: () => mockGetAccessToken(),
+  getResolvedApiBaseUrl: () => "http://192.168.1.103:5000/api/v1",
 }));
 
 describe("company realtime bridge", () => {
@@ -132,6 +133,26 @@ describe("company realtime bridge", () => {
     expect(mockIo).not.toHaveBeenCalled();
   });
 
+  it("does not use DRIVER_SOCKET_URL as company socket (configure API origin or COMPANY_SOCKET_URL)", () => {
+    delete process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL;
+    delete process.env.EXPO_PUBLIC_API_BASE_URL;
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver-only.example.test";
+    mockIsFeatureEnabled.mockReturnValue(true);
+    const {
+      companyRealtimeBridge,
+      getResolvedCompanySocketEnvSource,
+      getResolvedCompanySocketUrl,
+    } = require("./companyRealtimeBridge");
+
+    expect(getResolvedCompanySocketUrl()).toBe("");
+    expect(getResolvedCompanySocketEnvSource()).toBe("none");
+
+    companyRealtimeBridge.connect("company:42");
+
+    expect(mockIo).not.toHaveBeenCalled();
+    expect(companyRealtimeBridge.getSnapshot().status).toBe("failed");
+  });
+
   it("uses EXPO_PUBLIC_API_BASE_URL origin when no explicit socket URL", () => {
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_API_BASE_URL = "http://10.0.0.1:5000/api/v1";
@@ -190,5 +211,49 @@ describe("company realtime bridge", () => {
     expect(companyRealtimeBridge.getSnapshot().status).toBe("reconnecting");
     mockReconnectHandlers.get("reconnect_failed")?.[0]?.();
     expect(companyRealtimeBridge.getSnapshot().status).toBe("failed");
+  });
+
+  it("falls back to polling-only after a websocket handshake error", () => {
+    mockIsFeatureEnabled.mockReturnValue(true);
+    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "http://company.example.test/socket";
+    const { companyRealtimeBridge } = require("./companyRealtimeBridge");
+
+    companyRealtimeBridge.connect("company:42");
+
+    expect(mockIo).toHaveBeenCalledTimes(1);
+    expect(mockIo.mock.calls[0]?.[1]).toMatchObject({
+      transports: ["websocket"],
+    });
+
+    mockHandlers.get("connect_error")?.[0]?.({ message: "websocket error" });
+    jest.runOnlyPendingTimers();
+
+    expect(mockIo).toHaveBeenCalledTimes(2);
+    expect(mockIo.mock.calls[1]?.[1]).toMatchObject({
+      transports: ["polling"],
+      upgrade: false,
+    });
+  });
+
+  it("adds company_id to socket.io query when context is company:N", () => {
+    mockIsFeatureEnabled.mockReturnValue(true);
+    process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "http://example.test";
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { companyRealtimeBridge } = require("./companyRealtimeBridge");
+
+    companyRealtimeBridge.connect("company:7");
+    expect(mockIo.mock.calls[0]?.[1]?.query).toEqual({
+      context_id: "company:7",
+      company_id: "7",
+      surface: "company",
+    });
+  });
+
+  it("getCompanyNumericIdFromContextId parses company: prefix", () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getCompanyNumericIdFromContextId } = require("./companyRealtimeBridge");
+    expect(getCompanyNumericIdFromContextId("company:1")).toBe("1");
+    expect(getCompanyNumericIdFromContextId("  company:42  ")).toBe("42");
+    expect(getCompanyNumericIdFromContextId("driver:1")).toBe("");
   });
 });

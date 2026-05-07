@@ -329,10 +329,10 @@ def run_processed_location_fanout_consumer() -> None:
         and TRACKING_INGEST_ASYNC_ENABLED
         and TRACKING_PROCESSED_FANOUT_ENABLED
     ):
-        logger.error(
-            "[processed_fanout] disabled (need KAFKA_ENABLED, TRACKING_INGEST_ASYNC_ENABLED, TRACKING_PROCESSED_FANOUT_ENABLED)"
+        logger.info(
+            "[processed_fanout] disabled (need KAFKA_ENABLED, TRACKING_INGEST_ASYNC_ENABLED, TRACKING_PROCESSED_FANOUT_ENABLED), exiting cleanly"
         )
-        sys.exit(1)
+        sys.exit(0)
     consumer = ProcessedLocationFanoutConsumer()
     if not consumer.initialized:
         sys.exit(1)

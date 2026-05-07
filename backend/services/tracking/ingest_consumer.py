@@ -428,10 +428,10 @@ class TrackingIngestConsumer:
 
 def run_tracking_ingest_consumer() -> None:
     if not KAFKA_ENABLED or not TRACKING_INGEST_ASYNC_ENABLED:
-        logger.error(
-            "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED)"
+        logger.info(
+            "[tracking_consumer] disabled (KAFKA_ENABLED or TRACKING_INGEST_ASYNC_ENABLED), exiting cleanly"
         )
-        sys.exit(1)
+        sys.exit(0)
     consumer = TrackingIngestConsumer()
     if not consumer.initialized:
         logger.error("[tracking_consumer] exiting (kafka clients not initialized)")

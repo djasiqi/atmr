@@ -20,7 +20,10 @@ import {
   switchCompanyDispatchMode,
 } from "../../../src/features/company/api/companyApi";
 import { useCompanyRealtimeStatus } from "../../../src/features/company/hooks";
-import { getResolvedCompanySocketUrl } from "../../../src/features/company/realtime/companyRealtimeBridge";
+import {
+  getResolvedCompanySocketEnvSource,
+  getResolvedCompanySocketUrl,
+} from "../../../src/features/company/realtime/companyRealtimeBridge";
 import { isContextSwitchClientSupported } from "../../../src/core/contextSwitchPolicy";
 
 export default function CompanySettingsScreen() {
@@ -45,6 +48,7 @@ export default function CompanySettingsScreen() {
   const roleGuardsEnabled = isFeatureEnabled("company_mobile_role_guards_enabled");
   const companyRealtime = useCompanyRealtimeStatus();
   const companySocketUrlResolved = getResolvedCompanySocketUrl() || "—";
+  const companySocketEnvSource = getResolvedCompanySocketEnvSource();
 
   const contexts = useMemo<AuthContext[]>(
     () => bootstrap?.available_contexts ?? [],
@@ -244,6 +248,7 @@ export default function CompanySettingsScreen() {
           company_realtime_enabled: {String(isFeatureEnabled("company_realtime_enabled"))}
         </AppText>
         <AppText variant="body">URL socket (résolue): {companySocketUrlResolved}</AppText>
+        <AppText variant="caption">Source URL (env): {companySocketEnvSource}</AppText>
         <AppText variant="body">
           Flux company (Socket.IO) : {companyRealtime.status} | branche:{" "}
           {companyRealtime.connected ? "oui" : "non"}

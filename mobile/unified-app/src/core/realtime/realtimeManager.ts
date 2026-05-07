@@ -331,12 +331,39 @@ class RealtimeManager {
       });
       return;
     }
-    this.socket = io(socketUrl, {
+
+    const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
       transports: ["websocket"],
       reconnection: false, // géré manuellement pour contrôler l'auth recovery
       timeout: 10000,
+      path: "/socket.io",
       query: { context_id: contextId, surface: "driver" },
-    });
+    };
+
+    let hasAccessToken = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuthAccessToken } = require("../api/client") as {
+        getAuthAccessToken: () => string | null;
+      };
+      hasAccessToken = Boolean(getAuthAccessToken());
+    } catch {
+      hasAccessToken = false;
+    }
+
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[DriverSocket]", {
+        socketUrl,
+        urlEnvSource: "EXPO_PUBLIC_DRIVER_SOCKET_URL",
+        transports: socketOptions.transports,
+        path: socketOptions.path,
+        contextId,
+        surface: "driver",
+        hasToken: hasAccessToken,
+      });
+    }
+
+    this.socket = io(socketUrl, socketOptions);
 
     this.socket.on("connect", () => {
       this.setState({

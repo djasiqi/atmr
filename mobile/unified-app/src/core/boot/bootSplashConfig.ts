@@ -1,13 +1,10 @@
 /**
  * Comportement de l’intro Lottie au démarrage.
  *
- * Par défaut : une seule fois par installation (`AsyncStorage`).
- * Pour rejouer l’animation à **chaque** cold start (ancien comportement) :
- * `EXPO_PUBLIC_BOOT_LOTTIE_EVERY_COLD_START=true`
+ * Exigence produit actuelle : rejouer l’intro à chaque cold start
+ * (après fermeture complète / app kill).
  */
-export const BOOT_LOTTIE_EVERY_COLD_START =
-  process.env.EXPO_PUBLIC_BOOT_LOTTIE_EVERY_COLD_START === "true" ||
-  process.env.EXPO_PUBLIC_BOOT_LOTTIE_EVERY_COLD_START === "1";
+export const BOOT_LOTTIE_EVERY_COLD_START = true;
 
-/** Intro jouée une seule fois ; si false, pas de persistance (rejoue à chaque lancement). */
+/** Si true, l’intro est jouée une seule fois par installation. */
 export const BOOT_LOTTIE_FIRST_LAUNCH_ONLY = !BOOT_LOTTIE_EVERY_COLD_START;

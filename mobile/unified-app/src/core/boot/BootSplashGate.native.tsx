@@ -20,22 +20,29 @@ export function BootSplashGate({ children }: Props) {
             g.styles.layer,
             {
               opacity: g.fadeOpacity,
-              paddingTop: g.insets.top,
-              paddingBottom: g.insets.bottom,
             },
           ]}
           pointerEvents={g.pointerEvents}
         >
           {g.showLottieLayer ? (
-            <LottieView
-              source={g.source}
-              autoPlay
-              loop={false}
-              style={g.styles.lottie}
-              resizeMode="contain"
-              renderMode={Platform.OS === "android" ? "HARDWARE" : "AUTOMATIC"}
-              onAnimationFinish={g.onLottieFinish}
-            />
+            <Animated.View
+              style={[
+                g.styles.lottieLayer,
+                {
+                  opacity: g.lottieOpacity,
+                },
+              ]}
+            >
+              <LottieView
+                source={g.source}
+                autoPlay
+                loop={false}
+                style={g.styles.lottie}
+                resizeMode="contain"
+                renderMode={Platform.OS === "android" ? "HARDWARE" : "AUTOMATIC"}
+                onAnimationFinish={g.onLottieFinish}
+              />
+            </Animated.View>
           ) : null}
         </Animated.View>
       ) : null}
