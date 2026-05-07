@@ -131,7 +131,10 @@ celerybeat-schedule*
 backend/celerybeat-schedule*
 
 # ===== Documentation temporaire / Audits =====
-docs/
+# Uniquement la doc à la racine : le motif global `docs/` empêchait de versionner le runbook ops.
+/docs/**
+!/docs/ops/
+!/docs/ops/**
 # Exception: journal pilote requis par CI (prefill-pilot-log)
 !mobile/unified-app/docs/
 !mobile/unified-app/docs/PILOT_EXECUTION_LOG.md
