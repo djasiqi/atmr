@@ -155,6 +155,7 @@ patches/
 .tmp/
 tmp/
 backend/docs/openapi.baseline.json
+backend/docs/openapi.json
 api_logs_snapshot.txt
 schema_now.sql
 comparison_output.txt
