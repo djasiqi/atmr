@@ -26,6 +26,7 @@ export function useGoogleMapsLoaded() {
 function GoogleMapsLoader({ children }) {
   const [isLoaded, setIsLoaded] = useState(isGoogleMapsSdkReady);
   const [loadError, setLoadError] = useState(null);
+  const isDev = process.env.NODE_ENV !== 'production';
 
   // Même frame que le premier paint : si le SDK est déjà en cache, évite un flash « non chargé ».
   useLayoutEffect(() => {
@@ -55,12 +56,20 @@ function GoogleMapsLoader({ children }) {
 
     const run = () => {
       if (cancelled) return;
+      if (isDev && window.google?.maps && typeof window.google.maps.importLibrary !== 'function') {
+        console.info('[GoogleMaps] SDK détecté, finalisation importLibrary en cours...');
+      }
       loadGoogleMapsScript()
         .then(() => {
           if (!cancelled) setIsLoaded(true);
         })
         .catch((e) => {
           if (!cancelled) {
+            if (isDev && /importLibrary indisponible/i.test(String(e?.message || ''))) {
+              console.warn(
+                '[GoogleMaps] Échec finalisation SDK : importLibrary indisponible après timeout'
+              );
+            }
             console.warn('[GoogleMaps] Chargement SDK', e?.message);
             setLoadError(e instanceof Error ? e : new Error(String(e)));
           }
@@ -84,7 +93,7 @@ function GoogleMapsLoader({ children }) {
         window.cancelIdleCallback(idleId);
       }
     };
-  }, [isLoaded]);
+  }, [isLoaded, isDev]);
 
   return (
     <GoogleMapsContext.Provider value={{ isLoaded, loadError }}>

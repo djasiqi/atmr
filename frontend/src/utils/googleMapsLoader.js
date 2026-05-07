@@ -28,6 +28,8 @@ export function isGoogleMapsSdkReady() {
 
 const NAMESPACE_WAIT_MS = 15000;
 const NAMESPACE_POLL_MS = 50;
+const IMPORT_LIBRARY_WAIT_MS = 2000;
+const IMPORT_LIBRARY_POLL_MS = 100;
 
 /** Attend que `google.maps` existe (bootstrap chargé), avant `importLibrary`. */
 function waitForGoogleMapsNamespace() {
@@ -43,6 +45,30 @@ function waitForGoogleMapsNamespace() {
         return;
       }
       window.setTimeout(tick, NAMESPACE_POLL_MS);
+    };
+    tick();
+  });
+}
+
+/** Attend brièvement la disponibilité de `google.maps.importLibrary` (bootstrap async). */
+function waitForImportLibraryAvailability() {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    const tick = () => {
+      const gm = window.google?.maps;
+      if (gm && typeof gm.importLibrary === 'function') {
+        resolve();
+        return;
+      }
+      if (Date.now() - startedAt > IMPORT_LIBRARY_WAIT_MS) {
+        reject(
+          new Error(
+            'Google Maps : importLibrary indisponible (script incomplet ou API obsolète)'
+          )
+        );
+        return;
+      }
+      window.setTimeout(tick, IMPORT_LIBRARY_POLL_MS);
     };
     tick();
   });
@@ -67,11 +93,7 @@ async function bootstrapGoogleMapsLibraries() {
   if (typeof gm.Map === 'function') {
     return;
   }
-  if (typeof gm.importLibrary !== 'function') {
-    throw new Error(
-      'Google Maps : importLibrary indisponible (script incomplet ou API obsolète)'
-    );
-  }
+  await waitForImportLibraryAvailability();
   await gm.importLibrary('maps');
   const extra = getGoogleMapsLibraryList().filter((name) => name !== 'maps');
   await Promise.all(extra.map((lib) => gm.importLibrary(lib)));
@@ -138,7 +160,7 @@ export function loadGoogleMapsScript() {
     const libs = getGoogleMapsLibraryList().join(',');
     const script = document.createElement('script');
     script.id = GOOGLE_MAPS_SCRIPT_ID;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libs}&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&libraries=${libs}&loading=async`;
     script.async = true;
     script.defer = true;
 
