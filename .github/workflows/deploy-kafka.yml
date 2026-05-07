@@ -1,0 +1,147 @@
+# yaml-language-server: disable
+# Déploiement Kafka production — manuel uniquement, séparé de Build & Deploy.
+# Ne modifie pas .github/workflows/deploy.yml.
+name: Deploy Kafka (production)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Tapez exactement kafka-on-production pour confirmer"
+        required: true
+        type: string
+        default: ""
+      init_topics:
+        description: "INIT_TOPICS=1 lors du deploy (création / alignement topics)"
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: "Si true : copie des fichiers + check-kafka-production.sh preflight-on uniquement"
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-kafka:
+    name: Kafka production
+    runs-on: ubuntu-latest
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate confirmation phrase
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "kafka-on-production" ]; then
+            echo "Refus : la valeur confirm doit être exactement kafka-on-production"
+            exit 1
+          fi
+          echo "Confirmation OK"
+
+      - name: Validate SSH secrets
+        run: |
+          MISSING=()
+          [ -z "${{ secrets.SSH_HOST }}" ] && MISSING+=("SSH_HOST")
+          [ -z "${{ secrets.SSH_USER }}" ] && MISSING+=("SSH_USER")
+          [ -z "${{ secrets.SSH_KEY }}" ] && MISSING+=("SSH_KEY")
+          if [ ${#MISSING[@]} -ne 0 ]; then
+            echo "Secrets manquants : ${MISSING[*]}"
+            exit 1
+          fi
+          echo "Secrets SSH présents"
+
+      - name: Ensure scripts/lib on server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            mkdir -p /srv/atmr/scripts/lib
+
+      - name: Copy Kafka compose files
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "docker-compose.production.yml,docker-compose.kafka.yml,docker-compose.kafka.atmr-network.yml"
+          target: "/srv/atmr"
+
+      - name: Copy Kafka scripts
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "scripts/deploy-kafka-production.sh,scripts/check-kafka-production.sh,scripts/kafka-init-topics-compose.sh"
+          target: "/srv/atmr/"
+
+      - name: Copy Kafka checks library
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          source: "scripts/lib/kafka_checks.sh"
+          target: "/srv/atmr/"
+
+      - name: chmod +x Kafka scripts
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            chmod +x /srv/atmr/scripts/deploy-kafka-production.sh
+            chmod +x /srv/atmr/scripts/check-kafka-production.sh
+            chmod +x /srv/atmr/scripts/kafka-init-topics-compose.sh
+
+      - name: Dry run (preflight-on only)
+        if: ${{ github.event.inputs.dry_run }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            export ATMR_DEPLOY_ROOT=/srv/atmr
+            ./scripts/check-kafka-production.sh preflight-on
+
+      - name: Deploy Kafka + validate (no FORCE)
+        if: ${{ !github.event.inputs.dry_run }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd /srv/atmr
+            export ATMR_DEPLOY_ROOT=/srv/atmr
+            if [ "${{ github.event.inputs.init_topics }}" = "true" ]; then
+              export INIT_TOPICS=1
+            fi
+            ./scripts/deploy-kafka-production.sh
+            ./scripts/check-kafka-production.sh on
