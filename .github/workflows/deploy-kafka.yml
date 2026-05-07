@@ -102,6 +102,26 @@ jobs:
           source: "scripts/lib/kafka_checks.sh"
           target: "/srv/atmr/"
 
+      - name: Verify Kafka files on server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          key: ${{ env.SSH_KEY }}
+          port: ${{ env.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            ls -la /srv/atmr/scripts || true
+            ls -la /srv/atmr/scripts/lib || true
+            test -f /srv/atmr/scripts/deploy-kafka-production.sh
+            test -f /srv/atmr/scripts/check-kafka-production.sh
+            test -f /srv/atmr/scripts/lib/kafka_checks.sh
+            if [ -f /srv/atmr/scripts/kafka-init-topics-compose.sh ]; then
+              echo "kafka-init-topics-compose.sh present"
+            else
+              echo "WARN: kafka-init-topics-compose.sh absent (required only when init_topics=true)"
+            fi
+
       - name: chmod +x Kafka scripts
         uses: appleboy/ssh-action@master
         with:
@@ -110,9 +130,12 @@ jobs:
           key: ${{ env.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script: |
+            set -euo pipefail
             chmod +x /srv/atmr/scripts/deploy-kafka-production.sh
             chmod +x /srv/atmr/scripts/check-kafka-production.sh
-            chmod +x /srv/atmr/scripts/kafka-init-topics-compose.sh
+            if [ -f /srv/atmr/scripts/kafka-init-topics-compose.sh ]; then
+              chmod +x /srv/atmr/scripts/kafka-init-topics-compose.sh
+            fi
 
       - name: Dry run (preflight-on only)
         if: ${{ github.event.inputs.dry_run }}
@@ -141,6 +164,7 @@ jobs:
             cd /srv/atmr
             export ATMR_DEPLOY_ROOT=/srv/atmr
             if [ "${{ github.event.inputs.init_topics }}" = "true" ]; then
+              test -f /srv/atmr/scripts/kafka-init-topics-compose.sh
               export INIT_TOPICS=1
             fi
             ./scripts/deploy-kafka-production.sh
