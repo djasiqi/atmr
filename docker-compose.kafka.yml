@@ -241,6 +241,7 @@ services:
     restart: "no"
 
   # Kafka UI (interface web pour monitoring)
+  # Port hôte 8090 (8080 déjà pris par Traefik dashboard).
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: atmr-kafka-ui
@@ -249,7 +250,7 @@ services:
       - kafka-broker-2
       - kafka-broker-3
     ports:
-      - "8080:8080"
+      - "8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: atmr-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092
