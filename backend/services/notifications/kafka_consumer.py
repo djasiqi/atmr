@@ -488,8 +488,10 @@ class KafkaConsumer:
 def run_kafka_consumer() -> None:
     """Point d'entrée pour lancer le consumer Kafka."""
     if not KAFKA_ENABLED:
-        logger.error("[kafka_consumer] Kafka is disabled (KAFKA_ENABLED=false)")
-        sys.exit(1)
+        logger.info(
+            "[kafka_consumer] désactivé (KAFKA_ENABLED=false), sortie propre"
+        )
+        sys.exit(0)
 
     consumer = KafkaConsumer()
     if not consumer.initialized:

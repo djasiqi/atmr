@@ -1,6 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Garde-fou : ce script scale tracking-kafka-consumer — exiger ingest async activé.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="${ATMR_ENV_FILE:-${ROOT}/.env.production}"
+
+read_env_flag() {
+  local name="$1"
+  local default="${2:-false}"
+  local v=""
+  if [[ -f "${ENV_FILE}" ]]; then
+    v="$(grep -E "^${name}=" "${ENV_FILE}" 2>/dev/null | tail -n1 | cut -d'=' -f2-)"
+    v="${v//\'/}"
+    v="${v//\"/}"
+    v="${v// /}"
+    v="$(printf '%s' "${v}" | tr '[:upper:]' '[:lower:]')"
+    if [[ -n "${v}" ]]; then
+      printf '%s\n' "${v}"
+      return
+    fi
+  fi
+  local indirect="${name}"
+  printf '%s' "${!indirect:-${default}}" | tr '[:upper:]' '[:lower:]'
+}
+
+TRACKING_REQUIRED_FLAGS=(KAFKA_ENABLED TRACKING_INGEST_ASYNC_ENABLED)
+INCOHERENT=()
+for flag in "${TRACKING_REQUIRED_FLAGS[@]}"; do
+  v="$(read_env_flag "${flag}")"
+  echo "🔒 ${flag}=${v} (${ENV_FILE})"
+  if [[ "${v}" != "true" ]]; then
+    INCOHERENT+=("${flag}=${v}")
+  fi
+done
+
+if [[ ${#INCOHERENT[@]} -gt 0 ]] && [[ "${FORCE:-0}" != "1" ]]; then
+  echo "❌ Refus : flags requis absents pour tracking-kafka-consumer."
+  printf '   %s\n' "${INCOHERENT[@]}"
+  echo "   Corriger ${ENV_FILE} ou FORCE=1 (exceptionnel)."
+  exit 2
+fi
+
 # Fichier Kafka (2ᵉ) — mêmes valeurs par défaut que l’habitude du repo
 COMPOSE_KAFKA="${1:-docker-compose.kafka.yml}"
 SCALE="${2:-3}"

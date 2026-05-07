@@ -336,9 +336,9 @@ async def _consume_kafka_events() -> None:
     if WS_KAFKA_SSL_KEYFILE:
         consumer_kwargs["ssl_keyfile"] = WS_KAFKA_SSL_KEYFILE
 
-    max_attempts = max(1, _kafka_bootstrap_env_int("KAFKA_BOOTSTRAP_MAX_ATTEMPTS", 60))
+    max_attempts = max(1, _kafka_bootstrap_env_int("KAFKA_BOOTSTRAP_MAX_ATTEMPTS", 5))
     base_sleep = max(0.05, _kafka_bootstrap_env_float("KAFKA_BOOTSTRAP_INITIAL_BACKOFF_SEC", 1.0))
-    max_sleep = max(base_sleep, _kafka_bootstrap_env_float("KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC", 30.0))
+    max_sleep = max(base_sleep, _kafka_bootstrap_env_float("KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC", 10.0))
 
     consumer: Any = None
     for attempt in range(1, max_attempts + 1):

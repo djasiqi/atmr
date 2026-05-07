@@ -1,6 +1,12 @@
 #!/bin/bash
 set -o errexit -o nounset -o pipefail
 
+# CONTRAT KAFKA (production) :
+#   - Ce script ne doit JAMAIS inclure --profile kafka.
+#   - Ce script ne doit JAMAIS fusionner -f docker-compose.kafka*.yml.
+#   - Pour activer Kafka : utiliser scripts/deploy-kafka-production.sh
+#     (garde-fou : 4 flags à true dans .env.production, ou FORCE=1 en bootstrap initial).
+
 # Déploiement « full stack » : ce script arrête puis relève toute la stack prod (voir « down » ci-dessous).
 # Pour réduire les coupures : préférer une mise à jour ciblée (ex. docker compose up -d --no-deps backend
 # puis ws-service), ou un orchestrateur avec rolling update (Swarm/Kubernetes).

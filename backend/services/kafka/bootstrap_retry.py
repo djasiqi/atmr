@@ -43,13 +43,13 @@ def run_with_kafka_bootstrap_retry(
 
     Variables d'environnement :
 
-    - ``KAFKA_BOOTSTRAP_MAX_ATTEMPTS`` — nombre max de tentatives (défaut ``60``, minimum ``1``).
+    - ``KAFKA_BOOTSTRAP_MAX_ATTEMPTS`` — nombre max de tentatives (défaut ``5``, minimum ``1``).
     - ``KAFKA_BOOTSTRAP_INITIAL_BACKOFF_SEC`` — premier délai entre deux échecs (défaut ``1.0``).
-    - ``KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC`` — plafond du backoff exponentiel (défaut ``30.0``).
+    - ``KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC`` — plafond du backoff exponentiel (défaut ``10.0``).
     """
-    max_attempts = max(1, _env_int("KAFKA_BOOTSTRAP_MAX_ATTEMPTS", 60))
+    max_attempts = max(1, _env_int("KAFKA_BOOTSTRAP_MAX_ATTEMPTS", 5))
     base_sleep = max(0.05, _env_float("KAFKA_BOOTSTRAP_INITIAL_BACKOFF_SEC", 1.0))
-    max_sleep = max(base_sleep, _env_float("KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC", 30.0))
+    max_sleep = max(base_sleep, _env_float("KAFKA_BOOTSTRAP_MAX_BACKOFF_SEC", 10.0))
 
     for attempt in range(1, max_attempts + 1):
         try:
