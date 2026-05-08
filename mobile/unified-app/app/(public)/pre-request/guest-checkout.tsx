@@ -313,7 +313,7 @@ export default function GuestCheckoutScreen() {
           transparent
           onRequestClose={() => setPostPayModalVisible(false)}
         >
-          <View style={styles.postPayModalRoot} pointerEvents="box-none">
+          <View style={styles.postPayModalRoot}>
             <Pressable
               style={styles.postPayModalBackdrop}
               onPress={() => setPostPayModalVisible(false)}
@@ -888,6 +888,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     paddingHorizontal: 20,
+    pointerEvents: "box-none",
   },
   postPayModalBackdrop: {
     ...StyleSheet.absoluteFillObject,

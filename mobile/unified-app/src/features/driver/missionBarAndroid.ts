@@ -1,13 +1,31 @@
 import { isFeatureEnabled } from "../../core/featureFlags/registry";
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { canUseNotifee, loadNotifee } from "./notifeeCompat";
 import { DRIVER_NOTIFICATION_CHANNELS } from "./notificationChannels";
 
 const MISSION_BAR_NOTIFICATION_ID = "driver-mission-bar";
 
 export async function showMissionBarAndroid(missionId: number, status: string): Promise<void> {
   if (!isFeatureEnabled("driver_mission_bar_enabled")) return;
+  if (!canUseNotifee()) {
+    emitDriverTelemetry("driver.mission_bar.android.unavailable", {
+      source: "driver.mission_bar.android",
+      mission_id: missionId,
+      status,
+    });
+    return;
+  }
   try {
-    const { default: notifee, AndroidImportance } = await import("@notifee/react-native");
+    const mod = await loadNotifee();
+    if (!mod) {
+      emitDriverTelemetry("driver.mission_bar.android.unavailable", {
+        source: "driver.mission_bar.android",
+        mission_id: missionId,
+        status,
+      });
+      return;
+    }
+    const { default: notifee, AndroidImportance } = mod;
     await notifee.createChannel({
       id: DRIVER_NOTIFICATION_CHANNELS.missionActive,
       name: "Driver Active Mission",
@@ -40,8 +58,11 @@ export async function showMissionBarAndroid(missionId: number, status: string): 
 }
 
 export async function hideMissionBarAndroid(): Promise<void> {
+  if (!canUseNotifee()) return;
   try {
-    const { default: notifee } = await import("@notifee/react-native");
+    const mod = await loadNotifee();
+    if (!mod) return;
+    const { default: notifee } = mod;
     await notifee.cancelNotification(MISSION_BAR_NOTIFICATION_ID);
     await notifee.stopForegroundService();
   } catch {

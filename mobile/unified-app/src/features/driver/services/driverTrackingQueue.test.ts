@@ -109,4 +109,40 @@ describe("driverTrackingQueue", () => {
     expect(secondFlush.queueDepth).toBe(0);
     expect(mockSendDriverLocation).toHaveBeenCalled();
   });
+
+  it("persists queue after enqueue for restart safety", async () => {
+    await driverTrackingQueue.enqueue({
+      missionId: 33,
+      appState: "background",
+      locationMode: "mission_live",
+      payload: { latitude: 1, longitude: 2, missionId: 33, locationMode: "mission_live" },
+    });
+    expect(mockAsyncStorageSetItem).toHaveBeenCalled();
+  });
+
+  it("purges only items with sequence_id <= ack_last_sequence_id", async () => {
+    await driverTrackingQueue.enqueue({
+      missionId: 1,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: { latitude: 1, longitude: 1, missionId: 1, locationMode: "mission_live" },
+    });
+    await driverTrackingQueue.enqueue({
+      missionId: 1,
+      appState: "active",
+      locationMode: "mission_live",
+      payload: { latitude: 2, longitude: 2, missionId: 1, locationMode: "mission_live" },
+    });
+    const queueWrite = [...mockAsyncStorageSetItem.mock.calls]
+      .reverse()
+      .find((call) => String(call[0]).includes("driver_tracking_delivery_queue_v1"));
+    const persistedRaw = (queueWrite?.[1] as string) ?? "[]";
+    const persisted = JSON.parse(persistedRaw) as Array<{ sequenceId: number }>;
+    const ackWatermark = Math.min(...persisted.map((item) => item.sequenceId));
+    const before = await driverTrackingQueue.getSnapshot();
+    const acked = await driverTrackingQueue.markBackendAckedByWatermark(ackWatermark);
+    expect(acked).toBe(1);
+    const snapshot = await driverTrackingQueue.getSnapshot();
+    expect(snapshot.queueDepth).toBe(before.queueDepth - 1);
+  });
 });

@@ -204,7 +204,6 @@ export function EnterpriseHeader({
         maxFontSizeMultiplier={HEADER_MAX_FONT_MULTIPLIER}
         style={[s.datePillText, s.datePillTextEmphasis]}
         numberOfLines={1}
-        pointerEvents="none"
       >
         {dayLine}
       </Text>
@@ -315,7 +314,7 @@ const s = StyleSheet.create({
     alignSelf: "stretch",
     width: "100%",
     backgroundColor: E.CARD,
-    paddingBottom: 14,
+    paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: STRIP_BORDER_SLATE,
     ...stripShadowResolved,
@@ -436,6 +435,7 @@ const s = StyleSheet.create({
     textTransform: "capitalize" as const,
     letterSpacing: 0.2,
     lineHeight: HEADER_ROW_LINE_HEIGHT,
+    pointerEvents: "none",
     ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
   },
   /** Web : curseur bouton sur la pilule date cliquable. */

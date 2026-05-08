@@ -26,7 +26,7 @@ from constants.driver_api_errors import (
     BOOKING_ASSIGNED_TO_OTHER_DRIVER,
     BOOKING_COMPANY_FORBIDDEN,
 )
-from ext import db, role_required, socketio
+from ext import db, redis_client, role_required, socketio
 from middleware.trace_id import get_trace_id
 from models import DelayEvent, Driver
 from models.enums import BookingStatus, DriverType, UserRole
@@ -86,6 +86,11 @@ HTTP_STATUS_SERVER_ERROR = 500
 TRACKING_INGEST_ASYNC_ENABLED = (
     os.getenv("TRACKING_INGEST_ASYNC_ENABLED", "false").lower() == "true"
 )
+MAX_BATCH_POSITIONS = int(os.getenv("MAX_BATCH_POSITIONS", "100"))
+MAX_DRAIN_POSITIONS_PER_MINUTE = int(
+    os.getenv("MAX_DRAIN_POSITIONS_PER_MINUTE", "1200")
+)
+IDEMPOTENCE_TTL_SEC = int(os.getenv("IDEMPOTENCE_TTL_SEC", "86400"))
 
 
 def _resolve_tracking_ack_status(
@@ -1825,12 +1830,62 @@ class DriverLocationBatch(Resource):
         raw_positions = body.get("positions") if isinstance(body, dict) else None
         if not isinstance(raw_positions, list) or not raw_positions:
             return {"error": "positions_required"}, 400
+        if len(raw_positions) > MAX_BATCH_POSITIONS:
+            return {
+                "error": "batch_too_large",
+                "max_batch_positions": MAX_BATCH_POSITIONS,
+            }, 400
+
+        tracking_session_id = (
+            str(body.get("tracking_session_id")).strip()
+            if isinstance(body, dict) and body.get("tracking_session_id")
+            else None
+        )
+        if not tracking_session_id:
+            return {"error": "tracking_session_id_required"}, 400
+
+        # Single active tracking session policy.
+        if redis_client is not None:
+            session_key = f"driver:{driver.id}:active_tracking_session"
+            current_active = redis_client.get(session_key)
+            current_active_value = (
+                current_active.decode("utf-8")
+                if isinstance(current_active, bytes)
+                else str(current_active)
+                if current_active is not None
+                else None
+            )
+            if current_active_value and current_active_value != tracking_session_id:
+                return {
+                    "error": "tracking_session_conflict",
+                    "message": "Une autre session tracking active existe pour ce chauffeur.",
+                }, 409
+            redis_client.setex(session_key, 1800, tracking_session_id)
+
+            # Driver-level burst protection.
+            minute_bucket = int(time.time() // 60)
+            quota_key = f"driver:{driver.id}:batch_quota:{minute_bucket}"
+            current_quota = redis_client.incr(quota_key)
+            if int(current_quota) == 1:
+                redis_client.expire(quota_key, 120)
+            if int(current_quota) > MAX_DRAIN_POSITIONS_PER_MINUTE:
+                return {
+                    "error": "drain_quota_exceeded",
+                    "max_drain_positions_per_minute": MAX_DRAIN_POSITIONS_PER_MINUTE,
+                }, 429
 
         accepted = 0
         rejected = 0
         trace_ids: list[str] = []
         reject_reasons: dict[str, int] = {}
-        for point in raw_positions:
+        ordered_positions = sorted(
+            [p for p in raw_positions if isinstance(p, dict)],
+            key=lambda p: (
+                int(p.get("sequence_id", 0) or 0),
+                str(p.get("recorded_at") or p.get("timestamp") or ""),
+            ),
+        )
+        for point in ordered_positions:
             if not isinstance(point, dict):
                 rejected += 1
                 continue
@@ -1839,6 +1894,15 @@ class DriverLocationBatch(Resource):
             ):
                 rejected += 1
                 continue
+            position_id = point.get("position_id")
+            if isinstance(position_id, str) and position_id.strip() and redis_client is not None:
+                idem_key = (
+                    f"driver:{driver.id}:tracking_session:{tracking_session_id}:position:{position_id.strip()}"
+                )
+                if redis_client.exists(idem_key):
+                    accepted += 1
+                    continue
+                redis_client.setex(idem_key, IDEMPOTENCE_TTL_SEC, "1")
             payload = {
                 "latitude": point.get("latitude", point.get("lat")),
                 "longitude": point.get("longitude", point.get("lon")),
@@ -1851,6 +1915,10 @@ class DriverLocationBatch(Resource):
                 "is_background": bool(point.get("is_background", False)),
                 "mission_id": point.get("mission_id"),
                 "tracking_event_id": point.get("tracking_event_id"),
+                "sequence_id": point.get("sequence_id"),
+                "tracking_session_id": tracking_session_id,
+                "position_id": point.get("position_id"),
+                "batch_id": body.get("batch_id") if isinstance(body, dict) else None,
             }
             company_id_raw = getattr(driver, "company_id", None)
             company_id_value = (
@@ -1882,6 +1950,7 @@ class DriverLocationBatch(Resource):
             "trace_ids": trace_ids[:20],
             "reject_reasons": reject_reasons,
             "fallback_required": rejected > 0,
+            "tracking_session_id": tracking_session_id,
         }
         if accepted == 0 and rejected > 0:
             return {

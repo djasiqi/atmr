@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { AppText } from "../../../design/ui/AppText";
+import { semanticDanger, semanticWarning } from "../../../design/responsive/colors";
 import NetInfo from "@react-native-community/netinfo";
 import * as Location from "expo-location";
 import { useSession } from "../../../core/sessionProvider";
@@ -9,23 +10,16 @@ import { useSocketStatus, useTrackingState } from "../hooks";
 import { driverOfflineQueue } from "../offlineQueue";
 
 function Banner(props: { title: string; message: string; tone?: "warn" | "error" }) {
-  const errorTone = props.tone === "error";
+  const tokens = props.tone === "error" ? semanticDanger : semanticWarning;
   return (
     <View
-      style={{
-        borderWidth: 1,
-        borderColor: errorTone ? "#B00020" : "#8a6d3b",
-        backgroundColor: errorTone ? "#fdecea" : "#fff8e1",
-        borderRadius: 8,
-        padding: 10,
-        gap: 2,
-      }}
+      style={[styles.banner, { borderColor: tokens.border, backgroundColor: tokens.bg }]}
+      accessibilityRole="text"
     >
-      {/* DS_EXCEPTION: couleurs sémantiques bannière warning / erreur sur fond teinté */}
-      <AppText variant="sectionTitle" style={{ color: errorTone ? "#8a1f1f" : "#6a5320" }}>
+      <AppText variant="sectionTitle" style={{ color: tokens.fg }}>
         {props.title}
       </AppText>
-      <AppText variant="body" style={{ color: errorTone ? "#8a1f1f" : "#6a5320" }}>
+      <AppText variant="body" style={{ color: tokens.fg }}>
         {props.message}
       </AppText>
     </View>
@@ -88,7 +82,7 @@ export function DriverStateBanners() {
   const transitionExpiredRisk = transitionQueueOldestAgeMs >= 10 * 60 * 1000;
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={styles.stack}>
       {isOffline ? (
         <Banner
           title="Mode hors ligne"
@@ -132,8 +126,15 @@ export function DriverStateBanners() {
       ) : null}
       {showTrackingWarning ? (
         <Banner
-          title="Synchronisation tracking"
-          message={`Des points de localisation restent en attente (${trackingDepth}).`}
+          title="Synchronisation en cours"
+          message={`Position en attente d'envoi (${trackingDepth}).`}
+          tone="warn"
+        />
+      ) : null}
+      {socketStatus.degraded ? (
+        <Banner
+          title="Connexion GPS instable"
+          message="Le suivi continue en mode degrade. Certaines positions peuvent etre rejouees avec retard."
           tone="warn"
         />
       ) : null}
@@ -151,10 +152,25 @@ export function DriverStateBanners() {
       {!trackingState.isTracking && trackingState.mode === "idle" && status === "ready" ? (
         <Banner
           title="Tracking inactif"
-          message="Le suivi chauffeur est inactif. Verifiez qu'une mission est bien engagee."
+          message="Le suivi chauffeur est inactif. Vérifiez qu'une mission est bien engagée."
           tone="warn"
         />
       ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  /** Même rythme vertical que le dashboard entreprise (`gap: 14`). */
+  stack: {
+    gap: 14,
+  },
+  /** Cartes alerte : rayon 16 comme les tuiles KPI / sections. */
+  banner: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+});

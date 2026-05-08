@@ -603,45 +603,73 @@ const ReservationDetailPanel = ({ reservation, onClose, onSave, onDelete, onRese
                   </div>
                 </div>
               </div>
-
-              {/* Accès départ — compact row */}
-              <div className={s.editSubLabel}>Accès départ</div>
-              <div className={s.editRowTriple}>
-                <input type="text" className={s.editInput} value={form.pickup_floor}
-                  onChange={(e) => handleChange('pickup_floor', e.target.value)} placeholder="Étage" />
-                <input type="text" className={s.editInput} value={form.pickup_door_code}
-                  onChange={(e) => handleChange('pickup_door_code', e.target.value)} placeholder="Code" />
-                <input type="text" className={s.editInput} value={form.pickup_entry_point}
-                  onChange={(e) => handleChange('pickup_entry_point', e.target.value)} placeholder="Accueil" />
-              </div>
-              <input type="text" className={s.editInput} value={form.pickup_access_notes}
-                onChange={(e) => handleChange('pickup_access_notes', e.target.value)}
-                placeholder="Consignes départ" style={{ marginTop: 6 }} />
             </div>
 
             <div className={s.editDivider} />
 
-            {/* ─── Destination ─── */}
-            <div className={s.editGroup}>
-              <div className={s.editGroupTitle}>
-                <FiHome size={12} className={s.editGroupIcon} />
-                Destination
-              </div>
-              <input type="text" className={s.editInput} value={form.medical_facility}
-                onChange={(e) => handleChange('medical_facility', e.target.value)}
-                placeholder="Établissement / lieu" />
-              <div className={s.editRow} style={{ marginTop: 8 }}>
-                <input type="text" className={s.editInput} value={form.hospital_service}
-                  onChange={(e) => handleChange('hospital_service', e.target.value)}
-                  placeholder="Service" />
-                <input type="text" className={s.editInput} value={form.doctor_name}
-                  onChange={(e) => handleChange('doctor_name', e.target.value)}
-                  placeholder="Médecin" />
-              </div>
-              <input type="text" className={s.editInput} value={form.dropoff_access_notes}
-                onChange={(e) => handleChange('dropoff_access_notes', e.target.value)}
-                placeholder="Consignes arrivée" style={{ marginTop: 8 }} />
-            </div>
+            {(() => {
+              // Sens du trajet : aller (domicile → hôpital) ou retour (hôpital → domicile).
+              // Les champs « domicile » (étage / code porte / accueil + consignes) restent
+              // bindés sur pickup_* / pickup_access_notes côté formulaire car ce sont les
+              // données stockées sur le client/booking. On inverse uniquement l'ordre
+              // d'affichage et les libellés pour refléter le sens réel du trajet.
+              const isReturnTrip = !!(reservation?.is_return);
+              const homeAccessNotesField = isReturnTrip ? 'dropoff_access_notes' : 'pickup_access_notes';
+              const hospitalAccessNotesField = isReturnTrip ? 'pickup_access_notes' : 'dropoff_access_notes';
+
+              const homeBlock = (
+                <div className={s.editGroup} key="home-access">
+                  <div className={s.editGroupTitle}>
+                    <FiMapPin size={12} className={s.editGroupIcon} />
+                    {isReturnTrip ? 'Accès domicile · Arrivée' : 'Accès domicile · Départ'}
+                  </div>
+                  <div className={s.editRowTriple}>
+                    <input type="text" className={s.editInput} value={form.pickup_floor}
+                      onChange={(e) => handleChange('pickup_floor', e.target.value)} placeholder="Étage" />
+                    <input type="text" className={s.editInput} value={form.pickup_door_code}
+                      onChange={(e) => handleChange('pickup_door_code', e.target.value)} placeholder="Code" />
+                    <input type="text" className={s.editInput} value={form.pickup_entry_point}
+                      onChange={(e) => handleChange('pickup_entry_point', e.target.value)} placeholder="Accueil" />
+                  </div>
+                  <input type="text" className={s.editInput} value={form[homeAccessNotesField]}
+                    onChange={(e) => handleChange(homeAccessNotesField, e.target.value)}
+                    placeholder={isReturnTrip ? 'Consignes arrivée' : 'Consignes départ'}
+                    style={{ marginTop: 6 }} />
+                </div>
+              );
+
+              const hospitalBlock = (
+                <div className={s.editGroup} key="hospital-access">
+                  <div className={s.editGroupTitle}>
+                    <FiHome size={12} className={s.editGroupIcon} />
+                    {isReturnTrip ? 'Lieu de départ · Hôpital' : 'Destination · Hôpital'}
+                  </div>
+                  <input type="text" className={s.editInput} value={form.medical_facility}
+                    onChange={(e) => handleChange('medical_facility', e.target.value)}
+                    placeholder="Établissement / lieu" />
+                  <div className={s.editRow} style={{ marginTop: 8 }}>
+                    <input type="text" className={s.editInput} value={form.hospital_service}
+                      onChange={(e) => handleChange('hospital_service', e.target.value)}
+                      placeholder="Service" />
+                    <input type="text" className={s.editInput} value={form.doctor_name}
+                      onChange={(e) => handleChange('doctor_name', e.target.value)}
+                      placeholder="Médecin" />
+                  </div>
+                  <input type="text" className={s.editInput} value={form[hospitalAccessNotesField]}
+                    onChange={(e) => handleChange(hospitalAccessNotesField, e.target.value)}
+                    placeholder={isReturnTrip ? 'Consignes départ' : 'Consignes arrivée'}
+                    style={{ marginTop: 8 }} />
+                </div>
+              );
+
+              return (
+                <>
+                  {isReturnTrip ? hospitalBlock : homeBlock}
+                  <div className={s.editDivider} />
+                  {isReturnTrip ? homeBlock : hospitalBlock}
+                </>
+              );
+            })()}
 
             <div className={s.editDivider} />
 

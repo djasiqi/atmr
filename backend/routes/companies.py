@@ -2443,8 +2443,19 @@ class AssignDriver(Resource):
         try:
             from application.events.event_bus import publish_event
             from domain.events.events import (
+                BookingAssignedEvent,
                 DriverBookingReassignedEvent,
                 DriverNewBookingEvent,
+            )
+
+            # Notifier explicitement la room entreprise pour garantir le live refresh
+            # du dashboard dispatch sur toute assignation/réassignation.
+            publish_event(
+                BookingAssignedEvent(
+                    booking_id=int(booking.id),
+                    company_id=int(company_id),
+                    driver_id=int(driver.id),
+                )
             )
 
             # Si l'ancien chauffeur était différent du nouveau, notifier l'ancien.
@@ -2713,6 +2724,7 @@ class ReservationBillingAdjustment(Resource):
 
             invalidate_summary_cache_for_booking(cid, booking)
 
+            actor_for_event_id: int | None = None
             try:
                 from models.user import User
                 from security.audit_log import AuditLogger
@@ -2723,6 +2735,11 @@ class ReservationBillingAdjustment(Resource):
                     if public_id
                     else None
                 )
+                if actor is not None:
+                    try:
+                        actor_for_event_id = int(actor.id)
+                    except Exception:
+                        actor_for_event_id = None
                 reason_clean = (validated.get("override_reason") or "").strip()
                 AuditLogger.log_action(
                     action_type="company_booking_billing_adjusted",
@@ -2746,6 +2763,37 @@ class ReservationBillingAdjustment(Resource):
                     "[ReservationBillingAdjustment] Audit: %s",
                     audit_err,
                 )
+
+            # Fan-out temps réel vers le driver et la company (parité PUT /reservations).
+            if booking.driver_id:
+                try:
+                    from application.events.event_bus import publish_event
+                    from domain.events.events import BookingUpdatedEvent
+
+                    publish_event(
+                        BookingUpdatedEvent(
+                            booking_id=int(booking.id),
+                            driver_id=int(booking.driver_id),
+                            company_id=cid,
+                            actor_role="company",
+                            actor_id=actor_for_event_id,
+                            source="company_api",
+                            changes={"billing": {"to": None}},
+                        )
+                    )
+                except Exception as event_error:
+                    logger.warning(
+                        "[ReservationBillingAdjustment] Event publish failed for booking #%s: %s",
+                        reservation_id,
+                        event_error,
+                    )
+                    try:
+                        notify_booking_update(int(booking.driver_id), booking)
+                    except Exception as fallback_error:
+                        logger.warning(
+                            "[ReservationBillingAdjustment] Fallback notify failed: %s",
+                            fallback_error,
+                        )
 
             return {
                 "message": "Facturation mise à jour",
@@ -4175,6 +4223,27 @@ class CompanyClients(Resource):
 class CompanyClientDetail(Resource):
     @jwt_required()
     @role_required(UserRole.company)
+    def get(self, client_id):
+        """GET /companies/me/clients/<id> — fiche client (`Client.serialize`)."""
+        company, error_response, status_code = _get_current_company_via_use_case()
+        if error_response or not company:
+            return error_response, status_code
+
+        from repositories.client_repository import ClientRepository
+
+        client_repo = ClientRepository()
+        client = client_repo.find_model_by_id_and_company(client_id, company.id)
+        if not client:
+            return APIErrorHandler.handle_not_found(
+                "Client",
+                client_id,
+                logger,
+            )
+
+        return client.serialize, 200
+
+    @jwt_required()
+    @role_required(UserRole.company)
     def put(self, client_id):
         """Met à jour les informations d'un client de l'entreprise
         (coordonnées, facturation, statut, etc.).
@@ -4724,7 +4793,6 @@ class SingleReservation(Resource):
                 cid,
                 ", ".join(uc_result.updated_fields or []),
             )
-            # Déclencher un re-dispatch si nécessaire
             _maybe_trigger_dispatch(cid, "update")
             from services.reservations_summary_cache import (
                 invalidate_summary_cache_for_booking_after_day_change,
@@ -4733,6 +4801,62 @@ class SingleReservation(Resource):
             invalidate_summary_cache_for_booking_after_day_change(
                 cid, booking, previous_summary_day
             )
+
+            # Publier l'évènement domain pour fan-out temps réel (driver + company).
+            # Sans ce publish, le chauffeur ne voit la modif (étage, code porte,
+            # mobilité, horaire, adresse, montant…) qu'au prochain polling 15 s
+            # ou pull-to-refresh — ce qui n'est pas du temps réel.
+            try:
+                from application.events.event_bus import publish_event
+                from domain.events.events import BookingUpdatedEvent
+                from models.user import User as _ActorUser
+
+                actor_id_for_event: int | None = None
+                try:
+                    public_id_for_event = get_jwt_identity()
+                    if public_id_for_event:
+                        actor_user = _ActorUser.query.filter_by(
+                            public_id=public_id_for_event
+                        ).first()
+                        if actor_user is not None:
+                            actor_id_for_event = int(actor_user.id)
+                except Exception:
+                    actor_id_for_event = None
+
+                # Format attendu par le handler : dict[str, dict[str, str | None]].
+                # On envoie au moins la clé du champ (pour activer la push quand
+                # scheduled_time / pickup_location / dropoff_location / notes change).
+                changes_payload: dict[str, dict[str, str | None]] = {}
+                for changed_field in uc_result.updated_fields or []:
+                    if isinstance(changed_field, str) and changed_field:
+                        changes_payload[changed_field] = {"to": None}
+
+                publish_event(
+                    BookingUpdatedEvent(
+                        booking_id=int(booking.id),
+                        driver_id=int(booking.driver_id) if booking.driver_id else 0,
+                        company_id=cid,
+                        actor_role="company",
+                        actor_id=actor_id_for_event,
+                        source="company_api",
+                        changes=changes_payload or None,
+                    )
+                )
+            except Exception as event_error:
+                logger.warning(
+                    "[UpdateReservation] Event publish failed for booking #%s: %s",
+                    reservation_id,
+                    event_error,
+                )
+                if booking.driver_id:
+                    try:
+                        notify_booking_update(int(booking.driver_id), booking)
+                    except Exception as fallback_error:
+                        logger.warning(
+                            "[UpdateReservation] Fallback notify failed: %s",
+                            fallback_error,
+                        )
+
             return {
                 "message": "Réservation mise à jour avec succès",
                 "reservation": booking.serialize,

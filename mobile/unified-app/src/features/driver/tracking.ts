@@ -2,7 +2,9 @@ import {
   disposeDriverTrackingBridge,
   flushDriverTrackingQueueNow,
   getDriverTrackingBridgeSnapshot,
+  getDriverTrackingPresenceWindowActive,
   getDriverTrackingQueueSnapshot,
+  setDriverTrackingPresenceWindow,
   subscribeDriverTrackingBridge,
   startDriverTrackingBridge,
   stopDriverTrackingBridge,
@@ -42,5 +44,17 @@ export async function getTrackingQueueSnapshot() {
 
 export function disposeDriverTracking() {
   disposeDriverTrackingBridge();
+}
+
+/**
+ * Pilote le mode présence par fenêtre horaire (07h–19h). Quand actif sans
+ * mission, l'app envoie des points GPS de présence (locationMode = availability_presence).
+ */
+export function setDriverPresenceWindowActive(active: boolean) {
+  setDriverTrackingPresenceWindow(active);
+}
+
+export function isDriverPresenceWindowActive(): boolean {
+  return getDriverTrackingPresenceWindowActive();
 }
 

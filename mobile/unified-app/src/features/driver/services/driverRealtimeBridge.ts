@@ -81,7 +81,11 @@ export function startDriverRealtimeBridge(
     }
     if (event.event_type === "driver_location_batch_ack") {
       const payload = (event as { payload?: unknown }).payload as
-        | { tracking_event_ids?: unknown; tracking_event_id?: unknown }
+        | {
+            tracking_event_ids?: unknown;
+            tracking_event_id?: unknown;
+            ack_last_sequence_id?: unknown;
+          }
         | undefined;
       const trackingEventIds = Array.isArray(payload?.tracking_event_ids)
         ? payload?.tracking_event_ids.filter((value): value is string => typeof value === "string")
@@ -91,10 +95,20 @@ export function startDriverRealtimeBridge(
       if (trackingEventIds.length > 0) {
         void driverTrackingQueue.markBackendAckedByIds(trackingEventIds);
       }
+      const ackLastSequenceId =
+        typeof payload?.ack_last_sequence_id === "number"
+          ? payload.ack_last_sequence_id
+          : typeof payload?.ack_last_sequence_id === "string"
+            ? Number(payload.ack_last_sequence_id)
+            : null;
+      if (ackLastSequenceId && Number.isFinite(ackLastSequenceId)) {
+        void driverTrackingQueue.markBackendAckedByWatermark(ackLastSequenceId);
+      }
       emitDriverTelemetry("tracking.batch.ack", {
         source: "driver.realtime.bridge",
         context_id: contextId,
         backend_acked_count: trackingEventIds.length,
+        ack_last_sequence_id: ackLastSequenceId,
       });
       return;
     }

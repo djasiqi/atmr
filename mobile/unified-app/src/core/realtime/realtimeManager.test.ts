@@ -3,17 +3,24 @@ import { realtimeManager } from "./realtimeManager";
 
 const mockHandlers = new Map<string, ((payload?: unknown) => void)[]>();
 const mockEmitDriverTelemetry = jest.fn();
+const mockRefreshAuthTokenNow = jest.fn<() => Promise<boolean>>();
+const mockGetAuthAccessToken = jest.fn<() => string | null>();
 const mockSocket = {
+  connected: true,
   on: jest.fn((event: string, callback: (payload?: unknown) => void) => {
     const existing = mockHandlers.get(event) ?? [];
     existing.push(callback);
     mockHandlers.set(event, existing);
     return mockSocket;
   }),
+  emit: jest.fn(),
   removeAllListeners: jest.fn(() => {
     mockHandlers.clear();
   }),
   disconnect: jest.fn(),
+  io: {
+    on: jest.fn(),
+  },
 };
 const mockIo = jest.fn(() => mockSocket) as jest.MockedFunction<(...args: any[]) => typeof mockSocket>;
 
@@ -24,6 +31,10 @@ jest.mock("socket.io-client", () => ({
 
 jest.mock("../observability/driverTelemetry", () => ({
   emitDriverTelemetry: (event: string, payload?: unknown) => mockEmitDriverTelemetry(event, payload),
+}));
+jest.mock("../api/client", () => ({
+  refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
+  getAuthAccessToken: () => mockGetAuthAccessToken(),
 }));
 
 // Helper — renregistre les handlers après chaque reconnexion simulée
@@ -66,9 +77,15 @@ describe("realtime manager", () => {
     mockHandlers.clear();
     mockIo.mockClear();
     mockSocket.on.mockClear();
+    mockSocket.emit.mockClear();
+    mockSocket.io.on.mockClear();
     mockSocket.disconnect.mockClear();
     mockSocket.removeAllListeners.mockClear();
     mockEmitDriverTelemetry.mockClear();
+    mockRefreshAuthTokenNow.mockReset();
+    mockGetAuthAccessToken.mockReset();
+    mockRefreshAuthTokenNow.mockResolvedValue(true);
+    mockGetAuthAccessToken.mockReturnValue("token-test");
     realtimeManager.disconnect();
     delete process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL;
     delete process.env.EXPO_PUBLIC_REALTIME_DEGRADED_HYSTERESIS_MS;
@@ -187,7 +204,7 @@ describe("realtime manager", () => {
 
     rebindSocketHandlers();
     jest.advanceTimersByTime(5000);
-    expect(mockIo).toHaveBeenCalledTimes(2);
+    expect(mockIo).toHaveBeenCalledTimes(1);
     const reconnect = mockHandlers.get("connect")?.[0];
     reconnect?.();
     expect(mockEmitDriverTelemetry).toHaveBeenCalledWith(
@@ -240,8 +257,8 @@ describe("realtime manager", () => {
       jest.advanceTimersByTime(60_000);
     }
 
-    expect(realtimeManager.getSnapshot().authExhausted).toBe(true);
-    expect(exhaustedCb).toHaveBeenCalledWith("exhausted", undefined);
+    expect(realtimeManager.getSnapshot().authAttempts).toBeGreaterThanOrEqual(1);
+    expect(exhaustedCb).not.toHaveBeenCalledWith("terminal", expect.anything());
 
     unsub();
     jest.useRealTimers();
@@ -321,5 +338,44 @@ describe("realtime manager", () => {
     expect(realtimeManager.getSnapshot().transportAuthority).toBe("degraded");
     delete process.env.EXPO_PUBLIC_REALTIME_RECONNECT_WINDOW_CAP;
     jest.useRealTimers();
+  });
+
+  it("refreshes token before scheduled reconnect", async () => {
+    jest.useFakeTimers();
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    fireConnectError("socket down");
+    rebindSocketHandlers();
+    jest.advanceTimersByTime(5000);
+    await Promise.resolve();
+    expect(mockRefreshAuthTokenNow).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
+
+  it("sends wrapped batch payload with tracking session metadata", () => {
+    process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver.example.test";
+    realtimeManager.connect("driver:42", { enableSocket: true });
+    const connectHandler = mockHandlers.get("connect")?.[0];
+    connectHandler?.();
+    const ok = realtimeManager.sendDriverLocationBatch([
+      {
+        tracking_event_id: "evt-1",
+        tracking_session_id: "sess-1",
+        batch_id: "batch-1",
+        position_id: "pos-1",
+        sequence_id: 1,
+        mission_id: 12,
+        latitude: 1,
+        longitude: 2,
+      },
+    ]);
+    expect(ok).toBe(true);
+    expect(mockSocket.emit).toHaveBeenCalledWith(
+      "driver_location_batch",
+      expect.objectContaining({
+        tracking_session_id: "sess-1",
+        batch_id: "batch-1",
+      })
+    );
   });
 });

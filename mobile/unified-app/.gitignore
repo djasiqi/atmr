@@ -4,3 +4,10 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local Expo env files (feature flags, dev URLs, secrets). Never commit.
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production

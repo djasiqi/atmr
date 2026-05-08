@@ -90,9 +90,10 @@ export function BaseFloatingBar({
   const FLOATING_BAR_COMPANY_PAD_Y = t.spacingXs;
 
   return (
-    <View style={{ height: containerHeight, backgroundColor: "transparent" }} pointerEvents="box-none">
+    <View
+      style={{ height: containerHeight, backgroundColor: "transparent", pointerEvents: "box-none" }}
+    >
       <View
-        pointerEvents="box-none"
         style={{
           position: "absolute",
           left: 0,
@@ -100,6 +101,7 @@ export function BaseFloatingBar({
           bottom: 0,
           alignItems: "center",
           paddingBottom,
+          pointerEvents: "box-none",
         }}
       >
         <View

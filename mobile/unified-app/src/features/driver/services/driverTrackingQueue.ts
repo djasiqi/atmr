@@ -19,6 +19,10 @@ export type DriverTrackingMode = "mission_live" | "availability_presence" | "obs
 
 export type DriverTrackingQueueItem = {
   id: string;
+  sequenceId: number;
+  trackingSessionId: string;
+  batchId: string;
+  positionId: string;
   missionId: number | null;
   appState: AppStateStatus;
   locationMode: DriverTrackingMode;
@@ -53,6 +57,7 @@ type DriverTrackingQueueSnapshot = {
 
 const STORAGE_KEY = "driver_tracking_delivery_queue_v1";
 const MAX_QUEUE_ITEMS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_QUEUE_MAX_ITEMS ?? "1000");
+const MAX_QUEUE_AGE_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_QUEUE_MAX_AGE_MS ?? "86400000");
 const MAX_RETRIES = 6;
 // 24h aligné sur ops locationQueue — couvre les missions longues (nuit, TGV, aéroport).
 const REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -62,6 +67,15 @@ const COMPACTION_HIGH_SPACING_MS = 45_000;
 const SPEED_DELTA_PIVOT_MS = 4;
 const HEADING_DELTA_PIVOT_DEG = 30;
 const SOCKET_BATCH_MAX_POINTS = Number(process.env.EXPO_PUBLIC_DRIVER_SOCKET_BATCH_MAX_POINTS ?? "20");
+const DRAIN_BATCH_SIZE = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_BATCH_SIZE ?? "50");
+const DRAIN_INTERVAL_MS = Number(process.env.EXPO_PUBLIC_DRIVER_TRACKING_DRAIN_INTERVAL_MS ?? "500");
+const MAX_DRAIN_POSITIONS_PER_MINUTE = Number(
+  process.env.EXPO_PUBLIC_DRIVER_TRACKING_MAX_DRAIN_POSITIONS_PER_MINUTE ?? "1200"
+);
+const TRACKING_SESSION_TTL_MS = Number(
+  process.env.EXPO_PUBLIC_DRIVER_TRACKING_SESSION_TTL_SEC ?? "1800"
+) * 1000;
+const SESSION_STORAGE_KEY = "driver_tracking_session_v1";
 const inMemoryStorage = new Map<string, string>();
 
 function nowMs(): number {
@@ -85,6 +99,11 @@ class DriverTrackingQueue {
   private loaded = false;
   private isFlushing = false;
   private items: DriverTrackingQueueItem[] = [];
+  private sequenceCounter = 0;
+  private trackingSessionId = "";
+  private sessionCreatedAt = 0;
+  private drainedInCurrentMinute = 0;
+  private drainMinuteBucket = 0;
 
   private async readStorage(key: string): Promise<string | null> {
     const storage = AsyncStorage as unknown as {
@@ -111,6 +130,21 @@ class DriverTrackingQueue {
     if (this.loaded) return;
     const parsed = safeJsonParse<DriverTrackingQueueItem[]>(await this.readStorage(STORAGE_KEY));
     this.items = Array.isArray(parsed) ? parsed : [];
+    this.items.sort((a, b) => (a.sequenceId ?? 0) - (b.sequenceId ?? 0));
+    this.sequenceCounter = this.items.reduce((max, item) => Math.max(max, item.sequenceId ?? 0), 0);
+    const sessionRaw = safeJsonParse<{ trackingSessionId: string; createdAt: number }>(
+      await this.readStorage(SESSION_STORAGE_KEY)
+    );
+    if (
+      sessionRaw?.trackingSessionId &&
+      typeof sessionRaw.createdAt === "number" &&
+      nowMs() - sessionRaw.createdAt < TRACKING_SESSION_TTL_MS
+    ) {
+      this.trackingSessionId = sessionRaw.trackingSessionId;
+      this.sessionCreatedAt = sessionRaw.createdAt;
+    } else {
+      this.rotateTrackingSession();
+    }
     this.loaded = true;
   }
 
@@ -118,8 +152,31 @@ class DriverTrackingQueue {
     await this.writeStorage(STORAGE_KEY, JSON.stringify(this.items));
   }
 
+  private async persistSession() {
+    await this.writeStorage(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({
+        trackingSessionId: this.trackingSessionId,
+        createdAt: this.sessionCreatedAt,
+      })
+    );
+  }
+
+  private rotateTrackingSession() {
+    this.trackingSessionId = `trk_sess_${nowMs()}_${Math.random().toString(36).slice(2, 10)}`;
+    this.sessionCreatedAt = nowMs();
+  }
+
+  private ensureSessionFresh() {
+    if (!this.trackingSessionId || nowMs() - this.sessionCreatedAt >= TRACKING_SESSION_TTL_MS) {
+      this.rotateTrackingSession();
+      void this.persistSession();
+    }
+  }
+
   private isExpired(item: DriverTrackingQueueItem): boolean {
-    return nowMs() - item.queuedAt > REPLAY_WINDOW_MS;
+    const maxAge = Math.min(REPLAY_WINDOW_MS, MAX_QUEUE_AGE_MS);
+    return nowMs() - item.queuedAt > maxAge;
   }
 
   private headingDeltaDegrees(previous?: number, next?: number): number {
@@ -200,8 +257,17 @@ class DriverTrackingQueue {
     payload: DriverLocationPayload;
   }): Promise<DriverTrackingQueueItem> {
     await this.ensureLoaded();
+    this.ensureSessionFresh();
+    const sequenceId = this.sequenceCounter + 1;
+    this.sequenceCounter = sequenceId;
+    const positionId = `trk_pos_${sequenceId}_${Math.random().toString(36).slice(2, 8)}`;
+    const batchId = `trk_batch_${Math.floor(sequenceId / Math.max(1, DRAIN_BATCH_SIZE))}_${nowMs()}`;
     const item: DriverTrackingQueueItem = {
       id: buildQueueId(),
+      sequenceId,
+      trackingSessionId: this.trackingSessionId,
+      batchId,
+      positionId,
       missionId: entry.missionId,
       appState: entry.appState,
       locationMode: entry.locationMode,
@@ -222,6 +288,7 @@ class DriverTrackingQueue {
     this.compactQueueIfNeeded();
     this.trimIfNeeded();
     await this.persist();
+    await this.persistSession();
     const oldestQueuedAt = this.items.length > 0 ? this.items[0]?.queuedAt ?? null : null;
     emitDriverTelemetry("tracking.queue.enqueued", {
       source: "driver.tracking.queue",
@@ -230,6 +297,8 @@ class DriverTrackingQueue {
       queue_depth: this.items.length,
       oldest_item_age_ms: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
       location_mode: entry.locationMode,
+      sequence_id: sequenceId,
+      tracking_session_id: this.trackingSessionId,
     });
     return item;
   }
@@ -240,6 +309,7 @@ class DriverTrackingQueue {
     forceHttpFallback?: boolean;
   }): Promise<DriverTrackingFlushResult> {
     await this.ensureLoaded();
+    this.ensureSessionFresh();
     const ackStaleMs = options?.ackStaleMs ?? SOCKET_ACK_DEFAULT_STALE_MS;
     const networkProfile = options?.networkProfile ?? "normal";
     if (this.isFlushing) {
@@ -267,19 +337,56 @@ class DriverTrackingQueue {
     try {
       const enableRealAck = isFeatureEnabled("tracking_real_ack_semantics_enabled");
       const remaining: DriverTrackingQueueItem[] = [];
-      this.items.sort((a, b) => a.queuedAt - b.queuedAt);
+      this.items.sort((a, b) => (a.sequenceId ?? 0) - (b.sequenceId ?? 0));
       const oldestQueuedAt = this.items[0]?.queuedAt ?? null;
+      const minuteBucket = Math.floor(nowMs() / 60_000);
+      if (this.drainMinuteBucket !== minuteBucket) {
+        this.drainMinuteBucket = minuteBucket;
+        this.drainedInCurrentMinute = 0;
+      }
+      const remainingBudget = Math.max(0, MAX_DRAIN_POSITIONS_PER_MINUTE - this.drainedInCurrentMinute);
+      const maxDrainNow = Math.max(0, Math.min(remainingBudget, DRAIN_BATCH_SIZE));
+      if (maxDrainNow <= 0) {
+        emitDriverTelemetry("tracking.queue.backpressure", {
+          source: "driver.tracking.queue",
+          queue_depth: this.items.length,
+          max_drain_positions_per_minute: MAX_DRAIN_POSITIONS_PER_MINUTE,
+          drain_interval_ms: DRAIN_INTERVAL_MS,
+        });
+        await this.persist();
+        return {
+          sent: 0,
+          backendAcked: 0,
+          socketEmitted: 0,
+          dropped: 0,
+          retried: 0,
+          queueDepth: this.items.length,
+          flushPathUsed,
+          lastBackendAckAt,
+          oldestItemAgeMs: oldestQueuedAt ? Math.max(0, nowMs() - oldestQueuedAt) : null,
+          networkProfile,
+        };
+      }
 
       // Envoi batch socket reel (N points par emission) pour reduire la pression reseau.
       if (!options?.forceHttpFallback && realtimeManager.isDriverSocketReady()) {
         const socketCandidates = this.items.filter(
           (item) => !this.isExpired(item) && item.deliveryState !== "socket_emitted"
         );
+        let sentThisFlush = 0;
         for (let index = 0; index < socketCandidates.length; index += SOCKET_BATCH_MAX_POINTS) {
-          const chunk = socketCandidates.slice(index, index + SOCKET_BATCH_MAX_POINTS);
+          if (sentThisFlush >= maxDrainNow) break;
+          const chunk = socketCandidates.slice(
+            index,
+            Math.min(index + SOCKET_BATCH_MAX_POINTS, index + (maxDrainNow - sentThisFlush))
+          );
           const sentViaSocket = realtimeManager.sendDriverLocationBatch(
             chunk.map((item) => ({
               tracking_event_id: item.id,
+              sequence_id: item.sequenceId,
+              tracking_session_id: item.trackingSessionId,
+              position_id: item.positionId,
+              batch_id: item.batchId,
               mission_id: item.missionId,
               latitude: item.payload.latitude,
               longitude: item.payload.longitude,
@@ -294,6 +401,8 @@ class DriverTrackingQueue {
           if (!sentViaSocket) break;
           for (const item of chunk) {
             sent += 1;
+            sentThisFlush += 1;
+            this.drainedInCurrentMinute += 1;
             socketEmitted += 1;
             flushPathUsed = "socket_batch";
             item.deliveryState = enableRealAck ? "socket_emitted" : "backend_acked";
@@ -309,6 +418,10 @@ class DriverTrackingQueue {
       }
 
       for (const item of this.items) {
+        if (sent >= maxDrainNow) {
+          remaining.push(item);
+          continue;
+        }
         if (this.isExpired(item)) {
           dropped += 1;
           emitDriverTelemetry("tracking.queue.expired", {
@@ -330,6 +443,10 @@ class DriverTrackingQueue {
             const socketSent = realtimeManager.sendDriverLocationBatch([
               {
                 tracking_event_id: item.id,
+                sequence_id: item.sequenceId,
+                tracking_session_id: item.trackingSessionId,
+                position_id: item.positionId,
+                batch_id: item.batchId,
                 mission_id: item.missionId,
                 latitude: item.payload.latitude,
                 longitude: item.payload.longitude,
@@ -343,6 +460,7 @@ class DriverTrackingQueue {
             ]);
             if (socketSent) {
               sent += 1;
+              this.drainedInCurrentMinute += 1;
               socketEmitted += 1;
               flushPathUsed = "socket_batch";
               item.deliveryState = enableRealAck ? "socket_emitted" : "backend_acked";
@@ -436,6 +554,11 @@ class DriverTrackingQueue {
       }
       this.items = remaining;
       await this.persist();
+      if (this.items.length > 0 && DRAIN_INTERVAL_MS > 0) {
+        setTimeout(() => {
+          void this.flush(options);
+        }, DRAIN_INTERVAL_MS);
+      }
       emitDriverTelemetry("tracking.queue.flush", {
         source: "driver.tracking.queue",
         sent,
@@ -500,6 +623,25 @@ class DriverTrackingQueue {
         flush_path: "socket_batch",
         ack_status: "accepted",
         backend_acked_count: ackedCount,
+      });
+    }
+    return ackedCount;
+  }
+
+  async markBackendAckedByWatermark(ackLastSequenceId: number): Promise<number> {
+    await this.ensureLoaded();
+    if (!Number.isFinite(ackLastSequenceId) || ackLastSequenceId <= 0) return 0;
+    const beforeCount = this.items.length;
+    this.items = this.items.filter((item) => item.sequenceId > ackLastSequenceId);
+    const ackedCount = beforeCount - this.items.length;
+    if (ackedCount > 0) {
+      await this.persist();
+      emitDriverTelemetry("tracking.ingest.ack", {
+        source: "driver.tracking.queue",
+        flush_path: "socket_batch",
+        ack_status: "accepted",
+        backend_acked_count: ackedCount,
+        ack_last_sequence_id: ackLastSequenceId,
       });
     }
     return ackedCount;

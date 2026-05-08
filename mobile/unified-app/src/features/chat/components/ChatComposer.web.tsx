@@ -61,7 +61,7 @@ export function ChatComposer({
     : "Saisissez du texte pour envoyer un message (la saisie vocale est reservee a l’app iOS / Android)";
 
   return (
-    <View style={styles.root} pointerEvents="box-none">
+    <View style={styles.root}>
       <View style={styles.mainRow}>
         <View
           style={[
@@ -71,7 +71,7 @@ export function ChatComposer({
           ]}
         >
           {dialOpen && hasDial ? (
-            <View style={styles.dialMenu} pointerEvents="box-none" accessibilityViewIsModal>
+            <View style={styles.dialMenu} accessibilityViewIsModal>
               {onPickImage ? (
                 <Pressable
                   onPress={() => runPick(onPickImage)}
@@ -154,7 +154,6 @@ export function ChatComposer({
             style={[styles.sendCircle, styles.sendCircleDisabled]}
             accessibilityRole="button"
             accessibilityLabel="La saisie vocale n’est pas disponible sur le web. Utilisez le clavier."
-            pointerEvents="none"
           >
             <Ionicons name="mic-off-outline" size={22} color={C_ICON_DISABLED} />
           </View>

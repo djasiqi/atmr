@@ -12,6 +12,7 @@ import {
   Screen,
 } from "../../../src/design/responsive";
 import { groupMissionsByPickupWindow } from "../../../src/features/driver/domain/missionGrouping";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverMissionsScreen() {
   const router = useRouter();
@@ -20,7 +21,13 @@ export default function DriverMissionsScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+        <Screen
+          scroll
+          backgroundColor={brandSurfaceSoft}
+          withHorizontalPadding={false}
+          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          contentContainerStyle={styles.page}
+        >
           <AppText variant="sectionTitle" style={styles.title}>
             Missions chauffeur
           </AppText>

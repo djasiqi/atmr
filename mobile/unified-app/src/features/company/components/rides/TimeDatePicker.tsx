@@ -1342,14 +1342,12 @@ export function TimeDatePicker({
                               <View style={{ minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
                             ) : null}
                             <LinearGradient
-                              pointerEvents="none"
                               colors={["rgba(248, 250, 252, 0.82)", "rgba(248, 250, 252, 0)"]}
                               start={{ x: 0, y: 0.5 }}
                               end={{ x: 1, y: 0.5 }}
                               style={styles.mobileCarouselFadeLeft}
                             />
                             <LinearGradient
-                              pointerEvents="none"
                               colors={["rgba(248, 250, 252, 0)", "rgba(248, 250, 252, 0.82)"]}
                               start={{ x: 0, y: 0.5 }}
                               end={{ x: 1, y: 0.5 }}
@@ -1536,14 +1534,12 @@ export function TimeDatePicker({
                           <View style={{ minHeight: PICKER_CAROUSEL_CARD_CONTENT_HEIGHT }} />
                         ) : null}
                         <LinearGradient
-                          pointerEvents="none"
                           colors={["rgba(248, 250, 252, 0.82)", "rgba(248, 250, 252, 0)"]}
                           start={{ x: 0, y: 0.5 }}
                           end={{ x: 1, y: 0.5 }}
                           style={styles.mobileCarouselFadeLeft}
                         />
                         <LinearGradient
-                          pointerEvents="none"
                           colors={["rgba(248, 250, 252, 0)", "rgba(248, 250, 252, 0.82)"]}
                           start={{ x: 0, y: 0.5 }}
                           end={{ x: 1, y: 0.5 }}

@@ -489,6 +489,13 @@ const CompanyDashboard = () => {
       }
       refetchAll();
     };
+    const onBookingReassigned = (data) => {
+      if (!acceptRealtime(data, data?.booking_id ? `booking:${data.booking_id}` : null)) return;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Course réassignée:', data);
+      }
+      refetchAll();
+    };
     if (useUnifiedDispatchWs) {
       socket.on('dispatch_state_patch', onDispatchStatePatch);
     } else {
@@ -505,6 +512,8 @@ const CompanyDashboard = () => {
     socket.on('transfer_received', onTransferReceived);
     socket.on('transfer_proposed', onTransferProposed);
     socket.on('booking_updated', onBookingUpdated);
+    socket.on('booking_reassigned', onBookingReassigned);
+    socket.on('booking_assigned', onBookingReassigned);
     return () => {
       if (useUnifiedDispatchWs) {
         socket.off('dispatch_state_patch', onDispatchStatePatch);
@@ -522,6 +531,8 @@ const CompanyDashboard = () => {
       socket.off('transfer_received', onTransferReceived);
       socket.off('transfer_proposed', onTransferProposed);
       socket.off('booking_updated', onBookingUpdated);
+      socket.off('booking_reassigned', onBookingReassigned);
+      socket.off('booking_assigned', onBookingReassigned);
     };
   }, [
     socket,
@@ -806,6 +817,8 @@ const CompanyDashboard = () => {
         map[d.booking_id] = {
           delay_minutes: d.delay_minutes,
           is_dropoff: !d.is_pickup,
+          pickup_eta: d.pickup_eta ?? null,
+          dropoff_eta: d.dropoff_eta ?? null,
         };
       }
     }

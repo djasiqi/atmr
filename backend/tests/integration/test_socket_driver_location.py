@@ -17,6 +17,49 @@ from ext import socketio
 from models import Driver
 
 
+def _build_socket_test_client(app, token: str):
+    """Construit un Socket.IO test client avec auth + header JWT.
+
+    Sur Flask-SocketIO test_client, le payload `auth` peut être ignoré selon la pile
+    Engine.IO. Le header Authorization rend le handshake déterministe en tests.
+    """
+    flask_client = app.test_client()
+    return socketio.test_client(
+        app,
+        auth={"token": token},
+        headers={"Authorization": f"Bearer {token}"},
+        flask_test_client=flask_client,
+    )
+
+
+def _ensure_socket_entities_committed(db, *entities) -> None:
+    """Rend les entités visibles depuis le contexte Socket.IO.
+
+    Le handshake Socket.IO peut interroger la DB via une session différente de la
+    session pytest courante; un simple flush ne suffit pas toujours.
+    """
+    db.session.flush()
+    db.session.commit()
+    for entity in entities:
+        db.session.refresh(entity)
+
+
+@pytest.fixture(autouse=True)
+def socketio_test_client_without_broker():
+    """Désactive le broker uniquement pour socketio.test_client en tests.
+
+    Important:
+    - n'impacte pas la config production;
+    - n'impacte pas le runtime réel, uniquement l'instanciation du client de test.
+    """
+    previous = socketio.server_options.get("message_queue")
+    socketio.server_options["message_queue"] = None
+    try:
+        yield
+    finally:
+        socketio.server_options["message_queue"] = previous
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(
     __import__("os").environ.get("SKIP_SOCKETIO", "false").lower() == "true",
@@ -40,8 +83,7 @@ class TestSocketDriverLocation:
             pytest.skip("test_driver fixture required")
         user = test_driver.user
         driver = test_driver
-        db.session.refresh(driver)
-        db.session.refresh(user)
+        _ensure_socket_entities_committed(db, driver, user)
 
         # JWT pour la connexion socket
         with app.app_context():
@@ -56,11 +98,7 @@ class TestSocketDriverLocation:
 
         # Connexion socket (driver a company_id pour que connect réussisse)
         with app.app_context():
-            client = socketio.test_client(
-                app,
-                auth={"token": token},
-                flask_test_client=app.test_client(),
-            )
+            client = _build_socket_test_client(app, token)
 
         if not client.is_connected():
             pytest.skip(
@@ -113,8 +151,7 @@ class TestSocketDriverLocation:
             pytest.skip("test_driver fixture required")
         user = test_driver.user
         driver = test_driver
-        db.session.refresh(driver)
-        db.session.refresh(user)
+        _ensure_socket_entities_committed(db, driver, user)
 
         with app.app_context():
             token = create_access_token(
@@ -122,11 +159,7 @@ class TestSocketDriverLocation:
                 additional_claims={"role": "driver", "aud": "atmr-api"},
                 expires_delta=timedelta(hours=1),
             )
-            client = socketio.test_client(
-                app,
-                auth={"token": token},
-                flask_test_client=app.test_client(),
-            )
+            client = _build_socket_test_client(app, token)
 
         if not client.is_connected():
             pytest.skip("Socket client could not connect")
@@ -165,8 +198,7 @@ class TestSocketDriverLocation:
             pytest.skip("test_driver fixture required")
         user = test_driver.user
         driver = test_driver
-        db.session.refresh(driver)
-        db.session.refresh(user)
+        _ensure_socket_entities_committed(db, driver, user)
 
         with app.app_context():
             token = create_access_token(
@@ -174,11 +206,7 @@ class TestSocketDriverLocation:
                 additional_claims={"role": "driver", "aud": "atmr-api"},
                 expires_delta=timedelta(hours=1),
             )
-            client = socketio.test_client(
-                app,
-                auth={"token": token},
-                flask_test_client=app.test_client(),
-            )
+            client = _build_socket_test_client(app, token)
 
         if not client.is_connected():
             pytest.skip("Socket client could not connect")

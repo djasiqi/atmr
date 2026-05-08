@@ -47,3 +47,8 @@
 
 # CTA semi-auto : écran propositions
 # EXPO_PUBLIC_ENABLE_COMPANY_DISPATCH_SCREEN=1
+
+# Clients & facturation (lecture seule) — en __DEV__ les deux sont déjà actifs par défaut.
+# En build release / prod sans __DEV__, décommenter pour forcer l’affichage des listes :
+# EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY=1
+# EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY=1

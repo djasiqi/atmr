@@ -129,6 +129,40 @@ def _booking_time_expr() -> Any:
     return B.scheduled_time
 
 
+# Statuts où l’on n’agrège plus de retard (course close, annulée, client à bord, ou pas encore dispatchable).
+_DELAYS_EXCLUDED_BOOKING_STATUSES_ROLLUP: frozenset[BookingStatus] = frozenset(
+    {
+        BookingStatus.COMPLETED,
+        BookingStatus.RETURN_COMPLETED,
+        BookingStatus.CANCELED,
+        BookingStatus.IN_PROGRESS,
+        BookingStatus.AWAITING_CLIENT_PAYMENT,
+    }
+)
+
+
+def _booking_status_enum_from_model(booking: Any) -> BookingStatus | None:
+    st = getattr(booking, "status", None)
+    if isinstance(st, BookingStatus):
+        return st
+    if isinstance(st, str) and st.strip():
+        raw = st.strip()
+        try:
+            return BookingStatus(raw)
+        except ValueError:
+            upper = raw.upper()
+            for member in BookingStatus:
+                if member.value == upper:
+                    return member
+    return None
+
+
+def _exclude_booking_from_delay_rollups(booking: Any) -> bool:
+    """True si la réservation ne doit pas compter dans GET /delays (header, filtres)."""
+    bst = _booking_status_enum_from_model(booking)
+    return bst is not None and bst in _DELAYS_EXCLUDED_BOOKING_STATUSES_ROLLUP
+
+
 def _classify_delay_severity(delay_minutes: int) -> str:
     """Classifie la sévérité d'un retard en 3 niveaux.
 

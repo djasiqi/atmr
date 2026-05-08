@@ -21,9 +21,9 @@ export function BootSplashGate({ children }: Props) {
             g.styles.layer,
             {
               opacity: g.fadeOpacity,
+              pointerEvents: g.pointerEvents,
             },
           ]}
-          pointerEvents={g.pointerEvents}
         >
           {g.showLottieLayer ? (
             <Animated.View

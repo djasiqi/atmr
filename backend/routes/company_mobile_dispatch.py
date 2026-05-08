@@ -54,7 +54,13 @@ from infrastructure.dispatch.validation_adapter import (
     check_existing_assignment_conflict,
 )
 from shared.geo_utils import haversine_distance
-from shared.time_utils import day_local_bounds, now_local, parse_local_naive
+from shared.time_utils import (
+    day_local_bounds,
+    iso_utc_z,
+    now_local,
+    parse_local_naive,
+    to_utc_from_db,
+)
 
 company_mobile_dispatch_ns = Namespace(
     "company_mobile_dispatch",
@@ -294,6 +300,14 @@ def _build_ride_summary(
     if not is_completed and active_assignment:
         delay_seconds = getattr(active_assignment, "delay_seconds", 0) or 0
 
+    # Repli carte retard mobile : tout retard assignment ≥ 1 min (aligné liste : pas seulement ≥ 5),
+    # quand l’assignment porte déjà du retard mais qu’aucune ligne ETA n’est dans delays/live.
+    assignment_pickup_delay_minutes: int | None = None
+    if not is_completed and isinstance(delay_seconds, (int, float)):
+        ds = int(delay_seconds)
+        if ds >= 60:
+            assignment_pickup_delay_minutes = max(1, round(ds / 60))
+
     risk_delay = bool(booking.is_urgent) or (
         not is_completed
         and isinstance(delay_seconds, (int, float))
@@ -438,14 +452,23 @@ def _build_ride_summary(
             ),
         }
 
+    # pickup_at : pour les horaires réels, aligner JSON sur `Booking.serialize.scheduled_time` (UTC « Z »)
+    # afin que React Native interprete le même instant que le web. La sentinelle locale 00:00:00 (« heure à
+    # définir ») reste en ISO naïf — sinon la conversion UTC casse la détection `isPickupSentinel` mobile.
     # pickup_at (API) = scheduled_time (modèle). Ne jamais transformer 00:00 en null :
     # 00:00:00 = valeur sentinelle "heure non définie", à traiter côté client par isPickupSentinel.
+    st = booking.scheduled_time
+    pickup_at_iso: str | None = None
+    if st is not None:
+        if st.hour == 0 and st.minute == 0 and st.second == 0:
+            pickup_at_iso = st.replace(tzinfo=None).isoformat()
+        else:
+            pickup_at_iso = iso_utc_z(to_utc_from_db(st))
+
     summary: Dict[str, Any] = {
         "id": str(booking.id),
         "time": {
-            "pickup_at": booking.scheduled_time.isoformat()
-            if booking.scheduled_time
-            else None,
+            "pickup_at": pickup_at_iso,
             "drop_eta": drop_eta,
             "window_start": None,
             "window_end": None,
@@ -465,6 +488,8 @@ def _build_ride_summary(
             "fairness_score": None,
             "override_pending": False,
         },
+        # Minutes (assignment.delay_seconds / 60), seuil ≥ 1 min — complète les endpoints ETA delays sur mobile.
+        "assignment_pickup_delay_minutes": assignment_pickup_delay_minutes,
     }
     return summary
 
@@ -776,8 +801,19 @@ def _execute_assignment_action(
         try:
             from application.events.event_bus import publish_event
             from domain.events.events import (
+                BookingAssignedEvent,
                 DriverBookingReassignedEvent,
                 DriverNewBookingEvent,
+            )
+
+            # Notifier explicitement la room entreprise pour garantir
+            # la synchro live dashboard après assignation mobile.
+            publish_event(
+                BookingAssignedEvent(
+                    booking_id=int(booking.id),
+                    company_id=int(company_id),
+                    driver_id=int(driver_id),
+                )
             )
 
             # Notifier l'ancien chauffeur si réassignation
@@ -1172,7 +1208,7 @@ class MobileDispatchRides(Resource):
                 statuses=statuses_list,
             )
             # ✅ Eager load des transferts et partenaires pour éviter les requêtes N+1
-            from sqlalchemy.orm import joinedload
+            from sqlalchemy.orm import joinedload, selectinload
             from models.booking_transfer import BookingTransfer
 
             bookings_query = bookings_query.options(
@@ -1181,6 +1217,7 @@ class MobileDispatchRides(Resource):
                     BookingTransfer.executing_company
                 ),
                 joinedload(Booking.dispatch_offers),
+                selectinload(Booking.assignments),
             )
         except Exception:
             raise

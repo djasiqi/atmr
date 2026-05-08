@@ -422,6 +422,7 @@ class InvoiceRepository:
         return (
             Invoice.query.options(joinedload(Invoice.lines))
             .filter(Invoice.company_id == company_id)
+            .order_by(Invoice.issued_at.desc(), Invoice.id.desc())
             .all()
         )
 

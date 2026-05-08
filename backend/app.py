@@ -796,6 +796,14 @@ def create_app(config_name: str | None = None):
         # à init_app() pour garantir que Redis est utilisé pour partager
         # les SIDs entre workers.
         # Le message_queue est configuré dans ext.py, mais doit être passé ici aussi.
+        test_disable_message_queue = bool(
+            app.config.get("SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE", False)
+        )
+        configured_message_queue = (
+            None
+            if app.config.get("TESTING") and test_disable_message_queue
+            else _socketio_message_queue
+        )
         socketio.init_app(
             app,
             async_mode=async_mode,
@@ -809,7 +817,7 @@ def create_app(config_name: str | None = None):
             allow_upgrades=allow_ws_upgrades,
             cors_credentials=True,
             # ✅ FIX: Ré-activer Redis pour synchroniser les handlers entre workers Gunicorn
-            message_queue=_socketio_message_queue,
+            message_queue=configured_message_queue,
             # ✅ Note: La compression Socket.IO est gérée automatiquement
             # par le protocole lors de la négociation client/serveur.
             # Pas besoin de paramètre explicite dans Flask-SocketIO.

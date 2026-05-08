@@ -1,9 +1,23 @@
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
+import { canUseNotifee, loadNotifee } from "./notifeeCompat";
 
 export function registerMissionBarBackgroundHandlers(): void {
+  if (!canUseNotifee()) {
+    emitDriverTelemetry("driver.mission_bar.background.unavailable", {
+      source: "driver.mission_bar.background",
+    });
+    return;
+  }
   void (async () => {
     try {
-      const { default: notifee } = await import("@notifee/react-native");
+      const mod = await loadNotifee();
+      if (!mod) {
+        emitDriverTelemetry("driver.mission_bar.background.unavailable", {
+          source: "driver.mission_bar.background",
+        });
+        return;
+      }
+      const { default: notifee } = mod;
       notifee.onBackgroundEvent(async (event) => {
         const { type, detail } = event;
         const pressActionId =

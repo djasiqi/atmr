@@ -238,7 +238,7 @@ export function MessageBubble({ message, onOpenImage, onOpenPdf }: MessageBubble
                   onLoad={handleImageLoad}
                   onError={() => setImageLoadFailed(true)}
                 />
-                <View style={styles.imageDownloadFab} pointerEvents="none">
+                <View style={styles.imageDownloadFab}>
                   <Ionicons name="download-outline" size={22} color="#fff" />
                 </View>
               </Pressable>
@@ -435,6 +435,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.4)",
+    pointerEvents: "none",
   },
   imageErrorBox: {
     flexDirection: "row",

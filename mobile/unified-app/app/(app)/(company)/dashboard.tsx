@@ -27,8 +27,10 @@ import { resolveDriverStatus } from "../../../src/features/company/utils/company
 import {
   buildDashboardPresentation,
   getDashboardModeConfig,
+  resolveDashboardKpiNavigation,
   type CompanyDispatchMode,
   type CompanyOptimizerRuntime,
+  type DashboardKpiNavigationTarget,
   type DashboardRuntimeMetrics,
 } from "../../../src/features/company/dashboard/dispatchDashboardPresentation";
 import { AppText, Screen } from "../../../src/design/responsive";
@@ -134,14 +136,16 @@ function resolveMissionIdFromEvent(payload: {
 function KpiTile({
   def,
   display,
+  onPress,
 }: {
   def: { label: string; icon: KpiIconName };
   display: { kind: "value" | "unavailable" | "hidden"; line1: string; line2?: string };
+  onPress?: () => void;
 }) {
   if (display.kind === "hidden") return null;
   const isUnavailable = display.kind === "unavailable";
-  return (
-    <View style={styles.kpiStat} accessibilityLabel={def.label}>
+  const inner = (
+    <>
       <View style={styles.kpiTopRow}>
         <View style={styles.kpiIconWrap} accessibilityElementsHidden>
           <Ionicons name={def.icon} size={16} color={C.brand} />
@@ -166,6 +170,23 @@ function KpiTile({
           )}
         </View>
       </View>
+    </>
+  );
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={def.label}
+        style={({ pressed }) => [styles.kpiStat, pressed && styles.kpiStatPressed]}
+      >
+        {inner}
+      </Pressable>
+    );
+  }
+  return (
+    <View style={styles.kpiStat} accessibilityLabel={def.label}>
+      {inner}
     </View>
   );
 }
@@ -605,6 +626,10 @@ export default function CompanyDashboardScreen() {
     router.push("/(app)/(company)/rides");
   }, [router]);
 
+  const onKpiTilePress = useCallback((target: DashboardKpiNavigationTarget) => {
+    router.push({ pathname: target.path, params: target.params } as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   return (
     <PermissionGuard permission="company:dashboard:read">
       <Screen
@@ -639,17 +664,27 @@ export default function CompanyDashboardScreen() {
           {view.kpi
             .map((row) => {
               const d = row.display;
+              const kpiNav = resolveDashboardKpiNavigation(row.def.key, { hasDispatchScreen });
+              const onPress = kpiNav ? () => onKpiTilePress(kpiNav) : undefined;
               if (d.kind === "value") {
                 return (
                   <KpiTile
                     key={row.def.key}
                     def={row.def}
                     display={{ kind: "value", line1: d.line1, line2: d.line2 }}
+                    onPress={onPress}
                   />
                 );
               }
               if (d.kind === "unavailable") {
-                return <KpiTile key={row.def.key} def={row.def} display={{ kind: "unavailable", line1: "—" }} />;
+                return (
+                  <KpiTile
+                    key={row.def.key}
+                    def={row.def}
+                    display={{ kind: "unavailable", line1: "—" }}
+                    onPress={onPress}
+                  />
+                );
               }
               return null;
             })
@@ -798,6 +833,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     ...dashboardSurfaceShadow,
   },
+  kpiStatPressed: { opacity: 0.88 },
   kpiTopRow: { flexDirection: "row" as const, alignItems: "center" as const, gap: 8 },
   kpiIconWrap: {
     width: 28,

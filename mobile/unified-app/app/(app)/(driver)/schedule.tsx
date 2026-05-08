@@ -13,6 +13,7 @@ import {
 } from "../../../src/design/responsive";
 import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
 import type { DriverMission } from "../../../src/features/driver/types";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 function byDate(missions: DriverMission[], selectedDate: string) {
   return missions.filter((mission) => {
@@ -38,6 +39,7 @@ export default function DriverScheduleScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
+          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
           contentContainerStyle={[
             styles.page,
             { paddingHorizontal: horizontalPadding, gap: t.spacingSm, paddingBottom: t.spacingMd },

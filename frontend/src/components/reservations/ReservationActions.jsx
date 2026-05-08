@@ -3,6 +3,16 @@ import React from 'react';
 import { FiClock, FiZap, FiUserPlus, FiShare2 } from 'react-icons/fi';
 import styles from './ReservationActions.module.css';
 
+/** Statuts où ce bloc n’affiche pas d’actions secondaires (normal en dispatch). */
+const NO_SECONDARY_ACTION_STATUSES = new Set([
+  'en_route',
+  'in_progress',
+  'completed',
+  'canceled',
+  'cancelled',
+  'return_completed',
+]);
+
 /**
  * Composant centralisé pour les actions sur les réservations
  * Utilisé dans ReservationTable, DispatchTable, etc.
@@ -30,6 +40,7 @@ const ReservationActions = ({
   hideDelete = false, // Si true, cache le bouton supprimer
   showAll = false, // Si true, affiche toutes les actions disponibles
   className = '',
+  needsTimeConfirmationOverride,
 }) => {
   // Vérifier si c'est un retour sans heure définie (à confirmer)
   // Support plusieurs façons d'identifier un retour
@@ -54,10 +65,25 @@ const ReservationActions = ({
   if (reservation?.scheduled_time) {
     const timeStr = reservation.scheduled_time.toString();
     // Format ISO: "2025-11-03T00:00:00" ou similaire
-    isDefaultTime = timeStr.includes('T00:00:00') || timeStr.includes(' 00:00:00');
+    isDefaultTime =
+      /[T ]00:00(?::00)?(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(timeStr) ||
+      timeStr.includes('T00:00:00') ||
+      timeStr.includes(' 00:00:00') ||
+      timeStr.includes('T00:00') ||
+      timeStr.includes(' 00:00');
+    if (!isDefaultTime) {
+      const parsed = new Date(timeStr.replace(' ', 'T'));
+      if (!Number.isNaN(parsed.getTime())) {
+        isDefaultTime = parsed.getHours() === 0 && parsed.getMinutes() === 0;
+      }
+    }
   }
 
-  const needsTimeConfirmation = isReturn && (!timeConfirmed || !hasScheduledTime || isDefaultTime);
+  const computedNeedsTimeConfirmation = isReturn && (!timeConfirmed || !hasScheduledTime || isDefaultTime);
+  const needsTimeConfirmation =
+    typeof needsTimeConfirmationOverride === 'boolean'
+      ? needsTimeConfirmationOverride
+      : computedNeedsTimeConfirmation;
 
   const status = reservation?.status?.toLowerCase() || 'unknown';
   const deletableStatuses = ['pending', 'accepted', 'assigned'];
@@ -81,54 +107,23 @@ const ReservationActions = ({
   // Supprimer : pour les retours à confirmer OU pour les statuts supprimables
   const showDelete = !hideDelete && (needsTimeConfirmation || isDeletable) && !!onDelete;
 
-  // Debug log pour comprendre pourquoi les boutons ne s'affichent pas
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[ReservationActions]', {
-      reservationId: reservation?.id,
-      status,
-      isReturn,
-      is_transferred: reservation?.is_transferred,
-      needsTimeConfirmation,
-      showSchedule,
-      showUrgent,
-      showAssign,
-      showEdit,
-      showTransfer,
-      showDelete,
-      hideEdit,
-      hideTransfer,
-      hideDelete,
-      hasOnEdit: !!onEdit,
-      hasOnTransfer: !!onTransfer,
-      hasOnDelete: !!onDelete,
-    });
-  }
-
   // Si aucune action à afficher
   if (!showSchedule && !showUrgent && !showAssign && !showEdit && !showTransfer && !showDelete && !showAll) {
     if (process.env.NODE_ENV === 'development') {
-      // En « pending », Accepter / Rejeter (et parfois l'assignation inline) sont souvent gérés par le parent
-      // (ReservationTable, DispatchTable) : pas d'actions dans ce composant = cas normal, pas un warning.
-      if (status === 'pending') {
+      if (NO_SECONDARY_ACTION_STATUSES.has(status)) {
+        // Cas attendu : pas de log (évite le spam à chaque refetch / focus).
+      } else if (status === 'pending') {
         console.debug(
           `[ReservationActions] Aucune action secondaire pour #${reservation?.id} (pending : voir boutons parent)`
         );
       } else {
-        console.warn(`⚠️ [ReservationActions] Aucune action pour réservation #${reservation?.id}`);
+        // accepted / assigned sans callbacks, etc. : debug seulement (pas un warning).
+        console.debug(
+          `[ReservationActions] Aucune action secondaire pour #${reservation?.id} (statut « ${status} »)`
+        );
       }
     }
     return null;
-  }
-  
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`✅ [ReservationActions] Affichage actions pour #${reservation?.id}:`, {
-      showSchedule,
-      showUrgent,
-      showAssign,
-      showEdit,
-      showTransfer,
-      showDelete,
-    });
   }
 
   return (

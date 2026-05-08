@@ -24,6 +24,7 @@ import {
 import { useSession } from "../../../src/core/sessionProvider";
 import {
   useActiveCompanyContextId,
+  useCompanyDispatchDelaysQuery,
   useCompanyDispatchMissionsQuery,
   useCompanyRideActions,
   useCompanyRealtimeInvalidation,
@@ -50,6 +51,11 @@ import { DispatchRideListCard } from "../../../src/features/company/components/D
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { isDispatchCompleted, isDispatchCancelled } from "../../../src/features/company/utils/companyDispatchStatus";
 import { filterMissionsByDispatchListChip } from "../../../src/features/company/utils/rideListStatusFilter";
+import {
+  flattenCompanyDispatchDelays,
+  pickupDelaysByBookingLastWins,
+  pickupEtaIsoByBookingId,
+} from "../../../src/features/company/utils/dispatchWebAlignment";
 import { isPickupSentinel } from "../../../src/features/company/utils/pickupSentinel";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
 import {
@@ -170,17 +176,28 @@ const RIDE_STATUS_FILTERS: {
   { key: "cancelled", label: "Annulés", icon: "close-circle-outline" },
 ];
 
+const RIDE_STATUS_FILTER_KEYS = new Set(RIDE_STATUS_FILTERS.map((item) => item.key));
+
+function firstSearchParam(value: string | string[] | undefined): string | undefined {
+  if (value == null) return undefined;
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/** Même écart vertical qu’entre cartes Clients / Facturation (`READONLY_LIST_CARD_STACK_GAP`). */
+const DISPATCH_RIDE_LIST_CARD_GAP = 4;
+
 const rideStyles = StyleSheet.create({
-  /** Réf. `operations-app` `(enterprise)/rides.tsx` : padding 16, espacement vertical ~14. */
-  page: { paddingTop: 16, paddingBottom: 8, gap: 14 },
+  /** Contenu scroll : rythme uniforme avec header / cartes. */
+  page: { paddingTop: 10, paddingBottom: 20, gap: 16 },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: E.CARD,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    minHeight: 44,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: E.BORDER,
+    borderColor: "rgba(148, 163, 184, 0.22)",
     ...searchBarShadowOps,
   },
   searchClearHit: { padding: 6 },
@@ -195,29 +212,29 @@ const rideStyles = StyleSheet.create({
     fontSize: 15,
     outlineStyle: Platform.OS === "web" ? ("none" as const) : undefined,
   },
-  /** Carte actions dispatch (réf. blocs `operations-app` : surface blanche + bordure teinte). */
+  /** Carte actions dispatch — même langage que recherche / filtres. */
   dispatchActionsCard: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
     backgroundColor: E.CARD,
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: E.BORDER,
+    borderColor: "rgba(148, 163, 184, 0.22)",
     ...searchBarShadowOps,
   },
   actionBtn: { flexGrow: 1, minWidth: 108 },
-  /** Bandeau filtres : discret (peu d’ombre, pas de gros blocs de couleur). */
+  /** Bandeau filtres — bordure slate légère comme la barre de recherche. */
   tabsPanel: {
     alignSelf: "stretch",
     ...(Platform.OS === "web" ? ({ minWidth: 0 } as const) : {}),
     backgroundColor: E.CARD,
-    borderRadius: 12,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: E.BORDER,
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.22)",
     ...searchBarShadowOps,
   },
   /** Pas de flexGrow vertical ici (colonne parente) : une seule ligne, largeur = parent. */
@@ -232,9 +249,9 @@ const rideStyles = StyleSheet.create({
     flexWrap: "nowrap" as const,
     alignItems: "center" as const,
     flexGrow: 1,
-    gap: 5,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+    gap: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
   },
   /** Une ligne : icône + compteur, état actif = léger lavis vert (pas de plein vert). */
   tabButton: {
@@ -242,11 +259,11 @@ const rideStyles = StyleSheet.create({
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
-    gap: 2,
-    minHeight: 34,
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 10,
+    gap: 4,
+    minHeight: 36,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+    borderRadius: 11,
     backgroundColor: "transparent",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "transparent",
@@ -255,8 +272,8 @@ const rideStyles = StyleSheet.create({
       : {}),
   },
   tabButtonActive: {
-    backgroundColor: "rgba(0, 121, 107, 0.09)",
-    borderColor: "rgba(0, 121, 107, 0.22)",
+    backgroundColor: "rgba(0, 121, 107, 0.1)",
+    borderColor: "rgba(0, 121, 107, 0.28)",
   },
   tabCount: {
     fontSize: 11,
@@ -281,17 +298,16 @@ const rideStyles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 0,
-    padding: 12,
+    padding: 14,
     backgroundColor: E.CARD,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: E.BORDER,
+    borderColor: "rgba(148, 163, 184, 0.22)",
     ...searchBarShadowOps,
   },
   pressed: { opacity: 0.88 },
-  rideCardWrapper: { marginBottom: 10 },
   /** Réf. `ridesListContainer` operations : marge haute portée par `page.gap`. */
-  listTop: { marginTop: 0 },
+  listTop: { marginTop: 0, gap: DISPATCH_RIDE_LIST_CARD_GAP },
   loadingBox: {
     alignItems: "center",
     paddingVertical: 48,
@@ -324,23 +340,62 @@ const rideStyles = StyleSheet.create({
     marginTop: 6,
     lineHeight: 19,
   },
-  errorBanner: {
+  /** Bandeau ops (flux WS, erreurs chargement) — liseré critique aligné cartes retard. */
+  opsAlert: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    backgroundColor: "rgba(220, 53, 69, 0.06)",
-    borderRadius: 12,
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(220, 53, 69, 0.15)",
-    gap: 8,
-    marginTop: 4,
+    borderColor: "rgba(220, 38, 38, 0.22)",
+    borderLeftWidth: 3,
+    borderLeftColor: "#DC2626",
+    ...searchBarShadowOps,
   },
-  errorBannerText: {
-    color: E.DANGER,
+  opsAlertIconWell: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "rgba(220, 38, 38, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  opsAlertBodyCol: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 19,
+    minWidth: 0,
+    gap: 4,
+  },
+  opsAlertTitle: {
+    color: E.TEXT,
+    fontSize: 14,
     fontWeight: "600",
+    letterSpacing: 0.1,
+    lineHeight: 19,
+  },
+  opsAlertMessage: {
+    color: E.TEXT_SEC,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  opsAlertRetry: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "rgba(0, 121, 107, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 121, 107, 0.25)",
+  },
+  opsAlertRetryDisabled: { opacity: 0.55 },
+  opsAlertRetryLabel: {
+    color: E.BRAND_DARK,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
   errorBlock: { color: E.DANGER, lineHeight: 19 },
   mutedText: { color: E.TEXT_SEC },
@@ -353,8 +408,9 @@ const rideStyles = StyleSheet.create({
 
 export default function CompanyRidesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ filter?: string; create?: string }>();
-  const { activeContext, can } = useSession();
+  const params = useLocalSearchParams<{ filter?: string; create?: string; status?: string }>();
+  const { activeContext, can, bootstrapSession } = useSession();
+  const [sessionRetryBusy, setSessionRetryBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [actionPending, setActionPending] = useState<null | "dispatch" | "optimizer">(null);
@@ -374,10 +430,28 @@ export default function CompanyRidesScreen() {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [dateSheetOpen, setDateSheetOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const filterNorm = useMemo(() => firstSearchParam(params.filter)?.toLowerCase() ?? "", [params.filter]);
+  const statusParam = firstSearchParam(params.status);
+
+  useEffect(() => {
+    if (filterNorm === "delayed" || filterNorm === "exceptions" || filterNorm === "urgent") {
+      setStatus("all");
+    }
+  }, [filterNorm]);
+
+  useEffect(() => {
+    if (filterNorm === "delayed" || filterNorm === "exceptions" || filterNorm === "urgent") return;
+    if (statusParam && RIDE_STATUS_FILTER_KEYS.has(statusParam)) {
+      setStatus(statusParam);
+    }
+  }, [filterNorm, statusParam]);
+
   const contextId = useActiveCompanyContextId();
   const rideActions = useCompanyRideActions();
   const missionsQuery = useCompanyDispatchMissionsQuery({ date: selectedDate, search, status });
   const missionsRefetch = missionsQuery.refetch;
+  const dispatchDelaysQuery = useCompanyDispatchDelaysQuery({ date: selectedDate });
+  const delaysRefetch = dispatchDelaysQuery.refetch;
   const allMissionsForCountsQuery = useCompanyDispatchMissionsQuery({
     date: selectedDate,
     search,
@@ -388,17 +462,36 @@ export default function CompanyRidesScreen() {
   const realtimeStatus = useCompanyRealtimeStatus();
   const lastOpenedTelemetryAtRef = useRef(0);
 
-  const createParam = Array.isArray(params.create) ? params.create[0] : params.create;
+  const createParam = firstSearchParam(params.create);
   useEffect(() => {
     if (String(createParam) !== "1") return;
     setCreateModalVisible(true);
-    const f = Array.isArray(params.filter) ? params.filter[0] : params.filter;
+    const f = firstSearchParam(params.filter);
     void router.setParams({ create: undefined, filter: f ?? undefined });
   }, [createParam, params.filter, router]);
 
   const refresh = useCallback(async () => {
-    await Promise.all([missionsRefetch(), allMissionsRefetch()]);
-  }, [missionsRefetch, allMissionsRefetch]);
+    await Promise.all([missionsRefetch(), allMissionsRefetch(), delaysRefetch()]);
+  }, [missionsRefetch, allMissionsRefetch, delaysRefetch]);
+
+  const clearRouteFilterOverride = useCallback(() => {
+    if (filterNorm === "exceptions" || filterNorm === "delayed" || filterNorm === "urgent") {
+      void router.setParams({ filter: undefined });
+    }
+  }, [filterNorm, router]);
+
+  const retryRealtimeSession = useCallback(async () => {
+    setSessionRetryBusy(true);
+    try {
+      await bootstrapSession();
+      await refresh();
+    } finally {
+      setSessionRetryBusy(false);
+    }
+  }, [bootstrapSession, refresh]);
+
+  const showRealtimeFluxAlert =
+    Boolean(realtimeStatus.lastError?.trim()) || realtimeStatus.status === "failed";
 
   useFocusEffect(
     useCallback(() => {
@@ -454,6 +547,18 @@ export default function CompanyRidesScreen() {
   }, [activeContext, invalidate, refresh]);
 
   const missions = useMemo(() => missionsQuery.data?.missions ?? [], [missionsQuery.data?.missions]);
+  const delayPickupByBookingId = useMemo(() => {
+    const rows = flattenCompanyDispatchDelays(dispatchDelaysQuery.data ?? []);
+    return pickupDelaysByBookingLastWins(rows);
+  }, [dispatchDelaysQuery.data]);
+  const pickupEtaByBookingId = useMemo(
+    () => pickupEtaIsoByBookingId(dispatchDelaysQuery.data ?? []),
+    [dispatchDelaysQuery.data],
+  );
+  const missionBeingEdited = useMemo(() => {
+    if (editMissionId == null) return null;
+    return missions.find((item) => item.mission_id === editMissionId) ?? null;
+  }, [editMissionId, missions]);
   const allMissions = useMemo(
     () => allMissionsForCountsQuery.data?.missions ?? [],
     [allMissionsForCountsQuery.data?.missions]
@@ -480,9 +585,16 @@ export default function CompanyRidesScreen() {
   const canScheduleRide = canRunSensitiveAction("company:rides:schedule", "company:rides:read");
   const canDispatchManage = canRunSensitiveAction("company:dispatch:manage", "company:rides:read");
   const filteredMissions = useMemo(() => {
-    const f = params.filter?.toLowerCase() ?? "";
+    const hasRenderableSchedule = (mission: CompanyDispatchMission) => {
+      if (!mission.scheduled_at) return false;
+      if (isPickupSentinel(mission.scheduled_at)) return true;
+      const parsed = Date.parse(mission.scheduled_at);
+      return Number.isFinite(parsed);
+    };
+    const missionsWithSchedule = missions.filter(hasRenderableSchedule);
+    const f = filterNorm;
     if (f === "urgent") {
-      return [...missions].sort((left, right) => {
+      return [...missionsWithSchedule].sort((left, right) => {
         const urgentLike = (m: (typeof left)) =>
           m.status === "pending" ||
           m.status === "proposed" ||
@@ -496,7 +608,7 @@ export default function CompanyRidesScreen() {
     }
     if (f === "exceptions") {
       const now = Date.now();
-      return missions.filter((m) => {
+      return missionsWithSchedule.filter((m) => {
         if (m.status === "completed" || m.status === "cancelled") return false;
         if ((m.status === "pending" || m.status === "proposed" || m.status === "accepted") && m.scheduled_at) {
           const t = Date.parse(m.scheduled_at);
@@ -505,8 +617,18 @@ export default function CompanyRidesScreen() {
         return false;
       });
     }
-    return missions;
-  }, [missions, params.filter]);
+    if (f === "delayed") {
+      const now = Date.now();
+      return missionsWithSchedule.filter((m) => {
+        if (m.status === "completed" || m.status === "cancelled") return false;
+        if (!m.scheduled_at) return false;
+        const t = Date.parse(m.scheduled_at);
+        if (!Number.isFinite(t)) return false;
+        return t < now;
+      });
+    }
+    return missionsWithSchedule;
+  }, [missions, filterNorm]);
 
   const loadDispatchMode = useCallback(async () => {
     if (!contextId) return;
@@ -792,6 +914,37 @@ export default function CompanyRidesScreen() {
           />
         }
       >
+        {showRealtimeFluxAlert ? (
+          <View style={rideStyles.opsAlert} accessibilityRole="alert">
+            <View style={rideStyles.opsAlertIconWell}>
+              <Ionicons name="pulse-outline" size={20} color="#B91C1C" />
+            </View>
+            <View style={rideStyles.opsAlertBodyCol}>
+              <Text style={rideStyles.opsAlertTitle}>Temps réel indisponible</Text>
+              <Text style={rideStyles.opsAlertMessage}>
+                {realtimeStatus.lastError?.trim() ||
+                  "Connexion temps réel interrompue. Les mises à jour peuvent être retardées."}
+              </Text>
+              <Pressable
+                onPress={() => void retryRealtimeSession()}
+                disabled={sessionRetryBusy}
+                style={({ pressed }) => [
+                  rideStyles.opsAlertRetry,
+                  sessionRetryBusy ? rideStyles.opsAlertRetryDisabled : null,
+                  pressed && !sessionRetryBusy ? rideStyles.pressed : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Rétablir la session et recharger les courses"
+              >
+                {sessionRetryBusy ? (
+                  <ActivityIndicator size="small" color={E.BRAND_DARK} />
+                ) : (
+                  <Text style={rideStyles.opsAlertRetryLabel}>Rétablir la session</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         <View style={rideStyles.searchBar}>
           <Ionicons name="search-outline" size={16} color={E.TEXT_MUTED} />
           <TextInput
@@ -834,10 +987,15 @@ export default function CompanyRidesScreen() {
             />
           </View>
         ) : null}
-        {params.filter?.toLowerCase() === "exceptions" ? (
+        {filterNorm === "exceptions" ? (
           <AppText variant="caption" style={rideStyles.exceptionsRouteHint} accessibilityRole="text">
             Vue « exceptions » : filtre local sur l’échéance (pas le comptage moteur). Les puces
             ci-dessous restent les statuts de mission.
+          </AppText>
+        ) : filterNorm === "delayed" ? (
+          <AppText variant="caption" style={rideStyles.exceptionsRouteHint} accessibilityRole="text">
+            Vue « retards » : courses actives dont l’horaire de prise en charge est dépassé (même
+            logique que le tableau de bord en mode manuel).
           </AppText>
         ) : null}
         <View style={rideStyles.tabsPanel}>
@@ -856,7 +1014,10 @@ export default function CompanyRidesScreen() {
               return (
                 <Pressable
                   key={item.key}
-                  onPress={() => setStatus(item.key)}
+                  onPress={() => {
+                    setStatus(item.key);
+                    clearRouteFilterOverride();
+                  }}
                   style={({ pressed }) => [
                     rideStyles.tabButton,
                     on && rideStyles.tabButtonActive,
@@ -934,9 +1095,32 @@ export default function CompanyRidesScreen() {
                 />
               ) : undefined;
             return (
-              <View key={mission.mission_id} style={rideStyles.rideCardWrapper}>
+              <View key={mission.mission_id}>
                 <DispatchRideListCard
                   mission={mission}
+                  bookingDelayPickupMinutes={(() => {
+                    const fromAssignment =
+                      mission.assignment_pickup_delay_minutes != null &&
+                      mission.assignment_pickup_delay_minutes > 0
+                        ? Math.round(mission.assignment_pickup_delay_minutes)
+                        : null;
+                    if (!dispatchDelaysQuery.isFetched) {
+                      return fromAssignment ?? undefined;
+                    }
+                    const fromDelays =
+                      delayPickupByBookingId.get(mission.mission_id) ??
+                      delayPickupByBookingId.get(Number(mission.mission_id)) ??
+                      null;
+                    const etaPositive = typeof fromDelays === "number" && fromDelays > 0 ? fromDelays : null;
+                    return etaPositive ?? (fromAssignment ?? null);
+                  })()}
+                  bookingPickupEtaIso={
+                    dispatchDelaysQuery.isFetched
+                      ? pickupEtaByBookingId.get(mission.mission_id) ??
+                        pickupEtaByBookingId.get(Number(mission.mission_id)) ??
+                        null
+                      : null
+                  }
                   expanded={isExpanded}
                   onToggleExpand={() =>
                     setExpandedMissionId((prev) => (prev === mission.mission_id ? null : mission.mission_id))
@@ -1006,13 +1190,18 @@ export default function CompanyRidesScreen() {
         )}
 
         {missionsQuery.error ? (
-          <View style={rideStyles.errorBanner} accessibilityRole="alert">
-            <Ionicons name="alert-circle" size={18} color={E.DANGER} />
-            <AppText variant="body" style={rideStyles.errorBannerText}>
-              {missionsQuery.error instanceof Error
-                ? missionsQuery.error.message
-                : "Erreur de chargement des courses."}
-            </AppText>
+          <View style={rideStyles.opsAlert} accessibilityRole="alert">
+            <View style={rideStyles.opsAlertIconWell}>
+              <Ionicons name="alert-circle" size={20} color="#B91C1C" />
+            </View>
+            <View style={rideStyles.opsAlertBodyCol}>
+              <Text style={rideStyles.opsAlertTitle}>Courses inaccessibles</Text>
+              <Text style={rideStyles.opsAlertMessage}>
+                {missionsQuery.error instanceof Error
+                  ? missionsQuery.error.message
+                  : "Erreur de chargement des courses."}
+              </Text>
+            </View>
           </View>
         ) : null}
       </Screen>
@@ -1080,15 +1269,17 @@ export default function CompanyRidesScreen() {
       <RideEditModal
         visible={editMissionId != null}
         missionId={editMissionId}
+        detailDate={selectedDate}
         isGuestMission
         initial={
-          editMissionId == null
+          missionBeingEdited == null
             ? null
             : {
                 clientId: null,
-                pickup: missions.find((item) => item.mission_id === editMissionId)?.pickup_label ?? "",
-                dropoff: missions.find((item) => item.mission_id === editMissionId)?.dropoff_label ?? "",
-                scheduledAt: missions.find((item) => item.mission_id === editMissionId)?.scheduled_at ?? null,
+                clientLabel: missionBeingEdited.client_name ?? null,
+                pickup: missionBeingEdited.pickup_label ?? "",
+                dropoff: missionBeingEdited.dropoff_label ?? "",
+                scheduledAt: missionBeingEdited.scheduled_at ?? null,
                 notes: null,
               }
         }

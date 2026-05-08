@@ -6,7 +6,6 @@ import {
   useDriverMissionDetailQuery,
   useDriverMissionDetailOpenResync,
   useDriverStatusTransition,
-  useDriverTracking,
   useDynamicEtaQuery,
 } from "../../../../src/features/driver/hooks";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
@@ -18,6 +17,7 @@ import { CancelJustificationModal } from "../../../../src/features/driver/compon
 import { StatusSwitch } from "../../../../src/features/driver/components/StatusSwitch";
 import { DriverStateBanners } from "../../../../src/features/driver/components/DriverStateBanners";
 import { useMissionLayout } from "../../../../src/features/driver/hooks/useMissionLayout";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverMissionDetailScreen() {
   const router = useRouter();
@@ -30,10 +30,9 @@ export default function DriverMissionDetailScreen() {
   const etaQuery = useDynamicEtaQuery(Number.isFinite(missionIdNumber) ? missionIdNumber : null);
   const transition = useDriverStatusTransition();
   const mission = missionQuery.data;
-  useDriverTracking(
-    mission?.id ?? null,
-    typeof mission?.status === "string" ? mission.status : null
-  );
+  // NB: le tracking GPS est piloté au niveau du `_layout.tsx` driver
+  // via `DriverTrackingHost` pour qu'il reste actif quel que soit
+  // l'écran ouvert. Pas besoin de le re-déclencher ici.
   useDriverMissionDetailOpenResync(Number.isFinite(missionIdNumber) ? missionIdNumber : null);
 
   const statusUx = useMemo(() => getDriverStatusUx(mission?.status as string), [mission?.status]);
@@ -77,6 +76,7 @@ export default function DriverMissionDetailScreen() {
           scroll
           backgroundColor={brandSurfaceSoft}
           withHorizontalPadding={false}
+          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
           contentContainerStyle={{
             paddingHorizontal: missionLayout.horizontalPadding,
             paddingVertical: 20,

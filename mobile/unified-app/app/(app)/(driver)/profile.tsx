@@ -25,6 +25,7 @@ import {
   Screen,
   useResponsiveTokens,
 } from "../../../src/design/responsive";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverProfileScreen() {
   const router = useRouter();
@@ -104,6 +105,7 @@ export default function DriverProfileScreen() {
       <Screen
         scroll
         backgroundColor={brandSurfaceSoft}
+        extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
         contentContainerStyle={{
           paddingTop: t.spacingSm,
           paddingBottom: t.spacingLg,

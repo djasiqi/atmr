@@ -16,20 +16,24 @@ export default function CompanyLayout() {
       ? activeContext.context_id
       : null;
 
-  // Ne lancer le socket qu’après bootstrap (jeton dispo après refresh dans bootstrapSession).
+  // Déconnexion à la sortie de la zone entreprise (évite socket orpheline).
+  useEffect(() => {
+    return () => {
+      companyRealtimeBridge.disconnect();
+    };
+  }, []);
+
+  // Ne lancer le socket qu’après bootstrap. Ne pas couper pendant `bootstrapping` :
+  // sinon reconnexion alors que le JWT est réaligné par refresh → faux « jeton absent » / boucles.
   useEffect(() => {
     if (!dispatchEnabled || !companyContextId) {
       companyRealtimeBridge.disconnect();
       return;
     }
     if (status !== "ready") {
-      companyRealtimeBridge.disconnect();
       return;
     }
     companyRealtimeBridge.connect(companyContextId);
-    return () => {
-      companyRealtimeBridge.disconnect();
-    };
   }, [companyContextId, dispatchEnabled, status]);
 
   // Après mise en arrière-plan / reconnexion réseau, relancer le bridge si le flux était en échec.
@@ -103,11 +107,11 @@ export default function CompanyLayout() {
           }}
         />
         <Tabs.Screen
-          name="clients"
+          name="clients-facturation"
           options={{
-            title: "Clients",
+            title: "Clients & facturation",
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="people-outline" size={size} color={color} />
+              <Ionicons name="reader-outline" size={size} color={color} />
             ),
           }}
         />

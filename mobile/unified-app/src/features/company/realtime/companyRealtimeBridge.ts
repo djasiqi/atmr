@@ -73,6 +73,9 @@ export function getCompanyNumericIdFromContextId(contextId: string): string {
 
 const MAP_SILENCE_RESYNC_MS = 120_000;
 
+/** Marge avant l’exp JWT : on rafraîchit le refresh pour réaligner Axios + auth Socket.IO. */
+const PROACTIVE_ACCESS_REFRESH_BEFORE_EXP_MS = 90_000;
+
 /** Attente du JWT après bootstrap / refresh (évite un failed définitif si connect() est un peu tôt). */
 const TOKEN_WAIT_MAX = 12;
 const TOKEN_WAIT_MS = 350;
@@ -81,6 +84,28 @@ const TOKEN_WAIT_FIRST_MS = 80;
 const CONNECT_ERROR_DEV_LOG_COOLDOWN_MS = 8_000;
 
 /** Champs utiles pour Metro / DevTools (sans jeton). Engine.IO renvoie souvent un message générique seul. */
+/** `exp` JWT (ms) sans vérifier la signature — uniquement pour planifier un refresh avant coupure WS. */
+function readJwtExpMs(token: string): number | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const seg = parts[1] ?? "";
+    if (!seg) return null;
+    const pad = (4 - (seg.length % 4)) % 4;
+    const b64 = (seg + "=".repeat(pad)).replace(/-/g, "+").replace(/_/g, "/");
+    if (typeof globalThis.atob !== "function") return null;
+    const binary = globalThis.atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const json = new TextDecoder().decode(bytes);
+    const payload = JSON.parse(json) as { exp?: unknown };
+    const exp = payload.exp;
+    return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 function describeConnectErrorForDev(error: unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (error instanceof Error) {
@@ -120,6 +145,7 @@ class CompanyRealtimeBridge {
   private socket: Socket | null = null;
   private listeners = new Set<CompanyRealtimeListener>();
   private silenceTimer: ReturnType<typeof setInterval> | null = null;
+  private proactiveAccessRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenWaitAttempt = 0;
   private hasConnectedOnce = false;
@@ -156,9 +182,64 @@ class CompanyRealtimeBridge {
     this.tokenWaitAttempt = 0;
   }
 
+  private clearProactiveAccessRefreshTimer() {
+    if (this.proactiveAccessRefreshTimer) {
+      clearTimeout(this.proactiveAccessRefreshTimer);
+      this.proactiveAccessRefreshTimer = null;
+    }
+  }
+
+  /**
+   * Met à jour le même objet `auth` passé au constructeur Socket.IO pour que chaque reconnexion
+   * (après expiration JWT côté serveur) envoie le jeton courant d’Axios, pas seulement celui du 1er connect().
+   */
+  private syncHandshakeAuthFromSession(handshakeAuth: { token: string }) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuthAccessToken } = require("../../../core/api/client") as {
+        getAuthAccessToken: () => string | null;
+      };
+      const t = getAuthAccessToken();
+      if (t) handshakeAuth.token = t;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Rafraîchit le couple access/refresh puis réinjecte le Bearer dans l’objet auth du handshake. */
+  private patchHandshakeAuthAfterRefresh(handshakeAuth: { token: string }) {
+    void (async () => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { getAuthAccessToken, refreshAuthTokenNow } = require("../../../core/api/client") as {
+          getAuthAccessToken: () => string | null;
+          refreshAuthTokenNow: () => Promise<boolean>;
+        };
+        await refreshAuthTokenNow();
+        const t = getAuthAccessToken();
+        if (t) handshakeAuth.token = t;
+      } catch {
+        /* ignore */
+      }
+    })();
+  }
+
+  private scheduleProactiveAccessRefresh(token: string, handshakeAuth: { token: string }) {
+    this.clearProactiveAccessRefreshTimer();
+    const expMs = readJwtExpMs(token);
+    if (!expMs) return;
+    const delay = expMs - Date.now() - PROACTIVE_ACCESS_REFRESH_BEFORE_EXP_MS;
+    if (delay < 3_000 || delay > 24 * 60 * 60_000) return;
+    this.proactiveAccessRefreshTimer = setTimeout(() => {
+      this.proactiveAccessRefreshTimer = null;
+      this.patchHandshakeAuthAfterRefresh(handshakeAuth);
+    }, delay);
+  }
+
   /** Coupe la socket sans remettre le bridge en « idle » (évite d’annuler une escalade transport en cours). */
   private softDisconnectSocket() {
     this.clearTokenWait();
+    this.clearProactiveAccessRefreshTimer();
     if (this.silenceTimer) {
       clearInterval(this.silenceTimer);
       this.silenceTimer = null;
@@ -175,6 +256,35 @@ class CompanyRealtimeBridge {
     this.clearTokenWait();
     const tick = () => {
       this.tokenWaitTimer = null;
+      const finishAfterRefresh = async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { getAuthAccessToken, refreshAuthTokenNow } = require("../../../core/api/client") as {
+            getAuthAccessToken: () => string | null;
+            refreshAuthTokenNow: () => Promise<boolean>;
+          };
+          await refreshAuthTokenNow();
+          const after = getAuthAccessToken();
+          if (after) {
+            this.tokenWaitAttempt = 0;
+            this.connect(contextId);
+            return;
+          }
+        } catch {
+          /* ignore */
+        }
+        this.tokenWaitAttempt += 1;
+        if (this.tokenWaitAttempt >= TOKEN_WAIT_MAX) {
+          this.tokenWaitAttempt = 0;
+          this.setStatus(
+            "failed",
+            "Jeton d’authentification absent pour le WebSocket. Reconnectez-vous ou rechargez l’app."
+          );
+          return;
+        }
+        this.tokenWaitTimer = setTimeout(tick, TOKEN_WAIT_MS);
+      };
+
       let token: string | null = null;
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -190,16 +300,7 @@ class CompanyRealtimeBridge {
         this.connect(contextId);
         return;
       }
-      this.tokenWaitAttempt += 1;
-      if (this.tokenWaitAttempt >= TOKEN_WAIT_MAX) {
-        this.tokenWaitAttempt = 0;
-        this.setStatus(
-          "failed",
-          "Jeton d’authentification absent pour le WebSocket. Reconnectez-vous ou rechargez l’app."
-        );
-        return;
-      }
-      this.tokenWaitTimer = setTimeout(tick, TOKEN_WAIT_MS);
+      void finishAfterRefresh();
     };
     this.tokenWaitTimer = setTimeout(tick, this.tokenWaitAttempt === 0 ? TOKEN_WAIT_FIRST_MS : TOKEN_WAIT_MS);
   }
@@ -332,6 +433,8 @@ class CompanyRealtimeBridge {
       ...(companyNumericId.length > 0 ? { company_id: companyNumericId } : {}),
     };
 
+    const handshakeAuth = { token };
+
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
       transports,
       reconnection: true,
@@ -343,7 +446,7 @@ class CompanyRealtimeBridge {
       path: "/socket.io",
       query: socketQuery,
       // `_extract_token` côté Flask : auth (token) et/ou header Bearer (natif en complément)
-      auth: { token },
+      auth: handshakeAuth,
       ...(disablePollingUpgrade ? { upgrade: false as const } : {}),
       ...(Platform.OS !== "web"
         ? { extraHeaders: { Authorization: `Bearer ${token}` } as Record<string, string> }
@@ -372,6 +475,15 @@ class CompanyRealtimeBridge {
     const socket = io(socketUrl, socketOptions);
     this.socket = socket;
 
+    this.scheduleProactiveAccessRefresh(token, handshakeAuth);
+
+    socket.io.on("reconnect_attempt", () => {
+      this.syncHandshakeAuthFromSession(handshakeAuth);
+      if (!handshakeAuth.token?.trim()) {
+        this.patchHandshakeAuthAfterRefresh(handshakeAuth);
+      }
+    });
+
     socket.on("connect", () => {
       this.lastConnectErrorDevLogMsg = null;
       this.nativeTransportEscalation = 0;
@@ -386,6 +498,7 @@ class CompanyRealtimeBridge {
       };
       this.notify();
       socket.emit("join_company");
+      this.syncHandshakeAuthFromSession(handshakeAuth);
       this.resetSilenceTimer();
       if (isReconnect) {
         contextRealtimeRouter.dispatch(

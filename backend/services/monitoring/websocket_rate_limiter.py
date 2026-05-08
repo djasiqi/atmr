@@ -13,6 +13,27 @@ from datetime import UTC, datetime, timedelta
 from ext import redis_client
 
 logger = logging.getLogger(__name__)
+_ATOMIC_SLIDING_WINDOW_LUA = """
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local limit = tonumber(ARGV[3])
+local member = ARGV[4]
+local window_start = now - window
+redis.call("ZREMRANGEBYSCORE", key, 0, window_start)
+local count = redis.call("ZCARD", key)
+if count >= limit then
+  local oldest = redis.call("ZRANGE", key, 0, 0, "WITHSCORES")
+  local retry_after = window
+  if oldest and #oldest >= 2 then
+    retry_after = math.max(1, tonumber(oldest[2]) + window - now)
+  end
+  return {0, retry_after, count}
+end
+redis.call("ZADD", key, now, member)
+redis.call("EXPIRE", key, window + 1)
+return {1, 0, count + 1}
+"""
 
 # Limites par event (event_name -> (limit, window_seconds))
 RATE_LIMITS = {
@@ -119,46 +140,22 @@ class WebSocketRateLimiter:
         try:
             now = datetime.now(UTC)
             now_ts = int(now.timestamp())
-
-            # Sliding window: garder seulement les timestamps dans la fenêtre
-            window_start_ts = now_ts - window_seconds
-
-            # Utiliser une liste Redis pour stocker les timestamps
-            pipe = redis_client.pipeline()
-            pipe.zremrangebyscore(key, 0, window_start_ts)  # Nettoyer anciens
-            pipe.zcard(key)  # Compter events dans la fenêtre
-            pipe.zadd(key, {str(now_ts): now_ts})  # Ajouter timestamp actuel
-            pipe.expire(
-                key, window_seconds + 1
-            )  # TTL légèrement supérieur à la fenêtre
-            results = pipe.execute()
-
-            count = (
-                results[1] if results and len(results) > 1 else 0
-            )  # Nombre d'events dans la fenêtre (avant ajout)
-
-            if count >= limit:
+            # Member unique pour éviter collisions score identique.
+            member = f"{now_ts}:{now.microsecond}"
+            result = redis_client.eval(
+                _ATOMIC_SLIDING_WINDOW_LUA,
+                1,
+                key,
+                now_ts,
+                window_seconds,
+                limit,
+                member,
+            )
+            allowed = bool(result and int(result[0]) == 1)
+            retry_after = int(result[1]) if result and len(result) > 1 else window_seconds
+            count = int(result[2]) if result and len(result) > 2 else 0
+            if not allowed:
                 # Rate limit dépassé
-                # Calculer le temps à attendre (premier timestamp dans la fenêtre)
-                oldest_ts_list = redis_client.zrange(key, 0, 0, withscores=True)
-                if (
-                    oldest_ts_list
-                    and isinstance(oldest_ts_list, list)
-                    and len(oldest_ts_list) > 0
-                ):
-                    oldest_tuple = oldest_ts_list[0]
-                    if (
-                        isinstance(oldest_tuple, (tuple, list))
-                        and len(oldest_tuple) > 1
-                    ):
-                        oldest = int(oldest_tuple[1])
-                        retry_after = (oldest + window_seconds) - now_ts
-                        retry_after = max(1, retry_after)  # Au moins 1 seconde
-                    else:
-                        retry_after = window_seconds
-                else:
-                    retry_after = window_seconds
-
                 logger.warning(
                     (
                         "Rate limit dépassé: event=%s, key=%s, count=%d, limit=%d, "
@@ -166,7 +163,7 @@ class WebSocketRateLimiter:
                     ),
                     key.split(":")[1],
                     key,
-                    count + 1,
+                    count,
                     limit,
                     retry_after,
                 )

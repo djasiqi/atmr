@@ -4,6 +4,7 @@ import { FiCheckCircle, FiXCircle, FiInbox, FiChevronDown } from 'react-icons/fi
 import styles from './ReservationTable.module.css';
 import { renderBookingDateTime } from '../../../../utils/formatDate';
 import { formatDelay } from '../../../../utils/formatDelay';
+import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
 
 const STATUS_LABELS = {
@@ -153,9 +154,27 @@ const ReservationTable = ({
     const _needsTimeConfirmation = isReturn && (r.time_confirmed === false || !r.scheduled_time);
     const bookingDelay = delaysMap[r.id];
     const delayMinutes = bookingDelay?.delay_minutes;
+    const pickupEtaIso =
+      bookingDelay?.pickup_eta ??
+      r?.assignment?.estimated_pickup_arrival ??
+      r?.assignment?.eta_pickup_at ??
+      r?.assignment?.pickup_eta ??
+      null;
     const delayRowClass = getDelayRowClass(delayMinutes);
+    const showPickupEtaStatuses = ['accepted', 'assigned', 'en_route'];
+    const pickupArrivalLabel =
+      showPickupEtaStatuses.includes(status) && pickupEtaIso
+        ? pickupArrivalHint(pickupEtaIso)
+        : null;
 
-    return { status, hasActions, canManageReservation, delayMinutes, delayRowClass };
+    return {
+      status,
+      hasActions,
+      canManageReservation,
+      delayMinutes,
+      delayRowClass,
+      pickupArrivalLabel,
+    };
   };
 
   return (
@@ -175,7 +194,14 @@ const ReservationTable = ({
           </thead>
           <tbody>
             {displayedReservations.map((r, index) => {
-              const { status, hasActions, canManageReservation, delayMinutes, delayRowClass } = renderRow(r);
+              const {
+                status,
+                hasActions,
+                canManageReservation,
+                delayMinutes,
+                delayRowClass,
+                pickupArrivalLabel,
+              } = renderRow(r);
 
               return (
                 <tr
@@ -220,7 +246,14 @@ const ReservationTable = ({
                     )}
                   </td>
                   <td className={styles.dateCell}>
-                    {renderBookingDateTime(r)}
+                    <div className={styles.timeCellStack}>
+                      <span>{renderBookingDateTime(r)}</span>
+                      {pickupArrivalLabel && (
+                        <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
+                          {pickupArrivalLabel.text}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className={styles.locationCell}>
                     <div className={styles.locationRow}>
@@ -328,7 +361,8 @@ const ReservationTable = ({
       {/* Mobile cards */}
       <div className={styles.mobileCards}>
         {displayedReservations.map((r) => {
-          const { status, hasActions, canManageReservation, delayMinutes } = renderRow(r);
+          const { status, hasActions, canManageReservation, delayMinutes, pickupArrivalLabel } =
+            renderRow(r);
 
           return (
             <div
@@ -362,7 +396,16 @@ const ReservationTable = ({
               <div className={styles.mobileCardBody}>
                 <div className={styles.mobileCardRow}>
                   <span className={styles.mobileCardLabel}>Horaire</span>
-                  <span className={styles.mobileCardValue}>{renderBookingDateTime(r)}</span>
+                  <span className={styles.mobileCardValue}>
+                    <div className={styles.timeCellStack}>
+                      <span>{renderBookingDateTime(r)}</span>
+                      {pickupArrivalLabel && (
+                        <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
+                          {pickupArrivalLabel.text}
+                        </span>
+                      )}
+                    </div>
+                  </span>
                 </div>
                 <div className={styles.mobileCardRoute}>
                   <div className={styles.locationRow}>

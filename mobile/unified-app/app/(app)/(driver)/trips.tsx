@@ -3,15 +3,20 @@ import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import { DriverContextGuard, PermissionGuard } from "../../../src/core/guards";
 import { useSession } from "../../../src/core/sessionProvider";
-import { useDriverMissionsQuery } from "../../../src/features/driver/hooks";
+import {
+  useDriverMissionsListFocusResync,
+  useDriverMissionsQuery,
+} from "../../../src/features/driver/hooks";
 import { DriverCompletedTrip, getDriverCompletedTrips } from "../../../src/features/driver/api";
 import { AppButton, AppText, brandSurfaceSoft, Screen } from "../../../src/design/responsive";
 import { MissionCard } from "../../../src/features/driver/components/MissionCard";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverTripsScreen() {
   const router = useRouter();
   const { activeContext } = useSession();
   const missionsQuery = useDriverMissionsQuery();
+  useDriverMissionsListFocusResync();
   const [historyPending, setHistoryPending] = useState(false);
   const [historyTrips, setHistoryTrips] = useState<DriverCompletedTrip[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -49,7 +54,13 @@ export default function DriverTripsScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+        <Screen
+          scroll
+          backgroundColor={brandSurfaceSoft}
+          withHorizontalPadding={false}
+          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          contentContainerStyle={styles.page}
+        >
           <AppText variant="sectionTitle" style={styles.title}>
             Courses
           </AppText>
@@ -87,15 +98,7 @@ export default function DriverTripsScreen() {
             activeMissions.map((mission) => {
               return (
                 <View key={mission.id} style={styles.block}>
-                  <MissionCard
-                    mission={mission}
-                    onOpen={(missionId) =>
-                      router.push({
-                        pathname: "/(app)/(driver)/missions/[missionId]",
-                        params: { missionId: String(missionId) },
-                      })
-                    }
-                  />
+                  <MissionCard mission={mission} />
                   <AppButton
                     title="Voir détails course"
                     variant="secondary"

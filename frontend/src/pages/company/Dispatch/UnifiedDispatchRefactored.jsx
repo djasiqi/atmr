@@ -24,6 +24,7 @@ import { useDispatchMode } from '../../../hooks/useDispatchMode';
 import { useAssignmentActions } from '../../../hooks/useAssignmentActions';
 
 // Services
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   runDispatchForDay,
   dispatchNowForReservation,
@@ -31,7 +32,10 @@ import {
   scheduleReservation,
   fetchDispatchStatus,
   updateReservation,
+  fetchDispatchDelays,
 } from '../../../services/companyService';
+import { lirieKeys } from '../../../queryKeys/lirie';
+import { normalizeDispatchDelayMapKey } from '../../../utils/dispatchDelayMapKey';
 import {
   startRealTimeOptimizer,
   stopRealTimeOptimizer,
@@ -180,6 +184,16 @@ const UnifiedDispatchRefactored = () => {
     { socket }
   );
 
+  const queryClient = useQueryClient();
+
+  /** Même source que CompanyHeader (`/delays`) — fusionné avec `/delays/live` pour le tableau. */
+  const { data: delaysSnapshot = [] } = useQuery({
+    queryKey: lirieKeys.dispatchDelays(date),
+    queryFn: () => fetchDispatchDelays(date),
+    staleTime: 20_000,
+    enabled: Boolean(isCompanyAuthReady && date && isCompanyOrAdmin),
+  });
+
   // 🆕 Ref pour compter les assignations réelles (mis à jour après chargement)
   // Utiliser une ref plutôt qu'un état pour éviter les re-renders inutiles
   const realAssignedCountRef = useRef(0);
@@ -229,18 +243,51 @@ const UnifiedDispatchRefactored = () => {
       }));
   }, [driversList, dispatches]);
 
-  // V11: Pre-calculer delayMap avec cle normalisee
+  // V11: Fusion `/delays/live` + snapshot `/delays` (header + tableau alignés ; clés id normalisées)
   const delayMap = useMemo(() => {
     const map = {};
+
+    const bump = (rawKey, patch) => {
+      const k = normalizeDispatchDelayMapKey(rawKey);
+      if (k == null) return;
+      const prev = map[k] || {
+        minutes: 0,
+        severity: 'reasonable',
+        current_eta: null,
+        pickup_eta: null,
+      };
+      const nextMin = Math.max(
+        Number(prev.minutes || 0),
+        Number(patch.minutes ?? patch.delay_minutes ?? 0)
+      );
+      map[k] = {
+        minutes: nextMin,
+        severity: patch.severity ?? prev.severity,
+        current_eta: patch.current_eta ?? patch.pickup_eta ?? prev.current_eta,
+        pickup_eta: patch.pickup_eta ?? patch.current_eta ?? prev.pickup_eta,
+      };
+    };
+
     (delays || []).forEach((d) => {
-      const key = d.booking_id ?? d.id;
-      map[key] = {
+      bump(d.booking_id ?? d.id, {
         minutes: Math.round(d.delay_minutes || d.pickup_delay_minutes || 0),
         severity: d.delay_severity || 'reasonable',
-      };
+        current_eta: d.current_eta || null,
+        pickup_eta: d.pickup_eta || d.current_eta || null,
+      });
     });
+
+    (delaysSnapshot || []).forEach((d) => {
+      if (d == null || d.booking_id == null) return;
+      bump(d.booking_id, {
+        minutes: Math.round(Number(d.delay_minutes || 0)),
+        pickup_eta: d.pickup_eta || null,
+        current_eta: d.pickup_eta || null,
+      });
+    });
+
     return map;
-  }, [delays]);
+  }, [delays, delaysSnapshot]);
 
   // V9 + V13: Handler assignation directe (optimistic UI, WebSocket fait le refresh)
   const handleAssignDirect = useCallback(
@@ -972,9 +1019,10 @@ const UnifiedDispatchRefactored = () => {
         : P3_DELAYS_FALLBACK_NO_SOCKET_MS;
     const interval = setInterval(() => {
       loadDelays();
+      queryClient.invalidateQueries({ queryKey: lirieKeys.dispatchDelays(date) });
     }, fallbackMs);
     return () => clearInterval(interval);
-  }, [autoRefresh, loadDelays, dispatchMode, socket]);
+  }, [autoRefresh, loadDelays, dispatchMode, socket, queryClient, date]);
 
   // Écoute WebSocket
   useEffect(() => {
@@ -1011,6 +1059,7 @@ const UnifiedDispatchRefactored = () => {
         console.log('🔄 [Dispatch] Rafraîchissement après completion (délai 1.5s)...');
         await loadDispatches();
         await loadDelays();
+        queryClient.invalidateQueries({ queryKey: lirieKeys.dispatchDelays(date) });
 
         // 🆕 Recharger une deuxième fois après un délai supplémentaire pour s'assurer
         // que toutes les assignations sont bien visibles
@@ -1068,30 +1117,28 @@ const UnifiedDispatchRefactored = () => {
     };
 
     const handleBookingUpdated = () => {
-      // ✅ En mode fully_auto, ne rafraîchir que si nécessaire
-      // L'agent gère les assignations automatiquement, pas besoin de rafraîchir à chaque événement
-      if (dispatchMode === 'fully_auto') {
-        // En fully_auto, on se fie aux événements dispatch_run_completed pour les rafraîchissements
-        // Les événements booking_updated individuels ne nécessitent pas de rafraîchissement immédiat
-        return;
-      }
       loadDispatches();
       scheduleLoadDelays();
+      queryClient.invalidateQueries({ queryKey: lirieKeys.dispatchDelays(date) });
     };
 
     socket.on('dispatch_run_started', handleDispatchStarted);
     socket.on('dispatch_run_completed', handleDispatchComplete);
     // ✅ FIX: Standardisé sur 'booking_updated' (underscore) pour cohérence avec backend
     socket.on('booking_updated', handleBookingUpdated);
+    socket.on('booking_reassigned', handleBookingUpdated);
+    socket.on('booking_assigned', handleBookingUpdated);
     socket.on('new_booking', handleBookingUpdated);
 
     return () => {
       socket.off('dispatch_run_started', handleDispatchStarted);
       socket.off('dispatch_run_completed', handleDispatchComplete);
       socket.off('booking_updated', handleBookingUpdated);
+      socket.off('booking_reassigned', handleBookingUpdated);
+      socket.off('booking_assigned', handleBookingUpdated);
       socket.off('new_booking', handleBookingUpdated);
     };
-  }, [socket, loadDispatches, loadDelays, scheduleLoadDelays, date, dispatchMode]);
+  }, [socket, loadDispatches, loadDelays, scheduleLoadDelays, date, dispatchMode, queryClient]);
 
   const dispatchListLoading = dispatchModeLoading || dispatchesLoading;
 
@@ -1108,7 +1155,11 @@ const UnifiedDispatchRefactored = () => {
       error: dispatchesError,
       styles,
       currentCompanyId: company?.id,
-      onRefresh: () => { loadDispatches(); loadDelays(); },
+      onRefresh: () => {
+        loadDispatches();
+        loadDelays();
+        queryClient.invalidateQueries({ queryKey: lirieKeys.dispatchDelays(date) });
+      },
     };
 
     switch (dispatchMode) {
@@ -1140,6 +1191,7 @@ const UnifiedDispatchRefactored = () => {
         return (
           <SemiAutoPanel
             {...commonProps}
+            delayMap={delayMap}
             onApplySuggestion={onApplySuggestion}
             onDeleteReservation={onDeleteReservationClick}
             onDispatchNow={onDispatchNow}

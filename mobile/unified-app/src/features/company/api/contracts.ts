@@ -22,6 +22,10 @@ export type CompanyDispatchMission = {
   driver_id?: number | null;
   company_id?: number | null;
   updated_at?: string | null;
+  /**
+   * Repli retard pickup (≥ 1 min) depuis `assignment.delay_seconds` quand `/delays*` n’a pas encore de ligne ETA.
+   */
+  assignment_pickup_delay_minutes?: number | null;
 };
 
 export type CompanyDispatchMissionListResponse = {

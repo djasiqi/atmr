@@ -14,6 +14,7 @@ import {
 import DispatchTable from '../../Dashboard/components/DispatchTable';
 import DispatchTableSkeleton from '../../../../components/SkeletonLoaders/DispatchTableSkeleton';
 import EmptyState from '../../../../components/EmptyState';
+import { getDispatchRowDelayInfo } from '../../../../utils/dispatchDelayMapKey';
 
 function ChipDropdown({ icon, value, options, onChange, styles }) {
   const [open, setOpen] = useState(false);
@@ -64,8 +65,7 @@ const ACTIVE_STATUSES = ['accepted', 'assigned', 'en_route', 'in_progress'];
 
 // V17: Hierarchie visuelle pour tri par priorite metier
 const getRowPriority = (d, delayMap) => {
-  const key = getDispatchKey(d);
-  const delay = delayMap?.[key]?.minutes || 0;
+  const delay = getDispatchRowDelayInfo(delayMap, d)?.minutes ?? delayMap?.[getDispatchKey(d)]?.minutes ?? 0;
   const isUnassigned = !d.driver_id && !d.driver;
   if (delay > 15) return 'critical';
   if (delay > 5) return 'moderate';
@@ -110,7 +110,8 @@ const ManualModePanel = ({
     const delayedActive = dispatches.filter(
       (d) =>
         ACTIVE_STATUSES.includes(d.status) &&
-        (delayMap[getDispatchKey(d)]?.minutes || 0) > 0
+        (getDispatchRowDelayInfo(delayMap, d)?.minutes || delayMap[getDispatchKey(d)]?.minutes || 0) >
+          0
     ).length;
     const inProgress = dispatches.filter(
       (d) => d.status === 'en_route' || d.status === 'in_progress'
@@ -131,7 +132,8 @@ const ManualModePanel = ({
       result = result.filter(
         (d) =>
           ACTIVE_STATUSES.includes(d.status) &&
-          (delayMap[getDispatchKey(d)]?.minutes || 0) > 0
+          (getDispatchRowDelayInfo(delayMap, d)?.minutes || delayMap[getDispatchKey(d)]?.minutes || 0) >
+            0
       );
     }
 

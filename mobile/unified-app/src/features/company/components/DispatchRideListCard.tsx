@@ -1,13 +1,26 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import type { LayoutChangeEvent } from "react-native";
+import { AccessibilityInfo, Pressable, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import dayjs from "dayjs";
-import "dayjs/locale/fr";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 import { AppText } from "../../../design/ui/AppText";
 import type { CompanyDispatchMission } from "../api/contracts";
 import { E } from "../theme/enterpriseOpsTheme";
 import { getEnterpriseStatusColors } from "../theme/enterpriseStatusColors";
+import {
+  formatDispatchScheduledTime,
+  pickupArrivalHintFr,
+  uiForDispatchDelayMinutes,
+} from "../utils/dispatchWebAlignment";
 import { isDispatchCompleted, isDispatchCancelled } from "../utils/companyDispatchStatus";
 import { isPickupSentinel } from "../utils/pickupSentinel";
 import { createShadow } from "../../../styles/shadowStyles";
@@ -20,8 +33,6 @@ const cardSurfaceShadow = createShadow({
   shadowRadius: 8,
   elevation: 2,
 });
-
-dayjs.locale("fr");
 
 const palette = {
   time: E.BRAND,
@@ -53,8 +64,161 @@ function formatBadge(value: string): string {
   return `${first} ${truncatedSecond}`;
 }
 
+const BADGE_MARQUEE_W = 80;
+const BADGE_MARQUEE_H = 28;
+/** Espace entre les deux copies — boucle linéaire sans à-coup. */
+const MARQUEE_SEGMENT_GAP = 14;
+/** Vitesse constante (px/s) pour un défilement lisible et régulier. */
+const MARQUEE_PX_PER_SEC = 36;
+
+type MarqueeRowContentProps = {
+  isCritical: boolean;
+  accent: string;
+  delayMinutes: number;
+  driverLabel: string;
+  onSegmentLayout?: (e: LayoutChangeEvent) => void;
+};
+
+function MarqueeBadgeRowInner({
+  isCritical,
+  accent,
+  delayMinutes,
+  driverLabel,
+  onSegmentLayout,
+}: MarqueeRowContentProps) {
+  return (
+    <View
+      style={[styles.badgeScrollInnerRow, styles.badgeMarqueeSegmentPad, styles.badgeMarqueeSegmentShrink]}
+      onLayout={onSegmentLayout}
+    >
+      {isCritical ? (
+        <Ionicons name="warning-outline" size={10} color={accent} accessibilityElementsHidden />
+      ) : null}
+      <AppText style={[styles.badgeDelayMinutes, { color: accent }]} numberOfLines={1}>
+        {`+${delayMinutes}min`}
+      </AppText>
+      <AppText variant="caption" style={[styles.badgeLabelInline, { color: accent }]} numberOfLines={1}>
+        {driverLabel}
+      </AppText>
+    </View>
+  );
+}
+
+type DispatchDelayMarqueeBadgeProps = {
+  isCritical: boolean;
+  accent: string;
+  delayMinutes: number;
+  driverLabel: string;
+  backgroundColor: string;
+  borderColor: string;
+  accessibilityLabel: string;
+  isLongDelayStyle: boolean;
+};
+
+/** Pastille ~80×28 : défilement linéaire en boucle (double segment) si débordement. */
+function DispatchDelayMarqueeBadge({
+  isCritical,
+  accent,
+  delayMinutes,
+  driverLabel,
+  backgroundColor,
+  borderColor,
+  accessibilityLabel,
+  isLongDelayStyle,
+}: DispatchDelayMarqueeBadgeProps) {
+  const [viewportW, setViewportW] = useState(0);
+  const [segmentW, setSegmentW] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const translateX = useSharedValue(0);
+
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (alive) setReduceMotion(v);
+    });
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
+
+  const overflowPx = segmentW > 0 && viewportW > 0 ? segmentW - viewportW : 0;
+  const needsMarquee =
+    !reduceMotion && viewportW > 0 && segmentW > 0 && overflowPx > 0.5;
+  const loopDistance = needsMarquee ? segmentW + MARQUEE_SEGMENT_GAP : 0;
+
+  useEffect(() => {
+    cancelAnimation(translateX);
+    if (loopDistance <= 0) {
+      translateX.value = 0;
+      return;
+    }
+    translateX.value = 0;
+    const durationMs = Math.min(20_000, Math.max(3_200, (loopDistance / MARQUEE_PX_PER_SEC) * 1000));
+    translateX.value = withRepeat(
+      withTiming(-loopDistance, { duration: durationMs, easing: Easing.linear }),
+      -1,
+      false,
+    );
+    return () => {
+      cancelAnimation(translateX);
+    };
+  }, [loopDistance]);
+
+  const rowAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const rowProps = { isCritical, accent, delayMinutes, driverLabel };
+
+  return (
+    <View
+      style={[
+        styles.badgeShellMarqueeOuter,
+        { backgroundColor, borderColor },
+        isLongDelayStyle ? styles.badgeLongDelay : styles.badgeShortDelay,
+      ]}
+      accessibilityLabel={accessibilityLabel}
+    >
+      <View
+        style={styles.badgeMarqueeClip}
+        onLayout={(e: LayoutChangeEvent) => setViewportW(e.nativeEvent.layout.width)}
+      >
+        {needsMarquee ? (
+          <Animated.View
+            collapsable={false}
+            style={[styles.badgeMarqueeTrack, rowAnimatedStyle]}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <MarqueeBadgeRowInner
+              {...rowProps}
+              onSegmentLayout={(e: LayoutChangeEvent) => setSegmentW(e.nativeEvent.layout.width)}
+            />
+            <View style={styles.badgeMarqueeBetweenGap} />
+            <MarqueeBadgeRowInner {...rowProps} />
+          </Animated.View>
+        ) : (
+          <MarqueeBadgeRowInner
+            {...rowProps}
+            onSegmentLayout={(e: LayoutChangeEvent) => setSegmentW(e.nativeEvent.layout.width)}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
 type DispatchRideListCardProps = {
   mission: CompanyDispatchMission;
+  /**
+   * Minutes de retard alignées tableau web (tout retard **> 0**, paliers 1–5 min = léger).
+   * `undefined` tant que les retards ne sont pas chargés (pas de badge).
+   */
+  bookingDelayPickupMinutes?: number | null;
+  /** ISO ETA pickup (après fusion live + snapshot delays). */
+  bookingPickupEtaIso?: string | null;
   expanded: boolean;
   onToggleExpand: () => void;
   /**
@@ -75,6 +239,8 @@ type DispatchRideListCardProps = {
 
 export function DispatchRideListCard({
   mission,
+  bookingDelayPickupMinutes,
+  bookingPickupEtaIso,
   expanded,
   onToggleExpand,
   timeSentinelAction,
@@ -84,7 +250,7 @@ export function DispatchRideListCard({
   footer,
 }: DispatchRideListCardProps) {
   const hasSchedule = mission.scheduled_at && !isPickupSentinel(mission.scheduled_at);
-  const pickupTime = hasSchedule ? dayjs(mission.scheduled_at).format("HH[h]mm") : "";
+  const pickupTime = hasSchedule ? formatDispatchScheduledTime(mission.scheduled_at) : "";
   const showTimeUndefined = !hasSchedule;
   const client = mission.client_name?.trim() || `Course #${mission.mission_id}`;
 
@@ -95,20 +261,41 @@ export function DispatchRideListCard({
   const statusColors = getEnterpriseStatusColors(normStatus);
 
   const driverLabel = mission.driver_name ?? (mission.driver_id != null ? `Chauffeur #${mission.driver_id}` : null);
-  const assignedTo = driverLabel;
 
-  let delayMinutes: number | null = null;
-  if (!isCompleted && !isCancelled && mission.driver_id && mission.scheduled_at && !isPickupSentinel(mission.scheduled_at)) {
-    const scheduled = dayjs(mission.scheduled_at);
-    if (scheduled.isValid() && scheduled.isBefore(dayjs())) {
-      delayMinutes = Math.max(0, dayjs().diff(scheduled, "minute"));
-    }
-  }
+  const pickupEtaStatuses = new Set(["accepted", "assigned", "en_route"]);
+  const etaHintIso =
+    hasSchedule &&
+    bookingPickupEtaIso?.trim() &&
+    normStatus &&
+    pickupEtaStatuses.has(normStatus)
+      ? bookingPickupEtaIso.trim()
+      : null;
+  const pickupEtaUi = etaHintIso ? pickupArrivalHintFr(etaHintIso) : null;
+  const assignedTo = driverLabel;
+  /** `undefined` : retards pas encore chargés. `null` ou nombre : aligné carte dispatch web (minutes > 0). */
+  const webPickupDelayMin =
+    bookingDelayPickupMinutes === undefined
+      ? undefined
+      : typeof bookingDelayPickupMinutes === "number" && bookingDelayPickupMinutes > 0
+        ? Math.round(bookingDelayPickupMinutes)
+        : null;
+
+  const delayUi =
+    !isCancelled &&
+    webPickupDelayMin != null &&
+    webPickupDelayMin > 0
+      ? uiForDispatchDelayMinutes(webPickupDelayMin)
+      : null;
 
   const unassignedCta = !isCompleted && !isCancelled && !assignedTo && onUnassignedPress != null;
 
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        delayUi ? { borderLeftWidth: 3, borderLeftColor: delayUi.stripeColor } : null,
+      ]}
+    >
       <View style={styles.summaryRow}>
         <View style={styles.timeContainer}>
           {showTimeUndefined ? (
@@ -118,9 +305,21 @@ export function DispatchRideListCard({
               <Ionicons name="time-outline" size={18} color={palette.timeUndefined} />
             )
           ) : (
-            <AppText variant="caption" style={styles.time}>
-              {pickupTime}
-            </AppText>
+            <>
+              <AppText variant="caption" style={[styles.time, delayUi ? { color: delayUi.timeColor } : null]}>
+                {pickupTime}
+              </AppText>
+              {pickupEtaUi ? (
+                <AppText
+                  variant="caption"
+                  style={styles.etaHint}
+                  numberOfLines={1}
+                  accessibilityLabel={pickupEtaUi.accessibility}
+                >
+                  {pickupEtaUi.text}
+                </AppText>
+              ) : null}
+            </>
           )}
         </View>
         {unassignedCta ? (
@@ -141,6 +340,7 @@ export function DispatchRideListCard({
                 onPress={onUnassignedPress}
                 disabled={unassignedPressDisabled}
                 style={({ pressed }) => [
+                  styles.badgeShell,
                   styles.badgeUnassignedCta,
                   unassignedPressDisabled && styles.badgeCtaDisabled,
                   pressed && !unassignedPressDisabled && styles.badgeCtaPressed,
@@ -161,21 +361,23 @@ export function DispatchRideListCard({
             </View>
           </View>
         ) : (
-          <TouchableOpacity
-            onPress={onToggleExpand}
-            activeOpacity={0.85}
-            style={styles.summaryTap}
-            accessibilityRole="button"
-            accessibilityLabel="Afficher ou masquer le détail de la course"
-          >
-            <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
-              {client}
-            </AppText>
+          <View style={styles.summaryMain}>
+            <TouchableOpacity
+              onPress={onToggleExpand}
+              activeOpacity={0.85}
+              style={styles.summaryTapSolo}
+              accessibilityRole="button"
+              accessibilityLabel="Afficher ou masquer le détail de la course"
+            >
+              <AppText variant="body" style={styles.client} numberOfLines={1} ellipsizeMode="tail">
+                {client}
+              </AppText>
+            </TouchableOpacity>
             <View style={styles.badgeContainer}>
               {isCompleted ? (
                 <View
                   style={[
-                    styles.badge,
+                    styles.badgeShell,
                     { backgroundColor: statusColors.bg, borderColor: `${statusColors.text}40` },
                   ]}
                 >
@@ -190,38 +392,47 @@ export function DispatchRideListCard({
                 </View>
               ) : assignedTo ? (
                 (() => {
-                  const d = delayMinutes ?? 0;
-                  const hasDelay = d > 0;
-                  const isLong = hasDelay && d >= 15;
-                  const shortName = hasDelay
-                    ? (assignedTo.split(" ")[0] ?? assignedTo).toUpperCase()
-                    : assignedTo;
-                  const delayText = hasDelay ? `${shortName} ${d}min` : formatBadge(assignedTo);
-                  const bg = hasDelay
-                    ? isLong
-                      ? "#fee2e2"
-                      : "#fef3c7"
-                    : statusColors.bg;
-                  const tx = hasDelay
-                    ? isLong
-                      ? "#ef4444"
-                      : "#f59e0b"
-                    : statusColors.text;
-                  return (
+                  const hasMinutes =
+                    webPickupDelayMin !== undefined && webPickupDelayMin !== null;
+                  const d = hasMinutes ? webPickupDelayMin : 0;
+                  const delayBadgeUi =
+                    hasMinutes && d > 0 ? uiForDispatchDelayMinutes(d) : null;
+                  const showDelay = delayBadgeUi != null;
+                  const isCritical = delayBadgeUi?.severity === "critical";
+                  const bg = showDelay ? delayBadgeUi.badgeBg : statusColors.bg;
+                  const badgeBorderColor = showDelay ? delayBadgeUi.badgeBorder : `${statusColors.text}40`;
+                  const accent = showDelay ? delayBadgeUi.timeColor : statusColors.text;
+                  const driverLabelShort = formatBadge(assignedTo);
+                  const driverMarqueeText =
+                    (assignedTo ?? "").trim().length > 0 ? (assignedTo ?? "").trim() : driverLabelShort;
+                  const a11yDelayBadge = showDelay
+                    ? `${isCritical ? "Retard critique. " : ""}+${d} minutes. ${driverMarqueeText}`
+                    : driverLabelShort;
+                  return showDelay ? (
+                    <DispatchDelayMarqueeBadge
+                      isCritical={isCritical}
+                      accent={accent}
+                      delayMinutes={d}
+                      driverLabel={driverMarqueeText}
+                      backgroundColor={bg}
+                      borderColor={badgeBorderColor}
+                      accessibilityLabel={a11yDelayBadge}
+                      isLongDelayStyle={isCritical}
+                    />
+                  ) : (
                     <View
                       style={[
-                        styles.badge,
-                        { backgroundColor: bg, borderColor: `${tx}40` },
-                        hasDelay && (isLong ? styles.badgeLongDelay : styles.badgeShortDelay),
+                        styles.badgeShell,
+                        { backgroundColor: bg, borderColor: badgeBorderColor },
                       ]}
                     >
                       <AppText
                         variant="caption"
-                        style={[styles.badgeLabel, { color: tx }]}
+                        style={[styles.badgeLabel, { color: accent }]}
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
-                        {delayText}
+                        {driverLabelShort}
                       </AppText>
                     </View>
                   );
@@ -229,7 +440,7 @@ export function DispatchRideListCard({
               ) : (
                 <View
                   style={[
-                    styles.badge,
+                    styles.badgeShell,
                     { backgroundColor: statusColors.bg, borderColor: `${statusColors.text}40` },
                   ]}
                 >
@@ -244,7 +455,7 @@ export function DispatchRideListCard({
                 </View>
               )}
             </View>
-          </TouchableOpacity>
+          </View>
         )}
         {priorityStrip}
         <TouchableOpacity
@@ -302,61 +513,72 @@ const styles = StyleSheet.create({
     ...cardSurfaceShadow,
   },
   summaryRow: { flexDirection: "row", alignItems: "center", minWidth: 0 },
-  /** Heure + client + pastille (repli / dépli) */
-  summaryTap: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 },
-  /** Client seul (tap) + pastille CTA « Non assigné » séparée, pour ne pas mélanger tap déplier / assigner */
+  /** Client seul (tap) + pastille séparée — évite ScrollView / CTA imbriqués dans le tap déplier */
   summaryMain: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 },
   summaryTapSolo: { flex: 1, minWidth: 0, marginRight: 0, flexDirection: "row", alignItems: "center" },
   timeContainer: {
-    width: 50,
+    width: 54,
     minHeight: 32,
     marginRight: 10,
     alignItems: "flex-start",
     justifyContent: "center",
+    gap: 2,
   },
   time: { color: palette.time, fontWeight: "700", fontSize: 15, letterSpacing: 0.2 },
+  etaHint: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: E.TEXT_MUTED,
+    maxWidth: 54,
+  },
   client: { color: palette.client, fontWeight: "600", fontSize: 14, width: 120, marginRight: 10, flexShrink: 0 },
   chevronContainer: {
     width: 24,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 2,
-    marginRight: 12,
+    marginRight: 0,
   },
   badgeContainer: { flex: 1, minWidth: 0, alignItems: "flex-end" },
-  badge: {
+  /** Toutes les pastilles résumé : même gabarit web (≈ padding inline ~6px, 10px / lh 16, 80×28). */
+  badgeShell: {
+    width: BADGE_MARQUEE_W,
+    height: BADGE_MARQUEE_H,
     borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    maxWidth: 130,
-    minWidth: 60,
-    overflow: "hidden",
     borderWidth: 1,
     borderColor: E.BORDER,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "stretch",
+    paddingHorizontal: 6,
+  },
+  badgeDelayMinutes: {
+    fontSize: 10,
+    lineHeight: 16,
+    fontWeight: "700" as const,
+    letterSpacing: 0.2,
+    textTransform: "none" as const,
   },
   badgeLabel: {
+    width: "100%",
     fontSize: 10,
+    lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
     textAlign: "center" as const,
   },
-  /** Pastille cliquable « Non assigné » (réf. ambre) */
+  /** Couleurs CTA ambre uniquement (`badgeShell` fournit la taille). */
   badgeUnassignedCta: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    maxWidth: 130,
-    minWidth: 60,
-    borderWidth: 1,
-    borderColor: "rgba(245, 158, 11, 0.25)",
     backgroundColor: "#fef3c7",
-    overflow: "hidden",
+    borderColor: "rgba(245, 158, 11, 0.25)",
   },
   badgeCtaPressed: { opacity: 0.86 },
   badgeCtaDisabled: { opacity: 0.55 },
   badgeUnassignedCtaLabel: {
+    width: "100%",
     fontSize: 10,
+    lineHeight: 16,
     fontWeight: "700",
     letterSpacing: 0.3,
     textTransform: "uppercase" as const,
@@ -365,6 +587,56 @@ const styles = StyleSheet.create({
   },
   badgeShortDelay: {},
   badgeLongDelay: {},
+  /** Même cible 80×28 que `badgeShell` ; pas de padding sur la coque (géré dans la ligne marquee). */
+  badgeShellMarqueeOuter: {
+    width: BADGE_MARQUEE_W,
+    height: BADGE_MARQUEE_H,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    overflow: "hidden",
+    justifyContent: "center",
+  },
+  /** `alignItems: flex-start` : sinon la ligne est étirée à la largeur du clip et segmentW ≈ viewportW → pas de marquee. */
+  badgeMarqueeClip: {
+    flex: 1,
+    width: "100%",
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
+  badgeMarqueeTrack: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    flexWrap: "nowrap" as const,
+    alignSelf: "flex-start",
+  },
+  badgeMarqueeBetweenGap: {
+    width: MARQUEE_SEGMENT_GAP,
+    flexShrink: 0,
+  },
+  badgeMarqueeSegmentPad: {
+    paddingHorizontal: 6,
+  },
+  badgeMarqueeSegmentShrink: {
+    alignSelf: "flex-start",
+    flexShrink: 0,
+  },
+  badgeScrollInnerRow: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    flexWrap: "nowrap" as const,
+    gap: 4,
+  },
+  badgeLabelInline: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase" as const,
+    lineHeight: 16,
+    textAlign: "center" as const,
+    flexShrink: 0,
+  },
   routeRow: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
   routeIcon: { marginRight: 8 },
   routeDivider: {

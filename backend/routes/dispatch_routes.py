@@ -65,6 +65,7 @@ from infrastructure.dispatch.realtime_optimizer_adapter import (
     start_optimizer_for_company,
     stop_optimizer_for_company,
 )
+from routes.dispatch.dispatch_helpers import _exclude_booking_from_delay_rollups
 from shared.time_utils import day_local_bounds, now_local
 
 N_BOOKINGS_ZERO = 0
@@ -458,10 +459,13 @@ delay_model = dispatch_ns.model(
         "dropoff_time": NullableDateTime,
         "pickup_eta": NullableDateTime,
         "dropoff_eta": NullableDateTime,
+        "delay_minutes": fields.Integer,
         "pickup_delay_minutes": fields.Integer,
         "dropoff_delay_minutes": fields.Integer,
-        "booking": NullableDict,
-        "driver": NullableDict,
+        # ORM Booking/Driver : Nested (getattr par champ), pas dict() —
+        # sinon marshal lève "'Booking' object is not iterable".
+        "booking": fields.Nested(booking_model, skip_none=True),
+        "driver": fields.Nested(driver_model, skip_none=True),
     },
 )
 
@@ -1978,6 +1982,8 @@ class DelaysResource(Resource):
         for a in assigns:
             b = a.booking  # ✅ Déjà chargé via joinedload
             if not b:
+                continue
+            if _exclude_booking_from_delay_rollups(b):
                 continue
 
             # Temps prévus

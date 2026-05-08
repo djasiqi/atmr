@@ -39,6 +39,12 @@ let permissionRequestInFlight: Promise<boolean> | null = null;
 type TrackingBridgeState = {
   missionId: number | null;
   missionStatus: DriverMissionStatus | null;
+  /**
+   * True quand on track « par fenêtre horaire » (07h–19h) sans mission active.
+   * Permet d'émettre des points GPS de présence pour les opérations même quand
+   * aucune mission n'est en cours.
+   */
+  presenceWindowActive: boolean;
   lastSentAt: string | null;
   lastAckAt: string | null;
   lastBackendAckLatencyMs: number | null;
@@ -78,6 +84,7 @@ type DriverTrackingBridgeListener = (snapshot: DriverTrackingBridgeSnapshot) => 
 const state: TrackingBridgeState = {
   missionId: null,
   missionStatus: null,
+  presenceWindowActive: false,
   lastSentAt: null,
   lastAckAt: null,
   lastBackendAckLatencyMs: null,
@@ -124,8 +131,12 @@ function notifyTrackingBridgeListeners() {
   });
 }
 
-function isEligible() {
+function hasActiveMission(): boolean {
   return state.missionId !== null && isTrackingActiveStatus(state.missionStatus);
+}
+
+function isEligible() {
+  return hasActiveMission() || state.presenceWindowActive;
 }
 
 async function ensurePermission(appState: AppStateStatus) {
@@ -248,7 +259,7 @@ async function getCurrentPositionWithTimeout(
 }
 
 async function flushPoint(appState: AppStateStatus) {
-  if (!isEligible() || state.missionId === null) return;
+  if (!isEligible()) return;
   const granted = await ensurePermission(appState);
   if (!granted) return;
   const position = await resolvePositionFromWatchOrFallback(appState);
@@ -305,7 +316,7 @@ async function flushPoint(appState: AppStateStatus) {
         flushResult.backendAcked === 0 &&
         flushResult.socketEmitted === 0 &&
         flushResult.dropped === 0));
-  const fallbackTrackingEventId = `bridge_fb_${state.missionId}_${Math.floor(
+  const fallbackTrackingEventId = `bridge_fb_${state.missionId ?? "presence"}_${Math.floor(
     (position.timestamp ?? Date.now()) / 1000
   )}`;
   const shouldSkipDuplicateFallback =
@@ -351,6 +362,10 @@ async function resolvePositionFromWatchOrFallback(appState: AppStateStatus) {
 }
 
 function resolveTrackingMode(appState: AppStateStatus): DriverTrackingMode {
+  /* Pas de mission ET fenêtre 07h–19h ouverte = présence pure. */
+  if (!hasActiveMission() && state.presenceWindowActive) {
+    return "availability_presence";
+  }
   if (state.missionStatus === "ASSIGNED" && isFeatureEnabled("tracking_presence_mode_enabled")) {
     return "availability_presence";
   }
@@ -446,7 +461,8 @@ async function sendLegacyPoint(appState: AppStateStatus, nowIso: string) {
   const granted = await ensurePermission(appState);
   if (!granted) return;
   const position = await getCurrentPositionWithTimeout(appState);
-  if (!position || state.missionId === null) return;
+  if (!position) return;
+  if (state.missionId === null && !state.presenceWindowActive) return;
   await sendDriverLocation({
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
@@ -466,7 +482,7 @@ const trackingManager = new TrackingManager({
   backgroundIntervalMs: BACKGROUND_INTERVAL_MS,
   maxBackoffMs: MAX_BACKOFF_MS,
   onTick: async ({ appState }) => {
-    if (!isEligible() || state.missionId === null) return "skipped";
+    if (!isEligible()) return "skipped";
     try {
       if (isFeatureEnabled("tracking_persistent_runtime_enabled")) {
         await flushPoint(appState);
@@ -520,9 +536,14 @@ function ensureManagerState() {
     return;
   }
   if (state.missionId != null) {
-    void setBackgroundTrackingMissionContext(state.missionId, state.missionStatus);
+    void setBackgroundTrackingMissionContext(state.missionId, state.missionStatus, "mission");
     if (isFeatureEnabled("tracking_background_enabled")) {
       void startBackgroundLocationTaskIfEligible(state.missionId, state.missionStatus);
+    }
+  } else if (state.presenceWindowActive) {
+    void setBackgroundTrackingMissionContext(null, null, "presence_window");
+    if (isFeatureEnabled("tracking_background_enabled")) {
+      void startBackgroundLocationTaskIfEligible(null, null, { presenceWindow: true });
     }
   }
   void ensureLocationWatch();
@@ -585,11 +606,49 @@ export function stopDriverTrackingBridge() {
   state.lastStaleFallbackAttemptMs = null;
   state.lastHttpFallbackTrackingEventId = null;
   resetPermissionState();
+  if (state.presenceWindowActive) {
+    /* Si la window 07h–19h est ouverte on garde le tracking en mode présence
+     * même après la fin d'une mission. Sinon on coupe complètement. */
+    ensureManagerState();
+    notifyTrackingBridgeListeners();
+    return;
+  }
   void setBackgroundTrackingMissionContext(null, null);
   void stopBackgroundLocationTask("tracking_bridge_stopped");
   stopLocationWatch();
   trackingManager.stop();
   notifyTrackingBridgeListeners();
+}
+
+/**
+ * Active ou désactive le mode présence par fenêtre horaire (07h–19h).
+ * Quand actif sans mission, l'app continue d'envoyer des points GPS de
+ * présence avec `missionId = null` et `locationMode = availability_presence`.
+ * Quand inactif, le tracking ne tourne que si une mission est éligible.
+ */
+export function setDriverTrackingPresenceWindow(active: boolean) {
+  if (state.presenceWindowActive === active) return;
+  state.presenceWindowActive = active;
+  emitDriverTelemetry("tracking.presence_window.toggled", {
+    source: "driver.tracking.bridge",
+    presence_window_active: active,
+    mission_id: state.missionId,
+  });
+  if (!active && state.missionId === null) {
+    /* Window vient de se fermer et pas de mission active : on coupe tout. */
+    void setBackgroundTrackingMissionContext(null, null);
+    void stopBackgroundLocationTask("presence_window_closed");
+    stopLocationWatch();
+    trackingManager.stop();
+    notifyTrackingBridgeListeners();
+    return;
+  }
+  ensureManagerState();
+  notifyTrackingBridgeListeners();
+}
+
+export function getDriverTrackingPresenceWindowActive(): boolean {
+  return state.presenceWindowActive;
 }
 
 export function getDriverTrackingBridgeSnapshot() {

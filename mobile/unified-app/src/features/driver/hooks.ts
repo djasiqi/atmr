@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "../../core/sessionProvider";
 import { realtimeManager } from "../../core/realtime/realtimeManager";
@@ -265,6 +266,43 @@ export function useDriverTracking(missionId: number | null, missionStatus: strin
       stopDriverTracking();
     };
   }, [contextId, missionId, normalized]);
+}
+
+/**
+ * À chaque retour de focus sur un écran qui dépend de la liste des missions
+ * (dashboard, liste missions actives), on déclenche un resync best-effort :
+ *   - schedule un sync orchestrator (delta /since si dispo, full sinon)
+ *   - invalide explicitement le cache RQ pour forcer un re-fetch immédiat
+ *
+ * Garantit que les modifications faites par le dispatch (étage, code porte,
+ * mobilité, horaire, adresse, montant…) sont visibles dès que le chauffeur
+ * revient sur l'écran, même si le socket realtime est gated par feature flag
+ * ou si l'event a été perdu (reconnexion réseau, app en background, etc.).
+ */
+export function useDriverMissionsListFocusResync() {
+  const queryClient = useQueryClient();
+  const contextId = useActiveDriverContextId();
+  const lastResyncAtRef = useRef(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!contextId) return;
+      const now = Date.now();
+      // Anti-doublon : si on a déjà resync il y a < 1.5 s, on saute
+      // (évite les boucles avec d'autres useEffect au mount).
+      if (now - lastResyncAtRef.current < 1500) return;
+      lastResyncAtRef.current = now;
+      scheduleDriverMissionSync(queryClient, contextId, "manual");
+      void queryClient.invalidateQueries({
+        queryKey: driverQueryKeys.missions(contextId),
+      });
+      emitDriverTelemetry("driver.runtime.resync", {
+        source: "driver.hooks.missions_list_focus",
+        context_id: contextId,
+        trigger: "missions_list_focus",
+      });
+    }, [contextId, queryClient])
+  );
 }
 
 export function useDriverMissionDetailOpenResync(missionId: number | null) {

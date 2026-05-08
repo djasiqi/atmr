@@ -443,6 +443,40 @@ export function formatDispatchStateFr(state: CompanyDispatchState): string {
   }
 }
 
+export type DashboardKpiNavigationTarget = { path: string; params?: Record<string, string> };
+
+/**
+ * Cible de navigation depuis une tuile KPI (tableau de bord entreprise).
+ * Les paramètres sont consommés par `app/(app)/(company)/rides.tsx` (`status`, `filter`).
+ */
+export function resolveDashboardKpiNavigation(
+  key: DashboardKpiKey,
+  input: { hasDispatchScreen: boolean }
+): DashboardKpiNavigationTarget | null {
+  switch (key) {
+    case "assign_pending":
+      return { path: ROUTE_RIDES, params: { status: "pending" } };
+    case "assign_in_progress":
+      return { path: ROUTE_RIDES, params: { status: "in_flight" } };
+    case "delayed":
+      return { path: ROUTE_RIDES, params: { filter: "delayed" } };
+    case "exceptions":
+      return { path: ROUTE_RIDES, params: { filter: "exceptions" } };
+    case "auto_assigned":
+      return { path: ROUTE_RIDES, params: { status: "assigned" } };
+    case "proposals":
+    case "assign_without_proposal":
+      if (input.hasDispatchScreen) return { path: ROUTE_DISPATCH };
+      return { path: ROUTE_RIDES };
+    case "drivers_available":
+    case "opportunities":
+    case "realtime_health":
+      return null;
+    default:
+      return null;
+  }
+}
+
 export function formatDispatchModeFr(mode: CompanyDispatchMode): string {
   switch (mode) {
     case "manual":

@@ -24,7 +24,10 @@ class ListCompanyInvoicesUseCase:
         invoices = self._invoice_repo.find_by_company_id_with_lines(company_id)
         serialized: list[dict[str, Any]] = []
         for inv in invoices:
-            if hasattr(inv, "serialize"):
+            to_dict = getattr(inv, "to_dict", None)
+            if callable(to_dict):
+                serialized.append(to_dict(list_view=True))
+            elif hasattr(inv, "serialize"):
                 ser = inv.serialize
                 if isinstance(ser, dict):
                     serialized.append(ser)

@@ -5,6 +5,7 @@ import { DriverContextGuard, PermissionGuard } from "../../../../src/core/guards
 import { useDriverMissionDetailQuery } from "../../../../src/features/driver/hooks";
 import { AppCard, AppSpinner, AppText, brandSurfaceSoft, Screen } from "../../../../src/design/responsive";
 import { getDriverStatusUx } from "../../../../src/features/driver/statusDictionary";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 export default function DriverTripDetailScreen() {
   const params = useLocalSearchParams<{
@@ -28,7 +29,13 @@ export default function DriverTripDetailScreen() {
   return (
     <DriverContextGuard>
       <PermissionGuard permission="mission:read">
-        <Screen scroll backgroundColor={brandSurfaceSoft} withHorizontalPadding={false} contentContainerStyle={styles.page}>
+        <Screen
+          scroll
+          backgroundColor={brandSurfaceSoft}
+          withHorizontalPadding={false}
+          extraScrollBottomPadding={DRIVER_FLOATING_TAB_SCROLL_PADDING}
+          contentContainerStyle={styles.page}
+        >
           <AppText variant="sectionTitle" style={styles.title}>
             Détail course
           </AppText>

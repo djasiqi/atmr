@@ -1258,25 +1258,59 @@ export const fetchDispatchDelays = async (date) => {
     const { data } = await apiClient.get('/company_dispatch/delays', {
       params: { date },
     });
-    // normalize: one item per late leg
-    return (Array.isArray(data) ? data : []).flatMap((d) => {
-      const rows = [];
-      if ((d.pickup_delay_minutes ?? 0) >= 5) {
-        rows.push({
-          booking_id: d.booking_id,
-          delay_minutes: d.pickup_delay_minutes,
+    /**
+     * Une entrée par booking_id avec le max des retards (pickup / dropoff / delay_minutes agrégé API).
+     * — Ne plus filtrer à ≥ 5 min : aligné DispatchTable / ReservationTable (retards légers 1–5 min).
+     * — Inclut les retours : l’API peut ne remplir que `delay_minutes` ou surtout une jambe.
+     * — Ignore les statuts terminés / annulés / en course (client à bord) si `booking.status` est présent.
+     */
+    const excludedStatus = new Set([
+      'completed',
+      'return_completed',
+      'canceled',
+      'cancelled',
+      'in_progress',
+      'awaiting_client_payment',
+    ]);
+    const agg = new Map();
+    for (const d of Array.isArray(data) ? data : []) {
+      const bs = String(d.booking?.status ?? '')
+        .trim()
+        .toLowerCase();
+      if (bs && excludedStatus.has(bs)) continue;
+      const bid = Number(d.booking_id);
+      if (!Number.isFinite(bid)) continue;
+      const pickup = Math.round(Number(d.pickup_delay_minutes ?? 0));
+      const drop = Math.round(Number(d.dropoff_delay_minutes ?? 0));
+      const declared = Math.round(Number(d.delay_minutes ?? 0));
+      const minutes = Math.max(pickup, drop, declared);
+      const pickupEta = d.pickup_eta != null && d.pickup_eta !== '' ? d.pickup_eta : null;
+      const dropoffEta = d.dropoff_eta != null && d.dropoff_eta !== '' ? d.dropoff_eta : null;
+      const hasEta = Boolean(pickupEta || dropoffEta);
+      if (minutes <= 0 && !hasEta) continue;
+
+      const prev = agg.get(bid);
+      if (!prev) {
+        agg.set(bid, {
+          booking_id: bid,
+          delay_minutes: minutes,
+          pickup_eta: pickupEta,
+          dropoff_eta: dropoffEta,
           is_pickup: true,
         });
+      } else {
+        if (minutes > prev.delay_minutes) {
+          prev.delay_minutes = minutes;
+          if (pickupEta != null) prev.pickup_eta = pickupEta;
+          if (dropoffEta != null) prev.dropoff_eta = dropoffEta;
+        } else {
+          prev.delay_minutes = Math.max(prev.delay_minutes, minutes);
+          if (pickupEta != null && prev.pickup_eta == null) prev.pickup_eta = pickupEta;
+          if (dropoffEta != null && prev.dropoff_eta == null) prev.dropoff_eta = dropoffEta;
+        }
       }
-      if ((d.dropoff_delay_minutes ?? 0) >= 5) {
-        rows.push({
-          booking_id: d.booking_id,
-          delay_minutes: d.dropoff_delay_minutes,
-          is_pickup: false,
-        });
-      }
-      return rows;
-    });
+    }
+    return Array.from(agg.values());
   } catch (e) {
     console.error('fetchDispatchDelays failed:', e?.response?.data || e);
     return [];

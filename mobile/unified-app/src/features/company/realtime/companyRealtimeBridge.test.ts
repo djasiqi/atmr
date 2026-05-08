@@ -50,9 +50,12 @@ jest.mock("../../../core/featureFlags/registry", () => ({
 }));
 
 const mockGetAccessToken = jest.fn<() => string | null>(() => "test-jwt");
+const mockRefreshAuthTokenNow = jest.fn(() => Promise.resolve(false));
+const mockGetResolvedApiBaseUrl = jest.fn(() => "http://192.168.1.103:5000/api/v1");
 jest.mock("../../../core/api/client", () => ({
   getAuthAccessToken: () => mockGetAccessToken(),
-  getResolvedApiBaseUrl: () => "http://192.168.1.103:5000/api/v1",
+  refreshAuthTokenNow: () => mockRefreshAuthTokenNow(),
+  getResolvedApiBaseUrl: () => mockGetResolvedApiBaseUrl(),
 }));
 
 describe("company realtime bridge", () => {
@@ -72,6 +75,10 @@ describe("company realtime bridge", () => {
     mockSocket.io.on.mockClear();
     mockIsFeatureEnabled.mockReset();
     mockGetAccessToken.mockReturnValue("test-jwt");
+    mockRefreshAuthTokenNow.mockReset();
+    mockRefreshAuthTokenNow.mockImplementation(() => Promise.resolve(false));
+    mockGetResolvedApiBaseUrl.mockReset();
+    mockGetResolvedApiBaseUrl.mockReturnValue("http://192.168.1.103:5000/api/v1");
     delete process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL;
     delete process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL;
     delete process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -96,7 +103,7 @@ describe("company realtime bridge", () => {
     expect(mockIo).not.toHaveBeenCalled();
   });
 
-  it("fails when access token is missing after wait window", () => {
+  it("fails when access token is missing after wait window", async () => {
     mockGetAccessToken.mockReturnValue(null);
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL = "wss://company.example.test";
@@ -104,7 +111,7 @@ describe("company realtime bridge", () => {
     const { companyRealtimeBridge } = require("./companyRealtimeBridge");
 
     companyRealtimeBridge.connect("company:42");
-    jest.advanceTimersByTime(25_000);
+    await jest.runAllTimersAsync();
 
     expect(companyRealtimeBridge.getSnapshot()).toEqual(
       expect.objectContaining({
@@ -118,6 +125,7 @@ describe("company realtime bridge", () => {
 
   it("fails when socket URL is missing", () => {
     delete process.env.EXPO_PUBLIC_API_BASE_URL;
+    mockGetResolvedApiBaseUrl.mockReturnValue("");
     mockIsFeatureEnabled.mockReturnValue(true);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { companyRealtimeBridge } = require("./companyRealtimeBridge");
@@ -136,6 +144,7 @@ describe("company realtime bridge", () => {
   it("does not use DRIVER_SOCKET_URL as company socket (configure API origin or COMPANY_SOCKET_URL)", () => {
     delete process.env.EXPO_PUBLIC_COMPANY_SOCKET_URL;
     delete process.env.EXPO_PUBLIC_API_BASE_URL;
+    mockGetResolvedApiBaseUrl.mockReturnValue("");
     process.env.EXPO_PUBLIC_DRIVER_SOCKET_URL = "wss://driver-only.example.test";
     mockIsFeatureEnabled.mockReturnValue(true);
     const {
@@ -156,6 +165,7 @@ describe("company realtime bridge", () => {
   it("uses EXPO_PUBLIC_API_BASE_URL origin when no explicit socket URL", () => {
     mockIsFeatureEnabled.mockReturnValue(true);
     process.env.EXPO_PUBLIC_API_BASE_URL = "http://10.0.0.1:5000/api/v1";
+    mockGetResolvedApiBaseUrl.mockReturnValue("http://10.0.0.1:5000/api/v1");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { companyRealtimeBridge } = require("./companyRealtimeBridge");
 

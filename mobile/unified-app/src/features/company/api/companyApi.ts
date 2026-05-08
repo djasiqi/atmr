@@ -15,6 +15,7 @@ import {
   validateCompanyOptimizerStatusResponse,
 } from "./contracts";
 import { emitCompanyDispatchTelemetry } from "../telemetry/companyTelemetry";
+import { mergeCompanyDispatchDelaySources } from "../utils/dispatchWebAlignment";
 import { filterMissionsByDispatchListChip } from "../utils/rideListStatusFilter";
 
 type CompanyRequestOptions = {
@@ -61,9 +62,19 @@ export function getDispatchApiErrorMessage(error: unknown, fallback: string): st
     : fallback;
 }
 
-function shouldTryFallback(error: unknown): boolean {
+function shouldTryFallback(error: unknown, domain?: string): boolean {
   const axiosError = error as AxiosError | undefined;
   const status = axiosError?.response?.status;
+  const body = axiosError?.response?.data as { error?: unknown; message?: unknown } | undefined;
+  const errorCode = typeof body?.error === "string" ? body.error.toLowerCase() : "";
+  const message = typeof body?.message === "string" ? body.message.toLowerCase() : "";
+  if (
+    domain === "dispatch_ride_create" &&
+    status === 400 &&
+    (errorCode === "invalid_json" || message.includes("json"))
+  ) {
+    return true;
+  }
   return status === 404 || status === 405 || status === 501;
 }
 
@@ -93,7 +104,7 @@ async function requestWithFallback<T>(
         typeof (error as AxiosError)?.response?.status === "number"
           ? (error as AxiosError).response?.status
           : null;
-      if (index === requests.length - 1 || !shouldTryFallback(error)) {
+      if (index === requests.length - 1 || !shouldTryFallback(error, trace?.domain)) {
         if (status === 401 || status === 403) {
           emitCompanyDispatchTelemetry(
             "company.dispatch.auth_failure",
@@ -164,6 +175,7 @@ type RawRide = {
   client?: { name?: string | null } | null;
   route?: { pickup_address?: string | null; dropoff_address?: string | null };
   driver?: { id?: string | number | null; name?: string | null; display_name?: string | null } | null;
+  assignment_pickup_delay_minutes?: number | string | null;
 };
 
 type RawDispatchRidesResponse = {
@@ -222,7 +234,8 @@ function toFiniteNumber(input: unknown): number | null {
 }
 
 function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
-  const missionId = toFiniteNumber(raw.mission_id ?? raw.booking_id ?? raw.id);
+  /** Même identifiant que `/company_dispatch/delays` et les routes `/rides/:id` (booking). */
+  const missionId = toFiniteNumber(raw.booking_id ?? raw.id ?? raw.mission_id);
   if (missionId == null) return null;
   let status = String(raw.status ?? "pending").toLowerCase();
   // Backend `Booking` : aller-retour terminé, pas une course « à venir » (avant: inconnu -> pending).
@@ -259,6 +272,7 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
       : typeof driverNameRaw?.name === "string" && driverNameRaw.name.trim()
         ? driverNameRaw.name.trim()
         : null;
+  const assignmentDelay = toFiniteNumber(raw.assignment_pickup_delay_minutes);
   return {
     mission_id: missionId,
     status: normalizedStatus,
@@ -270,6 +284,8 @@ function normalizeMission(raw: RawRide): CompanyDispatchMission | null {
     driver_id: driverId,
     company_id: companyId,
     updated_at: raw.updated_at ?? null,
+    assignment_pickup_delay_minutes:
+      assignmentDelay != null && assignmentDelay > 0 ? assignmentDelay : null,
   };
 }
 
@@ -489,6 +505,98 @@ function withContextHeaders(options: CompanyRequestOptions) {
   return { headers: buildHeaders(options.contextId) };
 }
 
+export async function getCompanyDispatchDelays(
+  options: CompanyRequestOptions & { date: string }
+): Promise<unknown[]> {
+  const params = { date: options.date };
+  const headersPayload = withContextHeaders(options);
+
+  let liveRows: unknown[] = [];
+  try {
+    const live = await apiClient.get<{ delays?: unknown[] }>("/company_dispatch/delays/live", {
+      ...headersPayload,
+      params,
+    });
+    if (Array.isArray(live.data?.delays)) {
+      liveRows = live.data!.delays!;
+    }
+  } catch {
+    liveRows = [];
+  }
+
+  let snapshotRows: unknown[] = [];
+  try {
+    const response = await apiClient.get<unknown[]>("/company_dispatch/delays", {
+      ...headersPayload,
+      params,
+    });
+    if (Array.isArray(response.data)) {
+      snapshotRows = response.data;
+    }
+  } catch {
+    snapshotRows = [];
+  }
+
+  return mergeCompanyDispatchDelaySources(liveRows, snapshotRows);
+}
+
+function stripNullishFields(payload: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = {};
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === null || value === undefined) return;
+    next[key] = value;
+  });
+  return next;
+}
+
+async function resolveReservationIdFromMission(
+  options: CompanyRequestOptions & { missionId: number }
+): Promise<number> {
+  const fallbackId = options.missionId;
+  const findNumericByKeys = (root: unknown, keys: string[]): number | null => {
+    const queue: unknown[] = [root];
+    const seen = new Set<unknown>();
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current || typeof current !== "object" || seen.has(current)) continue;
+      seen.add(current);
+      const row = current as Record<string, unknown>;
+      for (const key of keys) {
+        const parsed = toFiniteNumber(row[key]);
+        if (parsed != null) return parsed;
+      }
+      Object.values(row).forEach((value) => {
+        if (value && typeof value === "object") queue.push(value);
+      });
+    }
+    return null;
+  };
+  try {
+    const detail = await getCompanyRideDetail({
+      contextId: options.contextId,
+      missionId: options.missionId,
+    });
+    if (!detail || typeof detail !== "object") return fallbackId;
+    const payload = detail as Record<string, unknown>;
+    const deepBookingId = findNumericByKeys(payload, ["booking_id", "reservation_id", "bookingId", "reservationId"]);
+    if (deepBookingId != null) return deepBookingId;
+    const directCandidate =
+      (payload.summary as Record<string, unknown> | undefined) ??
+      (payload.data as Record<string, unknown> | undefined) ??
+      (payload.item as Record<string, unknown> | undefined) ??
+      (payload.ride as Record<string, unknown> | undefined) ??
+      (payload.mission as Record<string, unknown> | undefined) ??
+      payload;
+    const directBookingId = toFiniteNumber(
+      directCandidate?.booking_id ?? directCandidate?.reservation_id ?? directCandidate?.id
+    );
+    if (directBookingId != null) return directBookingId;
+  } catch {
+    // Best effort: si la résolution échoue, conserver missionId.
+  }
+  return fallbackId;
+}
+
 export async function runCompanyDispatch(options: CompanyRequestOptions & { date?: string }) {
   const response = await requestWithFallback<CompanyAnyPayload>(
     [
@@ -601,12 +709,64 @@ export async function assignCompanyRide(
   options: CompanyRequestOptions & { missionId: number; driverId: number }
 ) {
   try {
-    await postCompanyDispatchRideAction(
-      options,
-      "/assign",
-      { driver_id: options.driverId },
-      "dispatch_assign_post"
+    const id = options.missionId;
+    const reservationId = await resolveReservationIdFromMission(options);
+    const reservationCandidates = Array.from(new Set([reservationId, id])).filter((v) =>
+      Number.isFinite(v)
     );
+    let reservationAssignError: unknown = null;
+    for (const candidateId of reservationCandidates) {
+      try {
+        await apiClient.post(
+          `/companies/me/reservations/${candidateId}/assign`,
+          { driver_id: options.driverId },
+          withContextHeaders(options)
+        );
+        return;
+      } catch (error) {
+        reservationAssignError = error;
+      }
+    }
+    await requestWithFallback(
+      [
+        () =>
+          apiClient.post(
+            `/company_mobile/dispatch/v1/rides/${id}/assign`,
+            { driver_id: options.driverId },
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            `/dispatch/v1/rides/${id}/assign`,
+            { driver_id: options.driverId },
+            withContextHeaders(options)
+          ),
+      ],
+      { domain: "dispatch_assign_post", contextId: options.contextId }
+    );
+    // Best effort: tenter de refléter l'événement live web même si l'assignation réelle
+    // est passée par un endpoint dispatch.
+    for (const candidateId of reservationCandidates) {
+      try {
+        await apiClient.post(
+          `/companies/me/reservations/${candidateId}/assign`,
+          { driver_id: options.driverId },
+          withContextHeaders(options)
+        );
+        break;
+      } catch {
+        // no-op
+      }
+    }
+    if (__DEV__ && reservationAssignError) {
+      const status = (reservationAssignError as AxiosError | undefined)?.response?.status ?? null;
+      console.log("[assignCompanyRide] fallback dispatch used", {
+        missionId: id,
+        reservationId,
+        reservationCandidates,
+        reservationAssignStatus: status,
+      });
+    }
   } catch (e) {
     throw new Error(getDispatchApiErrorMessage(e, "Assignation impossible."));
   }
@@ -616,12 +776,62 @@ export async function reassignCompanyRide(
   options: CompanyRequestOptions & { missionId: number; driverId: number }
 ) {
   try {
-    await postCompanyDispatchRideAction(
-      options,
-      "/reassign",
-      { driver_id: options.driverId },
-      "dispatch_reassign_post"
+    const id = options.missionId;
+    const reservationId = await resolveReservationIdFromMission(options);
+    const reservationCandidates = Array.from(new Set([reservationId, id])).filter((v) =>
+      Number.isFinite(v)
     );
+    let reservationAssignError: unknown = null;
+    for (const candidateId of reservationCandidates) {
+      try {
+        await apiClient.post(
+          `/companies/me/reservations/${candidateId}/assign`,
+          { driver_id: options.driverId },
+          withContextHeaders(options)
+        );
+        return;
+      } catch (error) {
+        reservationAssignError = error;
+      }
+    }
+    await requestWithFallback(
+      [
+        () =>
+          apiClient.post(
+            `/company_mobile/dispatch/v1/rides/${id}/reassign`,
+            { driver_id: options.driverId },
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            `/dispatch/v1/rides/${id}/reassign`,
+            { driver_id: options.driverId },
+            withContextHeaders(options)
+          ),
+      ],
+      { domain: "dispatch_reassign_post", contextId: options.contextId }
+    );
+    for (const candidateId of reservationCandidates) {
+      try {
+        await apiClient.post(
+          `/companies/me/reservations/${candidateId}/assign`,
+          { driver_id: options.driverId },
+          withContextHeaders(options)
+        );
+        break;
+      } catch {
+        // no-op
+      }
+    }
+    if (__DEV__ && reservationAssignError) {
+      const status = (reservationAssignError as AxiosError | undefined)?.response?.status ?? null;
+      console.log("[reassignCompanyRide] fallback dispatch used", {
+        missionId: id,
+        reservationId,
+        reservationCandidates,
+        reservationAssignStatus: status,
+      });
+    }
   } catch (e) {
     throw new Error(getDispatchApiErrorMessage(e, "Réassignation impossible."));
   }
@@ -645,22 +855,69 @@ export async function cancelCompanyRide(
     "note" in options && typeof options.note === "string" && options.note.trim().length > 0
       ? options.note.trim()
       : null;
-  await postCompanyDispatchRideAction(
-    options,
-    "/cancel",
-    {
-      reason_code: reasonCode,
-      note,
-      reason: options.reason ?? reasonCode,
-    } satisfies CompanyCancelRidePayload,
-    "dispatch_cancel_post"
+  const id = options.missionId;
+  const cancelPayload = {
+    reason_code: reasonCode,
+    note,
+    reason: options.reason ?? reasonCode,
+  } satisfies CompanyCancelRidePayload;
+  await requestWithFallback(
+    [
+      () =>
+        apiClient.delete(`/companies/me/reservations/${id}`, {
+          ...withContextHeaders(options),
+          data: cancelPayload,
+        }),
+      () =>
+        apiClient.post(
+          `/company_mobile/dispatch/v1/rides/${id}/cancel`,
+          cancelPayload,
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
+          `/dispatch/v1/rides/${id}/cancel`,
+          cancelPayload,
+          withContextHeaders(options)
+        ),
+    ],
+    { domain: "dispatch_cancel_post", contextId: options.contextId }
   );
 }
 
 export async function scheduleCompanyRide(
   options: CompanyRequestOptions & { missionId: number; payload: CompanyScheduleRidePayload }
 ) {
-  await postCompanyDispatchRideAction(options, "/schedule", options.payload, "dispatch_schedule_post");
+  const id = options.missionId;
+  const webSchedulePayload: Record<string, unknown> = {
+    scheduled_time: options.payload.pickup_at,
+  };
+  if (options.payload.timezone) {
+    webSchedulePayload.timezone = options.payload.timezone;
+  }
+  await requestWithFallback(
+    [
+      () =>
+        apiClient.put(
+          `/companies/me/reservations/${id}/schedule`,
+          webSchedulePayload,
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
+          `/company_mobile/dispatch/v1/rides/${id}/schedule`,
+          options.payload,
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
+          `/dispatch/v1/rides/${id}/schedule`,
+          options.payload,
+          withContextHeaders(options)
+        ),
+    ],
+    { domain: "dispatch_schedule_post", contextId: options.contextId }
+  );
 }
 
 export async function markCompanyRideUrgent(
@@ -681,6 +938,12 @@ export async function markCompanyRideUrgent(
     [
       () =>
         apiClient.post(
+          `/companies/me/reservations/${options.missionId}/dispatch-now`,
+          { minutes_offset: extra_delay_minutes },
+          withContextHeaders(options)
+        ),
+      () =>
+        apiClient.post(
           `/company_mobile/dispatch/v1/rides/${options.missionId}/urgent`,
           body,
           withContextHeaders(options)
@@ -697,7 +960,198 @@ export async function markCompanyRideUrgent(
 }
 
 export async function createCompanyRide(options: CompanyRequestOptions & { payload: CompanyAnyPayload }) {
-  const response = await apiClient.post("/dispatch/v1/rides", options.payload, withContextHeaders(options));
+  const debugTraceId = `create_company_ride_${Date.now()}`;
+  const canonicalPayload: CompanyAnyPayload = {
+    ...options.payload,
+  };
+  const isRecurringRequest =
+    canonicalPayload.is_recurring === true ||
+    (typeof canonicalPayload.recurrence_type === "string" &&
+      canonicalPayload.recurrence_type.trim().length > 0);
+  const webManualPayload: CompanyAnyPayload = stripNullishFields({
+    ...canonicalPayload,
+  });
+  delete (webManualPayload as Record<string, unknown>).pickup_address;
+  delete (webManualPayload as Record<string, unknown>).dropoff_address;
+  delete (webManualPayload as Record<string, unknown>).is_return;
+  const legacyPayload: CompanyAnyPayload = {
+    ...canonicalPayload,
+  };
+  const pickupAddress = legacyPayload.pickup_address;
+  if (pickupAddress && typeof pickupAddress === "object") {
+    const pickupLabel =
+      (pickupAddress as Record<string, unknown>).label ??
+      (pickupAddress as Record<string, unknown>).address ??
+      (pickupAddress as Record<string, unknown>).description;
+    if (typeof pickupLabel === "string" && pickupLabel.trim().length > 0) {
+      legacyPayload.pickup_address = pickupLabel.trim();
+    }
+  }
+  const dropoffAddress = legacyPayload.dropoff_address;
+  if (dropoffAddress && typeof dropoffAddress === "object") {
+    const dropoffLabel =
+      (dropoffAddress as Record<string, unknown>).label ??
+      (dropoffAddress as Record<string, unknown>).address ??
+      (dropoffAddress as Record<string, unknown>).description;
+    if (typeof dropoffLabel === "string" && dropoffLabel.trim().length > 0) {
+      legacyPayload.dropoff_address = dropoffLabel.trim();
+    }
+  }
+  if (
+    legacyPayload.is_return === true &&
+    typeof legacyPayload.return_date === "string" &&
+    legacyPayload.return_date.trim().length > 0 &&
+    (legacyPayload.return_time == null || String(legacyPayload.return_time).trim().length === 0)
+  ) {
+    // Compat endpoint legacy: pour garantir la création du retour,
+    // envoyer un datetime ISO complet (heure non définie => 00:00:00).
+    legacyPayload.return_time = `${legacyPayload.return_date}T00:00:00`;
+  }
+  const cleanedLegacyPayload = stripNullishFields(legacyPayload as Record<string, unknown>);
+  const requests: Array<() => Promise<{ data: CompanyAnyPayload }>> = isRecurringRequest
+    ? [
+        // Pour une série, prioriser le pipeline web qui gère la récurrence.
+        () =>
+          apiClient.post(
+            "/companies/me/reservations/manual",
+            webManualPayload,
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            "/companies/me/reservations",
+            webManualPayload,
+            withContextHeaders(options)
+          ),
+        // Fallback final: certains environnements exposent seulement le pipeline dispatch.
+        () =>
+          apiClient.post(
+            "/company_mobile/dispatch/v1/rides",
+            cleanedLegacyPayload,
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            "/dispatch/v1/rides",
+            cleanedLegacyPayload,
+            withContextHeaders(options)
+          ),
+      ]
+    : [
+        () =>
+          apiClient.post(
+            "/company_mobile/dispatch/v1/rides",
+            cleanedLegacyPayload,
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            "/dispatch/v1/rides",
+            cleanedLegacyPayload,
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            "/companies/me/reservations/manual",
+            webManualPayload,
+            withContextHeaders(options)
+          ),
+        () =>
+          apiClient.post(
+            "/companies/me/reservations",
+            webManualPayload,
+            withContextHeaders(options)
+          ),
+      ];
+  const requestNames = isRecurringRequest
+    ? [
+        "/companies/me/reservations/manual",
+        "/companies/me/reservations",
+        "/company_mobile/dispatch/v1/rides",
+        "/dispatch/v1/rides",
+      ]
+    : [
+        "/company_mobile/dispatch/v1/rides",
+        "/dispatch/v1/rides",
+        "/companies/me/reservations/manual",
+        "/companies/me/reservations",
+      ];
+  const tracedRequests = requests.map((request, index) => {
+    const endpoint = requestNames[index] ?? `attempt_${index + 1}`;
+    return async () => {
+      if (__DEV__) {
+        console.log("[createCompanyRide] attempt", {
+          trace_id: debugTraceId,
+          endpoint,
+          contextId: options.contextId,
+          isRecurringRequest,
+          recurrence: {
+            is_recurring: canonicalPayload.is_recurring ?? false,
+            recurrence_type: canonicalPayload.recurrence_type ?? null,
+            recurrence_days: canonicalPayload.recurrence_days ?? null,
+            recurrence_end_date: canonicalPayload.recurrence_end_date ?? null,
+            occurrences: canonicalPayload.occurrences ?? null,
+            recurrence_series_length: canonicalPayload.recurrence_series_length ?? null,
+          },
+        });
+      }
+      let result: { data: CompanyAnyPayload };
+      try {
+        result = await request();
+      } catch (error) {
+        if (__DEV__) {
+          const axiosError = error as AxiosError<{ message?: unknown; error?: unknown }>;
+          const status = axiosError?.response?.status ?? null;
+          const body = axiosError?.response?.data;
+          const message =
+            typeof body?.message === "string"
+              ? body.message
+              : typeof body?.error === "string"
+                ? body.error
+                : axiosError?.message ?? "unknown_error";
+          console.log("[createCompanyRide] attempt failed", {
+            trace_id: debugTraceId,
+            endpoint,
+            status,
+            message,
+          });
+        }
+        throw error;
+      }
+      if (__DEV__) {
+        const data = result?.data as Record<string, unknown> | undefined;
+        const reservation =
+          data?.reservation && typeof data.reservation === "object"
+            ? (data.reservation as Record<string, unknown>)
+            : null;
+        console.log("[createCompanyRide] success", {
+          trace_id: debugTraceId,
+          endpoint,
+          keys: data ? Object.keys(data) : [],
+          response_summary: {
+            reservation_id: reservation?.id ?? null,
+            is_recurring:
+              data?.is_recurring ?? reservation?.is_recurring ?? data?.recurring ?? null,
+            recurrence_type:
+              data?.recurrence_type ?? reservation?.recurrence_type ?? null,
+            occurrences:
+              data?.occurrences ?? data?.recurrence_series_length ?? reservation?.occurrences ?? null,
+            created_count:
+              data?.created_count ??
+              data?.created_total ??
+              data?.series_count ??
+              data?.reservations_count ??
+              null,
+          },
+        });
+      }
+      return result;
+    };
+  });
+  const response = await requestWithFallback<CompanyAnyPayload>(tracedRequests, {
+    domain: "dispatch_ride_create",
+    contextId: options.contextId,
+  });
   return response.data as CompanyAnyPayload;
 }
 
@@ -883,15 +1337,16 @@ export async function searchCompanyAddresses(options: CompanyRequestOptions & { 
   try {
     const response = await requestWithFallback<CompanyAnyPayload>(
       [
+        // Aligné web: endpoint proxy géocodage en priorité (Google + fallback backend).
+        () =>
+          apiClient.get("/geocode/autocomplete", {
+            ...withContextHeaders(options),
+            params: { q: options.q, lat: 46.2044, lon: 6.1432, limit: 8 },
+          }),
         () =>
           apiClient.get("/company_mobile/dispatch/v1/addresses/search", {
             ...withContextHeaders(options),
             params: { q: options.q },
-          }),
-        () =>
-          apiClient.get("/geocode/autocomplete", {
-            ...withContextHeaders(options),
-            params: { q: options.q, limit: 8 },
           }),
         () =>
           apiClient.get("/dispatch/v1/places/autocomplete", {
@@ -1036,7 +1491,10 @@ export async function getCompanyBillingSettings(options: CompanyRequestOptions) 
 export async function simulateCompanyPricing(
   options: CompanyRequestOptions & { payload: CompanyAnyPayload }
 ) {
-  const response = await apiClient.post("/pricing/simulate", options.payload, withContextHeaders(options));
+  const response = await apiClient.post("/pricing/simulate", options.payload, {
+    ...withContextHeaders(options),
+    timeout: 6000,
+  });
   return response.data as CompanyAnyPayload;
 }
 
@@ -1054,14 +1512,16 @@ export async function updateCompanyBillingSettings(
 export async function getCompanyClients(
   options: CompanyRequestOptions & { q?: string; page?: number; limit?: number }
 ) {
+  const page = options.page ?? 1;
+  const perPage = options.limit ?? 100;
   const response = await requestWithFallback<CompanyAnyPayload>([
     () =>
       apiClient.get("/companies/me/clients", {
         ...withContextHeaders(options),
         params: {
-          q: options.q ?? undefined,
-          page: options.page ?? undefined,
-          limit: options.limit ?? undefined,
+          search: options.q?.trim() || undefined,
+          page,
+          per_page: perPage,
         },
       }),
     () =>
@@ -1069,6 +1529,7 @@ export async function getCompanyClients(
         ...withContextHeaders(options),
         params: {
           q: options.q ?? undefined,
+          page,
         },
       }),
   ], { domain: "company_clients_readonly", contextId: options.contextId });
@@ -1078,11 +1539,19 @@ export async function getCompanyClients(
 export async function getCompanyClientDetail(
   options: CompanyRequestOptions & { clientId: number }
 ) {
-  const response = await requestWithFallback<CompanyAnyPayload>([
-    () => apiClient.get(`/companies/me/clients/${options.clientId}`, withContextHeaders(options)),
-    () => apiClient.get(`/dispatch/v1/clients/${options.clientId}`, withContextHeaders(options)),
-  ], { domain: "company_client_detail_readonly", contextId: options.contextId });
-  return response.data as CompanyAnyPayload;
+  try {
+    const response = await requestWithFallback<CompanyAnyPayload>([
+      () => apiClient.get(`/companies/me/clients/${options.clientId}`, withContextHeaders(options)),
+      () => apiClient.get(`/dispatch/v1/clients/${options.clientId}`, withContextHeaders(options)),
+    ], { domain: "company_client_detail_readonly", contextId: options.contextId });
+    return response.data as CompanyAnyPayload;
+  } catch (error) {
+    const status = (error as AxiosError | undefined)?.response?.status;
+    if (status === 404) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getCompanyInvoices(

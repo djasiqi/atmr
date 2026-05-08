@@ -23,6 +23,9 @@ export const companyQueryKeys = {
       search,
       status,
     ] as const,
+  /** Aligné vue web : GET `/company_dispatch/delays`. */
+  dispatchDelays: (contextId: string, date: string) =>
+    [...companyQueryKeys.root, "dispatch-delays", companyContextScope(contextId), date] as const,
   dashboard: (contextId: string) =>
     [...companyQueryKeys.root, "dashboard", companyContextScope(contextId)] as const,
   optimizer: (contextId: string) =>
@@ -47,6 +50,7 @@ export const companyQueryKeys = {
 
 export type CompanyQueryKey =
   | ReturnType<typeof companyQueryKeys.missions>
+  | ReturnType<typeof companyQueryKeys.dispatchDelays>
   | ReturnType<typeof companyQueryKeys.dashboard>
   | ReturnType<typeof companyQueryKeys.optimizer>
   | ReturnType<typeof companyQueryKeys.driversLocations>

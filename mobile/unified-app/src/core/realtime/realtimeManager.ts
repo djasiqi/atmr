@@ -289,6 +289,10 @@ class RealtimeManager {
   sendDriverLocationBatch(
     payload: {
       tracking_event_id: string;
+      sequence_id?: number;
+      tracking_session_id?: string;
+      batch_id?: string;
+      position_id?: string;
       mission_id: number | null;
       latitude: number;
       longitude: number;
@@ -301,7 +305,12 @@ class RealtimeManager {
     }[]
   ): boolean {
     if (!this.isDriverSocketReady() || !this.socket) return false;
-    this.socket.emit("driver_location_batch", payload);
+    const first = payload[0];
+    this.socket.emit("driver_location_batch", {
+      tracking_session_id: first?.tracking_session_id,
+      batch_id: first?.batch_id,
+      positions: payload,
+    });
     return true;
   }
 
@@ -332,12 +341,24 @@ class RealtimeManager {
       return;
     }
 
+    let accessToken: string | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { getAuthAccessToken } = require("../api/client") as {
+        getAuthAccessToken: () => string | null;
+      };
+      accessToken = getAuthAccessToken();
+    } catch {
+      accessToken = null;
+    }
+    const handshakeAuth = { token: accessToken ?? "" };
     const socketOptions: NonNullable<Parameters<typeof io>[1]> = {
       transports: ["websocket"],
       reconnection: false, // géré manuellement pour contrôler l'auth recovery
       timeout: 10000,
       path: "/socket.io",
       query: { context_id: contextId, surface: "driver" },
+      auth: handshakeAuth,
     };
 
     let hasAccessToken = false;
@@ -364,6 +385,21 @@ class RealtimeManager {
     }
 
     this.socket = io(socketUrl, socketOptions);
+    this.socket.io.on("reconnect_attempt", () => {
+      void (async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { refreshAuthTokenNow, getAuthAccessToken } = require("../api/client") as {
+            refreshAuthTokenNow: () => Promise<boolean>;
+            getAuthAccessToken: () => string | null;
+          };
+          await refreshAuthTokenNow();
+          handshakeAuth.token = getAuthAccessToken() ?? handshakeAuth.token;
+        } catch {
+          // ignore: reconnect continuera en mode degrade/polling
+        }
+      })();
+    });
 
     this.socket.on("connect", () => {
       this.setState({
@@ -522,7 +558,18 @@ class RealtimeManager {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.state.activeContextId || this.state.authExhausted) return;
-      this.connectSocket(contextId);
+      void (async () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { refreshAuthTokenNow } = require("../api/client") as {
+            refreshAuthTokenNow: () => Promise<boolean>;
+          };
+          await refreshAuthTokenNow();
+        } catch {
+          // ignore: reconnect attempt still proceeds
+        }
+        this.connectSocket(contextId);
+      })();
     }, backoffMs);
   }
 

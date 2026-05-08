@@ -22,8 +22,11 @@ import {
   getCompanyPartnershipsForTransfer,
 } from "../../../src/features/company/api/companyApi";
 import { normalizeCompanyEventType } from "../../../src/core/realtime/eventContracts";
-import { NotesEditor } from "../../../src/features/company/components/NotesEditor";
 import { TransferRideModal } from "../../../src/features/company/components/transfers/TransferRideModal";
+import {
+  EnterpriseActionChip,
+  EnterpriseFooterActionRow,
+} from "../../../src/features/company/components/EnterpriseActionChip";
 import { E } from "../../../src/features/company/theme/enterpriseOpsTheme";
 import { getEnterpriseStatusColors } from "../../../src/features/company/theme/enterpriseStatusColors";
 import { createShadow } from "../../../src/styles/shadowStyles";
@@ -54,6 +57,127 @@ function readClientName(data: Record<string, unknown> | null | undefined): strin
   }
   const s = data.client_name;
   return typeof s === "string" && s.trim() ? s.trim() : null;
+}
+
+function parseNumberishId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readDriverLabel(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data) return null;
+  const direct = data.driver_name;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const assigned = data.assigned_driver_name;
+  if (typeof assigned === "string" && assigned.trim()) return assigned.trim();
+  const driverObj = data.driver;
+  if (driverObj && typeof driverObj === "object") {
+    const raw = driverObj as Record<string, unknown>;
+    const byName = raw.name;
+    if (typeof byName === "string" && byName.trim()) return byName.trim();
+    const first = typeof raw.first_name === "string" ? raw.first_name.trim() : "";
+    const last = typeof raw.last_name === "string" ? raw.last_name.trim() : "";
+    const full = [first, last].filter(Boolean).join(" ").trim();
+    if (full) return full;
+  }
+  return null;
+}
+
+function readLocationLabel(
+  data: Record<string, unknown> | null | undefined,
+  kind: "pickup" | "dropoff"
+): string | null {
+  if (!data) return null;
+  const directKeys =
+    kind === "pickup"
+      ? ["pickup_label", "pickup_location", "pickup_address_label", "from_address"]
+      : ["dropoff_label", "dropoff_location", "dropoff_address_label", "to_address"];
+  for (const key of directKeys) {
+    const raw = data[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  const nested =
+    kind === "pickup"
+      ? (data.pickup_address as Record<string, unknown> | undefined)
+      : (data.dropoff_address as Record<string, unknown> | undefined);
+  if (nested) {
+    const nestedLabel = nested.label ?? nested.address ?? nested.description;
+    if (typeof nestedLabel === "string" && nestedLabel.trim()) return nestedLabel.trim();
+  }
+  // Fallback deep-scan: certaines réponses détaillées portent les champs
+  // dans `booking`, `reservation`, `mission`, `summary`, etc.
+  const keys =
+    kind === "pickup"
+      ? [
+          "pickup_label",
+          "pickup_location",
+          "pickup_address_label",
+          "pickup_address",
+          "from_address",
+        ]
+      : [
+          "dropoff_label",
+          "dropoff_location",
+          "dropoff_address_label",
+          "dropoff_address",
+          "to_address",
+        ];
+  const queue: unknown[] = [data];
+  const seen = new Set<unknown>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    seen.add(current);
+    const raw = current as Record<string, unknown>;
+    for (const key of keys) {
+      const value = raw[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (value && typeof value === "object") {
+        const nestedObj = value as Record<string, unknown>;
+        const nestedLabel = nestedObj.label ?? nestedObj.address ?? nestedObj.description;
+        if (typeof nestedLabel === "string" && nestedLabel.trim()) return nestedLabel.trim();
+      }
+    }
+    for (const value of Object.values(raw)) {
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return null;
+}
+
+function readScheduledIso(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data) return null;
+  const candidates = [data.scheduled_at, data.scheduled_time, data.pickup_at, data.date_time];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  const datePart = typeof data.date === "string" ? data.date.trim() : "";
+  const timePart = typeof data.time === "string" ? data.time.trim() : "";
+  if (datePart && timePart) return `${datePart}T${timePart}`;
+  // Fallback deep-scan pour schémas legacy / imbriqués.
+  const queue: unknown[] = [data];
+  const seen = new Set<unknown>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    seen.add(current);
+    const raw = current as Record<string, unknown>;
+    const candidates = [raw.scheduled_at, raw.scheduled_time, raw.pickup_at, raw.date_time];
+    for (const value of candidates) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    const d = typeof raw.date === "string" ? raw.date.trim() : "";
+    const t = typeof raw.time === "string" ? raw.time.trim() : "";
+    if (d && t) return `${d}T${t}`;
+    for (const value of Object.values(raw)) {
+      if (value && typeof value === "object") queue.push(value);
+    }
+  }
+  return null;
 }
 
 function mapStatusToLabel(status: string) {
@@ -262,24 +386,28 @@ export default function CompanyRideDetailsScreen() {
   const statusStr = d ? String((d as { status?: string }).status ?? "pending") : "pending";
   const statusStyle = getEnterpriseStatusColors(statusStr);
   const clientTitle = d ? readClientName(d) : null;
+  const scheduledIso = readScheduledIso(d);
   const titleLine = clientTitle
     ? `${clientTitle} · ${
-        (d as { scheduled_at?: string | null })?.scheduled_at
-          ? dayjs(String((d as { scheduled_at?: string }).scheduled_at)).format("DD MMM HH:mm")
+        scheduledIso
+          ? dayjs(String(scheduledIso)).format("DD MMM HH:mm")
           : "⏱️ À définir"
       }`
     : "Course";
   const idLine = d ? String((d as { mission_id?: number }).mission_id ?? rideId ?? "—") : (rideId ?? "—");
-  const scheduled = d
-    ? String(
-        (d as { scheduled_at?: string | null })?.scheduled_at
-          ? dayjs(String((d as { scheduled_at: string }).scheduled_at)).format("DD/MM/YYYY HH:mm")
-          : "n/a"
+  const scheduled = scheduledIso ? dayjs(String(scheduledIso)).format("DD/MM/YYYY HH:mm") : "n/a";
+  const pickup = readLocationLabel(d, "pickup") ?? "—";
+  const drop = readLocationLabel(d, "dropoff") ?? "—";
+  const driverId = d
+    ? parseNumberishId(
+        (d as { driver_id?: unknown; driverId?: unknown; assigned_driver_id?: unknown }).driver_id ??
+          (d as { driverId?: unknown }).driverId ??
+          (d as { assigned_driver_id?: unknown }).assigned_driver_id
       )
-    : "n/a";
-  const pickup = d ? String((d as { pickup_label?: string | null })?.pickup_label ?? "—") : "—";
-  const drop = d ? String((d as { dropoff_label?: string | null })?.dropoff_label ?? "—") : "—";
-  const driverId = d && typeof (d as { driver_id?: number | null }).driver_id === "number" ? (d as { driver_id: number }).driver_id : null;
+    : null;
+  const driverLabel = readDriverLabel(d);
+  const hasAssignedDriver = driverId != null || Boolean(driverLabel);
+  const driverDisplay = driverLabel ?? (driverId != null ? `#${driverId}` : "Non assigné");
 
   if (missionQuery.isLoading && !d) {
     return (
@@ -336,14 +464,36 @@ export default function CompanyRideDetailsScreen() {
             </View>
             <View style={styles.section}>
               <AppText variant="sectionTitle" style={styles.sectionTitle}>
+                Trajet
+              </AppText>
+              <View style={styles.routeCard}>
+                <View style={styles.routeRow}>
+                  <View style={styles.routeIconWrap}>
+                    <Ionicons name="location-outline" size={16} color={E.BRAND} />
+                  </View>
+                  <AppText variant="body" style={styles.routeText} numberOfLines={3}>
+                    {pickup}
+                  </AppText>
+                </View>
+                <View style={styles.routeDivider} />
+                <View style={styles.routeRow}>
+                  <View style={styles.routeIconWrap}>
+                    <Ionicons name="flag-outline" size={16} color={E.BRAND} />
+                  </View>
+                  <AppText variant="body" style={styles.routeText} numberOfLines={3}>
+                    {drop}
+                  </AppText>
+                </View>
+              </View>
+            </View>
+            <View style={styles.section}>
+              <AppText variant="sectionTitle" style={styles.sectionTitle}>
                 Informations
               </AppText>
               {[
                 { label: "Statut", value: mapStatusToLabel(statusStr) },
-                { label: "Départ", value: pickup },
-                { label: "Arrivée", value: drop },
                 { label: "Prévue", value: scheduled },
-                { label: "Chauffeur", value: driverId != null ? `#${driverId}` : "Non assigné" },
+                { label: "Chauffeur", value: driverDisplay },
                 {
                   label: "Facturation",
                   value: linkedInvoice
@@ -378,110 +528,89 @@ export default function CompanyRideDetailsScreen() {
               <AppText variant="sectionTitle" style={styles.sectionTitle}>
                 Actions
               </AppText>
-              <View style={styles.quickRow}>
-                <TouchableOpacity
-                  style={styles.quickBtn}
-                  onPress={() => void openAssignModal()}
-                  disabled={!contextId || saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator color={E.BRAND} size="small" />
-                  ) : (
-                    <AppText variant="label" style={styles.quickBtnText}>
-                      {driverId != null ? "Réassigner" : "Assigner"}
-                    </AppText>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.quickBtn}
-                  onPress={async () => {
-                    if (!contextId || !rideIdNumber) return;
-                    setSaving(true);
-                    setMutationError(null);
-                    try {
-                      await scheduleCompanyRide({
-                        contextId,
-                        missionId: rideIdNumber,
+              <View style={styles.actionsWrap}>
+                <EnterpriseFooterActionRow>
+                  <EnterpriseActionChip
+                    icon="person-add-outline"
+                    label={saving ? "Affectation…" : hasAssignedDriver ? "Réassigner" : "Assigner"}
+                    onPress={() => void openAssignModal()}
+                    disabled={!contextId || saving}
+                    showSpinner={saving}
+                    compact
+                  />
+                  <EnterpriseActionChip
+                    icon="time-outline"
+                    label={saving ? "Planif…" : "Planifier +20 min"}
+                    onPress={() => {
+                      void (async () => {
+                        if (!contextId || !rideIdNumber) return;
+                        setSaving(true);
+                        setMutationError(null);
+                        try {
+                          await scheduleCompanyRide({
+                            contextId,
+                            missionId: rideIdNumber,
+                            payload: {
+                              pickup_at: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
+                              timezone: "Europe/Zurich",
+                              note: "Reschedule from ride-details",
+                              force_recompute: true,
+                            },
+                          });
+                          await missionQuery.refetch();
+                        } catch (error) {
+                          setMutationError(
+                            error instanceof Error ? error.message : "Planification impossible."
+                          );
+                        } finally {
+                          setSaving(false);
+                        }
+                      })();
+                    }}
+                    disabled={!contextId || saving}
+                    compact
+                  />
+                  <EnterpriseActionChip
+                    icon="flash-outline"
+                    label={rideActions.urgent.isPending ? "Urgent…" : "Urgent"}
+                    tone="urgent"
+                    onPress={() =>
+                      rideActions.urgent.mutate({
+                        missionId: rideIdNumber as number,
                         payload: {
-                          pickup_at: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-                          timezone: "Europe/Zurich",
-                          note: "Reschedule from ride-details",
-                          force_recompute: true,
+                          urgent: true,
+                          reason_code: "manual_company_priority",
+                          source: "ride_details",
                         },
-                      });
-                      await missionQuery.refetch();
-                    } catch (error) {
-                      setMutationError(
-                        error instanceof Error ? error.message : "Planification impossible."
-                      );
-                    } finally {
-                      setSaving(false);
+                      })
                     }
-                  }}
-                  disabled={!contextId || saving}
-                >
-                  <AppText variant="label" style={styles.quickBtnText}>
-                    {saving ? "Planif…" : "Planifier +20 min"}
-                  </AppText>
-                </TouchableOpacity>
+                    disabled={!contextId || rideActions.urgent.isPending}
+                    compact
+                  />
+                  <EnterpriseActionChip
+                    icon="swap-horizontal-outline"
+                    label="Transférer"
+                    tone="transfer"
+                    onPress={() => void openTransferModal()}
+                    disabled={!contextId || saving}
+                    compact
+                  />
+                  <EnterpriseActionChip
+                    icon="close-circle-outline"
+                    label={rideActions.cancel.isPending ? "Annulation…" : "Annuler"}
+                    tone="danger"
+                    onPress={() =>
+                      rideActions.cancel.mutate({
+                        missionId: rideIdNumber as number,
+                        reasonCode: "cancelled_from_mobile_dispatch",
+                        note: "Cancellation requested from company ride-details",
+                      })
+                    }
+                    disabled={!contextId || rideActions.cancel.isPending}
+                    compact
+                  />
+                </EnterpriseFooterActionRow>
               </View>
-              <View style={styles.quickRow}>
-                <TouchableOpacity
-                  style={styles.quickBtn}
-                  onPress={() =>
-                    rideActions.urgent.mutate({
-                      missionId: rideIdNumber as number,
-                      payload: {
-                        urgent: true,
-                        reason_code: "manual_company_priority",
-                        source: "ride_details",
-                      },
-                    })
-                  }
-                  disabled={!contextId || rideActions.urgent.isPending}
-                >
-                  <AppText variant="label" style={styles.quickBtnText}>
-                    {rideActions.urgent.isPending ? "Urgent…" : "Urgent"}
-                  </AppText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.quickBtn}
-                  onPress={() => void openTransferModal()}
-                  disabled={!contextId || saving}
-                >
-                  <AppText variant="label" style={styles.quickBtnText}>
-                    Transférer
-                  </AppText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.quickBtn, { borderColor: "rgba(220,53,69,0.35)" }]}
-                  onPress={() =>
-                    rideActions.cancel.mutate({
-                      missionId: rideIdNumber as number,
-                      reasonCode: "cancelled_from_mobile_dispatch",
-                      note: "Cancellation requested from company ride-details",
-                    })
-                  }
-                  disabled={!contextId || rideActions.cancel.isPending}
-                >
-                  <AppText variant="label" style={[styles.quickBtnText, { color: E.DANGER }]}>
-                    {rideActions.cancel.isPending ? "…" : "Annuler"}
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.section}>
-              <AppText variant="sectionTitle" style={styles.sectionTitle}>
-                Notes
-              </AppText>
-              <NotesEditor
-                initialValue={String(d.notes ?? "")}
-                onSave={async (notes) => {
-                  setMutationError(null);
-                  if (notes.length === 0) return;
-                }}
-                saveLabel="Enregistrer (local)"
-              />
             </View>
             {mutationError ? (
               <AppText variant="error" style={styles.mutationErr}>
@@ -599,7 +728,7 @@ const styles = StyleSheet.create({
   statusLabel: { fontWeight: "600" as const, letterSpacing: 0.3, maxWidth: 84 },
   section: {
     backgroundColor: E.CARD,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     margin: 16,
     marginBottom: 0,
@@ -608,6 +737,44 @@ const styles = StyleSheet.create({
     ...cardShadow,
   },
   sectionTitle: { color: E.TEXT, marginBottom: 12 },
+  actionsWrap: {
+    marginTop: 2,
+  },
+  routeCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: E.BORDER,
+    backgroundColor: E.BG,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  routeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  routeIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 121, 107, 0.10)",
+    marginTop: 1,
+  },
+  routeText: {
+    flex: 1,
+    color: E.TEXT_SEC,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  routeDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: E.BORDER,
+    marginVertical: 2,
+    marginLeft: 32,
+  },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -619,18 +786,6 @@ const styles = StyleSheet.create({
   infoRowLast: { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 },
   infoLabel: { color: E.TEXT_SEC, fontSize: 13, flex: 1, paddingRight: 8 },
   infoValue: { color: E.TEXT, fontSize: 13, flex: 1, textAlign: "right", fontWeight: "500" as const },
-  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 },
-  quickBtn: {
-    flex: 1,
-    minWidth: 120,
-    backgroundColor: E.BG,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: E.BORDER,
-  },
-  quickBtnText: { color: E.TEXT, fontWeight: "600" as const },
   mutationErr: { marginHorizontal: 16, marginTop: 8, fontWeight: "600" },
   backCta: {
     flexDirection: "row",

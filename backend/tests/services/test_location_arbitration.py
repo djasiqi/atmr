@@ -56,3 +56,20 @@ def test_newer_recorded_availability_presence_beats_old_mission_canonical() -> N
     )
     assert status == "accepted_canonical"
     assert reason == ""
+
+
+def test_older_point_never_regresses_canonical() -> None:
+    t_new = datetime.now(UTC)
+    t_old = t_new - timedelta(minutes=2)
+    existing = {
+        "recorded_at": t_new.isoformat(),
+        "location_mode": "mission_live",
+    }
+    status, reason = _svc()._arbitrate_update(
+        existing=existing,
+        location_mode="mission_live",
+        recorded_at=t_old,
+        accuracy=10.0,
+    )
+    assert status == "accepted_observability_only"
+    assert reason == "older_than_canonical"

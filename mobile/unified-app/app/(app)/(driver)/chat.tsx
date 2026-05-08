@@ -14,6 +14,7 @@ import {
 import { getDriverMessages, type DriverChatMessage } from "../../../src/features/driver/api";
 import { ChatComposer, ChatList, getChatListInitialScroll } from "../../../src/features/chat";
 import { AppText, Screen, useAppViewport, useResponsiveTokens } from "../../../src/design/responsive";
+import { DRIVER_FLOATING_TAB_SCROLL_PADDING } from "../../../src/features/driver/navigation/DriverFloatingTabBar";
 
 function toCompanyId(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -307,7 +308,9 @@ export default function DriverChatScreen() {
               flex: 1,
               paddingTop: t.spacingMd,
               paddingHorizontal: horizontalPadding,
-              paddingBottom: Platform.OS === "web" ? Math.max(t.spacingMd, bottomInset) : t.spacingMd,
+              paddingBottom:
+                (Platform.OS === "web" ? Math.max(t.spacingMd, bottomInset) : t.spacingMd) +
+                DRIVER_FLOATING_TAB_SCROLL_PADDING,
               gap: t.spacingSm,
               position: "relative",
             }}

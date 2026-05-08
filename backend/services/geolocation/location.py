@@ -18,7 +18,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Tuple
 
 import requests
@@ -46,6 +46,12 @@ MIN_POINTS_FOR_MATCHING = 3  # Minimum de points pour map-matching
 DEFAULT_OSRM_BASE_URL = os.getenv("UD_OSRM_BASE_URL", "http://osrm:5000")
 DEFAULT_DRIVER_LOC_TTL_SEC = int(os.getenv("DRIVER_LOC_TTL_SEC", "1200"))  # 20 min
 DEFAULT_MATCH_WINDOW = int(os.getenv("DRIVER_LOC_MATCH_WINDOW", "5"))  # 5 points
+OSRM_CIRCUIT_BREAKER_THRESHOLD = int(
+    os.getenv("OSRM_CIRCUIT_BREAKER_THRESHOLD", "5")
+)
+OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC = int(
+    os.getenv("OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC", "60")
+)
 
 # Missions « en cours » : historique trajet pour tout le cycle actif, pas seulement ONBOARD
 # (sinon aucun point pendant EN_ROUTE_* alors que le transport est réel).
@@ -128,6 +134,45 @@ class LocationService:
         self.redis_client = redis_client_instance or redis_client
         self.match_window = match_window
         self.geofence_radius_m = geofence_radius_m
+        self._osrm_failures = 0
+        self._osrm_circuit_open_until: datetime | None = None
+        self._osrm_degraded_mode = False
+
+    def _is_osrm_circuit_open(self) -> bool:
+        if self._osrm_circuit_open_until is None:
+            return False
+        if datetime.now(UTC) >= self._osrm_circuit_open_until:
+            self._osrm_circuit_open_until = None
+            self._osrm_degraded_mode = False
+            return False
+        return True
+
+    def _register_osrm_success(self) -> None:
+        self._osrm_failures = 0
+        if self._osrm_degraded_mode:
+            logger.warning("[LocationService] OSRM recovered, leaving degraded_no_snap")
+        self._osrm_degraded_mode = False
+        self._osrm_circuit_open_until = None
+
+    def _register_osrm_failure(self, operation: str, error: Exception) -> None:
+        self._osrm_failures += 1
+        logger.warning(
+            "[LocationService] OSRM %s failure (%s): %s (consecutive=%s)",
+            operation,
+            type(error).__name__,
+            str(error),
+            self._osrm_failures,
+        )
+        if self._osrm_failures >= OSRM_CIRCUIT_BREAKER_THRESHOLD:
+            self._osrm_degraded_mode = True
+            self._osrm_circuit_open_until = datetime.now(UTC).replace(
+                microsecond=0
+            ) + timedelta(seconds=OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC)
+            logger.warning(
+                "[LocationService] OSRM degraded_no_snap enabled for %ss after %s failures",
+                OSRM_CIRCUIT_BREAKER_COOLDOWN_SEC,
+                self._osrm_failures,
+            )
 
     def resolve_normalized_location_mode(
         self, company_id: int | None, location_mode: str
@@ -362,6 +407,8 @@ class LocationService:
             Tuple (lon, lat) snapée ou None si échec
         """
         try:
+            if self._is_osrm_circuit_open():
+                return None
             url = f"{self.osrm_base_url}/nearest/v1/driving/{longitude},{latitude}"
             r = requests.get(url, params={"number": 1}, timeout=2)
             if r.ok:
@@ -369,24 +416,14 @@ class LocationService:
                 waypoints = data.get("waypoints", [])
                 if waypoints and waypoints[0].get("location"):
                     loc = waypoints[0]["location"]
+                    self._register_osrm_success()
                     return (float(loc[0]), float(loc[1]))  # (lon, lat)
         except (RequestException, Timeout, ConnectionError, OSError) as e:
-            # Erreurs réseau attendues : OSRM indisponible, timeout
-            logger.debug(
-                "[LocationService] OSRM nearest failed (network error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
+            self._register_osrm_failure("nearest", e)
         except (ValueError, TypeError, KeyError) as e:
-            # Erreurs de validation attendues : réponse JSON invalide
-            logger.debug(
-                "[LocationService] OSRM nearest failed (validation error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
+            self._register_osrm_failure("nearest", e)
         except Exception:
-            # Erreur inattendue lors de l'appel OSRM nearest
-            logger.debug("[LocationService] OSRM nearest failed")
+            logger.warning("[LocationService] OSRM nearest failed", exc_info=True)
         return None
 
     def _map_match(
@@ -406,6 +443,8 @@ class LocationService:
             return None
 
         try:
+            if self._is_osrm_circuit_open():
+                return None
             # Ajouter point actuel au ring buffer
             ring_key = f"driver:{driver_id}:ring"
             point = {
@@ -462,24 +501,14 @@ class LocationService:
                     tp = tracepoints[-1]
                     if tp and tp.get("location"):
                         loc = tp["location"]
+                        self._register_osrm_success()
                         return (float(loc[0]), float(loc[1]))  # (lon, lat)
         except (RequestException, Timeout, ConnectionError, OSError) as e:
-            # Erreurs réseau attendues : OSRM indisponible, timeout
-            logger.debug(
-                "[LocationService] Map-matching failed (network error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
+            self._register_osrm_failure("match", e)
         except (ValueError, TypeError, KeyError) as e:
-            # Erreurs de validation attendues : réponse JSON invalide
-            logger.debug(
-                "[LocationService] Map-matching failed (validation error: %s): %s",
-                type(e).__name__,
-                str(e),
-            )
+            self._register_osrm_failure("match", e)
         except Exception:
-            # Erreur inattendue lors du map-matching
-            logger.debug("[LocationService] Map-matching failed")
+            logger.warning("[LocationService] Map-matching failed", exc_info=True)
         return None
 
     def _store_location(

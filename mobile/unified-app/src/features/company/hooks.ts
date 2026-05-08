@@ -20,6 +20,7 @@ import {
   getCompanyRideDetail,
   getCompanyClientDetail,
   getCompanyClients,
+  getCompanyDispatchDelays,
   getDispatchMissions,
   getDriversLocationsSnapshot,
   getCompanyInvoices,
@@ -103,6 +104,25 @@ export function useCompanyDispatchMissionsQuery(params: { date: string; search?:
       }),
     enabled: Boolean(contextId),
     staleTime: QUERY_STALE_TIME_MS.companyDetail,
+  });
+}
+
+/** Retards dispatch : même logique que le web (`delays/live` si dispo, sinon `/delays` + fusion minutes). */
+export function useCompanyDispatchDelaysQuery(params: { date: string }) {
+  const contextId = useActiveCompanyContextId();
+  return useQuery({
+    queryKey: contextId
+      ? contextScopedKey(contextId, [
+          ...companyQueryKeys.dispatchDelays(contextId, params.date),
+        ] as unknown[])
+      : ["company", "dispatch", "dispatch-delays", "disabled"],
+    queryFn: () =>
+      getCompanyDispatchDelays({
+        contextId: contextId as string,
+        date: params.date,
+      }),
+    enabled: Boolean(contextId),
+    staleTime: 20_000,
   });
 }
 
@@ -287,6 +307,13 @@ export function invalidateCompanyQueriesForEvent(
       ),
       exact: false,
     });
+    void queryClient.invalidateQueries({
+      queryKey: contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
+      ),
+      exact: false,
+    });
     if (typeof context.missionId === "number") {
       void queryClient.invalidateQueries({
         queryKey: contextScopedKey(
@@ -330,6 +357,13 @@ export function invalidateCompanyQueriesForEvent(
       queryKey: contextScopedKey(
         context.contextId,
         [...companyQueryKeys.dashboard(context.contextId)] as unknown[]
+      ),
+      exact: false,
+    });
+    void queryClient.invalidateQueries({
+      queryKey: contextScopedKey(
+        context.contextId,
+        [...companyQueryKeys.root, "dispatch-delays", scope] as unknown[]
       ),
       exact: false,
     });
@@ -553,38 +587,67 @@ export function useCompanyRideActions() {
 function normalizeReadonlyRows(input: unknown): Record<string, unknown>[] {
   if (!input || typeof input !== "object") return [];
   const payload = input as Record<string, unknown>;
-  const candidates = [payload.items, payload.results, payload.data, payload.clients, payload.invoices];
+  const candidates = [
+    payload.items,
+    payload.results,
+    payload.data,
+    payload.clients,
+    payload.invoices,
+  ];
   const rows = candidates.find((entry) => Array.isArray(entry));
   return Array.isArray(rows)
     ? rows.filter((entry): entry is Record<string, unknown> => !!entry && typeof entry === "object")
     : [];
 }
 
+/** `total` depuis `paginated_response` (`/companies/me/clients`) ou équivalent. */
+function extractClientsListTotal(input: unknown): number | null {
+  if (!input || typeof input !== "object") return null;
+  const p = input as Record<string, unknown>;
+  const pag = p.pagination;
+  if (pag && typeof pag === "object") {
+    const t = (pag as Record<string, unknown>).total;
+    if (typeof t === "number" && Number.isFinite(t)) return t;
+  }
+  if (typeof p.total === "number" && Number.isFinite(p.total)) return p.total;
+  return null;
+}
+
+export type CompanyClientsReadonlyResult = {
+  rows: Record<string, unknown>[];
+  total: number | null;
+};
+
 export function useCompanyClientsReadonlyQuery(params: { q?: string; page?: number; limit?: number }) {
   const contextId = useActiveCompanyContextId();
+  const flagOn = isFeatureEnabled("company_mobile_clients_readonly_enabled");
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
           contextId,
-          [...companyQueryKeys.root, "clients-readonly", contextId, params.q ?? "", params.page ?? 1] as unknown[]
+          [...companyQueryKeys.root, "clients-readonly", contextId, params.q ?? "", params.page ?? 1, params.limit ?? 30] as unknown[]
         )
       : ["company", "dispatch", "clients-readonly", "disabled"],
-    queryFn: async () => {
+    queryFn: async (): Promise<CompanyClientsReadonlyResult> => {
       const payload = await getCompanyClients({
         contextId: contextId as string,
         q: params.q,
         page: params.page,
         limit: params.limit ?? 30,
       });
-      return normalizeReadonlyRows(payload);
+      return {
+        rows: normalizeReadonlyRows(payload),
+        total: extractClientsListTotal(payload),
+      };
     },
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && flagOn,
     staleTime: QUERY_STALE_TIME_MS.companyList,
   });
 }
 
 export function useCompanyClientReadonlyDetailQuery(clientId: number | null) {
   const contextId = useActiveCompanyContextId();
+  const flagOn = isFeatureEnabled("company_mobile_clients_readonly_enabled");
   return useQuery({
     queryKey:
       contextId && clientId
@@ -608,18 +671,19 @@ export function useCompanyClientReadonlyDetailQuery(clientId: number | null) {
       }
       return null;
     },
-    enabled: Boolean(contextId) && clientId != null,
+    enabled: Boolean(contextId) && flagOn && clientId != null,
     staleTime: QUERY_STALE_TIME_MS.companyList,
   });
 }
 
 export function useCompanyInvoicesReadonlyQuery(params: { q?: string; page?: number; limit?: number }) {
   const contextId = useActiveCompanyContextId();
+  const flagOn = isFeatureEnabled("company_mobile_invoices_readonly_enabled");
   return useQuery({
     queryKey: contextId
       ? contextScopedKey(
           contextId,
-          [...companyQueryKeys.root, "invoices-readonly", contextId, params.q ?? "", params.page ?? 1] as unknown[]
+          [...companyQueryKeys.root, "invoices-readonly", contextId, params.page ?? 1, params.limit ?? 500] as unknown[]
         )
       : ["company", "dispatch", "invoices-readonly", "disabled"],
     queryFn: async () => {
@@ -627,11 +691,11 @@ export function useCompanyInvoicesReadonlyQuery(params: { q?: string; page?: num
         contextId: contextId as string,
         q: params.q,
         page: params.page,
-        limit: params.limit ?? 30,
+        limit: params.limit ?? 500,
       });
       return normalizeReadonlyRows(payload);
     },
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && flagOn,
     staleTime: QUERY_STALE_TIME_MS.companyList,
   });
 }

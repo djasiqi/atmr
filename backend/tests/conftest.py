@@ -79,6 +79,9 @@ os.environ.setdefault(
 os.environ["API_DOCS"] = "off"
 # Désactiver l'API legacy pendant les tests pour éviter conflits RestX
 os.environ["API_LEGACY_ENABLED"] = "false"
+# Socket.IO test_client ne supporte pas message_queue broker.
+# Override strictement pour les tests backend.
+os.environ["SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE"] = "1"
 
 from app import create_app  # noqa: E402
 from ext import db as _db  # noqa: E402
@@ -156,6 +159,9 @@ def app() -> Flask:
             "JWT_SECRET_KEY": "test-secret-key",
             "SECRET_KEY": "test-secret-key",
             "SQLALCHEMY_ECHO": False,  # Pas de logs SQL verbeux en tests
+            # Socket.IO test_client ne supporte pas message_queue.
+            # Override strictement en tests, sans impact prod.
+            "SOCKETIO_TEST_DISABLE_MESSAGE_QUEUE": True,
             # ✅ FIX: Configurer pour éviter les redirections 302 dans les tests E2E
             "SERVER_NAME": "localhost:5000",
             "PREFERRED_URL_SCHEME": "http",

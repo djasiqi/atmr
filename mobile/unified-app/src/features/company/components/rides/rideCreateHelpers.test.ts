@@ -85,8 +85,10 @@ describe("rideCreateHelpers", () => {
     "place_id": "p2",
   },
   "dropoff_lat": 46.21,
+  "dropoff_location": "Gare Cornavin, Genève",
   "dropoff_lon": 6.14,
   "is_return": false,
+  "is_round_trip": false,
   "notes_medical": null,
   "pickup_address": {
     "label": "Rue du Rhône 1, Genève",
@@ -95,9 +97,11 @@ describe("rideCreateHelpers", () => {
     "place_id": "p1",
   },
   "pickup_lat": 46.2,
+  "pickup_location": "Rue du Rhône 1, Genève",
   "pickup_lon": 6.15,
   "pricing_profile_id": 11,
   "pricing_profile_version_id": 22,
+  "scheduled_date": "2026-05-05",
   "scheduled_time": "2026-05-05T14:30:00",
 }
 `);
@@ -148,9 +152,11 @@ describe("rideCreateHelpers", () => {
     "place_id": null,
   },
   "dropoff_lat": 46.23,
+  "dropoff_location": "HUG, Genève",
   "dropoff_lon": 6.17,
   "hospital_service": "Cardiologie",
   "is_return": false,
+  "is_round_trip": false,
   "medical_facility": "Clinique Arcades",
   "notes_medical": "Patient fragile",
   "pickup_access_notes": "Étage 2 · Chambre 203",
@@ -161,9 +167,11 @@ describe("rideCreateHelpers", () => {
     "place_id": null,
   },
   "pickup_lat": 46.22,
+  "pickup_location": "Clinique Arcades, Genève",
   "pickup_lon": 6.16,
   "pricing_profile_id": 11,
   "pricing_profile_version_id": 22,
+  "scheduled_date": "2026-05-06",
   "scheduled_time": "2026-05-06T09:00:00",
   "wheelchair_client_has": true,
 }
@@ -216,10 +224,12 @@ describe("rideCreateHelpers", () => {
     "place_id": null,
   },
   "dropoff_lat": 46.38,
+  "dropoff_location": "Domicile, Nyon",
   "dropoff_lon": 6.24,
   "hospital_service": "Urgences",
   "is_recurring": true,
   "is_return": true,
+  "is_round_trip": true,
   "medical_facility": "HUG",
   "notes": "Retour domicile",
   "notes_medical": null,
@@ -231,16 +241,56 @@ describe("rideCreateHelpers", () => {
     "place_id": null,
   },
   "pickup_lat": 46.24,
+  "pickup_location": "HUG, Genève",
   "pickup_lon": 6.18,
   "pricing_profile_id": 11,
   "pricing_profile_version_id": 22,
+  "recurrence_series_length": 10,
   "recurrence_type": "weekly",
   "return_date": "2026-05-07",
   "return_time": "2026-05-07T12:00:00",
+  "scheduled_date": "2026-05-07",
   "scheduled_time": "2026-05-07T10:00:00",
   "wheelchair_need": true,
 }
 `);
+    });
+
+    it("scénario 4: aller-retour avec heure retour non définie", () => {
+      const payload = buildRideCreatePayload({
+        structuredPayloadEnabled: true,
+        clientId: 4,
+        pickup: "Onex",
+        dropoff: "Dialyse Onex",
+        pickupAddress: { label: "Onex", placeId: null, latitude: 46.18, longitude: 6.10 },
+        dropoffAddress: { label: "Dialyse Onex", placeId: null, latitude: 46.19, longitude: 6.11 },
+        scheduledTime: "2026-05-07T17:45:00",
+        isRoundTrip: true,
+        recurrence: "none",
+        notesMedical: "",
+        establishment: "",
+        hospitalService: "",
+        doctorName: "",
+        pickupAccessNotes: "",
+        dropoffAccessNotes: "",
+        wheelchairClient: false,
+        wheelchairProvide: false,
+        internalNotes: "",
+        notesMax: 500,
+        amountInput: "30",
+        amountSource: "preferential",
+        pricingProfileId: 11,
+        pricingProfileVersionId: 22,
+        isMaterialDelivery: false,
+        deliveryDescription: "",
+        returnScheduledAt: "",
+        billToPatient: false,
+        hasActiveStay: false,
+        clinicBillingPartyId: null,
+      });
+      expect(payload.return_date).toBe("2026-05-07");
+      expect(payload.return_time).toBeUndefined();
+      expect(payload.is_return).toBe(true);
     });
   });
 });

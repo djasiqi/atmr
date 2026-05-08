@@ -23,6 +23,133 @@ export function parseSimulationAmount(payload: unknown): number | null {
   return null;
 }
 
+export function parseSimulationDistanceKm(payload: unknown): number | null {
+  if (!payload || typeof payload !== "object") return null;
+  const raw = payload as Record<string, unknown>;
+  const pricing =
+    raw.pricing && typeof raw.pricing === "object"
+      ? (raw.pricing as Record<string, unknown>)
+      : undefined;
+  const breakdown =
+    raw.breakdown && typeof raw.breakdown === "object"
+      ? (raw.breakdown as Record<string, unknown>)
+      : undefined;
+  const candidates = [
+    raw.distance_km,
+    raw.distance,
+    raw.distance_meters,
+    pricing?.distance_km,
+    pricing?.distance,
+    pricing?.distance_meters,
+    pricing?.distance_m,
+    breakdown?.distance_km,
+    breakdown?.distance,
+    breakdown?.distance_meters,
+    breakdown?.distance_m,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0) {
+      // Heuristique : au-delà de 1000, on suppose des mètres.
+      return candidate > 1000 ? candidate / 1000 : candidate;
+    }
+    if (typeof candidate === "string") {
+      const parsed = Number.parseFloat(candidate);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed > 1000 ? parsed / 1000 : parsed;
+      }
+    }
+  }
+  return null;
+}
+
+export type PricingSimulationAnalysis = {
+  amount: number | null;
+  warningMessage: string | null;
+  blocked: boolean;
+};
+
+export function analyzePricingSimulation(payload: unknown): PricingSimulationAnalysis {
+  const amount = parseSimulationAmount(payload);
+  if (!payload || typeof payload !== "object") {
+    return { amount, warningMessage: "Calcul auto indisponible: saisissez un montant.", blocked: true };
+  }
+
+  const raw = payload as Record<string, unknown>;
+  const warnings = Array.isArray(raw.warnings)
+    ? raw.warnings
+    : Array.isArray((raw.breakdown as Record<string, unknown> | undefined)?.warnings)
+      ? ((raw.breakdown as Record<string, unknown>).warnings as unknown[])
+      : [];
+  const warningList = warnings.filter((v): v is string => typeof v === "string");
+
+  const blockingReasons = Array.isArray(raw.blocking_reasons)
+    ? raw.blocking_reasons.filter((v): v is string => typeof v === "string")
+    : [];
+  const confidence = String(raw.confidence ?? "").toLowerCase();
+  const modelUsed = String(
+    (raw.breakdown as Record<string, unknown> | undefined)?.model_used ?? ""
+  ).toLowerCase();
+  const isDistanceDependentModel = modelUsed === "distance" || modelUsed === "hybrid_stack";
+
+  const hasDistanceUnavailable = warningList.includes("distance_unavailable");
+  const hasZoneUnresolved = warningList.includes("zone_unresolved");
+
+  if ((confidence === "blocked" || blockingReasons.length > 0) && amount == null) {
+    if (blockingReasons.includes("zone_unresolved")) {
+      return {
+        amount: null,
+        warningMessage: "Calcul indisponible: zonage introuvable pour ce trajet. Saisissez un montant.",
+        blocked: true,
+      };
+    }
+    if (blockingReasons.includes("zone_unresolved_timeout")) {
+      return {
+        amount: null,
+        warningMessage: "Calcul indisponible: délai de calcul zonage dépassé. Réessayez.",
+        blocked: true,
+      };
+    }
+    if (blockingReasons.includes("distance_unavailable")) {
+      return {
+        amount: null,
+        warningMessage: "Calcul indisponible (distance). Saisissez un montant ou réessayez.",
+        blocked: true,
+      };
+    }
+    return {
+      amount: null,
+      warningMessage: "Calcul auto indisponible: saisissez un montant.",
+      blocked: true,
+    };
+  }
+
+  if (hasDistanceUnavailable && isDistanceDependentModel && amount == null) {
+    return {
+      amount: null,
+      warningMessage: "Calcul indisponible (distance). Saisissez un montant ou réessayez.",
+      blocked: true,
+    };
+  }
+
+  if (hasZoneUnresolved && amount == null) {
+    return {
+      amount: null,
+      warningMessage: "Calcul indisponible: zonage introuvable pour ce trajet. Saisissez un montant.",
+      blocked: true,
+    };
+  }
+
+  if (warningList.includes("zone_unresolved_fallback")) {
+    return {
+      amount,
+      warningMessage: "Zonage partiellement résolu: calcul appliqué avec fallback conservateur.",
+      blocked: false,
+    };
+  }
+
+  return { amount, warningMessage: null, blocked: false };
+}
+
 export function parseMedicalHintsFromAddress(label: string): {
   establishment?: string;
   doctorName?: string;
@@ -112,6 +239,16 @@ function parseOptionalAmount(raw: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+function extractIsoDatePart(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const directDate = /^(\d{4}-\d{2}-\d{2})$/.exec(t);
+  if (directDate) return directDate[1];
+  const dateTime = /^(\d{4}-\d{2}-\d{2})T/.exec(t);
+  if (dateTime) return dateTime[1];
+  return null;
+}
+
 const RECURRENCE_MAX_LOOP = 999;
 const RECURRENCE_OPEN_DAILY = 365;
 const RECURRENCE_OPEN_WEEKLY = 104;
@@ -131,7 +268,9 @@ export function buildRecurrenceApiFields(
     const d = endDate.trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
       recurrence_end_date = d;
-      occ = RECURRENCE_MAX_LOOP;
+      // Alignement web: conserver une longueur de série bornée
+      // même quand une date de fin est renseignée.
+      occ = Math.max(1, Math.min(52, Math.floor(Number(occurrencesInput)) || 10));
     }
   } else if (limitMode === "open") {
     if (recurrence === "weekly") occ = RECURRENCE_OPEN_WEEKLY;
@@ -173,14 +312,30 @@ export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<str
     client_id: input.clientId,
     pickup_address: pickupPayload,
     dropoff_address: dropoffPayload,
-    pickup_lat: input.pickupAddress?.latitude ?? null,
-    pickup_lon: input.pickupAddress?.longitude ?? null,
-    dropoff_lat: input.dropoffAddress?.latitude ?? null,
-    dropoff_lon: input.dropoffAddress?.longitude ?? null,
+    pickup_location: input.pickup.trim(),
+    dropoff_location: input.dropoff.trim(),
     scheduled_time: input.scheduledTime,
     is_return: input.isRoundTrip,
+    is_round_trip: input.isRoundTrip,
     notes_medical: input.notesMedical.trim() || null,
   };
+
+  if (typeof input.pickupAddress?.latitude === "number" && Number.isFinite(input.pickupAddress.latitude)) {
+    payload.pickup_lat = input.pickupAddress.latitude;
+  }
+  if (typeof input.pickupAddress?.longitude === "number" && Number.isFinite(input.pickupAddress.longitude)) {
+    payload.pickup_lon = input.pickupAddress.longitude;
+  }
+  if (typeof input.dropoffAddress?.latitude === "number" && Number.isFinite(input.dropoffAddress.latitude)) {
+    payload.dropoff_lat = input.dropoffAddress.latitude;
+  }
+  if (typeof input.dropoffAddress?.longitude === "number" && Number.isFinite(input.dropoffAddress.longitude)) {
+    payload.dropoff_lon = input.dropoffAddress.longitude;
+  }
+  const scheduledDatePart = extractIsoDatePart(input.scheduledTime);
+  if (scheduledDatePart) {
+    payload.scheduled_date = scheduledDatePart;
+  }
 
   if (input.establishment.trim()) payload.medical_facility = input.establishment.trim();
   if (input.hospitalService.trim()) payload.hospital_service = input.hospitalService.trim();
@@ -202,10 +357,15 @@ export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<str
     payload.delivery_description = input.deliveryDescription.trim() || null;
   }
 
-  if (input.isRoundTrip && input.returnScheduledAt) {
-    const [datePart] = input.returnScheduledAt.split("T");
-    payload.return_date = datePart;
-    payload.return_time = input.returnScheduledAt;
+  if (input.isRoundTrip) {
+    const returnDatePart =
+      extractIsoDatePart(input.returnScheduledAt) ?? extractIsoDatePart(input.scheduledTime);
+    if (returnDatePart) {
+      payload.return_date = returnDatePart;
+    }
+    if (input.returnScheduledAt.includes("T")) {
+      payload.return_time = input.returnScheduledAt;
+    }
   }
 
   if (input.recurrence !== "none") {
@@ -219,6 +379,8 @@ export function buildRideCreatePayload(input: BuildRidePayloadInput): Record<str
       input.recurrenceDays ?? [],
     );
     payload.occurrences = rb.occurrences;
+    // Compatibilité endpoint web/client: certains chemins lisent encore `recurrence_series_length`.
+    payload.recurrence_series_length = rb.occurrences;
     if (rb.recurrence_end_date) payload.recurrence_end_date = rb.recurrence_end_date;
     if (rb.recurrence_days?.length) payload.recurrence_days = rb.recurrence_days;
   }

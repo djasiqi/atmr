@@ -21,8 +21,30 @@ const C = {
   brand: "#0A8F7A",
 } as const;
 
-const HIDDEN_SHEET_ROUTES: { name: "clients" | "settings"; label: string; icon: keyof typeof Ionicons.glyphMap; href: Href }[] = [
-  { name: "clients", label: "Clients", icon: "people-outline", href: "/(app)/(company)/clients" as Href },
+/** Web / mobile web : pas de contour rectangulaire au focus, tap ou « hover » sur Pressable. */
+const PRESSABLE_WEB_SUPPRESS_SQUARE_HALO = Platform.select({
+  web: {
+    cursor: "pointer",
+    outlineWidth: 0,
+    outlineStyle: "none",
+    // @ts-expect-error RN web
+    WebkitTapHighlightColor: "transparent",
+  } as const,
+  default: undefined,
+});
+
+const HIDDEN_SHEET_ROUTES: {
+  name: "clients-facturation" | "settings";
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  href: Href;
+}[] = [
+  {
+    name: "clients-facturation",
+    label: "Clients & facturation",
+    icon: "reader-outline",
+    href: "/(app)/(company)/clients-facturation" as Href,
+  },
   { name: "settings", label: "Paramètres", icon: "settings-outline", href: "/(app)/(company)/settings" as Href },
 ];
 
@@ -42,7 +64,7 @@ function useActiveRouteName(state: BottomTabBarProps["state"]): string {
 
 /**
  * Barre d’onglets flottante (pilule) avec CTA centrale « nouvelle course »
- * (patron 2 + bouton rond + 2). « Autres » ouvre Clients et Paramètres.
+ * (patron 2 + bouton rond + 2). « Autres » ouvre Clients & facturation et Paramètres.
  *
  * Onglets : icônes + badge (chat) ; pas de libellé sous la barre — `label` sert à l’accessibilité.
  */
@@ -109,6 +131,7 @@ export function CompanyFloatingTabBar({ state, navigation }: BottomTabBarProps) 
                 styles.fabOuter,
                 !canCreateRide && styles.fabOuterDisabled,
                 pressed && canCreateRide && styles.fabOuterPressed,
+                Platform.OS === "web" ? PRESSABLE_WEB_SUPPRESS_SQUARE_HALO : null,
               ]}
             >
               <Ionicons name="add" size={26} color="#FFFFFF" />
@@ -197,19 +220,24 @@ function BarTabButton({
       ? `${label}, ${badgeCount} non lu${badgeCount > 1 ? "s" : ""}`
       : label;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityLabel={a11y}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-      android_ripple={
-        Platform.OS === "android"
-          ? { color: "rgba(10, 58, 52, 0.12)", borderless: false, foreground: true }
-          : undefined
-      }
-      style={({ pressed }) => [styles.tabHit, pressed && styles.tabHitPressed]}
-    >
-      <View style={[styles.tabIconShell, active && styles.tabIconShellActive]}>
+    <View style={styles.tabHit}>
+      <Pressable
+        onPress={onPress}
+        accessibilityLabel={a11y}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: active }}
+        android_ripple={
+          Platform.OS === "android"
+            ? { color: "rgba(10, 58, 52, 0.14)", borderless: false, foreground: true }
+            : undefined
+        }
+        style={({ pressed }) => [
+          styles.tabPressable,
+          active && styles.tabIconShellActive,
+          pressed && styles.tabHitPressed,
+          Platform.OS === "web" ? PRESSABLE_WEB_SUPPRESS_SQUARE_HALO : null,
+        ]}
+      >
         <View style={styles.iconBadgeWrap}>
           <Ionicons name={icon} size={22} color={active ? C.brand : C.textMuted} />
           {badgeCount > 0 ? (
@@ -225,33 +253,33 @@ function BarTabButton({
             </View>
           ) : null}
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /** Répartit l’espace entre onglets ; la zone cliquable est la pilule (`tabPressable`), pas toute la colonne. */
   tabHit: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     minHeight: 48,
-    borderRadius: 28,
   },
   tabHitPressed: {
     opacity: Platform.OS === "ios" ? 0.88 : 1,
   },
-  tabIconShell: {
+  /** Hit target ≈ 44×44, forme pilule — ripple / focus limités à cette forme. */
+  tabPressable: {
     paddingHorizontal: 13,
     paddingVertical: 9,
-    /** Pilule complète (web + natif) — évite un fond « carré » sur Android quand le rayon fixe ne suit pas la boîte. */
     borderRadius: 999,
-    alignSelf: "center",
-    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     minWidth: 44,
-    minHeight: 40,
+    minHeight: 44,
+    overflow: "hidden",
+    alignSelf: "center",
   },
   tabIconShellActive: {
     backgroundColor: "rgba(10, 143, 122, 0.1)",

@@ -44,6 +44,45 @@ from .enums import InvoiceBillingStrategy, InvoiceLineType, InvoiceStatus, Payme
 logger = logging.getLogger(__name__)
 
 
+def _ordered_unique_booking_ids_from_lines(lines: list[Any] | tuple[Any, ...]) -> list[int]:
+    """IDs courses pour registre mobile / ``list_view`` (plusieurs trajets, A/R fusionné).
+
+    Une ligne fusionnée n’a qu’un ``reservation_id`` (segment principal) ; les autres IDs
+    sont souvent dans ``line_meta.booking_ids`` ou ``round_trip_secondary_reservation_*``.
+    """
+    ordered: list[int] = []
+    seen: set[int] = set()
+
+    def add(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                add(item)
+            return
+        try:
+            i = int(value)
+        except (TypeError, ValueError):
+            return
+        if i in seen:
+            return
+        seen.add(i)
+        ordered.append(i)
+
+    for ln in lines:
+        add(getattr(ln, "reservation_id", None))
+        meta = getattr(ln, "line_meta", None)
+        if isinstance(meta, dict):
+            add(meta.get("booking_ids"))
+            add(meta.get("reservation_ids"))
+            add(meta.get("round_trip_secondary_reservation_ids"))
+            add(meta.get("round_trip_secondary_reservation_id"))
+            add(meta.get("round_trip_merge_partner_reservation_id"))
+            add(meta.get("round_trip_merge_primary_reservation_id"))
+
+    return ordered
+
+
 class Invoice(db.Model):
     """Modèle principal pour les factures."""
 
@@ -382,9 +421,19 @@ class Invoice(db.Model):
         else:
             payments_out = []
 
+        booking_ids_ordered: list[int] = []
+        if hasattr(self, "lines") and self.lines:
+            booking_ids_ordered = _ordered_unique_booking_ids_from_lines(list(self.lines))
+
+        primary_booking_id: int | None = (
+            booking_ids_ordered[0] if booking_ids_ordered else None
+        )
+
         return {
             "id": self.id,
             "company_id": self.company_id,
+            "booking_id": primary_booking_id,
+            "booking_ids": booking_ids_ordered,
             "client_id": self.client_id,
             "bill_to_client_id": self.bill_to_client_id,
             "billing_party_id": self.billing_party_id,

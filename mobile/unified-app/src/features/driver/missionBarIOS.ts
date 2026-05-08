@@ -1,5 +1,6 @@
 import { emitDriverTelemetry } from "../../core/observability/driverTelemetry";
 import { NativeModules, Platform } from "react-native";
+import { canUseNotifee, loadNotifee } from "./notifeeCompat";
 
 type LiveActivityPayload = {
   missionId: number;
@@ -8,8 +9,21 @@ type LiveActivityPayload = {
 };
 
 export async function configureMissionBarIOS(): Promise<void> {
+  if (!canUseNotifee()) {
+    emitDriverTelemetry("driver.mission_bar.ios.unavailable", {
+      source: "driver.mission_bar.ios",
+    });
+    return;
+  }
   try {
-    const { default: notifee } = await import("@notifee/react-native");
+    const mod = await loadNotifee();
+    if (!mod) {
+      emitDriverTelemetry("driver.mission_bar.ios.unavailable", {
+        source: "driver.mission_bar.ios",
+      });
+      return;
+    }
+    const { default: notifee } = mod;
     await notifee.setNotificationCategories([
       {
         id: "driver-mission-category",

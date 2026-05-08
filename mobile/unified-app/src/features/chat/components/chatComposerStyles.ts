@@ -66,6 +66,7 @@ export const styles = StyleSheet.create({
     maxWidth: MAX_W_FORM,
     alignSelf: "center",
     zIndex: 1,
+    pointerEvents: "box-none",
   },
   mainRow: {
     flexDirection: "row",
@@ -190,6 +191,7 @@ export const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
     borderColor: "rgba(148, 163, 184, 0.55)",
     opacity: 1,
+    pointerEvents: "none",
     ...Platform.select({
       web: {
         boxShadow: "none",

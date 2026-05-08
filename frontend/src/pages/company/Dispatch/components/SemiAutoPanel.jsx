@@ -20,6 +20,7 @@ const SemiAutoPanel = ({
   currentDate,
   styles = {},
   currentCompanyId, // ✅ ID de l'entreprise pour la direction des transferts
+  delayMap = {},
 }) => {
   // Charger suggestions RL (filtrage strict côté hook)
   const {
@@ -136,6 +137,7 @@ const SemiAutoPanel = ({
           {/* Tableau principal */}
           <DispatchTable
             dispatches={sortedDispatches}
+            delayMap={delayMap}
             onDelete={onDeleteReservation}
             onDispatchNow={onDispatchNow}
             onAssign={onAssign} // 🆕 Permettre l'assignation manuelle pour les courses transférées

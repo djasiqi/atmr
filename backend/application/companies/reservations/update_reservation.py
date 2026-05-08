@@ -20,7 +20,10 @@ class _BookingLike(Protocol):
     scheduled_time: Any
     medical_facility: Any
     doctor_name: Any
+    hospital_service: Any
     notes_medical: Any
+    pickup_access_notes: Any
+    dropoff_access_notes: Any
     amount: Any
     mission_type: Any
     delivery_description: Any
@@ -117,9 +120,18 @@ class UpdateCompanyReservationUseCase:
         if "doctor_name" in validated_data:
             booking.doctor_name = validated_data["doctor_name"]
             updated_fields.append("doctor_name")
+        if "hospital_service" in validated_data:
+            booking.hospital_service = validated_data["hospital_service"]
+            updated_fields.append("hospital_service")
         if "notes_medical" in validated_data:
             booking.notes_medical = validated_data["notes_medical"]
             updated_fields.append("notes_medical")
+        if "pickup_access_notes" in validated_data:
+            booking.pickup_access_notes = validated_data["pickup_access_notes"]
+            updated_fields.append("pickup_access_notes")
+        if "dropoff_access_notes" in validated_data:
+            booking.dropoff_access_notes = validated_data["dropoff_access_notes"]
+            updated_fields.append("dropoff_access_notes")
         if "amount" in validated_data:
             booking.amount = validated_data["amount"]
             updated_fields.append("amount")

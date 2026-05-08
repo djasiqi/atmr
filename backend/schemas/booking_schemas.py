@@ -242,6 +242,7 @@ class BookingUpdateSchema(Schema):
     # Champs médicaux optionnels
     medical_facility = fields.Str(validate=validate.Length(max=200))
     doctor_name = fields.Str(validate=validate.Length(max=200))
+    hospital_service = fields.Str(validate=validate.Length(max=100))
     is_round_trip = fields.Bool()
     return_time = fields.Str(
         validate=validate.Regexp(
@@ -250,6 +251,12 @@ class BookingUpdateSchema(Schema):
         allow_none=True,
     )
     notes_medical = fields.Str(validate=validate.Length(max=1000))
+    pickup_access_notes = fields.Str(
+        validate=validate.Length(max=1000), allow_none=True
+    )
+    dropoff_access_notes = fields.Str(
+        validate=validate.Length(max=1000), allow_none=True
+    )
 
     # ✅ Livraison matériel : permettre de corriger mission_type et delivery_description
     mission_type = fields.Str(

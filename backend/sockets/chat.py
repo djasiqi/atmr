@@ -190,6 +190,16 @@ def _log_socketio_exception(
     ws_metrics.on_error(f"{event_name}_exception")
 
 
+def _get_sid_claims(sid: str | None) -> Dict[str, Any]:
+    """Retourne les claims _SID_INDEX de manière défensive."""
+    if not sid:
+        return {}
+    raw = _SID_INDEX.get(sid)
+    if isinstance(raw, dict):
+        return raw
+    return {}
+
+
 # Les handlers Socket.IO sont enregistrés par @socketio.on()
 # Note: Rate limiting géré par WebSocketRateLimiter (backend/services/websocket_rate_limiter.py)
 
@@ -1806,7 +1816,7 @@ def init_chat_socket(socketio: SocketIO):
                 inc_batch_fallback_individual()
 
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
-            sid_info = _SID_INDEX.get(current_sid, {})
+            sid_info = _get_sid_claims(current_sid)
             user_public_id = sid_info.get("user_public_id")
             user_role = sid_info.get("role")
 
@@ -2197,7 +2207,7 @@ def init_chat_socket(socketio: SocketIO):
             )
 
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX uniquement
-            sid_info = _SID_INDEX.get(current_sid, {})
+            sid_info = _get_sid_claims(current_sid)
             user_public_id = sid_info.get("user_public_id")
             user_role = sid_info.get("role")
 
@@ -2290,6 +2300,26 @@ def init_chat_socket(socketio: SocketIO):
                 }
 
             positions = data.get("positions", [])
+            tracking_session_id = (
+                str(data.get("tracking_session_id")).strip()
+                if isinstance(data, dict) and data.get("tracking_session_id")
+                else ""
+            )
+            if not tracking_session_id:
+                return {"success": False, "error": "tracking_session_id_required"}
+            if redis_client is not None:
+                session_key = f"driver:{driver.id}:active_tracking_session"
+                active_raw = redis_client.get(session_key)
+                active_value = (
+                    active_raw.decode("utf-8")
+                    if isinstance(active_raw, bytes)
+                    else str(active_raw)
+                    if active_raw is not None
+                    else None
+                )
+                if active_value and active_value != tracking_session_id:
+                    return {"success": False, "error": "tracking_session_conflict"}
+                redis_client.setex(session_key, 1800, tracking_session_id)
             if not positions:
                 logger.warning("⚠️ driver_location_batch vide")
                 return {"success": False, "error": "Batch vide"}
@@ -2367,6 +2397,8 @@ def init_chat_socket(socketio: SocketIO):
             # Traiter chaque position du batch
             rejected_positions: list[dict[str, Any]] = []  # ✅ P2: Bug #7
             processed_count = 0  # ✅ P2: Compter positions traitées avec succès
+            acked_tracking_event_ids: list[str] = []
+            ack_last_sequence_id: int | None = None
             for idx, pos in enumerate(positions):
                 try:
                     latitude = float(pos.get("latitude", 0))
@@ -2457,6 +2489,18 @@ def init_chat_socket(socketio: SocketIO):
                         str(leid_b) if leid_b else None,
                     )
                     if skip_ingest and skip_r:
+                        tracking_event_id_val = pos.get("tracking_event_id")
+                        if isinstance(tracking_event_id_val, str):
+                            acked_tracking_event_ids.append(tracking_event_id_val)
+                        seq_obj = pos.get("sequence_id")
+                        if isinstance(seq_obj, (int, str)):
+                            with suppress(Exception):
+                                seq = int(seq_obj)
+                                ack_last_sequence_id = (
+                                    seq
+                                    if ack_last_sequence_id is None
+                                    else max(ack_last_sequence_id, seq)
+                                )
                         inc_dedup_skipped(
                             reason=skip_r,
                             location_mode=norm_mode_batch,
@@ -2598,6 +2642,18 @@ def init_chat_socket(socketio: SocketIO):
 
                     # ✅ P2: Incrémenter compteur de positions traitées avec succès
                     processed_count += 1
+                    tracking_event_id_val = pos.get("tracking_event_id")
+                    if isinstance(tracking_event_id_val, str):
+                        acked_tracking_event_ids.append(tracking_event_id_val)
+                    seq_obj = pos.get("sequence_id")
+                    if isinstance(seq_obj, (int, str)):
+                        with suppress(Exception):
+                            seq = int(seq_obj)
+                            ack_last_sequence_id = (
+                                seq
+                                if ack_last_sequence_id is None
+                                else max(ack_last_sequence_id, seq)
+                            )
 
                 except (TypeError, ValueError) as e:
                     # ✅ P2: Bug #7 - Tracker erreur au lieu de skip silencieux
@@ -2636,13 +2692,16 @@ def init_chat_socket(socketio: SocketIO):
                 "total_positions": len(positions),
                 "driver_id": driver.id,
                 "timestamp": now_iso,
+                "tracking_event_ids": acked_tracking_event_ids,
             }
+            if ack_last_sequence_id is not None:
+                ack_response["ack_last_sequence_id"] = ack_last_sequence_id
 
             # ✅ P2: Bug #7 - Inclure rejets si présents
             if rejected_positions:
                 ack_response["rejected"] = rejected_positions
                 ack_response["rejected_count"] = len(rejected_positions)
-
+            emit("driver_location_batch_ack", ack_response)
             return ack_response
 
         except Exception as e:

@@ -54,7 +54,7 @@ KAFKA_SSL_KEYFILE = os.getenv("KAFKA_SSL_KEYFILE", "")
 # et basculer sur le chemin synchrone. Valeur conservatrice : assez longue
 # pour absorber un leader election (< 1s normal), assez courte pour ne pas
 # bloquer l'endpoint HTTP chauffeur en production.
-KAFKA_PRODUCE_TIMEOUT_S = float(os.getenv("KAFKA_PRODUCE_TIMEOUT_S", "0.5"))
+KAFKA_PRODUCE_TIMEOUT_S = float(os.getenv("KAFKA_PRODUCE_TIMEOUT_S", "1.5"))
 
 # Initialisation lazy : `flask db upgrade`, healthcheck et import de l’app ne tentent
 # plus de joindre Kafka tant qu’aucune position n’est mise en file.

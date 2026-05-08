@@ -4,6 +4,11 @@ import styles from './ReservationTable.module.css';
 import { FiCheckCircle, FiXCircle, FiAlertTriangle, FiRefreshCw, FiEye, FiClock } from 'react-icons/fi';
 import ReservationActions from '../../../../components/reservations/ReservationActions';
 import DriverInlineSelect from '../../Dispatch/components/DriverInlineSelect';
+import { pickupArrivalHint } from '../../../../utils/formatPickupEta';
+import {
+  getDispatchRowDelayInfo,
+  normalizeDispatchDelayMapKey,
+} from '../../../../utils/dispatchDelayMapKey';
 
 // V11: Cle unifiee
 const getDispatchKey = (d) => d.booking_id ?? d.id;
@@ -48,7 +53,19 @@ const checkNeedsTimeConfirmation = (r) => {
   let isDefaultTime = false;
   if (r.scheduled_time) {
     const timeStr = r.scheduled_time.toString();
-    isDefaultTime = timeStr.includes('T00:00:00') || timeStr.includes(' 00:00:00');
+    // Retour "heure à définir" peut arriver en `00:00` avec ou sans secondes.
+    isDefaultTime =
+      /[T ]00:00(?::00)?(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(timeStr) ||
+      timeStr.includes('T00:00:00') ||
+      timeStr.includes(' 00:00:00') ||
+      timeStr.includes('T00:00') ||
+      timeStr.includes(' 00:00');
+    if (!isDefaultTime) {
+      const parsed = new Date(timeStr.replace(' ', 'T'));
+      if (!Number.isNaN(parsed.getTime())) {
+        isDefaultTime = parsed.getHours() === 0 && parsed.getMinutes() === 0;
+      }
+    }
   }
 
   return !timeConfirmed || !hasScheduledTime || isDefaultTime;
@@ -57,7 +74,8 @@ const checkNeedsTimeConfirmation = (r) => {
 // V17: Hierarchie visuelle stricte danger > warning
 const getRowPriority = (d, delayMap) => {
   const key = getDispatchKey(d);
-  const delay = delayMap?.[key]?.minutes || 0;
+  const delay =
+    getDispatchRowDelayInfo(delayMap, d)?.minutes ?? delayMap?.[key]?.minutes ?? 0;
   const isUnassigned = !d.driver_id && !d.driver;
   if (delay > 15) return 'critical';
   if (delay > 5) return 'moderate';
@@ -121,10 +139,13 @@ const DispatchTable = ({
     const map = {};
     if (delays && delays.length > 0) {
       delays.forEach((d) => {
-        const key = d.booking_id ?? d.id;
+        const key = normalizeDispatchDelayMapKey(d.booking_id ?? d.id);
+        if (key == null) return;
         map[key] = {
           minutes: Math.round(d.delay_minutes || d.pickup_delay_minutes || d.dropoff_delay_minutes || 0),
           severity: d.delay_severity || 'reasonable',
+          current_eta: d.current_eta || null,
+          pickup_eta: d.pickup_eta || d.current_eta || null,
         };
       });
     }
@@ -172,9 +193,19 @@ const DispatchTable = ({
             const status = r.status?.toLowerCase() || 'unknown';
             const key = getDispatchKey(r);
             const priority = getRowPriority(r, delayMap);
-            const delayInfo = delayMap[key];
+            const delayInfo = getDispatchRowDelayInfo(delayMap, r) ?? delayMap?.[key];
             const delayMinutes = delayInfo?.minutes || 0;
             const delayLevel = getDelayLevel(delayMinutes);
+            const etaIso =
+              delayInfo?.pickup_eta ||
+              delayInfo?.current_eta ||
+              r?.assignment?.estimated_pickup_arrival ||
+              r?.assignment?.eta_pickup_at ||
+              r?.assignment?.pickup_eta ||
+              null;
+            const etaStatuses = ['accepted', 'assigned', 'en_route'];
+            const pickupArrivalLabel =
+              etaStatuses.includes(status) && etaIso ? pickupArrivalHint(etaIso) : null;
             const driverName = getDriverName(r);
             const needsTimeConfirmation = checkNeedsTimeConfirmation(r);
 
@@ -210,18 +241,25 @@ const DispatchTable = ({
                       <FiClock size={12} /> A definir
                     </span>
                   ) : (
-                    <>
-                      <span className={styles.timeBold}>{formatTime(r.scheduled_time)}</span>
-                      {delayLevel && (
-                        <span
-                          className={`${styles.delayBadge} ${DELAY_BADGE_CLASS[delayLevel] || ''}`}
-                          title={`Retard de ${delayMinutes} min`}
-                        >
-                          {delayLevel === 'critical' && <FiAlertTriangle size={10} />}
-                          +{delayMinutes}min
+                    <div className={styles.timeCellStack}>
+                      <div className={styles.timePrimaryRow}>
+                        <span className={styles.timeBold}>{formatTime(r.scheduled_time)}</span>
+                        {delayLevel && (
+                          <span
+                            className={`${styles.delayBadge} ${DELAY_BADGE_CLASS[delayLevel] || ''}`}
+                            title={`Retard de ${delayMinutes} min`}
+                          >
+                            {delayLevel === 'critical' && <FiAlertTriangle size={10} />}
+                            +{delayMinutes}min
+                          </span>
+                        )}
+                      </div>
+                      {pickupArrivalLabel && (
+                        <span className={styles.pickupEtaHint} title={pickupArrivalLabel.title}>
+                          {pickupArrivalLabel.text}
                         </span>
                       )}
-                    </>
+                    </div>
                   )}
                 </td>
 
@@ -334,6 +372,7 @@ const DispatchTable = ({
                       )}
                       <ReservationActions
                         reservation={r}
+                        needsTimeConfirmationOverride={needsTimeConfirmation}
                         onSchedule={onSchedule}
                         onDispatchNow={onDispatchNow}
                         onAssign={onAssign}

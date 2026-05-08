@@ -1,10 +1,15 @@
-import { useEffect, useId, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { AppText } from "../../../../design/ui/AppText";
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
 import { isDriverPositionStale } from "../../utils/companyDriverMapStatus";
 
 const SCRIPT_ID = "google-maps-js-sdk-lirie-fleet";
+const NAMESPACE_WAIT_MS = 15_000;
+
+/** Guide officiel erreurs (dont ApiTargetBlockedMapError). */
+const MAPS_ERROR_HELP_URL =
+  "https://developers.google.com/maps/documentation/javascript/error-messages#api-target-blocked-map-error";
 
 /**
  * Refuse les placeholders courants (ex. `ta_clef_google_maps_js` copié depuis un exemple de doc)
@@ -28,6 +33,121 @@ function getGoogleMaps(): Record<string, unknown> | undefined {
   if (typeof window === "undefined") return undefined;
   const g = (window as unknown as { google?: { maps: Record<string, unknown> } }).google?.maps;
   return g;
+}
+
+function isMapsCoreReady(): boolean {
+  return typeof getGoogleMaps()?.Map === "function";
+}
+
+function waitForGoogleMapsNamespace(): Promise<void> {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      if (typeof window !== "undefined" && window.google?.maps) {
+        resolve();
+        return;
+      }
+      if (Date.now() - start > NAMESPACE_WAIT_MS) {
+        reject(new Error("SDK Google Maps indisponible (timeout)"));
+        return;
+      }
+      window.setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
+/** Avec `loading=async`, appeler `importLibrary('maps')` avant d'utiliser `google.maps.Map`. */
+async function ensureMapsLibraryImported(): Promise<void> {
+  if (isMapsCoreReady()) return;
+  const gm = window.google?.maps as { importLibrary?: (name: string) => Promise<unknown> } | undefined;
+  if (!gm || typeof gm.importLibrary !== "function") {
+    throw new Error("Google Maps : importLibrary indisponible (script incomplet ?)");
+  }
+  await gm.importLibrary("maps");
+  if (!isMapsCoreReady()) {
+    throw new Error("Google Maps : échec après importLibrary(maps)");
+  }
+}
+
+let mapsScriptLoadInflight: Promise<void> | null = null;
+
+/**
+ * Charge le bootstrap Maps JS (recommandation Google : `v=weekly` + `loading=async`).
+ * @see https://developers.google.com/maps/documentation/javascript/load-maps-js-api
+ */
+function loadGoogleMapsScript(apiKey: string): Promise<void> {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.resolve();
+  }
+  if (isMapsCoreReady()) return Promise.resolve();
+  if (mapsScriptLoadInflight) return mapsScriptLoadInflight;
+
+  mapsScriptLoadInflight = new Promise((resolve, reject) => {
+    const previousGmf = window.gm_authFailure;
+
+    const cleanupAuthHook = (hook: () => void) => {
+      if (window.gm_authFailure === hook) {
+        window.gm_authFailure = previousGmf;
+      }
+    };
+
+    const authHook = () => {
+      cleanupAuthHook(authHook);
+      mapsScriptLoadInflight = null;
+      if (typeof previousGmf === "function") previousGmf();
+      reject(new Error("GOOGLE_MAPS_AUTH_FAILURE"));
+    };
+    window.gm_authFailure = authHook;
+
+    const finishAfterScriptLoaded = () => {
+      waitForGoogleMapsNamespace()
+        .then(() => ensureMapsLibraryImported())
+        .then(() => {
+          cleanupAuthHook(authHook);
+          mapsScriptLoadInflight = null;
+          resolve();
+        })
+        .catch((e: unknown) => {
+          cleanupAuthHook(authHook);
+          mapsScriptLoadInflight = null;
+          reject(e instanceof Error ? e : new Error(String(e)));
+        });
+    };
+
+    const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+    if (existing) {
+      if (isMapsCoreReady() || window.google?.maps) {
+        finishAfterScriptLoaded();
+      } else {
+        existing.addEventListener("load", finishAfterScriptLoaded, { once: true });
+        existing.addEventListener(
+          "error",
+          () => {
+            cleanupAuthHook(authHook);
+            mapsScriptLoadInflight = null;
+            reject(new Error("Google Maps script error"));
+          },
+          { once: true }
+        );
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = SCRIPT_ID;
+    script.async = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
+    script.onload = () => finishAfterScriptLoaded();
+    script.onerror = () => {
+      cleanupAuthHook(authHook);
+      mapsScriptLoadInflight = null;
+      reject(new Error("Impossible de charger Google Maps"));
+    };
+    document.head.appendChild(script);
+  });
+
+  return mapsScriptLoadInflight;
 }
 
 function computeRegion(drivers: CompanyDriverLiveLocation[]) {
@@ -55,45 +175,21 @@ function computeRegion(drivers: CompanyDriverLiveLocation[]) {
   };
 }
 
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return Promise.resolve();
-  }
-  if (getGoogleMaps()) {
-    return Promise.resolve();
-  }
-  const existing = document.getElementById(SCRIPT_ID);
-  if (existing) {
-    return new Promise((resolve, reject) => {
-      const check = () => {
-        if (getGoogleMaps()) resolve();
-      };
-      if (getGoogleMaps()) {
-        resolve();
-        return;
-      }
-      existing.addEventListener("load", () => {
-        check();
-        resolve();
-      });
-      existing.addEventListener("error", () => reject(new Error("Google Maps script error")));
-    });
-  }
-  return new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.id = SCRIPT_ID;
-    s.async = true;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Impossible de charger Google Maps"));
-    document.head.appendChild(s);
-  });
-}
-
 type Props = {
   drivers: CompanyDriverLiveLocation[];
   height: number;
 };
+
+const MAP_ERR_AUTH_FR = [
+  "Google Maps a refusé la clé (souvent ApiTargetBlockedMapError sur le web). Vérifiez dans Google Cloud :",
+  "• l’API « Maps JavaScript API » est activée pour le projet ;",
+  "• la clé n’est pas limitée aux seules applis Android/iOS : ajoutez des restrictions « sites web » avec l’origine exacte (ex. http://localhost:8081, https://votre-domaine.com) ;",
+  "• la facturation est active.",
+  `Documentation : ${MAPS_ERROR_HELP_URL}`,
+].join("\n");
+
+const MAP_ERR_GENERIC_FR =
+  "Impossible d’afficher la carte (réseau, timeout ou script bloqué). Rechargez la page ou vérifiez la clé EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.";
 
 /**
  * Carte flotte web (API JavaScript Google Maps). Nécessite `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`.
@@ -104,6 +200,7 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
     null
   );
   const markersRef = useRef<{ setMap: (v: null) => void }[]>([]);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const rawMapsKey = useMemo(
     () => (typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string" ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim() : ""),
     []
@@ -118,6 +215,7 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
 
   useEffect(() => {
     if (!apiKey) return;
+    setMapLoadError(null);
     let cancelled = false;
     const run = async () => {
       try {
@@ -184,8 +282,14 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
         } else {
           map.fitBounds(bounds, 48);
         }
-      } catch {
-        /* message si pas de réseau / script bloqué */
+      } catch (e: unknown) {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : "";
+        if (msg === "GOOGLE_MAPS_AUTH_FAILURE") {
+          setMapLoadError(MAP_ERR_AUTH_FR);
+        } else {
+          setMapLoadError(MAP_ERR_GENERIC_FR);
+        }
       }
     };
 
@@ -222,6 +326,16 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
     );
   }
 
+  if (mapLoadError) {
+    return (
+      <View style={[styles.fallback, { height }]} accessibilityLabel="Erreur carte Google">
+        <AppText variant="caption" style={styles.fallbackText}>
+          {mapLoadError}
+        </AppText>
+      </View>
+    );
+  }
+
   return <View nativeID={mapDomId} style={[styles.map, { height }]} accessibilityLabel="Carte des chauffeurs" />;
 }
 
@@ -241,7 +355,7 @@ const styles = StyleSheet.create({
   },
   fallbackText: {
     color: "#64748B",
-    textAlign: "center",
+    textAlign: "left",
     lineHeight: 18,
   },
 });

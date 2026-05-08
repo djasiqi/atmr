@@ -27,6 +27,7 @@ from routes.dispatch.dispatch_helpers import (
     _booking_time_expr,
     _calculate_eta_for_assignment,
     _classify_delay_severity,
+    _exclude_booking_from_delay_rollups,
     _get_current_company,
     _get_driver_previous_booking,
     _parse_date,
@@ -111,6 +112,8 @@ class DelaysResource(Resource):
                 b = a.booking  # ✅ Déjà chargé via joinedload
                 if not b:
                     continue
+                if _exclude_booking_from_delay_rollups(b):
+                    continue
 
                 # Temps prévus
                 pickup_time = getattr(b, "pickup_time", None) or getattr(
@@ -158,6 +161,15 @@ class DelaysResource(Resource):
                         )
                     except Exception:
                         pickup_delay = MAX_DELAY_ZERO
+                elif pickup_time:
+                    # Même repli que `/delays/live` : sans ETA (souvent segments retour / trajets récents).
+                    try:
+                        current_time = now_local()
+                        time_diff_seconds = (current_time - pickup_time).total_seconds()
+                        if time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD:
+                            pickup_delay = int(time_diff_seconds / 60)
+                    except Exception:
+                        pickup_delay = MAX_DELAY_ZERO
 
                 dropoff_delay = MAX_DELAY_ZERO
                 if dropoff_time and dropoff_eta:
@@ -168,10 +180,20 @@ class DelaysResource(Resource):
                         )
                     except Exception:
                         dropoff_delay = MAX_DELAY_ZERO
+                elif dropoff_time:
+                    try:
+                        current_time = now_local()
+                        time_diff_seconds = (current_time - dropoff_time).total_seconds()
+                        if time_diff_seconds > TIME_DIFF_SECONDS_THRESHOLD:
+                            dropoff_delay = int(time_diff_seconds / 60)
+                    except Exception:
+                        dropoff_delay = MAX_DELAY_ZERO
 
-                # Toujours renvoyer si on a un ETA; le front pourra afficher "À l'heure" (0)
-                if pickup_eta or dropoff_eta:
-                    max_delay = max(pickup_delay, dropoff_delay)
+                max_delay = max(pickup_delay, dropoff_delay)
+
+                # ETA présents → une ligne (retard 0 possible). Sans ETA mais horloge en retard → ligne utile
+                # pour aller/retour même quand les ETA ne sont pas encore posés sur l’assignment.
+                if pickup_eta or dropoff_eta or max_delay > MAX_DELAY_ZERO:
 
                     # ✨ NOUVEAUTÉ: Générer des suggestions intelligentes
                     suggestions_list = []

@@ -308,9 +308,11 @@ delay_model = dispatch_ns.model(
         "dropoff_time": NullableDateTime,
         "pickup_eta": NullableDateTime,
         "dropoff_eta": NullableDateTime,
+        # Agrégé (max pickup/dropoff) — doit figurer dans le marshal sinon le mobile ne le voit pas.
+        "delay_minutes": fields.Integer,
         "pickup_delay_minutes": fields.Integer,
         "dropoff_delay_minutes": fields.Integer,
-        "booking": NullableDict,
-        "driver": NullableDict,
+        "booking": fields.Nested(booking_model, skip_none=True),
+        "driver": fields.Nested(driver_model, skip_none=True),
     },
 )

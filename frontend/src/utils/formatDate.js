@@ -41,6 +41,18 @@ function formatLocalNaive(dateInput) {
   }
 }
 
+function formatDateOnly(value) {
+  if (!value || typeof value !== 'string') return null;
+  const raw = value.trim();
+  if (!raw) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (m) return `${m[3]}.${m[2]}.${m[1]}`;
+  const d = new Date(raw.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
+
 /**
  * Formate la date d'une réservation, en utilisant les champs pré-formatés
  * du backend si disponibles, sinon en forçant le fuseau horaire de Zurich.
@@ -61,12 +73,17 @@ export function renderBookingDateTime(booking) {
     const day = pad(date.getDate());
     const month = pad(date.getMonth() + 1);
     const year = date.getFullYear();
-    return `${day}.${month}.${year} • ⏱️`;
+    return `${day}.${month}.${year} • À définir`;
   }
 
   // Si c'est un retour sans scheduled_time du tout
   if (isReturn && !scheduledTime) {
-    return '⏱️';
+    const returnDateLabel =
+      formatDateOnly(booking.return_date) ||
+      formatDateOnly(booking.scheduled_date) ||
+      formatDateOnly(booking.date) ||
+      null;
+    return returnDateLabel ? `${returnDateLabel} • À définir` : 'À définir';
   }
 
   // 🔍 Détecter les heures à 00:00 (heure par défaut à confirmer)
@@ -81,7 +98,7 @@ export function renderBookingDateTime(booking) {
       const day = pad(date.getDate());
       const month = pad(date.getMonth() + 1);
       const year = date.getFullYear();
-      return `${day}.${month}.${year} • ⏱️`;
+      return `${day}.${month}.${year} • À définir`;
     }
   }
 

@@ -76,6 +76,12 @@ KAFKA_RETRY_BACKOFF_MS = int(os.getenv("KAFKA_RETRY_BACKOFF_MS", "300"))
 KAFKA_PUBLISH_ACK_TIMEOUT_S = float(os.getenv("KAFKA_PUBLISH_ACK_TIMEOUT_S", "0.5"))
 KAFKA_MAX_BLOCK_MS = int(os.getenv("KAFKA_MAX_BLOCK_MS", "500"))
 TRACKING_DLQ_RETRY_BACKOFF_S = float(os.getenv("TRACKING_DLQ_RETRY_BACKOFF_S", "1.0"))
+TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS = int(
+    os.getenv("TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS", "3")
+)
+TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE = (
+    os.getenv("TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE", "true").lower() == "true"
+)
 KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL", "PLAINTEXT")
 KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM", "")
 KAFKA_SASL_USERNAME = os.getenv("KAFKA_SASL_USERNAME", "")
@@ -261,55 +267,67 @@ class TrackingIngestConsumer:
             "retry_count": retry_count,
             "timestamp": int(time.time() * 1000),
         }
-        try:
-            self._publish_with_ack(
-                topic=TOPIC_DRIVER_LOCATION_DLQ,
-                key=key,
-                message=dlq_payload,
-                retry_count=retry_count,
-            )
-            self._commit_current()
+        for dlq_attempt in range(1, TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS + 1):
             try:
-                inc_tracking_kafka_dlq_messages(reason=error_type)
-            except Exception:
-                logger.debug(
-                    "[tracking_consumer] dlq metric unavailable", exc_info=True
+                self._publish_with_ack(
+                    topic=TOPIC_DRIVER_LOCATION_DLQ,
+                    key=key,
+                    message=dlq_payload,
+                    retry_count=retry_count,
                 )
-            logger.warning(
-                "[tracking_consumer] DLQ confirmed topic=%s partition=%s offset=%s type=%s",
-                record.topic,
-                record.partition,
-                record.offset,
-                error_type,
-            )
-            return True
-        except Exception:
-            try:
-                inc_tracking_kafka_publish_errors(
-                    topic=TOPIC_DRIVER_LOCATION_DLQ, stage="dlq_publish_failed"
+                self._commit_current()
+                try:
+                    inc_tracking_kafka_dlq_messages(reason=error_type)
+                except Exception:
+                    logger.debug(
+                        "[tracking_consumer] dlq metric unavailable", exc_info=True
+                    )
+                logger.warning(
+                    "[tracking_consumer] DLQ confirmed topic=%s partition=%s offset=%s type=%s",
+                    record.topic,
+                    record.partition,
+                    record.offset,
+                    error_type,
                 )
+                return True
             except Exception:
-                logger.debug(
-                    "[tracking_consumer] publish error metric unavailable",
+                try:
+                    inc_tracking_kafka_publish_errors(
+                        topic=TOPIC_DRIVER_LOCATION_DLQ, stage="dlq_publish_failed"
+                    )
+                except Exception:
+                    logger.debug(
+                        "[tracking_consumer] publish error metric unavailable",
+                        exc_info=True,
+                    )
+                logger.error(
+                    "[tracking_consumer] DLQ publish failed attempt=%s/%s topic=%s partition=%s offset=%s",
+                    dlq_attempt,
+                    TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS,
+                    record.topic,
+                    record.partition,
+                    record.offset,
                     exc_info=True,
                 )
-            logger.error(
-                "[tracking_consumer] DLQ publish failed -> backoff sleep=%.3fs topic=%s partition=%s offset=%s",
-                TRACKING_DLQ_RETRY_BACKOFF_S,
-                record.topic,
-                record.partition,
-                record.offset,
-            )
-            logger.critical(
-                "[tracking_consumer] DLQ publish failed, commit skipped topic=%s partition=%s offset=%s",
-                record.topic,
-                record.partition,
-                record.offset,
-                exc_info=True,
-            )
-            # Évite une boucle chaude sur le même offset si la DLQ est indisponible.
-            time.sleep(TRACKING_DLQ_RETRY_BACKOFF_S)
-            return False
+                if dlq_attempt < TRACKING_DLQ_PUBLISH_MAX_ATTEMPTS:
+                    time.sleep(TRACKING_DLQ_RETRY_BACKOFF_S * dlq_attempt)
+                    continue
+                if TRACKING_DLQ_FORCE_COMMIT_ON_FAILURE:
+                    logger.critical(
+                        "[tracking_consumer] DLQ exhausted -> force commit to avoid offset stall topic=%s partition=%s offset=%s",
+                        record.topic,
+                        record.partition,
+                        record.offset,
+                    )
+                    self._commit_current()
+                    return True
+                logger.critical(
+                    "[tracking_consumer] DLQ exhausted and force-commit disabled topic=%s partition=%s offset=%s",
+                    record.topic,
+                    record.partition,
+                    record.offset,
+                )
+                return False
 
     def _observe_e2e_latency(self, message: dict[str, Any]) -> None:
         received_at_ms = message.get("received_at_ms")

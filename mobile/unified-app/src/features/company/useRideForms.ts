@@ -41,6 +41,10 @@ export type RideAddressOption = {
   placeId: string | null;
   latitude: number | null;
   longitude: number | null;
+  source?: string | null;
+  mainText?: string | null;
+  secondaryText?: string | null;
+  types?: string[];
 };
 
 function parseId(input: unknown): number | null {
@@ -305,6 +309,36 @@ export type RideClientDetail = {
   clinicBillingPartyId: number | null;
 };
 
+/** Champs médicaux / accès / fauteuil extraits d’un objet mission ou détail course (clés API). */
+export function rideMissionMedicalTripFields(record: Record<string, unknown>) {
+  return {
+    pickupAccessNotes:
+      (typeof record.pickup_access_notes === "string" && record.pickup_access_notes.trim()) ||
+      (typeof record.access_notes === "string" && record.access_notes.trim()) ||
+      "",
+    dropoffAccessNotes:
+      (typeof record.dropoff_access_notes === "string" && record.dropoff_access_notes.trim()) || "",
+    notesMedical:
+      (typeof record.notes_medical === "string" && record.notes_medical.trim()) ||
+      (typeof record.medical_notes === "string" && record.medical_notes.trim()) ||
+      "",
+    establishment:
+      (typeof record.medical_facility === "string" && record.medical_facility.trim()) ||
+      (typeof record.establishment === "string" && record.establishment.trim()) ||
+      "",
+    hospitalService:
+      (typeof record.hospital_service === "string" && record.hospital_service.trim()) ||
+      (typeof record.service === "string" && record.service.trim()) ||
+      "",
+    doctorName:
+      (typeof record.doctor_name === "string" && record.doctor_name.trim()) ||
+      (typeof record.doctor === "string" && record.doctor.trim()) ||
+      "",
+    wheelchairClient: Boolean(record.wheelchair_client_has),
+    wheelchairProvide: Boolean(record.wheelchair_need),
+  };
+}
+
 function parseClientDetail(payload: unknown): RideClientDetail | null {
   if (!payload || typeof payload !== "object") return null;
   const raw = payload as Record<string, unknown>;
@@ -370,36 +404,21 @@ function parseClientDetail(payload: unknown): RideClientDetail | null {
     Boolean(stay) &&
     raw.active_stay !== null &&
     raw.activeStay !== null;
+  const medicalTrip = rideMissionMedicalTripFields(detail as Record<string, unknown>);
   return {
     phone:
       (typeof detail.phone === "string" && detail.phone.trim()) ||
       (typeof detail.contact_phone === "string" && detail.contact_phone.trim()) ||
       null,
     pickupAddressCandidate,
-    pickupAccessNotes:
-      (typeof detail.pickup_access_notes === "string" && detail.pickup_access_notes.trim()) ||
-      (typeof detail.access_notes === "string" && detail.access_notes.trim()) ||
-      "",
-    dropoffAccessNotes:
-      (typeof detail.dropoff_access_notes === "string" && detail.dropoff_access_notes.trim()) || "",
-    notesMedical:
-      (typeof detail.notes_medical === "string" && detail.notes_medical.trim()) ||
-      (typeof detail.medical_notes === "string" && detail.medical_notes.trim()) ||
-      "",
-    establishment:
-      (typeof detail.medical_facility === "string" && detail.medical_facility.trim()) ||
-      (typeof detail.establishment === "string" && detail.establishment.trim()) ||
-      "",
-    hospitalService:
-      (typeof detail.hospital_service === "string" && detail.hospital_service.trim()) ||
-      (typeof detail.service === "string" && detail.service.trim()) ||
-      "",
-    doctorName:
-      (typeof detail.doctor_name === "string" && detail.doctor_name.trim()) ||
-      (typeof detail.doctor === "string" && detail.doctor.trim()) ||
-      "",
-    wheelchairClient: Boolean(detail.wheelchair_client_has),
-    wheelchairProvide: Boolean(detail.wheelchair_need),
+    pickupAccessNotes: medicalTrip.pickupAccessNotes,
+    dropoffAccessNotes: medicalTrip.dropoffAccessNotes,
+    notesMedical: medicalTrip.notesMedical,
+    establishment: medicalTrip.establishment,
+    hospitalService: medicalTrip.hospitalService,
+    doctorName: medicalTrip.doctorName,
+    wheelchairClient: medicalTrip.wheelchairClient,
+    wheelchairProvide: medicalTrip.wheelchairProvide,
     preferentialRate: Number.isFinite(preferentialRate) ? preferentialRate : null,
     hasActiveStay,
     clinicName,
@@ -473,6 +492,42 @@ function parseAddressOptions(payload: unknown): RideAddressOption[] {
     }
     return index + 1;
   };
+  const normalizeSwissLikeLabel = (
+    raw: Record<string, unknown>,
+    properties: Record<string, unknown> | undefined
+  ): string => {
+    const street =
+      (typeof raw.street === "string" && raw.street.trim()) ||
+      (typeof properties?.street === "string" && properties.street.trim()) ||
+      (typeof properties?.name === "string" && properties.name.trim()) ||
+      "";
+    const houseNumber =
+      (typeof raw.housenumber === "string" && raw.housenumber.trim()) ||
+      (typeof properties?.housenumber === "string" && properties.housenumber.trim()) ||
+      "";
+    const postcode =
+      (typeof raw.postcode === "string" && raw.postcode.trim()) ||
+      (typeof properties?.postcode === "string" && properties.postcode.trim()) ||
+      "";
+    const city =
+      (typeof raw.city === "string" && raw.city.trim()) ||
+      (typeof properties?.city === "string" && properties.city.trim()) ||
+      (typeof properties?.locality === "string" && properties.locality.trim()) ||
+      "";
+    const placeName =
+      (typeof raw.name === "string" && raw.name.trim()) ||
+      (typeof properties?.name === "string" && properties.name.trim()) ||
+      "";
+    const streetWithNumber = [street, houseNumber].filter(Boolean).join(" ").trim();
+    const locality = [postcode, city].filter(Boolean).join(" ").trim();
+    const addressLine = [streetWithNumber, locality].filter(Boolean).join(", ").trim();
+    if (placeName && addressLine && placeName.toLowerCase() !== streetWithNumber.toLowerCase()) {
+      return `${placeName}, ${addressLine}`;
+    }
+    if (addressLine) return addressLine;
+    if (placeName) return placeName;
+    return "";
+  };
   return rows
     .map((row, index) => {
       if (!row || typeof row !== "object") return null;
@@ -492,6 +547,29 @@ function parseAddressOptions(payload: unknown): RideAddressOption[] {
         `#${id}`;
       const geometry = raw.geometry as Record<string, unknown> | undefined;
       const geometryCoords = Array.isArray(geometry?.coordinates) ? geometry?.coordinates : null;
+      const source =
+        typeof raw.source === "string"
+          ? raw.source
+          : typeof properties?.source === "string"
+            ? properties.source
+            : null;
+      const mainText =
+        typeof raw.main_text === "string"
+          ? raw.main_text
+          : typeof properties?.main_text === "string"
+            ? properties.main_text
+            : null;
+      const secondaryText =
+        typeof raw.secondary_text === "string"
+          ? raw.secondary_text
+          : typeof properties?.secondary_text === "string"
+            ? properties.secondary_text
+            : null;
+      const normalizedSwissLabel = normalizeSwissLikeLabel(raw, properties);
+      const googleLikeLabel =
+        source === "google_places" || source === "google"
+          ? [mainText, secondaryText].filter((v): v is string => typeof v === "string" && v.trim().length > 0).join(", ")
+          : "";
       const latitudeCandidate =
         raw.lat ??
         raw.latitude ??
@@ -521,7 +599,7 @@ function parseAddressOptions(payload: unknown): RideAddressOption[] {
             : NaN;
       return {
         id,
-        label: String(label),
+        label: googleLikeLabel || normalizedSwissLabel || String(label),
         placeId:
           typeof raw.place_id === "string"
             ? raw.place_id
@@ -532,6 +610,14 @@ function parseAddressOptions(payload: unknown): RideAddressOption[] {
               : null,
         latitude: Number.isFinite(latitude) ? latitude : null,
         longitude: Number.isFinite(longitude) ? longitude : null,
+        source,
+        mainText,
+        secondaryText,
+        types: Array.isArray(raw.types)
+          ? raw.types.filter((v): v is string => typeof v === "string")
+          : Array.isArray(properties?.types)
+            ? properties.types.filter((v): v is string => typeof v === "string")
+            : [],
       };
     })
     .filter((value): value is RideAddressOption => value !== null);
@@ -539,6 +625,29 @@ function parseAddressOptions(payload: unknown): RideAddressOption[] {
 
 export function __parseAddressOptionsForTests(payload: unknown): RideAddressOption[] {
   return parseAddressOptions(payload);
+}
+
+function buildAddressFallbackQueries(rawQuery: string): string[] {
+  const q = rawQuery.trim();
+  if (!q) return [];
+  const variants: string[] = [];
+  const stripped = q
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const hasGeneva = /geneve|genève/i.test(q);
+  if (stripped && stripped !== q) {
+    variants.push(stripped);
+  }
+  if (stripped && stripped !== q && !/geneve|genève/i.test(stripped)) {
+    variants.push(`${stripped} geneve`);
+  }
+  if (!hasGeneva) {
+    variants.push(`${q} geneve`);
+  }
+  return Array.from(new Set(variants));
 }
 
 export function useCompanyClientSearch(query: string) {
@@ -570,8 +679,24 @@ export function useCompanyAddressSearch(query: string) {
       : ["company", "ride-form", "addresses", "disabled"],
     enabled: Boolean(contextId) && query.trim().length > 2,
     queryFn: async () => {
-      const payload = await searchCompanyAddresses({ contextId: contextId as string, q: query.trim() });
-      return parseAddressOptions(payload);
+      const baseQuery = query.trim();
+      const payload = await searchCompanyAddresses({ contextId: contextId as string, q: baseQuery });
+      const primaryRows = parseAddressOptions(payload);
+      if (primaryRows.length > 0) {
+        return primaryRows;
+      }
+      const variants = buildAddressFallbackQueries(baseQuery);
+      for (const variant of variants) {
+        const variantPayload = await searchCompanyAddresses({
+          contextId: contextId as string,
+          q: variant,
+        });
+        const variantRows = parseAddressOptions(variantPayload);
+        if (variantRows.length > 0) {
+          return variantRows;
+        }
+      }
+      return [];
     },
     staleTime: QUERY_STALE_TIME_MS.default,
   });

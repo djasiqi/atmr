@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { AppButton, Modal, useResponsiveTokens } from "../../../../design/responsive";
+import { AxiosError } from "axios";
+import { AppButton, Modal } from "../../../../design/responsive";
 import { AppInput } from "../../../../design/ui/AppInput";
 import { AppText } from "../../../../design/ui/AppText";
 import { isFeatureEnabled } from "../../../../core/featureFlags/registry";
+import { apiClient } from "../../../../core/api/client";
 import { E } from "../../theme/enterpriseOpsTheme";
 import {
   normalizeScheduledTimeIso,
@@ -14,13 +16,16 @@ import {
   useRideCreate,
   useRideFormState,
 } from "../../useRideForms";
-import type { RideClientOption } from "../../useRideForms";
+import type { RideAddressOption, RideClientOption } from "../../useRideForms";
+import { useActiveCompanyContextId } from "../../hooks";
+import { searchCompanyAddresses } from "../../api/companyApi";
 import { AddressSelector } from "./AddressSelector";
 import { ClientSelector } from "./ClientSelector";
 import { RecurrenceSelector } from "./RecurrenceSelector";
 import { TimeDatePicker } from "./TimeDatePicker";
 import { ClientCreateModal } from "./ClientCreateModal";
 import {
+  analyzePricingSimulation,
   backendWeekdayFromScheduledIso,
   buildRideCreatePayload,
   parseMedicalHintsFromAddress,
@@ -34,6 +39,10 @@ type RideCreateModalProps = {
 };
 
 const NOTES_MAX = 500;
+const SIM_DEBOUNCE_MS = 180;
+const SIM_CACHE_TTL_MS = 60 * 1000;
+const SIM_CACHE_MAX_SIZE = 50;
+const COORD_PRECISION = 5;
 /** Jours backend 0 = lun … 6 = dim. */
 const WEEKDAY_SHORT = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"] as const;
 const ROW_RADIUS = 12;
@@ -383,6 +392,23 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: E.TEXT_MUTED,
   },
+  amountMetaRow: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
+    gap: 6,
+    alignItems: "center" as const,
+    marginTop: 2,
+  },
+  amountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  amountBadgeText: {
+    fontSize: 12,
+    fontWeight: "700" as const,
+  },
   error: { marginTop: 4 },
 });
 
@@ -397,6 +423,176 @@ function parseOptionalAmount(raw: string): number | null {
   if (!t) return null;
   const n = Number.parseFloat(t);
   return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function isValidPreferentialAmount(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function hasValidCoords(address: RideAddressOption | null | undefined): boolean {
+  if (!address) return false;
+  return Number.isFinite(Number(address.latitude)) && Number.isFinite(Number(address.longitude));
+}
+
+function toRoundedCoord(value: number): number {
+  return Number(value.toFixed(COORD_PRECISION));
+}
+
+function pruneSimulationCache(
+  cache: Map<string, { amount: number; warningMessage: string | null; cachedAt: number }>
+) {
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if (now - entry.cachedAt > SIM_CACHE_TTL_MS) {
+      cache.delete(key);
+    }
+  }
+  if (cache.size <= SIM_CACHE_MAX_SIZE) return;
+  const oldest = [...cache.entries()].sort((a, b) => a[1].cachedAt - b[1].cachedAt);
+  const toDelete = oldest.slice(0, cache.size - SIM_CACHE_MAX_SIZE);
+  toDelete.forEach(([key]) => cache.delete(key));
+}
+
+function toResolvedAddressOption(raw: unknown, fallbackLabel: string): RideAddressOption | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const properties =
+    row.properties && typeof row.properties === "object"
+      ? (row.properties as Record<string, unknown>)
+      : undefined;
+  const geometry =
+    row.geometry && typeof row.geometry === "object"
+      ? (row.geometry as Record<string, unknown>)
+      : undefined;
+  const geometryCoords = Array.isArray(geometry?.coordinates) ? geometry.coordinates : null;
+
+  const labelCandidate =
+    (typeof row.label === "string" && row.label.trim()) ||
+    (typeof row.description === "string" && row.description.trim()) ||
+    (typeof row.address === "string" && row.address.trim()) ||
+    (typeof row.display_name === "string" && row.display_name.trim()) ||
+    (typeof properties?.label === "string" && properties.label.trim()) ||
+    (typeof properties?.name === "string" && properties.name.trim()) ||
+    fallbackLabel;
+
+  const latCandidate =
+    row.lat ??
+    row.latitude ??
+    properties?.lat ??
+    (geometryCoords && geometryCoords.length > 1 ? geometryCoords[1] : null);
+  const lonCandidate =
+    row.lon ??
+    row.lng ??
+    row.longitude ??
+    properties?.lon ??
+    properties?.lng ??
+    (geometryCoords && geometryCoords.length > 0 ? geometryCoords[0] : null);
+
+  const latitude =
+    typeof latCandidate === "number"
+      ? latCandidate
+      : typeof latCandidate === "string"
+        ? Number.parseFloat(latCandidate)
+        : NaN;
+  const longitude =
+    typeof lonCandidate === "number"
+      ? lonCandidate
+      : typeof lonCandidate === "string"
+        ? Number.parseFloat(lonCandidate)
+        : NaN;
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  const idCandidate =
+    row.id ??
+    row.place_id ??
+    row.placeId ??
+    row.photon_id ??
+    row.osm_id ??
+    properties?.id;
+  const parsedId =
+    typeof idCandidate === "number"
+      ? idCandidate
+      : typeof idCandidate === "string"
+        ? Number.parseInt(idCandidate, 10)
+        : NaN;
+
+  return {
+    id: Number.isFinite(parsedId) ? parsedId : Math.abs(Math.floor(latitude * 100000)),
+    label: String(labelCandidate),
+    placeId:
+      typeof row.place_id === "string"
+        ? row.place_id
+        : typeof row.placeId === "string"
+          ? row.placeId
+          : typeof properties?.place_id === "string"
+            ? properties.place_id
+            : null,
+    latitude,
+    longitude,
+  };
+}
+
+async function enrichAddressWithPlaceDetails(address: RideAddressOption): Promise<RideAddressOption> {
+  if (hasValidCoords(address) || !address.placeId) {
+    return address;
+  }
+  try {
+    const response = await apiClient.get(
+      `geocode/place-details?place_id=${encodeURIComponent(address.placeId)}`
+    );
+    const details = response?.data as
+      | {
+          lat?: number | string;
+          lon?: number | string;
+          label?: string;
+          address?: string;
+          name?: string;
+          address_components?: Array<{ long_name?: string; types?: string[] }>;
+        }
+      | undefined;
+    const latCandidate = Number(details?.lat);
+    const lonCandidate = Number(details?.lon);
+    if (!Number.isFinite(latCandidate) || !Number.isFinite(lonCandidate)) {
+      return address;
+    }
+    const comps = Array.isArray(details?.address_components) ? details.address_components : [];
+    const pickComp = (type: string) =>
+      comps.find((c) => Array.isArray(c.types) && c.types.includes(type))?.long_name?.trim() || "";
+    const streetNumber = pickComp("street_number");
+    const route = pickComp("route");
+    const postcode = pickComp("postal_code");
+    const city = pickComp("locality") || pickComp("administrative_area_level_2");
+    const streetAddress = [route, streetNumber].filter(Boolean).join(" ").trim();
+    const structuredAddress = [streetAddress, [postcode, city].filter(Boolean).join(" ").trim()]
+      .filter(Boolean)
+      .join(", ");
+    const placeName =
+      (typeof details?.name === "string" && details.name.trim()) ||
+      address.mainText ||
+      "";
+    const nextLabel =
+      (structuredAddress
+        ? placeName && placeName.toLowerCase() !== streetAddress.toLowerCase()
+          ? `${placeName}, ${structuredAddress}`
+          : structuredAddress
+        : "") ||
+      (typeof details?.label === "string" && details.label.trim()) ||
+      (typeof details?.address === "string" && details.address.trim()) ||
+      address.label;
+    return {
+      ...address,
+      label: nextLabel,
+      mainText: placeName || address.mainText || null,
+      secondaryText: structuredAddress || address.secondaryText || null,
+      latitude: latCandidate,
+      longitude: lonCandidate,
+    };
+  } catch {
+    return address;
+  }
 }
 
 function formatSwissDateTime(iso: string): string {
@@ -426,21 +622,24 @@ function formatSwissTimeOnly(iso: string): string {
   });
 }
 
-function formatIsoDateDisplayFr(yyyyMmDd: string): string {
-  const t = yyyyMmDd.trim();
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
-  if (!m) return t;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  if (Number.isNaN(d.getTime())) return t;
-  return d.toLocaleDateString("fr-CH", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+function toSubmitErrorMessage(error: unknown): string {
+  if (error instanceof AxiosError) {
+    const data = error.response?.data as
+      | { message?: unknown; error?: unknown; error_message?: unknown }
+      | undefined;
+    const candidate = [data?.message, data?.error, data?.error_message, error.message].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0
+    );
+    if (candidate) return candidate.trim();
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  return "Création de la réservation impossible.";
 }
 
 export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModalProps) {
-  const t = useResponsiveTokens();
+  const activeContextId = useActiveCompanyContextId();
   const createRide = useRideCreate();
   const form = useRideFormState();
   const [error, setError] = useState<string | null>(null);
@@ -448,9 +647,22 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   const [amountSource, setAmountSource] = useState<"preferential" | "simulated" | "manual" | null>(null);
   const [amountLocked, setAmountLocked] = useState(false);
   const [pricingWarning, setPricingWarning] = useState("");
+  const [selectedClientPreferentialRate, setSelectedClientPreferentialRate] = useState<number | null>(null);
   const [billToPatient, setBillToPatient] = useState(false);
   const [createClientVisible, setCreateClientVisible] = useState(false);
   const [medicalOpen, setMedicalOpen] = useState(false);
+  const [routePointsForPricing, setRoutePointsForPricing] = useState<Array<{ lat: number; lng: number }>>([]);
+  const clientDetailHydrationKeyRef = useRef<string>("");
+  const lastSimulationKeyRef = useRef<string>("");
+  const activeSimulationKeyRef = useRef<string>("");
+  const simulationRequestSeqRef = useRef(0);
+  const amountLockedRef = useRef(false);
+  const amountSourceRef = useRef<"preferential" | "simulated" | "manual" | null>(null);
+  const simulationCacheRef = useRef(
+    new Map<string, { amount: number; warningMessage: string | null; cachedAt: number }>()
+  );
+  const lastGeocodePickupKeyRef = useRef<string>("");
+  const lastGeocodeDropoffKeyRef = useRef<string>("");
   const structuredPayloadEnabled = isFeatureEnabled("company_mobile_structured_ride_payload_enabled");
   const clientDetailQuery = useCompanyClientDetail(form.clientId);
   const pricingContextQuery = useCompanyBillingPricingContext();
@@ -496,6 +708,14 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   }, [form.scheduledAt]);
 
   const recurringOn = form.recurrence !== "none";
+
+  useEffect(() => {
+    amountLockedRef.current = amountLocked;
+  }, [amountLocked]);
+
+  useEffect(() => {
+    amountSourceRef.current = amountSource;
+  }, [amountSource]);
 
   useEffect(() => {
     if (form.recurrence !== "custom") return;
@@ -557,12 +777,33 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     (!form.isMaterialDelivery || form.deliveryDescription.trim().length > 0) &&
     recurrenceValid;
 
+  const handlePickupAddressSelected = useCallback(async (address: RideAddressOption) => {
+    form.selectPickupAddress(address);
+    const enriched = await enrichAddressWithPlaceDetails(address);
+    if (enriched !== address && hasValidCoords(enriched)) {
+      form.selectPickupAddress(enriched);
+      lastSimulationKeyRef.current = "";
+    }
+  }, [form]);
+
+  const handleDropoffAddressSelected = useCallback(async (address: RideAddressOption) => {
+    form.selectDropoffAddress(address);
+    const enriched = await enrichAddressWithPlaceDetails(address);
+    if (enriched !== address && hasValidCoords(enriched)) {
+      form.selectDropoffAddress(enriched);
+      lastSimulationKeyRef.current = "";
+    }
+  }, [form]);
+
   const handleClientSelected = (client: RideClientOption) => {
     form.setClientId(client.id);
     setSelectedClientLabel(client.label);
+    setSelectedClientPreferentialRate(
+      isValidPreferentialAmount(client.preferentialRate) ? client.preferentialRate : null
+    );
     setBillToPatient(false);
-    if (form.pickup.trim().length === 0 && client.pickupAddressCandidate) {
-      form.selectPickupAddress(client.pickupAddressCandidate);
+    if (client.pickupAddressCandidate) {
+      void handlePickupAddressSelected(client.pickupAddressCandidate);
     }
     if (form.pickupAccessNotes.trim().length === 0 && client.pickupAccessNotes) {
       form.setPickupAccessNotes(client.pickupAccessNotes);
@@ -600,16 +841,19 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
   useEffect(() => {
     const detail = clientDetailQuery.data;
     if (!detail) return;
-    console.log("[RideCreateModal] client detail", {
-      clientId,
-      clientDetail: detail,
-      pickup,
-      pickupCandidate: detail.pickupAddressCandidate,
-      clinicAddress: detail.clinicAddress,
-      hasActiveStay: detail.hasActiveStay,
-    });
+    const hydrationKey = [
+      String(clientId ?? ""),
+      String(Boolean(detail.hasActiveStay)),
+      String(Boolean(detail.clinicAddress)),
+      String(Boolean(detail.pickupAddressCandidate)),
+      String(Boolean(billToPatient)),
+    ].join("|");
+    if (clientDetailHydrationKeyRef.current === hydrationKey) {
+      return;
+    }
+    clientDetailHydrationKeyRef.current = hydrationKey;
     if (detail.hasActiveStay && !billToPatient && detail.clinicAddress) {
-      selectPickupAddress(detail.clinicAddress);
+      void handlePickupAddressSelected(detail.clinicAddress);
       if (establishment.trim().length === 0 && detail.clinicName) setEstablishment(detail.clinicName);
       if (hospitalService.trim().length === 0 && detail.clinicService) {
         setHospitalService(detail.clinicService);
@@ -620,8 +864,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       if (pickupAccessNotes.trim().length === 0 && accessHint) setPickupAccessNotes(accessHint);
       setMedicalOpen(true);
     }
-    if (pickup.trim().length === 0 && detail.pickupAddressCandidate) {
-      selectPickupAddress(detail.pickupAddressCandidate);
+    if ((!detail.hasActiveStay || billToPatient) && detail.pickupAddressCandidate) {
+      void handlePickupAddressSelected(detail.pickupAddressCandidate);
     }
     if (pickupAccessNotes.trim().length === 0 && detail.pickupAccessNotes) {
       setPickupAccessNotes(detail.pickupAccessNotes);
@@ -664,7 +908,6 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     pickupAccessNotes,
     wheelchairClient,
     wheelchairProvide,
-    selectPickupAddress,
     setAmountInput,
     setDoctorName,
     setDropoffAccessNotes,
@@ -682,18 +925,240 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       setAmountSource(null);
       setAmountLocked(false);
       setPricingWarning("");
+      setSelectedClientPreferentialRate(null);
       setBillToPatient(false);
+      clientDetailHydrationKeyRef.current = "";
+      lastSimulationKeyRef.current = "";
+      activeSimulationKeyRef.current = "";
+      simulationRequestSeqRef.current = 0;
+      simulationCacheRef.current.clear();
+      lastGeocodePickupKeyRef.current = "";
+      lastGeocodeDropoffKeyRef.current = "";
     }
   }, [form.clientId]);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadRoutePoints = async () => {
+      if (!hasValidCoords(pickupAddress) || !hasValidCoords(dropoffAddress)) {
+        setRoutePointsForPricing([]);
+        return;
+      }
+      try {
+        const response = await apiClient.get("/osrm/route", {
+          params: {
+            pickup_lat: Number(pickupAddress?.latitude),
+            pickup_lon: Number(pickupAddress?.longitude),
+            dropoff_lat: Number(dropoffAddress?.latitude),
+            dropoff_lon: Number(dropoffAddress?.longitude),
+          },
+          timeout: 4000,
+        });
+        if (cancelled) return;
+        const route = Array.isArray(response?.data?.route)
+          ? response.data.route
+              .filter((pair: unknown) => Array.isArray(pair) && pair.length >= 2)
+              .map((pair: unknown) => {
+                const [lat, lng] = pair as [number, number];
+                return { lat: Number(lat), lng: Number(lng) };
+              })
+              .filter((pt) => Number.isFinite(pt.lat) && Number.isFinite(pt.lng))
+          : [];
+        setRoutePointsForPricing(route);
+      } catch {
+        if (!cancelled) {
+          setRoutePointsForPricing([]);
+        }
+      }
+    };
+    void loadRoutePoints();
+    return () => {
+      cancelled = true;
+    };
+  }, [pickupAddress, dropoffAddress]);
+
+  useEffect(() => {
+    if (!activeContextId) return;
+    let cancelled = false;
+
+    const normalizeRows = (payload: unknown): unknown[] => {
+      if (Array.isArray(payload)) return payload;
+      if (!payload || typeof payload !== "object") return [];
+      const raw = payload as Record<string, unknown>;
+      const buckets = [
+        raw.items,
+        raw.results,
+        raw.data,
+        raw.clients,
+        raw.addresses,
+        raw.features,
+        raw.predictions,
+        raw.suggestions,
+      ];
+      const list = buckets.find((entry) => Array.isArray(entry));
+      return Array.isArray(list) ? list : [];
+    };
+
+    const resolveAddressCoords = async (
+      kind: "pickup" | "dropoff",
+      rawLabel: string,
+      setResolved: (addr: RideAddressOption) => void
+    ) => {
+      const q = rawLabel.trim();
+      if (q.length < 4) return;
+      const key = `${kind}|${q.toLowerCase()}`;
+      const keyRef = kind === "pickup" ? lastGeocodePickupKeyRef : lastGeocodeDropoffKeyRef;
+      if (keyRef.current === key) return;
+      keyRef.current = key;
+      try {
+        const payload = await searchCompanyAddresses({ contextId: activeContextId, q });
+        if (cancelled) return;
+        const rows = normalizeRows(payload)
+          .map((row) => toResolvedAddressOption(row, q))
+          .filter((row): row is RideAddressOption => row != null);
+        const scored = rows
+          .map((row) => {
+            const label = (row.label || "").toLowerCase();
+            const mainText = (row.mainText || "").toLowerCase();
+            const startsWith = label.startsWith(q.toLowerCase()) || mainText.startsWith(q.toLowerCase());
+            const hasCoords = hasValidCoords(row);
+            const isGoogle = row.source === "google_places" || row.source === "google";
+            const score = (hasCoords ? 1000 : 0) + (isGoogle ? 300 : 0) + (startsWith ? 150 : 0);
+            return { row, score };
+          })
+          .sort((a, b) => b.score - a.score);
+        const resolved = scored[0]?.row ?? null;
+        if (!resolved || cancelled) return;
+        setResolved(resolved);
+        lastSimulationKeyRef.current = "";
+      } catch {
+        // Best effort: si l'auto-résolution échoue, l'utilisateur peut saisir manuellement.
+      }
+    };
+
+    if (!hasValidCoords(pickupAddress) && pickup.trim().length > 0) {
+      void resolveAddressCoords("pickup", pickup, (addr) => {
+        void handlePickupAddressSelected(addr);
+      });
+    }
+    if (!hasValidCoords(dropoffAddress) && form.dropoff.trim().length > 0) {
+      void resolveAddressCoords("dropoff", form.dropoff, (addr) => {
+        void handleDropoffAddressSelected(addr);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeContextId,
+    dropoffAddress,
+    form.dropoff,
+    form.selectDropoffAddress,
+    pickup,
+    pickupAddress,
+    handlePickupAddressSelected,
+    handleDropoffAddressSelected,
+  ]);
+
+  const activePreferentialAmount = useMemo(() => {
+    if (!form.clientId || isMaterialDelivery) return null;
+    const detail = clientDetailQuery.data;
+    const detailRate = detail?.preferentialRate ?? null;
+
+    // Si le client est hospitalisé et qu'on ne force pas la facturation patient,
+    // priorité au tarif de la clinique/séjour.
+    if (!billToPatient && detail?.hasActiveStay && isValidPreferentialAmount(detailRate)) {
+      return detailRate;
+    }
+
+    // En facturation patient (ou sans séjour), utiliser le tarif préférentiel client si disponible.
+    if (isValidPreferentialAmount(selectedClientPreferentialRate)) {
+      return selectedClientPreferentialRate;
+    }
+
+    // Fallback sur le détail quand il n'y a pas de séjour actif explicite.
+    if ((!detail || !detail.hasActiveStay) && isValidPreferentialAmount(detailRate)) {
+      return detailRate;
+    }
+
+    return null;
+  }, [
+    billToPatient,
+    clientDetailQuery.data,
+    form.clientId,
+    isMaterialDelivery,
+    selectedClientPreferentialRate,
+  ]);
+
+  useEffect(() => {
+    if (isMaterialDelivery) return;
+    if (activePreferentialAmount != null) {
+      if (!amountLocked) {
+        setAmountInput(activePreferentialAmount.toFixed(2));
+        setAmountSource("preferential");
+        setPricingWarning("");
+      }
+      return;
+    }
+    if (!amountLocked && amountSource === "preferential") {
+      setAmountInput("");
+      setAmountSource(null);
+    }
+  }, [
+    activePreferentialAmount,
+    amountLocked,
+    amountSource,
+    isMaterialDelivery,
+    setAmountInput,
+  ]);
+
+  useEffect(() => {
     if (isMaterialDelivery || amountLocked || amountSource === "preferential") return;
     if (!pickupAddress || !dropoffAddress || !scheduledOk) return;
+    const pickupLat = Number(pickupAddress.latitude);
+    const pickupLng = Number(pickupAddress.longitude);
+    const dropoffLat = Number(dropoffAddress.latitude);
+    const dropoffLng = Number(dropoffAddress.longitude);
+    const hasValidCoords =
+      Number.isFinite(pickupLat) &&
+      Number.isFinite(pickupLng) &&
+      Number.isFinite(dropoffLat) &&
+      Number.isFinite(dropoffLng);
+    if (!hasValidCoords) {
+      setPricingWarning("Sélectionnez les adresses dans la liste pour calculer automatiquement le montant.");
+      return;
+    }
     const pricingProfileVersionId = pricingContextQuery.data?.pricingProfileVersionId;
     if (!pricingProfileVersionId) {
       setPricingWarning("Profil tarifaire introuvable: montant manuel requis.");
       return;
     }
+    const simulationKey = [
+      String(pricingProfileVersionId),
+      normalizeScheduledTimeIso(scheduledAt),
+      String(Boolean(isRoundTrip)),
+      toRoundedCoord(pickupLat).toFixed(COORD_PRECISION),
+      toRoundedCoord(pickupLng).toFixed(COORD_PRECISION),
+      toRoundedCoord(dropoffLat).toFixed(COORD_PRECISION),
+      toRoundedCoord(dropoffLng).toFixed(COORD_PRECISION),
+      String(routePointsForPricing.length),
+    ].join("|");
+    if (lastSimulationKeyRef.current === simulationKey) {
+      return;
+    }
+    const cached = simulationCacheRef.current.get(simulationKey);
+    if (cached && Date.now() - cached.cachedAt <= SIM_CACHE_TTL_MS) {
+      setAmountInput(cached.amount.toFixed(2));
+      setAmountSource("simulated");
+      setPricingWarning(cached.warningMessage || "");
+      lastSimulationKeyRef.current = simulationKey;
+      return;
+    }
+    lastSimulationKeyRef.current = simulationKey;
+    activeSimulationKeyRef.current = simulationKey;
+    simulationRequestSeqRef.current += 1;
+    const requestSeq = simulationRequestSeqRef.current;
     setPricingWarning("");
     const timer = setTimeout(() => {
       const payload = {
@@ -701,27 +1166,62 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         booking: {
           pickup_at: normalizeScheduledTimeIso(scheduledAt),
           is_round_trip: isRoundTrip,
-          pickup_lat: pickupAddress?.latitude,
-          pickup_lng: pickupAddress?.longitude,
-          dropoff_lat: dropoffAddress?.latitude,
-          dropoff_lng: dropoffAddress?.longitude,
+          pickup_lat: toRoundedCoord(pickupLat),
+          pickup_lng: toRoundedCoord(pickupLng),
+          dropoff_lat: toRoundedCoord(dropoffLat),
+          dropoff_lng: toRoundedCoord(dropoffLng),
+          route_points:
+            Array.isArray(routePointsForPricing) && routePointsForPricing.length > 1
+              ? routePointsForPricing
+              : undefined,
         },
       };
       pricingSimulation.mutate(payload, {
         onSuccess: (response) => {
-          const amount = parseSimulationAmount(response);
+          if (
+            requestSeq !== simulationRequestSeqRef.current ||
+            activeSimulationKeyRef.current !== simulationKey ||
+            amountLockedRef.current ||
+            amountSourceRef.current === "manual"
+          ) {
+            return;
+          }
+          const analysis = analyzePricingSimulation(response);
+          if (analysis.warningMessage) {
+            setPricingWarning(analysis.warningMessage);
+          } else {
+            setPricingWarning("");
+          }
+          if (analysis.blocked) {
+            return;
+          }
+          const amount = analysis.amount ?? parseSimulationAmount(response);
           if (amount == null) {
             setPricingWarning("Calcul auto indisponible: saisissez un montant.");
             return;
           }
           setAmountInput(amount.toFixed(2));
           setAmountSource("simulated");
+          simulationCacheRef.current.set(simulationKey, {
+            amount,
+            warningMessage: analysis.warningMessage,
+            cachedAt: Date.now(),
+          });
+          pruneSimulationCache(simulationCacheRef.current);
         },
         onError: () => {
+          if (
+            requestSeq !== simulationRequestSeqRef.current ||
+            activeSimulationKeyRef.current !== simulationKey ||
+            amountLockedRef.current ||
+            amountSourceRef.current === "manual"
+          ) {
+            return;
+          }
           setPricingWarning("Calcul auto indisponible: saisissez un montant.");
         },
       });
-    }, 220);
+    }, SIM_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [
     amountLocked,
@@ -733,6 +1233,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     scheduledAt,
     pricingContextQuery.data?.pricingProfileVersionId,
     pricingSimulation,
+    routePointsForPricing,
     scheduledOk,
     setAmountInput,
     clientId,
@@ -750,6 +1251,66 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       return;
     }
     try {
+      const resolveAddressForSubmit = async (
+        label: string,
+        current: RideAddressOption | null
+      ): Promise<RideAddressOption | null> => {
+        if (hasValidCoords(current)) {
+          return current;
+        }
+        if (!activeContextId || label.trim().length < 4) {
+          return current;
+        }
+        try {
+          const payload = await searchCompanyAddresses({ contextId: activeContextId, q: label.trim() });
+          const rows = (Array.isArray(payload) ? payload : []) as unknown[];
+          const normalizedRows =
+            rows.length > 0
+              ? rows
+              : payload && typeof payload === "object"
+                ? ([
+                    (payload as Record<string, unknown>).items,
+                    (payload as Record<string, unknown>).results,
+                    (payload as Record<string, unknown>).data,
+                    (payload as Record<string, unknown>).addresses,
+                    (payload as Record<string, unknown>).predictions,
+                    (payload as Record<string, unknown>).suggestions,
+                  ].find((entry) => Array.isArray(entry)) as unknown[] | undefined) ?? []
+                : [];
+          const candidates = normalizedRows
+            .map((row) => toResolvedAddressOption(row, label))
+            .filter((row): row is RideAddressOption => row != null)
+            .map((row) => {
+              const startsWith = row.label.toLowerCase().startsWith(label.trim().toLowerCase());
+              const isGoogle = row.source === "google_places" || row.source === "google";
+              const score = (hasValidCoords(row) ? 1000 : 0) + (startsWith ? 150 : 0) + (isGoogle ? 300 : 0);
+              return { row, score };
+            })
+            .sort((a, b) => b.score - a.score);
+          const best = candidates[0]?.row ?? current;
+          if (!best) return null;
+          return enrichAddressWithPlaceDetails(best);
+        } catch {
+          return current;
+        }
+      };
+
+      const resolvedPickupAddress = await resolveAddressForSubmit(form.pickup, form.pickupAddress);
+      const resolvedDropoffAddress = await resolveAddressForSubmit(form.dropoff, form.dropoffAddress);
+      if (!hasValidCoords(resolvedPickupAddress) || !hasValidCoords(resolvedDropoffAddress)) {
+        setError(
+          "Coordonnées GPS introuvables pour le départ ou la destination. Sélectionnez une suggestion d’adresse avant de créer la réservation."
+        );
+        return;
+      }
+      if (resolvedPickupAddress && resolvedPickupAddress !== form.pickupAddress) {
+        form.selectPickupAddress(resolvedPickupAddress);
+      }
+      if (resolvedDropoffAddress && resolvedDropoffAddress !== form.dropoffAddress) {
+        form.selectDropoffAddress(resolvedDropoffAddress);
+      }
+
+      const debugTraceId = `ride_create_${Date.now()}`;
       const scheduled_time = normalizeScheduledTimeIso(form.scheduledAt);
       const normalizedReturnScheduledAt = normalizeScheduledTimeIso(form.returnScheduledAt);
       const payload = buildRideCreatePayload({
@@ -757,8 +1318,8 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         clientId: form.clientId,
         pickup: form.pickup,
         dropoff: form.dropoff,
-        pickupAddress: form.pickupAddress,
-        dropoffAddress: form.dropoffAddress,
+        pickupAddress: resolvedPickupAddress,
+        dropoffAddress: resolvedDropoffAddress,
         scheduledTime: scheduled_time,
         isRoundTrip: form.isRoundTrip,
         recurrence: form.recurrence,
@@ -788,6 +1349,22 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
         recurrenceDays,
       });
 
+      if (__DEV__) {
+        console.log("[RideCreateModal] submit payload", {
+          trace_id: debugTraceId,
+          is_recurring: payload.is_recurring ?? false,
+          recurrence_type: payload.recurrence_type ?? null,
+          recurrence_days: payload.recurrence_days ?? null,
+          recurrence_end_date: payload.recurrence_end_date ?? null,
+          occurrences: payload.occurrences ?? null,
+          recurrence_series_length: payload.recurrence_series_length ?? null,
+          is_round_trip: payload.is_round_trip ?? false,
+          return_date: payload.return_date ?? null,
+          return_time: payload.return_time ?? null,
+          scheduled_time: payload.scheduled_time ?? null,
+        });
+      }
+
       await createRide.mutateAsync(payload);
       form.reset();
       setSelectedClientLabel("");
@@ -800,7 +1377,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
       onCreated?.();
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Création de la réservation impossible.");
+      setError(toSubmitErrorMessage(e));
     }
   };
 
@@ -837,6 +1414,32 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
     clientDetailQuery.data?.hasActiveStay,
     billToPatient,
   ]);
+
+  const amountBadgeMeta = useMemo(() => {
+    if (!amountSource) return null;
+    if (amountSource === "preferential") {
+      return {
+        label: "Tarif préférentiel",
+        borderColor: "rgba(14, 116, 144, 0.34)",
+        backgroundColor: "rgba(14, 116, 144, 0.10)",
+        textColor: "#0E7490",
+      };
+    }
+    if (amountSource === "simulated") {
+      return {
+        label: "Calculé automatiquement",
+        borderColor: "rgba(0, 121, 107, 0.34)",
+        backgroundColor: "rgba(0, 121, 107, 0.10)",
+        textColor: E.BRAND,
+      };
+    }
+    return {
+      label: "Modifié manuellement",
+      borderColor: "rgba(249, 115, 22, 0.36)",
+      backgroundColor: "rgba(249, 115, 22, 0.10)",
+      textColor: "#C2410C",
+    };
+  }, [amountSource]);
 
   const header = () => (
     <View style={s.headerRow}>
@@ -938,7 +1541,9 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   label=""
                   value={form.pickup}
                   onChange={form.setPickup}
-                  onSelectAddress={form.selectPickupAddress}
+                  onSelectAddress={(address) => {
+                    void handlePickupAddressSelected(address);
+                  }}
                   placeholder="Rechercher une adresse ou un lieu…"
                   leftSlot={<Ionicons name="navigate-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                   containerStyle={s.compactAddressContainer}
@@ -954,7 +1559,7 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                   value={form.dropoff}
                   onChange={form.setDropoff}
                   onSelectAddress={(address) => {
-                    form.selectDropoffAddress(address);
+                    void handleDropoffAddressSelected(address);
                     const hints = parseMedicalHintsFromAddress(address.label);
                     if (hints.establishment && form.establishment.trim().length === 0) {
                       form.setEstablishment(hints.establishment);
@@ -1162,30 +1767,51 @@ export function RideCreateModal({ visible, onClose, onCreated }: RideCreateModal
                 leftSlot={<Ionicons name="cash-outline" size={FIELD_ICON_SIZE} color={E.TEXT_SEC} />}
                 shellStyle={{ borderRadius: ROW_RADIUS, backgroundColor: "#FAFBFA" }}
               />
-              {amountSource ? (
+              {amountBadgeMeta ? (
+                <View style={s.amountMetaRow}>
+                  <View
+                    style={[
+                      s.amountBadge,
+                      {
+                        borderColor: amountBadgeMeta.borderColor,
+                        backgroundColor: amountBadgeMeta.backgroundColor,
+                      },
+                    ]}
+                  >
+                    <AppText style={[s.amountBadgeText, { color: amountBadgeMeta.textColor }]}>
+                      {amountBadgeMeta.label}
+                    </AppText>
+                  </View>
+                </View>
+              ) : null}
+              {pricingSimulation.isPending && !amountLocked ? (
                 <AppText style={s.sectionHelper}>
-                  {amountSource === "preferential"
-                    ? "Tarif préférentiel client appliqué."
-                    : amountSource === "simulated"
-                      ? "Montant calculé automatiquement."
-                      : "Montant modifié manuellement."}
+                  {amountSource === "simulated" && form.amountInput.trim().length > 0
+                    ? "Mise à jour du montant exact en cours…"
+                    : "Calcul du montant en cours…"}
                 </AppText>
               ) : null}
               {pricingWarning ? <AppText style={s.sectionHelper}>{pricingWarning}</AppText> : null}
               {amountLocked && !form.isMaterialDelivery ? (
-                <Pressable
-                  onPress={() => {
-                    setAmountLocked(false);
-                    setAmountSource(null);
-                  }}
-                  style={s.linkNewClient}
-                  accessibilityRole="button"
-                  accessibilityLabel="Réactiver le calcul automatique du montant"
-                >
-                  <AppText style={{ color: E.BRAND, fontWeight: "600" }}>
-                    Recalculer automatiquement
+                <>
+                  <AppText style={s.sectionHelper}>
+                    Montant verrouillé manuellement.
                   </AppText>
-                </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      setAmountLocked(false);
+                      setAmountSource(null);
+                      lastSimulationKeyRef.current = "";
+                    }}
+                    style={s.linkNewClient}
+                    accessibilityRole="button"
+                    accessibilityLabel="Réactiver le calcul automatique du montant"
+                  >
+                    <AppText style={{ color: E.BRAND, fontWeight: "600" }}>
+                      Recalculer automatiquement
+                    </AppText>
+                  </Pressable>
+                </>
               ) : null}
             </>
           )}

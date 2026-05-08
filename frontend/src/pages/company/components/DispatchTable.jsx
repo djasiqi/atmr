@@ -551,6 +551,12 @@ const DispatchTable = ({
       'booking_updated': [
         lirieKeys.assignedReservations(dispatchDay),
       ],
+      'booking_reassigned': [
+        lirieKeys.assignedReservations(dispatchDay),
+      ],
+      'booking_assigned': [
+        lirieKeys.assignedReservations(dispatchDay),
+      ],
     },
     {
       dependencies: [dispatchDay, useUnifiedDispatchWs],

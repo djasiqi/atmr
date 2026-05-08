@@ -145,6 +145,7 @@ def test_driver(db, test_company):
     user = User()
     user.username = f"driver_{unique_suffix}"
     user.email = f"driver_{unique_suffix}@test.ch"
+    user.public_id = str(uuid.uuid4())
     user.role = UserRole.driver
     user.first_name = f"Test{unique_suffix}"
     user.last_name = "Driver"

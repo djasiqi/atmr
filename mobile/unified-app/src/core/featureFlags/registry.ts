@@ -44,6 +44,17 @@ export const featureFlags = {
     enabled: envEnabled("EXPO_PUBLIC_ENABLE_TRACKING_PRESENCE_MODE"),
     description: "Enable availability_presence tracking mode outside strict mission_live cadence.",
   } satisfies FeatureFlagDefinition,
+  driver_tracking_work_window_enabled: {
+    key: "driver_tracking_work_window_enabled",
+    source: "env",
+    /** Activé par défaut : règle métier ops (07h–19h presence, hors plage = mission only). */
+    enabled:
+      process.env.EXPO_PUBLIC_ENABLE_DRIVER_TRACKING_WORK_WINDOW === undefined
+        ? true
+        : envEnabled("EXPO_PUBLIC_ENABLE_DRIVER_TRACKING_WORK_WINDOW"),
+    description:
+      "Force le tracking GPS chauffeur en mode présence pendant la fenêtre 07h–19h (heure locale) même sans mission active. Hors plage : tracking uniquement si une mission éligible est en cours.",
+  } satisfies FeatureFlagDefinition,
   tracking_http_fallback_enabled: {
     key: "tracking_http_fallback_enabled",
     source: "env",
@@ -224,14 +235,20 @@ export const featureFlags = {
   company_mobile_clients_readonly_enabled: {
     key: "company_mobile_clients_readonly_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY"),
-    description: "Enable mobile readonly clients screens for company context.",
+    enabled:
+      envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY") ||
+      (typeof __DEV__ !== "undefined" && __DEV__),
+    description:
+      "Lecture seule clients (company). Dev : actif par défaut (__DEV__). Prod : EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_CLIENTS_READONLY=1 ou feature_flags session.",
   } satisfies FeatureFlagDefinition,
   company_mobile_invoices_readonly_enabled: {
     key: "company_mobile_invoices_readonly_enabled",
     source: "env",
-    enabled: envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY"),
-    description: "Enable mobile readonly invoices list for company context.",
+    enabled:
+      envEnabled("EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY") ||
+      (typeof __DEV__ !== "undefined" && __DEV__),
+    description:
+      "Lecture seule factures (company). Dev : actif par défaut (__DEV__). Prod : EXPO_PUBLIC_ENABLE_COMPANY_MOBILE_INVOICES_READONLY=1 ou feature_flags session.",
   } satisfies FeatureFlagDefinition,
   company_mobile_role_guards_enabled: {
     key: "company_mobile_role_guards_enabled",

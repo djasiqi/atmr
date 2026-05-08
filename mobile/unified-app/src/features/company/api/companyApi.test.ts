@@ -5,6 +5,7 @@ import {
   getDispatchStatus,
   getCompanyDispatchMessages,
   getCompanyDispatchModes,
+  getCompanyDispatchDelays,
   getDispatchMissions,
   getDriversLocationsSnapshot,
   getOptimizerStatus,
@@ -72,6 +73,29 @@ describe("company api normalization", () => {
       }),
     ]);
     expect(mockGet.mock.calls[0][0]).toEqual("/company_mobile/dispatch/v1/rides");
+  });
+
+  it("priorise booking_id sur mission_id pour l’alignement retards `/company_dispatch/delays`", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            mission_id: 99999,
+            booking_id: "101",
+            status: "assigned",
+            client: { name: "Dupont" },
+            route: { pickup_address: "A", dropoff_address: "B" },
+          },
+        ],
+      },
+    });
+
+    const result = await getDispatchMissions({
+      contextId: "company:42",
+      date: "2026-01-01",
+    });
+
+    expect(result.missions[0]?.mission_id).toBe(101);
   });
 
   it("marks dashboard metrics absent when the API key is missing (no implicite zero)", async () => {
@@ -414,6 +438,30 @@ describe("company api normalization", () => {
         target_company_id: 66,
       }),
       { allowWhenDisabled: true }
+    );
+  });
+
+  it("fusionne les retards live et snapshot comme le tableau web", async () => {
+    mockGet
+      .mockResolvedValueOnce({
+        data: { delays: [{ booking_id: 1, delay_minutes: 4 }] },
+      })
+      .mockResolvedValueOnce({
+        data: [{ booking_id: 1, delay_minutes: 9, pickup_eta: "2026-01-01T10:00:00.000Z" }],
+      });
+
+    const rows = await getCompanyDispatchDelays({ contextId: "company:42", date: "2026-01-01" });
+
+    expect(mockGet.mock.calls[0]?.[0]).toBe("/company_dispatch/delays/live");
+    expect(mockGet.mock.calls[1]?.[0]).toBe("/company_dispatch/delays");
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          booking_id: 1,
+          delay_minutes: 9,
+          pickup_eta: "2026-01-01T10:00:00.000Z",
+        }),
+      ]),
     );
   });
 

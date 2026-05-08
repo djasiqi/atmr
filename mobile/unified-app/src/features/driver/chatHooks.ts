@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useSession } from "../../core/sessionProvider";
 import { QUERY_STALE_TIME_MS } from "../../core/queryStaleTimes";
+import { useActiveDriverContextId } from "./hooks";
 import { getDriverMessages, type DriverChatMessage } from "./api";
 
 const DRIVER_CHAT_KEY = ["driver", "chat"] as const;
@@ -70,4 +73,24 @@ export function useUnreadMessages(
       await markReadMutation.mutateAsync(latest);
     },
   };
+}
+
+/** Badge chat pour la barre d’onglets driver (même logique que `useUnreadMessages` sur l’accueil). */
+export function useDriverChatUnreadCount(): number {
+  const { activeContext } = useSession();
+  const driverContextId = useActiveDriverContextId();
+
+  const companyId = useMemo((): number | null => {
+    const raw = activeContext?.organization_id;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string") {
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }, [activeContext?.organization_id]);
+
+  const messagesQuery = useDriverChatMessages(companyId, driverContextId);
+  const { unreadCount } = useUnreadMessages(companyId, driverContextId, messagesQuery.data);
+  return unreadCount;
 }
