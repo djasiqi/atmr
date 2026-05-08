@@ -5,6 +5,18 @@ import { SOCKET_CONFIG, SOCKET_PATH, getSocketTransports, isDevelopmentLocalhost
 let socket = null;
 let connectPromise = null;
 const listeners = new Map(); // event -> callback
+
+/** Évite les instances Socket.IO orphelines quand connectPromise est recréé après un disconnect. */
+function disposeCompanySocketInstance() {
+  if (!socket) return;
+  try {
+    socket.removeAllListeners();
+  } catch {}
+  try {
+    socket.disconnect();
+  } catch {}
+  socket = null;
+}
 let currentCompanyId = null; // company to (re)join on connect/reconnect
 /** Évite les double émissions join_* pour le même id (réduit bruit serveur / logs). */
 let lastJoinCompanyEmitId = null;
@@ -175,6 +187,9 @@ export function getCompanySocket() {
   if (!connectPromise) {
     connectPromise = new Promise((resolve, reject) => {
       try {
+        if (socket) {
+          disposeCompanySocketInstance();
+        }
         // token lu dynamiquement via buildSocketOptions.auth()
         const socketOptions = buildSocketOptions();
         // ✅ Obtenir l'URL Socket.IO dynamiquement (pour utiliser le proxy en dev)

@@ -75,6 +75,7 @@ _TRACKING_KAFKA_PRODUCED = None
 _TRACKING_KAFKA_PUBLISH_ERRORS = None
 _TRACKING_KAFKA_DLQ = None
 _TRACKING_KAFKA_REBALANCE = None
+_TRACKING_PROCESSED_FANOUT_FAILURES = None
 _TRACKING_KAFKA_E2E_LATENCY = None
 
 if Counter is not None:
@@ -140,6 +141,11 @@ if Counter is not None:
         "tracking_kafka_rebalance_total",
         "Nombre de rebalances détectés sur le consumer tracking",
         ["event"],
+    )
+    _TRACKING_PROCESSED_FANOUT_FAILURES = Counter(
+        "tracking_processed_fanout_failures_total",
+        "Échecs traitement message dans le consumer driver.location.processed → fanout",
+        ["error_type"],
     )
 
 if Histogram is not None:
@@ -375,6 +381,15 @@ def inc_tracking_kafka_rebalance(*, event: str) -> None:
     if not _metrics_enabled() or _TRACKING_KAFKA_REBALANCE is None:
         return
     _TRACKING_KAFKA_REBALANCE.labels(event=event or "_unknown").inc()
+
+
+def inc_tracking_processed_fanout_failure(*, error_type: str) -> None:
+    if not _metrics_enabled() or _TRACKING_PROCESSED_FANOUT_FAILURES is None:
+        return
+    et = (error_type or "_unknown").strip() or "_unknown"
+    if len(et) > 120:
+        et = et[:120]
+    _TRACKING_PROCESSED_FANOUT_FAILURES.labels(error_type=et).inc()
 
 
 def observe_tracking_kafka_e2e_latency(*, latency_ms: float) -> None:

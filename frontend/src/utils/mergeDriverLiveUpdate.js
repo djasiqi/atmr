@@ -18,14 +18,14 @@ function parseIsoMs(s) {
 }
 
 /**
- * Horodatage unique pour comparaisons (spec interne) — toujours la même chaîne :
- * `received_at` > `recorded_at` > `timestamp` (évite de mélanger des champs non comparables).
+ * Horodatage unique pour comparaisons (spec interne) — aligné sur realtimeEventGuard :
+ * temps événementiel d’abord (`recorded_at`, `timestamp`), `received_at` en dernier recours.
  * @param {Record<string, unknown> | null | undefined} o
  * @returns {number | null} ms depuis epoch, ou null si non parsable
  */
 export function canonicalTimeMs(o) {
   if (!o || typeof o !== 'object') return null;
-  return parseIsoMs(o.received_at ?? o.recorded_at ?? o.timestamp);
+  return parseIsoMs(o.recorded_at ?? o.timestamp ?? o.ts ?? o.received_at);
 }
 
 function pickLatitude(update, driver) {

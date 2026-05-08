@@ -88,6 +88,7 @@
       "<rootDir>/tests/**/*.{spec,test}.{js,jsx,ts,tsx}"
     ],
     "moduleNameMapper": {
+      "^@atmr/google-maps-bootstrap$": "<rootDir>/src/shared/google-maps/bootstrap.js",
       "^services/(.*)$": "<rootDir>/src/services/$1",
       "^hooks/(.*)$": "<rootDir>/src/hooks/$1",
       "^utils/(.*)$": "<rootDir>/src/utils/$1",

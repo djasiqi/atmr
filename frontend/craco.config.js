@@ -1,6 +1,8 @@
 // craco.config.js
 // Configuration minimale pour @craco/craco
 
+const path = require('path');
+
 const SML_EXCLUDE = /node_modules[\\/](svg-engine)/;
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
@@ -58,6 +60,15 @@ module.exports = {
         }
         return plugin;
       });
+
+      config.resolve = config.resolve || {};
+      config.resolve.alias = {
+        ...(config.resolve.alias || {}),
+        '@atmr/google-maps-bootstrap': path.resolve(
+          __dirname,
+          'src/shared/google-maps/bootstrap.js'
+        ),
+      };
 
       // Ignore "Failed to parse source map"
       config.ignoreWarnings = [...(config.ignoreWarnings || []), /Failed to parse source map/];

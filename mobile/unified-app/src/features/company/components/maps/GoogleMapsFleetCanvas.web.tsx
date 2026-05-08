@@ -3,9 +3,10 @@ import { StyleSheet, View } from "react-native";
 import { AppText } from "../../../../design/ui/AppText";
 import type { CompanyDriverLiveLocation } from "../../api/contracts";
 import { isDriverPositionStale } from "../../utils/companyDriverMapStatus";
-
-const SCRIPT_ID = "google-maps-js-sdk-lirie-fleet";
-const NAMESPACE_WAIT_MS = 15_000;
+import {
+  loadGoogleMapsScriptWithKey,
+  parseGoogleMapsLibraryList,
+} from "../../../../../../../frontend/src/shared/google-maps/bootstrap.js";
 
 /** Guide officiel erreurs (dont ApiTargetBlockedMapError). */
 const MAPS_ERROR_HELP_URL =
@@ -33,121 +34,6 @@ function getGoogleMaps(): Record<string, unknown> | undefined {
   if (typeof window === "undefined") return undefined;
   const g = (window as unknown as { google?: { maps: Record<string, unknown> } }).google?.maps;
   return g;
-}
-
-function isMapsCoreReady(): boolean {
-  return typeof getGoogleMaps()?.Map === "function";
-}
-
-function waitForGoogleMapsNamespace(): Promise<void> {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const tick = () => {
-      if (typeof window !== "undefined" && window.google?.maps) {
-        resolve();
-        return;
-      }
-      if (Date.now() - start > NAMESPACE_WAIT_MS) {
-        reject(new Error("SDK Google Maps indisponible (timeout)"));
-        return;
-      }
-      window.setTimeout(tick, 50);
-    };
-    tick();
-  });
-}
-
-/** Avec `loading=async`, appeler `importLibrary('maps')` avant d'utiliser `google.maps.Map`. */
-async function ensureMapsLibraryImported(): Promise<void> {
-  if (isMapsCoreReady()) return;
-  const gm = window.google?.maps as { importLibrary?: (name: string) => Promise<unknown> } | undefined;
-  if (!gm || typeof gm.importLibrary !== "function") {
-    throw new Error("Google Maps : importLibrary indisponible (script incomplet ?)");
-  }
-  await gm.importLibrary("maps");
-  if (!isMapsCoreReady()) {
-    throw new Error("Google Maps : échec après importLibrary(maps)");
-  }
-}
-
-let mapsScriptLoadInflight: Promise<void> | null = null;
-
-/**
- * Charge le bootstrap Maps JS (recommandation Google : `v=weekly` + `loading=async`).
- * @see https://developers.google.com/maps/documentation/javascript/load-maps-js-api
- */
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return Promise.resolve();
-  }
-  if (isMapsCoreReady()) return Promise.resolve();
-  if (mapsScriptLoadInflight) return mapsScriptLoadInflight;
-
-  mapsScriptLoadInflight = new Promise((resolve, reject) => {
-    const previousGmf = window.gm_authFailure;
-
-    const cleanupAuthHook = (hook: () => void) => {
-      if (window.gm_authFailure === hook) {
-        window.gm_authFailure = previousGmf;
-      }
-    };
-
-    const authHook = () => {
-      cleanupAuthHook(authHook);
-      mapsScriptLoadInflight = null;
-      if (typeof previousGmf === "function") previousGmf();
-      reject(new Error("GOOGLE_MAPS_AUTH_FAILURE"));
-    };
-    window.gm_authFailure = authHook;
-
-    const finishAfterScriptLoaded = () => {
-      waitForGoogleMapsNamespace()
-        .then(() => ensureMapsLibraryImported())
-        .then(() => {
-          cleanupAuthHook(authHook);
-          mapsScriptLoadInflight = null;
-          resolve();
-        })
-        .catch((e: unknown) => {
-          cleanupAuthHook(authHook);
-          mapsScriptLoadInflight = null;
-          reject(e instanceof Error ? e : new Error(String(e)));
-        });
-    };
-
-    const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      if (isMapsCoreReady() || window.google?.maps) {
-        finishAfterScriptLoaded();
-      } else {
-        existing.addEventListener("load", finishAfterScriptLoaded, { once: true });
-        existing.addEventListener(
-          "error",
-          () => {
-            cleanupAuthHook(authHook);
-            mapsScriptLoadInflight = null;
-            reject(new Error("Google Maps script error"));
-          },
-          { once: true }
-        );
-      }
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.async = true;
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&loading=async`;
-    script.onload = () => finishAfterScriptLoaded();
-    script.onerror = () => {
-      cleanupAuthHook(authHook);
-      mapsScriptLoadInflight = null;
-      reject(new Error("Impossible de charger Google Maps"));
-    };
-    document.head.appendChild(script);
-  });
-
-  return mapsScriptLoadInflight;
 }
 
 function computeRegion(drivers: CompanyDriverLiveLocation[]) {
@@ -189,10 +75,12 @@ const MAP_ERR_AUTH_FR = [
 ].join("\n");
 
 const MAP_ERR_GENERIC_FR =
-  "Impossible d’afficher la carte (réseau, timeout ou script bloqué). Rechargez la page ou vérifiez la clé EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.";
+  "Impossible d’afficher la carte (réseau, timeout ou script bloqué). Rechargez la page ou vérifiez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (ou REACT_APP_GOOGLE_MAPS_API_KEY en build web).";
 
 /**
- * Carte flotte web (API JavaScript Google Maps). Nécessite `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY`.
+ * Carte flotte web (API JavaScript Google Maps).
+ * Clé : `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` ; secours `REACT_APP_GOOGLE_MAPS_API_KEY` si présent au build.
+ * Charge le SDK via le bootstrap monorepo partagé avec le frontend entreprise (un seul SCRIPT_ID).
  */
 export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
   const mapDomId = useId().replace(/:/g, "");
@@ -201,10 +89,22 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
   );
   const markersRef = useRef<{ setMap: (v: null) => void }[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
-  const rawMapsKey = useMemo(
-    () => (typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string" ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim() : ""),
+
+  const libraryList = useMemo(
+    () =>
+      parseGoogleMapsLibraryList(
+        process.env.EXPO_PUBLIC_GOOGLE_MAPS_LIBRARIES || process.env.REACT_APP_GOOGLE_MAPS_LIBRARIES
+      ),
     []
   );
+
+  const rawMapsKey = useMemo(() => {
+    const expo = typeof process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY === "string" ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY.trim() : "";
+    const react =
+      typeof process.env.REACT_APP_GOOGLE_MAPS_API_KEY === "string" ? process.env.REACT_APP_GOOGLE_MAPS_API_KEY.trim() : "";
+    return expo || react;
+  }, []);
+
   const apiKey = useMemo(
     () => (rawMapsKey && isPlausibleGoogleMapsBrowserKey(rawMapsKey) ? rawMapsKey : ""),
     [rawMapsKey]
@@ -219,7 +119,7 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
     let cancelled = false;
     const run = async () => {
       try {
-        await loadGoogleMapsScript(apiKey);
+        await loadGoogleMapsScriptWithKey(apiKey, { libraryList });
         if (cancelled) return;
         const gmaps = getGoogleMaps();
         const el = document.getElementById(mapDomId);
@@ -285,7 +185,7 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
       } catch (e: unknown) {
         if (cancelled) return;
         const msg = e instanceof Error ? e.message : "";
-        if (msg === "GOOGLE_MAPS_AUTH_FAILURE") {
+        if (msg.includes("Authentification Google Maps refusée") || msg.includes("GOOGLE_MAPS_AUTH_FAILURE")) {
           setMapLoadError(MAP_ERR_AUTH_FR);
         } else {
           setMapLoadError(MAP_ERR_GENERIC_FR);
@@ -301,7 +201,7 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [apiKey, drivers, mapDomId, region.latitude, region.longitude]);
+  }, [apiKey, drivers, libraryList, mapDomId, region.latitude, region.longitude]);
 
   useEffect(
     () => () => {
@@ -319,8 +219,8 @@ export function GoogleMapsFleetCanvas({ drivers, height }: Props) {
       <View style={[styles.fallback, { height }]} accessibilityLabel="Carte flotte indisponible">
         <AppText variant="caption" style={styles.fallbackText}>
           {mapsKeyRejected
-            ? "Clé Google Maps invalide ou texte d’exemple — créez une clé Maps JavaScript API dans Google Cloud et mettez-la dans EXPO_PUBLIC_GOOGLE_MAPS_API_KEY, puis redémarrez le bundler."
-            : "Définissez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY pour afficher la carte sur le web."}
+            ? "Clé Google Maps invalide ou texte d’exemple — créez une clé Maps JavaScript API dans Google Cloud et mettez-la dans EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (ou REACT_APP_GOOGLE_MAPS_API_KEY), puis redémarrez le bundler."
+            : "Définissez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (ou REACT_APP_GOOGLE_MAPS_API_KEY) pour afficher la carte sur le web."}
         </AppText>
       </View>
     );

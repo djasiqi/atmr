@@ -69,11 +69,31 @@ export const LIRIE_MAP_STYLES = [
 
 /**
  * Map ID requis pour AdvancedMarkerElement (Google Cloud Console → Map Management).
- * En dev sans ID dédié, `DEMO_MAP_ID` permet de valider l’intégration ; en prod, définir
- * REACT_APP_GOOGLE_MAPS_MAP_ID pour votre projet.
+ * En dev sans ID dédié, `DEMO_MAP_ID` permet de valider l’intégration.
+ * En production avec `REACT_APP_GOOGLE_MAPS_LIRIE_STYLE=cloud`, un Map ID réel est obligatoire
+ * (pas de fallback silencieux vers DEMO_MAP_ID).
  */
-export const GOOGLE_MAPS_MAP_ID =
-  process.env.REACT_APP_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
+const _rawMapId = process.env.REACT_APP_GOOGLE_MAPS_MAP_ID;
+const _useCloudStyle = process.env.REACT_APP_GOOGLE_MAPS_LIRIE_STYLE === 'cloud';
+const _isProd = process.env.NODE_ENV === 'production';
+
+function resolveGoogleMapsMapId() {
+  const trimmed = typeof _rawMapId === 'string' ? _rawMapId.trim() : '';
+  if (_useCloudStyle && _isProd) {
+    if (!trimmed || trimmed === 'DEMO_MAP_ID') {
+      // eslint-disable-next-line no-console
+      console.error(
+        '[Maps] Production + style cloud : définissez REACT_APP_GOOGLE_MAPS_MAP_ID avec un Map ID valide (Google Cloud). ' +
+          'Le fallback DEMO_MAP_ID est désactivé pour éviter InvalidMapId silencieux.'
+      );
+      return '';
+    }
+    return trimmed;
+  }
+  return trimmed || 'DEMO_MAP_ID';
+}
+
+export const GOOGLE_MAPS_MAP_ID = resolveGoogleMapsMapId();
 
 /**
  * `cloud` : mapId + marqueurs avancés ; le style Lirie doit être importé dans la console Google (pas de `styles` en JS).

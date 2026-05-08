@@ -101,20 +101,26 @@ describe('mergeDriverLiveUpdate', () => {
 });
 
 describe('canonicalTimeMs', () => {
-  it('priorise received_at > recorded_at > timestamp', () => {
+  it('priorise recorded_at / timestamp / ts avant received_at (temps événementiel)', () => {
     expect(
       canonicalTimeMs({
         received_at: '2026-01-01T12:00:00.000Z',
         recorded_at: '2026-01-01T11:00:00.000Z',
         timestamp: '2026-01-01T10:00:00.000Z',
       })
-    ).toBe(Date.parse('2026-01-01T12:00:00.000Z'));
+    ).toBe(Date.parse('2026-01-01T11:00:00.000Z'));
     expect(
       canonicalTimeMs({
-        recorded_at: '2026-01-01T11:00:00.000Z',
         timestamp: '2026-01-01T10:00:00.000Z',
+        received_at: '2026-01-01T12:00:00.000Z',
       })
-    ).toBe(Date.parse('2026-01-01T11:00:00.000Z'));
+    ).toBe(Date.parse('2026-01-01T10:00:00.000Z'));
+    expect(
+      canonicalTimeMs({
+        ts: '2026-01-01T09:30:00.000Z',
+        received_at: '2026-01-01T12:00:00.000Z',
+      })
+    ).toBe(Date.parse('2026-01-01T09:30:00.000Z'));
   });
 });
 

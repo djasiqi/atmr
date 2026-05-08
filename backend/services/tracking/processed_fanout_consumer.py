@@ -262,7 +262,7 @@ class ProcessedLocationFanoutConsumer:
                 consumer = KC(
                     bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(","),
                     group_id=KAFKA_PROCESSED_FANOUT_GROUP,
-                    enable_auto_commit=True,
+                    enable_auto_commit=False,
                     auto_offset_reset=KAFKA_AUTO_OFFSET_RESET,
                     value_deserializer=lambda v: json.loads(v.decode("utf-8")),
                     key_deserializer=lambda k: k.decode("utf-8") if k else None,
@@ -298,20 +298,59 @@ class ProcessedLocationFanoutConsumer:
             return
         self._running = True
         logger.info("[processed_fanout] loop start")
+        from kafka.structs import OffsetAndMetadata
+
+        from services.monitoring.driver_location_metrics import (
+            inc_tracking_processed_fanout_failure,
+        )
+
         while self._running:
             try:
                 polled = self._consumer.poll(timeout_ms=1000)
-                for _tp, records in polled.items():
+                for tp, records in polled.items():
+                    last_ok: OffsetAndMetadata | None = None
                     for record in records:
                         try:
                             msg = record.value
                             if isinstance(msg, dict):
                                 _fanout_processed_message(msg)
-                        except Exception:
+                            else:
+                                logger.debug(
+                                    "[processed_fanout] skip non-dict partition=%s offset=%s",
+                                    record.partition,
+                                    record.offset,
+                                )
+                            last_ok = OffsetAndMetadata(record.offset + 1, "")
+                        except Exception as exc:
+                            drv = (
+                                record.value.get("driver_id")
+                                if isinstance(record.value, dict)
+                                else None
+                            )
                             logger.exception(
-                                "[processed_fanout] fanout failed partition=%s offset=%s",
+                                "[processed_fanout] fanout failed partition=%s offset=%s driver_id=%s error=%s",
                                 record.partition,
                                 record.offset,
+                                drv,
+                                exc,
+                            )
+                            try:
+                                inc_tracking_processed_fanout_failure(
+                                    error_type=type(exc).__name__
+                                )
+                            except Exception:
+                                logger.debug(
+                                    "[processed_fanout] fanout failure metric unavailable",
+                                    exc_info=True,
+                                )
+                            break
+                    if last_ok is not None:
+                        try:
+                            self._consumer.commit({tp: last_ok})
+                        except Exception:
+                            logger.exception(
+                                "[processed_fanout] commit failed after batch partition=%s",
+                                getattr(tp, "partition", "?"),
                             )
             except Exception:
                 logger.exception("[processed_fanout] poll loop error")
