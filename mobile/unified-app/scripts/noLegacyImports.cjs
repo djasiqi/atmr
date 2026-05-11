@@ -3,7 +3,13 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const SCAN_ROOTS = [path.join(ROOT, "app"), path.join(ROOT, "src")];
-const FORBIDDEN_PATTERNS = [/mobile[\\/]+operations-app/i, /operations-app[\\/]/i];
+/** Dépendances interdites : uniquement des chemins de modules (import / require / import()), pas les mentions dans les commentaires. */
+const FORBIDDEN_PATTERNS = [
+  /\bfrom\s+["'][^"']*operations-app[^"']*["']/i,
+  /\brequire\s*\(\s*["'][^"']*operations-app[^"']*["']\s*\)/i,
+  /\bimport\s*\(\s*["'][^"']*operations-app[^"']*["']\s*\)/i,
+  /\bexport\s+[^;{]*\bfrom\s+["'][^"']*operations-app[^"']*["']/i,
+];
 const FILE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 function listFiles(dir) {
@@ -40,7 +46,7 @@ for (const root of SCAN_ROOTS) {
 }
 
 if (violations.length > 0) {
-  console.error("no-legacy-imports: forbidden operations-app references found:");
+  console.error("no-legacy-imports: forbidden operations-app module references found:");
   for (const violation of violations) {
     console.error(` - ${violation.file} (${violation.pattern})`);
   }
