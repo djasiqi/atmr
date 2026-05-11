@@ -60,7 +60,11 @@ jest.mock("react-native", () => ({
       return { remove: jest.fn() };
     },
   },
-  Platform: { OS: "android" },
+  Platform: {
+    OS: "android",
+    select: (spec: Record<string, unknown>) =>
+      (spec.android as unknown) ?? (spec.default as unknown) ?? (spec.ios as unknown),
+  },
 }));
 
 jest.mock("../../core/sessionProvider", () => ({

@@ -38,6 +38,11 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   default: mockAsyncStorage,
 }));
 
+jest.mock("expo-battery", () => ({
+  __esModule: true,
+  getBatteryLevelAsync: jest.fn().mockResolvedValue(0.85),
+}));
+
 jest.mock("expo-location", () => ({
   requestForegroundPermissionsAsync: () => mockRequestForegroundPermissionsAsync(),
   requestBackgroundPermissionsAsync: () => mockRequestBackgroundPermissionsAsync(),
