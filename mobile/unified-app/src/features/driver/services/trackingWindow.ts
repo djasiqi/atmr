@@ -26,8 +26,7 @@ function clampHour(value: number): number {
   return int;
 }
 
-function readHourFromEnv(key: string, fallback: number): number {
-  const raw = process.env[key];
+function readHourFromEnvVar(raw: string | undefined, fallback: number): number {
   if (raw == null) return fallback;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) return fallback;
@@ -40,12 +39,12 @@ export type TrackingWindowConfig = {
 };
 
 export function getTrackingWindowConfig(): TrackingWindowConfig {
-  const startHour = readHourFromEnv(
-    "EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_START_HOUR",
+  const startHour = readHourFromEnvVar(
+    process.env.EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_START_HOUR,
     DEFAULT_WORK_START_HOUR
   );
-  const endHour = readHourFromEnv(
-    "EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_END_HOUR",
+  const endHour = readHourFromEnvVar(
+    process.env.EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_END_HOUR,
     DEFAULT_WORK_END_HOUR
   );
   if (endHour <= startHour) {
