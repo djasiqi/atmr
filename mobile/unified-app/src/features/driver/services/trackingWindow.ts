@@ -33,6 +33,11 @@ function readHourFromEnvVar(raw: string | undefined, fallback: number): number {
   return clampHour(parsed);
 }
 
+/** Runtime lookup (Jest-safe) : évite l’inline Babel des `process.env.EXPO_PUBLIC_*` qui figerait les valeurs au build. */
+function readExpoPublicEnv(name: string): string | undefined {
+  return process.env[name];
+}
+
 export type TrackingWindowConfig = {
   startHour: number;
   endHour: number;
@@ -40,11 +45,11 @@ export type TrackingWindowConfig = {
 
 export function getTrackingWindowConfig(): TrackingWindowConfig {
   const startHour = readHourFromEnvVar(
-    process.env.EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_START_HOUR,
+    readExpoPublicEnv("EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_START_HOUR"),
     DEFAULT_WORK_START_HOUR
   );
   const endHour = readHourFromEnvVar(
-    process.env.EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_END_HOUR,
+    readExpoPublicEnv("EXPO_PUBLIC_DRIVER_TRACKING_WINDOW_END_HOUR"),
     DEFAULT_WORK_END_HOUR
   );
   if (endHour <= startHour) {
