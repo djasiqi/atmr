@@ -47,13 +47,18 @@ describe("company query invalidation policy", () => {
       missionId: 101,
     });
 
-    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenCalledTimes(3);
     expect(spy.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         exact: false,
       })
     );
     expect(spy.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        queryKey: expect.arrayContaining(["ctx", "company:42"]),
+      })
+    );
+    expect(spy.mock.calls[2]?.[0]).toEqual(
       expect.objectContaining({
         queryKey: expect.arrayContaining(["ctx", "company:42"]),
       })
@@ -68,7 +73,7 @@ describe("company query invalidation policy", () => {
     invalidateCompanyQueriesForEvent(queryClient, "booking_updated", context);
     invalidateCompanyQueriesForEvent(queryClient, "booking_updated", context);
 
-    // First event does two invalidations, duplicate is ignored.
-    expect(spy).toHaveBeenCalledTimes(2);
+    // Premier événement : missions + dispatch-delays + ride-detail ; doublon ignoré.
+    expect(spy).toHaveBeenCalledTimes(3);
   });
 });

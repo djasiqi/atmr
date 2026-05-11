@@ -20,6 +20,7 @@ import {
 const mockGet = jest.fn<(...args: any[]) => any>();
 const mockPost = jest.fn<(...args: any[]) => any>();
 const mockPut = jest.fn<(...args: any[]) => any>();
+const mockDelete = jest.fn<(...args: any[]) => any>();
 const mockEmitCompanyDispatchTelemetry = jest.fn<(...args: any[]) => any>();
 
 jest.mock("../../../core/api/client", () => ({
@@ -27,6 +28,7 @@ jest.mock("../../../core/api/client", () => ({
     get: (...args: unknown[]) => mockGet(...args),
     post: (...args: unknown[]) => mockPost(...args),
     put: (...args: unknown[]) => mockPut(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -39,6 +41,7 @@ describe("company api normalization", () => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockPut.mockReset();
+    mockDelete.mockReset();
     mockEmitCompanyDispatchTelemetry.mockReset();
   });
 
@@ -272,6 +275,7 @@ describe("company api normalization", () => {
   });
 
   it("posts schedule payload on dispatch schedule endpoint", async () => {
+    mockPut.mockRejectedValueOnce({ response: { status: 404 } });
     mockPost.mockResolvedValueOnce({ data: { ok: true } });
 
     await scheduleCompanyRide({
@@ -299,6 +303,7 @@ describe("company api normalization", () => {
   });
 
   it("uses cancel parity payload with reason_code and note", async () => {
+    mockDelete.mockRejectedValueOnce({ response: { status: 404 } });
     mockPost.mockResolvedValueOnce({ data: { ok: true } });
 
     await cancelCompanyRide({
@@ -320,7 +325,9 @@ describe("company api normalization", () => {
   });
 
   it("sends typed urgent payload with default source", async () => {
-    mockPost.mockResolvedValueOnce({ data: { ok: true } });
+    mockPost
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockResolvedValueOnce({ data: { ok: true } });
 
     await markCompanyRideUrgent({
       contextId: "company:42",

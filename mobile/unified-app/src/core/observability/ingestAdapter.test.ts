@@ -72,9 +72,9 @@ describe("ingestAdapter", () => {
     sendIngestEvent("ev1", {});
     sendIngestEvent("ev2", {});
     sendIngestEvent("ev3", {});
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    for (let i = 0; i < 20; i += 1) {
+      await Promise.resolve();
+    }
 
     mockFetch.mockReset();
     sendIngestEvent("ev4", {});

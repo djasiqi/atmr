@@ -47,14 +47,20 @@ export function sendIngestEvent(
 
   const { signal, clear } = abortAfterMs(3000);
 
-  fetch(`${resolveBaseUrl()}/ingest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body,
-    signal,
-  })
+  // Promise.resolve : si `fetch` renvoie undefined (Jest / preload), on compte un échec au lieu de crasher sur `.finally`.
+  void Promise.resolve(
+    fetch(`${resolveBaseUrl()}/ingest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      signal,
+    })
+  )
     .finally(clear)
-    .then(() => {
+    .then((res) => {
+      if (!res || !("ok" in res) || !res.ok) {
+        throw new Error("ingest_unavailable");
+      }
       failures = 0;
     })
     .catch(() => {
