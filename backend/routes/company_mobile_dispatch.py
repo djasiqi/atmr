@@ -53,6 +53,7 @@ from infrastructure.dispatch.realtime_optimizer_adapter import (
 from infrastructure.dispatch.validation_adapter import (
     check_existing_assignment_conflict,
 )
+from services.geolocation.maps import get_distance_duration
 from shared.geo_utils import haversine_distance
 from shared.time_utils import (
     day_local_bounds,
@@ -211,6 +212,7 @@ def _serialize_driver(driver: Driver | None) -> Dict[str, Any] | None:
         "id": str(driver.id),
         "name": _driver_display_name(driver),
         "is_emergency": is_emergency,
+        "driver_type": str(driver_type),
     }
 
 
@@ -279,6 +281,38 @@ def _get_active_assignment(booking: Booking) -> Assignment | None:
     return None
 
 
+def _resolve_booking_map_coordinates(
+    address: str | None,
+    lat: float | int | None,
+    lon: float | int | None,
+    *,
+    booking_id: int | None = None,
+    point_label: str = "point",
+) -> tuple[float | None, float | None]:
+    """Retourne lat/lon stockés ou géocode l'adresse texte pour l'affichage carte mobile."""
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        return float(lat), float(lon)
+
+    addr = (address or "").strip()
+    if not addr:
+        return None, None
+
+    try:
+        from services.geolocation.maps import geocode_address
+
+        coords = geocode_address(addr, country="CH")
+        if coords and "lat" in coords and "lon" in coords:
+            return float(coords["lat"]), float(coords["lon"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[MobileDispatch] Geocode %s booking=%s: %s",
+            point_label,
+            booking_id,
+            exc,
+        )
+    return None, None
+
+
 def _build_ride_summary(
     booking: Booking, current_company_id: int | None = None
 ) -> Dict[str, Any]:
@@ -314,10 +348,76 @@ def _build_ride_summary(
         and delay_seconds > 15 * 60
     )
 
+    pickup_lat = getattr(booking, "pickup_lat", None)
+    pickup_lon = getattr(booking, "pickup_lon", None)
+    dropoff_lat = getattr(booking, "dropoff_lat", None)
+    dropoff_lon = getattr(booking, "dropoff_lon", None)
+
+    booking_id = getattr(booking, "id", None)
+    if not is_completed:
+        pickup_lat, pickup_lon = _resolve_booking_map_coordinates(
+            booking.pickup_location,
+            pickup_lat,
+            pickup_lon,
+            booking_id=booking_id,
+            point_label="pickup",
+        )
+        dropoff_lat, dropoff_lon = _resolve_booking_map_coordinates(
+            booking.dropoff_location,
+            dropoff_lat,
+            dropoff_lon,
+            booking_id=booking_id,
+            point_label="dropoff",
+        )
+
+    duration_seconds = getattr(booking, "duration_seconds", None)
     distance_meters = getattr(booking, "distance_meters", None)
+    if not isinstance(duration_seconds, (int, float)) or duration_seconds <= 0:
+        duration_seconds = None
+    if not isinstance(distance_meters, (int, float)) or distance_meters <= 0:
+        distance_meters = None
+
+    if duration_seconds is None or distance_meters is None:
+        origin: tuple[float, float] | str | None = None
+        destination: tuple[float, float] | str | None = None
+
+        if (
+            isinstance(pickup_lat, (int, float))
+            and isinstance(pickup_lon, (int, float))
+            and isinstance(dropoff_lat, (int, float))
+            and isinstance(dropoff_lon, (int, float))
+        ):
+            origin = (float(pickup_lat), float(pickup_lon))
+            destination = (float(dropoff_lat), float(dropoff_lon))
+        elif booking.pickup_location and booking.dropoff_location:
+            origin = booking.pickup_location
+            destination = booking.dropoff_location
+
+        if origin is not None and destination is not None:
+            try:
+                computed_duration_s, computed_distance_m = get_distance_duration(
+                    origin,
+                    destination,
+                )
+                if duration_seconds is None and isinstance(computed_duration_s, int) and computed_duration_s > 0:
+                    duration_seconds = computed_duration_s
+                if distance_meters is None and isinstance(computed_distance_m, int) and computed_distance_m > 0:
+                    distance_meters = computed_distance_m
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[MobileDispatch] Impossible de calculer durée/distance booking=%s: %s",
+                    getattr(booking, "id", None),
+                    exc,
+                )
+
     distance_km = (
-        round(distance_meters / 1000.0, 1)
-        if isinstance(distance_meters, (int, float))
+        round(float(distance_meters) / 1000.0, 1)
+        if isinstance(distance_meters, (int, float)) and distance_meters > 0
+        else None
+    )
+    duration_min = (
+        max(1, round(float(duration_seconds) / 60.0))
+        if isinstance(duration_seconds, (int, float)) and duration_seconds > 0
         else None
     )
 
@@ -478,6 +578,14 @@ def _build_ride_summary(
             "pickup_address": booking.pickup_location or "",
             "dropoff_address": booking.dropoff_location or "",
             "distance_km": distance_km,
+            "duration_min": duration_min,
+            "duration_seconds": int(duration_seconds)
+            if isinstance(duration_seconds, (int, float)) and duration_seconds > 0
+            else None,
+            "pickup_lat": float(pickup_lat) if pickup_lat is not None else None,
+            "pickup_lon": float(pickup_lon) if pickup_lon is not None else None,
+            "dropoff_lat": float(dropoff_lat) if dropoff_lat is not None else None,
+            "dropoff_lon": float(dropoff_lon) if dropoff_lon is not None else None,
         },
         "status": _resolve_booking_status(booking, current_company_id),
         "driver": _serialize_driver(driver),

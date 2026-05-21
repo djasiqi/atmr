@@ -91,6 +91,7 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
     from services.realtime.live_driver_status import (
         resolve_driver_status_for_fanout,
         resolve_mission_status_for_driver,
+        sanitize_fanout_mission_id,
     )
     from services.realtime.socketio import fanout_driver_location_update
 
@@ -144,7 +145,17 @@ def _fanout_processed_message(envelope: dict[str, Any]) -> None:
         sent_at = str(p.get("sent_at") or datetime.now(UTC).isoformat())
         location_mode = str(p.get("location_mode") or "mission_live")
         is_background = bool(p.get("is_background", False))
-        mission_id = p.get("mission_id")
+        mission_id_raw = p.get("mission_id")
+        mission_id_parsed: int | None = (
+            int(mission_id_raw)
+            if isinstance(mission_id_raw, int)
+            else (
+                int(mission_id_raw)
+                if isinstance(mission_id_raw, str) and mission_id_raw.isdigit()
+                else None
+            )
+        )
+        mission_id = sanitize_fanout_mission_id(driver_id, mission_id_parsed)
 
         validated_ms = envelope.get("validated_at_ms")
         received_at = (

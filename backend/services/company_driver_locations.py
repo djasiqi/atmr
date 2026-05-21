@@ -280,7 +280,9 @@ def build_company_driver_locations_items(
         if accuracy_m is not None:
             loc_item["accuracy_m"] = accuracy_m
         if has_active_booking:
-            loc_item["current_booking_id"] = active_booking.get("current_booking_id")
+            booking_id = active_booking.get("current_booking_id")
+            loc_item["current_booking_id"] = booking_id
+            loc_item["mission_id"] = booking_id
             loc_item["client_short"] = active_booking.get("client_short", "")
             if status == "busy":
                 logger.debug(

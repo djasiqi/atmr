@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useGoogleMapsLoaded } from '../../../../../components/common/GoogleMapsProvider';
 import MapPlaceholder from '../../../../../components/common/MapPlaceholder';
+import {
+  GOOGLE_MAPS_USE_JS_STYLES,
+  GOOGLE_MAPS_MAP_ID,
+  LIRIE_MAP_STYLES,
+} from '../../../../../utils/mapUtils';
 
 const DEFAULT_CENTER = { lat: 46.2044, lng: 6.1432 };
 const DEFAULT_ZOOM = 10;
@@ -87,6 +92,9 @@ const ZoneSetReadonlyMap = ({
         return false;
       }
       if (!mapRef.current) {
+        const lirieStyleOpts = GOOGLE_MAPS_USE_JS_STYLES
+          ? { styles: LIRIE_MAP_STYLES }
+          : { mapId: GOOGLE_MAPS_MAP_ID };
         mapRef.current = new window.google.maps.Map(container, {
           center: DEFAULT_CENTER,
           zoom: DEFAULT_ZOOM,
@@ -94,7 +102,11 @@ const ZoneSetReadonlyMap = ({
           mapTypeControl: false,
           streetViewControl: false,
           fullscreenControl: false,
+          clickableIcons: false,
+          gestureHandling: 'greedy',
+          scaleControl: true,
           backgroundColor: '#f8fafc',
+          ...lirieStyleOpts,
         });
         mapListenersRef.current.push(
           mapRef.current.addListener('tilesloaded', () => {

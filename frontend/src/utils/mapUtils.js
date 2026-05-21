@@ -39,7 +39,8 @@ export const STATUS_COLORS = {
 
 // ─── Style carte Lirie — épuré, professionnel, calme ───
 // Avec Advanced Markers, `mapId` est requis : l’API n’autorise pas `styles` en JS en même temps.
-// Réimporter ce JSON comme style de carte dans Google Cloud Console pour le Map ID utilisé.
+// Cloud (prod) : style console « Carte Lirie – site », ID style a699eeb51ddb599964e58e8f ;
+// import JSON `public/maps/lirie-google-map-style.json` — voir `frontend/maps.env.example` (Map ID ≠ ID style).
 export const LIRIE_MAP_STYLES = [
   // Désactiver les POI et simplifier le transit
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
@@ -97,7 +98,7 @@ export const GOOGLE_MAPS_MAP_ID = resolveGoogleMapsMapId();
 
 /**
  * `cloud` : mapId + marqueurs avancés ; le style Lirie doit être importé dans la console Google (pas de `styles` en JS).
- * Toute autre valeur / absent : `styles: LIRIE_MAP_STYLES` en JS + marqueurs classiques (rendu Lirie immédiat, warning dépréciation possible).
+ * `json` ou absent : `styles: LIRIE_MAP_STYLES` en JS + marqueurs classiques (recommandé en dev).
  */
 export const GOOGLE_MAPS_USE_JS_STYLES =
   process.env.REACT_APP_GOOGLE_MAPS_LIRIE_STYLE !== 'cloud';
@@ -236,57 +237,65 @@ export function iconAnchorToAdvancedMarkerCss(ax, ay, w, h) {
 }
 
 /**
- * Marqueur cercle chauffeur avec ombre portée.
+ * Marqueur cercle chauffeur avec ombre portée et libellé optionnel (initiales).
+ * @param {string} color
+ * @param {number} opacity
+ * @param {{ label?: string, textColor?: string, ringColor?: string }} options
  */
-export const makeCircleMarkerIcon = (color, opacity = 1) => {
+export const makeCircleMarkerIcon = (color, opacity = 1, options = {}) => {
+  const labelRaw = typeof options.label === 'string' ? options.label.trim().toUpperCase() : '';
+  const label = labelRaw.slice(0, 2);
+  const textColor = options.textColor || '#ffffff';
+  const ringColor = options.ringColor || '#ffffff';
+  const textNode = label
+    ? `<text x="12" y="12.4" text-anchor="middle" dominant-baseline="central" fill="${textColor}" font-size="7.4" font-weight="700" letter-spacing="0.2" font-family="-apple-system,Segoe UI,Roboto,sans-serif">${label}</text>`
+    : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
     <defs>
       <filter id="ds" x="-20%" y="-20%" width="140%" height="140%">
         <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#000" flood-opacity="0.2"/>
       </filter>
     </defs>
-    <circle cx="12" cy="12" r="8" fill="${color}" fill-opacity="${opacity}" stroke="#fff" stroke-width="2.5" filter="url(#ds)"/>
+    <circle cx="12" cy="12" r="8.2" fill="${color}" fill-opacity="${opacity}" stroke="${ringColor}" stroke-width="2.1" filter="url(#ds)"/>
+    ${textNode}
   </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 };
 
+/** Taille des points LIRIE (pickup / destination) — ancrage centré. */
+export const LIRIE_POINT_MARKER_SIZE_PX = 28;
+
+const _liriePointCache = {};
+
 /**
- * Marqueur pin professionnel (pickup / destination).
- * Cache intégré pour ne pas ré-encoder le SVG à chaque render.
+ * Marqueur LIRIE minimal (disque + lettre P/D) — remplace les pins goutte Google.
  * @param {'pickup'|'dropoff'|'default'} type
  */
-const _pinCache = {};
-export const makePinMarkerIcon = (type = 'default') => {
-  if (_pinCache[type]) return _pinCache[type];
-
+export const makeLiriePointMarkerIcon = (type = 'default') => {
+  if (_liriePointCache[type]) return _liriePointCache[type];
   const isPickup = type === 'pickup' || type === 'default';
-  const bg = isPickup ? MAP_COLORS.brand : '#1E293B';
-  const accent = isPickup ? MAP_COLORS.brandDark : '#0f172a';
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52" fill="none">
-<defs>
-  <filter id="m${type[0]}" x="0" y="0" width="40" height="52" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-    <feFlood flood-opacity="0" result="bg"/>
-    <feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="a"/>
-    <feOffset dy="2"/>
-    <feGaussianBlur stdDeviation="3"/>
-    <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0"/>
-    <feBlend in2="bg"/>
-    <feBlend in="SourceGraphic"/>
-  </filter>
-</defs>
-<g filter="url(#m${type[0]})">
-  <path d="M20 4C12.268 4 6 10.268 6 18c0 9.6 14 28 14 28s14-18.4 14-28c0-7.732-6.268-14-14-14z" fill="${bg}"/>
-  <path d="M20 5C12.82 5 7 10.82 7 18c0 8.8 13 26.5 13 26.5S33 26.8 33 18c0-7.18-5.82-13-13-13z" fill="none" stroke="${accent}" stroke-opacity=".15"/>
-  <circle cx="20" cy="18" r="7" fill="#fff"/>
-  <circle cx="20" cy="18" r="3" fill="${bg}"/>
-</g>
-</svg>`;
-
-  const url = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-  _pinCache[type] = url;
+  const url = makePoiMarkerIcon(isPickup ? 'P' : 'D', isPickup ? MAP_COLORS.brand : MAP_COLORS.textPrimary);
+  _liriePointCache[type] = url;
   return url;
 };
+
+/** @deprecated Alias — préférer makeLiriePointMarkerIcon */
+export const makePinMarkerIcon = makeLiriePointMarkerIcon;
+
+/**
+ * Icône + ancrage centré pour google.maps.Marker / AdvancedMarker (img).
+ * @param {typeof google.maps | undefined} gmaps
+ * @param {'pickup'|'dropoff'|'default'} type
+ */
+export function resolveLiriePointMarkerIcon(gmaps, type = 'default') {
+  const size = LIRIE_POINT_MARKER_SIZE_PX;
+  const half = size / 2;
+  return {
+    url: makeLiriePointMarkerIcon(type),
+    scaledSize: gmaps?.Size ? new gmaps.Size(size, size) : undefined,
+    anchor: gmaps?.Point ? new gmaps.Point(half, half) : undefined,
+  };
+}
 
 /**
  * Marqueur point d'intérêt (POI) pour chauffeur — cercle avec lettre.

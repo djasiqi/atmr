@@ -5,7 +5,7 @@ import GoogleMapsAdvancedMarker from '../common/GoogleMapsAdvancedMarker';
 import {
   PUBLIC_MAP_OPTIONS,
   MAP_COLORS,
-  makePinMarkerIcon,
+  resolveLiriePointMarkerIcon,
   makePoiMarkerIcon,
 } from '../../utils/mapUtils';
 import styles from './ClientBookingLiveTrackModal.module.css';
@@ -130,9 +130,7 @@ export default function ClientBookingLiveTrackModal({ booking, etaLine, onClose 
               <GoogleMapsAdvancedMarker
                 position={pickup}
                 icon={{
-                  url: makePinMarkerIcon('pickup'),
-                  scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
-                  anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
+                  ...resolveLiriePointMarkerIcon(window.google?.maps, 'pickup'),
                 }}
                 title="Lieu de prise en charge"
               />

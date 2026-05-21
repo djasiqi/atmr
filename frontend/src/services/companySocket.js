@@ -1,84 +1,194 @@
 import { io } from 'socket.io-client';
 import { getAccessToken } from '../hooks/useAuthToken';
 import { SOCKET_CONFIG, SOCKET_PATH, getSocketTransports, isDevelopmentLocalhost } from '../config/socketConfig';
+import {
+  getCompanySocketMetricsSnapshot,
+  isCompanySocketMetricsDebugEnabled,
+  recordConnectReady,
+  recordConnectStarted,
+  recordReconnectAttempt,
+  setActiveListenerCount,
+  trackListenerCountForWatchdog,
+  warnIfTooManyListeners,
+} from './companySocketMetrics';
+import { companyReconnectCircuitBreaker } from './reconnectCircuitBreaker';
+import { bindUrgentAlertSoundListeners } from '../utils/urgentAlertSound';
 
 let socket = null;
 let connectPromise = null;
-const listeners = new Map(); // event -> callback
+/** Incrémenté à chaque create/destroy pour invalider callbacks async obsolètes. */
+let socketGenerationId = 0;
 
-/** Évite les instances Socket.IO orphelines quand connectPromise est recréé après un disconnect. */
-function disposeCompanySocketInstance() {
-  if (!socket) return;
-  try {
-    socket.removeAllListeners();
-  } catch {}
-  try {
-    socket.disconnect();
-  } catch {}
-  socket = null;
-}
-let currentCompanyId = null; // company to (re)join on connect/reconnect
-/** Évite les double émissions join_* pour le même id (réduit bruit serveur / logs). */
+/** Registre multi-abonnés : event -> Set<callback> */
+const eventSubscribers = new Map();
+/** Pont unique socket.io -> fan-out Set */
+const socketBridgeListeners = new Map();
+
+let currentCompanyId = null;
 let lastJoinCompanyEmitId = null;
-// ✅ Heartbeat géré nativement par Socket.IO (ping_interval=25s, ping_timeout=60s)
-// Suppression du heartbeat applicatif redondant
-let networkListenersSetup = false; // Track if network listeners are set up
+let networkListenersSetup = false;
+let onOnlineHandler = null;
+let onOfflineHandler = null;
 
-// ✅ isDevelopmentLocalhost importé depuis socketConfig.js
+export const COMPANY_SOCKET_STATE_EVENT = 'company_socket_state';
 
-// ✅ Socket.IO doit utiliser le proxy en développement pour éviter les problèmes CORS/cookies
-// Le proxy est configuré dans setupProxy.js pour /socket.io
+function notifyCompanySocketState(detail) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(COMPANY_SOCKET_STATE_EVENT, {
+      detail: { reconnecting: false, ...detail },
+    })
+  );
+}
+
+function nextSocketGeneration() {
+  socketGenerationId += 1;
+  return socketGenerationId;
+}
+
+function isSocketGenerationActive(generation) {
+  return generation === socketGenerationId && generation > 0;
+}
+
+function recordReconnectFailure() {
+  const enteredCooldown = companyReconnectCircuitBreaker.recordFailure(socket);
+  if (enteredCooldown && isCompanySocketMetricsDebugEnabled()) {
+    // eslint-disable-next-line no-console
+    console.warn('[CompanySocket] circuit breaker: cooldown reconnect actif');
+  }
+}
+
+function isReconnectCooldownActive() {
+  return companyReconnectCircuitBreaker.isCooldownActive();
+}
+
+function syncListenerMetrics() {
+  const byEvent = {};
+  let total = 0;
+  eventSubscribers.forEach((set, event) => {
+    byEvent[event] = set.size;
+    total += set.size;
+    warnIfTooManyListeners(event, set.size);
+  });
+  setActiveListenerCount(total, byEvent);
+  trackListenerCountForWatchdog(total);
+}
+
+function fanOutEvent(event, payload) {
+  const subs = eventSubscribers.get(event);
+  if (!subs || subs.size === 0) return;
+  subs.forEach((callback) => {
+    try {
+      callback(payload);
+    } catch (err) {
+      console.error(JSON.stringify({
+        event: 'socket_listener_error',
+        socket_event: event,
+        error: err?.message || String(err),
+        timestamp: new Date().toISOString(),
+      }));
+    }
+  });
+}
+
+function ensureSocketBridgeListener(event) {
+  if (!socket || socketBridgeListeners.has(event)) return;
+  const bridge = (payload) => fanOutEvent(event, payload);
+  socket.on(event, bridge);
+  socketBridgeListeners.set(event, bridge);
+}
+
+function removeSocketBridgeListener(event) {
+  if (!socket) return;
+  const bridge = socketBridgeListeners.get(event);
+  if (bridge) {
+    socket.off(event, bridge);
+    socketBridgeListeners.delete(event);
+  }
+}
+
+function teardownNetworkListeners() {
+  if (!networkListenersSetup || typeof window === 'undefined') return;
+  if (onOnlineHandler) {
+    window.removeEventListener('online', onOnlineHandler);
+    onOnlineHandler = null;
+  }
+  if (onOfflineHandler) {
+    window.removeEventListener('offline', onOfflineHandler);
+    onOfflineHandler = null;
+  }
+  networkListenersSetup = false;
+}
+
+function setupNetworkListeners(generation) {
+  if (networkListenersSetup || typeof window === 'undefined') return;
+
+  onOnlineHandler = () => {
+    if (!isSocketGenerationActive(generation)) return;
+    if (isReconnectCooldownActive()) return;
+    if (socket && !socket.connected) {
+      socket.connect();
+    }
+  };
+
+  onOfflineHandler = () => {
+    if (!isSocketGenerationActive(generation)) return;
+  };
+
+  window.addEventListener('online', onOnlineHandler);
+  window.addEventListener('offline', onOfflineHandler);
+  networkListenersSetup = true;
+}
+
+function disposeCompanySocketInstance() {
+  nextSocketGeneration();
+  teardownNetworkListeners();
+
+  if (socket) {
+    socketBridgeListeners.forEach((bridge, event) => {
+      try {
+        socket.off(event, bridge);
+      } catch {}
+    });
+    socketBridgeListeners.clear();
+    try {
+      socket.removeAllListeners();
+    } catch {}
+    try {
+      socket.disconnect();
+    } catch {}
+    socket = null;
+  }
+
+  notifyCompanySocketState({ connected: false, reconnecting: false });
+}
+
 const getSocketUrl = () => {
   const isProduction = process.env.NODE_ENV === 'production';
-  
-  // ✅ Détecter dynamiquement si on est en développement localhost
   const isDevLocalhost = isDevelopmentLocalhost();
-  
-  // ✅ PRIORITÉ 1: En développement localhost, TOUJOURS utiliser le proxy
-  // (même si REACT_APP_SOCKET_URL est définie, pour éviter les problèmes CORS/cookies)
+  const metricsDebug = isCompanySocketMetricsDebugEnabled();
+
   if (!isProduction && isDevLocalhost) {
-    // ✅ Utiliser le proxy relatif pour Socket.IO (via setupProxy.js)
-    // Cela permet d'envoyer les cookies httpOnly correctement
     if (typeof window !== 'undefined' && window.location) {
-      // Utiliser le proxy relatif pour Socket.IO
-      const proxyUrl = window.location.origin;
-      // eslint-disable-next-line no-console
-      console.log('[CompanySocket] Mode développement détecté, utilisation du proxy:', proxyUrl);
-      return proxyUrl;
+      return window.location.origin;
     }
-    // Fallback si window n'est pas disponible
-    const devSocketUrl = process.env.REACT_APP_SOCKET_URL || 'http://127.0.0.1:5000';
-    // eslint-disable-next-line no-console
-    console.warn('[CompanySocket] window.location non disponible, fallback:', devSocketUrl);
-    return devSocketUrl;
+    return process.env.REACT_APP_SOCKET_URL || 'http://127.0.0.1:5000';
   }
-  
-  // ✅ DEBUG: Log toutes les valeurs pour comprendre le comportement
-  // eslint-disable-next-line no-console
-  console.log('[CompanySocket] getSocketUrl() - Debug:', {
-    isProduction,
-    isDevelopmentLocalhost: isDevLocalhost,
-    NODE_ENV: process.env.NODE_ENV,
-    REACT_APP_SOCKET_URL: process.env.REACT_APP_SOCKET_URL,
-    REACT_APP_API_BASE_URL: process.env.REACT_APP_API_BASE_URL,
-    REACT_APP_API_URL: process.env.REACT_APP_API_URL,
-    windowLocation: typeof window !== 'undefined' && window.location ? window.location.host : 'N/A',
-    windowOrigin: typeof window !== 'undefined' && window.location ? window.location.origin : 'N/A',
-  });
-  
-  // ✅ PRIORITÉ 2: Variable d'environnement dédiée pour Socket.IO (production uniquement)
+
+  if (metricsDebug) {
+    // eslint-disable-next-line no-console
+    console.debug('[CompanySocket] getSocketUrl context', {
+      isProduction,
+      isDevLocalhost,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+  }
+
   const socketUrl = process.env.REACT_APP_SOCKET_URL;
   if (socketUrl && socketUrl.startsWith('http')) {
-    // eslint-disable-next-line no-console
-    console.log('[CompanySocket] REACT_APP_SOCKET_URL trouvée:', socketUrl);
     try {
       const url = new URL(socketUrl);
-      // Validation en production : doit être HTTPS
       if (isProduction && !socketUrl.startsWith('https://')) {
-        console.error(
-          'REACT_APP_SOCKET_URL doit commencer par "https://" en production. ' +
-          `Valeur actuelle: ${socketUrl}`
-        );
         throw new Error('REACT_APP_SOCKET_URL invalide en production');
       }
       return url.origin;
@@ -87,21 +197,13 @@ const getSocketUrl = () => {
     }
   }
 
-  // ✅ PRIORITÉ 3: Variables d'environnement API (fallback)
   const baseUrl =
     process.env.REACT_APP_API_BASE_URL ||
     process.env.REACT_APP_API_URL;
   if (baseUrl && baseUrl.startsWith('http')) {
-    // eslint-disable-next-line no-console
-    console.log('[CompanySocket] REACT_APP_API_BASE_URL/API_URL trouvée:', baseUrl);
     try {
       const url = new URL(baseUrl);
-      // Validation en production : doit être HTTPS
       if (isProduction && !baseUrl.startsWith('https://')) {
-        console.error(
-          'REACT_APP_API_BASE_URL doit commencer par "https://" en production. ' +
-          `Valeur actuelle: ${baseUrl}`
-        );
         throw new Error('REACT_APP_API_BASE_URL invalide en production');
       }
       return url.origin;
@@ -109,261 +211,211 @@ const getSocketUrl = () => {
       console.error('Invalid API URL:', baseUrl, e);
     }
   }
-  
-  // Log pour déboguer si on n'utilise pas le proxy
-  if (!isProduction && !isDevLocalhost) {
-    // eslint-disable-next-line no-console
-    console.log('[CompanySocket] Mode développement mais isDevelopmentLocalhost=false', {
-      isDevelopmentLocalhost: isDevLocalhost,
-      windowLocation: typeof window !== 'undefined' && window.location ? window.location.host : 'N/A',
-    });
-  }
 
-  // ✅ PRIORITÉ 4: Production - erreur si aucune variable n'est définie
   if (isProduction) {
     const errorMsg =
-      'REACT_APP_SOCKET_URL ou REACT_APP_API_BASE_URL est requis en production. ' +
-      'Définissez au moins une de ces variables d\'environnement avec une URL HTTPS valide.';
+      'REACT_APP_SOCKET_URL ou REACT_APP_API_BASE_URL est requis en production.';
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
 
-  // Fallback pour développement (si NODE_ENV n'est pas 'production')
   return 'http://127.0.0.1:5000';
 };
 
-// ✅ Validation au démarrage en production
 if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
   if (!process.env.REACT_APP_SOCKET_URL && !process.env.REACT_APP_API_BASE_URL) {
     console.error(
-      '[Socket.IO] ⚠️ Variables d\'environnement manquantes en production: ' +
+      '[Socket.IO] Variables d\'environnement manquantes en production: ' +
       'REACT_APP_SOCKET_URL ou REACT_APP_API_BASE_URL doit être défini.'
     );
   }
 }
 
-// ✅ SOCKET_PATH importé depuis socketConfig.js
-
 function buildSocketOptions() {
-  // ✅ Jitter anti-storm: ajouter variation aléatoire pour éviter reconnexions simultanées
-  const jitterDelay = Math.random() * 100; // 0-100ms
-  const jitterMax = Math.random() * 500; // 0-500ms
-  
+  const jitterDelay = Math.random() * 100;
+  const jitterMax = Math.random() * 500;
+
   return {
     ...SOCKET_CONFIG,
-    // ✅ Override path pour utiliser SOCKET_PATH (peut être différent de SOCKET_CONFIG.path)
     path: SOCKET_PATH,
-    // ✅ Appliquer jitter aux délais de reconnexion
     reconnectionDelay: SOCKET_CONFIG.reconnectionDelay + jitterDelay,
     reconnectionDelayMax: SOCKET_CONFIG.reconnectionDelayMax + jitterMax,
-    // ✅ Utiliser transports adaptés (polling d'abord en dev localhost)
     transports: getSocketTransports(),
-    // 🔒 Auth dynamique : sera rappelé à chaque (re)connexion
-    // ✅ Support cookies httpOnly : si pas de token dans localStorage, utiliser uniquement les cookies
     auth: (cb) => {
       const token = getAccessToken();
-      // ✅ Si token disponible (mode mobile), l'envoyer dans le payload
-      // ✅ Sinon, envoyer objet vide pour utiliser uniquement les cookies httpOnly (mode web)
       if (token) {
         cb({ token });
       } else {
-        // Mode cookies httpOnly : ne pas envoyer de payload auth, le serveur lira les cookies
         cb({});
       }
     },
   };
 }
 
+function attachSocketHandlers(targetSocket, generation, { onFirstConnectError } = {}) {
+  bindUrgentAlertSoundListeners(targetSocket);
+  targetSocket.io.on('reconnect_attempt', () => {
+    if (!isSocketGenerationActive(generation)) return;
+    if (isReconnectCooldownActive()) return;
+    recordReconnectAttempt();
+    notifyCompanySocketState({ connected: false, reconnecting: true });
+  });
+
+  targetSocket.io.on('reconnect_failed', () => {
+    if (!isSocketGenerationActive(generation)) return;
+    recordReconnectFailure();
+    notifyCompanySocketState({ connected: false, reconnecting: false });
+  });
+
+  targetSocket.on('connect', () => {
+    if (!isSocketGenerationActive(generation)) return;
+    companyReconnectCircuitBreaker.recordSuccess();
+    recordConnectReady();
+    notifyCompanySocketState({ connected: true, reconnecting: false });
+
+    if (currentCompanyId) {
+      try {
+        targetSocket.emit('join_company', { company_id: currentCompanyId });
+      } catch {}
+    }
+
+    setupNetworkListeners(generation);
+  });
+
+  targetSocket.on('reconnect', () => {
+    if (!isSocketGenerationActive(generation)) return;
+    if (currentCompanyId) {
+      try {
+        targetSocket.emit('join_company', { company_id: currentCompanyId });
+        targetSocket.emit('get_driver_locations');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('company_socket_reconnected', {
+              detail: { companyId: currentCompanyId, at: Date.now() },
+            })
+          );
+        }
+      } catch (err) {
+        console.error(JSON.stringify({
+          event: 'socket_rejoin_error',
+          error: err?.message || String(err),
+          timestamp: new Date().toISOString(),
+        }));
+      }
+    }
+  });
+
+  targetSocket.on('disconnect', (reason) => {
+    if (!isSocketGenerationActive(generation)) return;
+    notifyCompanySocketState({ connected: false, reconnecting: false });
+
+    const hasLocalToken = !!getAccessToken();
+    if (reason === 'io server disconnect' || (reason === 'unauthorized' && hasLocalToken)) {
+      if (targetSocket.io?.opts) {
+        targetSocket.io.opts.reconnection = false;
+      }
+    }
+  });
+
+  targetSocket.on('connect_error', (err) => {
+    if (!isSocketGenerationActive(generation)) return;
+    recordReconnectFailure();
+    notifyCompanySocketState({ connected: false, reconnecting: false });
+    const msg = err?.message || err?.description || String(err || '');
+    if (typeof onFirstConnectError === 'function') {
+      onFirstConnectError(err);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('socket_connection_rejected', {
+          detail: { message: msg, code: msg, originalError: err },
+        })
+      );
+    }
+  });
+
+  targetSocket.on('unauthorized', (err) => {
+    if (!isSocketGenerationActive(generation)) return;
+    const reason = err?.reason || err?.data?.reason;
+    if (reason === 'token_expired') {
+      try {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+      } catch {}
+      try {
+        if (targetSocket.io?.opts) {
+          targetSocket.io.opts.reconnection = true;
+        }
+        targetSocket.connect();
+      } catch {}
+    }
+  });
+
+  eventSubscribers.forEach((_, event) => {
+    ensureSocketBridgeListener(event);
+  });
+}
+
 export function getCompanySocket() {
-  // ✅ Feature flag : désactiver Socket.IO si SOCKET_ENABLED=false
   const socketEnabled = process.env.REACT_APP_SOCKET_ENABLED !== 'false';
   if (!socketEnabled) {
-    console.log('[CompanySocket] Socket.IO désactivé (REACT_APP_SOCKET_ENABLED=false)');
     return null;
   }
-  
+
   if (socket && socket.connected) return socket;
 
   if (!connectPromise) {
+    recordConnectStarted();
+
     connectPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      const settleResolve = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const settleReject = (error) => {
+        if (settled) return;
+        settled = true;
+        connectPromise = null;
+        reject(error);
+      };
+
       try {
         if (socket) {
           disposeCompanySocketInstance();
         }
-        // token lu dynamiquement via buildSocketOptions.auth()
+
+        const activeGeneration = nextSocketGeneration();
         const socketOptions = buildSocketOptions();
-        // ✅ Obtenir l'URL Socket.IO dynamiquement (pour utiliser le proxy en dev)
         const socketUrl = getSocketUrl();
-        // eslint-disable-next-line no-console
-        console.log('[CompanySocket] Connexion à:', socketUrl, 'avec path:', socketOptions.path);
         socket = io(socketUrl, socketOptions);
-
-        socket.on('connect', () => {
-          // ✅ Logs structurés
-          console.log(JSON.stringify({
-            event: 'socket_connect',
-            socket_id: socket.id,
-            timestamp: new Date().toISOString(),
-            user_type: 'company'
-          }));
-          
-          // Rejoindre automatiquement la room entreprise si connue
-          if (currentCompanyId) {
-            try {
-              socket.emit('join_company', { company_id: currentCompanyId });
-            } catch {}
-          }
-          
-          // ✅ Heartbeat géré nativement par Socket.IO (ping_interval=25s, ping_timeout=60s)
-          // Le heartbeat applicatif a été supprimé car redondant
-          
-          // ✅ Détection réseau (online/offline)
-          if (!networkListenersSetup && typeof window !== 'undefined') {
-            window.addEventListener('online', () => {
-              console.log(JSON.stringify({
-                event: 'network_online',
-                timestamp: new Date().toISOString()
-              }));
-              if (socket && !socket.connected) {
-                console.log(JSON.stringify({
-                  event: 'socket_reconnect_triggered',
-                  reason: 'network_online',
-                  timestamp: new Date().toISOString()
-                }));
-                socket.connect();
-              }
-            });
-            
-            window.addEventListener('offline', () => {
-              console.log(JSON.stringify({
-                event: 'network_offline',
-                timestamp: new Date().toISOString()
-              }));
-            });
-            
-            networkListenersSetup = true;
-          }
-          
-          resolve(socket);
+        attachSocketHandlers(socket, activeGeneration, {
+          onFirstConnectError: settleReject,
         });
 
-        // ✅ Handler reconnect : rejoin automatiquement les rooms
-        socket.on('reconnect', (attempt) => {
-          // ✅ Logs structurés
-          console.log(JSON.stringify({
-            event: 'socket_reconnect',
-            attempt: attempt,
-            timestamp: new Date().toISOString()
-          }));
-          
-          // Rejoin automatique des rooms
-          if (currentCompanyId) {
-            try {
-              socket.emit('join_company', { company_id: currentCompanyId });
-              socket.emit('get_driver_locations');
-              console.log(JSON.stringify({
-                event: 'socket_rejoin_room',
-                room: 'company',
-                company_id: currentCompanyId,
-                timestamp: new Date().toISOString()
-              }));
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(
-                  new CustomEvent('company_socket_reconnected', {
-                    detail: { companyId: currentCompanyId, at: Date.now() },
-                  })
-                );
-              }
-            } catch (err) {
-              console.error(JSON.stringify({
-                event: 'socket_rejoin_error',
-                error: err?.message || String(err),
-                timestamp: new Date().toISOString()
-              }));
-            }
+        const onInitialConnect = () => {
+          if (!isSocketGenerationActive(activeGeneration)) {
+            socket.off('connect', onInitialConnect);
+            return;
           }
-          
-          // ✅ Heartbeat géré nativement par Socket.IO, pas besoin de relancer
-        });
+          socket.off('connect', onInitialConnect);
+          settleResolve(socket);
+        };
 
-        socket.on('disconnect', (reason) => {
-          // ✅ Logs structurés
-          console.log(JSON.stringify({
-            event: 'socket_disconnect',
-            reason: reason,
-            timestamp: new Date().toISOString()
-          }));
-          connectPromise = null;
-          
-          // ✅ Ne pas reconnecter si serveur a déconnecté volontairement
-          // NOTE:
-          // - `unauthorized` arrive souvent quand un vieux `authToken` expiré traîne en localStorage.
-          //   Dans ce cas, on veut **pouvoir** se reconnecter (souvent via cookies httpOnly).
-          // - On stoppe donc la reconnexion uniquement si on a encore un token local à envoyer.
-          const hasLocalToken = !!getAccessToken();
-          if (reason === 'io server disconnect' || (reason === 'unauthorized' && hasLocalToken)) {
-            console.log(JSON.stringify({
-              event: 'socket_disconnect_stop_reconnect',
-              reason: reason,
-              timestamp: new Date().toISOString()
-            }));
-            // Désactiver la reconnexion automatique
-            socket.io.reconnect = false;
-            return; // Pas de reconnexion auto
-          }
-          
-          // ✅ Heartbeat géré nativement par Socket.IO, pas de nettoyage nécessaire
-        });
+        socket.on('connect', onInitialConnect);
 
-        socket.on('connect_error', (err) => {
-          const msg = err?.message || err?.description || (err?.data && err.data.message) || String(err || '');
-          console.error(JSON.stringify({
-            event: 'socket_connect_error',
-            error: msg,
-            timestamp: new Date().toISOString()
-          }));
-          connectPromise = null;
-          // Backend envoie maintenant des codes via ConnectionRefusedError (AUTH_REQUIRED, TOKEN_EXPIRED, etc.)
-          // L’app peut écouter socket_connection_rejected pour afficher un toast / logout.
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('socket_connection_rejected', {
-                detail: { message: msg, code: msg, originalError: err },
-              })
-            );
-          }
-          reject(err);
-        });
-
-        socket.on('unauthorized', (err) => {
-          console.error(JSON.stringify({
-            event: 'socket_unauthorized',
-            error: err?.error || String(err),
-            timestamp: new Date().toISOString()
-          }));
-
-          // ✅ Auto-récupération: si token expiré, on le purge pour basculer sur cookies httpOnly
-          // et on autorise une reconnexion.
-          const reason = err?.reason || err?.data?.reason;
-          if (reason === 'token_expired') {
-            try {
-              localStorage.removeItem('authToken');
-              localStorage.removeItem('refreshToken');
-            } catch {}
-            try {
-              socket.io.reconnect = true;
-              // Relancer une connexion (Socket.IO gère le backoff)
-              socket.connect();
-            } catch {}
-          }
-        });
+        if (socket.connected) {
+          socket.off('connect', onInitialConnect);
+          settleResolve(socket);
+        }
       } catch (e) {
-        console.error('❌ Socket init error:', e);
         connectPromise = null;
         reject(e);
       }
     });
   }
+
   return socket || null;
 }
 
@@ -371,10 +423,13 @@ export async function ensureCompanySocket() {
   const existing = getCompanySocket();
   if (existing && existing.connected) return existing;
   if (!connectPromise) return null;
-  return connectPromise;
+  try {
+    return await connectPromise;
+  } catch {
+    return null;
+  }
 }
 
-// ✅ Rejoindre une room d’entreprise (legacy no-op: le backend joint déjà la room à la connexion côté 'company')
 export async function joinCompanyRoom(companyId) {
   const s = await ensureCompanySocket();
   if (!s) return;
@@ -383,7 +438,6 @@ export async function joinCompanyRoom(companyId) {
     return;
   }
   lastJoinCompanyEmitId = companyId;
-  // Compat: certains backends écoutent join_company, d'autres join_company_room
   try {
     s.emit('join_company', { company_id: companyId });
   } catch {}
@@ -392,7 +446,6 @@ export async function joinCompanyRoom(companyId) {
   } catch {}
 }
 
-// ✅ Quitter la room (optionnel si le serveur expose un handler)
 export async function leaveCompanyRoom(companyId) {
   const s = await ensureCompanySocket();
   if (!s) return;
@@ -403,100 +456,125 @@ export async function leaveCompanyRoom(companyId) {
   lastJoinCompanyEmitId = null;
 }
 
-// ✅ Écouter les mises à jour de localisation (fanout backend : driver_location_update)
-export async function onDriverLocationUpdate(callback) {
-  const s = await ensureCompanySocket();
-  if (!s) return;
-  // Remplace l’éventuel listener existant pour éviter les doublons
-  const evt = 'driver_location_update';
-  const prev = listeners.get(evt);
-  if (prev) s.off(evt, prev);
-  s.on(evt, callback);
-  listeners.set(evt, callback);
-}
-
-// ✅ Arrêter d’écouter les mises à jour
-export async function offDriverLocationUpdate() {
-  const s = await ensureCompanySocket();
-  if (!s) return;
-  const evt = 'driver_location_update';
-  const prev = listeners.get(evt);
-  if (prev) {
-    s.off(evt, prev);
-    listeners.delete(evt);
+function subscribeToEvent(event, callback) {
+  if (!eventSubscribers.has(event)) {
+    eventSubscribers.set(event, new Set());
   }
+  const subs = eventSubscribers.get(event);
+  subs.add(callback);
+  syncListenerMetrics();
+
+  const s = getCompanySocket();
+  if (s) {
+    ensureSocketBridgeListener(event);
+  }
+
+  return () => unsubscribeFromEvent(event, callback);
 }
 
-// 🔧 Utilitaires génériques d'abonnement (évite la multiplication de helpers spécifiques)
+function unsubscribeFromEvent(event, callback) {
+  const subs = eventSubscribers.get(event);
+  if (!subs) return;
+  if (callback) {
+    subs.delete(callback);
+  } else {
+    subs.clear();
+  }
+  if (subs.size === 0) {
+    eventSubscribers.delete(event);
+    removeSocketBridgeListener(event);
+  }
+  syncListenerMetrics();
+}
+
+export async function onDriverLocationUpdate(callback) {
+  return subscribeToEvent('driver_location_update', callback);
+}
+
+export async function offDriverLocationUpdate(callback) {
+  unsubscribeFromEvent('driver_location_update', callback);
+}
+
 export async function on(event, callback) {
-  const s = await ensureCompanySocket();
-  if (!s) return;
-  const prev = listeners.get(event);
-  if (prev) s.off(event, prev);
-  s.on(event, callback);
-  listeners.set(event, callback);
+  return subscribeToEvent(event, callback);
 }
 
 export async function once(event, callback) {
   const s = await ensureCompanySocket();
-  if (!s) return;
-  s.once(event, callback);
+  if (!s) return undefined;
+  const generation = socketGenerationId;
+  const wrapper = (...args) => {
+    if (!isSocketGenerationActive(generation)) return;
+    s.off(event, wrapper);
+    callback(...args);
+  };
+  s.once(event, wrapper);
+  return () => s.off(event, wrapper);
 }
 
-export async function off(event) {
-  const s = await ensureCompanySocket();
-  if (!s) return;
-  const prev = listeners.get(event);
-  if (prev) {
-    s.off(event, prev);
-    listeners.delete(event);
-  }
+export async function off(event, callback) {
+  unsubscribeFromEvent(event, callback);
 }
 
 export async function waitUntilConnected(timeoutMs = 10000) {
-  const start = Date.now();
-  let s = await ensureCompanySocket();
-  while (s && !s.connected && Date.now() - start < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 100));
-    s = socket;
-  }
-  return s?.connected ? s : null;
+  const s = await ensureCompanySocket();
+  if (!s) return null;
+  if (s.connected) return s;
+
+  const generation = socketGenerationId;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      finish(s.connected && isSocketGenerationActive(generation) ? s : null);
+    }, timeoutMs);
+
+    const onConnect = () => {
+      if (!isSocketGenerationActive(generation)) {
+        finish(null);
+        return;
+      }
+      finish(s);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      s.off('connect', onConnect);
+    };
+
+    s.once('connect', onConnect);
+  });
 }
 
 export function getSocketId() {
   return socket?.id || null;
 }
 
-// ✅ Fermeture propre (ex. au logout)
+export function getCompanySocketMetrics() {
+  return getCompanySocketMetricsSnapshot();
+}
+
 export function disconnectCompanySocket() {
   try {
-    listeners.forEach((cb, evt) => {
-      socket?.off(evt, cb);
-    });
-    listeners.clear();
     connectPromise = null;
-    // ✅ Heartbeat géré nativement par Socket.IO, pas de nettoyage nécessaire
-    if (socket) {
-      socket.disconnect();
-      socket = null;
-    }
-    
-    // ✅ Nettoyer listeners réseau (optionnel, mais propre)
-    if (networkListenersSetup && typeof window !== 'undefined') {
-      // Les listeners online/offline peuvent rester, mais on pourrait les nettoyer si nécessaire
-      networkListenersSetup = false;
-    }
-    
-    console.log(JSON.stringify({
-      event: 'socket_disconnect_cleanup',
-      timestamp: new Date().toISOString()
-    }));
+    currentCompanyId = null;
+    lastJoinCompanyEmitId = null;
+    companyReconnectCircuitBreaker.reset(socket);
+    disposeCompanySocketInstance();
+    eventSubscribers.clear();
+    syncListenerMetrics();
   } catch (err) {
     console.error(JSON.stringify({
       event: 'socket_disconnect_error',
       error: err?.message || String(err),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     }));
   }
 }
-

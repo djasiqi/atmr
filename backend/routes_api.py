@@ -226,6 +226,8 @@ def init_namespaces(app):
     from routes.invoices import invoices_ns
     from routes.medical import medical_ns
     from routes.messages import messages_ns
+    from routes.conversations import conversations_ns
+    from routes.messages_hub import messages_hub_ns
     from routes.osrm import osrm_ns
     from routes.osrm_health import osrm_health_ns
     from routes.osrm_metrics import ns_osrm_metrics
@@ -315,6 +317,8 @@ def init_namespaces(app):
 
     # Routes messages
     api_v1.add_namespace(messages_ns, path="/messages")
+    api_v1.add_namespace(messages_hub_ns, path="/messages")
+    api_v1.add_namespace(conversations_ns, path="/conversations")
 
     # Routes geocode
     api_v1.add_namespace(geocode_ns, path="/geocode")
@@ -435,6 +439,8 @@ def init_namespaces(app):
         api_legacy.add_namespace(payments_ns, path="/payments")
         api_legacy.add_namespace(utils_ns, path="/utils")
         api_legacy.add_namespace(messages_ns, path="/messages")
+        api_legacy.add_namespace(messages_hub_ns, path="/messages")
+        api_legacy.add_namespace(conversations_ns, path="/conversations")
         api_legacy.add_namespace(geocode_ns, path="/geocode")
         api_legacy.add_namespace(medical_ns, path="/medical")
         api_legacy.add_namespace(invoices_ns, path="/invoices")

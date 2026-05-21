@@ -839,6 +839,19 @@ def create_app(config_name: str | None = None):
         print(
             "🔌 [SOCKET.IO] Flask-SocketIO initialisé avec path=/socket.io", flush=True
         )
+        try:
+            from services.infrastructure.socketio_runtime_check import (
+                log_socketio_runtime_diagnostics,
+            )
+
+            log_socketio_runtime_diagnostics(
+                app.logger,
+                message_queue=configured_message_queue,
+            )
+        except Exception as exc:
+            app.logger.warning(
+                "[Socket.IO] Diagnostics runtime non disponibles: %s", exc
+            )
 
     # ✅ 2.9: Injection trace_id dans logs pour corrélation
     # (une seule fois au démarrage)

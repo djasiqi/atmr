@@ -22,11 +22,12 @@ export const SOCKET_CONFIG = {
 };
 
 // Helper pour détecter si on est en développement localhost
+// Inclure 127.0.0.1 : même origine CRA que localhost, proxy /socket.io + cookies sinon ratés si on pointe direct 5000
 export const isDevelopmentLocalhost = () => {
   return (
     typeof window !== "undefined" &&
     window.location &&
-    /localhost:3000$/i.test(window.location.host)
+    /^(localhost|127\.0\.0\.1):3000$/i.test(window.location.host)
   );
 };
 

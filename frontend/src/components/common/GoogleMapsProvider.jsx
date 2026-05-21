@@ -7,7 +7,11 @@ import React, {
   Component,
 } from 'react';
 
-import { isGoogleMapsSdkReady, loadGoogleMapsScript } from '../../utils/googleMapsLoader';
+import {
+  isGoogleMapsSdkReady,
+  loadGoogleMapsScript,
+  resolveWebMapsApiKey,
+} from '../../utils/googleMapsLoader';
 
 const GoogleMapsContext = createContext({ isLoaded: false, loadError: null });
 
@@ -24,7 +28,7 @@ export function useGoogleMapsLoaded() {
  * que useJsApiLoader en StrictMode et avec HMR.
  */
 function GoogleMapsLoader({ children }) {
-  const [isLoaded, setIsLoaded] = useState(isGoogleMapsSdkReady);
+  const [isLoaded, setIsLoaded] = useState(() => isGoogleMapsSdkReady());
   const [loadError, setLoadError] = useState(null);
   const isDev = process.env.NODE_ENV !== 'production';
 
@@ -43,9 +47,11 @@ function GoogleMapsLoader({ children }) {
       return;
     }
 
-    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    const apiKey = resolveWebMapsApiKey();
     if (!apiKey) {
-      console.warn('[GoogleMaps] REACT_APP_GOOGLE_MAPS_API_KEY non définie');
+      console.warn(
+        '[GoogleMaps] Clé absente : définir REACT_APP_GOOGLE_MAPS_API_KEY (CRA uniquement)'
+      );
       setLoadError(new Error('API key manquante'));
       return;
     }

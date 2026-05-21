@@ -157,6 +157,7 @@ class UpdateDriverBookingStatusUseCase:
                 status_code = 400
 
             if not response and data is not None and new_status_str is not None:
+                status_before = _status_value(booking)
                 # Log payload reçu (diagnostic Docker / litiges)
                 logger.info(
                     "[UpdateDriverBookingStatus] booking_id=%s status=%s cancel_reason=%s reason_code=%s",
@@ -209,6 +210,21 @@ class UpdateDriverBookingStatusUseCase:
                             "unchanged": True,
                             "mission_milestone": "ARRIVED",
                         }
+                        try:
+                            from services.messaging.system_message_emitter import (
+                                SystemMessageEmitter,
+                            )
+
+                            SystemMessageEmitter.emit_mission_event(
+                                int(booking.company_id),
+                                int(booking.id),
+                                "arrived",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "system message arrived failed booking_id=%s",
+                                booking.id,
+                            )
                     else:
                         logger.info(
                             "invalid_transition arrived booking_id=%s current=%s",
@@ -666,6 +682,19 @@ class UpdateDriverBookingStatusUseCase:
                     )
 
             self._db.commit()
+            try:
+                from services.messaging.system_message_emitter import SystemMessageEmitter
+
+                SystemMessageEmitter.on_booking_status_change(
+                    booking,
+                    locals().get("status_before"),
+                    _status_value(booking),
+                )
+            except Exception:
+                logger.exception(
+                    "system message status change failed booking_id=%s",
+                    booking.id,
+                )
             # ✅ Clean Architecture: Publier événement au lieu d'appel direct
             try:
                 from application.events.event_bus import publish_event

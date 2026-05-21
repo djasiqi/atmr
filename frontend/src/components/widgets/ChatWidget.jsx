@@ -315,7 +315,10 @@ export default function ChatWidget({ companyId }) {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     socket.emit('typing_stop');
 
-    socket.emit('team_chat_message', { content: text, receiver_id: null }, (response) => {
+    socket.emit(
+      'team_chat_message',
+      { content: text, receiver_id: null, thread_id: 'dispatch' },
+      (response) => {
       if (response && response.error) {
         console.error('❌ Erreur serveur:', response.error);
       }
@@ -351,6 +354,7 @@ export default function ChatWidget({ companyId }) {
           content: '',
           image_url: url,
           receiver_id: null,
+          thread_id: 'dispatch',
         });
       } catch (error) {
         console.error('❌ Erreur upload image:', error);
@@ -376,6 +380,7 @@ export default function ChatWidget({ companyId }) {
           pdf_filename: filename,
           pdf_size: size_bytes,
           receiver_id: null,
+          thread_id: 'dispatch',
         });
       } catch (error) {
         console.error('❌ Erreur upload PDF:', error);

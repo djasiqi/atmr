@@ -1,7 +1,7 @@
 // frontend/src/hooks/useSocketStatus.js
 
 import { useEffect, useState } from 'react';
-import { getCompanySocket } from '../services/companySocket';
+import { COMPANY_SOCKET_STATE_EVENT, getCompanySocket } from '../services/companySocket';
 
 /**
  * Hook pour exposer l'état de connexion Socket.IO
@@ -15,54 +15,63 @@ export function useSocketStatus() {
 
   useEffect(() => {
     const socket = getCompanySocket();
+    // État initial (instance courante peut être remplacée plus tard sans remonter le hook)
     if (!socket) {
       setConnected(false);
-      return;
+      setReconnecting(false);
+    } else {
+      setConnected(Boolean(socket.connected));
+      setReconnecting(false);
+      if (socket.connected) {
+        setLastConnected(new Date());
+      }
     }
 
-    // État initial
-    setConnected(socket.connected);
-    if (socket.connected) {
-      setLastConnected(new Date());
-    }
+    const handleDocumentState = (e) => {
+      const d = e.detail || {};
+      if (typeof d.connected === 'boolean') {
+        setConnected(d.connected);
+        if (d.connected) {
+          setLastConnected(new Date());
+        }
+      }
+      if (typeof d.reconnecting === 'boolean') {
+        setReconnecting(d.reconnecting);
+      }
+    };
 
-    // Écouter les événements de connexion
+    window.addEventListener(COMPANY_SOCKET_STATE_EVENT, handleDocumentState);
+
+    // Les handlers socket ci-dessous ne survivent pas à disposeCompanySocketInstance() ;
+    // l’événement document assure la synchro après recréation de l’instance.
+    let s = socket;
     const handleConnect = () => {
       setConnected(true);
       setReconnecting(false);
       setLastConnected(new Date());
     };
-
     const handleDisconnect = () => {
       setConnected(false);
       setReconnecting(false);
     };
+    const handleReconnect = () => setReconnecting(true);
+    const handlePong = () => {};
 
-    const handleReconnect = (_attemptNumber) => {
-      setReconnecting(true);
-      // Après reconnexion réussie, handleConnect sera appelé
-    };
+    if (s) {
+      s.on('connect', handleConnect);
+      s.on('disconnect', handleDisconnect);
+      s.on('reconnect', handleReconnect);
+      s.on('pong', handlePong);
+    }
 
-    // Écouter les pong pour calculer la latence
-    const handlePong = (_data) => {
-      // La latence est calculée dans companySocket.js
-      // On peut l'exposer via un événement personnalisé ou via un getter
-      // Pour l'instant, on ne track pas la latence ici car elle est déjà loggée
-      // On pourrait ajouter un système d'événements personnalisés si nécessaire
-    };
-
-    // Attacher les listeners
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('reconnect', handleReconnect);
-    socket.on('pong', handlePong);
-
-    // Cleanup
     return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('reconnect', handleReconnect);
-      socket.off('pong', handlePong);
+      window.removeEventListener(COMPANY_SOCKET_STATE_EVENT, handleDocumentState);
+      if (s) {
+        s.off('connect', handleConnect);
+        s.off('disconnect', handleDisconnect);
+        s.off('reconnect', handleReconnect);
+        s.off('pong', handlePong);
+      }
     };
   }, []);
 

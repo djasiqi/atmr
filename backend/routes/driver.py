@@ -51,6 +51,7 @@ from services.monitoring.driver_booking_metrics import (
 from services.realtime.live_driver_status import (
     resolve_driver_status_for_fanout,
     resolve_mission_status_for_driver,
+    sanitize_fanout_mission_id,
 )
 from services.realtime.socketio import fanout_driver_location_update
 from services.tracking import enqueue_tracking_event
@@ -91,6 +92,127 @@ MAX_DRAIN_POSITIONS_PER_MINUTE = int(
     os.getenv("MAX_DRAIN_POSITIONS_PER_MINUTE", "1200")
 )
 IDEMPOTENCE_TTL_SEC = int(os.getenv("IDEMPOTENCE_TTL_SEC", "86400"))
+DRIVER_LIST_FALLBACK_SPEED_KMH = float(
+    os.getenv("DRIVER_LIST_FALLBACK_SPEED_KMH", "32.0")
+)
+
+
+def _as_float_or_none(value: Any) -> float | None:
+    try:
+        if value is None:
+            return None
+        num = float(value)
+        return num if num == num else None  # NaN guard
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int_or_none(value: Any) -> int | None:
+    try:
+        if value is None:
+            return None
+        num = int(float(value))
+        return num if num > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _maybe_geocode_booking_endpoint(
+    out: dict[str, Any], *, lat_key: str, lon_key: str, address_key: str
+) -> None:
+    """Best-effort : remplit lat/lon depuis l'adresse texte si coords absentes."""
+    if _as_float_or_none(out.get(lat_key)) is not None and _as_float_or_none(
+        out.get(lon_key)
+    ) is not None:
+        return
+    address = out.get(address_key)
+    if not isinstance(address, str) or not address.strip():
+        return
+    try:
+        from services.geolocation.maps import geocode_address
+
+        coords = geocode_address(address.strip(), country="CH")
+        if coords and coords.get("lat") is not None and coords.get("lon") is not None:
+            out[lat_key] = float(coords["lat"])
+            out[lon_key] = float(coords["lon"])
+    except Exception:
+        pass
+
+
+def _enrich_driver_booking_list_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalise durée/distance pour les listes driver sans coût réseau additionnel.
+
+    - Préserve les valeurs existantes lorsqu'elles sont déjà présentes.
+    - Ajoute `distance_km` et `duration_minutes` dérivés des champs seconds/meters.
+    - Si manquants, calcule une estimation locale à partir des coordonnées (haversine).
+    """
+    out = dict(payload)
+
+    _maybe_geocode_booking_endpoint(
+        out, lat_key="pickup_lat", lon_key="pickup_lon", address_key="pickup_location"
+    )
+    _maybe_geocode_booking_endpoint(
+        out,
+        lat_key="dropoff_lat",
+        lon_key="dropoff_lon",
+        address_key="dropoff_location",
+    )
+
+    distance_meters = _as_int_or_none(out.get("distance_meters"))
+    duration_seconds = _as_int_or_none(out.get("duration_seconds"))
+
+    # Tentative de récupération depuis d'autres clés existantes.
+    if distance_meters is None:
+        distance_km_existing = _as_float_or_none(out.get("distance_km"))
+        if distance_km_existing and distance_km_existing > 0:
+            distance_meters = int(round(distance_km_existing * 1000.0))
+    if duration_seconds is None:
+        duration_minutes_existing = _as_int_or_none(
+            out.get("duration_minutes") or out.get("duration_in_minutes")
+        )
+        if duration_minutes_existing:
+            duration_seconds = int(duration_minutes_existing * 60)
+
+    estimated = False
+    if distance_meters is None or duration_seconds is None:
+        pickup_lat = _as_float_or_none(out.get("pickup_lat"))
+        pickup_lon = _as_float_or_none(out.get("pickup_lon"))
+        dropoff_lat = _as_float_or_none(out.get("dropoff_lat"))
+        dropoff_lon = _as_float_or_none(out.get("dropoff_lon"))
+
+        if None not in (pickup_lat, pickup_lon, dropoff_lat, dropoff_lon):
+            try:
+                from shared.geo_utils import haversine_distance
+
+                km = haversine_distance(
+                    pickup_lat, pickup_lon, dropoff_lat, dropoff_lon
+                )
+                if km and km > 0:
+                    if distance_meters is None:
+                        distance_meters = int(round(km * 1000.0))
+                        estimated = True
+                    if duration_seconds is None:
+                        duration_seconds = int(
+                            round((km / max(DRIVER_LIST_FALLBACK_SPEED_KMH, 1e-3)) * 3600.0)
+                        )
+                        estimated = True
+            except Exception:
+                # Fallback best-effort uniquement; ne jamais casser l'endpoint.
+                pass
+
+    if distance_meters is not None and distance_meters > 0:
+        out["distance_meters"] = distance_meters
+        out["distance_km"] = round(distance_meters / 1000.0, 1)
+    if duration_seconds is not None and duration_seconds > 0:
+        out["duration_seconds"] = duration_seconds
+        out["duration_minutes"] = max(1, int(round(duration_seconds / 60.0)))
+        out["duration_in_minutes"] = out.get("duration_in_minutes") or out[
+            "duration_minutes"
+        ]
+    if estimated:
+        out["distance_duration_estimated"] = True
+
+    return out
 
 
 def _resolve_tracking_ack_status(
@@ -764,19 +886,22 @@ class DriverUpcomingBookings(Resource):
                 b.scheduled_time,
             )
 
-        # ✅ Implémentation : Précharger les missions via notification silencieuse
-        # Permet de synchroniser les missions en arrière-plan pour optimisation
+        # Préchargement push optionnel (cold start / header client)
         try:
+            import os
+
             from services.events.fanout import send_missions_preload
 
-            # Sérialiser les bookings pour la notification silencieuse
-            missions_data = [
-                b.serialize if hasattr(b, "serialize") else {"id": b.id}
-                for b in bookings
-            ]
-
-            # Envoyer la notification silencieuse (pas de son/vibration)
-            send_missions_preload(driver_id=driver.id, missions=missions_data)
+            should_preload = (
+                request.headers.get("X-Missions-Preload") == "1"
+                or os.environ.get("DRIVER_MISSIONS_PRELOAD_DEFAULT", "0") == "1"
+            )
+            if should_preload:
+                missions_data = [
+                    b.serialize if hasattr(b, "serialize") else {"id": b.id}
+                    for b in bookings
+                ]
+                send_missions_preload(driver_id=driver.id, missions=missions_data)
             logger.debug(
                 "[Driver Bookings] Missions préchargées via notification silencieuse pour driver %s",
                 driver.id,
@@ -875,7 +1000,7 @@ class DriverUpcomingBookings(Resource):
                 e,
             )
 
-        return [b.serialize for b in bookings], 200
+        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
 
 
 @driver_ns.route("/me/bookings/since")
@@ -997,7 +1122,9 @@ class DriverBookingsSince(Resource):
                         b.scheduled_time,
                     )
 
-            return [b.serialize for b in bookings], 200
+            return [
+                _enrich_driver_booking_list_payload(b.serialize) for b in bookings
+            ], 200
         finally:
             observe_driver_bookings_since_request(
                 trigger_reason=trigger,
@@ -1043,7 +1170,9 @@ class DriverMobileSnapshot(Resource):
             today_fn=lambda: now_local().date(),
         )
         bookings = uc_bookings.execute(driver_id=driver.id).bookings
-        today_bookings = [b.serialize for b in bookings]
+        today_bookings = [
+            _enrich_driver_booking_list_payload(b.serialize) for b in bookings
+        ]
 
         active_booking = None
         for b in bookings:
@@ -1051,7 +1180,7 @@ class DriverMobileSnapshot(Resource):
                 BookingStatus.EN_ROUTE,
                 BookingStatus.IN_PROGRESS,
             ):
-                active_booking = b.serialize
+                active_booking = _enrich_driver_booking_list_payload(b.serialize)
                 break
 
         counters = {
@@ -1707,6 +1836,12 @@ class DriverLocation(Resource):
                                             presence_status=presence_status,
                                         )
                                     )
+                                    fanout_mission_id = sanitize_fanout_mission_id(
+                                        driver.id,
+                                        mission_id
+                                        if isinstance(mission_id, int)
+                                        else None,
+                                    )
                                     canonical_payload = {
                                         "driver_id": driver.id,
                                         "company_id": driver.company_id,
@@ -1725,7 +1860,7 @@ class DriverLocation(Resource):
                                         "sent_at": sent_at,
                                         "received_at": received_at,
                                         "is_background": is_background,
-                                        "mission_id": mission_id,
+                                        "mission_id": fanout_mission_id,
                                         "location_mode": location_mode,
                                         "last_seen_seconds": last_seen_seconds,
                                         "location_status": location_status,
@@ -2182,7 +2317,11 @@ class BookingDetails(Resource):
             from repositories.booking_repository import BookingRepository
 
             uc = GetDriverBookingDetailsUseCase(booking_repo=BookingRepository())  # type: ignore[reportArgumentType]
-            result = uc.execute(booking_id=booking_id, driver_id=driver.id)
+            result = uc.execute(
+                booking_id=booking_id,
+                driver_id=driver.id,
+                driver_company_id=getattr(driver, "company_id", None),
+            )
             if result is None:
                 return APIErrorHandler.handle_not_found(
                     "Booking",
@@ -2724,7 +2863,7 @@ class DriverAllBookings(Resource):
         uc = GetDriverAllBookingsUseCase(booking_repo=BookingRepository())
         bookings = uc.execute(driver_id=driver.id).bookings
         # ✅ Retourner une liste vide au lieu d'une erreur 404
-        return [b.serialize for b in bookings], 200
+        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
 
 
 @driver_ns.route("/me/company-bookings/today")
@@ -2755,7 +2894,7 @@ class DriverCompanyBookingsToday(Resource):
             .all()
         )
 
-        return [b.serialize for b in bookings], 200
+        return [_enrich_driver_booking_list_payload(b.serialize) for b in bookings], 200
 
 
 @driver_ns.route("/me/bookings/<int:booking_id>/report")

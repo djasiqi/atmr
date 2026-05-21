@@ -6,7 +6,7 @@ import MapPlaceholder from '../../../../components/common/MapPlaceholder';
 import {
   DEFAULT_MAP_OPTIONS,
   MAP_COLORS,
-  makePinMarkerIcon,
+  resolveLiriePointMarkerIcon,
   getRouteColor,
   ROUTE_OPTIONS,
   INFOWINDOW_FONT,
@@ -181,11 +181,7 @@ const ReservationMapView = ({ reservations }) => {
             <GoogleMapsAdvancedMarker
               key={m.id}
               position={m.position}
-              icon={{
-                url: makePinMarkerIcon('pickup'),
-                scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
-                anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
-              }}
+              icon={resolveLiriePointMarkerIcon(window.google?.maps, 'pickup')}
               onClick={() => handlePickupClick(m)}
             />
           ))}
@@ -194,11 +190,7 @@ const ReservationMapView = ({ reservations }) => {
           {activeRoute?.dropoff && (
             <GoogleMapsAdvancedMarker
               position={activeRoute.dropoff}
-              icon={{
-                url: makePinMarkerIcon('dropoff'),
-                scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
-                anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
-              }}
+              icon={resolveLiriePointMarkerIcon(window.google?.maps, 'dropoff')}
             />
           )}
 

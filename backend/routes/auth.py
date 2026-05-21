@@ -1196,6 +1196,7 @@ def _permissions_for_context(context_type: str) -> list[str]:
             "mission:update_status",
             "mission:location:update",
             "notification:read",
+            "chat:read",
         ]
     if context_type == "company":
         return [

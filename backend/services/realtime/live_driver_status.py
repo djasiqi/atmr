@@ -39,6 +39,50 @@ def resolve_mission_status_for_driver(driver_id: int) -> str:
     return "NONE"
 
 
+def resolve_active_booking_id_for_driver(driver_id: int) -> int | None:
+    """ID de la course active la plus récente (ASSIGNED / EN_ROUTE / IN_PROGRESS), ou None."""
+    statuses = (
+        BookingStatus.ASSIGNED.value,
+        BookingStatus.EN_ROUTE.value,
+        BookingStatus.IN_PROGRESS.value,
+    )
+    row = (
+        Booking.query.filter(
+            Booking.driver_id == driver_id,
+            Booking.status.in_(statuses),
+        )
+        .with_entities(Booking.id)
+        .order_by(Booking.updated_at.desc())
+        .first()
+    )
+    if row is None:
+        return None
+    bid = getattr(row, "id", None)
+    if bid is None:
+        return None
+    try:
+        return int(bid)
+    except (TypeError, ValueError):
+        return None
+
+
+def sanitize_fanout_mission_id(
+    driver_id: int,
+    client_mission_id: int | None,
+) -> int | None:
+    """Ne fanoute pas un ``mission_id`` GPS obsolète après fin de course."""
+    active_id = resolve_active_booking_id_for_driver(driver_id)
+    if active_id is None:
+        return None
+    if client_mission_id is None:
+        return active_id
+    try:
+        client = int(client_mission_id)
+    except (TypeError, ValueError):
+        return active_id
+    return active_id
+
+
 def resolve_driver_status_for_fanout(
     *,
     mission_status: str,

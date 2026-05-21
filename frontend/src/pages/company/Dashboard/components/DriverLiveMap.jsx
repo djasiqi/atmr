@@ -30,8 +30,60 @@ const MAP_DEBUG =
   (window.__MAP_DEBUG === true || sessionStorage.getItem('MAP_DEBUG') === '1');
 const AVAILABLE_LIGHT_GREEN = '#4ade80';
 const STALE_SECONDS_THRESHOLD = 120;
+const STATUS_TITLE_LABELS = {
+  available: 'Disponible',
+  assigned: 'Assigné',
+  busy: 'En course',
+  offline: 'Hors-ligne',
+  emergency: 'Urgence',
+};
 
 const CONTAINER_STYLE = { width: '100%', height: '100%', minHeight: '280px' };
+
+function getDriverDisplayName(driver) {
+  return driver.full_name ||
+    (driver.first_name || driver.last_name
+      ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
+      : driver.username || `#${driver.id}`);
+}
+
+function getDriverMarkerLabel(driver) {
+  const fullName = getDriverDisplayName(driver);
+  const words = String(fullName).trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0][0] || ''}${words[1][0] || ''}`.toUpperCase();
+  }
+  return String(fullName).slice(0, 2).toUpperCase();
+}
+
+function normalizeHexColor(hex) {
+  if (typeof hex !== 'string') return null;
+  const v = hex.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+  if (/^#[0-9a-fA-F]{3}$/.test(v)) {
+    return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
+  }
+  return null;
+}
+
+function blendHexColors(hexA, hexB, amount = 0.5) {
+  const a = normalizeHexColor(hexA);
+  const b = normalizeHexColor(hexB);
+  if (!a || !b) return hexA;
+  const t = Math.max(0, Math.min(1, amount));
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ar = (pa >> 16) & 255;
+  const ag = (pa >> 8) & 255;
+  const ab = pa & 255;
+  const br = (pb >> 16) & 255;
+  const bg = (pb >> 8) & 255;
+  const bb = pb & 255;
+  const rr = Math.round(ar * (1 - t) + br * t);
+  const rg = Math.round(ag * (1 - t) + bg * t);
+  const rb = Math.round(ab * (1 - t) + bb * t);
+  return `#${[rr, rg, rb].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+}
 
 function trackStaleMarkers(companyId, staleCount) {
   if (!staleCount || staleCount <= 0) return;
@@ -89,10 +141,7 @@ const createStyledTooltip = (driver, opts = {}) => {
   const conf = statusConf[status] || statusConf.offline;
   if (noGps) conf.label = 'Sans GPS';
 
-  const displayName = driver.full_name ||
-    (driver.first_name || driver.last_name
-      ? `${driver.first_name || ''} ${driver.last_name || ''}`.trim()
-      : driver.username || `#${driver.id}`);
+  const displayName = getDriverDisplayName(driver);
 
   // Ligne meta
   let metaLine = '';
@@ -176,9 +225,17 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (!map || !window.google) return;
 
     const markerColors = { ...STATUS_COLORS, available: AVAILABLE_LIGHT_GREEN };
-    const color = isStale ? '#9e9e9e' : (markerColors[status] ?? markerColors.available);
-    const opacity = isStale ? 0.7 : 1;
-    const iconUrl = makeCircleMarkerIcon(color, opacity);
+    const baseColor = markerColors[status] ?? markerColors.available;
+    const color = isStale ? blendHexColors(baseColor, '#94A3B8', 0.55) : baseColor;
+    const opacity = isStale ? 0.88 : 1;
+    const markerLabel = getDriverMarkerLabel(driver);
+    const titleStatus = STATUS_TITLE_LABELS[status] || status || 'Inconnu';
+    const markerTitle = `${getDriverDisplayName(driver)} · ${titleStatus}${isStale ? ' · signal ancien' : ''}`;
+    const iconUrl = makeCircleMarkerIcon(color, opacity, {
+      label: markerLabel,
+      textColor: '#ffffff',
+      ringColor: '#ffffff',
+    });
 
     if (GOOGLE_MAPS_USE_JS_STYLES) {
       if (markersRef.current[id]) {
@@ -189,6 +246,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           scaledSize: new window.google.maps.Size(24, 24),
           anchor: new window.google.maps.Point(12, 12),
         });
+        marker.setTitle(markerTitle);
         marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
         marker._driverStatus = status;
         return marker;
@@ -203,6 +261,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
           scaledSize: new window.google.maps.Size(24, 24),
           anchor: new window.google.maps.Point(12, 12),
         },
+        title: markerTitle,
         optimized: true,
       });
 
@@ -210,6 +269,17 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       marker._driverStatus = status;
 
       marker.addListener('mouseover', () => {
+        if (!infoWindowRef.current) {
+          infoWindowRef.current = new window.google.maps.InfoWindow({
+            disableAutoPan: false,
+            maxWidth: 260,
+            pixelOffset: new window.google.maps.Size(0, -4),
+          });
+        }
+        infoWindowRef.current.setContent(marker._tooltipHtml);
+        infoWindowRef.current.open(map, marker);
+      });
+      marker.addListener('click', () => {
         if (!infoWindowRef.current) {
           infoWindowRef.current = new window.google.maps.InfoWindow({
             disableAutoPan: false,
@@ -237,10 +307,13 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     if (markersRef.current[id]) {
       const marker = markersRef.current[id];
       marker.position = position;
+      marker.title = markerTitle;
       const img = marker._img;
       if (img) {
         img.src = iconUrl;
         img.style.opacity = String(opacity);
+        img.alt = markerTitle;
+        img.title = markerTitle;
       }
       marker._tooltipHtml = createStyledTooltip(driver, tooltipOpts);
       marker._driverStatus = status;
@@ -253,6 +326,8 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     img.height = 24;
     img.style.display = 'block';
     img.style.opacity = String(opacity);
+    img.alt = markerTitle;
+    img.title = markerTitle;
     img.draggable = false;
 
     const clustered = ENABLE_CLUSTERING && clustererRef.current;
@@ -263,6 +338,7 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
       anchorLeft: DRIVER_MARKER_ANCHOR.anchorLeft,
       anchorTop: DRIVER_MARKER_ANCHOR.anchorTop,
       gmpClickable: true,
+      title: markerTitle,
     });
     marker._img = img;
 
@@ -285,9 +361,11 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
     };
 
     img.addEventListener('mouseenter', onMouseEnter);
+    img.addEventListener('click', onMouseEnter);
     img.addEventListener('mouseleave', onMouseLeave);
     marker._hoverCleanup = () => {
       img.removeEventListener('mouseenter', onMouseEnter);
+      img.removeEventListener('click', onMouseEnter);
       img.removeEventListener('mouseleave', onMouseLeave);
     };
 
@@ -650,6 +728,10 @@ export default function DriverLiveMap({ drivers: propDrivers }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#91A3A0', flexShrink: 0 }} />
                 <span>Off</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+                <span>Urgence</span>
               </div>
             </div>
           </div>

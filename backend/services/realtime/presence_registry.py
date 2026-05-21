@@ -16,6 +16,7 @@ PRESENCE_TTL_SECONDS = 90
 SID_INDEX_PREFIX = "presence:sid:"
 DRIVER_CANONICAL_PREFIX = "presence:driver:"
 DRIVER_SESSIONS_PREFIX = "presence:driver_sids:"
+USER_SIDS_PREFIX = "presence:user_sids:"
 
 
 def _presence_key(role: str, user_id: int, sid: str) -> str:
@@ -32,6 +33,10 @@ def _driver_canonical_key(driver_id: int) -> str:
 
 def _driver_sessions_key(driver_id: int) -> str:
     return f"{DRIVER_SESSIONS_PREFIX}{driver_id}"
+
+
+def _user_sids_key(user_id: int) -> str:
+    return f"{USER_SIDS_PREFIX}{user_id}"
 
 
 def _resolve_redis_response(value: Any) -> Any:
@@ -63,6 +68,9 @@ def register_presence(
         raw_payload = json.dumps(payload)
         redis_client.setex(key, PRESENCE_TTL_SECONDS, raw_payload)
         redis_client.setex(_sid_index_key(sid), PRESENCE_TTL_SECONDS, raw_payload)
+        user_sids_key = _user_sids_key(user_id)
+        redis_client.sadd(user_sids_key, sid)
+        redis_client.expire(user_sids_key, PRESENCE_TTL_SECONDS)
 
         if driver_id is None:
             return
@@ -129,6 +137,13 @@ def remove_presence(*, sid: str, user_id: int, role: str) -> None:
     key = _presence_key(role, user_id, sid)
     try:
         redis_client.delete(key)
+        user_sids_key = _user_sids_key(user_id)
+        redis_client.srem(user_sids_key, sid)
+        remaining_user_sids = _resolve_redis_response(
+            cast(Any, redis_client.scard(user_sids_key))
+        )
+        if int(remaining_user_sids or 0) <= 0:
+            redis_client.delete(user_sids_key)
         sid_payload_raw = _resolve_redis_response(
             cast(Any, redis_client.get(_sid_index_key(sid)))
         )
@@ -160,3 +175,23 @@ def remove_presence(*, sid: str, user_id: int, role: str) -> None:
                                     redis_client.delete(canonical_key)
     except Exception:
         logger.exception("[presence] remove failed")
+
+
+def list_user_sids(user_id: int) -> list[str]:
+    """Liste les SID Socket.IO actifs pour un utilisateur."""
+    if redis_client is None:
+        return []
+    try:
+        raw = _resolve_redis_response(
+            cast(Any, redis_client.smembers(_user_sids_key(user_id)))
+        )
+        if not raw:
+            return []
+        if isinstance(raw, (bytes, bytearray)):
+            return [raw.decode("utf-8")]
+        if isinstance(raw, str):
+            return [raw]
+        return [str(item) for item in raw if item]
+    except Exception:
+        logger.exception("[presence] list_user_sids failed user_id=%s", user_id)
+        return []

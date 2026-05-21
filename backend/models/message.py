@@ -14,10 +14,12 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     Text,
     func,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from typing_extensions import override
 
@@ -73,10 +75,27 @@ class Message(db.Model):
     )
     is_read = Column(Boolean, nullable=False, default=False)
 
+    thread_id = Column(sa.String(64), nullable=True, index=True)
+    booking_id = Column(Integer, ForeignKey("booking.id", ondelete="SET NULL"), nullable=True, index=True)
+    message_type = Column(sa.String(32), nullable=False, default="text", server_default="text")
+    priority = Column(sa.String(16), nullable=False, default="normal", server_default="normal")
+    client_message_id = Column(sa.String(64), nullable=True, index=True)
+    acked_at = Column(DateTime(timezone=True), nullable=True)
+
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversation.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    visibility_tags = Column(JSONB, nullable=True)
+    system_event_key = Column(String(128), nullable=True, index=True)
+
     # Relations
     sender = relationship("User", foreign_keys=[sender_id], lazy="joined")
     receiver = relationship("User", foreign_keys=[receiver_id], lazy="joined")
     company = relationship("Company", lazy="joined")
+    conversation = relationship("Conversation", back_populates="messages", lazy="joined")
 
     @override
     def __repr__(self):
@@ -91,7 +110,14 @@ class Message(db.Model):
         company_obj = getattr(self, "company", None)
         sender_role_str = str(sender_role_val)
         if sender_role_str == "DRIVER":
-            sender_name = getattr(sender_user, "first_name", None)
+            if sender_user:
+                first = (getattr(sender_user, "first_name", None) or "").strip()
+                last = (getattr(sender_user, "last_name", None) or "").strip()
+                sender_name = f"{first} {last}".strip() or getattr(
+                    sender_user, "username", None
+                )
+            else:
+                sender_name = None
         else:
             sender_name = getattr(company_obj, "name", None)
         receiver_name = (
@@ -113,6 +139,15 @@ class Message(db.Model):
             "pdf_url": getattr(self, "pdf_url", None),
             "pdf_filename": getattr(self, "pdf_filename", None),
             "pdf_size": getattr(self, "pdf_size", None),
+            "thread_id": getattr(self, "thread_id", None),
+            "booking_id": getattr(self, "booking_id", None),
+            "message_type": getattr(self, "message_type", None) or "text",
+            "priority": getattr(self, "priority", None) or "normal",
+            "client_message_id": getattr(self, "client_message_id", None),
+            "acked_at": _iso(self.acked_at) if getattr(self, "acked_at", None) else None,
+            "conversation_id": getattr(self, "conversation_id", None),
+            "visibility_tags": getattr(self, "visibility_tags", None),
+            "system_event_key": getattr(self, "system_event_key", None),
         }
 
     # Validateurs

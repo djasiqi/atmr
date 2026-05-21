@@ -152,7 +152,15 @@ from .invoice import (
     InvoiceSequence,
 )
 from .medical import FavoritePlace, MedicalEstablishment, MedicalService
+from .conversation import Conversation
+from .conversation_participant import ConversationParticipant
 from .message import Message
+from .message_read import MessageRead
+from .messaging_enums import (
+    ConversationContext,
+    ConversationType,
+    ParticipantRole,
+)
 from .ml_prediction import MLPrediction
 from .partner_invoice import PartnerInvoice
 from .partnership import Partnership
@@ -278,7 +286,13 @@ __all__ = [
     "OfferStatus",  # ✅ ÉTAPE 4: Statut offre
     "MedicalEstablishment",
     "MedicalService",
+    "Conversation",
+    "ConversationContext",
+    "ConversationParticipant",
+    "ConversationType",
     "Message",
+    "MessageRead",
+    "ParticipantRole",
     "PartnerInvoice",
     "Partnership",
     "PlatformAdminPermissionGrant",

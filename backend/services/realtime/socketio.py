@@ -983,6 +983,36 @@ def emit_delay_detected(
 # ---------------------------------------------------------------------------
 # Helpers pour joindre/quitter des rooms côté serveur (utilisable hors handler)
 # ---------------------------------------------------------------------------
+def get_conversation_room(conversation_id: int) -> str:
+    return f"conversation_{conversation_id}"
+
+
+def join_conversation_room(
+    sid: str, conversation_id: int, namespace: str = DEFAULT_NAMESPACE
+) -> None:
+    """Ajoute un client (sid) à la room conversation — utilisable hors handler."""
+    try:
+        cast("Any", socketio).enter_room(
+            sid, get_conversation_room(conversation_id), namespace=namespace
+        )
+    except (ConnectionError, OSError) as e:
+        app_logger.error(
+            "[socketio] enter_room(conversation) failed sid=%s conv=%s (network: %s): %s",
+            sid,
+            conversation_id,
+            type(e).__name__,
+            e,
+        )
+        raise
+    except Exception:
+        app_logger.exception(
+            "[socketio] enter_room(conversation) failed sid=%s conv=%s",
+            sid,
+            conversation_id,
+        )
+        raise
+
+
 def join_company_room(
     sid: str, company_id: int, namespace: str = DEFAULT_NAMESPACE
 ) -> None:
@@ -1103,7 +1133,9 @@ __all__ = [
     "get_company_room",
     "get_date_room",
     "get_driver_room",
+    "get_conversation_room",
     "join_company_room",
+    "join_conversation_room",
     "join_date_room",
     "leave_company_room",
     "leave_date_room",

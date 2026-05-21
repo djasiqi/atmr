@@ -4,7 +4,7 @@ import GoogleMapsAdvancedMarker from '../../components/common/GoogleMapsAdvanced
 import {
   PUBLIC_MAP_OPTIONS,
   MAP_COLORS,
-  makePinMarkerIcon,
+  resolveLiriePointMarkerIcon,
   ROUTE_OPTIONS,
   ROUTE_OUTLINE_OPTIONS,
 } from '../../utils/mapUtils';
@@ -27,11 +27,7 @@ export default function HomeRouteMap({ center, onMapLoad, routePath, pickupCoord
       {pickupCoord && (
         <GoogleMapsAdvancedMarker
           position={{ lat: pickupCoord.lat, lng: pickupCoord.lon }}
-          icon={{
-            url: makePinMarkerIcon('pickup'),
-            scaledSize: window.google ? new window.google.maps.Size(40, 52) : undefined,
-            anchor: window.google ? new window.google.maps.Point(20, 46) : undefined,
-          }}
+          icon={resolveLiriePointMarkerIcon(window.google?.maps, 'pickup')}
           title="Départ"
           zIndex={10}
         />
@@ -39,11 +35,7 @@ export default function HomeRouteMap({ center, onMapLoad, routePath, pickupCoord
       {dropoffCoord && (
         <GoogleMapsAdvancedMarker
           position={{ lat: dropoffCoord.lat, lng: dropoffCoord.lon }}
-          icon={{
-            url: makePinMarkerIcon('dropoff'),
-            scaledSize: window.google ? new window.google.maps.Size(40, 52) : undefined,
-            anchor: window.google ? new window.google.maps.Point(20, 46) : undefined,
-          }}
+          icon={resolveLiriePointMarkerIcon(window.google?.maps, 'dropoff')}
           title="Destination"
           zIndex={11}
         />

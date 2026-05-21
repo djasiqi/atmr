@@ -15,7 +15,7 @@ import GoogleMapsAdvancedMarker from '../../../components/common/GoogleMapsAdvan
 import {
   PUBLIC_MAP_OPTIONS,
   MAP_COLORS,
-  makePinMarkerIcon,
+  resolveLiriePointMarkerIcon,
   ROUTE_OPTIONS,
 } from '../../../utils/mapUtils';
 import polyline from '@mapbox/polyline';
@@ -1534,22 +1534,14 @@ const ClientDashboard = () => {
                   {pickupMarkerPos && (
                     <GoogleMapsAdvancedMarker
                       position={pickupMarkerPos}
-                      icon={{
-                        url: makePinMarkerIcon('pickup'),
-                        scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
-                        anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
-                      }}
+                      icon={resolveLiriePointMarkerIcon(window.google?.maps, 'pickup')}
                       title="Départ"
                     />
                   )}
                   {destinationMarkerPos && (
                     <GoogleMapsAdvancedMarker
                       position={destinationMarkerPos}
-                      icon={{
-                        url: makePinMarkerIcon('dropoff'),
-                        scaledSize: window.google ? new window.google.maps.Size(28, 38) : undefined,
-                        anchor: window.google ? new window.google.maps.Point(14, 38) : undefined,
-                      }}
+                      icon={resolveLiriePointMarkerIcon(window.google?.maps, 'dropoff')}
                       title="Arrivée"
                     />
                   )}

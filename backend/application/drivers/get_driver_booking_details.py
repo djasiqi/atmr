@@ -29,6 +29,10 @@ class _BookingRepo(Protocol):
         self, booking_id: int, driver_id: int
     ) -> _BookingLike | None: ...
 
+    def find_model_by_id_and_company(
+        self, booking_id: int, company_id: int
+    ) -> _BookingLike | None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class BookingDetailsResponse:
@@ -43,12 +47,21 @@ class GetDriverBookingDetailsUseCase:
         self._booking_repo = booking_repo
 
     def execute(
-        self, *, booking_id: int, driver_id: int
+        self,
+        *,
+        booking_id: int,
+        driver_id: int,
+        driver_company_id: int | None = None,
     ) -> BookingDetailsResponse | None:
         booking = self._booking_repo.find_model_by_id_and_driver(
             booking_id=booking_id,
             driver_id=driver_id,
         )
+        if booking is None and driver_company_id is not None:
+            booking = self._booking_repo.find_model_by_id_and_company(
+                booking_id=booking_id,
+                company_id=driver_company_id,
+            )
         if booking is None:
             return None
 

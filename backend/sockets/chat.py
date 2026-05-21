@@ -45,10 +45,22 @@ from services.monitoring.driver_location_metrics import (
 from services.monitoring.location_correlation_log import log_driver_location_processed
 from services.monitoring.websocket_rate_limiter import ws_rate_limiter
 from services.monitoring.websocket_metrics import ws_metrics
+from services.monitoring.chat_metrics import (
+    inc_chat_message_rejected,
+    inc_chat_message_sent,
+    inc_chat_payload_validation_failed,
+    inc_chat_sid_lookup_failed,
+)
 from services.realtime.presence_registry import register_presence, remove_presence
+from services.realtime.sid_claims_registry import (
+    delete_sid_claims,
+    get_sid_claims,
+    set_sid_claims,
+)
 from services.realtime.live_driver_status import (
     resolve_driver_status_for_fanout as _resolve_driver_status,
     resolve_mission_status_for_driver as _resolve_mission_status_for_driver,
+    sanitize_fanout_mission_id as _sanitize_fanout_mission_id,
 )
 
 # from services.notifications.push import send_push_message  # Unused, using fanout now
@@ -69,8 +81,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("socketio")
 
-# Petit index en mémoire pour le debug/nettoyage : sid -> infos
+# Cache local synchronisé avec sid_claims_registry (tests legacy peuvent patcher).
 _SID_INDEX: Dict[str, Dict[str, Any]] = {}
+
+
+def _store_sid_claims(sid: str, data: Dict[str, Any]) -> None:
+    set_sid_claims(sid, data)
+    _SID_INDEX[sid] = data
 
 # ✅ Tracking des erreurs token_expired par IP pour réduire le bruit dans les logs
 # Format: {ip: (last_log_time | None, count)}
@@ -142,8 +159,7 @@ def _log_socketio_exception(
     if sid is None:
         sid = _get_sid()
 
-    # Récupérer les infos depuis _SID_INDEX si disponibles
-    sid_data = _SID_INDEX.get(sid, {}) if sid else {}
+    sid_data = _get_sid_claims(sid) if sid else {}
     if user_id is None:
         user_id = sid_data.get("user_id")
     if company_id is None:
@@ -191,9 +207,13 @@ def _log_socketio_exception(
 
 
 def _get_sid_claims(sid: str | None) -> Dict[str, Any]:
-    """Retourne les claims _SID_INDEX de manière défensive."""
+    """Retourne les claims socket (Redis + cache local)."""
     if not sid:
         return {}
+    claims = get_sid_claims(sid)
+    if claims:
+        _SID_INDEX[sid] = claims
+        return claims
     raw = _SID_INDEX.get(sid)
     if isinstance(raw, dict):
         return raw
@@ -871,19 +891,36 @@ def init_chat_socket(socketio: SocketIO):
                 driver_room = f"driver_{driver.id}"
                 join_room(company_room)
                 join_room(driver_room)
+                try:
+                    from services.messaging.conversation_service import (
+                        ConversationService,
+                    )
+
+                    if driver.user_id:
+                        for cid in ConversationService.conversation_ids_for_user(
+                            int(driver.user_id), limit=50
+                        ):
+                            conv_room = f"conversation_{cid}"
+                            join_room(conv_room)
+                            ws_metrics.on_room_join(conv_room)
+                except Exception:
+                    logger.exception("[socketio] join conversation rooms on connect failed")
 
                 emit("connected", {"message": "✅ Chauffeur connecté"})
 
-                _SID_INDEX[sid] = {
-                    "user_public_id": public_id,
-                    "user_id": user.id,
-                    "driver_id": driver.id,
-                    "company_id": driver.company_id,
-                    "ip": client_ip,
-                    "role": "driver",
-                    "device_id": device_id,
-                    "session_diag": session_diag,
-                }
+                _store_sid_claims(
+                    sid,
+                    {
+                        "user_public_id": public_id,
+                        "user_id": user.id,
+                        "driver_id": driver.id,
+                        "company_id": driver.company_id,
+                        "ip": client_ip,
+                        "role": "driver",
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                    },
+                )
                 register_presence(
                     sid=sid,
                     user_id=user.id,
@@ -941,17 +978,38 @@ def init_chat_socket(socketio: SocketIO):
 
                 room = f"company_{company.id}"
                 join_room(room)
+                try:
+                    from services.messaging.conversation_service import (
+                        ConversationService,
+                    )
+
+                    company_inbox = ConversationService.build_company_inbox(user)
+                    joined_conv = 0
+                    for row in company_inbox.get("threads") or []:
+                        cid = row.get("conversation_id")
+                        if not cid or joined_conv >= 50:
+                            continue
+                        conv_room = f"conversation_{cid}"
+                        join_room(conv_room)
+                        ws_metrics.on_room_join(conv_room)
+                        joined_conv += 1
+                except Exception:
+                    logger.exception("[socketio] join conversation rooms for company on connect failed")
+
                 emit("connected", {"message": f"✅ Entreprise connectée à {room}"})
 
-                _SID_INDEX[sid] = {
-                    "user_public_id": public_id,
-                    "user_id": user.id,
-                    "company_id": company.id,
-                    "ip": client_ip,
-                    "role": "company",
-                    "device_id": device_id,
-                    "session_diag": session_diag,
-                }
+                _store_sid_claims(
+                    sid,
+                    {
+                        "user_public_id": public_id,
+                        "user_id": user.id,
+                        "company_id": company.id,
+                        "ip": client_ip,
+                        "role": "company",
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                    },
+                )
                 register_presence(
                     sid=sid,
                     user_id=user.id,
@@ -1006,15 +1064,18 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(room)
                 emit("connected", {"message": f"✅ Institution connectée à {room}"})
 
-                _SID_INDEX[sid] = {
-                    "user_public_id": public_id,
-                    "user_id": user.id,
-                    "institution_id": institution_id,
-                    "ip": client_ip,
-                    "role": "institution",
-                    "device_id": device_id,
-                    "session_diag": session_diag,
-                }
+                _store_sid_claims(
+                    sid,
+                    {
+                        "user_public_id": public_id,
+                        "user_id": user.id,
+                        "institution_id": institution_id,
+                        "ip": client_ip,
+                        "role": "institution",
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                    },
+                )
                 register_presence(
                     sid=sid,
                     user_id=user.id,
@@ -1049,14 +1110,17 @@ def init_chat_socket(socketio: SocketIO):
                 join_room(room)
                 emit("connected", {"message": f"✅ Client connecté à {room}"})
 
-                _SID_INDEX[sid] = {
-                    "user_public_id": public_id,
-                    "user_id": user.id,
-                    "ip": client_ip,
-                    "role": "client",
-                    "device_id": device_id,
-                    "session_diag": session_diag,
-                }
+                _store_sid_claims(
+                    sid,
+                    {
+                        "user_public_id": public_id,
+                        "user_id": user.id,
+                        "ip": client_ip,
+                        "role": "client",
+                        "device_id": device_id,
+                        "session_diag": session_diag,
+                    },
+                )
                 register_presence(
                     sid=sid,
                     user_id=user.id,
@@ -1145,34 +1209,51 @@ def init_chat_socket(socketio: SocketIO):
 
     @socketio.on("team_chat_message")
     def handle_team_chat(data):
-        local_id = data.get("_localId")
-        logger.info("📨 [CHAT] team_chat_message reçu: data=%s", data)
+        local_id = data.get("_localId") if isinstance(data, dict) else None
         try:
-            # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX au lieu de session Flask
+            if not isinstance(data, dict):
+                inc_chat_payload_validation_failed(
+                    event="team_chat_message", reason="not_dict"
+                )
+                emit("error", {"error": "Payload invalide."})
+                return
+
+            from pydantic import ValidationError
+
+            from services.messaging.schemas import TeamChatInboundPayload
+
+            try:
+                inbound = TeamChatInboundPayload.model_validate(data)
+            except ValidationError:
+                inc_chat_payload_validation_failed(
+                    event="team_chat_message", reason="schema"
+                )
+                emit("error", {"error": "Payload invalide."})
+                return
+
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             logger.info(
-                "📨 [CHAT] SID=%s, user_public_id=%s, sid_data=%s",
+                "[CHAT] team_chat_message sid=%s thread_id=%s has_content=%s",
                 sid,
-                user_public_id,
-                sid_data,
+                inbound.thread_id,
+                bool((inbound.content or "").strip()),
             )
 
             if not user_public_id:
-                logger.error("❌ [CHAT] Session JWT introuvable pour SID=%s", sid)
+                inc_chat_sid_lookup_failed(event="team_chat_message")
+                logger.error("[CHAT] Session JWT introuvable pour SID=%s", sid)
+                inc_chat_message_rejected("auth")
                 emit("error", {"error": "Session JWT introuvable. Reconnectez-vous."})
                 return
 
             user = User.query.filter_by(public_id=user_public_id).first()
             if not user:
-                logger.error(
-                    "❌ [CHAT] Utilisateur non trouvé pour public_id=%s", user_public_id
-                )
+                inc_chat_message_rejected("auth")
                 emit("error", {"error": "Utilisateur non reconnu."})
                 return
 
-            # ✅ Rate limiting: vérifier avant anti-spam (plus restrictif)
             client_ip = request.environ.get("REMOTE_ADDR", "unknown")
             allowed, retry_after = ws_rate_limiter.check_rate_limit(
                 "team_chat_message",
@@ -1180,11 +1261,7 @@ def init_chat_socket(socketio: SocketIO):
                 client_ip=client_ip,
             )
             if not allowed:
-                logger.warning(
-                    "🚫 Rate limit team_chat_message dépassé pour user_id=%s, retry_after=%d",
-                    user.id,
-                    retry_after or 0,
-                )
+                inc_chat_message_rejected("rate_limit")
                 emit(
                     "rate_limit_exceeded",
                     {
@@ -1198,45 +1275,26 @@ def init_chat_socket(socketio: SocketIO):
                 ws_metrics.on_rate_limit_hit("team_chat_message")
                 return
 
-            # ✅ Anti-spam: vérifier le taux d'envoi (1 message/seconde) - garde pour compatibilité
             allowed_spam, spam_error = can_send_message(user.id)
             if not allowed_spam:
-                logger.warning(
-                    "🚫 [CHAT] Anti-spam: Utilisateur %s - %s", user.id, spam_error
-                )
+                inc_chat_message_rejected("spam")
                 emit(
                     "error",
                     {"error": spam_error or "Trop de messages. Attendez 1 seconde."},
                 )
                 return
 
-            content_raw = data.get("content")
-            logger.info(
-                "📨 [CHAT] Content brut reçu: %s (type=%s)",
-                content_raw,
-                type(content_raw).__name__,
-            )
-            content = (content_raw or "").strip() if content_raw else ""
-            logger.info(
-                "📨 [CHAT] Content après strip: '%s' (len=%d, bool=%s)",
-                content,
-                len(content),
-                bool(content),
-            )
-
-            # Support pour images et PDF
-            image_url = data.get("image_url") or data.get("image")
-            pdf_url = data.get("pdf_url") or data.get("pdf")
-            pdf_filename = data.get("pdf_filename")
-            pdf_size = data.get("pdf_size")
-
-            # ✅ Limite: 1 fichier par message (image OU PDF, pas les deux)
+            content = (inbound.content or "").strip() if inbound.content else ""
+            image_url = inbound.resolved_image_url()
+            pdf_url = inbound.resolved_pdf_url()
+            pdf_filename = inbound.pdf_filename
+            pdf_size = inbound.pdf_size
+            audio_url = inbound.audio_url
+            has_audio = bool(audio_url)
             has_image = bool(image_url)
             has_pdf = bool(pdf_url)
             if has_image and has_pdf:
-                logger.error(
-                    "❌ [CHAT] Limite: 1 fichier par message (image OU PDF, pas les deux)"
-                )
+                inc_chat_message_rejected("empty")
                 emit(
                     "error",
                     {
@@ -1248,23 +1306,22 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 return
 
-            # ✅ Validation : le message doit avoir au moins du contenu texte,
-            # une image ou un PDF
             has_content = bool(content)
-            if not (has_content or has_image or has_pdf):
-                logger.error("❌ [CHAT] Message vide : ni contenu, ni image, ni PDF")
+            if not (has_content or has_image or has_pdf or has_audio):
+                inc_chat_message_rejected("empty")
                 emit(
                     "error",
                     {
                         "error": (
-                            "Le message doit contenir du texte, une image ou un PDF."
+                            "Le message doit contenir du texte, une image, un PDF "
+                            "ou un message vocal."
                         )
                     },
                 )
                 return
 
-            # ✅ Validation longueur message (si contenu texte présent)
             if has_content and len(content) > MAX_MESSAGE_LENGTH:
+                inc_chat_message_rejected("empty")
                 emit(
                     "error",
                     {
@@ -1275,18 +1332,13 @@ def init_chat_socket(socketio: SocketIO):
                 )
                 return
 
-            receiver_id = data.get("receiver_id")
+            receiver_id = inbound.receiver_id
+            thread_id = inbound.thread_id
+            booking_id_raw = inbound.booking_id
+            message_type = (inbound.message_type or "text").strip() or "text"
+            priority = (inbound.priority or "normal").strip() or "normal"
+            client_message_id = inbound.resolved_client_message_id() or local_id
             timestamp = datetime.now(UTC)
-
-            # ✅ Validation receiver_id si fourni
-            if receiver_id is not None:
-                try:
-                    receiver_id = int(receiver_id)
-                    if receiver_id <= RECEIVER_ID_ZERO:
-                        raise ValueError
-                except (TypeError, ValueError):
-                    emit("error", {"error": "receiver_id invalide."})
-                    return
 
             if user.role == UserRole.driver:
                 driver = Driver.query.filter_by(user_id=user.id).first()
@@ -1321,87 +1373,167 @@ def init_chat_socket(socketio: SocketIO):
                 emit("error", {"error": "Rôle non autorisé pour le chat."})
                 return
 
-            logger.info(
-                (
-                    "📨 [CHAT] Création du message: sender_id=%s, "
-                    "receiver_id=%s, company_id=%s, sender_role=%s, "
-                    "content='%s' (len=%d)"
-                ),
-                sender_id,
-                receiver_id,
-                company_id,
-                sender_role,
-                content[:50],
-                len(content),
+            from services.messaging.message_idempotence import (
+                find_idempotent_message,
+                note_duplicate_hit,
             )
-            MessageCtor = cast("Any", Message)
-            try:
-                # ✅ Vérifier que le contenu n'est pas vide avant de créer le message
-                # Permettre None si seulement image/PDF
-                content_final = content.strip() if content else None
-                logger.info(
-                    (
-                        "📨 [CHAT] Contenu final avant création: '%s' "
-                        "(len=%d, type=%s, has_image=%s, has_pdf=%s)"
-                    ),
-                    content_final or "(vide)",
-                    len(content_final) if content_final else 0,
-                    type(content_final).__name__ if content_final else "None",
-                    has_image,
-                    has_pdf,
-                )
-                # Validation déjà faite plus haut : au moins content, image ou PDF
 
-                logger.info(
-                    "📨 [CHAT] Création de l'objet Message avec content='%s'",
-                    content_final[:100] if content_final else "(vide)",
+            thread_type_metric = (
+                str(thread_id).split(":", 1)[0] if thread_id and ":" in str(thread_id) else (str(thread_id) if thread_id else "unknown")
+            )
+
+            message: Message | None = None
+            conversation_id_val = inbound.conversation_id
+            booking_id = booking_id_raw
+
+            if client_message_id:
+                existing_msg = find_idempotent_message(
+                    sender_id, str(client_message_id)
                 )
-                message = MessageCtor(
-                    sender_id=sender_id,
-                    receiver_id=receiver_id,
-                    company_id=company_id,
-                    sender_role=sender_role,
-                    content=content_final
-                    if content_final
-                    else None,  # Permettre None si seulement image/PDF
-                    timestamp=timestamp,
-                    image_url=image_url if has_image else None,
-                    pdf_url=pdf_url if has_pdf else None,
-                    pdf_filename=pdf_filename if has_pdf else None,
-                    pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
-                )
-                logger.info(
-                    "📨 [CHAT] Message créé avec succès, id=%s, content vérifié='%s'",
-                    getattr(message, "id", "N/A"),
-                    (getattr(message, "content", None) or "")[:50],
-                )
-                logger.info("📨 [CHAT] Message créé, ajout à la session...")
-                db.session.add(message)
-                logger.info("📨 [CHAT] Commit en cours...")
-                db.session.commit()
-                logger.info(
-                    (
-                        "✅ [CHAT] Message sauvegardé en DB: id=%s, "
-                        "content='%s', sender_role=%s"
-                    ),
-                    message.id,
-                    content[:50],
-                    sender_role,
-                )
-            except Exception as commit_err:
-                db.session.rollback()
-                logger.exception(
-                    "❌ [CHAT] Erreur lors du commit du message: %s", commit_err
-                )
-                emit(
-                    "error",
-                    {
-                        "error": (
-                            f"Erreur lors de la sauvegarde du message: {commit_err!s}"
+                if existing_msg is not None:
+                    note_duplicate_hit(channel="socket")
+                    message = existing_msg
+
+            MessageCtor = cast("Any", Message)
+            if message is None:
+                try:
+                    content_final = content.strip() if content else None
+                    if booking_id_raw is not None:
+                        booking_id = int(booking_id_raw)
+                    if not thread_id and booking_id:
+                        thread_id = f"mission:{booking_id}"
+                    if not thread_id:
+                        if receiver_id:
+                            thread_id = f"direct:{receiver_id}"
+                        elif sender_role == SenderRole.COMPANY:
+                            thread_id = "dispatch"
+                        else:
+                            thread_id = "team"
+
+                    conv_obj = None
+                    try:
+                        from models import Conversation
+                        from services.messaging.conversation_service import (
+                            ConversationService,
                         )
-                    },
-                )
+                        from services.messaging.permission_service import (
+                            MessagingPermissionService,
+                        )
+
+                        if conversation_id_val:
+                            conv_obj = Conversation.query.get(
+                                int(conversation_id_val)
+                            )
+                        else:
+                            driver_resolve = (
+                                Driver.query.filter_by(user_id=user.id).first()
+                                if user.role == UserRole.driver
+                                else None
+                            )
+                            conv_obj = ConversationService.resolve_by_legacy_thread(
+                                int(company_id),
+                                str(thread_id),
+                                driver_resolve,
+                            )
+                            if (
+                                thread_id
+                                and str(thread_id).startswith("direct:")
+                                and conv_obj is None
+                            ):
+                                inc_chat_message_rejected("permission")
+                                emit(
+                                    "error",
+                                    {
+                                        "error": (
+                                            "Collègue introuvable ou message "
+                                            "direct refusé."
+                                        )
+                                    },
+                                )
+                                return
+                        if conv_obj is not None:
+                            MessagingPermissionService.assert_can_write(
+                                user, conv_obj
+                            )
+                            conversation_id_val = conv_obj.id
+                    except PermissionError as perm_err:
+                        inc_chat_message_rejected("permission")
+                        emit("error", {"error": str(perm_err)})
+                        return
+                    except Exception:
+                        logger.exception("[CHAT] conversation resolve failed")
+
+                    message = MessageCtor(
+                        sender_id=sender_id,
+                        receiver_id=receiver_id,
+                        company_id=company_id,
+                        sender_role=sender_role,
+                        content=content_final if content_final else None,
+                        timestamp=timestamp,
+                        image_url=image_url if has_image else None,
+                        pdf_url=pdf_url if has_pdf else None,
+                        pdf_filename=pdf_filename if has_pdf else None,
+                        pdf_size=int(pdf_size) if has_pdf and pdf_size else None,
+                        thread_id=str(thread_id) if thread_id else None,
+                        booking_id=booking_id,
+                        message_type=message_type,
+                        priority=priority,
+                        client_message_id=str(client_message_id)
+                        if client_message_id
+                        else None,
+                        conversation_id=int(conversation_id_val)
+                        if conversation_id_val
+                        else None,
+                        visibility_tags=["operational"],
+                    )
+                    db.session.add(message)
+                    db.session.commit()
+                except Exception as commit_err:
+                    from sqlalchemy.exc import IntegrityError
+
+                    db.session.rollback()
+                    if (
+                        client_message_id
+                        and isinstance(commit_err, IntegrityError)
+                    ):
+                        raced = find_idempotent_message(
+                            sender_id, str(client_message_id)
+                        )
+                        if raced is not None:
+                            note_duplicate_hit(channel="socket")
+                            message = raced
+                        else:
+                            logger.exception(
+                                "[CHAT] commit IntegrityError sans message existant"
+                            )
+                            emit(
+                                "error",
+                                {"error": "Erreur lors de la sauvegarde du message."},
+                            )
+                            return
+                    else:
+                        logger.exception(
+                            "[CHAT] Erreur lors du commit du message: %s",
+                            commit_err,
+                        )
+                        emit(
+                            "error",
+                            {
+                                "error": (
+                                    "Erreur lors de la sauvegarde du message."
+                                )
+                            },
+                        )
+                        return
+
+            if message is None:
+                emit("error", {"error": "Erreur lors de la sauvegarde du message."})
                 return
+
+            conversation_id_val = message.conversation_id or conversation_id_val
+            thread_id = message.thread_id or thread_id
+            content = (message.content or "").strip() if message.content else content
+            inc_chat_message_sent(channel="socket", thread_type=thread_type_metric)
 
             payload = {
                 "id": message.id,
@@ -1431,26 +1563,36 @@ def init_chat_socket(socketio: SocketIO):
                 "pdf_url": pdf_url if has_pdf else None,
                 "pdf_filename": pdf_filename if has_pdf else None,
                 "pdf_size": int(pdf_size) if has_pdf and pdf_size else None,
+                "thread_id": getattr(message, "thread_id", None),
+                "booking_id": getattr(message, "booking_id", None),
+                "message_type": getattr(message, "message_type", None) or "text",
+                "priority": getattr(message, "priority", None) or "normal",
+                "audio_url": audio_url if has_audio else None,
+                "conversation_id": conversation_id_val,
             }
 
             # ✅ Enrichir payload avec event_id, version, timestamp
             enriched_payload = _enrich_payload_if_needed(payload, "team_chat_message")
 
-            room = f"company_{company_id}"
-            # Pylance ne déclare pas kwarg 'room' sur emit -> cast en Any
-            cast("Any", emit)("team_chat_message", enriched_payload, room=room)
-            logger.info(
-                "📨 Message émis dans %s par %s : %s", room, sender_role, content
-            )
+            from services.messaging.channel_routing import emit_chat_message
 
-            # ✅ Si un receiver_id (driver) est fourni, notifier aussi sa room dédiée
-            # Note: Utiliser le même payload enrichi (même event_id pour les deux rooms)
-            if receiver_id:
-                driver_room = f"driver_{receiver_id}"
-                cast("Any", emit)(
-                    "team_chat_message", enriched_payload, room=driver_room
-                )
-                logger.info("📨 Message relayé vers %s", driver_room)
+            emit_chat_message(
+                cast("Any", emit),
+                "team_chat_message",
+                enriched_payload,
+                company_id=int(company_id),
+                thread_id=str(thread_id) if thread_id else None,
+                conversation_id=int(conversation_id_val)
+                if conversation_id_val
+                else None,
+                receiver_id=int(receiver_id) if receiver_id else None,
+            )
+            logger.info(
+                "📨 Message routé (thread_id=%s, conversation_id=%s) par %s",
+                thread_id,
+                conversation_id_val,
+                sender_role,
+            )
 
             # ✅ P0: Push notification pour message.new (fan-out hybride)
             # Utiliser le système de fan-out centralisé pour cohérence
@@ -1535,7 +1677,7 @@ def init_chat_socket(socketio: SocketIO):
             # ✅ 18. Améliorer gestion erreurs Socket.IO : Logger avec contexte complet
             try:
                 sid = _get_sid()
-                sid_data = _SID_INDEX.get(sid, {})
+                sid_data = _get_sid_claims(sid)
             except Exception:
                 sid = None
                 sid_data = {}
@@ -1574,6 +1716,58 @@ def init_chat_socket(socketio: SocketIO):
                     },
                 )
 
+    @socketio.on("team_chat_typing")
+    def handle_team_chat_typing(data=None):
+        """Alias mobile unified-app → relay team_chat_typing to company room."""
+        if not isinstance(data, dict):
+            inc_chat_payload_validation_failed(
+                event="team_chat_typing", reason="not_dict"
+            )
+            return
+        try:
+            from pydantic import ValidationError
+
+            from services.messaging.schemas import TypingPayload
+
+            inbound_typing = TypingPayload.model_validate(data)
+        except ValidationError:
+            inc_chat_payload_validation_failed(
+                event="team_chat_typing", reason="schema"
+            )
+            return
+        try:
+            sid = _get_sid()
+            sid_data = _get_sid_claims(sid)
+            user_public_id = sid_data.get("user_public_id")
+            company_id = sid_data.get("company_id")
+            if not user_public_id or not company_id:
+                return
+            sender_name = inbound_typing.sender_name
+            if not sender_name:
+                user = User.query.filter_by(public_id=user_public_id).first()
+                sender_name = getattr(user, "first_name", None) if user else None
+            typing_payload = {
+                "user_id": user_public_id,
+                "sender_name": sender_name or "Chauffeur",
+                "surface": inbound_typing.surface,
+                "conversation_id": inbound_typing.conversation_id,
+            }
+            conv_id = inbound_typing.conversation_id
+            if conv_id:
+                conv_room = f"conversation_{conv_id}"
+                cast("Any", emit)(
+                    "team_chat_typing", typing_payload, room=conv_room, skip_sid=sid
+                )
+            room = f"company_{company_id}"
+            cast("Any", emit)(
+                "team_chat_typing",
+                typing_payload,
+                room=room,
+                skip_sid=sid,
+            )
+        except Exception as e:
+            _log_socketio_exception(exception=e, event_name="team_chat_typing")
+
     @socketio.on("typing_start")
     def handle_typing_start(data=None):  # noqa: ARG001
         """Handler pour l'indicateur de frappe (typing indicator)."""
@@ -1583,7 +1777,7 @@ def init_chat_socket(socketio: SocketIO):
         user_public_id_log: str | None = None
         try:
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             company_id = sid_data.get("company_id")
             user_public_id_log = user_public_id
@@ -1657,7 +1851,7 @@ def init_chat_socket(socketio: SocketIO):
         user_public_id_log: str | None = None
         try:
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             company_id = sid_data.get("company_id")
             user_public_id_log = user_public_id
@@ -1730,7 +1924,7 @@ def init_chat_socket(socketio: SocketIO):
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             user_public_id_log = user_public_id
 
@@ -1757,6 +1951,18 @@ def init_chat_socket(socketio: SocketIO):
             join_room(driver_room)
             company_room = f"company_{driver.company_id}"
             join_room(company_room)
+            try:
+                from services.messaging.conversation_service import ConversationService
+
+                if driver.user_id:
+                    for cid in ConversationService.conversation_ids_for_user(
+                        int(driver.user_id), limit=50
+                    ):
+                        conv_room = f"conversation_{cid}"
+                        join_room(conv_room)
+                        ws_metrics.on_room_join(conv_room)
+            except Exception:
+                logger.exception("[socketio] join conversation rooms failed")
             # ✅ Tracking rooms
             ws_metrics.on_room_join(driver_room)
             ws_metrics.on_room_join(company_room)
@@ -2083,6 +2289,10 @@ def init_chat_socket(socketio: SocketIO):
                 is_active=bool(getattr(driver, "is_active", True)),
                 presence_status=presence_status,
             )
+            fanout_mission_id = _sanitize_fanout_mission_id(
+                driver.id,
+                mission_id if isinstance(mission_id, int) else None,
+            )
             from services.realtime.socketio import fanout_driver_location_update
 
             fanout_driver_location_update(
@@ -2122,7 +2332,7 @@ def init_chat_socket(socketio: SocketIO):
                     else "",
                     "last_seen_seconds": last_seen_seconds,
                     "location_mode": location_mode,
-                    "mission_id": mission_id,
+                    "mission_id": fanout_mission_id,
                     "recorded_at": recorded_at_dt.isoformat()
                     if recorded_at_dt
                     else now_iso,
@@ -2595,6 +2805,10 @@ def init_chat_socket(socketio: SocketIO):
                         is_active=bool(getattr(driver, "is_active", True)),
                         presence_status=presence_status,
                     )
+                    fanout_mission_id = _sanitize_fanout_mission_id(
+                        driver.id,
+                        mission_id if isinstance(mission_id, int) else None,
+                    )
                     ts_str = (
                         recorded_at_dt.isoformat()
                         if recorded_at_dt
@@ -2633,7 +2847,7 @@ def init_chat_socket(socketio: SocketIO):
                             else "",
                             "last_seen_seconds": last_seen_seconds,
                             "location_mode": location_mode,
-                            "mission_id": mission_id,
+                            "mission_id": fanout_mission_id,
                             "recorded_at": ts_str,
                             "received_at": received_at,
                         },
@@ -2746,7 +2960,7 @@ def init_chat_socket(socketio: SocketIO):
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             user_role = sid_data.get("role")
             user_public_id_log = user_public_id
@@ -2838,7 +3052,7 @@ def init_chat_socket(socketio: SocketIO):
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             user_role = sid_data.get("role")
             user_public_id_log = user_public_id
@@ -2908,7 +3122,7 @@ def init_chat_socket(socketio: SocketIO):
         try:
             # ✅ SECURITY: Utiliser JWT depuis _SID_INDEX
             sid = _get_sid()
-            company_info = _SID_INDEX.get(sid, {})
+            company_info = _get_sid_claims(sid)
             user_public_id = company_info.get("user_public_id")
             user_role = company_info.get("role")
             company_id = company_info.get("company_id")
@@ -3129,7 +3343,7 @@ def init_chat_socket(socketio: SocketIO):
     def handle_disconnect():
         try:
             sid = _get_sid()
-            info = _SID_INDEX.pop(sid, None)
+            info = delete_sid_claims(sid) or _SID_INDEX.pop(sid, None)
             trace_id = request.headers.get("X-Trace-ID") or request.headers.get(
                 "Trace-Id"
             )
@@ -3250,7 +3464,7 @@ def init_chat_socket(socketio: SocketIO):
         """
         try:
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             user_public_id = sid_data.get("user_public_id")
             role = sid_data.get("role", "unknown")
             driver_id = sid_data.get("driver_id")
@@ -3301,7 +3515,7 @@ def init_chat_socket(socketio: SocketIO):
         """
         try:
             sid = _get_sid()
-            sid_data = _SID_INDEX.get(sid, {})
+            sid_data = _get_sid_claims(sid)
             driver_id = sid_data.get("driver_id")
             company_id = sid_data.get("company_id")
             user_public_id = sid_data.get("user_public_id")

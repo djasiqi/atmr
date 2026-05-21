@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -166,7 +166,7 @@ class MessagesList(Resource):
             if result is None:
                 # 📦 Lecture des params de pagination
                 try:
-                    limit = max(1, int(request.args.get("limit", 20)))
+                    limit = max(1, min(100, int(request.args.get("limit", 20))))
                     before = request.args.get("before", None)
                 except ValueError:
                     result = {"error": "Paramètres invalides"}
@@ -179,6 +179,17 @@ class MessagesList(Resource):
                             # support basique ISO8601 avec 'Z'
                             before_str = before.rstrip("Z")
                             dt_before = datetime.fromisoformat(before_str)
+                            if dt_before.tzinfo is None:
+                                dt_before = dt_before.replace(tzinfo=UTC)
+                            now_utc = datetime.now(UTC)
+                            if dt_before < now_utc - timedelta(days=365):
+                                result = {
+                                    "error": "Timestamp trop ancien (max 365 jours)"
+                                }
+                                status_code = 400
+                            elif dt_before > now_utc + timedelta(days=1):
+                                result = {"error": "Timestamp futur invalide"}
+                                status_code = 400
                         except ValueError:
                             result = {"error": "Timestamp invalide"}
                             status_code = 400
